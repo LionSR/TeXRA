@@ -74,15 +74,7 @@ export const DEFAULT_CORE_SETTINGS = {
   goal: {
     enabled: true,
   },
-  ui: {
-    showApiKeyReminders: true,
-    showLoginBanner: true,
-    showGettingStartedBanner: true,
-    showOrchestratorBanner: true,
-  },
   model: {
-    useImprovedConnection: false,
-    improvedConnectionDomain: 'proxy.texra.ai',
     useOpenAIResponsesAPI: true,
     useGoogleInteractionsAPI: true,
     useGoogleInteractionsServerState: true,
@@ -92,7 +84,6 @@ export const DEFAULT_CORE_SETTINGS = {
     gpt5ReasoningSummary: false,
     retry: {
       maxAttempts: 2,
-      backoffMs: 1000,
     },
   },
   chatgptCodex: {
@@ -192,7 +183,6 @@ export const DEFAULT_CORE_SETTINGS = {
     zoteroPort: 23119,
   },
   latex: {
-    showLatexindentWarning: false,
     latexindentConfig: '',
     texfmtConfig: '',
     tikzInputDirectory: '',
@@ -239,7 +229,6 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   git: {
     numberOfCommitsToShow: 20,
-    emitPrCiStartedEvents: false,
   },
   agentReview: {
     runOnCommit: false,
@@ -258,8 +247,7 @@ export const DEFAULT_CORE_SETTINGS = {
     enabled: true,
   },
   debug: {
-    saveDebugObjects: false,
-    saveInputPrompt: false,
+    saveModelIO: false,
   },
   skills: {
     enabled: AGENT_SKILLS_ENABLED_DEFAULT,
@@ -267,9 +255,6 @@ export const DEFAULT_CORE_SETTINGS = {
   toolUse: {
     requireEditApproval: true,
     requireBashApproval: true,
-    persistence: {
-      ttlHours: 336,
-    },
   },
 };
 
@@ -332,36 +317,8 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.goal),
-  ui: z
-    .strictObject({
-      showApiKeyReminders: boolField(
-        DEFAULT_CORE_SETTINGS.ui.showApiKeyReminders,
-        'Show API key reminders in the status bar and main view when no API keys are configured',
-      ),
-      showLoginBanner: boolField(
-        DEFAULT_CORE_SETTINGS.ui.showLoginBanner,
-        'Show login banner prompting users to sign in for access to remote agents',
-      ),
-      showGettingStartedBanner: boolField(
-        DEFAULT_CORE_SETTINGS.ui.showGettingStartedBanner,
-        'Show getting started banner with import options when no LaTeX files are found',
-      ),
-      showOrchestratorBanner: boolField(
-        DEFAULT_CORE_SETTINGS.ui.showOrchestratorBanner,
-        'Show orchestrator and session reminder text in the main view',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.ui),
   model: z
     .strictObject({
-      useImprovedConnection: boolField(
-        DEFAULT_CORE_SETTINGS.model.useImprovedConnection,
-        'Use improved connection for API requests',
-      ),
-      improvedConnectionDomain: stringField(
-        DEFAULT_CORE_SETTINGS.model.improvedConnectionDomain,
-        'Domain to use when using improved connection',
-      ),
       useOpenAIResponsesAPI: boolField(
         DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
         "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
@@ -396,11 +353,6 @@ export const CoreSettingsShape = {
           maxAttempts: numberField(
             DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
             'Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.',
-            { min: 0 },
-          ),
-          backoffMs: numberField(
-            DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
-            'Base backoff delay in milliseconds between retry attempts for model calls',
             { min: 0 },
           ),
         })
@@ -487,10 +439,6 @@ export const CoreSettingsShape = {
     .prefault(DEFAULT_CORE_SETTINGS.bib),
   latex: z
     .strictObject({
-      showLatexindentWarning: boolField(
-        DEFAULT_CORE_SETTINGS.latex.showLatexindentWarning,
-        'Show warning when latexindent is not installed',
-      ),
       latexindentConfig: stringField(
         DEFAULT_CORE_SETTINGS.latex.latexindentConfig,
         'Path to latexindent configuration file',
@@ -560,10 +508,6 @@ export const CoreSettingsShape = {
         'Number of recent commits to show in the commit selection dropdown',
         { min: 1, max: 100 },
       ),
-      emitPrCiStartedEvents: boolField(
-        DEFAULT_CORE_SETTINGS.git.emitPrCiStartedEvents,
-        'Emit a PR subscription event when GitHub check runs first appear for a new head commit.',
-      ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.git),
   agentReview: z
@@ -624,13 +568,9 @@ export const CoreSettingsShape = {
     .prefault(DEFAULT_CORE_SETTINGS.telemetry),
   debug: z
     .strictObject({
-      saveDebugObjects: boolField(
-        DEFAULT_CORE_SETTINGS.debug.saveDebugObjects,
-        'Save message and response objects to JSON files for debugging purposes',
-      ),
-      saveInputPrompt: boolField(
-        DEFAULT_CORE_SETTINGS.debug.saveInputPrompt,
-        'Save the final input prompt sent to the model as an XML file for debugging purposes',
+      saveModelIO: boolField(
+        DEFAULT_CORE_SETTINGS.debug.saveModelIO,
+        'Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.debug),
@@ -645,15 +585,6 @@ export const CoreSettingsShape = {
         DEFAULT_CORE_SETTINGS.toolUse.requireBashApproval,
         'Require user approval before tool-use agents execute bash commands',
       ),
-      persistence: z
-        .strictObject({
-          ttlHours: numberField(
-            DEFAULT_CORE_SETTINGS.toolUse.persistence.ttlHours,
-            'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup',
-            { min: 1 },
-          ),
-        })
-        .prefault(DEFAULT_CORE_SETTINGS.toolUse.persistence),
     })
     .prefault(DEFAULT_CORE_SETTINGS.toolUse),
 };
@@ -710,12 +641,6 @@ export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
   'inlineCriticism.enabled',
   'goal.enabled',
-  'ui.showApiKeyReminders',
-  'ui.showLoginBanner',
-  'ui.showGettingStartedBanner',
-  'ui.showOrchestratorBanner',
-  'model.useImprovedConnection',
-  'model.improvedConnectionDomain',
   'model.useOpenAIResponsesAPI',
   'model.useGoogleInteractionsAPI',
   'model.useGoogleInteractionsServerState',
@@ -724,7 +649,6 @@ export const CORE_SETTING_PATHS = [
   'model.compactionThresholdPercent',
   'model.gpt5ReasoningSummary',
   'model.retry.maxAttempts',
-  'model.retry.backoffMs',
   'chatgptCodex.preferSubscription',
   'files.included.mediaExtensions',
   'files.included.inputExtensions',
@@ -739,7 +663,6 @@ export const CORE_SETTING_PATHS = [
   'maxImageDimension',
   'bib.defaultPath',
   'bib.zoteroPort',
-  'latex.showLatexindentWarning',
   'latex.latexindentConfig',
   'latex.texfmtConfig',
   'latex.tikzInputDirectory',
@@ -753,7 +676,6 @@ export const CORE_SETTING_PATHS = [
   'latexdiff.pictureEnvironments',
   'latexdiff.tempFileLocation',
   'git.numberOfCommitsToShow',
-  'git.emitPrCiStartedEvents',
   'agentReview.runOnCommit',
   'agentReview.includeSubmodules',
   'agentReview.includeUntrackedFiles',
@@ -762,12 +684,10 @@ export const CORE_SETTING_PATHS = [
   'audio.soxPath',
   'logger.debugMode',
   'telemetry.enabled',
-  'debug.saveDebugObjects',
-  'debug.saveInputPrompt',
+  'debug.saveModelIO',
   'skills.enabled',
   'toolUse.requireEditApproval',
   'toolUse.requireBashApproval',
-  'toolUse.persistence.ttlHours',
 ] as const satisfies readonly LeafPaths<CoreSettings>[];
 
 type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
@@ -775,4 +695,137 @@ type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
 // Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
 type _AssertCorePathsExhaustive = AssertNever<
   Exclude<LeafPaths<CoreSettings>, CoreSettingPath>
+>;
+
+/**
+ * Which hosts actually read each Core setting, keyed by the file that reads it.
+ *
+ * The split matters because `.texra/config.json` is shared by the CLI and the
+ * desktop app while the VS Code extension keeps its configuration in
+ * `.vscode/settings.json`. A setting only the extension reads is inert in
+ * `.texra/config.json`, so the CLI's unknown-key warning must report it rather
+ * than accept it silently.
+ *
+ * This mirrors the `cliConsumer` discipline {@link STATE_SETTINGS} enforces in
+ * `stateSettings.ts`. State-backed settings additionally carry
+ * `cliRuntimeReachability` because they are surfaced as editable rows in the
+ * CLI `/config` panel; the entries here make the weaker claim that the key is
+ * not a no-op, so the reading file is the whole of the evidence. The guardrail
+ * suite checks that each file exists and sits on the side of the host split it
+ * is filed under.
+ */
+export const CLI_CORE_SETTING_CONSUMERS = {
+  'src/agent/runtime/selectAutoOpenFinalOutput.ts': [
+    'agentOutputs.autoOpenFinal',
+  ],
+  'src/tools/goal/goalFeatureFlag.ts': ['goal.enabled'],
+  'src/agent/runtime/ModelFactory.ts': [
+    'model.useOpenAIResponsesAPI',
+    'model.useGoogleInteractionsAPI',
+  ],
+  'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts': [
+    'model.useGoogleInteractionsServerState',
+  ],
+  'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts': [
+    'model.useBackgroundResponses',
+    'model.gpt5ReasoningSummary',
+  ],
+  'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts': [
+    'model.openaiParallelToolCalls',
+  ],
+  'src/agent/modelHandlers/ModelHandler.ts': [
+    'model.compactionThresholdPercent',
+  ],
+  'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
+  'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
+  'src/common/files/fileTypeUtils.ts': [
+    'files.included.mediaExtensions',
+    'files.included.inputExtensions',
+    'files.included.contextExtensions',
+    'files.included.editedExtensions',
+  ],
+  'src/common/files/fileListingRules.ts': [
+    'files.ignored.fileExtensions',
+    'files.ignored.inputFiles',
+    'files.ignored.inputDirectories',
+    'files.ignored.mediaDirectories',
+    'files.ignored.directories',
+    'files.ignored.keywords',
+  ],
+  'src/utils/media/img.ts': ['maxImageDimension'],
+  'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
+  'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],
+  'src/latex/formatter/latexindentpt.ts': ['latex.latexindentConfig'],
+  'src/latex/formatter/texfmt.ts': ['latex.texfmtConfig'],
+  'src/latex/texTools.ts': [
+    'latex.tikzInputDirectory',
+    'latex.includeWorkspaceInTexinputs',
+  ],
+  'src/latex/TikzPictureManager.ts': ['latex.tikzTemplate'],
+  'src/replacement/engine.ts': [
+    'latex.wrapCritiqueInAlign',
+    'latex.enabledReplacements',
+    'latex.enabledReplacementsRegex',
+    'latex.customReplacementsRegex',
+    'latex.customReplacements',
+  ],
+  'src/latex/latexdiff/diffCommandExecutor.ts': [
+    'latexdiff.pictureEnvironments',
+  ],
+  'src/tools/approval/latexPreview.ts': ['latexdiff.tempFileLocation'],
+  // Only the extension's git commands read the commit count, but the setup
+  // assistant's `update_config` tool writes it from any host, so a CLI-written
+  // value must not then be reported as unknown.
+  'src/tools/setup/ConfigTools.ts': ['git.numberOfCommitsToShow'],
+  'src/tools/media/audio.ts': ['audio.soxPath'],
+  'src/logger/logUtils.ts': ['logger.debugMode'],
+  'src/telemetry/UsageLogService.ts': ['telemetry.enabled'],
+  'src/agent/utils/debugMessageSaver.ts': ['debug.saveModelIO'],
+  'src/agent/utils/userVars.ts': ['skills.enabled'],
+  'src/tools/approval/toolEditApproval.ts': ['toolUse.requireEditApproval'],
+  'src/tools/approval/bashApproval.ts': ['toolUse.requireBashApproval'],
+} as const satisfies Readonly<Record<string, readonly CoreSettingPath[]>>;
+
+const EXTENSION_ONLY_CONSUMER_FILES = {
+  // The criticism sink that honors this flag is a VS Code diagnostics surface;
+  // the desktop reports inline criticism as unsupported.
+  'packages/extension/src/frontend/latex/inlineCriticism.ts': [
+    'inlineCriticism.enabled',
+  ],
+  'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts': [
+    'agentReview.runOnCommit',
+  ],
+  'packages/extension/src/frontend/review/AgentReviewService.ts': [
+    'agentReview.includeSubmodules',
+    'agentReview.includeUntrackedFiles',
+    'agentReview.approach',
+    'agentReview.model',
+  ],
+} as const satisfies Readonly<Record<string, readonly CoreSettingPath[]>>;
+
+/**
+ * Core settings only the VS Code extension reads. Setting one of these in
+ * `.texra/config.json` does nothing, so the CLI reports it as unknown.
+ *
+ * Exported with widened keys: the SDK declaration build (`packages/agent`)
+ * forbids `packages/extension/src/` text in emitted `.d.ts`, so the literal
+ * consumer-file keys stay on the internal const above, which also feeds the
+ * classification guard below.
+ */
+export const EXTENSION_ONLY_CORE_SETTING_CONSUMERS: Readonly<
+  Record<string, readonly CoreSettingPath[]>
+> = EXTENSION_ONLY_CONSUMER_FILES;
+
+type ConsumedPaths<T extends Readonly<Record<string, readonly string[]>>> =
+  T[keyof T][number];
+
+// Build fails when a Core setting is added without filing it on one side of the
+// host split, so a new extension-only key cannot silently rejoin the CLI's
+// known-key set.
+type _AssertEveryCorePathClassified = AssertNever<
+  Exclude<
+    CoreSettingPath,
+    | ConsumedPaths<typeof CLI_CORE_SETTING_CONSUMERS>
+    | ConsumedPaths<typeof EXTENSION_ONLY_CONSUMER_FILES>
+  >
 >;

@@ -4,17 +4,18 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  LATEX_WORKSHOP_EXT_ID,
-  type LatexConfigField,
-} from '@shared/constants/latex';
+import { type LatexConfigField } from '@shared/constants/latex';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import { unsupported } from '@shared/utils/dispatcher';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { setToolEnabled } from '@utils/config/constants';
+
+const NO_EXTENSION_HOSTING =
+  'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
 
 interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
   readonly onError: (error: unknown) => void;
@@ -35,7 +36,6 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
   };
   readonly navigation: {
     openExternal(url: string): Promise<void>;
-    presentExtensionInstall(extensionId: string): Promise<void>;
   };
   readonly commands: {
     run(command: string): Promise<void>;
@@ -61,16 +61,14 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   ) {
     this.toolsActions = {
       openInstallUrl: (url) => options.navigation.openExternal(url),
-      installExtension: (extensionId) =>
-        options.navigation.presentExtensionInstall(extensionId),
+      installExtension: unsupported(NO_EXTENSION_HOSTING),
       recheckStatus: () => this.refreshToolDashboard(),
       toggle: (toolId, enabled) => this.toggleTool(toolId, enabled),
       runCommand: (input) => this.runToolCommand(input),
     };
     this.latexActions = {
       applySettings: () => this.postLatexSettingsStatus(),
-      installLatexWorkshop: () =>
-        options.navigation.presentExtensionInstall(LATEX_WORKSHOP_EXT_ID),
+      installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
       runInstallCommand: (command) => this.runLatexInstallCommand(command),
       setConfigValue: (input) => this.updateLatexConfigValue(input),
     };
@@ -99,7 +97,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     const items = await this.options.dashboard.buildItems(cachedResults);
     this.options.renderer.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items,
+      items: items.map(withoutExtensionInstall),
     });
   }
 
@@ -166,4 +164,16 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     );
     this.postLatexConfigValues();
   }
+}
+
+/**
+ * Drops the marketplace install affordance from a dashboard item. The desktop
+ * app cannot host VS Code extensions, so the "Install Extension" button would
+ * have nowhere to go; the item's install guide and URL still describe the
+ * standalone path (Lean 4's `lake` build, for example).
+ */
+function withoutExtensionInstall(item: ToolDashboardItem): ToolDashboardItem {
+  if (item.installExtensionId == null) return item;
+  const { installExtensionId, ...rest } = item;
+  return rest;
 }

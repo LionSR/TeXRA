@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
-import { DefaultDesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import { DesktopHistoryHandlers } from '@desktop/main/desktopHistoryHandlers';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
@@ -20,7 +19,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 // Local file imports
 import {
   createStubDesktopAgentSettingsController,
-  createStubDesktopCrashReportingSettingsController,
   createStubDesktopCredentialSettingsController,
   createStubDesktopHistoryOptions,
   createStubDesktopHistorySettingsController,
@@ -66,16 +64,6 @@ function realAgentController(): DefaultDesktopAgentSettingsController {
       signIn: async () => false,
     },
     notifications: { showInfoMessage: noOp, showErrorMessage: noOp },
-  });
-}
-
-function realCrashReportingController(): DefaultDesktopCrashReportingSettingsController {
-  return new DefaultDesktopCrashReportingSettingsController({
-    state: new FakeStateStore(),
-    secrets: new FakeSecrets(),
-    renderer: { postToRenderer: () => undefined },
-    prompt: { input: async () => undefined },
-    initialization: { initialize: noOp },
   });
 }
 
@@ -125,7 +113,7 @@ function realToolingController(): DefaultDesktopToolingSettingsController {
         reason: 'unknownTool',
       }),
     },
-    navigation: { openExternal: noOp, presentExtensionInstall: noOp },
+    navigation: { openExternal: noOp },
     commands: { run: noOp },
     latexToolingController: new LatexToolingController({
       checkToolInstalled: async () => false,
@@ -170,17 +158,12 @@ describe('desktop settings capability markers', () => {
     );
   });
 
-  it('matches the real agent, crash-reporting, and history controllers, which support every action', () => {
+  it('matches the real agent and history controllers, which support every action', () => {
     const domains = [
       {
         name: 'agent',
         real: realAgentController().actions,
         stub: createStubDesktopAgentSettingsController().actions,
-      },
-      {
-        name: 'crashReporting',
-        real: realCrashReportingController().actions,
-        stub: createStubDesktopCrashReportingSettingsController().actions,
       },
       {
         name: 'history',
@@ -199,12 +182,16 @@ describe('desktop settings capability markers', () => {
     }
   });
 
-  it('matches the real tooling controller, which supports every tools and LaTeX action', () => {
+  it('matches the real tooling controller, which excludes VS Code extension installs', () => {
     const real = realToolingController();
     const stub = createStubDesktopToolingSettingsController();
 
-    expect(unsupportedCommands(real.toolsActions)).toEqual([]);
-    expect(unsupportedCommands(real.latexActions)).toEqual([]);
+    expect(unsupportedCommands(real.toolsActions)).toEqual([
+      'installExtension',
+    ]);
+    expect(unsupportedCommands(real.latexActions)).toEqual([
+      'installLatexWorkshop',
+    ]);
     expect(unsupportedCommands(stub.toolsActions)).toEqual(
       unsupportedCommands(real.toolsActions),
     );

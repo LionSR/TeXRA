@@ -17,7 +17,6 @@ interface DataRootOptions {
 
 interface ResourcesPathOptions {
   appPath?: string;
-  env?: Pick<NodeJS.ProcessEnv, 'TEXRA_RESOURCES_PATH'>;
   isDirectory?: (path: string) => boolean;
   resourcesPath?: string;
 }
@@ -64,12 +63,9 @@ export function resolveResourcesPath(
   mainDirname: string,
   options: ResourcesPathOptions = {},
 ): string {
-  const env = options.env ?? process.env;
-  const configured = env.TEXRA_RESOURCES_PATH?.trim();
   const appPath = options.appPath ?? app.getAppPath();
   const resourcesPath = options.resourcesPath ?? process.resourcesPath;
   const candidates = [
-    configured,
     join(appPath, 'resources'),
     resourcesPath ? join(resourcesPath, 'resources') : undefined,
     join(mainDirname, '../../../extension/resources'),

@@ -51,7 +51,7 @@ const SEVERITY_CONFIG: Record<
 };
 
 /** Get the string label for a severity level. */
-export function getSeverityLabel(severity: number): string {
+function getSeverityLabel(severity: number): string {
   return SEVERITY_CONFIG[severity]?.label ?? 'unknown';
 }
 

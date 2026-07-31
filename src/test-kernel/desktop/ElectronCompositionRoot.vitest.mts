@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { join, relative } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
@@ -306,21 +306,6 @@ describe('desktop composition root and launch environment', () => {
     expect(source).not.toContain('cwd: workspacePath ?? userDataPath,');
   });
 
-  it('resolves workspace paths only from an explicit launch environment', async () => {
-    const { resolveWorkspacePath } = await loadSourceModule(
-      '@desktop/main/platform/paths',
-    );
-
-    expect(
-      resolveWorkspacePath({
-        env: { TEXRA_WORKSPACE_PATH: ' ./project ' },
-      }),
-    ).toBe(resolve('./project'));
-    expect(
-      resolveWorkspacePath({ env: { TEXRA_WORKSPACE_PATH: '   ' } }),
-    ).toBeUndefined();
-  });
-
   it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {
     const { resolveDesktopDataRoot } = await loadSourceModule(
       '@desktop/main/platform/paths',
@@ -337,51 +322,37 @@ describe('desktop composition root and launch environment', () => {
     ).toBe(userDataPath);
   });
 
-  it('finds resources in configured, packaged, and monorepo development layouts', async () => {
+  it('finds resources in packaged and monorepo development layouts', async () => {
     const { resolveResourcesPath } = await loadSourceModule(
       '@desktop/main/platform/paths',
     );
     const root = await makeTempDir('texra-electron-root-', tempDirs);
-    const configuredResources = join(root, 'configured-resources');
     const appResources = join(root, 'app', 'resources');
     const packagedResources = join(root, 'electron-resources', 'resources');
     const monorepoResources = join(root, 'packages', 'extension', 'resources');
     const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
 
     await Promise.all(
-      [
-        configuredResources,
-        appResources,
-        packagedResources,
-        monorepoResources,
-      ].map(createResourceTree),
+      [appResources, packagedResources, monorepoResources].map(
+        createResourceTree,
+      ),
     );
 
     expect(
       resolveResourcesPath(mainDirname, {
-        appPath: join(root, 'missing-app'),
-        env: { TEXRA_RESOURCES_PATH: configuredResources },
-        resourcesPath: join(root, 'missing-electron-resources'),
-      }),
-    ).toBe(configuredResources);
-    expect(
-      resolveResourcesPath(mainDirname, {
         appPath: join(root, 'app'),
-        env: { TEXRA_RESOURCES_PATH: undefined },
         resourcesPath: join(root, 'missing-electron-resources'),
       }),
     ).toBe(appResources);
     expect(
       resolveResourcesPath(mainDirname, {
         appPath: join(root, 'missing-app'),
-        env: { TEXRA_RESOURCES_PATH: undefined },
         resourcesPath: join(root, 'electron-resources'),
       }),
     ).toBe(packagedResources);
     expect(
       resolveResourcesPath(mainDirname, {
         appPath: join(root, 'missing-app'),
-        env: { TEXRA_RESOURCES_PATH: undefined },
         resourcesPath: join(root, 'missing-electron-resources'),
       }),
     ).toBe(monorepoResources);
@@ -392,29 +363,27 @@ describe('desktop composition root and launch environment', () => {
       '@desktop/main/platform/paths',
     );
     const root = await makeTempDir('texra-electron-root-', tempDirs);
-    const incompleteResources = join(root, 'configured-resources');
-    const fileBackedResources = join(root, 'file-backed-resources');
+    const incompleteApp = join(root, 'incomplete-app');
+    const fileBackedApp = join(root, 'file-backed-app');
     const monorepoResources = join(root, 'packages', 'extension', 'resources');
     const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
 
     await Promise.all([
-      mkdir(join(incompleteResources, 'agents'), { recursive: true }),
-      mkdir(join(fileBackedResources, 'agents'), { recursive: true }),
+      mkdir(join(incompleteApp, 'resources', 'agents'), { recursive: true }),
+      mkdir(join(fileBackedApp, 'resources', 'agents'), { recursive: true }),
       createResourceTree(monorepoResources),
     ]);
-    await writeFile(join(fileBackedResources, 'tool_use_agents'), '');
+    await writeFile(join(fileBackedApp, 'resources', 'tool_use_agents'), '');
 
     expect(
       resolveResourcesPath(mainDirname, {
-        appPath: join(root, 'missing-app'),
-        env: { TEXRA_RESOURCES_PATH: fileBackedResources },
+        appPath: fileBackedApp,
         resourcesPath: join(root, 'missing-electron-resources'),
       }),
     ).toBe(monorepoResources);
     expect(
       resolveResourcesPath(mainDirname, {
-        appPath: join(root, 'missing-app'),
-        env: { TEXRA_RESOURCES_PATH: incompleteResources },
+        appPath: incompleteApp,
         resourcesPath: join(root, 'missing-electron-resources'),
       }),
     ).toBe(monorepoResources);
@@ -430,12 +399,10 @@ describe('desktop composition root and launch environment', () => {
     expect(() =>
       resolveResourcesPath(mainDirname, {
         appPath: join(root, 'app'),
-        env: { TEXRA_RESOURCES_PATH: join(root, 'configured') },
         resourcesPath: join(root, 'electron-resources'),
       }),
     ).toThrow(
       [
-        join(root, 'configured'),
         join(root, 'app', 'resources'),
         join(root, 'electron-resources', 'resources'),
         join(root, 'packages', 'extension', 'resources'),

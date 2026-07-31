@@ -53,14 +53,13 @@ import {
 import type { DesktopStreamRevealResult } from './desktopAgentExecution.js';
 import type { DesktopHistorySettingsController } from './desktopHistoryHandlers.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
-import type { DesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
 export interface DesktopSettingsUiHost {
   openPath(filePath: string): Promise<void>;
   /**
-   * Route the window to the stream's progress board. `'unavailable'` covers a
+   * Select the stream as the window's active stream. `'unavailable'` covers a
    * presentation that could not be reached at all; the reveal is then reported
    * through {@link DesktopSettingsUiHost.onError} rather than here.
    */
@@ -88,7 +87,6 @@ export interface DesktopSettingsUiHost {
 export interface DesktopSettingsIpcOptions {
   postToRenderer(message: unknown): void;
   agentSettingsController: DesktopAgentSettingsController;
-  crashReportingSettingsController: DesktopCrashReportingSettingsController;
   credentialSettingsController: DesktopCredentialSettingsController;
   historySettingsController: DesktopHistorySettingsController;
   toolingSettingsController: DesktopToolingSettingsController;
@@ -221,7 +219,6 @@ export function createDesktopSettingsIpc(
       postGitHubSubscriptions(),
       options.credentialSettingsController.postStartupData(),
       options.toolingSettingsController.postStartupData(),
-      options.crashReportingSettingsController.postStartupData(),
       options.agentSettingsController.postStartupData(),
     ]);
   }
@@ -477,7 +474,6 @@ export function createDesktopSettingsIpc(
       getList: postGoalList,
       revealStream: (streamId) => revealStream(streamId),
     },
-    desktopCrashReporting: options.crashReportingSettingsController.actions,
   };
 
   const settingsHandlers = createSettingsViewCommandHandlers(settingsActions);

@@ -501,25 +501,11 @@ function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
   return resolved;
 }
 
-/**
- * Agents in a category, deduplicated by name. `includeInternal` controls
- * whether internal agents (hidden from dropdowns but launchable by commands)
- * are in the set: dropdowns exclude them, launch resolution includes them.
- */
-function categoryEntries(
-  category: AgentCategory,
-  includeInternal: boolean,
-): AgentEntry[] {
-  return deduplicateByName(
-    [...cache.values()].filter(
-      (e) => e.category === category && (includeInternal || !e.internal),
-    ),
-  );
-}
-
-/** Get non-internal agents for a category, deduplicated by name. */
+/** Get agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
-  return categoryEntries(category, false);
+  return deduplicateByName(
+    [...cache.values()].filter((e) => e.category === category),
+  );
 }
 
 /** Get agents by source. */
@@ -605,7 +591,7 @@ export function getRosterAgent(
     identifier === name
       ? getCategoryAgent(category, identifier)
       : getAgent(identifier, category);
-  return entry?.category === category && !entry.internal ? entry : undefined;
+  return entry?.category === category ? entry : undefined;
 }
 
 // =============================================================================
@@ -654,8 +640,7 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
 
 /**
  * Resolve delegation targets for a run: the scope's pinned keys when a
- * delegation scope is active (dropping `internal` agents, same as the
- * unscoped roster below), or the workspace-visible roster otherwise. The
+ * delegation scope is active, or the workspace-visible roster otherwise. The
  * single resolver behind both the "Available agents:" tool-description block
  * (`delegationAgentAvailability.ts`) and the prompt-template agent lists
  * (`userVars.ts`), so a delegating agent's tool description and its own
@@ -745,11 +730,10 @@ export function getVisibleAgent(
 }
 
 /**
- * Resolve an identifier to an agent in a category, ignoring visibility
- * (including internal agents, which are hidden from dropdowns but still hold a
- * visibility slot). Shares {@link resolveWithinCategory} with
- * {@link getVisibleAgent} so the category-scoped matching rule is identical to
- * validation's. Used by the legacy-alias migration and as the category floor of
+ * Resolve an identifier to an agent in a category, ignoring visibility. Shares
+ * {@link resolveWithinCategory} with {@link getVisibleAgent} so the
+ * category-scoped matching rule is identical to validation's. Used by the
+ * legacy-alias migration and as the category floor of
  * {@link resolveAgentForLaunch}.
  */
 export function getCategoryAgent(
@@ -757,7 +741,7 @@ export function getCategoryAgent(
   identifier: string,
 ): AgentEntry | undefined {
   return resolveWithinCategory(
-    categoryEntries(category, true),
+    getAgentsByCategory(category),
     category,
     identifier,
   );
@@ -776,12 +760,12 @@ export function getCategoryAgent(
  *     resolves to exactly what validation resolved, not a same-name shadow the
  *     full set would dedup to differently.
  *  3. The full category set (`getCategoryAgent`), reached only for names the
- *     visible set can't resolve — internal agents, launchable by command but
- *     hidden from dropdowns/validation.
+ *     visible set can't resolve — a legacy alias, or an agent the workspace
+ *     roster hides but a command still names.
  *
  * It never falls back to blind source-priority on a bare name, so launch only
- * ever extends resolution to internal agents — it cannot pick a different entry
- * than validation for any name validation resolves.
+ * ever extends resolution beyond the visible roster — it cannot pick a
+ * different entry than validation for any name validation resolves.
  */
 export function resolveAgentForLaunch(
   category: AgentCategory,

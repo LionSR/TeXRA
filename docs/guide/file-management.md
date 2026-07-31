@@ -241,7 +241,7 @@ The CLI follows the same storage-first lifecycle — its run store lives at
 <p class="hero-caption">Three beats of the same lifecycle: storage-first output, <code>--output</code> as Accept, and <code>history show</code> to browse a run's stored files.</p>
 
 The folder also stores intermediate artifacts such as optional
-debug JSON files written when `texra.debug.saveDebugObjects` is enabled.
+debug JSON files written when `texra.debug.saveModelIO` is enabled.
 
 ## Working with LaTeX Projects
 

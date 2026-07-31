@@ -227,12 +227,13 @@ Control which directories TeXRA ignores:
 Pick the formatter (`latexindent`, `tex-fmt`, or `none` to disable) from the **Dashboard → LaTeX** tab. The related options are standard settings:
 
 ```json
-"texra.latex.showLatexindentWarning": false,
 "texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
 "texra.latex.texfmtConfig": "/path/to/tex-fmt.toml"
 ```
 
-- `showLatexindentWarning`: Disabled by default. Set to `true` to show a popup when `latexindent` is missing.
+A missing `latexindent` is reported once per session; pick a different
+formatter (including `none`) if you do not want it.
+
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
 
@@ -390,13 +391,11 @@ Control logging behavior:
 
 ```json
 "texra.logger.debugMode": false,
-"texra.debug.saveDebugObjects": false,
-"texra.debug.saveInputPrompt": false
+"texra.debug.saveModelIO": false
 ```
 
 - `debugMode`: Show detailed debug messages in the logger view
-- `saveDebugObjects`: Save message and response objects to JSON files for debugging purposes (includes both API messages and raw responses)
-- `saveInputPrompt`: Persist the final model input prompt as an XML file (stored alongside other debug artifacts when an execution ID is available)
+- `saveModelIO`: Save what TeXRA sends to and receives from the model — the request messages and raw responses as JSON, plus the final input prompt as an XML file (stored alongside other debug artifacts when an execution ID is available)
 
 ## Environment-Specific Configuration
 
@@ -481,7 +480,7 @@ Use workspace settings to ensure consistent configuration across the team.
 
 Power users can edit the underlying settings file directly:
 
-- **CLI / project-level:** edit `.texra/config.json` in your project (run `texra init` to scaffold one). Only recognized `texra.*` keys take effect — the CLI warns on unknown keys.
+- **CLI / project-level:** edit `.texra/config.json` in your project (run `texra init` to scaffold one). Only recognized `texra.*` keys take effect — the CLI warns on unknown keys, including keys that only the VS Code extension reads (such as `texra.agentReview.*`), which belong in VS Code settings instead.
 - **VS Code extension:** open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run "Preferences: Open User Settings (JSON)", and add or modify `texra.*` keys.
 
 ### Cross-Extension Compatibility
@@ -533,7 +532,7 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 Reflection rounds are now controlled entirely by the agent definition. Choose agents whose `userRequest` prompt list includes follow-up entries (or create custom ones) when you need an automatic follow-up critique.
 
-To capture the full prompt sent to the model, enable the `texra.debug.saveInputPrompt` setting (in `.texra/config.json` or VS Code settings).
+To capture the full prompt sent to the model, enable the `texra.debug.saveModelIO` setting (in `.texra/config.json` or VS Code settings).
 
 **Model/Agent Selection:**
 

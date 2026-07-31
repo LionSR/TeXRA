@@ -205,11 +205,6 @@ export interface SettingsViewCommandActions {
     readonly getList: HandlerOrUnsupported;
     readonly revealStream: StringAction;
   };
-  readonly desktopCrashReporting: {
-    readonly get: HandlerOrUnsupported;
-    readonly setEnabled: EnabledAction;
-    readonly setDsn: HandlerOrUnsupported;
-  };
 }
 
 function mapAction<TData, TArgs extends readonly unknown[]>(
@@ -420,12 +415,5 @@ export function createSettingsViewCommandHandlers(
     revealGoalStream: mapAction(actions.goals.revealStream, (data) => [
       data.streamId,
     ]),
-
-    getDesktopCrashReporting: actions.desktopCrashReporting.get,
-    setDesktopCrashReportingEnabled: mapAction(
-      actions.desktopCrashReporting.setEnabled,
-      (data) => [data.enabled],
-    ),
-    setDesktopCrashReportingDsn: actions.desktopCrashReporting.setDsn,
   };
 }

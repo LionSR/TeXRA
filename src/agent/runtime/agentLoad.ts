@@ -75,7 +75,7 @@ export function validateAgentYamlContent(
 }
 
 /** Loads and parses a YAML file from an absolute path. */
-export async function loadYaml(absolutePath: string): Promise<object> {
+async function loadYaml(absolutePath: string): Promise<object> {
   if (!path.isAbsolute(absolutePath)) {
     throw new Error('loadYaml requires an absolute path');
   }

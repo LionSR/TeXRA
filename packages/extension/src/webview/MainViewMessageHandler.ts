@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getAuthStatus } from '@commands/auth/authCommands';
+import { GlobalStateKey, globalSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -22,7 +23,7 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { getConfig, updateConfig } from '@utils/config/configUtils';
+import { getConfig } from '@utils/config/configUtils';
 import { SETTINGS_QUERY } from '@utils/config/constants';
 import {
   checkCoreDependencies,
@@ -323,10 +324,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           );
         }
       },
-      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: () =>
-        updateConfig('ui.showLoginBanner', false),
-      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: () =>
-        updateConfig('ui.showOrchestratorBanner', false),
+      [MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER]: async () => {
+        await globalSM.update(GlobalStateKey.LOGIN_BANNER_DISMISSED, true);
+      },
+      [MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER]: async () => {
+        await globalSM.update(
+          GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
+          true,
+        );
+      },
       [MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (m) => {
         await safeExecuteCommand(
           GETTING_STARTED_COMMANDS[m.action],

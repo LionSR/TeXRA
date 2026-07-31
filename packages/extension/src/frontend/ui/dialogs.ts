@@ -99,26 +99,3 @@ export async function selectFolder(
   });
   return folders?.[0]?.fsPath ?? null;
 }
-
-export interface FileSelectionResult {
-  relativePath: string;
-  absolutePath: string;
-}
-
-/**
- * Prompts the user to select a file within the current workspace.
- * Returns both the workspace-relative and absolute paths for downstream
- * consumers. Returns null when the workspace is unavailable or the user
- * cancels the dialog.
- */
-export async function selectFileFromWorkspace(
-  options: FileDialogOptions,
-): Promise<FileSelectionResult | null> {
-  const relativePath = await selectFile(options);
-  if (!relativePath) return null;
-
-  return {
-    relativePath,
-    absolutePath: WorkspaceFS.fullPath(relativePath),
-  };
-}

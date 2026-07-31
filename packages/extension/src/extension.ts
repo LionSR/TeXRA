@@ -122,23 +122,15 @@ async function refreshApiKeyStatus() {
     return;
   }
 
-  // Check if reminders are enabled
-  const showReminders = getConfig<boolean>(
-    'texra.ui.showApiKeyReminders',
-    true,
-  );
-
-  if (!showReminders) {
-    apiKeyStatusBarItem.hide();
-    statusBarItem?.show();
-    return;
-  }
-
   // Use the same credential predicate as the setup assistant and onboarding
   // funnel. This keeps ChatGPT subscription, Researcher Access, and direct API
   // keys in agreement about whether the first-run CTA should remain visible.
   const exists = await hasAnyUsableSetupCredential();
-  if (!exists) {
+  // A pre-retirement `ui.showApiKeyReminders` of false is a deliberate
+  // opt-out; keep honoring it rather than making the CTA unsuppressible.
+  const remindersOptOut =
+    getConfig<boolean>('ui.showApiKeyReminders', true) === false;
+  if (!exists && !remindersOptOut) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =

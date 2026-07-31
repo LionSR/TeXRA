@@ -19,33 +19,22 @@ export { AgentCategory };
  * only the prefault-vs-optional wrapper differs per schema, by design.
  */
 const temperatureField = z.number().min(0).max(1);
-/** Shared by both `requiredFiles` and `requiredFilesInternal` — same shape, distinct fields. */
+/** Variable name to file path, resolved against the agent's YAML directory. */
 const requiredFilesField = z.record(z.string(), z.string());
 const defaultOutputFilesField = z.array(z.string());
-const filePatternsContainEntryFields = {
-  pattern: z.string(),
-  varName: z.string(),
-};
 
 const AgentSettingBaseSchema = z.strictObject({
   temperature: temperatureField.prefault(1.0),
-  requiredFiles: requiredFilesField.prefault({}),
   requiredFilesInternal: requiredFilesField.prefault({}),
   defaultOutputFiles: defaultOutputFilesField.prefault([]),
-  filePatternsContain: z
-    .array(
-      z.strictObject({
-        ...filePatternsContainEntryFields,
-        categories: z.array(z.string()).prefault([]),
-      }),
-    )
-    .prefault([]),
   tools: z.array(ToolDefinitionSchema).prefault([]),
-  /** Registry metadata: hides the agent from default launcher listings. */
-  internal: z.boolean().optional(),
 });
 
-/** Tool reference that may be a raw name string (YAML) or a resolved definition. */
+/**
+ * Tool reference: a name resolved from the registry, or — for definitions
+ * registered as values rather than YAML — a whole tool definition, which may
+ * carry runtime-only fields no YAML can express.
+ */
 const AgentToolInputSchema = z.union([z.string(), ToolDefinitionSchema]);
 
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
@@ -63,13 +52,43 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
 });
 
 /**
+ * console.warn, not the structured trace logger: this module is a leaf schema
+ * (`core/definition`, dependency-free by design — see
+ * src/agent/core/README.md) and must not pull in the logger's transitive
+ * `@shared/schemas` barrel just for deprecation notices. Same pattern as
+ * `src/shared/schemas/streamData.ts`'s `warnDroppedItem`.
+ */
+function warnRetiredSetting(message: string): void {
+  console.warn(`[AgentDataclass] ${message}`);
+}
+
+function isNonEmptyRecord(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length > 0
+  );
+}
+
+/**
  * Drop obsolete settings accepted only for legacy YAML and persisted state.
- * `documentTag`/`endTag` used to configure the per-agent output container;
- * every bundled and custom agent has converged on the fixed
- * `<documents><document name="...">...</document></documents>` protocol (see
- * `@shared/schemas/output`). The fixed default legacy values are
- * silently ignored so old bundled/persisted copies do not pollute CLI stderr;
- * bespoke legacy tags still warn because they now get the standard container.
+ * Values that carried no behavior (`outputExt`, `prefills`, the default output
+ * tags, and materialized empty maps) are dropped silently so old
+ * bundled/persisted copies do not pollute CLI stderr; a value that used to do
+ * something warns, because the agent now behaves differently:
+ *
+ * - `documentTag`/`endTag` configured the per-agent output container; every
+ *   agent now emits the fixed
+ *   `<documents><document name="...">...</document></documents>` protocol (see
+ *   `@shared/schemas/output`).
+ * - `internal` hid an agent from launcher listings; no agent uses it and every
+ *   listing now shows the full category.
+ * - `requiredFiles` mapped variables to workspace-relative files; agent-bundled
+ *   files live in `requiredFilesInternal` and workspace files are attached per
+ *   run as context files.
+ * - `filePatternsContain` bound variables to files whose names matched a
+ *   pattern within a UI file category.
  */
 function stripLegacySettingFields(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
@@ -80,6 +99,9 @@ function stripLegacySettingFields(input: unknown): unknown {
     prefills: _prefills,
     documentTag,
     endTag,
+    internal,
+    requiredFiles,
+    filePatternsContain,
     ...rest
   } = input as Record<string, unknown>;
   const hasLegacyOutputTags = documentTag !== undefined || endTag !== undefined;
@@ -87,13 +109,23 @@ function stripLegacySettingFields(input: unknown): unknown {
     (documentTag === undefined || documentTag === OUTPUT_DOCUMENTS_TAG) &&
     (endTag === undefined || endTag === OUTPUT_END_TAG);
   if (hasLegacyOutputTags && !usesDefaultOutputTags) {
-    // console.warn, not the structured trace logger: this module is a leaf
-    // schema (`core/definition`, dependency-free by design — see
-    // src/agent/core/README.md) and must not pull in the logger's transitive
-    // `@shared/schemas` barrel just for one deprecation notice. Same pattern
-    // as `src/shared/schemas/streamData.ts`'s `warnDroppedItem`.
-    console.warn(
-      '[AgentDataclass] settings.documentTag/endTag are no longer configurable — every agent emits the fixed <documents><document name="..."> container. Ignoring the value from this agent definition.',
+    warnRetiredSetting(
+      'settings.documentTag/endTag are no longer configurable — every agent emits the fixed <documents><document name="..."> container. Ignoring the value from this agent definition.',
+    );
+  }
+  if (internal === true) {
+    warnRetiredSetting(
+      'settings.internal no longer hides an agent — this agent is listed with the rest of its category.',
+    );
+  }
+  if (isNonEmptyRecord(requiredFiles)) {
+    warnRetiredSetting(
+      'settings.requiredFiles (workspace-relative) is no longer loaded — bundle the file next to the agent YAML and map it under requiredFilesInternal, or attach it as a context file for the run.',
+    );
+  }
+  if (Array.isArray(filePatternsContain) && filePatternsContain.length > 0) {
+    warnRetiredSetting(
+      'settings.filePatternsContain is no longer loaded — its template variables render empty. Map the file under requiredFilesInternal or attach it as a context file for the run.',
     );
   }
   return rest;
@@ -124,19 +156,9 @@ export type AgentToolUseSetting = Extract<
 
 const rawAgentSettingBaseFields = {
   temperature: temperatureField.optional(),
-  requiredFiles: requiredFilesField.optional(),
   requiredFilesInternal: requiredFilesField.optional(),
   defaultOutputFiles: defaultOutputFilesField.optional(),
-  filePatternsContain: z
-    .array(
-      z.strictObject({
-        ...filePatternsContainEntryFields,
-        categories: z.array(z.string()).optional(),
-      }),
-    )
-    .optional(),
   tools: z.array(AgentToolInputSchema).optional(),
-  internal: z.boolean().optional(),
 };
 
 /** Workflow-only settings, shared by the partial and root raw input schemas. */

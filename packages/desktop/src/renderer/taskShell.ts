@@ -25,7 +25,6 @@ export interface TaskSidebarModel {
   readonly filesExpanded: boolean;
   readonly hasWorkspace: boolean;
   readonly initials: string;
-  readonly pendingApprovalCount: number;
   readonly projectSectionPosition: number;
   readonly sessions: Node;
   readonly streamCount: number;
@@ -49,7 +48,6 @@ function sidebarAction(options: {
   icon: Parameters<typeof waIcon>[0];
   label: string;
   onClick: () => void;
-  badge?: number;
   primary?: boolean;
 }): TemplateResult {
   return html`
@@ -66,18 +64,6 @@ function sidebarAction(options: {
         slot: 'start',
       })}
       <span>${options.label}</span>
-      ${
-        options.badge && options.badge > 0
-          ? html`<wa-badge
-              class="task-sidebar-badge"
-              slot="end"
-              variant="warning"
-              appearance="filled"
-              pill
-              >${options.badge > 99 ? '99+' : options.badge}</wa-badge
-            >`
-          : nothing
-      }
     </wa-button>
   `;
 }
@@ -199,7 +185,6 @@ export function taskSidebarTemplate(
           icon: 'file-lines',
           label: 'Logs',
           onClick: callbacks.onOpenLogs,
-          badge: model.pendingApprovalCount,
         })}
         ${sidebarAction({
           icon: 'gear',

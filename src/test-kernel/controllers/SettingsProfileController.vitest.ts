@@ -230,11 +230,5 @@ describe('SettingsProfileController', () => {
         value: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
       }),
     );
-    expect(reliabilitySettings).toContainEqual(
-      expect.objectContaining({
-        key: 'texra.model.retry.backoffMs',
-        value: DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
-      }),
-    );
   });
 });

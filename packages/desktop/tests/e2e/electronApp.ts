@@ -218,14 +218,14 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   );
 }
 
-export type DesktopRoute = 'main' | 'progress' | 'settings' | 'logs';
+export type DesktopRoute = 'main' | 'settings' | 'logs';
 
 /**
  * Send a legacy `desktop:setRoute` IPC message through the task-centric shell
- * and wait until the route is fully applied. Main and progress keep the
- * permanent conversation surface; Settings and Logs activate their
- * corresponding right-workbench tabs. The wait asserts both the route marker
- * and the target surface so callers never race the first frame.
+ * and wait until the route is fully applied. Main keeps the permanent
+ * conversation surface; Settings and Logs activate their corresponding
+ * right-workbench tabs. The wait asserts both the route marker and the target
+ * surface so callers never race the first frame.
  */
 export async function setRoute(
   launched: LaunchedApp,
@@ -240,8 +240,7 @@ export async function setRoute(
       const shell = document.querySelector<HTMLElement>('.task-shell');
       if (!shell) return false;
       switch (targetRoute) {
-        case 'main':
-        case 'progress': {
+        case 'main': {
           const pane = document.querySelector<HTMLElement>(
             '.task-conversation-pane[data-pane="launcher"]',
           );

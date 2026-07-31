@@ -83,7 +83,6 @@ import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.
 import { DesktopPromptController } from './desktopPromptController.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
-import { DefaultDesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { DesktopHistoryHandlers } from './desktopHistoryHandlers.js';
 import {
@@ -229,7 +228,6 @@ function createWindow(options: {
   workspacePath: string | undefined;
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
-  initializeCrashReporting: () => Promise<void>;
   processSession: SessionHandle;
   sessionStores: SessionStores;
   /**
@@ -782,28 +780,6 @@ function createWindow(options: {
       },
       onError: reportAsyncError,
     });
-  const presentExtensionInstall = async (extensionId: string) => {
-    // TeXRA Desktop cannot host VS Code extensions. This action explicitly
-    // offers navigation to the VS Code marketplace or the extension id.
-    const result = await dialog.showMessageBox(window, {
-      type: 'info',
-      message: 'VS Code extension referenced',
-      detail:
-        `${extensionId}\n\n` +
-        'TeXRA Desktop runs standalone and cannot host VS Code extensions. ' +
-        'If you also use VS Code, you can install this extension there.',
-      buttons: ['Open in Marketplace', 'Copy ID', 'Close'],
-      defaultId: 0,
-      cancelId: 2,
-    });
-    if (result.response === 0) {
-      await previewHost.openExternal(
-        `https://marketplace.visualstudio.com/items?itemName=${encodeURIComponent(extensionId)}`,
-      );
-    } else if (result.response === 1) {
-      clipboard.writeText(extensionId);
-    }
-  };
   const toolingSettingsController = new DefaultDesktopToolingSettingsController(
     {
       onError: reportAsyncError,
@@ -819,10 +795,7 @@ function createWindow(options: {
         refreshDisabledCache: refreshDefaultDisabledToolCache,
         planTerminalAction: planDefaultToolTerminalAction,
       },
-      navigation: {
-        openExternal: previewHost.openExternal,
-        presentExtensionInstall,
-      },
+      navigation: { openExternal: previewHost.openExternal },
       commands: { run: runSetupCommand },
       latexToolingController: new LatexToolingController({
         checkToolInstalled: (tool) => checkToolInstalled(tool, false),
@@ -840,19 +813,6 @@ function createWindow(options: {
       latexConfigPersistenceController: new LatexConfigPersistenceController(),
     },
   );
-  const crashReportingSettingsController =
-    new DefaultDesktopCrashReportingSettingsController({
-      state: platform().globalState,
-      secrets: platform().secrets,
-      renderer: {
-        postToRenderer,
-      },
-      prompt: {
-        input: (input) =>
-          promptController.request({ ...input, password: true }),
-      },
-      initialization: { initialize: options.initializeCrashReporting },
-    });
   const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
     showErrorMessage,
@@ -924,7 +884,6 @@ function createWindow(options: {
   const settingsIpc = createDesktopSettingsIpc({
     postToRenderer,
     agentSettingsController,
-    crashReportingSettingsController,
     credentialSettingsController,
     historySettingsController,
     toolingSettingsController,
@@ -1277,7 +1236,6 @@ function createWindow(options: {
     // `ready-to-show` is not guaranteed when the page is already cached, so
     // keep load completion as an idempotent presentation fallback.
     presentWindow();
-    void options.initializeCrashReporting();
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -1373,32 +1331,14 @@ if (protocolLifecycle.shouldContinue) {
           });
         });
 
-        let crashReportingInitialized = false;
-        let crashReportingInitialization: Promise<void> | undefined;
-        const initializeCrashReporting = async (): Promise<void> => {
-          if (crashReportingInitialized) return;
-          crashReportingInitialization ??= (async () => {
-            try {
-              crashReportingInitialized = await initializeDesktopCrashReporting(
-                {
-                  globalState: platform().globalState,
-                  secrets: platform().secrets,
-                  sensitivePaths: [
-                    platformInit.workspacePath,
-                    app.getPath('userData'),
-                    platformInit.dataRoot,
-                  ],
-                  log: console,
-                },
-              );
-            } finally {
-              if (!crashReportingInitialized) {
-                crashReportingInitialization = undefined;
-              }
-            }
-          })();
-          await crashReportingInitialization;
-        };
+        void initializeDesktopCrashReporting({
+          sensitivePaths: [
+            platformInit.workspacePath,
+            app.getPath('userData'),
+            platformInit.dataRoot,
+          ],
+          log: console,
+        });
         const authCoordinator = createDesktopAuthCoordinator({
           secrets: platform().secrets,
           log: console,
@@ -1412,7 +1352,6 @@ if (protocolLifecycle.shouldContinue) {
             workspacePath: platformInit.workspacePath,
             authCoordinator,
             authCallbackState,
-            initializeCrashReporting,
             processSession,
             sessionStores,
             hasPriorInstall: platformInit.hasPriorInstall,

@@ -72,8 +72,6 @@ import {
   customAgentDir,
   customAgentDirIsDefault,
   customPresets,
-  desktopCrashReportingConfigured,
-  desktopCrashReportingEnabled,
   detachSubagentsOnStop,
   gitAuthorEmail,
   gitAuthorName,
@@ -414,12 +412,6 @@ export class SettingsApp extends SettingsAppBase {
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
             .agentSkillsEnabled=${agentSkillsEnabled.get()}
             .showAgentSkillsSettings=${this.isDesktopHost}
-            .showDesktopCrashReporting=${!isKnownUnsupported(
-              unsupportedCommands.get(),
-              SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
-            )}
-            .desktopCrashReportingEnabled=${desktopCrashReportingEnabled.get()}
-            .desktopCrashReportingConfigured=${desktopCrashReportingConfigured.get()}
           ></tools-tab>
         `;
       case 'ai-agents':

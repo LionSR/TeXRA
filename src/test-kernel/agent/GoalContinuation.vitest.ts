@@ -8,17 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { platform, type Platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
-import {
-  LEGACY_GOAL_FEATURE_FLAG_KEYS,
-  GOAL_FEATURE_FLAG_KEY,
-} from '@shared/schemas/goal';
+import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas/goal';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 
 const STREAM_ID = 'stream:goal-cont' as StreamTabId;
-// Pre-rename canonical key, still honored read-only for back-compat.
-const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
 
 async function installPlatformWithConfig(
   config: Record<string, unknown>,
@@ -30,40 +25,19 @@ async function installPlatformWithConfig(
 describe('isGoalEnabled', () => {
   it.each([
     {
-      name: 'defaults on when neither key is set',
+      name: 'defaults on when the key is not set',
       config: {},
       expected: true,
     },
     {
-      name: 'honors explicit canonical false',
+      name: 'honors an explicit false',
       config: { [GOAL_FEATURE_FLAG_KEY]: false },
       expected: false,
     },
     {
-      name: 'honors explicit legacy false when canonical is absent',
-      config: { [LEGACY_GOAL_FEATURE_FLAG_KEY]: false },
-      expected: false,
-    },
-    {
-      name: 'honors explicit legacy true when canonical is absent',
-      config: { [LEGACY_GOAL_FEATURE_FLAG_KEY]: true },
+      name: 'honors an explicit true',
+      config: { [GOAL_FEATURE_FLAG_KEY]: true },
       expected: true,
-    },
-    {
-      name: 'lets canonical true override legacy false',
-      config: {
-        [LEGACY_GOAL_FEATURE_FLAG_KEY]: false,
-        [GOAL_FEATURE_FLAG_KEY]: true,
-      },
-      expected: true,
-    },
-    {
-      name: 'lets canonical false override legacy true',
-      config: {
-        [LEGACY_GOAL_FEATURE_FLAG_KEY]: true,
-        [GOAL_FEATURE_FLAG_KEY]: false,
-      },
-      expected: false,
     },
   ])('$name', async ({ config, expected }) => {
     await installPlatformWithConfig(config);

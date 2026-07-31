@@ -11,6 +11,7 @@ import {
   resolveDelegationScopeAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
+import { shouldSaveModelIO } from '@agent/utils/debugMessageSaver';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
@@ -55,9 +56,9 @@ export type UserVars = Record<string, unknown>;
  * Agent-creation templates render once when a YAML file is produced, then the
  * generated agent renders again at runtime. These tokens must pass through the
  * creation render literally so the runtime render can substitute them later.
- * User-defined `requiredFiles` / pattern variables are intentionally not in
- * this fixed list; they remain caller-supplied names and `throwOnUndefined`
- * stays disabled until there is a separate validation story for them.
+ * User-defined `requiredFilesInternal` variables are intentionally not in this
+ * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
+ * disabled until there is a separate validation story for them.
  */
 export const USER_VAR_RUNTIME_TOKENS = [
   'MODEL',
@@ -177,16 +178,14 @@ export async function buildUserVars(
   logger: AgentTrace,
   options: BuildUserVarsOptions = {},
 ): Promise<UserVars> {
-  // Parallelize independent I/O: required files, pattern files, rules, and memories
+  // Parallelize independent I/O: required files, rules, and memories
   const [
     { vars: requiredVars, files: requiredFiles },
-    { vars: patternVars, files: patternFiles },
     latexStyleRules,
     attachedMemories,
     runtimeSkills,
   ] = await Promise.all([
     getRequiredFileVars(agentSetting, agentPath),
-    getPatternBasedFileVars(agentConfig, agentSetting),
     // Load shared LaTeX style rules (best-effort; empty string if missing)
     AbsoluteFS.read(path.join(agentPath, SHARED_LATEX_RULES_REL)).catch(
       () => '',
@@ -203,7 +202,6 @@ export async function buildUserVars(
       ? loadRuntimeSkillCatalog()
       : Promise.resolve({ catalog: '', issues: [] }),
   ]);
-  const allLoadedFiles: LoadedFileEntry[] = [...requiredFiles, ...patternFiles];
 
   for (const issue of runtimeSkills.issues) {
     logger.warn(`Skill import ${formatRuntimeSkillIssue(issue)}`);
@@ -215,7 +213,6 @@ export async function buildUserVars(
     ...getBasicVars(agentConfig, providerFlags, options),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
-    ...patternVars,
     ...resolveOutputFiles(agentConfig, agentSetting),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
@@ -225,8 +222,8 @@ export async function buildUserVars(
   };
 
   // Emit aggregated file list if any files were loaded
-  if (allLoadedFiles.length > 0) {
-    logFilesLoaded(logger, 'all', allLoadedFiles);
+  if (requiredFiles.length > 0) {
+    logFilesLoaded(logger, 'all', requiredFiles);
   }
 
   return userVars;
@@ -448,98 +445,33 @@ async function logFileCategoriesWithExistence(
   }
 }
 
-async function processRequiredFileMap(
-  fileMap: Record<string, string> | undefined,
-  source: string,
-  basePath?: string,
-): Promise<FileVarsResult> {
-  if (!fileMap) return { vars: {}, files: [] };
-
-  const vars: UserVars = {};
-  const files: LoadedFileEntry[] = [];
-
-  for (const [varName, filePath] of Object.entries(fileMap)) {
-    if (!filePath) continue;
-
-    const fullPath = basePath ? path.join(basePath, filePath) : filePath;
-    const ok = await setVarFromFile(fullPath, varName, vars, Boolean(basePath));
-    files.push({
-      path: fullPath,
-      ok,
-      varName,
-      source,
-      ...(basePath && { internal: true }),
-    });
-  }
-  return { vars, files };
-}
-
+/**
+ * Load the files an agent bundles next to its YAML. Paths are resolved against
+ * the agent's directory; an absolute path is used as written.
+ */
 async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
 ): Promise<FileVarsResult> {
-  // Process file maps in parallel - each returns its own vars object to avoid shared mutation
-  const [required, internal] = await Promise.all([
-    processRequiredFileMap(agentSetting.requiredFiles, 'requiredFiles'),
-    processRequiredFileMap(
-      agentSetting.requiredFilesInternal,
-      'requiredFilesInternal',
-      agentPath,
-    ),
-  ]);
-
-  // Merge vars from both results
-  return {
-    vars: { ...required.vars, ...internal.vars },
-    files: [...required.files, ...internal.files],
-  };
-}
-
-async function getPatternBasedFileVars(
-  agentConfig: AgentConfig,
-  agentSetting: AgentSetting,
-): Promise<FileVarsResult> {
-  const userVars: UserVars = {};
+  const vars: UserVars = {};
   const files: LoadedFileEntry[] = [];
 
-  if (!agentSetting.filePatternsContain) {
-    return { vars: userVars, files };
+  for (const [varName, filePath] of Object.entries(
+    agentSetting.requiredFilesInternal,
+  )) {
+    if (!filePath) continue;
+
+    const fullPath = path.resolve(agentPath, filePath);
+    const ok = await setVarFromFile(fullPath, varName, vars, true);
+    files.push({
+      path: fullPath,
+      ok,
+      varName,
+      source: 'requiredFilesInternal',
+      internal: true,
+    });
   }
-
-  for (const {
-    pattern: rawPattern,
-    varName,
-    categories,
-  } of agentSetting.filePatternsContain) {
-    const pattern = rawPattern.toLowerCase();
-    const source = `Pattern '${pattern}'`;
-
-    // Helper to try setting a var from a file that matches the pattern
-    async function trySetVar(filePath: string): Promise<boolean> {
-      if (!filePath.toLowerCase().includes(pattern)) return false;
-      const ok = await setVarFromFile(filePath, varName, userVars);
-      files.push({ path: filePath, ok, varName, source });
-      return ok;
-    }
-
-    // Check each category for matching files
-    for (const category of categories) {
-      const categoryValue = agentConfig[
-        category as keyof AgentConfig
-      ] as unknown;
-
-      if (category.endsWith('File') && typeof categoryValue === 'string') {
-        await trySetVar(categoryValue);
-      } else if (category.endsWith('Files') && Array.isArray(categoryValue)) {
-        // Try each file until one succeeds
-        for (const file of categoryValue) {
-          if (typeof file === 'string' && (await trySetVar(file))) break;
-        }
-      }
-    }
-  }
-
-  return { vars: userVars, files };
+  return { vars, files };
 }
 
 /**
@@ -622,10 +554,7 @@ export function getToolFlags(
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
-    PRINT_INPUT_PROMPT: getConfig<boolean>(
-      'texra.debug.saveInputPrompt',
-      false,
-    ),
+    PRINT_INPUT_PROMPT: shouldSaveModelIO(),
     AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
     CODEX_GUIDANCE: agentSetting.tools.some((t) => t.name === 'codex')
       ? 'Choose codex for coding tasks that benefit from a separate OpenAI agent — it runs in its own sandbox with independent tool use. ' +

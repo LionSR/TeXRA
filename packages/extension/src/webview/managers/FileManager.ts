@@ -33,8 +33,8 @@ import {
 } from '@shared/schemas/fileTypes';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
@@ -397,14 +397,18 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  /** Post show/hide getting started banner based on condition and setting */
+  /** Post show/hide getting started banner. The banner's own close button
+   * dismisses it for the session; a pre-move `ui.showGettingStartedBanner`
+   * of false still counts as a permanent opt-out (nothing writes the legacy
+   * key back), matching the login/orchestrator banners. */
   private postGettingStartedBanner(show: boolean): void {
-    const enabled =
-      show && getConfig<boolean>('ui.showGettingStartedBanner', true);
+    const legacyOptOut =
+      getConfig<boolean>('ui.showGettingStartedBanner', true) === false;
     this.postMessage({
-      command: enabled
-        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+      command:
+        show && !legacyOptOut
+          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 

@@ -24,6 +24,22 @@ interface DebugSaveOptions {
 
 type DebugObjectType = 'messages' | 'response';
 
+/**
+ * Whether to persist what TeXRA sends to and receives from the model.
+ *
+ * `texra.debug.saveModelIO` replaced the `saveDebugObjects` / `saveInputPrompt`
+ * pair, which always described one workflow. The two legacy keys are honored
+ * for one release so an in-flight debugging session does not go quiet, then
+ * both reads here go away.
+ */
+export function shouldSaveModelIO(): boolean {
+  return (
+    getConfig<boolean>('texra.debug.saveModelIO', false) ||
+    getConfig<boolean>('texra.debug.saveDebugObjects', false) ||
+    getConfig<boolean>('texra.debug.saveInputPrompt', false)
+  );
+}
+
 export interface SaveDebugParams {
   object: unknown;
   objectType: DebugObjectType;
@@ -33,7 +49,7 @@ export interface SaveDebugParams {
 
 /**
  * Save debug objects (messages or responses) to a JSON file when
- * `texra.debug.saveDebugObjects` is enabled. Skips remote agents to avoid
+ * `texra.debug.saveModelIO` is enabled. Skips remote agents to avoid
  * leaking prompts.
  */
 export async function maybeSaveDebugObject({
@@ -42,8 +58,7 @@ export async function maybeSaveDebugObject({
   context,
   fileOptions = {},
 }: SaveDebugParams): Promise<void> {
-  const shouldSave = getConfig<boolean>('texra.debug.saveDebugObjects', false);
-  if (!shouldSave || context.isRemote) return;
+  if (!shouldSaveModelIO() || context.isRemote) return;
 
   const { logger, modelName, executionId } = context;
   const { outputFile, baseName = objectType, continuationCount } = fileOptions;

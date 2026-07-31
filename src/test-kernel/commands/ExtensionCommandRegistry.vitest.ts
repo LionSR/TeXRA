@@ -41,31 +41,17 @@ function makeActions(): ExtensionCommandActions {
     signIn: vi.fn().mockResolvedValue(false),
     signInChatGpt: vi.fn().mockResolvedValue(false),
     signOut: vi.fn().mockResolvedValue(undefined),
-    viewProfile: vi.fn().mockResolvedValue(undefined),
     runSetupAssistant: vi.fn().mockResolvedValue(undefined),
     openGettingStarted: vi.fn().mockReturnValue(Promise.resolve()),
     createSampleProject: vi.fn().mockResolvedValue(undefined),
     downloadArXivSource: vi.fn().mockResolvedValue(undefined),
-    testConnection: vi.fn().mockResolvedValue(undefined),
-    testAgentLoading: vi.fn().mockResolvedValue(undefined),
-    loadSpecificAgent: vi.fn().mockResolvedValue(undefined),
     openProgressViewInTab: vi.fn().mockResolvedValue(undefined),
     openDoc: vi.fn().mockResolvedValue(undefined),
     stopAgent: vi.fn(),
     compactResponse: vi.fn().mockResolvedValue(undefined),
-    parseXml: vi.fn().mockResolvedValue(undefined),
-    parseYaml: vi.fn().mockResolvedValue(undefined),
-    testTextEditor: vi.fn().mockResolvedValue(undefined),
     indentCurrentTeX: vi.fn().mockResolvedValue(undefined),
-    applyReplacements: vi.fn().mockResolvedValue(undefined),
     fixCompilation: vi.fn().mockResolvedValue(undefined),
     getTeXCount: vi.fn().mockResolvedValue(undefined),
-    countPdfPages: vi.fn().mockResolvedValue(undefined),
-    showLinterMessages: vi.fn().mockResolvedValue(undefined),
-    countLinterMessages: vi.fn().mockResolvedValue(undefined),
-    extractFigurePaths: vi.fn().mockResolvedValue(undefined),
-    encodeImageToBase64: vi.fn().mockResolvedValue(undefined),
-    convertPdfToImages: vi.fn().mockResolvedValue(undefined),
     extractTikzFigures: vi.fn().mockResolvedValue(undefined),
     compileTikzFigures: vi.fn().mockResolvedValue(undefined),
     cloneOverleafProject: vi.fn().mockResolvedValue(undefined),
@@ -150,28 +136,14 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     ['texra.auth.signIn', 'signIn'],
     ['texra.auth.chatgpt.signIn', 'signInChatGpt'],
     ['texra.auth.signOut', 'signOut'],
-    ['texra.auth.viewProfile', 'viewProfile'],
     ['texra.runSetupAssistant', 'runSetupAssistant'],
     ['texra.openGettingStarted', 'openGettingStarted'],
     ['texra.createSampleProject', 'createSampleProject'],
     ['texra.downloadArXivSource', 'downloadArXivSource'],
-    ['texra.testConnection', 'testConnection'],
-    ['texra.testAgentLoading', 'testAgentLoading'],
-    ['texra.loadSpecificAgent', 'loadSpecificAgent'],
     ['texra.openProgressViewInTab', 'openProgressViewInTab'],
-    ['texra.parseXml', 'parseXml'],
-    ['texra.parseYaml', 'parseYaml'],
-    ['texra.testTextEditor', 'testTextEditor'],
     ['texra.indentCurrentTeX', 'indentCurrentTeX'],
-    ['texra.applyReplacements', 'applyReplacements'],
     ['texra.fixCompilation', 'fixCompilation'],
     ['texra.getTeXCount', 'getTeXCount'],
-    ['texra.countPdfPages', 'countPdfPages'],
-    ['texra.showLinterMessages', 'showLinterMessages'],
-    ['texra.countLinterMessages', 'countLinterMessages'],
-    ['texra.extractFigurePaths', 'extractFigurePaths'],
-    ['texra.encodeImageToBase64', 'encodeImageToBase64'],
-    ['texra.convertPdfToImages', 'convertPdfToImages'],
     ['texra.extractTikzFigures', 'extractTikzFigures'],
     ['texra.compileTikzFigures', 'compileTikzFigures'],
     ['texra.cloneOverleafProject', 'cloneOverleafProject'],
@@ -182,6 +154,16 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     const actions = makeActions();
     await expect(dispatchAsync(actions, id)).resolves.toBe(true);
     expect(actions[actionKey]).toHaveBeenCalledOnce();
+  });
+
+  it('texra.auth.viewProfile opens the account tab', async () => {
+    const actions = makeActions();
+    await expect(
+      dispatchAsync(actions, 'texra.auth.viewProfile'),
+    ).resolves.toBe(true);
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
+      SETTINGS_TAB.ACCOUNT,
+    );
   });
 
   it('texra.showMemory passes the memory tab index', async () => {
@@ -546,7 +528,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       ['texra.cleanOutput', 'cleanOutput'],
       ['texra.auth.signIn', 'signIn'],
       ['texra.showMemory', 'showSettings'],
-      ['texra.encodeImageToBase64', 'encodeImageToBase64'],
       ['texra.cloneOverleafProject', 'cloneOverleafProject'],
     ] as const)('%s rejection bubbles up', async (id, actionKey) => {
       const actions = makeActions();
