@@ -60,14 +60,9 @@ function argValues(arg: ArgDef): readonly string[] {
 
 function isNegatableBoolean(arg: ArgDef): boolean {
   if (arg.type !== 'boolean') return false;
-  // Booleans defaulting to `true` are passed via their negated form, and opt-in
-  // toggles that advertise a `negativeDescription` (e.g. `--no-websocket`) also
-  // accept it — keep completions in step with the CLI flag router so a
-  // documented `--no-<name>` is completable.
-  return (
-    ('default' in arg && arg.default === true) ||
-    negativeDescription(arg) !== undefined
-  );
+  // Booleans defaulting to `true` are passed via their negated form. Keep this
+  // in step with the CLI flag router so a documented `--no-<name>` completes.
+  return 'default' in arg && arg.default === true;
 }
 
 function negativeDescription(arg: ArgDef): string | undefined {

@@ -63,11 +63,14 @@ export interface DesktopShellActions extends DesktopCommandActions {
   showInfoMessage(message: string): void;
 }
 
+// The desktop task shell has no separate progress surface: the conversation is
+// the permanent canvas, so a 'progress' target is already on screen and maps to
+// no route change.
 const SWITCH_VIEW_ROUTES = {
   main: 'main',
-  progress: 'progress',
+  progress: undefined,
   dashboard: 'settings',
-} satisfies Record<SwitchViewTarget, DesktopRoute>;
+} satisfies Record<SwitchViewTarget, DesktopRoute | undefined>;
 
 export function createDesktopShellActions(
   renderer: DesktopRenderer,
@@ -193,9 +196,11 @@ function dispatchMainViewInboundOnShell(
   actions: DesktopShellActions,
 ): boolean {
   switch (message.command) {
-    case COMMON_COMMANDS.SWITCH_VIEW:
-      actions.showRoute(SWITCH_VIEW_ROUTES[message.view]);
+    case COMMON_COMMANDS.SWITCH_VIEW: {
+      const route = SWITCH_VIEW_ROUTES[message.view];
+      if (route) actions.showRoute(route);
       return true;
+    }
     case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:
       actions.showSettings();
       return true;

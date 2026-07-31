@@ -167,27 +167,10 @@ export async function setPreferKimiCode(enabled: boolean): Promise<void> {
   await tryGlobalState()?.update(GlobalStateKey.KIMI_CODE_PREFER, enabled);
 }
 
-/**
- * Per-process override for the OpenAI WebSocket toggle, set from the CLI
- * `--websocket`/`--no-websocket` flag. The global-state key has no CLI setter,
- * so this lets a single CLI invocation flip the transport without persisting to
- * `~/.texra/global-storage/state.json`. `undefined` falls through to the stored
- * setting (the extension/desktop UI toggle). Hosts other than the CLI never set
- * it, so the stored value remains authoritative there.
- */
-let webSocketEnabledOverride: boolean | undefined;
-
-export function setWebSocketEnabledOverride(value: boolean | undefined): void {
-  webSocketEnabledOverride = value;
-}
-
 export function getWebSocketEnabled(): boolean {
   // WEBSOCKET_OPENAI is catalog-modeled, so its default comes from the schema
   // via the shared accessor.
-  return (
-    webSocketEnabledOverride ??
-    readPlatformSetting<boolean>(GlobalStateKey.WEBSOCKET_OPENAI)
-  );
+  return readPlatformSetting<boolean>(GlobalStateKey.WEBSOCKET_OPENAI);
 }
 
 /**

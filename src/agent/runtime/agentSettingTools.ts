@@ -10,7 +10,7 @@
  */
 import type { AgentSettingInput } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
-import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
+import { resolveToolDefinitions } from '@tools/registry';
 
 export function resolveAgentSettingTools(
   settings: AgentSettingInput,
@@ -19,13 +19,8 @@ export function resolveAgentSettingTools(
   if (!Array.isArray(settings.tools)) return settings;
   return {
     ...settings,
-    tools: resolveToolDefinitions(
-      settings.tools as RawToolConfig[],
-      (name, reason) =>
-        logger.warn(
-          channel,
-          `Tool "${name}" ${reason ?? 'not found in registry'}`,
-        ),
+    tools: resolveToolDefinitions(settings.tools, (name, reason) =>
+      logger.warn(channel, `Tool "${name}" ${reason}`),
     ),
   };
 }

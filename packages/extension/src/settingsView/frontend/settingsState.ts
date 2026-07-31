@@ -219,8 +219,6 @@ export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
 export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
   ...DEFAULT_CHATGPT_AUTH,
 }));
-export const desktopCrashReportingEnabled = trackedSignal(() => false);
-export const desktopCrashReportingConfigured = trackedSignal(() => false);
 export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(
   () => [],
 );

@@ -185,15 +185,6 @@ test('a new desktop process repairs canonical waiting and orphaned streams', asy
       .poll(() => terminalGroupStatus(storagePath, ORPHAN_STREAM))
       .toBe('failed');
 
-    await currentLaunch.page.evaluate(() => {
-      window.postMessage(
-        { command: 'desktop:setRoute', route: 'progress' },
-        '*',
-      );
-    });
-    await currentLaunch.page.waitForFunction(
-      () => document.body.dataset.desktopRoute === 'progress',
-    );
     await expect
       .poll(async () =>
         currentLaunch!.page.locator('stream-tab').evaluateAll((tabs) =>

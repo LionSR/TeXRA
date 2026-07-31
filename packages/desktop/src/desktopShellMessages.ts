@@ -6,7 +6,7 @@ export const DESKTOP_SHELL_COMMANDS = {
   TOGGLE_LAYOUT: 'desktop:toggleLayout',
 } as const;
 
-const DesktopRouteSchema = z.enum(['main', 'progress', 'settings', 'logs']);
+const DesktopRouteSchema = z.enum(['main', 'settings', 'logs']);
 export type DesktopRoute = z.infer<typeof DesktopRouteSchema>;
 
 export const DesktopSetRouteMessageSchema = z.object({

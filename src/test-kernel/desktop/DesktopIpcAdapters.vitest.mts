@@ -202,7 +202,7 @@ describe('desktop IPC adapters', () => {
 
     shellIpc.handleMessage({
       command: COMMON_COMMANDS.SWITCH_VIEW,
-      view: 'progress',
+      view: 'main',
     });
     shellIpc.handleMessage({ command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS });
     shellIpc.handleMessage({
@@ -217,7 +217,7 @@ describe('desktop IPC adapters', () => {
 
     expect(postToRenderer).toHaveBeenNthCalledWith(1, {
       command: 'desktop:setRoute',
-      route: 'progress',
+      route: 'main',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(2, {
       command: 'desktop:setRoute',

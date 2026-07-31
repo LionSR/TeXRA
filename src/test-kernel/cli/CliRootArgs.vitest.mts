@@ -131,16 +131,6 @@ async function withExternalDirs(
 }
 
 describe('CLI root argument routing', () => {
-  it('routes top-level --logout to the logout subcommand', () => {
-    expect(normalizeRootShortcuts(['--logout'])).toEqual(['logout']);
-  });
-
-  it('preserves global flags when routing top-level --logout', () => {
-    expect(
-      normalizeRootShortcuts(['--output-format', 'json', '--logout']),
-    ).toEqual(['logout', '--output-format', 'json']);
-  });
-
   it('routes top-level version shortcuts to the version command', () => {
     expect(normalizeRootShortcuts(['--version'])).toEqual(['version']);
     expect(normalizeRootShortcuts(['--no-color', '-v'])).toEqual([
@@ -153,10 +143,10 @@ describe('CLI root argument routing', () => {
     ]);
   });
 
-  it('does not rewrite subcommand-scoped --logout flags', () => {
-    expect(normalizeRootShortcuts(['chat', '--logout'])).toEqual([
+  it('does not rewrite subcommand-scoped shortcut flags', () => {
+    expect(normalizeRootShortcuts(['chat', '--version'])).toEqual([
       'chat',
-      '--logout',
+      '--version',
     ]);
   });
 
@@ -180,10 +170,10 @@ describe('CLI root argument routing', () => {
     ).toEqual(['resume', 'abc123', '--output-format', 'json']);
   });
 
-  it('does not rewrite unknown leading flags before --logout', () => {
-    expect(normalizeRootShortcuts(['--unknown', '--logout'])).toEqual([
+  it('does not rewrite unknown leading flags before a shortcut', () => {
+    expect(normalizeRootShortcuts(['--unknown', '--version'])).toEqual([
       '--unknown',
-      '--logout',
+      '--version',
     ]);
   });
 
@@ -1431,17 +1421,6 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('USAGE texra auth login');
     expect(stdout).toContain('texra auth chatgpt login');
     expect(stdout).toContain('texra login --device');
-    expect(stderr).toBe('');
-  });
-
-  it('recommends the exact opus5T model id in latexdiff help examples', async () => {
-    const result = await runCli(['latexdiff', '--help']);
-    expect(result.exitCode).toBe(0);
-    expect(stdout).toContain('texra latexdiff revise -m opus5T -i paper.tex');
-    expect(stdout).toContain(
-      'texra latexdiff revise -m opus5T -i paper.tex --between-rounds',
-    );
-    expect(stdout).not.toContain('claude-opus-5');
     expect(stderr).toBe('');
   });
 

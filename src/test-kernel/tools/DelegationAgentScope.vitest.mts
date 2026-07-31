@@ -18,14 +18,6 @@ const customReview = {
   name: 'review',
   path: '/agents/custom-review.yaml',
 } as const;
-const internalReview = {
-  category: 'toolUse',
-  source: 'builtInToolUse',
-  name: 'internalReview',
-  path: '/agents/internal-review.yaml',
-  internal: true,
-} as const;
-
 const mocks = vi.hoisted(() => ({
   context: undefined as unknown,
 }));
@@ -43,7 +35,6 @@ vi.mock('@agent/runtime/RunContext', () => ({
 vi.mock('@agent/index/agentRegistry', () => {
   const aliasTarget = (identifier: string) => {
     if (identifier === 'remote:review') return remoteReview;
-    if (identifier === 'builtInToolUse:internalReview') return internalReview;
     if (identifier === 'custom:review' || identifier === 'review') {
       return customReview;
     }

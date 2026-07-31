@@ -512,7 +512,7 @@ An end-of-session reviewer. It looks at what was just done, the project's standi
 **Best for:** Auditing what a team run actually delivered versus the goal
 
 ::: tip
-Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: View Profile** from the Command Palette for the full list. See [Remote Agents](./remote-agents.md) to sign in and sync them.
+Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: Show Agents** from the Command Palette for the full list. See [Remote Agents](./remote-agents.md) to sign in and sync them.
 :::
 
 ## Built-in Teams

@@ -51,15 +51,6 @@ describe('cross-category agent resolution', () => {
         'prompts:',
         '  systemPrompt: Custom workflow assistant.',
       ],
-      'secretAgent.yaml': [
-        'name: secretAgent',
-        'description: Internal tool-use agent hidden from dropdowns.',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  internal: true',
-        'prompts:',
-        '  systemPrompt: Internal agent.',
-      ],
       'review.yaml': [
         'name: review',
         'description: Custom tool-use agent that shadows a built-in name.',
@@ -151,16 +142,6 @@ describe('cross-category agent resolution', () => {
     expect(stale?.entry.source).toBe('builtInToolUse');
   });
 
-  it('reaches internal agents only via the full-category floor', () => {
-    // Internal agents are absent from the visible set (tier 2), so an unpinned
-    // launch resolves them through the full-category floor (tier 3) — still
-    // launchable by command, without ever shadowing a visible agent.
-    expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
-    expect(
-      resolveAgentForLaunch(AgentCategory.ToolUse, 'secretAgent')?.entry.name,
-    ).toBe('secretAgent');
-  });
-
   it('still resolves a non-colliding name and legacy aliases within category', () => {
     expect(getCategoryAgent('toolUse', 'review')?.name).toBe('review');
     // `chat` is the legacy alias for `assistant`; within tool-use it must map to
@@ -175,22 +156,13 @@ describe('cross-category agent resolution', () => {
     expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
   });
 
-  it('hides internal agents from dropdowns but keeps them launchable by name', () => {
-    // Internal agents are excluded from the visible/dropdown set…
-    expect(getVisibleAgent('toolUse', 'secretAgent')).toBeUndefined();
-    // …but a command launch (no pinned source) still reaches them by name.
-    expect(resolveAgent('secretAgent')?.entry.name).toBe('secretAgent');
-    expect(getCategoryAgent('toolUse', 'secretAgent')?.internal).toBe(true);
-  });
-
-  it('resolves scoped names within category and excludes internal agents', () => {
+  it('resolves scoped names within category and drops unknown ones', () => {
     const scoped = resolveDelegationScopeAgents(
       {
         workflowAgentKeys: [],
         toolUseAgentKeys: [
           'assistant',
           'builtInToolUse:assistant',
-          'secretAgent',
           'missing-agent',
         ],
       },

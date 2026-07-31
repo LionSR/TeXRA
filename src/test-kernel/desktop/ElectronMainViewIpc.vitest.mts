@@ -402,11 +402,9 @@ describe('desktop main-view IPC', () => {
     sends.length = 0;
     sendFromRenderer({
       command: COMMON_COMMANDS.SWITCH_VIEW,
-      view: 'progress',
+      view: 'main',
     });
-    expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith(
-      'progress',
-    );
+    expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith('main');
     expect(sends).toEqual([]);
 
     sends.length = 0;

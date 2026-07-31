@@ -1,0 +1,47 @@
+<--- Last few GCs --->
+
+[88853:0xc7740c000] 116403123 ms: Scavenge (during sweeping) 4029.6 (4077.1) -> 4016.6 (4083.6) MB, pooled: 0.0 MB, 29.54 / 0.05 ms (average mu = 0.277, current mu = 0.236) allocation failure;
+[88853:0xc7740c000] 116404008 ms: Incremental Mark-Compact (reduce) 4023.6 (4083.8) -> 3967.0 (4020.8) MB, pooled: 0.0 MB, 281.72 / 0.02 ms (+ 538.5 ms in 109 steps since start of marking, biggest step 6.5 ms, walltime since start of marking 832 ms) (aver
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x107e758c8 node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 2: 0x107138ed8 v8::Utils::ReportOOMFailure(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 3: 0x107138e88 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 4: 0x1072ed858 v8::internal::Heap::IsLoadingInitialized() const [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 5: 0x1072ecd0c v8::internal::Heap::OldGenerationConsumedBytes() const [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 6: 0x1072ec0b4 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags, v8::internal::PerformHeapLimitCheck, v8::internal::PerformIneffectiveMarkCompactCheck) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 7: 0x1072760c0 v8::internal::StackGuard::HandleInterrupts(v8::internal::StackGuard::InterruptLevel) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 8: 0x1075e5328 v8::internal::Runtime_StackGuard(int, unsigned long*, v8::internal::Isolate*) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+ 9: 0x106c18cac Builtins_CEntry_Return1_ArgvOnStack_NoBuiltinExit [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+10: 0x106c4d9c4 Builtins_ArrayPrototypeReverse [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+11: 0x11e08a168
+12: 0x11e347494
+13: 0x11e34d3a8
+14: 0x106c48868 Builtins_ArrayMap [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+15: 0x11eb51084
+16: 0x11e4486ec
+17: 0x11e7b0e80
+18: 0x11eefa24c
+19: 0x11e07e260
+20: 0x11ebfa590
+21: 0x11e0b51ac
+22: 0x11ee75f70
+23: 0x11e1ce994
+24: 0x106b72788 Builtins_JSEntryTrampoline [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+25: 0x106b72478 Builtins_JSEntry [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+26: 0x107251f50 v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+27: 0x107251988 v8::internal::Execution::Call(v8::internal::Isolate*, v8::internal::DirectHandle<v8::internal::Object>, v8::internal::DirectHandle<v8::internal::Object>, v8::base::Vector<v8::internal::DirectHandle<v8::internal::Object> const>) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+28: 0x107f24028 v8::Function::Call(v8::Isolate*, v8::Local<v8::Context>, v8::Local<v8::Value>, int, v8::Local<v8::Value>*) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+29: 0x106d5c310 node::InternalMakeCallback(node::Environment*, v8::Local<v8::Object>, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+30: 0x106d5c618 node::InternalMakeCallback(v8::Isolate*, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+31: 0x107e54e9c node::Environment::CheckImmediate(uv_check_s*) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+32: 0x10249c24c uv__run_check [/opt/homebrew/Cellar/libuv/1.52.1/lib/libuv.1.0.0.dylib]
+33: 0x102496b94 uv_run [/opt/homebrew/Cellar/libuv/1.52.1/lib/libuv.1.0.0.dylib]
+34: 0x106d5cfd0 node::SpinEventLoopInternal(node::Environment*) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+35: 0x106e30af0 node::NodeMainInstance::Run(node::ExitCode*, node::Environment*) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+36: 0x106e30824 node::NodeMainInstance::Run() [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+37: 0x106dd2930 node::Start(int, char**) [/opt/homebrew/Cellar/node/26.3.0/lib/libnode.147.dylib]
+38: 0x184c044e4 start [/usr/lib/dyld]
+[1]    88853 abort      texra-local
+☁  TNLean [main]

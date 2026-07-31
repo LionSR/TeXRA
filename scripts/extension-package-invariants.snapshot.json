@@ -266,15 +266,7 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.getRecentCommits",
-            "when": "texra.activated"
-          },
-          {
             "command": "texra.cloneOverleafProject",
-            "when": "texra.activated"
-          },
-          {
-            "command": "texra.refreshCommits",
             "when": "texra.activated"
           },
           {
@@ -283,11 +275,7 @@
           },
           {
             "command": "texra.resumeAgent",
-            "when": "texra.activated"
-          },
-          {
-            "command": "texra.applyReplacements",
-            "when": "texra.activated"
+            "when": "false"
           },
           {
             "command": "texra.fixCompilation",
@@ -295,22 +283,6 @@
           },
           {
             "command": "texra.getTeXCount",
-            "when": "texra.activated"
-          },
-          {
-            "command": "texra.countPdfPages",
-            "when": "texra.activated"
-          },
-          {
-            "command": "texra.encodeImageToBase64",
-            "when": "texra.activated"
-          },
-          {
-            "command": "texra.convertPdfToImages",
-            "when": "texra.activated"
-          },
-          {
-            "command": "texra.extractFigurePaths",
             "when": "texra.activated"
           },
           {
@@ -322,18 +294,6 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.testConnection",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
-            "command": "texra.testAgentLoading",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
-            "command": "texra.loadSpecificAgent",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
             "command": "texra.downloadArXivSource",
             "when": "texra.activated"
           },
@@ -342,16 +302,8 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.parseXml",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
-            "command": "texra.parseYaml",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
             "command": "texra.stopAgent",
-            "when": "texra.activated"
+            "when": "false"
           },
           {
             "command": "texra.execute",
@@ -359,11 +311,11 @@
           },
           {
             "command": "texra.pack",
-            "when": "texra.activated"
+            "when": "false"
           },
           {
             "command": "texra.clean",
-            "when": "texra.activated"
+            "when": "false"
           },
           {
             "command": "texra.createAgentWithAI",
@@ -394,20 +346,8 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.testTextEditor",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
-            "command": "texra.showLinterMessages",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
-            "command": "texra.countLinterMessages",
-            "when": "texra.activated && config.texra.logger.debugMode"
-          },
-          {
             "command": "texra.openDoc",
-            "when": "texra.activated"
+            "when": "false"
           },
           {
             "command": "texra.mainView.reset",
@@ -476,6 +416,10 @@
           {
             "command": "texra.unresolveCommentThread",
             "when": "false"
+          },
+          {
+            "command": "texra.compactResponse",
+            "when": "false"
           }
         ],
         "comments/commentThread/context": [
@@ -497,60 +441,11 @@
             "when": "commentController == texra.inlineComments && commentThread == texraInlineCommentResolved"
           }
         ],
-        "editor/context": [
-          {
-            "command": "texra.cleanOutput",
-            "group": "z_texra@1",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          },
-          {
-            "command": "texra.cleanBuild",
-            "group": "z_texra@2",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          }
-        ],
         "editor/title": [
-          {
-            "command": "texra.indentCurrentTeX",
-            "group": "navigation",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          },
-          {
-            "command": "texra.applyReplacements",
-            "group": "navigation",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          },
           {
             "command": "texra.fixCompilation",
             "group": "navigation",
             "when": "texra.activated && editorLangId == latex"
-          },
-          {
-            "command": "texra.getTeXCount",
-            "group": "navigation",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          },
-          {
-            "command": "texra.cleanOutput",
-            "group": "2_texra_housekeeping@1",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          },
-          {
-            "command": "texra.cleanBuild",
-            "group": "2_texra_housekeeping@2",
-            "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          }
-        ],
-        "explorer/context": [
-          {
-            "command": "texra.cleanOutput",
-            "group": "z_texra@1",
-            "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/"
-          },
-          {
-            "command": "texra.cleanBuild",
-            "group": "z_texra@2",
-            "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/"
           }
         ],
         "view/item/context": [
@@ -717,11 +612,8 @@
               "title": "Manual path: pick your files"
             },
             {
-              "completionEvents": [
-                "onCommand:texra.extractFigurePaths",
-                "onCommand:texra.extractTikzFigures"
-              ],
-              "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run them manually:\n\n[Extract figure paths](command:texra.extractFigurePaths) | [Extract TikZ figures](command:texra.extractTikzFigures)",
+              "completionEvents": ["onCommand:texra.extractTikzFigures"],
+              "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run TikZ extraction manually:\n\n[Extract TikZ figures](command:texra.extractTikzFigures)",
               "id": "texra.gettingStarted.autoExtract",
               "media": {
                 "altText": "Screenshot showing auto-extraction options",

@@ -1,10 +1,7 @@
 // Local imports
 import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import {
-  ToolDefinitionSchema,
-  type ToolDefinition,
-} from '@model/ToolDefinition';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
@@ -192,27 +189,48 @@ export function getDefaultToolRegistry(): IToolRegistry {
 const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 /**
- * Raw tool configuration from YAML - can be a string name or partial definition.
- * Object form must have a name and can include optional description/parameters.
+ * A declared tool: a registry name, or a whole definition — either one a parent
+ * agent's load already resolved, or one an embedder registered as a value, the
+ * only way to attach the runtime-only fields no YAML can express.
  */
-export type RawToolConfig =
-  string | (Partial<ToolDefinition> & { name: string });
+export type RawToolConfig = string | ToolDefinition;
+
+function differsFrom(declared: unknown, registered: unknown): boolean {
+  if (declared === undefined || declared === registered) return false;
+  return JSON.stringify(declared) !== JSON.stringify(registered);
+}
 
 /**
- * Resolve raw tool configurations to ToolDefinition objects.
- * Handles both string names (resolved from registry) and partial definitions.
+ * Whether an entry states a contract of its own instead of the registered one.
+ * An inherited entry carries the definition a parent's load already resolved,
+ * so repeating the registry's own description and parameters is not an override.
+ */
+function overridesContract(
+  item: RawToolConfig,
+  registered: ToolDefinition,
+): boolean {
+  if (typeof item === 'string') return false;
+  return (
+    differsFrom(item.description, registered.description) ||
+    differsFrom(item.parameters, registered.parameters)
+  );
+}
+
+/**
+ * Resolve declared tools to their definitions. A registered tool's contract is
+ * the registered one: a definition entry that names it contributes only that
+ * name, and any description or parameters it carries are dropped with a warning
+ * rather than handed to the model in place of the real contract.
  *
- * @param tools - Array of raw tool configs (strings or objects with name)
- * @param warnOnMissing - Optional callback for logging warnings about missing or
- *   invalid tools. `reason` distinguishes "not in the registry" (undefined,
- *   callers default it to a not-found message) from other failure modes
- *   (e.g. a found tool's object-form override failing schema validation) so
- *   callers don't mislabel a validation failure as a missing tool.
+ * @param tools - Declared tool names or definitions
+ * @param warnOnMissing - Optional callback for logging warnings. `reason` says
+ *   what happened to the entry, so a dropped override is never reported as a
+ *   missing tool.
  * @returns Array of resolved ToolDefinition objects
  */
 export function resolveToolDefinitions(
   tools: RawToolConfig[],
-  warnOnMissing?: (toolName: string, reason?: string) => void,
+  warnOnMissing?: (toolName: string, reason: string) => void,
 ): ToolDefinition[] {
   const registry = getDefaultToolRegistry();
   const seenNames = new Set<string>();
@@ -225,47 +243,23 @@ export function resolveToolDefinitions(
     }
     seenNames.add(canonicalName);
 
-    if (!VALID_TOOL_NAME.test(canonicalName)) {
-      warnOnMissing?.(name);
-      return [{ name: canonicalName }];
-    }
+    const tool = VALID_TOOL_NAME.test(canonicalName)
+      ? registry.get(canonicalName)
+      : undefined;
 
-    const tool = registry.get(canonicalName);
+    // Unregistered name: keep an embedder's own definition, and fall back to a
+    // bare name for everything else so the entry is still visible downstream.
     if (!tool) {
-      warnOnMissing?.(name);
+      warnOnMissing?.(name, 'not found in registry');
+      return [typeof item === 'string' ? { name: canonicalName } : item];
     }
 
-    // Aliases are compatibility names, not independent tool contracts. Legacy
-    // object-form configs may carry the retired tool's parameter schema, so
-    // normalize the whole definition at this boundary instead of only renaming
-    // it and exposing a stale contract to the model.
-    if (name !== canonicalName && tool) {
-      return [tool.definition];
+    if (overridesContract(item, tool.definition)) {
+      warnOnMissing?.(
+        name,
+        'is declared with a description or parameters; agent definitions name tools, so the registered definition is used instead',
+      );
     }
-
-    // String items: return tool definition or minimal fallback
-    if (typeof item === 'string') {
-      return [tool?.definition ?? { name: canonicalName }];
-    }
-
-    // Object items: always parse with schema to validate/merge overrides. A
-    // malformed override (bad `parameters`/`description`) must not silently
-    // drop to a bare-name tool without a trace, so warn instead of
-    // `.catch()`-ing it away. Only warn here when the tool was actually found
-    // (the override, not the tool, is what's invalid) — otherwise the
-    // missing-tool branch above already warned for this name, and warning
-    // again with the generic not-found reason would fire twice for one bad
-    // entry.
-    const parsed = ToolDefinitionSchema.safeParse({
-      ...item,
-      name: canonicalName,
-    });
-    if (parsed.success) {
-      return [parsed.data];
-    }
-    if (tool) {
-      warnOnMissing?.(name, 'has an invalid tool definition override');
-    }
-    return [{ name: canonicalName }];
+    return [tool.definition];
   });
 }

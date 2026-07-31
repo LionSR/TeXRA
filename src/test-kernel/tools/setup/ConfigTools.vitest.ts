@@ -102,7 +102,7 @@ describe('ConfigTools — update_config allowlist', () => {
     const tool = new UpdateConfigTool();
 
     const result = await tool.call({
-      key: 'texra.model.useImprovedConnection',
+      key: 'texra.model.useOpenAIResponsesAPI',
       value: true,
       target: 'user',
     });

@@ -197,39 +197,17 @@ export interface ExtensionCommandActions {
   signIn(): Promise<boolean>;
   signInChatGpt(): Promise<boolean>;
   signOut(): Promise<void>;
-  viewProfile(): Promise<void>;
   runSetupAssistant(): Promise<void>;
   openGettingStarted(): Thenable<unknown>;
   createSampleProject(): Promise<void>;
   downloadArXivSource(): Promise<void>;
-  testConnection(): Promise<void>;
-  testAgentLoading(): Promise<void>;
-  loadSpecificAgent(): Promise<void>;
   openProgressViewInTab(): Promise<void>;
   openDoc(page: string): Promise<void>;
   stopAgent(streamId: string): void;
   compactResponse(streamId: string): Promise<void>;
-  parseXml(): Promise<void>;
-  parseYaml(): Promise<void>;
-  testTextEditor(): Promise<void>;
   indentCurrentTeX(): Promise<void>;
-  applyReplacements(): Promise<void>;
   fixCompilation(): Promise<void>;
   getTeXCount(): Promise<void>;
-  countPdfPages(): Promise<void>;
-  showLinterMessages(): Promise<void>;
-  countLinterMessages(): Promise<void>;
-  extractFigurePaths(): Promise<void>;
-  // Batch 3 (#3781). The action functions return data (the underlying
-  // `string | string[] | undefined`) for direct callers, but the
-  // registry's typed return is `Promise<boolean>`, so the dispatcher
-  // wraps them with `awaitTrue(...)` and the resolved data is
-  // intentionally dropped. Palette / `executeCommand` callers don't
-  // consume the value today; if a future caller needs the original
-  // payload it must call the action helper directly instead of going
-  // through `vscode.commands.executeCommand`.
-  encodeImageToBase64(): Promise<string | undefined>;
-  convertPdfToImages(): Promise<string[] | string | undefined>;
   extractTikzFigures(): Promise<void>;
   compileTikzFigures(): Promise<void>;
   cloneOverleafProject(): Promise<void>;
@@ -322,7 +300,8 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
   'texra.auth.chatgpt.signIn': (actions) => awaitTrue(actions.signInChatGpt()),
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
-  'texra.auth.viewProfile': (actions) => awaitTrue(actions.viewProfile()),
+  'texra.auth.viewProfile': (actions) =>
+    awaitTrue(actions.showSettings(SETTINGS_TAB.ACCOUNT)),
   'texra.runSetupAssistant': (actions) =>
     awaitTrue(actions.runSetupAssistant()),
   'texra.openGettingStarted': (actions) =>
@@ -331,10 +310,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.createSampleProject()),
   'texra.downloadArXivSource': (actions) =>
     awaitTrue(actions.downloadArXivSource()),
-  'texra.testConnection': (actions) => awaitTrue(actions.testConnection()),
-  'texra.testAgentLoading': (actions) => awaitTrue(actions.testAgentLoading()),
-  'texra.loadSpecificAgent': (actions) =>
-    awaitTrue(actions.loadSpecificAgent()),
   'texra.openProgressViewInTab': (actions) =>
     awaitTrue(actions.openProgressViewInTab()),
   'texra.openDoc': definedHandler(
@@ -354,26 +329,9 @@ export const EXTENSION_COMMAND_HANDLERS = {
     (actions: ExtensionCommandActions, streamId) =>
       awaitTrue(actions.compactResponse(streamId)),
   ),
-  'texra.parseXml': (actions) => awaitTrue(actions.parseXml()),
-  'texra.parseYaml': (actions) => awaitTrue(actions.parseYaml()),
-  'texra.testTextEditor': (actions) => awaitTrue(actions.testTextEditor()),
   'texra.indentCurrentTeX': (actions) => awaitTrue(actions.indentCurrentTeX()),
-  'texra.applyReplacements': (actions) =>
-    awaitTrue(actions.applyReplacements()),
   'texra.fixCompilation': (actions) => awaitTrue(actions.fixCompilation()),
   'texra.getTeXCount': (actions) => awaitTrue(actions.getTeXCount()),
-  'texra.countPdfPages': (actions) => awaitTrue(actions.countPdfPages()),
-  'texra.showLinterMessages': (actions) =>
-    awaitTrue(actions.showLinterMessages()),
-  'texra.countLinterMessages': (actions) =>
-    awaitTrue(actions.countLinterMessages()),
-  'texra.extractFigurePaths': (actions) =>
-    awaitTrue(actions.extractFigurePaths()),
-  // Batch 3 (#3781) — image / PDF / TikZ / Overleaf entry points.
-  'texra.encodeImageToBase64': (actions) =>
-    awaitTrue(actions.encodeImageToBase64()),
-  'texra.convertPdfToImages': (actions) =>
-    awaitTrue(actions.convertPdfToImages()),
   'texra.extractTikzFigures': (actions) =>
     awaitTrue(actions.extractTikzFigures()),
   'texra.compileTikzFigures': (actions) =>

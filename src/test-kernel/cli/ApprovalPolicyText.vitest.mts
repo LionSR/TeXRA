@@ -16,18 +16,23 @@ describe('CLI approval policy text', () => {
     );
   });
 
-  it('parses canonical policies and slash-command aliases', () => {
+  it('parses only the three documented policy names', () => {
     expect(parseCliApprovalPolicy('ask')).toBe('ask');
     expect(parseCliApprovalPolicy('NEVER')).toBe('never');
     expect(parseCliApprovalPolicy(' yolo ')).toBe('yolo');
-    expect(parseCliApprovalPolicy('default')).toBe('ask');
-    expect(parseCliApprovalPolicy('interactive')).toBe('ask');
-    expect(parseCliApprovalPolicy('on')).toBe('ask');
-    expect(parseCliApprovalPolicy('off')).toBe('never');
-    expect(parseCliApprovalPolicy('deny')).toBe('never');
-    expect(parseCliApprovalPolicy('auto')).toBe('yolo');
-    expect(parseCliApprovalPolicy('full')).toBe('yolo');
-    expect(parseCliApprovalPolicy('danger')).toBe('yolo');
     expect(parseCliApprovalPolicy('sometimes')).toBeUndefined();
+    // Retired synonyms: `on`/`off` in particular never said which policy.
+    for (const retired of [
+      'default',
+      'interactive',
+      'on',
+      'off',
+      'deny',
+      'auto',
+      'full',
+      'danger',
+    ]) {
+      expect(parseCliApprovalPolicy(retired)).toBeUndefined();
+    }
   });
 });

@@ -58,6 +58,41 @@ describe('AgentSettingSchema', () => {
     expect(warningCount).toBe(expectedWarnings);
   });
 
+  it.each([
+    {
+      scenario: 'warns once per retired setting that carried a value',
+      legacy: {
+        internal: true,
+        requiredFiles: { TEMPLATE: 'templates/main.tex' },
+        filePatternsContain: [{ pattern: 'bibliography', varName: 'BIB' }],
+      },
+      expectedWarnings: 3,
+    },
+    {
+      scenario: 'drops materialized empty retired settings silently',
+      legacy: { requiredFiles: {}, filePatternsContain: [] },
+      expectedWarnings: 0,
+    },
+  ])('$scenario', ({ legacy, expectedWarnings }) => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let setting!: ReturnType<typeof AgentSettingSchema.parse>;
+    let warningCount = 0;
+    try {
+      setting = AgentSettingSchema.parse({
+        agentCategory: AgentCategory.Workflow,
+        ...legacy,
+      });
+      warningCount = warnSpy.mock.calls.length;
+    } finally {
+      warnSpy.mockRestore();
+    }
+
+    for (const key of Object.keys(legacy)) {
+      expect(Object.hasOwn(setting, key)).toBe(false);
+    }
+    expect(warningCount).toBe(expectedWarnings);
+  });
+
   it('regression #7497: public remote agent YAML no longer carries documentTag/endTag', () => {
     // The retired keys used to be copy-pasted into every remote agent, so
     // parsing the bundle at startup fired the deprecation console.warn 4-8x

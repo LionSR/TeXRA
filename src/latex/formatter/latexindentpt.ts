@@ -14,6 +14,14 @@ const CHANNEL = 'LaTeXCommands';
 
 export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
 
+/**
+ * A missing `latexindent` is reported once per session, then stays quiet.
+ * Formatting that silently does nothing is the failure mode worth avoiding;
+ * a user who does not want the report picks a different LaTeX formatter,
+ * which includes "none".
+ */
+let missingLatexindentReported = false;
+
 async function cleanupIndentLog(logPath: string): Promise<void> {
   try {
     await AbsoluteFS.delete(logPath);
@@ -58,11 +66,6 @@ async function cleanupBackupFiles(
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
-    const showWarning = getConfig<boolean>(
-      'texra.latex.showLatexindentWarning',
-      false,
-    );
-
     // Resolve workspace-relative paths to absolute so cleanup works correctly.
     // Some callers (latexCommands, housekeeping/indent) pass relative paths.
     const workspacePath = WorkspaceFS.getPath();
@@ -81,8 +84,9 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
     const result = await runToolWithCheck('latexindent', args, {
       channel: CHANNEL,
-      showError: showWarning,
+      showError: !missingLatexindentReported,
     });
+    if (result === false) missingLatexindentReported = true;
     const success = Boolean(result && result.success);
 
     if (success) {
