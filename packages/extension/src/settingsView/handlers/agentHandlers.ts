@@ -60,6 +60,7 @@ export class AgentHandlers {
       fetchPromptConfig: fetchRemoteAgentConfigYaml,
     });
   private readonly visibilityController: SettingsAgentVisibilityController;
+  private readonly activeCustomAgentDeletions = new Set<string>();
 
   constructor(
     private readonly ctx: SettingsHandlerContext,
@@ -317,50 +318,57 @@ export class AgentHandlers {
   async handleDeleteCustomAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
   ): Promise<void> {
-    await withHandlerErrorHandling(
-      this.ctx,
-      'Failed to delete custom agent',
-      async () => {
-        const key = createKey('custom', data.agentName);
-        const entry = getAgent(key);
-        if (!entry?.path) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Custom agent not found: ${data.agentName}`,
+    if (this.activeCustomAgentDeletions.has(data.agentName)) return;
+    this.activeCustomAgentDeletions.add(data.agentName);
+
+    try {
+      await withHandlerErrorHandling(
+        this.ctx,
+        'Failed to delete custom agent',
+        async () => {
+          const key = createKey('custom', data.agentName);
+          const entry = getAgent(key);
+          if (!entry?.path) {
+            await showLoggedMessage(
+              this.ctx.channel,
+              `Custom agent not found: ${data.agentName}`,
+            );
+            return;
+          }
+
+          const customDir = await agentDirectories.custom();
+          const result = this.fileController.planDeleteCustomAgent({
+            entry,
+            customDir,
+          });
+          if (!result.ok) {
+            await showLoggedMessage(
+              this.ctx.channel,
+              `Refusing to delete: file is not inside the custom agents directory.`,
+            );
+            return;
+          }
+
+          const deleteChoice = 'Delete';
+          const confirmed = await vscode.window.showWarningMessage(
+            `Delete "${data.agentName}"? This cannot be undone.`,
+            { modal: true },
+            deleteChoice,
           );
-          return;
-        }
+          if (confirmed !== deleteChoice) return;
 
-        const customDir = await agentDirectories.custom();
-        const result = this.fileController.planDeleteCustomAgent({
-          entry,
-          customDir,
-        });
-        if (!result.ok) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Refusing to delete: file is not inside the custom agents directory.`,
+          await AbsoluteFS.delete(result.plan.path, { recursive: false });
+
+          void vscode.window.showInformationMessage(
+            `Deleted custom agent: ${data.agentName}`,
           );
-          return;
-        }
 
-        const deleteChoice = 'Delete';
-        const confirmed = await vscode.window.showWarningMessage(
-          `Delete "${data.agentName}"? This cannot be undone.`,
-          { modal: true },
-          deleteChoice,
-        );
-        if (confirmed !== deleteChoice) return;
-
-        await AbsoluteFS.delete(result.plan.path, { recursive: false });
-
-        void vscode.window.showInformationMessage(
-          `Deleted custom agent: ${data.agentName}`,
-        );
-
-        await this.refreshAfterAgentMutation();
-      },
-    );
+          await this.refreshAfterAgentMutation();
+        },
+      );
+    } finally {
+      this.activeCustomAgentDeletions.delete(data.agentName);
+    }
   }
 
   // ── Custom agent directory handlers ──

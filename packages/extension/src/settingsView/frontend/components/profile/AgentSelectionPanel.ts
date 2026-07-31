@@ -441,7 +441,6 @@ export class AgentSelectionPanel extends LitElement {
 
     const { tone, badge } = SOURCE_META[agent.source];
     const builtIn = tone === 'builtin';
-    const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
 
     return html`
       <div class="agent-detail-pane">
