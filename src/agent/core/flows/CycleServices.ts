@@ -133,5 +133,6 @@ export interface FailedCycleFields {
 }
 
 export function buildFailedCycleOutcome(error: unknown): FailedCycleFields {
-  return { failureLogEmitted: false, ...buildFailedRetryInfo(error) };
+  const { lastError } = buildFailedRetryInfo(error);
+  return { failureLogEmitted: false, lastError };
 }
