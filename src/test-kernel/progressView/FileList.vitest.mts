@@ -8,7 +8,11 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { OutputFileInfo } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  dispatchKey,
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 function outputFile(): OutputFileInfo {
   return {
@@ -32,23 +36,10 @@ function outputFile(): OutputFileInfo {
   };
 }
 
-async function mountFileList(): Promise<FileList> {
-  const element = document.createElement('file-list') as FileList;
-  element.filesByRound = { '1': [outputFile()] };
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
-}
-
-function dispatchSpace(target: Element): void {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key: ' ',
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
+function mountFileList(): Promise<FileList> {
+  return mountComponent<FileList>('file-list', {
+    filesByRound: { '1': [outputFile()] },
+  });
 }
 
 describe('file-list keyboard activation', () => {
@@ -71,7 +62,7 @@ describe('file-list keyboard activation', () => {
         ?.querySelector(`wa-tooltip[for="${filePath?.id}"]`)
         ?.textContent?.trim(),
     ).toBe('paper_revised.tex');
-    dispatchSpace(filePath!);
+    dispatchKey(filePath!, ' ');
 
     expect(actions).toEqual([
       {
@@ -86,7 +77,7 @@ describe('file-list keyboard activation', () => {
       'wa-button[data-command]',
     );
     expect(nativeButton).toBeInstanceOf(HTMLElement);
-    dispatchSpace(nativeButton!);
+    dispatchKey(nativeButton!, ' ');
 
     expect(actions).toHaveLength(1);
   });

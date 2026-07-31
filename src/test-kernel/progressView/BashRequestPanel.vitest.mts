@@ -6,7 +6,10 @@ import type { BashRequestPanel } from '@progressView/frontend/components/BashReq
 import type { BashPermission } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 function createPermission(
   data: Partial<BashPermission>,
@@ -23,16 +26,10 @@ function createPermission(
   };
 }
 
-async function mountPanel(
+function mountPanel(
   permission: BashRequestPanel['permission'],
 ): Promise<BashRequestPanel> {
-  const element = document.createElement(
-    'bash-request-panel',
-  ) as BashRequestPanel;
-  element.permission = permission;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<BashRequestPanel>('bash-request-panel', { permission });
 }
 
 type ApproveSplit = HTMLElement & { canBypass?: boolean };

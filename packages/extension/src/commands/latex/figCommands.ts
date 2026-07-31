@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { runGuardedLatexCommand } from '@commands/_shared/latexCommandGuard';
+import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { TikzPictureManager } from '@latex/TikzPictureManager';

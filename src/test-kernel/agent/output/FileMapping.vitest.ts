@@ -2,11 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { noopTrace, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import {
   createFileMapping,
   replaceInputCommands,
 } from '@agent/output/fileMapping';
+import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation as externalLocation } from '@utils/files';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
@@ -81,7 +82,7 @@ describe('replaceInputCommands', () => {
     vi.spyOn(AbsoluteFS, 'read').mockRejectedValue(new Error('read failed'));
     const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
     const warn = vi.fn<AgentTrace['warn']>();
-    const logger: AgentTrace = { ...noopTrace, debug: vi.fn(), warn };
+    const logger = spiedTrace({ warn });
 
     await expect(
       replaceInputCommands([base], [output], logger),
@@ -99,7 +100,7 @@ describe('replaceInputCommands', () => {
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(String.raw`\input{chapter}`);
     vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(new Error('write failed'));
     const warn = vi.fn<AgentTrace['warn']>();
-    const logger: AgentTrace = { ...noopTrace, debug: vi.fn(), warn };
+    const logger = spiedTrace({ warn });
 
     await expect(
       replaceInputCommands([base], [output], logger),

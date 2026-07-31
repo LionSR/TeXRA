@@ -6,7 +6,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import type { TeamOptionData } from '@shared/schemas';
 
-// Local imports - main-view actions, catalog slice, and state
+// Local imports - main-view actions, catalog slice, state, and test utilities
 import {
   buildExecuteMessage,
   changeLaunchTarget,
@@ -31,6 +31,7 @@ import {
   workingDirectory$,
   workspaceRootOptions$,
 } from '@webview/frontend/mainViewState';
+import { teamOption } from './mainViewTestUtils';
 
 const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
@@ -44,22 +45,6 @@ vi.mock('@shared/hostBridge', () => ({
 vi.mock('@webview/frontend/persistence', () => ({
   saveState: mocks.saveState,
 }));
-
-function teamOption(
-  value: string,
-  overrides: Partial<TeamOptionData> = {},
-): TeamOptionData {
-  return {
-    value,
-    label: value,
-    icon: 'bookmark',
-    source: 'built-in',
-    description: '',
-    unavailableMembers: [],
-    rootAgentName: null,
-    ...overrides,
-  };
-}
 
 function setTeamOptions(optionsData: TeamOptionData[]): void {
   catalogHandlers[MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS]({

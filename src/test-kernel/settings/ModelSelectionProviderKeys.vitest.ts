@@ -13,7 +13,10 @@ import type {
   ModelSelectionItem,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 type ModelSelectionListElement = HTMLElement & {
   models: ModelSelectionItem[];
@@ -34,17 +37,13 @@ const deepseekModel: ModelSelectionItem = {
   isFast: true,
 };
 
-async function renderModelSelectionList(
+function renderModelSelectionList(
   props: Partial<ModelSelectionListElement> = {},
 ): Promise<ModelSelectionListElement> {
-  const list = document.createElement(
-    'model-selection-list',
-  ) as ModelSelectionListElement;
-  list.models = [deepseekModel];
-  Object.assign(list, props);
-  document.body.append(list);
-  await list.updateComplete;
-  return list;
+  return mountComponent<ModelSelectionListElement>('model-selection-list', {
+    models: [deepseekModel],
+    ...props,
+  });
 }
 
 describe('ModelSelectionList provider key status', () => {

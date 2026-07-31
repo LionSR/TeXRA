@@ -9,7 +9,11 @@ import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  dispatchKey,
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 type PostedMessage = { command: string; file?: string };
 let posted: PostedMessage[] = [];
@@ -47,27 +51,12 @@ function createPermission(): ProposalRequestPanel['permission'] {
   };
 }
 
-async function mountPanel(
+function mountPanel(
   permission: ProposalRequestPanel['permission'] = createPermission(),
 ): Promise<ProposalRequestPanel> {
-  const element = document.createElement(
-    'proposal-request-panel',
-  ) as ProposalRequestPanel;
-  element.permission = permission;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
-}
-
-function dispatchKey(target: Element, key: string): void {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
+  return mountComponent<ProposalRequestPanel>('proposal-request-panel', {
+    permission,
+  });
 }
 
 function recordPermissionActions(

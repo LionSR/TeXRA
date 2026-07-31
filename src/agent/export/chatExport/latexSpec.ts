@@ -7,7 +7,7 @@
  * `@resources` import and is buildable from any host.
  */
 
-import type { DocumentMeta } from '@agent/export/schemas';
+import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 import { filterNotNullish } from '@utils/core';
 
@@ -59,10 +59,10 @@ function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
   ].join('\n');
 }
 
-const LATEX_ATTACHMENT_LABELS: Record<string, string> = {
+const LATEX_ATTACHMENT_LABELS = {
   image: '\\textit{[Image attachment]}',
   document: '\\textit{[Document attachment]}',
-};
+} as const satisfies Record<ExportAttachmentType, string>;
 
 function latexLinkOrText(url: string, title: string): string {
   const safeUrl = sanitizeLiveLinkUrl(url);

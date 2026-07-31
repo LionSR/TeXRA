@@ -1,8 +1,9 @@
 /**
  * Config-loading half of the remote-agent client. Resolving a remote agent's
- * YAML tool list needs `@tools/registry`, which imports every registered tool;
- * keep this module out of any path reachable from `src/tools/`. The listing
- * half — which the agent index does reach — lives in `./remoteAgentList`.
+ * YAML tool list pulls in `@tools/registry` (through
+ * `resolveAgentSettingTools`), which imports every registered tool; keep this
+ * module out of any path reachable from `src/tools/`. The listing half — which
+ * the agent index does reach — lives in `./remoteAgentList`.
  */
 import {
   type AgentSettingInput,
@@ -11,10 +12,10 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { extractToolNames, updateAgentMeta } from '@agent/index/agentRegistry';
+import { resolveAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
-import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
@@ -59,19 +60,7 @@ export async function loadRemoteAgent(
     const defaultOutputFiles = settings.defaultOutputFiles;
 
     // Process tool definitions (remote agents are self-contained)
-    const resolvedSettings = Array.isArray(settings.tools)
-      ? {
-          ...settings,
-          tools: resolveToolDefinitions(
-            settings.tools as RawToolConfig[],
-            (name, reason) =>
-              logger.warn(
-                CHANNEL,
-                `Tool "${name}" ${reason ?? 'not found in registry'}`,
-              ),
-          ),
-        }
-      : settings;
+    const resolvedSettings = resolveAgentSettingTools(settings, CHANNEL);
 
     const config: RemoteAgentConfig = {
       settings: AgentSettingSchema.parse(resolvedSettings),

@@ -1,6 +1,6 @@
 /** Markdown format spec for chat export. */
 
-import type { DocumentMeta } from '@agent/export/schemas';
+import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 import { filterNotNullish } from '@utils/core';
 
@@ -55,10 +55,10 @@ function markdownHeader(meta: DocumentMeta): string {
   ].join('\n');
 }
 
-const ATTACHMENT_LABELS: Record<string, string> = {
+const ATTACHMENT_LABELS = {
   image: 'Image attachment',
   document: 'Document attachment',
-};
+} as const satisfies Record<ExportAttachmentType, string>;
 
 // Backtick/*/_/# added on top of the link-syntax-breaking set: a
 // tool-controlled title containing them can trigger incidental code-span,

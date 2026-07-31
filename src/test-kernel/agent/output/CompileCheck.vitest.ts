@@ -5,29 +5,19 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  runCompileCheck,
-  type CompileCheckContext,
-} from '@agent/output/compileCheck';
-import {
-  createOutputState,
-  ensureRoundData,
-  type OutputState,
-} from '@agent/output/outputState';
+import { runCompileCheck } from '@agent/output/compileCheck';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import type {
-  ExecutionId,
-  FileLocation,
-  OutputFileInfo,
-} from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { installPlatform } from '@test/support/setupPlatform';
-import { spiedTrace } from '@test/support/spiedTrace';
+import type { ExecutionId, FileLocation } from '@shared/schemas';
+import { AbsoluteFS } from '@utils/files';
+
+// Local file imports
 import {
-  TaskRunFileService,
-  createRunStorageLocation,
-  AbsoluteFS,
-} from '@utils/files';
+  compileContext,
+  initLatexPlatform,
+  outputFile,
+  runDir,
+} from './compileCheckTestUtils';
 
 interface FakeCompileOptions {
   outputDirectory?: string;
@@ -51,39 +41,6 @@ vi.mock('@latex/latexToolchain', () => ({
   hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
-const storagePath = '/storage';
-const workspacePath = '/workspace';
-
-function runDir(executionId: ExecutionId): string {
-  return path.join(storagePath, 'executions', executionId);
-}
-
-function runStorageFile(
-  executionId: ExecutionId,
-  relativePath: string,
-): FileLocation {
-  return createRunStorageLocation(
-    path.join(runDir(executionId), relativePath),
-    relativePath,
-    executionId,
-  );
-}
-
-function outputFile(
-  executionId: ExecutionId,
-  relativePath: string,
-  source: string,
-  round: number,
-): OutputFileInfo {
-  return {
-    source,
-    round,
-    location: runStorageFile(executionId, relativePath),
-    lineage: null,
-    diff: null,
-  };
-}
-
 /** Seeds a single round-0 `main.tex` output -- the common single-file case. */
 function seedMainTexOutput(executionId: ExecutionId) {
   const outputState = createOutputState();
@@ -91,30 +48,6 @@ function seedMainTexOutput(executionId: ExecutionId) {
     outputFile(executionId, path.join('r0', 'main.tex'), 'main.tex', 0),
   ];
   return outputState;
-}
-
-function compileContext(
-  executionId: ExecutionId,
-  outputState: OutputState,
-): CompileCheckContext {
-  return {
-    fileService: new TaskRunFileService(executionId),
-    outputState,
-    logger: spiedTrace(),
-    streamId: 'compile-stream',
-  };
-}
-
-function initLatexPlatform(files: Record<string, string>): Promise<void> {
-  return installPlatform({
-    files,
-    storagePath,
-    workspacePath,
-    workspaceState: {
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
-    },
-  });
 }
 
 describe('runCompileCheck', () => {

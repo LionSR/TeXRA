@@ -103,9 +103,9 @@ import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
+import { postDesktopSettingsRoute } from '../desktopCommandSurface.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
-import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
+import { buildDesktopSetRouteMessage } from '../desktopShellMessages.js';
 import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
@@ -1039,24 +1039,19 @@ export class DesktopProgressBridge {
   }
 
   private routeToProgress(): void {
-    this.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-      route: 'progress',
-    });
+    this.postToRenderer(buildDesktopSetRouteMessage('progress'));
   }
 
   /**
-   * Open the settings overlay, optionally on a specific tab. Same two-message
-   * sequence `desktopShellIpc.postSettingsRoute` uses, so a stream-initiated
-   * navigation lands identically to one from the rail or a menu command.
+   * Open the settings overlay, optionally on a specific tab, through the same
+   * owner the rail and menu commands use, so a stream-initiated navigation
+   * lands identically.
    */
   private routeToSettings(tabIndex?: SettingsTab): void {
-    this.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-      route: 'settings',
-    });
-    if (tabIndex == null) return;
-    this.postToRenderer(buildDesktopSettingsTabMessage(tabIndex));
+    postDesktopSettingsRoute(
+      (message) => this.postToRenderer(message),
+      tabIndex,
+    );
   }
 
   private handlePresentationEvent<K extends RuntimePresentationEvent>(
@@ -1352,10 +1347,7 @@ export class DesktopProgressBridge {
       });
       return false;
     }
-    this.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-      route: 'main',
-    });
+    this.postToRenderer(buildDesktopSetRouteMessage('main'));
     this.postToRenderer({
       command: COMMON_COMMANDS.STATE_RESTORE,
       state,

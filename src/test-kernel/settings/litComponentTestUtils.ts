@@ -45,6 +45,7 @@ const domGlobalKeys = [
   'KeyboardEvent',
   'MouseEvent',
   'ShadowRoot',
+  'DocumentFragment',
   'Node',
   'CSSStyleSheet',
   'AbortController',
@@ -214,10 +215,12 @@ function installElementInternalsPolyfill(window: TestDomWindow): void {
 
 /**
  * Install the browser globals Lit components need, import the component module,
- * and reset the document between tests.
+ * and reset the document between tests. Suites that import the module under
+ * test from inside a test body (which already runs after the globals are in
+ * place) can omit `importComponents`.
  */
 export function useLitComponentTestDom(
-  importComponents: () => Promise<unknown>,
+  importComponents?: () => Promise<unknown>,
 ): void {
   let dom: JSDOM;
   const previousGlobals = new Map<
@@ -250,6 +253,7 @@ export function useLitComponentTestDom(
       KeyboardEvent: dom.window.KeyboardEvent,
       MouseEvent: dom.window.MouseEvent,
       ShadowRoot: dom.window.ShadowRoot,
+      DocumentFragment: dom.window.DocumentFragment,
       Node: dom.window.Node,
       CSSStyleSheet: dom.window.CSSStyleSheet,
       // wa-dialog (and other Web Awesome components) rely on these browser
@@ -294,7 +298,7 @@ export function useLitComponentTestDom(
     installElementInternalsPolyfill(dom.window);
     installDialogPolyfill(dom.window);
     installAnimationPolyfill(dom.window);
-    await importComponents();
+    await importComponents?.();
   });
 
   beforeEach(() => {
@@ -316,4 +320,35 @@ export function useLitComponentTestDom(
       }
     }
   });
+}
+
+/**
+ * Creates `tag`, assigns `props` before it is connected (so the first render
+ * already sees them), attaches it to the document body, and waits for that
+ * render to finish.
+ */
+export async function mountComponent<
+  T extends { updateComplete: Promise<unknown> },
+>(tag: string, props: Partial<T> = {}): Promise<T> {
+  const element = document.createElement(tag) as unknown as T;
+  Object.assign(element, props);
+  document.body.append(element as unknown as HTMLElement);
+  await element.updateComplete;
+  return element;
+}
+
+/**
+ * Dispatches the keydown a component's keyboard-activation handlers listen for:
+ * bubbling and composed so shadow-DOM delegates see it, cancelable so a handler
+ * calling `preventDefault()` is observable.
+ */
+export function dispatchKey(target: EventTarget, key: string): void {
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    }),
+  );
 }

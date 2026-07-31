@@ -228,6 +228,10 @@ export async function activate(context: vscode.ExtensionContext) {
     workspacePath: () => workspace.getWorkspacePath(),
   });
   await migrateLegacyVscodeStorage(context, storage);
+  // Shared by the `Platform` tool-availability port and the setup platform's
+  // extensions port, which both answer the same question.
+  const isVscodeExtensionInstalled = (id: string) =>
+    vscode.extensions.getExtension(id) !== undefined;
   initPlatform({
     config: new VscodeConfigProvider(),
     globalState: context.globalState,
@@ -244,8 +248,7 @@ export async function activate(context: vscode.ExtensionContext) {
     },
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,
-      isVscodeExtensionInstalled: (id) =>
-        vscode.extensions.getExtension(id) !== undefined,
+      isVscodeExtensionInstalled,
     },
     languageModel,
     toolMissingHandler: async (message, openDocsCommand) => {
@@ -487,6 +490,8 @@ export async function activate(context: vscode.ExtensionContext) {
             : undefined;
         const editorType = vscode.env.appName || undefined;
         UsageLogService.initialize({}, extensionVersion, editorType);
+        // Not redundant with the shutdown hook: VS Code skips deactivate()
+        // when activate() throws, but always disposes subscriptions.
         context.subscriptions.push({
           dispose: () => void UsageLogService.dispose(),
         });
@@ -518,7 +523,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
   setTimeout(() => void configureLatexSettings(), 0);
-  const viewProviders = registerCommands(context);
+  const mainViewProvider = registerCommands(context);
   registerFileDecorations(context);
 
   initializeNativeToolEditApproval(context, defaultSession().interactions, {
@@ -548,7 +553,7 @@ export async function activate(context: vscode.ExtensionContext) {
         Promise.resolve(vscode.commands.executeCommand(cmd, ...args)),
     },
     extensions: {
-      isInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
+      isInstalled: isVscodeExtensionInstalled,
       install: async (id) => {
         await vscode.commands.executeCommand(
           'workbench.extensions.installExtension',
@@ -718,10 +723,6 @@ export async function activate(context: vscode.ExtensionContext) {
     onUsageChanged: updateStatusBarTooltip,
   });
 
-  const showMainView = async () => {
-    await viewProviders.mainViewProvider.showInSidebar();
-  };
-
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
   registerLanguageModelTools(context);
@@ -729,35 +730,34 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     { dispose: disposeStatusListener },
     statusBarItem,
-    // `texra.showMainView` keeps its bespoke registration here because the
-    // handler closes over the `MainViewProvider`. `texra.toggleView` migrated
-    // to the shared command registry in #3781 batch 4 — its action only needs
-    // module-level state (`getActiveSidebarView()`) so it doesn't need a
-    // closure into `activate()`.
-    vscode.commands.registerCommand('texra.showMainView', showMainView),
+    // Registered here rather than through the shared command registry because
+    // the handler closes over this activation's status-bar refresh queue.
     vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
       await queueApiKeyStatusRefresh();
       // Credential facts changed (set/unset API key from any entry point —
       // palette, walkthrough, welcome card), so the onboarding funnel must
       // recompute too: the State 0 card has no other signal when a key is
       // added outside the main view's own round-trip.
-      await viewProviders.mainViewProvider
-        .refreshOnboardingFunnel()
-        .catch(() => {});
+      await mainViewProvider.refreshOnboardingFunnel().catch((err) => {
+        logger.warn(
+          'extension',
+          `Onboarding funnel refresh failed: ${toErrorMessage(err)}`,
+        );
+      });
     }),
   );
 
   progressViewProvider.setSidebarWebviewGetter(
-    () => viewProviders.mainViewProvider.getWebviewView()?.webview,
+    () => mainViewProvider.getWebviewView()?.webview,
   );
-  progressViewProvider.setMainViewProvider(viewProviders.mainViewProvider);
-  viewProviders.mainViewProvider.setProgressViewProvider(progressViewProvider);
+  progressViewProvider.setMainViewProvider(mainViewProvider);
+  mainViewProvider.setProgressViewProvider(progressViewProvider);
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`
   // keeps them hidden until every command handler is registered. This must run
-  // after ALL `registerCommand` calls in this function (including the late ones
-  // for `texra.showMainView` and `texra.toggleView`), otherwise palette entries
-  // can fire before their handlers exist and produce "command not found" errors.
+  // after ALL `registerCommand` calls in this function (including the late one
+  // for `texra.refreshApiKeyStatus`), otherwise palette entries can fire before
+  // their handlers exist and produce "command not found" errors.
   await vscode.commands.executeCommand('setContext', 'texra.activated', true);
 
   const welcomeKey = 'texra.welcomeShown';

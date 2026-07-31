@@ -12,7 +12,7 @@
 // runs, and both entry points already reject those before calling it, so
 // `texra run` / `--print` / piped output stay byte-identical (headless parity).
 
-import { render, Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import { useState } from 'react';
 
 import { listExecutions } from '@agent/storage';
@@ -21,8 +21,7 @@ import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { type CodexSession } from '@auth/codex';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
-import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
+import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
@@ -207,32 +206,26 @@ async function runOnboardingFlow(options: {
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
   const picker = onboardingPicker(options);
-  let chosen: OnboardingResolution | undefined;
-  const instance = render(
-    <OnboardingApp
-      pickerSubtitle={picker.subtitle}
-      pickerItems={picker.items}
-      onResolve={(next) => {
-        chosen = next;
-      }}
-    />,
+  // `interactive`: both callers reject non-TTY output before reaching this
+  // flow. Keep that product boundary authoritative when a real PTY also has CI
+  // set; Ink otherwise disables interactive rendering from its CI heuristic.
+  // The visible-screen clear keeps scrollback intact so the summary below
+  // lands there.
+  const chosen = await renderCliPrompt<OnboardingResolution>(
+    (resolve) => (
+      <OnboardingApp
+        pickerSubtitle={picker.subtitle}
+        pickerItems={picker.items}
+        onResolve={resolve}
+      />
+    ),
     {
-      // Both callers reject non-TTY output before reaching this flow. Keep
-      // that product boundary authoritative when a real PTY also has CI set;
-      // Ink otherwise disables interactive rendering from its CI heuristic.
-      interactive: true,
-      stdout: tuiOutputStreamForColor(
-        process.stdout,
-        options.colorEnabled ?? true,
-      ),
+      stdout: process.stdout,
       stderr: process.stderr,
-      stdin: process.stdin,
+      colorEnabled: options.colorEnabled,
+      interactive: true,
     },
   );
-  await instance.waitUntilExit();
-  // Wipe the picker out of the visible screen without erasing scrollback
-  // (matches runOrchestrationTui); the summary below lands in scrollback.
-  clearTerminalVisibleScreen();
   const resolution: OnboardingResolution = chosen ?? NO_ONBOARDING_RESULT;
 
   if (resolution.declined) {

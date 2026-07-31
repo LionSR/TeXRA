@@ -10,6 +10,7 @@ import {
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
 import {
+  buildDesktopSetRouteMessage,
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
   type DesktopRoute,
@@ -23,9 +24,9 @@ import {
 } from './desktopIpcTypes.js';
 import {
   buildDesktopMainViewResetMessage,
-  buildDesktopSettingsTabMessage,
   DESKTOP_DOCS_URL,
   DESKTOP_LOCAL_COMMANDS,
+  postDesktopSettingsRoute,
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
 
@@ -81,20 +82,17 @@ export function createDesktopShellActions(
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
   function postRoute(route: DesktopRoute) {
-    renderer.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-      route,
-    });
+    renderer.postToRenderer(buildDesktopSetRouteMessage(route));
   }
 
   function postSettingsRoute(
     tabIndex?: SettingsTab,
     agentSubTab?: AgentCategory,
   ) {
-    postRoute('settings');
-    if (tabIndex == null) return;
-    renderer.postToRenderer(
-      buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
+    postDesktopSettingsRoute(
+      (message) => renderer.postToRenderer(message),
+      tabIndex,
+      agentSubTab,
     );
   }
 

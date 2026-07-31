@@ -670,7 +670,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   // ============================================================
-  // Public methods for external access
+  // Full refresh — SettingsViewProvider's entry point
   // ============================================================
 
   public async sendAllData(webview: vscode.Webview): Promise<void> {
@@ -710,7 +710,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  public async sendMemoryData(webview: vscode.Webview): Promise<void> {
+  private async sendMemoryData(webview: vscode.Webview): Promise<void> {
     await this.settingsHost.sendMemoryData((message) =>
       webview.postMessage(message),
     );
@@ -733,13 +733,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  public async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
+  private async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
     await this.settingsHost.sendMemoryEnabled((message) =>
       webview.postMessage(message),
     );
   }
 
-  public async sendInlineCriticismEnabled(
+  private async sendInlineCriticismEnabled(
     webview: vscode.Webview,
   ): Promise<void> {
     await webview.postMessage({
@@ -755,13 +755,13 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w));
   }
 
-  public async sendProfileData(webview: vscode.Webview): Promise<void> {
+  private async sendProfileData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
       await this.profileController.buildProfileMessage(),
     );
   }
 
-  public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
+  private async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     await this.settingsHost.sendModelSelectionData((message) =>
       webview.postMessage(message),
     );
@@ -778,7 +778,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Multi-agent coordination handler implementations
   // ============================================================
 
-  public async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
+  private async sendSuperYoloEnabled(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
       buildSuperYoloMessage({
         workspaceState: workspaceSM,
@@ -1187,7 +1187,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Tool dashboard handler implementations
   // ============================================================
 
-  public async sendToolDashboardData(
+  private async sendToolDashboardData(
     webview: vscode.Webview,
     options?: { skipChecks?: boolean },
   ): Promise<void> {

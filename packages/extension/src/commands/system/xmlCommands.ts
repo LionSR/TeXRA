@@ -2,44 +2,39 @@
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - core
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import {
-  getActiveEditorWithGuards,
-  logGuardFailure,
-} from '@frontend/editor/activeFileGuards';
+import { runGuardedFileCommand } from '@frontend/editor/activeFileGuards';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'XmlCommands';
 
 export async function handleParseXml(): Promise<void> {
-  try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions: ['.xml'],
+  await runGuardedFileCommand(
+    {
+      channel: CHANNEL,
+      action: 'parse XML',
       resourceName: 'XML',
-    });
+      allowedExtensions: ['.xml'],
+      errorMessage: 'Error parsing XML',
+    },
+    async ({ editor }) => {
+      const content = editor.document.getText();
+      logger.debug(
+        CHANNEL,
+        `Parsing XML content from: ${editor.document.fileName}`,
+      );
 
-    if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'parse XML', guardResult.status, 'XML');
-      return;
-    }
+      const parser = new XMLParser({
+        ignoreAttributes: false,
+        parseTagValue: true,
+        textNodeName: 'content',
+        attributeNamePrefix: '',
+      });
 
-    const { editor } = guardResult;
-    const content = editor.document.getText();
-    logger.debug(
-      CHANNEL,
-      `Parsing XML content from: ${editor.document.fileName}`,
-    );
-
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      parseTagValue: true,
-      textNodeName: 'content',
-      attributeNamePrefix: '',
-    });
-
-    const parsedXml = parser.parse(content);
-    logger.debug(CHANNEL, `Parsed XML:\n${JSON.stringify(parsedXml, null, 2)}`);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error parsing XML', err);
-  }
+      const parsedXml = parser.parse(content);
+      logger.debug(
+        CHANNEL,
+        `Parsed XML:\n${JSON.stringify(parsedXml, null, 2)}`,
+      );
+    },
+  );
 }

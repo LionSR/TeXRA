@@ -1,6 +1,3 @@
-// Standard library imports
-import { strict as assert } from 'node:assert';
-
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
@@ -90,7 +87,7 @@ describe('SettingsAgentVisibilityController', () => {
       enabled: false,
     });
 
-    assert.deepEqual(enabled.workflow, [
+    expect(enabled.workflow).toEqual([
       'builtInWorkflow:correct',
       'custom:customWriter',
     ]);
@@ -107,7 +104,7 @@ describe('SettingsAgentVisibilityController', () => {
       enabled: true,
     });
 
-    assert.deepEqual(enabled.workflow, [
+    expect(enabled.workflow).toEqual([
       'builtInWorkflow:correct',
       'custom:customWriter',
     ]);

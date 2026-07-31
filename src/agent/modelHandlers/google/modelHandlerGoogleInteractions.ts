@@ -363,13 +363,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   /** Number of Steps already sent to the server (anchors the delta slice). */
   private sentStepCount = 0;
 
-  /**
-   * Single-turn guard: concurrent createResponse() calls would race the chain
-   * state (chainedInteractionId / sentStepCount) and corrupt the chain. See the
-   * {@link createResponse} override.
-   */
-  private inFlight = false;
-
   /** Result of an in-call compaction, surfaced as {@link CreateResponseResult.updatedMessages}. */
   private compactionResult?: { compactedMessages: Step[] };
 
@@ -1163,27 +1156,13 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // ===========================================================================
 
   /**
-   * Single-turn guard (mirrors {@link ModelHandlerOpenAIResponse}). The base
-   * {@link ModelHandler.createResponse} owns the SDK error-tag wrap;
-   * we supply only the in-flight guard. Concurrent callers would race
-   * chainedInteractionId / sentStepCount and corrupt the chain, so fail loudly
-   * instead of silently corrupting state.
+   * Single-turn guard: concurrent callers would race chainedInteractionId /
+   * sentStepCount and corrupt the chain.
    */
-  protected override async withCreateResponseGuard<T>(
+  protected override withCreateResponseGuard<T>(
     run: () => Promise<T>,
   ): Promise<T> {
-    if (this.inFlight) {
-      throw new Error(
-        'modelHandlerGoogleInteractions.createResponse invoked while a prior ' +
-          'call is still in flight; this handler is single-turn per instance.',
-      );
-    }
-    this.inFlight = true;
-    try {
-      return await run();
-    } finally {
-      this.inFlight = false;
-    }
+    return this.withSingleTurnGuard('modelHandlerGoogleInteractions', run);
   }
 
   protected override async createResponseImpl(

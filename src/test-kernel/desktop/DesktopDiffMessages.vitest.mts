@@ -1,32 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-async function loadDiffMessages(): Promise<
-  typeof import('../../../packages/desktop/src/desktopDiffMessages')
-> {
-  return (await import(
-    moduleFileUrl(desktopSourcePath('desktopDiffMessages.ts'))
-  )) as typeof import('../../../packages/desktop/src/desktopDiffMessages');
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('monacoLanguageForFilePath', () => {
   it('maps known LaTeX extensions', async () => {
-    const { monacoLanguageForFilePath } = await loadDiffMessages();
+    const { monacoLanguageForFilePath } = await loadSourceModule(
+      '@desktop/desktopDiffMessages',
+    );
     expect(monacoLanguageForFilePath('foo.tex')).toBe('latex');
     expect(monacoLanguageForFilePath('/abs/path/foo.bib')).toBe('bibtex');
     expect(monacoLanguageForFilePath('windows\\path\\foo.sty')).toBe('latex');
   });
 
   it('falls back to plaintext on unknown / missing extensions', async () => {
-    const { monacoLanguageForFilePath } = await loadDiffMessages();
+    const { monacoLanguageForFilePath } = await loadSourceModule(
+      '@desktop/desktopDiffMessages',
+    );
     expect(monacoLanguageForFilePath(undefined)).toBe('plaintext');
     expect(monacoLanguageForFilePath('Makefile')).toBe('plaintext');
     expect(monacoLanguageForFilePath('foo.unknownext')).toBe('plaintext');
   });
 
   it('is case-insensitive', async () => {
-    const { monacoLanguageForFilePath } = await loadDiffMessages();
+    const { monacoLanguageForFilePath } = await loadSourceModule(
+      '@desktop/desktopDiffMessages',
+    );
     expect(monacoLanguageForFilePath('FOO.TEX')).toBe('latex');
     expect(monacoLanguageForFilePath('Foo.MD')).toBe('markdown');
   });
@@ -34,7 +32,9 @@ describe('monacoLanguageForFilePath', () => {
 
 describe('DesktopShowDiffMessageSchema', () => {
   it('round-trips a complete payload', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadDiffMessages();
+    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+      '@desktop/desktopDiffMessages',
+    );
     const parsed = DesktopShowDiffMessageSchema.parse({
       command: 'desktop:showDiff',
       title: 'Compare',
@@ -53,7 +53,9 @@ describe('DesktopShowDiffMessageSchema', () => {
   });
 
   it('defaults missing language to plaintext', async () => {
-    const { DesktopShowDiffMessageSchema } = await loadDiffMessages();
+    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+      '@desktop/desktopDiffMessages',
+    );
     const parsed = DesktopShowDiffMessageSchema.parse({
       command: 'desktop:showDiff',
       title: 'Compare',

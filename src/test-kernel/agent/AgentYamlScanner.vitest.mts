@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 
 /** Create a temp agent directory holding the given YAML files, given as lines. */
 async function createAgentDir(
@@ -33,10 +33,7 @@ function toolUseAgent(name: string, systemPrompt: string): string[] {
 }
 
 describe('agent YAML scanner', () => {
-  beforeAll(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-  });
+  beforeAll(() => installPlatform({}, { fs: nodeFilesystem }));
 
   it('derives workflow round counts from inherited settings and prompts', async () => {
     const agentDir = await createAgentDir({

@@ -2,8 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import {
   createToolUseRoundFlow,
@@ -11,65 +9,10 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
-import { testRunScope, withTestRunContext } from '../progressTestUtils';
-
-/**
- * Fields identical across every `ToolUseRoundServices` fixture below --
- * only `modelHandler`, `session`, `setting`, and `toolRegistry` vary per
- * scenario, so those stay inline at each call site.
- */
-function baseRoundServices(traceLabel: string) {
-  return {
-    runScope: testRunScope('test-stream'),
-    checkInterruption: () => false,
-    client: {},
-    config: { agent: 'test-agent', model: 'test-model' },
-    fileService: {
-      createLocation: (filePath: string) => ({ absolutePath: filePath }),
-    },
-    logger: createRunTrace(traceLabel, StreamLogStore.ephemeral('test')).trace,
-    onRoundFinalized: () => {},
-    prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
-    run: AgentRunStateSnapshotSchema.parse({}),
-    setAbortController: () => {},
-    userVarChannels: { input: {}, transient: {} },
-    workspace: AgentWorkspaceState.create(),
-  };
-}
-
-/**
- * The model-handler surface a full round drives -- response extraction,
- * server-tool data, routing, streaming. Scenarios override only the members
- * whose behavior they exercise.
- */
-function roundModelHandler(overrides: Record<string, unknown>) {
-  return {
-    addMediaToUserMessage: vi.fn(async () => []),
-    capabilities: { supportsVision: true },
-    config: { provider: 'openai', fullName: 'test-model' },
-    createAssistantMessageFromResponse: vi.fn(
-      (_response: unknown, text: string) =>
-        ({ type: 'message', role: 'assistant', content: text }) as never,
-    ),
-    extractAssistantContent: () => [],
-    extractServerToolData: () => ({
-      contentBlocks: [],
-      webFetchResults: [],
-      webSearchResults: [],
-    }),
-    extractToolUse: () => [],
-    getWireRouteKey: () => 'openai:test-route',
-    getModelRetryRouteKey: () => 'openai:test-route:model',
-    getStreamingConfig: () => false,
-    isEndTurnStop: (stopReason: string) => stopReason === 'stop',
-    processThinkingBlock: () => null,
-    setOutputStreaming: vi.fn(),
-    ...overrides,
-  };
-}
+import { withTestRunContext } from '../progressTestUtils';
+import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
 
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {

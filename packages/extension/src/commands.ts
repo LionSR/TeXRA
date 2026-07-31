@@ -21,9 +21,9 @@ import { registerAgentReviewCommands } from '@commands/review/agentReviewCommand
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MainViewProvider } from './MainViewProvider';
 
-export function registerCommands(context: vscode.ExtensionContext): {
-  mainViewProvider: MainViewProvider;
-} {
+export function registerCommands(
+  context: vscode.ExtensionContext,
+): MainViewProvider {
   registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
@@ -57,7 +57,12 @@ export function registerCommands(context: vscode.ExtensionContext): {
         },
       },
     ),
+    // Registered here rather than through the shared registry because the
+    // handler needs the `MainViewProvider` instance created just above.
+    vscode.commands.registerCommand('texra.showMainView', () =>
+      mainViewProvider.showInSidebar(),
+    ),
   );
 
-  return { mainViewProvider };
+  return mainViewProvider;
 }

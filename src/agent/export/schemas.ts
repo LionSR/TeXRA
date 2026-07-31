@@ -12,6 +12,8 @@
 
 import { z } from 'zod';
 
+import type { MediaAttachmentKind } from '@shared/schemas';
+
 // ============================================================
 // Export configuration (caller-supplied)
 // ============================================================
@@ -44,11 +46,24 @@ const WebSearchResultSchema = z.object({
   url: z.string(),
 });
 
+/**
+ * Attachment kinds a renderer must be able to label. Kept in step with the
+ * canonical {@link MediaAttachmentKind} vocabulary: the transcript row and the
+ * exported document describe the same attachment, so a kind added there must
+ * also gain a label in every format spec.
+ */
+const EXPORT_ATTACHMENT_TYPES = [
+  'image',
+  'document',
+] as const satisfies readonly MediaAttachmentKind[];
+
+export type ExportAttachmentType = (typeof EXPORT_ATTACHMENT_TYPES)[number];
+
 const UserPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({
     type: z.literal('attachment'),
-    attachmentType: z.enum(['image', 'document']),
+    attachmentType: z.enum(EXPORT_ATTACHMENT_TYPES),
   }),
 ]);
 export type UserPart = z.infer<typeof UserPartSchema>;

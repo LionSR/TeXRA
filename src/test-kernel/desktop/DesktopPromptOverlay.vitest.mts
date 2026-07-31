@@ -4,31 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - shared utilities
 import { delay } from '@utils/core';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+// Local imports - test support
+import { loadSourceModule } from './loadSourceModule.mjs';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-interface DesktopPromptOverlay {
-  open(message: {
-    command: 'desktop:showPrompt';
-    requestId: string;
-    title: string;
-    prompt: string;
-    password: boolean;
-  }): void;
-}
+type DesktopPromptOverlay = ReturnType<
+  typeof import('@desktop/renderer/promptOverlay').createDesktopPromptOverlay
+>;
 
-interface DesktopPromptOverlayModule {
-  createDesktopPromptOverlay(
-    appRoot: HTMLElement,
-    send: (message: Record<string, unknown>) => void,
-  ): DesktopPromptOverlay;
-}
-
-async function loadDesktopPromptOverlay(): Promise<DesktopPromptOverlayModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('renderer', 'promptOverlay.ts'))
-  ) as Promise<DesktopPromptOverlayModule>;
+async function loadDesktopPromptOverlay(): Promise<
+  typeof import('@desktop/renderer/promptOverlay')
+> {
+  return loadSourceModule('@desktop/renderer/promptOverlay');
 }
 
 async function flushDialogTicks(times = 5): Promise<void> {

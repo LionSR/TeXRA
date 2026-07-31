@@ -1,6 +1,6 @@
 import { isDesktopProtocolUrl } from './desktopProtocol.js';
 
-interface WorkspacePathOptions {
+export interface WorkspacePathOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
   storedWorkspacePath?: string;

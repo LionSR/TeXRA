@@ -1,6 +1,5 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -8,6 +7,12 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+
+// Local file imports
+import {
+  GOOGLE_INTERACTIONS_TEST_CONFIG,
+  StreamingGoogleInteractionsHandler,
+} from './googleInteractionsTestUtils';
 
 // Third-party imports
 import type { Interactions } from '@google/genai';
@@ -38,23 +43,11 @@ function createStreamRecorder(records: StreamRecord[]): AgentTrace {
   };
 }
 
-class StreamingInteractionsHandler extends ModelHandlerGoogleInteractions {
-  override getStreamingConfig(): boolean {
-    return true;
-  }
-}
-
 function createHandler(
   records: StreamRecord[],
 ): ModelHandlerGoogleInteractions {
-  const handler = new StreamingInteractionsHandler(
-    buildTestModelConfig({
-      name: 'test-google-interactions',
-      label: 'Test Google Interactions',
-      fullName: 'gemini-3-pro-test',
-      shortName: 'gemini-3-pro-test',
-      provider: ModelProvider.GOOGLE,
-      contextWindow: 4096,
+  const handler = new StreamingGoogleInteractionsHandler(
+    buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG, {
       capabilities: {
         supportsReasoning: true,
         supportsTokenCounting: false,

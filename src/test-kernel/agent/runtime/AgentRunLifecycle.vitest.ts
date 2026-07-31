@@ -53,9 +53,9 @@ import { StorageFS } from '@utils/files';
 
 // Local file imports
 import {
-  createRecordingHost,
   recordSessionEvents,
   runEventsOfType,
+  sessionFactPayloads,
 } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
@@ -111,7 +111,6 @@ function lifecycleFixture(
   streamId: StreamTabId;
   streamStatus: StreamStatusMachine;
   ctx: AgentLaunchContext;
-  explicit: ReturnType<typeof createRecordingHost>;
 } {
   const executionId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as ExecutionId;
@@ -121,7 +120,6 @@ function lifecycleFixture(
     streamId,
     streamStatus: defaultSession().status,
     ctx: createTestLaunchContext({ executionId, streamId, agent }),
-    explicit: createRecordingHost(),
   };
 }
 
@@ -381,9 +379,13 @@ describe('runFlowWithLifecycle', () => {
   });
 
   it('does not emit a status event when starting an already-running stream with no substate', async () => {
-    const { executionId, streamId, streamStatus, ctx, explicit } =
-      lifecycleFixture('lifecycle-steady-running-no-substate');
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-steady-running-no-substate',
+    );
 
+    const recorded = recordSessionEvents(ctx.runScope.session.events, {
+      scope: 'session',
+    });
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
 
@@ -391,15 +393,14 @@ describe('runFlowWithLifecycle', () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
         expect(streamStatus.getSubstate(streamId)).toBeUndefined();
         expect(
-          explicit.events.filter(
-            (entry) => entry.event === 'updateStreamStatus',
-          ),
+          sessionFactPayloads(recorded.events, 'updateStreamStatus'),
         ).toEqual([]);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
+      recorded.detach();
       clearStreamStatusForTest(streamStatus, streamId);
     }
   });
@@ -929,7 +930,6 @@ describe('finalizeRunTerminal', () => {
     const executionId = 'exec-finalize-race';
     const streamId = 'stream-finalize-race' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const explicit = createRecordingHost();
     const handle = new AgentExecutionHandle(
       executionId,
       streamId,

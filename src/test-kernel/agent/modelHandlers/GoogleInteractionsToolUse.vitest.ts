@@ -1,15 +1,20 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { GoogleToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
+
+// Local file imports
+import {
+  fakeWorkspace,
+  GOOGLE_INTERACTIONS_TEST_CONFIG,
+  StreamingGoogleInteractionsHandler,
+} from './googleInteractionsTestUtils';
 
 // Third-party imports
 import type { Interactions } from '@google/genai';
@@ -32,40 +37,9 @@ type Step = Interactions.Step;
 type SSEEvent = Interactions.InteractionSSEEvent;
 type CreateParams = Interactions.CreateModelInteractionParamsStreaming;
 
-/**
- * Minimal workspace stub exposing the reasoning cache + reset hooks the handler
- * touches during a tool round-trip.
- */
-function fakeWorkspace(): AgentWorkspaceState {
-  const reasoning = { thinkingBlocks: [], thinkingAdded: false } as {
-    thinkingBlocks: Array<{ thinking?: string; signature?: string }>;
-    thinkingAdded: boolean;
-  };
-  return {
-    reasoning,
-    resetServerToolContent: () => undefined,
-    resetReasoning: () => {
-      reasoning.thinkingBlocks = [];
-      reasoning.thinkingAdded = false;
-    },
-  } as unknown as AgentWorkspaceState;
-}
-
-class StreamingHandler extends ModelHandlerGoogleInteractions {
-  override getStreamingConfig(): boolean {
-    return true;
-  }
-}
-
 function createHandler(): ModelHandlerGoogleInteractions {
-  const handler = new StreamingHandler(
-    buildTestModelConfig({
-      name: 'test-google-interactions',
-      label: 'Test Google Interactions',
-      fullName: 'gemini-3-pro-test',
-      shortName: 'gemini-3-pro-test',
-      provider: ModelProvider.GOOGLE,
-      contextWindow: 4096,
+  const handler = new StreamingGoogleInteractionsHandler(
+    buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG, {
       capabilities: { supportsTokenCounting: false },
     }),
   );
