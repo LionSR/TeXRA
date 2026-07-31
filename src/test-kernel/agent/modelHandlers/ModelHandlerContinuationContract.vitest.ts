@@ -19,6 +19,8 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import { ModelHandlerVscodeLm } from '@agent/modelHandlers/vscodelm/modelHandlerVscodeLm';
+import type { LanguageModelMessage } from '@platform/languageModel';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Third-party imports
@@ -79,6 +81,12 @@ function textFromGoogleContent(message: Content): string {
 function textFromInteractionStep(step: Interactions.Step): string {
   if (!('content' in step) || !Array.isArray(step.content)) return '';
   return step.content.map((part) => ('text' in part ? part.text : '')).join('');
+}
+
+function textFromVscodeLmMessage(message: LanguageModelMessage): string {
+  return message.content
+    .map((part) => (part.kind === 'text' ? part.text : ''))
+    .join('');
 }
 
 function assertSingleAssistantTurn(messages: readonly unknown[]): void {
@@ -245,6 +253,39 @@ const cases: ContinuationCase[] = [
       );
     },
   },
+  {
+    name: 'VS Code LM',
+    run: () => {
+      const handler = new ModelHandlerVscodeLm(
+        buildTestModelConfig({
+          provider: ModelProvider.COPILOT,
+          capabilities: CONTINUATION_CAPABILITIES,
+        }),
+      );
+      handler.setLogger({ ...noopTrace });
+      const messages: LanguageModelMessage[] = [
+        handler.createAssistantMessage('partial'),
+      ];
+      const workspaceState = createWorkspaceState();
+
+      handler.addContinueMessage(messages, workspaceState, agentSetting);
+      assert.equal(messages.length, 2);
+      assert.equal(messages.at(-1)?.role, 'user');
+      assert.match(
+        textFromVscodeLmMessage(messages.at(-1)!),
+        /continue responding exactly from where you left/i,
+      );
+
+      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
+
+      assertSingleAssistantTurn(messages);
+      assert.equal(messages.at(-1)?.role, 'assistant');
+      assert.equal(
+        textFromVscodeLmMessage(messages.at(-1)!),
+        'partial\n\n resumed',
+      );
+    },
+  },
 ];
 
 describe('model handler continuation contract', () => {
@@ -253,6 +294,142 @@ describe('model handler continuation contract', () => {
       testCase.run();
     });
   }
+
+  it('preserves OpenAI-family system continuation messages after resumed output', () => {
+    const capabilities = {
+      ...CONTINUATION_CAPABILITIES,
+      supportsIntermDevMsgs: true,
+    };
+
+    const chatHandler = new ModelHandlerOpenAI(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities,
+      }),
+    );
+    chatHandler.setLogger({ ...noopTrace });
+    const chatMessages: ChatCompletionMessageParam[] = [
+      chatHandler.createAssistantMessage('partial'),
+    ];
+    const chatWorkspaceState = createWorkspaceState();
+    chatHandler.addContinueMessage(
+      chatMessages,
+      chatWorkspaceState,
+      agentSetting,
+    );
+    const chatContinuation = chatMessages.at(-1)!;
+    assert.equal(chatMessages.length, 2);
+    const chatContinuationText = textFromOpenAiContent(
+      chatContinuation.content,
+    );
+    assert.match(
+      chatContinuationText,
+      /continue responding exactly from where you left/i,
+    );
+    assert.deepEqual(chatContinuation, {
+      role: 'system',
+      content: [{ type: 'text', text: chatContinuationText }],
+    });
+    chatHandler.updateMessageContent(
+      chatMessages,
+      '',
+      ' resumed',
+      chatWorkspaceState,
+    );
+    assert.equal(chatMessages.length, 2);
+    assert.equal(
+      textFromOpenAiContent(chatMessages[0]?.content),
+      'partial resumed',
+    );
+    assert.equal(chatMessages.at(-1), chatContinuation);
+
+    const responseHandler = new ModelHandlerOpenAIResponse(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities,
+      }),
+    );
+    responseHandler.setLogger({ ...noopTrace });
+    const responseMessages: ResponseInputItem[] = [
+      responseHandler.createAssistantMessage('partial'),
+    ];
+    const responseWorkspaceState = createWorkspaceState();
+    responseHandler.addContinueMessage(
+      responseMessages,
+      responseWorkspaceState,
+      agentSetting,
+    );
+    const responseContinuation = responseMessages.at(-1)!;
+    assert.equal(responseMessages.length, 2);
+    const responseContinuationText =
+      textFromResponseContent(responseContinuation);
+    assert.match(
+      responseContinuationText,
+      /continue responding exactly from where you left/i,
+    );
+    assert.deepEqual(responseContinuation, {
+      type: 'message',
+      role: 'system',
+      content: [{ type: 'input_text', text: responseContinuationText }],
+    });
+    responseHandler.updateMessageContent(
+      responseMessages,
+      '',
+      ' resumed',
+      responseWorkspaceState,
+    );
+    assert.equal(responseMessages.length, 2);
+    assert.equal(
+      textFromResponseContent(responseMessages[0]!),
+      'partial resumed',
+    );
+    assert.equal(responseMessages.at(-1), responseContinuation);
+
+    const openRouterHandler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities,
+        openrouterFullName: 'openai/test-model',
+      }),
+    );
+    openRouterHandler.setLogger({ ...noopTrace });
+    const openRouterMessages: ChatMessages[] = [
+      openRouterHandler.createAssistantMessage('partial'),
+    ];
+    const openRouterWorkspaceState = createWorkspaceState();
+    openRouterHandler.addContinueMessage(
+      openRouterMessages,
+      openRouterWorkspaceState,
+      agentSetting,
+    );
+    const openRouterContinuation = openRouterMessages.at(-1)!;
+    assert.equal(openRouterMessages.length, 2);
+    const openRouterContinuationText = textFromOpenAiContent(
+      openRouterContinuation.content as ChatCompletionMessageParam['content'],
+    );
+    assert.match(
+      openRouterContinuationText,
+      /continue responding exactly from where you left/i,
+    );
+    assert.deepEqual(openRouterContinuation, {
+      role: 'system',
+      content: [{ type: 'text', text: openRouterContinuationText }],
+    });
+    openRouterHandler.updateMessageContent(
+      openRouterMessages,
+      '',
+      ' resumed',
+      openRouterWorkspaceState,
+    );
+    assert.equal(openRouterMessages.length, 2);
+    assert.equal(
+      textFromOpenAiContent(
+        openRouterMessages[0]?.content as ChatCompletionMessageParam['content'],
+      ),
+      'partial resumed',
+    );
+    assert.equal(openRouterMessages.at(-1), openRouterContinuation);
+  });
 
   it('keeps Google GenAI continuation prompts separate from trailing user turns', () => {
     const handler = new ModelHandlerGoogleGenAI(

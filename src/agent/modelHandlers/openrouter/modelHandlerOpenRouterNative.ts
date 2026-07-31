@@ -697,15 +697,10 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Stop / continue logic
   // ---------------------------------------------------------------------------
 
-  protected appendUserText(
-    messages: ChatMessages[],
-    text: string,
-    placement: 'last-user' | 'continuation',
-  ): void {
+  protected appendUserText(messages: ChatMessages[], text: string): void {
     appendUserTextToChatMessages(
       messages,
       text,
-      placement,
       this.capabilities.supportsIntermDevMsgs,
     );
   }

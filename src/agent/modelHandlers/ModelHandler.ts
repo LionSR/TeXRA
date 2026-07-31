@@ -138,8 +138,6 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
-type UserTextPlacement = 'last-user' | 'continuation';
-
 interface AssistantTextAppendOptions {
   /**
    * True when the current trailing user/system message may be the synthetic
@@ -1246,16 +1244,8 @@ export abstract class ModelHandler<
     endTag: string,
   ): ExtractResponseResult;
 
-  /**
-   * Append provider-shaped user text. `last-user` is for pseudo-prefill
-   * instructions that should join the current request; `continuation` is for the
-   * synthetic "cut off" prompt added between model calls.
-   */
-  protected abstract appendUserText(
-    messages: M[],
-    text: string,
-    placement: UserTextPlacement,
-  ): void;
+  /** Append a provider-shaped continuation prompt as a fresh message. */
+  protected abstract appendUserText(messages: M[], text: string): void;
 
   /**
    * Append text to the existing assistant/model turn when the provider message
@@ -1294,7 +1284,7 @@ export abstract class ModelHandler<
     this.logger.debug('Adding continuation message to conversation', {
       data: { continuationMessage: continuationPrompt },
     });
-    this.appendUserText(messages, continuationPrompt, 'continuation');
+    this.appendUserText(messages, continuationPrompt);
   }
 
   /**

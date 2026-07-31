@@ -936,12 +936,10 @@ export class ModelHandlerOpenAI<
   protected appendUserText(
     messages: ChatCompletionMessageParam[],
     text: string,
-    placement: 'last-user' | 'continuation',
   ): void {
     appendUserTextToChatMessages(
       messages,
       text,
-      placement,
       this.capabilities.supportsIntermDevMsgs,
     );
   }
