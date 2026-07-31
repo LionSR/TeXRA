@@ -338,13 +338,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   protected appendUserText(
     messages: LanguageModelMessage[],
     text: string,
-    placement: 'last-user' | 'continuation',
   ): void {
-    const last = messages.at(-1);
-    if (placement === 'last-user' && last?.role === 'user') {
-      messages[messages.length - 1] = appendText(last, text);
-      return;
-    }
     messages.push({ role: 'user', content: [textPart(text)] });
   }
 
