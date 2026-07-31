@@ -26,8 +26,14 @@ import type {
 } from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
+import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
+import {
+  buildStreamInfo,
+  streamMatchesCategoryFilter,
+} from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
@@ -79,8 +85,10 @@ import {
 } from '@shared/ipc';
 import {
   AgentCategory,
+  INSTRUCTION_ACTION,
   SETTINGS_TAB,
   type AgentCategoryFilter,
+  type InstructionAction,
   type MainViewPersistedState,
   type ExecutionId,
   type RequestOpenFilePayload,
@@ -92,6 +100,7 @@ import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import {
   mergeRunDirAndWorkspaceResult,
@@ -106,14 +115,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { postDesktopSettingsRoute } from '../desktopCommandSurface.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { buildDesktopSetRouteMessage } from '../desktopShellMessages.js';
-import {
-  createDesktopToolEditApprovalController,
-  type DesktopToolEditApprovalController,
-} from './desktopToolEditApproval.js';
-import {
-  createDesktopHostInteractions,
-  type DesktopHostInteractions,
-} from './desktopHostInteractions.js';
+import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
+import { createDesktopHostInteractions } from './desktopHostInteractions.js';
 import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
@@ -127,6 +130,27 @@ import {
 } from './desktopAgentLaunch.js';
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
+
+/**
+ * Outcome of revealing a stream, mirroring the extension's progress navigation
+ * so a settings-panel jump to a deleted run reports the same thing on both
+ * hosts instead of silently doing nothing.
+ */
+export type DesktopStreamRevealResult = 'revealed' | 'missing';
+
+/**
+ * Desktop phrasing for the {@link InstructionAction} tokens the agent core
+ * emits. The extension turns each token into a command button and the CLI into
+ * a stderr hint; the desktop dialog has no buttons, so it reads as a hint too.
+ * The `satisfies` clause keeps the table exhaustive at compile time while the
+ * lookup type stays partial, so a token from a newer producer falls back to the
+ * raw token rather than printing nothing.
+ */
+const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
+  [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key in Settings',
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
+} satisfies Record<InstructionAction, string>;
 
 export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
@@ -172,8 +196,8 @@ export class DesktopProgressBridge {
    */
   private unsubscribe: () => void = () => undefined;
   private detachCompletedResult: () => void = () => undefined;
-  private toolEditApprovals: DesktopToolEditApprovalController | undefined;
-  private hostInteractions!: DesktopHostInteractions;
+  private toolEditApprovals: ToolEditApprovalController | undefined;
+  private hostInteractions!: ProgressHostInteractions;
   private fileActions!: DesktopProgressFileActions;
   private readonly initialization: Promise<void>;
   private disposed = false;
@@ -236,15 +260,23 @@ export class DesktopProgressBridge {
                 id,
               ),
           },
+          proposal: createAgentProposalTransport({
+            getWebviewUpdater: () => this.backend.webviewUpdater,
+            isPending: (proposalId) =>
+              this.backend.approvalHandlers.proposal.get(proposalId) !==
+              undefined,
+          }),
         },
       },
       lifecycle: {
-        stopStream: (stream) => {
-          this.session.interactions.cancel({
-            streamId: stream,
-            kind: 'retry',
-            cause: 'Retry request cleared.',
-          });
+        stopStream: (stream, options) => {
+          if (options?.clearRetryRequest === true) {
+            this.session.interactions.cancel({
+              streamId: stream,
+              kind: 'retry',
+              cause: 'Retry request cleared.',
+            });
+          }
           this.session.executions.stopAgentStream(stream, {
             detachActiveChildren: detachSubagentsOnStop(),
           });
@@ -264,7 +296,6 @@ export class DesktopProgressBridge {
           const activeStream = this.updateStreamMetadata();
           if (syncActiveStream) this.syncStreamContent(activeStream);
         },
-        refreshRenderedStreamsAfterDeletion: syncRenderedStreams,
         activateStream: (_stream) => syncRenderedStreams(),
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
@@ -298,14 +329,15 @@ export class DesktopProgressBridge {
     await this.backend.load();
     if (this.disposed) return;
 
-    this.toolEditApprovals = createDesktopToolEditApprovalController({
+    this.toolEditApprovals = new ToolEditApprovalController({
       interactions: presentationHost,
       session: this.session,
-      ui: this.options.host,
+      host: new DesktopToolEditApprovalHost({ ui: this.options.host }),
       showToolEditPermission: (payload) =>
         this.backend.approvalHandlers.toolEdit.show(payload),
       resolveToolEditPermission: (requestId) =>
         this.backend.approvalHandlers.toolEdit.dismiss(requestId),
+      detachCause: SESSION_DISPOSED_CAUSE,
     });
     this.hostInteractions = createDesktopHostInteractions({
       interactions: presentationHost,
@@ -538,6 +570,8 @@ export class DesktopProgressBridge {
   private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
     switch (plan.kind) {
       case 'warning':
+        await this.options.host.showWarningMessage(plan.message);
+        return;
       case 'info':
         await this.options.host.showInfoMessage(plan.message);
         return;
@@ -750,7 +784,7 @@ export class DesktopProgressBridge {
       },
       agentProposal: {
         getPendingProposal: (proposalId) =>
-          this.backend.approvalHandlers.agentProposal.get(proposalId),
+          this.backend.approvalHandlers.proposal.get(proposalId),
         restoreTaskState: async (taskState) => this.restoreTaskState(taskState),
         settleProposal: (proposalId, result) => {
           const resolved = this.hostInteractions.submitProposalDecision(
@@ -790,13 +824,6 @@ export class DesktopProgressBridge {
           deleteAllStreams: () => this.backend.deleteAllStreams(),
           stopStream: (stream) => this.backend.stopStream(stream),
         },
-        resumeStream: (stream) => {
-          void this.tryResumeStream(stream).catch((error: unknown) => {
-            this.logger.warn(`Failed to resume desktop stream ${stream}`, {
-              data: toLogData(error),
-            });
-          });
-        },
         followUp: {
           sendFollowUp: ({ stream, text, mediaFiles }) =>
             this.sendFollowUp(stream, text, mediaFiles),
@@ -809,6 +836,7 @@ export class DesktopProgressBridge {
         },
         bypass: {
           session: this.session,
+          showInfo: (message) => this.options.host.showInfoMessage(message),
         },
         file: {
           openFile: (file, line) => this.options.host.openPath(file, line),
@@ -1063,12 +1091,25 @@ export class DesktopProgressBridge {
         if (!data.fallbackNotification) this.routeToProgress();
         return;
       }
-      case 'requestShowError':
-      case 'requestShowInstruction': {
-        const { message } = payload as
-          | RuntimePresentationEventPayloads['requestShowError']
-          | RuntimePresentationEventPayloads['requestShowInstruction'];
+      case 'requestShowError': {
+        const { message } =
+          payload as RuntimePresentationEventPayloads['requestShowError'];
         void this.options.host.showErrorMessage(message);
+        return;
+      }
+      case 'requestShowInstruction': {
+        const instruction =
+          payload as RuntimePresentationEventPayloads['requestShowInstruction'];
+        // An instruction is actionable guidance, not a failure, so it uses the
+        // info dialog. The desktop dialog carries no buttons, so the action
+        // tokens the extension renders as buttons become trailing hint text
+        // and `showSuppress` has no affordance to attach to.
+        const hint = instruction.actions?.length
+          ? ` (${instruction.actions
+              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
+              .join(', ')})`
+          : '';
+        void this.options.host.showInfoMessage(`${instruction.message}${hint}`);
         return;
       }
       case 'showAgentConfigBanner': {
@@ -1150,22 +1191,25 @@ export class DesktopProgressBridge {
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
    * run works the same way on both hosts.
    *
-   * Resolves category via `buildStreamInfo` (canonical stream metadata), not
-   * `getStreamState()`'s ephemeral session-only kind, so a goal-owned stream
-   * restored from `workspaceState` that hasn't emitted a live fact yet this
-   * session still matches the current filter instead of unconditionally
-   * resetting it to 'all' (#7851).
+   * Resolves category from canonical stream metadata, not `getStreamState()`'s
+   * ephemeral session-only kind, so a goal-owned stream restored from
+   * `workspaceState` that hasn't emitted a live fact yet this session still
+   * matches the current filter instead of unconditionally resetting it to
+   * 'all' (#7851).
    */
-  async revealStream(streamId: StreamTabId): Promise<void> {
+  async revealStream(
+    streamId: StreamTabId,
+  ): Promise<DesktopStreamRevealResult> {
     if (!this.streamLogs.has(streamId)) {
-      return;
+      return 'missing';
     }
     const filter = this.state.agentCategoryFilter;
-    if (buildStreamInfo(this.state, streamId, filter) === null) {
+    if (!streamMatchesCategoryFilter(this.state, streamId, filter)) {
       this.state.agentCategoryFilter = 'all';
     }
     this.routeToProgress();
     this.setActiveStream(streamId);
+    return 'revealed';
   }
 
   private setAgentFilter(filter: AgentCategoryFilter): void {
@@ -1203,10 +1247,6 @@ export class DesktopProgressBridge {
           `Transcript load failed: ${toErrorMessage(error)}`,
         );
       });
-  }
-
-  private tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    return platform().agentResume.tryResumeStream(streamId);
   }
 
   private async runLatexdiffFile(

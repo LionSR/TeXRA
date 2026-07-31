@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
-import { GlobalStateKey } from '@shared/state/stateKeys';
-
 const mocks = vi.hoisted(() => {
   const authCoordinator = {
     clearSession: vi.fn(),
@@ -15,6 +13,9 @@ const mocks = vi.hoisted(() => {
     })),
     clearServerKeyCaches: vi.fn(),
     getCliSecrets: vi.fn(),
+    getConfiguredRelayToken: vi.fn(),
+    getStoredSessionState: vi.fn(),
+    getUserTier: vi.fn(),
     openBrowser: vi.fn(),
     pollForDeviceSession: vi.fn(),
     requestDeviceAuthorization: vi.fn(),
@@ -23,7 +24,6 @@ const mocks = vi.hoisted(() => {
     startLoopbackCallbackServer: vi.fn(),
     toStorableSupabaseSession: vi.fn((session) => session),
     tryPlatform: vi.fn(),
-    updateGlobalState: vi.fn(),
     invalidateRemoteAgentsAfterSignOut: vi.fn(),
   };
 });
@@ -48,8 +48,8 @@ vi.mock('@auth/SupabaseClient', () => ({
       },
     }),
     getRelayAccessToken: vi.fn(),
-    getUserTier: vi.fn(),
-    isAuthenticated: vi.fn(),
+    getStoredSessionState: mocks.getStoredSessionState,
+    getUserTier: mocks.getUserTier,
   },
 }));
 
@@ -61,7 +61,7 @@ vi.mock('@auth/SupabaseSession', () => ({
 vi.mock('@auth/relayToken', () => ({
   RELAY_TOKEN_ENV_VAR: 'TEXRA_RELAY_TOKEN',
   fetchRelayTokenStatus: vi.fn(),
-  getConfiguredRelayToken: vi.fn(),
+  getConfiguredRelayToken: mocks.getConfiguredRelayToken,
 }));
 
 vi.mock('@auth/serverKeys', () => ({
@@ -72,11 +72,6 @@ vi.mock('@auth/serverKeys', () => ({
 }));
 
 vi.mock('@platform/platform', () => ({
-  platform: () => ({
-    globalState: {
-      update: mocks.updateGlobalState,
-    },
-  }),
   tryPlatform: mocks.tryPlatform,
 }));
 
@@ -145,7 +140,6 @@ describe('CLI Supabase auth', () => {
     mocks.tryPlatform.mockReturnValue(null);
     mocks.getCliSecrets.mockReturnValue({ kind: 'cli-secrets' });
     mocks.setUseIncludedModelAccess.mockResolvedValue(undefined);
-    mocks.updateGlobalState.mockResolvedValue(undefined);
     mocks.invalidateRemoteAgentsAfterSignOut.mockResolvedValue(undefined);
   });
 
@@ -176,35 +170,6 @@ describe('CLI Supabase auth', () => {
     expect(mocks.getCliSecrets).toHaveBeenCalledWith('/tmp/sandbox-storage');
     expect(mocks.createHostAuthCoordinator).toHaveBeenCalledWith(
       expect.objectContaining({ secrets: cliSecrets }),
-    );
-  });
-
-  it('clears OpenRouter routing after browser sign-in enables included access', async () => {
-    const session = { access_token: 'token' };
-    stubBrowserSignIn(async () => session);
-    const { signInCliSupabase } = await loadSupabaseAuth();
-
-    await expect(signInCliSupabase({ openBrowser: false })).resolves.toBe(
-      session,
-    );
-
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.USE_OPENROUTER,
-      false,
-    );
-  });
-
-  it('clears OpenRouter routing after device-code sign-in enables included access', async () => {
-    const session = { access_token: 'device-token' };
-    mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
-    mocks.pollForDeviceSession.mockResolvedValue(session);
-    const { signInCliSupabaseDeviceCode } = await loadSupabaseAuth();
-
-    await expect(signInCliSupabaseDeviceCode()).resolves.toBe(session);
-
-    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-      GlobalStateKey.USE_OPENROUTER,
-      false,
     );
   });
 
@@ -302,6 +267,54 @@ describe('CLI Supabase auth', () => {
 
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(mocks.invalidateRemoteAgentsAfterSignOut).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the included-access preference to the user on sign-in', async () => {
+    const session = { access_token: 'token' };
+    stubBrowserSignIn(async () => session);
+    mocks.requestDeviceAuthorization.mockResolvedValue(DEVICE_AUTHORIZATION);
+    mocks.pollForDeviceSession.mockResolvedValue(session);
+    const { signInCliSupabase, signInCliSupabaseDeviceCode } =
+      await loadSupabaseAuth();
+
+    await signInCliSupabase({ openBrowser: false });
+    await signInCliSupabaseDeviceCode();
+
+    // Both transports drop the caches derived from the previous credential and
+    // let the next request resolve access against the new one.
+    expect(mocks.clearServerKeyCaches).toHaveBeenCalledTimes(2);
+    expect(mocks.setUseIncludedModelAccess).not.toHaveBeenCalled();
+  });
+
+  it('leaves the included-access preference to the user on sign-out', async () => {
+    const { signOutCliSupabase } = await loadSupabaseAuth();
+
+    await signOutCliSupabase();
+
+    expect(mocks.clearServerKeyCaches).toHaveBeenCalledWith({
+      resetQuotaFlip: true,
+    });
+    expect(mocks.setUseIncludedModelAccess).not.toHaveBeenCalled();
+  });
+
+  it('reports a service outage instead of a signed-out session', async () => {
+    mocks.getStoredSessionState.mockResolvedValue('transient');
+    const { getCliAuthProfile } = await loadSupabaseAuth();
+
+    await expect(getCliAuthProfile()).resolves.toEqual({
+      authenticated: false,
+      sessionState: 'transient',
+    });
+  });
+
+  it('reports a rejected refresh credential as signed out', async () => {
+    mocks.getStoredSessionState.mockResolvedValue('invalid');
+    const { getCliAuthProfile } = await loadSupabaseAuth();
+
+    await expect(getCliAuthProfile()).resolves.toEqual({
+      authenticated: false,
+      sessionState: 'invalid',
+    });
   });
 
   it('completes sign-out when the local catalog rebuild fails', async () => {

@@ -41,7 +41,7 @@ export function ApprovalModal(
           onDecide={decide}
         />
       );
-    case 'plan':
+    case 'planApproval':
       return (
         <PlanApproval
           availableRows={props.availableRows}

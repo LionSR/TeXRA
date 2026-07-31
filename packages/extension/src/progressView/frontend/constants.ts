@@ -125,8 +125,9 @@ const YOLO_TOGGLE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.YOLO_TOGGLE_BTN,
   icon: 'shield',
   command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
-  title: 'Skip edit approvals (auto-accept file changes)',
-  titleActive: 'Edit auto-accept active — click to resume approval prompts',
+  title: 'Auto-approve both file edits and shell commands in this run',
+  titleActive:
+    'File edits and shell commands are being auto-approved. Click to resume approval prompts for both.',
   className: 'yolo-toggle-button',
   isToggle: true,
 });

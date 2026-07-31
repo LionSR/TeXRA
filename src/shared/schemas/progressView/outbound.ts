@@ -10,6 +10,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { ThemeSchema } from '../commonViewMessages';
 import { GoalStateSchema, GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
@@ -40,6 +41,7 @@ import {
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
+  PhaseStageSchema,
   RoundStageSchema,
   StreamMetadataSchema,
 } from '../streamState';
@@ -181,15 +183,12 @@ export type SetFollowupOptionsMessage = z.infer<
   typeof SetFollowupOptionsMessageSchema
 >;
 
-const PermissionKindSchema = z.enum([
-  'toolEdit',
-  'bash',
-  'retry',
-  'proposal',
-  'planApproval',
-  'externalInquiry',
-  'userQuestion',
-]);
+const PermissionKindSchema = z.enum(PERMISSION_KIND);
+/**
+ * The one approval/prompt kind vocabulary. Wire payloads, the backend handler
+ * set, the runtime host-interaction kinds, and the CLI approval queue all key
+ * off this union, so a spelling that drifts fails to compile.
+ */
 export type ProgressPermissionKind = z.infer<typeof PermissionKindSchema>;
 
 const PermissionPayloadSchema = z.discriminatedUnion('kind', [
@@ -292,6 +291,7 @@ const StreamContentRenderFields = {
     .strictObject({
       conversationProgress: ConversationProgressSchema,
       roundStage: RoundStageSchema.nullable(),
+      phaseStage: PhaseStageSchema.nullable(),
       badges: z.strictObject({
         subagents: z.array(ActiveChildInfoSchema),
       }),

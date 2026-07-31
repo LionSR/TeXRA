@@ -211,7 +211,7 @@ function approvalForegroundMaxRows(
     case 'proposal':
     case 'externalInquiry':
       return APPROVAL_FOREGROUND_MAX_ROWS;
-    case 'plan':
+    case 'planApproval':
     case 'retry':
     case 'userQuestion':
       return undefined;

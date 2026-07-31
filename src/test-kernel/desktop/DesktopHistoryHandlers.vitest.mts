@@ -8,9 +8,11 @@ import type { ChatExportInput } from '@controllers/settingsView/ChatExportContro
 import type { DesktopHistoryOptions } from '@desktop/main/desktopHistoryHandlers';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
+import type { StreamTabId } from '@shared/schemas/identifiers';
 import { assertSupported } from '@shared/utils/dispatcher';
+import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { StorageFS } from '@utils/files';
+import { GoalStore } from '@tools/goal';
 
 // Local file imports
 import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
@@ -110,20 +112,6 @@ async function writeHistoryConfig(): Promise<void> {
   await getExecutionStore(HISTORY_ID).writeConfig(HISTORY_CONFIG);
 }
 
-async function writeForeignLease(executionId: string): Promise<void> {
-  await StorageFS.ensureDir('executionLeases');
-  await StorageFS.writeAtomic(
-    `executionLeases/${executionId}.json`,
-    JSON.stringify({
-      version: 1,
-      executionId,
-      ownerToken: '00000000-0000-4000-8000-000000000004',
-      acquiredAt: Date.now(),
-      heartbeatAt: Date.now(),
-    }),
-  );
-}
-
 describe('DesktopHistoryHandlers', () => {
   beforeAll(async () => {
     ({ DesktopHistoryHandlers } = await loadSourceModule(
@@ -178,14 +166,14 @@ describe('DesktopHistoryHandlers', () => {
     });
   });
 
-  it('protects an active execution from deletion', async () => {
+  it('warns instead of deleting an active execution', async () => {
     await writeHistoryConfig();
     await writeForeignLease(HISTORY_ID);
     const postToRenderer = vi.fn();
-    const showInfoMessage = vi.fn(async () => undefined);
+    const showWarningMessage = vi.fn(async () => undefined);
     const actions = createHistoryActions({
       postToRenderer,
-      showInfoMessage,
+      showWarningMessage,
     });
 
     await assertSupported(actions.deleteAgent)(HISTORY_ID);
@@ -193,10 +181,21 @@ describe('DesktopHistoryHandlers', () => {
     expect(await getExecutionStore(HISTORY_ID).readConfig()).toEqual(
       HISTORY_CONFIG,
     );
-    expect(showInfoMessage).toHaveBeenCalledWith(
+    expect(showWarningMessage).toHaveBeenCalledWith(
       'Cannot delete an execution that is active in TeXRA',
     );
     expect(postToRenderer).not.toHaveBeenCalled();
+  });
+
+  it('warns when the history item to delete no longer exists', async () => {
+    const showWarningMessage = vi.fn(async () => undefined);
+    const actions = createHistoryActions({ showWarningMessage });
+
+    await assertSupported(actions.deleteAgent)('eeee5555');
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      'History item not found: eeee5555',
+    );
   });
 
   it('deletes an inactive execution and refreshes history', async () => {
@@ -210,6 +209,37 @@ describe('DesktopHistoryHandlers', () => {
     expect(postToRenderer).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
       historyItems: [],
+    });
+  });
+
+  it('drops the goal owned by a deleted execution', async () => {
+    await writeHistoryConfig();
+    const streamId = `chat@deepseek#${HISTORY_ID}` as StreamTabId;
+    const survivor = 'chat@deepseek#ffff8888' as StreamTabId;
+    await GoalStore.start(streamId, 'finish the cleanup');
+    await GoalStore.start(survivor, 'keep me');
+    const actions = createHistoryActions();
+
+    await assertSupported(actions.deleteAgent)(HISTORY_ID);
+
+    expect(GoalStore.getForStream(streamId)).toBeNull();
+    expect(GoalStore.getForStream(survivor)?.objective).toBe('keep me');
+  });
+
+  it('confirms a full clear and drops the goals of every cleared execution', async () => {
+    await writeHistoryConfig();
+    const streamId = `chat@deepseek#${HISTORY_ID}` as StreamTabId;
+    await GoalStore.start(streamId, 'finish the cleanup');
+    const postToRenderer = vi.fn();
+    const showInfoMessage = vi.fn(async () => undefined);
+    const actions = createHistoryActions({ postToRenderer, showInfoMessage });
+
+    await assertSupported(actions.clear)();
+
+    expect(GoalStore.getForStream(streamId)).toBeNull();
+    expect(showInfoMessage).toHaveBeenCalledWith('Agent history cleared');
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
     });
   });
 

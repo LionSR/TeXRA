@@ -72,6 +72,21 @@ describe('CLI auth command', () => {
     );
   });
 
+  it('explains an auth-service outage instead of inviting a re-login', async () => {
+    mocks.getCliAuthProfile.mockResolvedValueOnce({
+      authenticated: false,
+      sessionState: 'transient',
+    });
+
+    const result = await runCli(['auth', '--no-color']);
+
+    expect(result.exitCode).toBe(0);
+    expect(stdout.trim()).toBe(
+      'The authentication service is temporarily unavailable. Your stored session is intact; try again later.',
+    );
+    expect(stderr).toBe('');
+  });
+
   it('honors structured output on bare auth status', async () => {
     mocks.getCliAuthProfile.mockResolvedValueOnce({
       authenticated: true,

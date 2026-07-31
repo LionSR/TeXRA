@@ -10,6 +10,7 @@ import {
 } from '@agent/storage/executionLease';
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
@@ -20,6 +21,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
@@ -57,7 +59,7 @@ function openDeferredSession(transcripts: StreamLogStore): SessionHandle {
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const directory of [
-    'executionLeases',
+    WORKSPACE_STORAGE_LAYOUT.executionLeases,
     'executions',
     'streamLogs',
     'streamLogSummaries',
@@ -110,17 +112,9 @@ describe('SessionHandle restart repair', () => {
     });
     await executionStore.write(flowKey(executionId), { invalid: true });
 
-    const heartbeatAt = Date.now() - EXECUTION_LEASE_STALE_MS - 1;
-    await StorageFS.ensureDir('executionLeases');
-    await StorageFS.writeAtomic(
-      `executionLeases/${executionId}.json`,
-      JSON.stringify({
-        version: 1,
-        executionId,
-        ownerToken: '00000000-0000-4000-8000-000000000001',
-        acquiredAt: heartbeatAt,
-        heartbeatAt,
-      }),
+    await writeForeignLease(
+      executionId,
+      Date.now() - EXECUTION_LEASE_STALE_MS - 1,
     );
 
     const session = openDeferredSession(transcripts);
@@ -606,17 +600,7 @@ describe('SessionHandle restart repair', () => {
     await executionStore.write(flowKey(rollbackExecutionId), {
       invalid: true,
     });
-    await StorageFS.ensureDir('executionLeases');
-    await StorageFS.writeAtomic(
-      `executionLeases/${rollbackExecutionId}.json`,
-      JSON.stringify({
-        version: 1,
-        executionId: rollbackExecutionId,
-        ownerToken: '00000000-0000-4000-8000-000000000002',
-        acquiredAt: Date.now(),
-        heartbeatAt: Date.now(),
-      }),
-    );
+    await writeForeignLease(rollbackExecutionId);
 
     const session = openDeferredSession(transcripts);
 

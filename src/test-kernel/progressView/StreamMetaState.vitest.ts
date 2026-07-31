@@ -386,7 +386,7 @@ describe('stream meta frontend state', () => {
     expect(phaseStages$.get()).toBe(advanced);
   });
 
-  it('clears round stage when synced content explicitly clears it', () => {
+  it('clears round and phase stage when synced content explicitly clears them', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     registerStream(state, streamId);
@@ -394,6 +394,7 @@ describe('stream meta frontend state', () => {
       streamId,
       createStreamState(AgentCategory.Workflow, {
         roundStage: { index: 2 },
+        phaseStage: { label: 'Reduce', index: 1, total: 3 },
       } satisfies Partial<StreamState>),
     );
     const getState = seedState(state);
@@ -409,6 +410,7 @@ describe('stream meta frontend state', () => {
         activeState: {
           conversationProgress: { toolCallCount: 0 },
           roundStage: null,
+          phaseStage: null,
           badges: {
             subagents: [],
           },
@@ -420,6 +422,7 @@ describe('stream meta frontend state', () => {
     dispatch(syncHandlers, message);
 
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
+    expect(getState().streamStates.get(streamId)?.phaseStage).toBeUndefined();
   });
 
   it('honors an explicit empty active-stream selection', () => {

@@ -32,6 +32,7 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
 function createServerSideKeyService(options: {
   useIncludedAccess: boolean;
+  readonly authenticated?: boolean;
   readonly canUseServerSideKeys?: boolean;
   readonly canUseModelSync?: boolean;
   readonly relayQuotaExceeded?: boolean;
@@ -48,6 +49,7 @@ function createServerSideKeyService(options: {
       return options.canUseServerSideKeys ?? false;
     },
     getUseIncludedModelAccess: () => options.useIncludedAccess,
+    isAuthenticated: async () => options.authenticated ?? true,
     isRelayQuotaExceeded: () => options.relayQuotaExceeded ?? false,
     wasQuotaAutoSwitched: () => options.quotaAutoSwitched ?? false,
     isProviderOnServer: () => true,
@@ -92,7 +94,6 @@ function initSubscriptionPlatform(
   return installPlatform({
     config: {
       'texra.chatgptCodex.preferSubscription': true,
-      'texra.chatgptCodex.subscriptionToolUseOnly': true,
     },
     globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
     secrets,
@@ -184,6 +185,66 @@ describe('computeModelOptionsData relay quota state', () => {
     expect(reason).toBe(
       'Model "kimiCoding" requires your Kimi Code API key. Provide it to continue.',
     );
+  });
+
+  it('asks signed-out included-access users to sign in rather than to add a key', async () => {
+    const access = createModelOptionsAccess(
+      { useIncludedAccess: true, authenticated: false },
+      {},
+    );
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+    const reason = await getModelUnavailableReason('gpt55', access);
+
+    expect(model).toMatchObject({
+      availability: 'included-login-required',
+      availabilityLabel: 'Login required',
+      requiresKey: false,
+      disabled: true,
+    });
+    expect(reason).toBe(
+      'Model "gpt55" is served by included TeXRA model access, which needs an account. Sign in, or provide a provider API key and switch to personal API keys.',
+    );
+  });
+
+  it('keeps a personal key usable while included access is selected but signed out', async () => {
+    const access = createModelOptionsAccess({
+      useIncludedAccess: true,
+      authenticated: false,
+    });
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+
+    expect(model).toMatchObject({
+      availability: 'provider-key',
+      disabled: false,
+    });
+  });
+
+  it('reports a signed-in user without tier coverage as missing a key, not signed out', async () => {
+    const access = createModelOptionsAccess(
+      { useIncludedAccess: true, authenticated: true },
+      {},
+    );
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+
+    expect(model.availability).toBe('missing-key');
+  });
+
+  it('labels models the registry no longer describes instead of shipping a bare row', async () => {
+    const access = createModelOptionsAccess({ useIncludedAccess: false });
+
+    const [model] = await computeModelOptionsData(['no-such-model'], access);
+
+    expect(model).toMatchObject({
+      value: 'no-such-model',
+      label: 'no-such-model',
+      availability: 'unknown-model',
+      availabilityLabel: 'Unknown model',
+      requiresKey: false,
+      disabled: true,
+    });
   });
 
   it('falls back to personal keys when included access is disabled without quota auto-switch', async () => {
@@ -364,7 +425,7 @@ describe('computeModelOptionsData relay quota state', () => {
     }
   });
 
-  it('shows subscription access only for tool-use availability when the scoped switch is on', async () => {
+  it('shows subscription access for tool-use, workflow, and untagged availability', async () => {
     await initSubscriptionPlatform({
       [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
     });
@@ -376,21 +437,11 @@ describe('computeModelOptionsData relay quota state', () => {
     const [workflowModel] = await computeModelOptionsData(['gpt55'], access, {
       agentCategory: AgentCategory.Workflow,
     });
+    const [untaggedModel] = await computeModelOptionsData(['gpt55'], access);
 
     expect(toolUseModel.availability).toBe('subscription-access');
-    expect(workflowModel.availability).toBe('provider-key');
-  });
-
-  it('does not advertise subscription access for untagged availability checks under the scoped switch', async () => {
-    await initSubscriptionPlatform({
-      [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
-    });
-    const access = createModelOptionsAccess({ useIncludedAccess: false }, {});
-
-    const [model] = await computeModelOptionsData(['gpt55'], access);
-
-    expect(model.availability).toBe('missing-key');
-    expect(model.disabled).toBe(true);
+    expect(workflowModel.availability).toBe('subscription-access');
+    expect(untaggedModel.availability).toBe('subscription-access');
   });
 
   it('does not reuse cached provider keys for injected access', async () => {

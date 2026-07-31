@@ -25,6 +25,7 @@ import type {
   ToolEditPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -53,6 +54,11 @@ interface DesktopHostInteractions {
     plan: { objective: string };
   }): Promise<unknown>;
   requestAgentProposal(request: unknown): Promise<unknown>;
+  openExternalInquiry(request: {
+    requestId: string;
+    threadId: string;
+    streamId?: StreamTabId;
+  }): Promise<{ threadId: string }>;
   submitBashDecision(requestId: string, decision: BashSettlement): boolean;
   submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean;
   submitProposalDecision(requestId: string, decision: ProposalResult): boolean;
@@ -95,7 +101,7 @@ interface RecordingApprovalHandlerSet extends ApprovalRequestHandlerSet {
     toolEdit: RecordingTransport<ToolEditPermission>;
     bash: RecordingTransport<BashPermission>;
     retry: RecordingTransport<RetryPermission>;
-    agentProposal: RecordingTransport<AgentProposalPermission>;
+    proposal: RecordingTransport<AgentProposalPermission>;
     planApproval: RecordingTransport<PlanApprovalPermission>;
     externalInquiry: RecordingTransport<ExternalInquiryPermission>;
     userQuestion: RecordingTransport<UserQuestionPermission>;
@@ -133,7 +139,7 @@ function createHandlers(): RecordingApprovalHandlerSet {
     'requestId',
   );
   const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
-  const agentProposal = handler<
+  const proposal = handler<
     AgentProposalPermission,
     'proposalId',
     ProposalResult
@@ -156,7 +162,7 @@ function createHandlers(): RecordingApprovalHandlerSet {
     toolEdit: toolEdit.handler,
     bash: bash.handler,
     retry: retry.handler,
-    agentProposal: agentProposal.handler,
+    proposal: proposal.handler,
     planApproval: planApproval.handler,
     externalInquiry: externalInquiry.handler,
     userQuestion: userQuestion.handler,
@@ -164,7 +170,7 @@ function createHandlers(): RecordingApprovalHandlerSet {
       toolEdit: toolEdit.transport,
       bash: bash.transport,
       retry: retry.transport,
-      agentProposal: agentProposal.transport,
+      proposal: proposal.transport,
       planApproval: planApproval.transport,
       externalInquiry: externalInquiry.transport,
       userQuestion: userQuestion.transport,
@@ -260,7 +266,7 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(parallel).resolves.toEqual({ action: 'approve' });
     await expect(bash).resolves.toEqual({ action: 'approve' });
-    expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
+    expect(handlers.transport.proposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
     );
 
@@ -298,8 +304,11 @@ describe('createDesktopHostInteractions', () => {
       interactions.requestToolEditApproval(request),
     ).resolves.toEqual({ accepted: true });
     // The controller owns its window session (options.session), so the call
-    // carries only the request.
-    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(request);
+    // carries only the request and the caller's interaction options.
+    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
+      request,
+      undefined,
+    );
   });
 
   it('rejects a plan decision for a pending bash request', async () => {
@@ -408,6 +417,37 @@ describe('createDesktopHostInteractions', () => {
     });
   });
 
+  it('reveals the owning stream before showing an external inquiry', async () => {
+    const handlers = createHandlers();
+    const { interactions, presentationSink, sessionEvents } =
+      await createInteractions(handlers);
+
+    await expect(
+      interactions.openExternalInquiry({
+        requestId: 'inquiry-a',
+        threadId: 'thread-a',
+        streamId: 'stream-a' as StreamTabId,
+      }),
+    ).resolves.toEqual({ threadId: 'thread-a' });
+
+    expect(handlers.transport.externalInquiry.show).toHaveBeenCalledOnce();
+    expect(presentationSink.emit).toHaveBeenCalledWith(
+      'requestEnsureProgressView',
+      {},
+    );
+    expect(sessionEvents).toContainEqual({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: {
+          streamId: 'stream-a',
+          suppressViewSwitch: true,
+          ensureVisible: true,
+        },
+      },
+    });
+  });
+
   it('preserves typed proposal approval overrides', async () => {
     const handlers = createHandlers();
     const { interactions } = await createInteractions(handlers);
@@ -432,7 +472,7 @@ describe('createDesktopHostInteractions', () => {
       model: 'openai:gpt-5',
       agent: 'configured-agent',
     });
-    expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
+    expect(handlers.transport.proposal.dismiss).toHaveBeenCalledWith(
       'proposal-a',
     );
   });
@@ -456,11 +496,11 @@ describe('createDesktopHostInteractions', () => {
 
     await expect(bashPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'Desktop presentation detached.',
+      feedback: SESSION_DISPOSED_CAUSE,
     });
     await expect(planPromise).resolves.toEqual({
       action: 'reject',
-      feedback: 'Desktop presentation detached.',
+      feedback: SESSION_DISPOSED_CAUSE,
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(handlers.transport.planApproval.dismiss).toHaveBeenCalled();

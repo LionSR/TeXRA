@@ -31,7 +31,8 @@ import {
   describeLatexExportResult,
   exportedFileMessage,
   exportInputErrorMessage,
-  HISTORY_ITEM_NOT_FOUND_MESSAGE,
+  HISTORY_CLEARED_MESSAGE,
+  HISTORY_CONFIG_UNREADABLE_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
@@ -42,6 +43,7 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
+import { GoalStore } from '@tools/goal';
 
 import {
   withHandlerErrorHandling,
@@ -107,7 +109,8 @@ export class HistoryHandlers {
       this.ctx,
       'Failed to delete history item',
       async () => {
-        const result = await deleteExecution(data.historyId as ExecutionId);
+        const executionId = data.historyId as ExecutionId;
+        const result = await deleteExecution(executionId);
         const outcome = describeDeleteExecutionResult(result);
         switch (outcome.kind) {
           case 'active':
@@ -119,6 +122,7 @@ export class HistoryHandlers {
             await vscode.window.showWarningMessage(outcome.message);
             return;
           case 'deleted':
+            await GoalStore.forgetByExecutionIds([executionId]);
             await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
             return;
         }
@@ -132,9 +136,10 @@ export class HistoryHandlers {
       'Failed to clear history',
       async () => {
         const result = await deleteAllExecutions();
+        await GoalStore.forgetByExecutionIds(result.deleted);
         const outcome = describeClearHistoryResult(result);
         if (outcome.kind === 'cleared') {
-          await vscode.window.showInformationMessage('Agent history cleared');
+          await vscode.window.showInformationMessage(HISTORY_CLEARED_MESSAGE);
           await this.ctx.withActiveWebview(async (w) => {
             await w.postMessage({
               command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
@@ -271,7 +276,7 @@ export class HistoryHandlers {
       if (!config) {
         await showLoggedMessage(
           this.ctx.channel,
-          HISTORY_ITEM_NOT_FOUND_MESSAGE,
+          HISTORY_CONFIG_UNREADABLE_MESSAGE,
         );
         return;
       }

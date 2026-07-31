@@ -23,7 +23,7 @@ const LeaseExecutionIdSchema = z
   .min(1)
   .regex(/^[^/\\]+$/);
 
-const ExecutionLeaseSchema = z
+export const ExecutionLeaseSchema = z
   .strictObject({
     version: z.literal(1),
     executionId: LeaseExecutionIdSchema,

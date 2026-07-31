@@ -25,10 +25,19 @@ import type {
   LatexExportResult,
 } from './ChatExportController';
 
-export const HISTORY_ITEM_NOT_FOUND_MESSAGE = 'History item not found';
+const HISTORY_ITEM_NOT_FOUND_MESSAGE = 'History item not found';
+
+/**
+ * Message for a null `readConfig()`, which cannot tell a missing execution
+ * apart from a corrupt or incompatible one, so it must not claim either.
+ */
+export const HISTORY_CONFIG_UNREADABLE_MESSAGE =
+  'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
 
 export const ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE =
   'Cannot delete an execution that is active in TeXRA';
+
+export const HISTORY_CLEARED_MESSAGE = 'Agent history cleared';
 
 /** Message for a failed {@link ChatExportController.buildExportInput} status. */
 export function exportInputErrorMessage(

@@ -28,6 +28,12 @@ import type { ReasoningEffort } from 'llm-zoo';
 export interface IncludedModelAccess {
   /** Whether the user has included access switched on at all. */
   getUseIncludedModelAccess(): boolean;
+  /**
+   * Whether an account session exists at all. Distinguishes "not signed in"
+   * from "signed in but this tier does not cover the model", which
+   * {@link canUseServerSideKeys} collapses into a single `false`.
+   */
+  isAuthenticated(): Promise<boolean>;
   /** Whether the account can currently use included access (may fetch). */
   canUseServerSideKeys(): Promise<boolean>;
   /** Whether the primed tier cache covers this model. */
@@ -64,6 +70,7 @@ export interface IncludedModelAccess {
  */
 const BYOK_ONLY: IncludedModelAccess = {
   getUseIncludedModelAccess: () => false,
+  isAuthenticated: async () => false,
   canUseServerSideKeys: async () => false,
   canUseModelSync: () => false,
   isProviderOnServer: () => false,

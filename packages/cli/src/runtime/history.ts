@@ -7,6 +7,7 @@ import {
   deriveResumability,
   getExecutionStore,
   isUserVisibleExecution,
+  listExecutionEditedFiles,
   listExecutions,
   unwrapResultMeta,
   type ExecutionListingEntry,
@@ -33,7 +34,6 @@ import {
 } from './history/conversationFormat';
 import {
   listGeneratedFiles,
-  listWorkspaceToolFiles,
   mergeHistoryFiles,
 } from './history/generatedFiles';
 
@@ -92,6 +92,12 @@ export function resumableCliHistoryEntries<
   );
 }
 
+/**
+ * The rule `isUserVisibleExecution` applies to storage listings, applied to an
+ * already-built entry array: a menu assembled from history handed in by its
+ * caller (the TUI harness scenarios build one directly) must not offer an
+ * agent-spawned child run either.
+ */
 export function userStartedCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'parentExecutionId'>,
 >(entries: readonly T[]): T[] {
@@ -163,12 +169,19 @@ export async function readCliHistoryDetails(
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
     : undefined;
-  const workspaceFiles = await listWorkspaceToolFiles(
+  const workspaceFiles = await listExecutionEditedFiles(
     config,
     persistedWorkspaceFilePaths,
     conversation,
   );
-  const files = mergeHistoryFiles(generatedFiles, workspaceFiles);
+  const files = mergeHistoryFiles(
+    generatedFiles,
+    workspaceFiles.map((file) => ({
+      path: file.displayPath,
+      size: file.size,
+      isDirectory: file.isDirectory,
+    })),
+  );
 
   if (
     !meta &&
@@ -345,7 +358,8 @@ export async function preflightCliHistoryDeleteAll(options: {
   if (!options.all) return { proceed: false, count: 0 };
   // Unlike list, a full wipe intentionally counts (and later clears) every
   // stored execution, including `isUserVisibleExecution`-hidden
-  // process-bookkeeping entries — don't add the visibility filter here.
+  // process-bookkeeping entries and agent-spawned child runs — don't add the
+  // visibility filter here.
   // (`show`/`export` were never filtered either — both are explicit-id
   // lookups, a different contract from browsing a list.)
   const count = (await listExecutions()).length;

@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   detachEvents: vi.fn(),
   detachInteractions: vi.fn(),
   disposeSession: vi.fn(),
+  interruptClaudeAgentSessions: vi.fn(),
+  interruptCodexThreads: vi.fn(),
+  killBackgroundProcesses: vi.fn(),
   eventListener: undefined as ((event: RunEventEnvelope) => void) | undefined,
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
@@ -52,10 +55,18 @@ vi.mock('@agent/index/agentRegistry', () => ({
 vi.mock('@agent/runtime/SessionHandle', () => ({
   SessionHandle: class {
     readonly events = { subscribe: mocks.subscribe };
+    readonly executions = {
+      killBackgroundProcesses: mocks.killBackgroundProcesses,
+    };
 
     useHostInteractions = mocks.useHostInteractions;
     dispose = mocks.disposeSession;
   },
+}));
+
+vi.mock('@tools/agentCliSessionStores', () => ({
+  ClaudeAgentSessions: { interruptAll: mocks.interruptClaudeAgentSessions },
+  CodexThreads: { interruptAll: mocks.interruptCodexThreads },
 }));
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -183,6 +194,37 @@ describe('agent package run lifecycle', () => {
       'Custom tools are supported only for tool-use agents; "assistant" is a workflow agent.',
     );
     expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+  });
+
+  it('stops the run session background children before disposing it', async () => {
+    await runAgent(INPUT).result;
+
+    const sessionExecutions = {
+      killBackgroundProcesses: mocks.killBackgroundProcesses,
+    };
+    expect(mocks.killBackgroundProcesses).toHaveBeenCalledOnce();
+    expect(mocks.interruptCodexThreads).toHaveBeenCalledWith(sessionExecutions);
+    expect(mocks.interruptClaudeAgentSessions).toHaveBeenCalledWith(
+      sessionExecutions,
+    );
+    const killOrder =
+      mocks.killBackgroundProcesses.mock.invocationCallOrder.at(0);
+    const disposeOrder = mocks.disposeSession.mock.invocationCallOrder.at(0);
+    expect(killOrder ?? Infinity).toBeLessThan(disposeOrder ?? -Infinity);
+  });
+
+  it('still disposes the session when the background drain fails', async () => {
+    const killError = new Error('kill failed');
+    mocks.killBackgroundProcesses.mockImplementationOnce(() => {
+      throw killError;
+    });
+
+    await expect(runAgent(INPUT).result).resolves.toBe(RESULT);
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'Failed to stop package background processes',
+      { data: killError },
+    );
+    expect(mocks.disposeSession).toHaveBeenCalledOnce();
   });
 
   it('preserves the run result when session disposal fails', async () => {

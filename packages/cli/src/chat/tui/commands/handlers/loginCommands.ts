@@ -1,10 +1,10 @@
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import {
   refreshCodexPreferenceViews,
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
 import { sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
-  chatGptAccountLabel,
   chatGptSignOutPreferenceMessage,
   shouldUseChatGptDeviceCode,
   signInCliChatGpt,
@@ -70,8 +70,8 @@ async function loginToChatGptSubscription(
 
   output.appendOutcome(
     update.effective
-      ? `Signed in with ChatGPT as ${chatGptAccountLabel(session)} (Codex models enabled).`
-      : `Signed in with ChatGPT as ${chatGptAccountLabel(session)} (Codex models remain disabled because a more specific setting overrides ${update.target} config).`,
+      ? `Signed in with ChatGPT as ${codexAccountLabel(session)} (Codex models enabled).`
+      : `Signed in with ChatGPT as ${codexAccountLabel(session)} (Codex models remain disabled because a more specific setting overrides ${update.target} config).`,
   );
 }
 

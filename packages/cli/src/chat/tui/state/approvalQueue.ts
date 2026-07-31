@@ -9,7 +9,6 @@
 import { signal, type Signal } from '@lit-labs/signals';
 
 import type { ApprovalBypassKind as HostApprovalBypassKind } from '@agent/runtime/HostInteractions';
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { StreamTabId } from '@shared/schemas';
 import type {
   AgentProposalPermission,
@@ -18,9 +17,11 @@ import type {
   ExternalInquiryPermission,
   PlanApprovalAction,
   PlanApprovalPermission,
+  ProgressPermissionKind,
   RetryPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { assertNever } from '@utils/core';
 
@@ -35,7 +36,7 @@ export type TuiRetryRequest = RetryPermission & {
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }
   | { kind: 'toolEdit'; payload: ToolEditApprovalRequest }
-  | { kind: 'plan'; payload: PlanApprovalPermission }
+  | { kind: 'planApproval'; payload: PlanApprovalPermission }
   | { kind: 'proposal'; payload: AgentProposalPermission }
   | {
       kind: 'retry';
@@ -54,7 +55,7 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
   /** Turn off the "prefer ChatGPT subscription" preference before accepting,
    *  so a Codex usage-limit retry routes through the OpenAI API key. */
   readonly disableChatGptSubscription?: boolean;
@@ -76,7 +77,9 @@ export interface EnqueueApprovalOptions {
   readonly onPresent?: () => void;
 }
 
-export type PendingApprovalKind = ApprovalPayload['kind'];
+/** Derived from the wire contract, so the queue's payload kinds and every
+ *  kind-keyed record here stay exhaustive against it. */
+export type PendingApprovalKind = ProgressPermissionKind;
 
 /** Stream key for payloads that carry no stream id — they are session-wide
  *  and belong to the root/main row, never a child row. */
@@ -198,7 +201,7 @@ function statusKindForPayload(
       return 'question';
     case 'bash':
     case 'toolEdit':
-    case 'plan':
+    case 'planApproval':
     case 'proposal':
     case 'retry':
       return 'approval';
@@ -230,7 +233,7 @@ export function approvalPayloadStreamId(
 ): StreamTabId | undefined {
   switch (payload.kind) {
     case 'bash':
-    case 'plan':
+    case 'planApproval':
     case 'proposal':
     case 'retry':
     case 'externalInquiry':

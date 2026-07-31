@@ -1,5 +1,5 @@
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -11,7 +11,8 @@ import { getConfig } from '@utils/config/configUtils';
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
  * - Only a `completed` run qualifies — cancelled or failed runs may carry
  *   partial outputs the user did not ask to review.
- * - The highest round wins, which is the canonical "final" revision.
+ * - Which file counts as final is {@link finalWorkflowOutput}'s call, shared
+ *   with the CLI's `--output` copy and text result.
  *
  * Returns `undefined` when nothing should open; the host supplies only its own
  * open verb (the extension's text-document preview, the desktop's `openPath`).
@@ -22,10 +23,7 @@ export function selectAutoOpenFinalOutput(
   if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
     return undefined;
   }
-  if (result.outcome !== RUN_OUTCOME.COMPLETED || result.outputs.length === 0) {
-    return undefined;
-  }
+  if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;
 
-  const lastRound = Math.max(...result.outputs.map((output) => output.round));
-  return result.outputs.find((output) => output.round === lastRound);
+  return finalWorkflowOutput(result.outputs);
 }

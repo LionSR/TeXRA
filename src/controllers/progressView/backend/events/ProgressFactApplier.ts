@@ -750,6 +750,7 @@ export class ProgressFactApplier {
     return {
       conversationProgress: state.conversationProgress,
       roundStage: state.roundStage ?? null,
+      phaseStage: state.phaseStage ?? null,
       badges: this.state.projectChildRosters(state),
       parentStreamId: this.state.snapshots.getParentStreamId(stream) ?? null,
     };

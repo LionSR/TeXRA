@@ -14,6 +14,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 const mocks = vi.hoisted(() => ({
   invalidateModelOptionsCache: vi.fn(),
   setUseIncludedModelAccess: vi.fn(),
+  getGlobalState: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
 
@@ -30,6 +31,7 @@ vi.mock('@model/computeModelOptions', () => ({
 vi.mock('@platform/platform', () => ({
   platform: () => ({
     globalState: {
+      get: mocks.getGlobalState,
       update: mocks.updateGlobalState,
     },
   }),
@@ -58,26 +60,44 @@ describe('CLI API access mode settings', () => {
   beforeEach(() => {
     mocks.invalidateModelOptionsCache.mockClear();
     mocks.setUseIncludedModelAccess.mockReset();
+    mocks.getGlobalState.mockReset().mockReturnValue(false);
     mocks.updateGlobalState.mockReset();
   });
 
-  it('turns off OpenRouter routing when switching to included access', async () => {
-    await setCliApiMode('included');
+  it('reports the OpenRouter routing it turns off for included access', async () => {
+    mocks.getGlobalState.mockReturnValue(true);
 
+    const update = await setCliApiMode('included');
+
+    expect(update).toEqual({ mode: 'included', openRouterDisabled: true });
     expect(mocks.setUseIncludedModelAccess).toHaveBeenCalledWith(true);
     expect(mocks.updateGlobalState).toHaveBeenCalledWith(
       GlobalStateKey.USE_OPENROUTER,
       false,
     );
-    expect(mocks.updateGlobalState).toHaveBeenCalledBefore(
-      mocks.setUseIncludedModelAccess,
+    // Access flag first: an interrupted switch leaves included access with
+    // OpenRouter still on rather than personal keys with routing silently off.
+    expect(mocks.setUseIncludedModelAccess).toHaveBeenCalledBefore(
+      mocks.updateGlobalState,
     );
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves OpenRouter routing unchanged when switching to personal keys', async () => {
-    await setCliApiMode('personal');
+  it('skips the OpenRouter write when routing is already off', async () => {
+    const update = await setCliApiMode('included');
 
+    expect(update).toEqual({ mode: 'included', openRouterDisabled: false });
+    expect(mocks.setUseIncludedModelAccess).toHaveBeenCalledWith(true);
+    expect(mocks.updateGlobalState).not.toHaveBeenCalled();
+    expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves OpenRouter routing unchanged when switching to personal keys', async () => {
+    mocks.getGlobalState.mockReturnValue(true);
+
+    const update = await setCliApiMode('personal');
+
+    expect(update).toEqual({ mode: 'personal', openRouterDisabled: false });
     expect(mocks.setUseIncludedModelAccess).toHaveBeenCalledWith(false);
     expect(mocks.updateGlobalState).not.toHaveBeenCalled();
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledTimes(1);

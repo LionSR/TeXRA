@@ -2,6 +2,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { useEffect, useMemo, useState } from 'react';
 
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
@@ -9,6 +10,7 @@ import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
 } from '@model/providerCapabilities';
+import type { SpendingStatus } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 
 import { approvalQueueStatus } from '../state/approvalQueue';
@@ -38,6 +40,7 @@ import {
 } from './statusBarDisplay';
 
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
+const RELAY_QUOTA_REFRESH_MS = 10_000;
 
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
@@ -157,6 +160,21 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     };
   }, [accessTarget.category, accessTarget.model, codexPreferenceVersion]);
 
+  // The relay spend snapshot only changes when the tier config is refetched
+  // (5-minute TTL), so poll the cached accessor rather than waiting for the
+  // next launch: a quota warning that only appears at startup is useless to a
+  // session that crosses the threshold mid-run. `getSpendingStatus` returns
+  // the retained snapshot object, so an unchanged read re-renders nothing.
+  const [relayQuota, setRelayQuota] = useState<SpendingStatus>();
+  useEffect(() => {
+    const readRelayQuota = (): void =>
+      setRelayQuota(getServerSideKeyService().getSpendingStatus() ?? undefined);
+    readRelayQuota();
+    const quotaTimer = setInterval(readRelayQuota, RELAY_QUOTA_REFRESH_MS);
+    quotaTimer.unref?.();
+    return () => clearInterval(quotaTimer);
+  }, []);
+
   const runStartedAt = isActivePhase(statusSlice?.status)
     ? statusSlice?.runStartedAt
     : undefined;
@@ -192,6 +210,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalKind: approvals.kind,
     model: accessTarget.model,
     modelAccess,
+    relayQuota,
     transcriptMode: sessionMeta.transcriptMode,
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,

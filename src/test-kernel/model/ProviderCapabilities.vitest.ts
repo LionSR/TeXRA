@@ -63,13 +63,10 @@ const signedInSession: CodexSession = {
 async function installSubscriptionPlatform(options?: {
   useOpenRouter?: boolean;
   signedIn?: boolean;
-  toolUseOnly?: boolean;
 }): Promise<void> {
   await installPlatform({
     config: {
       'texra.chatgptCodex.preferSubscription': true,
-      'texra.chatgptCodex.subscriptionToolUseOnly':
-        options?.toolUseOnly ?? false,
     },
     globalState: {
       'texra.useOpenRouter': options?.useOpenRouter ?? false,
@@ -173,21 +170,14 @@ describe('ChatGPT subscription model routing', () => {
     ).not.toBeNull();
   });
 
-  it('restricts subscription routing to tool-use agents when configured', async () => {
-    await installSubscriptionPlatform({ toolUseOnly: true });
+  it('routes workflow and untagged agents through the subscription too', async () => {
+    await installSubscriptionPlatform();
 
     expect(
       resolveCodexSubscriptionCapabilitiesForAgentCategory(
         MODEL_CONFIGS.gpt55,
         false,
         AgentCategory.Workflow,
-      ),
-    ).toBeNull();
-    expect(
-      resolveCodexSubscriptionCapabilitiesForAgentCategory(
-        MODEL_CONFIGS.gpt55,
-        false,
-        AgentCategory.ToolUse,
       ),
     ).not.toBeNull();
     expect(
@@ -196,12 +186,9 @@ describe('ChatGPT subscription model routing', () => {
         false,
         undefined,
       ),
-    ).toBeNull();
+    ).not.toBeNull();
     await expect(
       isCodexSubscriptionActive('gpt55', AgentCategory.Workflow),
-    ).resolves.toBe(false);
-    await expect(
-      isCodexSubscriptionActive('gpt55', AgentCategory.ToolUse),
     ).resolves.toBe(true);
   });
 

@@ -36,6 +36,7 @@ import {
 } from '@shared/state/PersistedState';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { clamp } from '@utils/core';
@@ -179,6 +180,10 @@ export class ProgressViewState {
         goalEntries: {
           forget: (stream) => GoalStore.forget(stream, this.session),
           forgetMany: (streams) => GoalStore.forgetMany(streams, this.session),
+        },
+        onCanonicalStreamDeleted: (stream) => {
+          this.session.status.clearStream(stream);
+          releaseStreamResources(stream, this.session);
         },
       });
   }

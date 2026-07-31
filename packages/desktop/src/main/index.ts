@@ -50,7 +50,7 @@ import {
 } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { StreamLogStore } from '@transcript';
+import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { BinaryResolver } from '@utils/system/binaryResolver';
@@ -92,13 +92,14 @@ import {
 } from './desktopSettingsIpc.js';
 import {
   buildDefaultToolDashboardItems,
-  findToolCommand,
   getCachedToolCheckResults,
+  planDefaultToolTerminalAction,
   refreshDefaultDisabledToolCache,
   refreshDefaultToolAvailability,
 } from './desktopSettingsIpcHelpers.js';
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
+import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import {
   getDesktopWindowTitle,
@@ -128,6 +129,7 @@ import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
+import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -297,9 +299,7 @@ function createWindow(options: {
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
-  const modelListRefresh = refreshDesktopModelListStateIfNeeded({
-    onError: reportAsyncError,
-  });
+  const modelListRefresh = refreshDesktopModelListStateIfNeeded();
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -337,6 +337,9 @@ function createWindow(options: {
   };
   const showInfoMessage = async (message: string) => {
     await dialog.showMessageBox(window, { type: 'info', message });
+  };
+  const showWarningMessage = async (message: string) => {
+    await dialog.showMessageBox(window, { type: 'warning', message });
   };
   // Shared shape for the "confirm this action" dialog: a warning with a
   // confirm button (defaulted, id 0) and a 'Cancel' button (id 1), collapsed
@@ -473,11 +476,28 @@ function createWindow(options: {
     host: desktopAuthHost,
     log: console,
   });
+  /**
+   * Sole owner of the desktop sign-in provider choice. Every sign-in entry
+   * point (login banner, credential settings, remote-agent catalog) routes
+   * here so the desktop offers the same providers as the extension quick pick
+   * and the CLI select instead of assuming one account type.
+   */
+  const chooseOAuthProvider = () =>
+    chooseDesktopOAuthProvider((messageBoxOptions) =>
+      dialog.showMessageBox(window, messageBoxOptions),
+    );
+  const signIn = async (): Promise<void> => {
+    const provider = await chooseOAuthProvider();
+    if (provider === undefined) return;
+    await desktopAuth.signIn(provider);
+  };
   const signInForRemoteAgentCatalog = async (): Promise<boolean> => {
+    const provider = await chooseOAuthProvider();
+    if (provider === undefined) return false;
     teamSignInPending = true;
     try {
       return (
-        (await desktopAuth.signInAndWaitForSession()) &&
+        (await desktopAuth.signInAndWaitForSession(provider)) &&
         (await SupabaseClient.canAccessRemoteAgentCatalog())
       );
     } finally {
@@ -578,6 +598,7 @@ function createWindow(options: {
       chooseTeamAvailability(unavailableNames),
     signInForRemoteAgentCatalog,
     showInfoMessage,
+    showWarningMessage,
     showErrorMessage,
     // Recompute the onboarding funnel after a run completes so a user's first
     // successful run leaves the setup card without waiting for a restart
@@ -743,13 +764,18 @@ function createWindow(options: {
           }
         },
       },
-      notifications: { showInfoMessage, showErrorMessage },
+      notifications: { showInfoMessage, showWarningMessage, showErrorMessage },
       auth: {
-        signIn: () => desktopAuth.signIn(),
+        signIn,
         signOut: () => desktopAuth.signOut(),
       },
       setUseIncludedModelAccess: (enabled) =>
         getServerSideKeyService().setUseIncludedModelAccess(enabled),
+      modelSelectionExtras: {
+        useIncludedAccess: () =>
+          getServerSideKeyService().getUseIncludedModelAccess(),
+        getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
+      },
       modelListRefresh,
       onCredentialChanged: async () => {
         await onboardingIpcRef.current?.refreshOnboardingFunnel();
@@ -791,7 +817,7 @@ function createWindow(options: {
         getCachedCheckResults: getCachedToolCheckResults,
         refreshAvailability: refreshDefaultToolAvailability,
         refreshDisabledCache: refreshDefaultDisabledToolCache,
-        findCommand: findToolCommand,
+        planTerminalAction: planDefaultToolTerminalAction,
       },
       navigation: {
         openExternal: previewHost.openExternal,
@@ -836,9 +862,10 @@ function createWindow(options: {
     revealStream: async (streamId) => {
       try {
         const execution = await getAgentExecution();
-        await execution.revealStream(streamId);
+        return await execution.revealStream(streamId);
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
+        return 'unavailable';
       }
     },
     // Only a live presentation knows a stream's label, so this reads the
@@ -865,6 +892,7 @@ function createWindow(options: {
       (await getAgentExecution()).restoreTaskState(taskState),
     openPath: settingsUi.openPath,
     showInfoMessage: settingsUi.showInfoMessage,
+    showWarningMessage,
     showErrorMessage: settingsUi.showErrorMessage,
     onError: settingsUi.onError,
   });
@@ -906,6 +934,7 @@ function createWindow(options: {
     },
     config: platform().config,
     ui: settingsUi,
+    session: options.processSession,
   });
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
@@ -984,12 +1013,7 @@ function createWindow(options: {
           session: options.processSession,
         });
       },
-      signInWithChatGpt: async () => {
-        // Welcome-card sign-in enables ChatGPT subscription routing so the
-        // funnel recognises the new credential instead of bouncing back to
-        // `needs-credential`.
-        await settingsIpc.signInChatGpt({ enableSubscription: true });
-      },
+      signInWithChatGpt: () => settingsIpc.signInChatGpt(),
       // The desktop shell can't host the VS Code getting-started walkthrough, so
       // the State 0 walkthrough button opens the desktop docs externally — the
       // closest desktop analog, reusing the same docs URL the Help menu's
@@ -1068,7 +1092,7 @@ function createWindow(options: {
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
       openWorkspaceFolder,
-      signIn: () => desktopAuth.signIn(),
+      signIn,
       getRecentCommits: () => gitHost.getRecentCommits(),
       showInfoMessage,
       onAsyncError: reportAsyncError,
@@ -1274,7 +1298,12 @@ if (protocolLifecycle.shouldContinue) {
         processResumeOwner,
       );
       const { lifecycle } = platformInit;
-      const transcripts = await StreamLogStore.open();
+      // A broken transcript directory must not reject whenReady: degrade to
+      // an in-memory store and warn once the window exists, exactly as the
+      // CLI TUI does. The degraded session also cannot resume — nothing is
+      // persisted for a later launch to pick up, and `SessionHandle` skips
+      // restart repair on a non-persistent store.
+      const transcripts = await StreamLogStore.openOrEphemeral();
       const processSession = new SessionHandle({
         transcripts,
         restartRepair: 'deferred',
@@ -1390,6 +1419,11 @@ if (protocolLifecycle.shouldContinue) {
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();
+        if (transcripts.mode.kind === 'ephemeral') {
+          void showDesktopWarningDialog(
+            ephemeralTranscriptWarning(transcripts.mode.reason),
+          ).catch((error: unknown) => console.error(error));
+        }
 
         app.on('activate', () => {
           if (BrowserWindow.getAllWindows().length === 0) {

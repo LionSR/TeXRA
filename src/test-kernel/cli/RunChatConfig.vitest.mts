@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAgent, type AgentEntry } from '@agent/index';
+import {
+  resolveAgentForLaunch,
+  type AgentEntry,
+  type ResolvedAgent,
+} from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   applyInitialCliAgentSelection,
@@ -16,7 +20,7 @@ vi.mock('@agent/index', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/index')>();
   return {
     ...actual,
-    getAgent: vi.fn(),
+    resolveAgentForLaunch: vi.fn(),
   };
 });
 
@@ -24,7 +28,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   appendLocalAssistantTranscript: vi.fn(),
 }));
 
-const mockedGetAgent = vi.mocked(getAgent);
+const mockedResolveAgentForLaunch = vi.mocked(resolveAgentForLaunch);
 
 function registryAgent(category: AgentCategory): AgentEntry {
   return {
@@ -36,13 +40,20 @@ function registryAgent(category: AgentCategory): AgentEntry {
   };
 }
 
+function registryResolution(category: AgentCategory): ResolvedAgent {
+  const entry = registryAgent(category);
+  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+}
+
 beforeEach(() => {
-  mockedGetAgent.mockReset();
+  mockedResolveAgentForLaunch.mockReset();
 });
 
 describe('CLI chat run config', () => {
   it('leaves team mode when the root agent is changed explicitly', () => {
-    mockedGetAgent.mockReturnValue(registryAgent(AgentCategory.ToolUse));
+    mockedResolveAgentForLaunch.mockReturnValue(
+      registryResolution(AgentCategory.ToolUse),
+    );
     patchSessionMeta({
       teamName: 'Physicist',
       cliMultiAgentPresetId: 'physicist',
@@ -133,17 +144,20 @@ describe('CLI chat run config', () => {
   });
 
   it('accepts valid tool-use root chat agents', () => {
-    mockedGetAgent.mockReturnValueOnce(registryAgent(AgentCategory.ToolUse));
+    mockedResolveAgentForLaunch.mockReturnValueOnce(
+      registryResolution(AgentCategory.ToolUse),
+    );
 
     expect(chatToolUseAgentUsageError('assistant')).toBeUndefined();
-    expect(mockedGetAgent).toHaveBeenCalledWith(
-      'assistant',
+    expect(mockedResolveAgentForLaunch).toHaveBeenCalledWith(
       AgentCategory.ToolUse,
+      'assistant',
+      undefined,
     );
   });
 
   it('rejects missing root chat agents before a prompt is submitted', () => {
-    mockedGetAgent.mockReturnValueOnce(undefined);
+    mockedResolveAgentForLaunch.mockReturnValue(undefined);
 
     expect(chatToolUseAgentUsageError('mathematician')).toContain(
       'Tool-use agent not found: mathematician.',
@@ -151,7 +165,11 @@ describe('CLI chat run config', () => {
   });
 
   it('rejects workflow agents as root chat agents', () => {
-    mockedGetAgent.mockReturnValueOnce(registryAgent(AgentCategory.Workflow));
+    mockedResolveAgentForLaunch.mockImplementation((category) =>
+      category === AgentCategory.Workflow
+        ? registryResolution(AgentCategory.Workflow)
+        : undefined,
+    );
 
     expect(chatToolUseAgentUsageError('polish')).toContain(
       '`texra chat` only handles tool-use agents',

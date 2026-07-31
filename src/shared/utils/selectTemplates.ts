@@ -119,21 +119,12 @@ export function renderAgentOptions(
   `;
 }
 
-function defaultAvailability(opt: ModelOptionData): {
-  value: string;
-  label: string;
-} {
-  if (opt.requiresKey)
-    return { value: 'missing-key', label: 'Missing API key' };
-  if (opt.disabled) return { value: 'not-included', label: 'Not included' };
-  return { value: '', label: '' };
-}
-
 function renderModelOption(opt: ModelOptionData): TemplateResult {
   const decorator = getModelProviderDecorator(opt.provider ?? '');
-  const fallback = defaultAvailability(opt);
-  const availability = opt.availability ?? fallback.value;
-  const availabilityLabel = opt.availabilityLabel ?? fallback.label;
+  // `computeModelOptionsData` is the sole producer of both fields; a row
+  // without them came from the secret-free basic list, which has no
+  // availability verdict to show.
+  const { availability, availabilityLabel } = opt;
 
   const hints: string[] = [];
   if (decorator.label) hints.push(decorator.label);

@@ -57,6 +57,7 @@ function capIncludedReasoningEffort(
 const TEXRA_INCLUDED_MODEL_ACCESS: IncludedModelAccess = {
   getUseIncludedModelAccess: () =>
     getServerSideKeyService().getUseIncludedModelAccess(),
+  isAuthenticated: () => SupabaseClient.isAuthenticated(),
   canUseServerSideKeys: () => getServerSideKeyService().canUseServerSideKeys(),
   canUseModelSync: (modelName) =>
     getServerSideKeyService().canUseModelSync(modelName),

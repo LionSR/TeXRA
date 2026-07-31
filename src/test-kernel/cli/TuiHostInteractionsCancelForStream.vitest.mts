@@ -8,6 +8,24 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: vi.fn(),
 }));
 
+// Approval prompt preparation reads per-stream bypass state off the process
+// session; stub the session so these queue-focused tests need no
+// initializeDefaultSession/platform setup.
+vi.mock('@agent/runtime/SessionHandle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/runtime/SessionHandle')>();
+  const bypass = { isBypassed: () => false, setBypass: vi.fn() };
+  const session = {
+    approvals: { bash: { bypass }, toolEdit: { bypass } },
+    events: { emit: vi.fn() },
+  };
+  return {
+    ...actual,
+    currentSession: () => session,
+    defaultSession: () => session,
+  };
+});
+
 import {
   clearApprovals,
   currentApproval,
@@ -84,7 +102,7 @@ describe('createTuiHostInteractions', () => {
         goalEnabled: false,
       });
 
-      await waitForApproval('plan', { streamId: 'stream-a' });
+      await waitForApproval('planApproval', { streamId: 'stream-a' });
 
       interactions.cancel({ streamId: 'stream-a' });
 
@@ -95,9 +113,44 @@ describe('createTuiHostInteractions', () => {
 
       // stream-b's request was never touched and now becomes the foreground
       // modal instead of being left permanently pending.
-      await waitForApproval('plan', { streamId: 'stream-b' });
+      await waitForApproval('planApproval', { streamId: 'stream-b' });
       currentApproval.get()?.decide({ accepted: true });
       await expect(otherStreamResult).resolves.toEqual({ action: 'approve' });
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
+  it('settles plan decisions through the shared mapper: goal action kept, silent rejection omits feedback', async () => {
+    const interactions = createTuiHostInteractions(host(), context());
+    try {
+      const goalResult = interactions.requestPlanApproval?.({
+        approvalId: 'approval-goal',
+        streamId: 'stream-a',
+        plan,
+        goalEnabled: true,
+      });
+      await waitForApproval('planApproval', { streamId: 'stream-a' });
+      currentApproval.get()?.decide({
+        accepted: true,
+        planAction: 'approve_and_goal',
+      });
+      await expect(goalResult).resolves.toEqual({
+        action: 'approve_and_goal',
+      });
+
+      const rejected = interactions.requestPlanApproval?.({
+        approvalId: 'approval-reject',
+        streamId: 'stream-a',
+        plan,
+        goalEnabled: false,
+      });
+      await waitForApproval('planApproval', { streamId: 'stream-a' });
+      currentApproval.get()?.decide({ accepted: false });
+
+      // A rejection without a user message omits `feedback` rather than
+      // sending an explicit `undefined`.
+      await expect(rejected).resolves.toStrictEqual({ action: 'reject' });
     } finally {
       interactions.dispose?.();
     }
@@ -192,13 +245,13 @@ describe('createTuiHostInteractions', () => {
         goalEnabled: false,
       });
 
-      await waitForApproval('plan', { streamId: 'stream-a' });
+      await waitForApproval('planApproval', { streamId: 'stream-a' });
 
       interactions.cancel({ streamId: 'stream-a', kind: 'retry' });
 
       // The plan approval is still the foreground modal and still decidable.
       expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'plan',
+        kind: 'planApproval',
         payload: { streamId: 'stream-a' },
       });
       currentApproval.get()?.decide({ accepted: true });

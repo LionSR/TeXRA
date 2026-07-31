@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentEntry } from '@agent/index';
+import type { AgentEntry, ResolvedAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 
@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getAgentsByCategory: vi.fn(),
   getVisibleAgents: vi.fn(),
   loadAgents: vi.fn(),
+  resolveAgentForLaunch: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
@@ -16,6 +17,7 @@ vi.mock('@agent/index', () => ({
   getAgentsByCategory: mocks.getAgentsByCategory,
   getVisibleAgents: mocks.getVisibleAgents,
   loadAgents: mocks.loadAgents,
+  resolveAgentForLaunch: mocks.resolveAgentForLaunch,
 }));
 
 const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
@@ -37,6 +39,10 @@ function agent(
   };
 }
 
+function resolution(entry: AgentEntry): ResolvedAgent {
+  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+}
+
 describe('CLI agent resolution', () => {
   beforeEach(() => {
     isAuthenticatedSpy.mockReset();
@@ -47,6 +53,7 @@ describe('CLI agent resolution', () => {
     mocks.getAgentsByCategory.mockReset();
     mocks.getVisibleAgents.mockReset();
     mocks.loadAgents.mockReset();
+    mocks.resolveAgentForLaunch.mockReset();
   });
 
   it('loads the local registry and returns a local agent for signed-out users', async () => {
@@ -95,20 +102,24 @@ describe('CLI agent resolution', () => {
     const local = agent('lean');
     const remote = agent('lean', 'remote');
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
-    mocks.getAgent.mockReturnValueOnce(local).mockReturnValueOnce(remote);
+    mocks.resolveAgentForLaunch
+      .mockReturnValueOnce(resolution(local))
+      .mockReturnValueOnce(resolution(remote));
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('lean', 'chat')).resolves.toBe(remote);
 
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.resolveAgentForLaunch).toHaveBeenNthCalledWith(
       1,
-      'lean',
       AgentCategory.ToolUse,
+      'lean',
+      undefined,
     );
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.resolveAgentForLaunch).toHaveBeenNthCalledWith(
       2,
-      'lean',
       AgentCategory.ToolUse,
+      'lean',
+      undefined,
     );
     expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
@@ -131,31 +142,64 @@ describe('CLI agent resolution', () => {
 
   it('uses launch target category for local and remote-fallback lookups', async () => {
     const remote = agent('assistant', 'remote');
-    mocks.getAgent.mockReturnValueOnce(undefined).mockReturnValueOnce(remote);
+    mocks.resolveAgentForLaunch
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(resolution(remote));
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('assistant', 'agentsRun')).resolves.toBe(
       remote,
     );
 
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.resolveAgentForLaunch).toHaveBeenNthCalledWith(
       1,
-      'assistant',
       AgentCategory.ToolUse,
+      'assistant',
+      undefined,
     );
-    expect(mocks.getAgent).toHaveBeenNthCalledWith(
+    expect(mocks.resolveAgentForLaunch).toHaveBeenNthCalledWith(
       2,
-      'assistant',
       AgentCategory.ToolUse,
+      'assistant',
+      undefined,
     );
   });
 
+  it('pins a source-qualified launch identifier to that exact source', async () => {
+    const shadowed = agent('review', 'builtInToolUse');
+    mocks.resolveAgentForLaunch.mockReturnValue(resolution(shadowed));
+    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
+
+    await expect(
+      resolveCliLaunchAgent('builtInToolUse:review', 'chat'),
+    ).resolves.toBe(shadowed);
+
+    expect(mocks.resolveAgentForLaunch).toHaveBeenCalledWith(
+      AgentCategory.ToolUse,
+      'builtInToolUse:review',
+      'builtInToolUse',
+    );
+    expect(canAccessRemoteAgentCatalogSpy).not.toHaveBeenCalled();
+  });
+
   it('reports launch-specific missing-agent messages', async () => {
-    mocks.getAgent.mockReturnValue(undefined);
+    mocks.resolveAgentForLaunch.mockReturnValue(undefined);
     const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
 
     await expect(resolveCliLaunchAgent('missing', 'agentsRun')).rejects.toThrow(
       'Tool-use agent not found: missing. Use `texra agents list` for visible starter agents, `texra agents list --all` for the full catalog, or pass a known launchable agent name from a team preset.',
+    );
+  });
+
+  it('probes the other category to report a launch-mode mismatch', async () => {
+    const workflow = agent('polish', 'builtInWorkflow', AgentCategory.Workflow);
+    mocks.resolveAgentForLaunch.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? resolution(workflow) : undefined,
+    );
+    const { resolveCliLaunchAgent } = await import('@cli/runtime/agents');
+
+    await expect(resolveCliLaunchAgent('polish', 'chat')).rejects.toThrow(
+      'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
     );
   });
 

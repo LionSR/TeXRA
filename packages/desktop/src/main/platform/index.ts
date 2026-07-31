@@ -34,6 +34,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   migrateLegacyDesktopDataRoot,
   migrateLegacyDesktopWorkspaceBucket,
+  runBestEffortMigration,
 } from './dataRootMigration.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
@@ -43,7 +44,7 @@ import {
   resolveResourcesPath,
   resolveWorkspacePath,
 } from './paths.js';
-import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
+import { showDesktopWarningDialog } from './warningDialog.js';
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
   lifecycle: LifecycleHost;
@@ -127,11 +128,15 @@ export async function initializeElectronPlatform(
   // `userData`-rooted store protects the maintainer's own dev machines; there
   // is no ongoing read fallback afterward — only `dataRoot` is ever read.
   const dataRoot = resolveDesktopDataRoot(userDataPath);
-  await migrateLegacyDesktopDataRoot(userDataPath, dataRoot);
-  await migrateLegacyDesktopWorkspaceBucket(
-    dataRoot,
-    legacyWorkspacePath,
-    workspacePath,
+  await runBestEffortMigration('data-root', () =>
+    migrateLegacyDesktopDataRoot(userDataPath, dataRoot),
+  );
+  await runBestEffortMigration('workspace-alias', () =>
+    migrateLegacyDesktopWorkspaceBucket(
+      dataRoot,
+      legacyWorkspacePath,
+      workspacePath,
+    ),
   );
   const storage = new WorkspaceStorageProvider(dataRoot, workspacePath);
   const workspaceStateStore = await JsonStore.open(
@@ -278,7 +283,7 @@ export async function initializeElectronPlatform(
       workspaceState: workspaceStateStore,
       storage,
       secrets: new ElectronSecrets(secretsStore, {
-        showWarningMessage: showSecretStorageWarningDialog,
+        showWarningMessage: showDesktopWarningDialog,
       }),
       lifecycle,
       agentResume,

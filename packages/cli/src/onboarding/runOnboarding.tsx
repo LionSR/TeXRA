@@ -19,6 +19,7 @@ import { listExecutions } from '@agent/storage';
 import { type SupabaseSession } from '@auth/SupabaseSession';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { type CodexSession } from '@auth/codex';
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
@@ -44,11 +45,12 @@ import {
   ONBOARDING_CHOICE_SIGN_IN,
   ONBOARDING_CHOICE_SKIP_LABEL,
 } from '@shared/copy/onboarding';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
-import { type CliApiMode } from '../runtime/apiAccessMode';
-import { chatGptAccountLabel, signInCliChatGpt } from '../runtime/chatgptLogin';
+import { setCliApiMode } from '../runtime/apiAccessMode';
+import { signInCliChatGpt } from '../runtime/chatgptLogin';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { cliApiFallbackSelection } from '../runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../runtime/modelAccessSelection';
@@ -90,7 +92,7 @@ export interface OnboardingGateContext {
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
   readonly stdoutColorEnabled?: boolean;
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
 }
 
 const SKIP_SUMMARY =
@@ -202,7 +204,7 @@ export async function runCliOnboarding(
 
 async function runOnboardingFlow(options: {
   readonly firstRun: boolean;
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
   const picker = onboardingPicker(options);
@@ -350,7 +352,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
 
   if (screen === 'chatgpt-progress') {
     const onSuccess = (session: CodexSession): void => {
-      const label = chatGptAccountLabel(session);
+      const label = codexAccountLabel(session);
       finish({
         configured: true,
         declined: false,
@@ -489,7 +491,7 @@ interface OnboardingPicker {
 /** Picker copy and the credential paths offered, for one entry point. */
 function onboardingPicker(props: {
   readonly firstRun: boolean;
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
 }): OnboardingPicker {
   const picker = (
     subtitle: string,
@@ -634,6 +636,10 @@ function useSignInOnMount(
   useCancellableEffect(async (isCancelled) => {
     try {
       const session = await signIn(isCancelled);
+      // Picking Researcher Access in the funnel is the mode choice itself, so
+      // record it here. Signing in does not touch the preference on its own:
+      // a credential says who you are, not which route you want.
+      await setCliApiMode('included');
       if (!isCancelled()) callbacks.onSuccess(session.account.label);
     } catch (loginError: unknown) {
       if (!isCancelled()) callbacks.onError(toErrorMessage(loginError));

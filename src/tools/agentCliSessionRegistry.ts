@@ -132,9 +132,15 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
     }
   }
 
-  interruptAll(): void {
+  /**
+   * Interrupt every registered CLI-backed session, or only those owned by
+   * `ownedBy` when one session tears down while others stay live (the agent
+   * package disposes a per-run session on every `runAgent` return).
+   */
+  interruptAll(ownedBy?: ExecutionRegistry): void {
     const interrupted = new Set<ExecutionId>();
     const interrupt = (entry: T): void => {
+      if (ownedBy && entry.executions !== ownedBy) return;
       if (interrupted.has(entry.executionId)) return;
       const { childStreamId, executions } = entry;
       const handle = executions.getAgentHandleByStream(childStreamId);

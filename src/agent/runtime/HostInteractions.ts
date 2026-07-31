@@ -7,12 +7,14 @@ import type {
 import type {
   AgentProposal,
   Plan,
+  ProgressPermissionKind,
   ProviderErrorPartial,
   StreamTabId,
   UserQuestionAnswers,
   ExternalInquiryPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
   AgentRuntimeEmitOptions,
@@ -132,7 +134,7 @@ export type HostUserQuestionRequest = UserQuestionPermission;
 
 export interface HostInteractionResultByKind {
   readonly bash: BashSettlement;
-  readonly plan: PlanApprovalResult;
+  readonly planApproval: PlanApprovalResult;
   readonly proposal: ProposalResult;
   readonly retry: RetryResult;
   readonly userQuestion: UserQuestionSettlement;
@@ -160,14 +162,7 @@ export type UserQuestionSettlement =
       readonly answers?: never;
     };
 
-export type PendingInteractionKind =
-  | 'toolEdit'
-  | 'bash'
-  | 'plan'
-  | 'proposal'
-  | 'retry'
-  | 'userQuestion'
-  | 'externalInquiry';
+export type PendingInteractionKind = ProgressPermissionKind;
 
 export type SettledInteractionKind = keyof HostInteractionResultByKind;
 
@@ -179,7 +174,7 @@ type CancellationResultFactories = {
 
 const cancellationResultFactories: CancellationResultFactories = {
   bash: (feedback) => ({ action: 'reject', feedback: feedback?.trim() }),
-  plan: (feedback) => ({ action: 'reject', feedback }),
+  planApproval: (feedback) => ({ action: 'reject', feedback }),
   proposal: (feedback) => ({ action: 'reject', feedback }),
   retry: () => ({ action: 'cancel' }),
   userQuestion: (feedback) => ({ action: 'reject', feedback }),
@@ -434,10 +429,10 @@ export class SessionHostInteractions implements HostInteractions {
     options?: HostInteractionOptions,
   ): Promise<PlanApprovalResult> {
     return this.enqueue<PlanApprovalResult>(
-      'plan',
+      'planApproval',
       request.streamId,
       (interactions) => interactions.requestPlanApproval?.(request, options),
-      (cause) => cancellationResultFor('plan', cause),
+      (cause) => cancellationResultFor('planApproval', cause),
     );
   }
 
@@ -515,7 +510,7 @@ export class SessionHostInteractions implements HostInteractions {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const cancellationCause = 'Session disposed.';
+    const cancellationCause = SESSION_DISPOSED_CAUSE;
     let firstError: unknown;
     try {
       this.cancel({ cause: cancellationCause });

@@ -203,6 +203,32 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     }
   });
 
+  it('refuses a one-shot run whose follow-up could never be collected', async () => {
+    mocks.getCurrentToolContexts.mockReturnValue({
+      runContext: {
+        streamId: parentStreamId,
+        executionId,
+        stopAfterCycle: true,
+        interactions: { name: 'fake-runtime-host' },
+      },
+      callContext: { tracker: {}, hooks: {} },
+    });
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'must not launch into a run that ends first',
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining(
+        'claude_code is unavailable in one-shot runs',
+      ),
+    });
+    expect(mocks.requestBashApproval).not.toHaveBeenCalled();
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
   it('does not create an execution when Claude binary discovery fails', async () => {
     mocks.findClaudeBinaryPath.mockRejectedValue(
       new Error('Claude binary lookup failed'),

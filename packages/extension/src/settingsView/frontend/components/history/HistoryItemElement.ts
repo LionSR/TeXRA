@@ -389,6 +389,9 @@ export class HistoryItemElement extends LitElement {
         }
         ${presentation.decorator.label}
       </wa-tag>`,
+      html`<wa-tag variant=${presentation.status.variant} size="s">
+        ${presentation.status.label}
+      </wa-tag>`,
       `Agent: ${presentation.agent}`,
       `Model: ${presentation.model}`,
     ];

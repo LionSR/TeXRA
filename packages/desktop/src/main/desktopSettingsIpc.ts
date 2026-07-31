@@ -1,3 +1,4 @@
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatError } from '@common/errors';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
@@ -33,7 +34,7 @@ import {
 } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { GoalStore } from '@tools/goal';
+import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
@@ -49,6 +50,7 @@ import {
   type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
+import type { DesktopStreamRevealResult } from './desktopAgentExecution.js';
 import type { DesktopHistorySettingsController } from './desktopHistoryHandlers.js';
 import type { DesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import type { DesktopCrashReportingSettingsController } from './desktopCrashReportingSettingsController.js';
@@ -57,13 +59,20 @@ import type { DesktopToolingSettingsController } from './desktopToolingSettingsC
 
 export interface DesktopSettingsUiHost {
   openPath(filePath: string): Promise<void>;
-  revealStream(streamId: string): Promise<void>;
+  /**
+   * Route the window to the stream's progress board. `'unavailable'` covers a
+   * presentation that could not be reached at all; the reveal is then reported
+   * through {@link DesktopSettingsUiHost.onError} rather than here.
+   */
+  revealStream(
+    streamId: string,
+  ): Promise<DesktopStreamRevealResult | 'unavailable'>;
   /**
    * Display label for a stream, used by the Git tab to name each subscription's
    * owning agent run. Returns undefined when no presentation is attached, in
    * which case the raw stream id is shown.
    */
-  getStreamLabel?(streamId: string): string | undefined;
+  getStreamLabel(streamId: string): string | undefined;
   /** Prompt for a secret (masked). Used for the GitHub personal access token. */
   promptForSecret?(input: {
     title: string;
@@ -86,13 +95,19 @@ export interface DesktopSettingsIpcOptions {
   state: SettingsStatePorts;
   config: ConfigProvider;
   ui: DesktopSettingsUiHost;
+  /**
+   * Process-owned session the desktop runs execute in. Goal mutations are
+   * emitted on it, so the Goals tab follows a run without a manual refresh.
+   * The desktop has no process-default session, so it must be passed.
+   */
+  session: Pick<SessionHandle, 'events'>;
 }
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(options?: {
     deferAgentCatalogRefresh?: boolean;
   }): Promise<void>;
-  signInChatGpt(options?: { enableSubscription?: boolean }): Promise<void>;
+  signInChatGpt(): Promise<void>;
 }
 
 export function createDesktopSettingsIpc(
@@ -170,14 +185,6 @@ export function createDesktopSettingsIpc(
     options.postToRenderer(buildAgentSkillsSettingsMessage(options.config));
   }
 
-  /**
-   * Deliberate divergence from the extension: no `subscribeGoalStateChanges`
-   * push hook here. The initial post below, the webview-ready re-post, and
-   * the Goals tab's manual `getList` refresh cover the desktop settings
-   * panel — goal state only changes through agent runs, and returning to
-   * (or refreshing) the panel re-reads the store, so a live push adds a
-   * subscription surface without a user-visible gain.
-   */
   async function postGoalList(): Promise<void> {
     try {
       options.postToRenderer({
@@ -193,6 +200,9 @@ export function createDesktopSettingsIpc(
   }
 
   async function postInitialSettingsData(): Promise<void> {
+    // Model availability can change without a session event (a server-side
+    // tier or subscription flip), so the panel must not paint a stale list.
+    invalidateModelOptionsCache();
     postGitAuthorSettings();
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
@@ -207,6 +217,8 @@ export function createDesktopSettingsIpc(
       settingsHost.sendMemoryData(),
       options.historySettingsController.postHistoryData(),
       modelSelectionDataPosted,
+      postGitHubTokenStatus(),
+      postGitHubSubscriptions(),
       options.credentialSettingsController.postStartupData(),
       options.toolingSettingsController.postStartupData(),
       options.crashReportingSettingsController.postStartupData(),
@@ -307,6 +319,12 @@ export function createDesktopSettingsIpc(
 
   applyCurrentGitAuthorSettings();
 
+  // Agent runs execute in this same main process and the settings panel shares
+  // the app window with run progress, so a Goals tab left open during a run
+  // needs the push. Lifetime == app, matching the extension's process-global
+  // stance, so there is no dispose to hold.
+  subscribeGoalStateChanges(options.session, () => runAsync(postGoalList()));
+
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
 
   async function postGitHubTokenStatus(): Promise<void> {
@@ -342,9 +360,23 @@ export function createDesktopSettingsIpc(
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
       subscriptions: listGitHubSubscriptionEntries((streamId) =>
-        options.ui.getStreamLabel?.(streamId),
+        options.ui.getStreamLabel(streamId),
       ),
     });
+  }
+
+  /**
+   * Jump from a settings entry (a goal, a PR subscription) to the run that owns
+   * it. A stream deleted since the entry was written has nothing to show, so
+   * say so instead of leaving the click with no visible effect.
+   */
+  async function revealStream(streamId: string): Promise<void> {
+    const result = await options.ui.revealStream(streamId);
+    if (result === 'missing') {
+      await options.ui.showInfoMessage(
+        'The agent stream is no longer available.',
+      );
+    }
   }
 
   async function unsubscribeGitHub(data: { key: string }): Promise<void> {
@@ -415,7 +447,7 @@ export function createDesktopSettingsIpc(
       openTokenUrl: () => openGitHubTokenUrl(),
       getSubscriptions: () => postGitHubSubscriptions(),
       unsubscribe: (data) => unsubscribeGitHub(data),
-      openSubscriptionStream: (data) => options.ui.revealStream(data.streamId),
+      openSubscriptionStream: (data) => revealStream(data.streamId),
     },
     chatGpt: options.credentialSettingsController.chatGptActions,
     approval: {
@@ -443,7 +475,7 @@ export function createDesktopSettingsIpc(
     },
     goals: {
       getList: postGoalList,
-      revealStream: (streamId) => options.ui.revealStream(streamId),
+      revealStream: (streamId) => revealStream(streamId),
     },
     desktopCrashReporting: options.crashReportingSettingsController.actions,
   };
@@ -452,8 +484,7 @@ export function createDesktopSettingsIpc(
 
   return {
     refreshAuthDependentData,
-    signInChatGpt: (signInOptions) =>
-      options.credentialSettingsController.signInChatGpt(signInOptions),
+    signInChatGpt: () => options.credentialSettingsController.signInChatGpt(),
 
     handleMessage(message: DesktopCommandMessage) {
       // WEBVIEW_READY is a broadcast: act on it but return false so sibling

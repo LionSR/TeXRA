@@ -1,11 +1,11 @@
 import { defineCommand } from 'citty';
 
 import { codexCoordinator, type CodexSession } from '@auth/codex';
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 
 import {
-  chatGptAccountLabel,
   chatGptSignOutPreferenceMessage,
   shouldUseChatGptDeviceCode,
   signInCliChatGpt,
@@ -31,7 +31,7 @@ function emitLogin(
     accountId: session.accountId ?? null,
     preferSubscription: preferenceEffective,
   };
-  const signedIn = `Signed in with ChatGPT as ${chatGptAccountLabel(session)}.`;
+  const signedIn = `Signed in with ChatGPT as ${codexAccountLabel(session)}.`;
   emitCliResult(context, {
     json: payload,
     ndjson: { kind: 'chatgpt-auth', ...payload },
@@ -138,7 +138,7 @@ const chatgptStatusCommand = defineCliCommand({
       json: status,
       ndjson: { kind: 'chatgpt-auth-status', ...status },
       text: status.signedIn
-        ? `Signed in with ChatGPT as ${status.email ?? status.accountId ?? 'unknown'}.`
+        ? `Signed in with ChatGPT as ${codexAccountLabel(status)}.`
         : 'Not signed in with ChatGPT.',
     });
     return CliExitCode.Success;

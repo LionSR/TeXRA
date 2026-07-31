@@ -152,7 +152,6 @@ export interface SettingsViewCommandActions {
     readonly signIn: HandlerOrUnsupported;
     readonly signOut: HandlerOrUnsupported;
     readonly setPreferSubscription: EnabledAction;
-    readonly setSubscriptionToolUseOnly: EnabledAction;
   };
   readonly approval: {
     readonly setBashApprovalEnabled: EnabledAction;
@@ -372,10 +371,6 @@ export function createSettingsViewCommandHandlers(
     signOutChatGpt: actions.chatGpt.signOut,
     setChatGptPreferSubscription: mapAction(
       actions.chatGpt.setPreferSubscription,
-      (data) => [data.enabled],
-    ),
-    setChatGptSubscriptionToolUseOnly: mapAction(
-      actions.chatGpt.setSubscriptionToolUseOnly,
       (data) => [data.enabled],
     ),
 

@@ -1,10 +1,11 @@
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatPercent } from '@utils/text/stringUtils';
 
-import { getCliApiMode, type CliApiMode } from './apiAccessMode';
+import { getCliApiMode } from './apiAccessMode';
 import {
   formatCliChatGptPreference,
   formatCliKimiCodePreference,
@@ -58,7 +59,7 @@ export interface CliModelAccessOverview {
 
 /** Read both account sessions and the effective model-access route. */
 export async function loadCliModelAccessOverview(
-  options: { readonly apiMode?: CliApiMode } = {},
+  options: { readonly apiMode?: ApiAccessMode } = {},
 ): Promise<CliModelAccessOverview> {
   const apiMode = options.apiMode ?? getCliApiMode();
   const [access, profile] = await Promise.all([
@@ -100,7 +101,7 @@ export function formatApiKeyShadowWarning(
 }
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
-  CliApiMode,
+  ApiAccessMode,
   Record<'signedIn' | 'signedOut' | 'signedOutWithPersonalKey', string>
 > = {
   included: {
@@ -121,7 +122,7 @@ const CLI_API_STATUS_ACTION_HINTS: Record<
 };
 
 export function formatCliApiStatusActionHint(
-  mode: CliApiMode,
+  mode: ApiAccessMode,
   profile: Pick<CliAuthProfile, 'authenticated'>,
   options: { readonly hasPersonalKey?: boolean } = {},
 ): string {
@@ -148,7 +149,7 @@ export interface CliApiStatus {
 }
 
 export interface LoadCliApiStatusOptions {
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
   readonly includeActionHint?: boolean;
 }
 

@@ -2,12 +2,36 @@ import { describe, expect, it } from 'vitest';
 
 import {
   decodeXmlEntities,
+  deliveryTagOf,
   hasIncompleteEmbeddedSubagentFollowup,
   stripOrchestratorFollowup,
   summarizeEmbeddedSubagentFollowups,
   summarizeFollowupMessage,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
+
+describe('deliveryTagOf', () => {
+  it('recognizes every envelope opening a render surface can receive', () => {
+    expect(
+      deliveryTagOf('<subagent-result agent="a">x</subagent-result>'),
+    ).toBe('subagent-result');
+    expect(
+      deliveryTagOf('  \n<execution-activity>x</execution-activity>'),
+    ).toBe('execution-activity');
+    expect(deliveryTagOf('<claude-agent-error />')).toBe('claude-agent-error');
+    expect(deliveryTagOf('<codex-result/>')).toBe('codex-result');
+  });
+
+  it('rejects text that only resembles an envelope', () => {
+    expect(deliveryTagOf('hello world')).toBeUndefined();
+    expect(
+      deliveryTagOf('<codex-result-partial>x</codex-result-partial>'),
+    ).toBe(undefined);
+    expect(
+      deliveryTagOf('prose then <subagent-result>x</subagent-result>'),
+    ).toBe(undefined);
+  });
+});
 
 describe('summarizeSubagentFollowup', () => {
   it('passes non-subagent text through unchanged', () => {
@@ -257,7 +281,7 @@ describe('summarizeSubagentFollowup', () => {
 
     expect(summarizeSubagentFollowup(xml)).toBe(
       [
-        '✓ proofread-pipeline completed · 2 phases · 4/4 tasks · $0.190 · 12m 4s',
+        '✓ proofread-pipeline completed · 2 phases · 4/4 tasks succeeded · $0.190 · 12m 4s',
         '  paper_A.tex (+120 -80)',
         '  notes.txt',
         '  script: .texra/workflow-scripts/proofread-pipeline.mjs',

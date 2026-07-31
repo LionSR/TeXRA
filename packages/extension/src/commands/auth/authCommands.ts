@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
+import { relayTokenSignOutNotice } from '@auth/relayToken';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import {
@@ -210,7 +211,12 @@ export async function signOut(): Promise<void> {
   try {
     const storedSessionState = await SupabaseClient.getStoredSessionState();
     if (storedSessionState === 'none') {
-      void vscode.window.showInformationMessage('Not signed in');
+      // A configured relay token authenticates without a stored session, so
+      // "Not signed in" alone would contradict the access the user still has.
+      const notice = relayTokenSignOutNotice();
+      void vscode.window.showInformationMessage(
+        notice ? `Not signed in. ${notice}` : 'Not signed in',
+      );
       return;
     }
 
@@ -224,8 +230,12 @@ export async function signOut(): Promise<void> {
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
       const removed = await authProvider.removeStoredSession();
+      const outcome = removed
+        ? 'Signed out successfully'
+        : 'No stored session found';
+      const relayNotice = relayTokenSignOutNotice();
       void vscode.window.showInformationMessage(
-        removed ? 'Signed out successfully' : 'No stored session found',
+        relayNotice ? `${outcome}. ${relayNotice}` : outcome,
       );
     } else {
       void showLoggedMessage(CHANNEL, 'Authentication provider not available');

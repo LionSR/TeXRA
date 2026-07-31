@@ -31,3 +31,21 @@ export type SpendingStatusError = z.infer<typeof SpendingStatusErrorSchema>;
 export function isSpendingQuotaExceeded(status: SpendingStatus): boolean {
   return status.remaining <= 0;
 }
+
+/** Percent of the monthly relay quota at which surfaces start warning. */
+const WARNING_THRESHOLD_PCT = 80;
+
+export type SpendingQuotaState = 'ok' | 'warning' | 'exhausted';
+
+/** How far into the monthly relay quota the user is. Shared by the Settings
+ *  quota meter and the CLI status bar so the two warn at the same point. */
+export function spendingQuotaState(status: SpendingStatus): SpendingQuotaState {
+  if (isSpendingQuotaExceeded(status)) return 'exhausted';
+  if (status.percentUsed >= WARNING_THRESHOLD_PCT) return 'warning';
+  return 'ok';
+}
+
+/** Whole-percent headroom left in the monthly relay quota, clamped at 0. */
+export function spendingQuotaRemainingPercent(status: SpendingStatus): number {
+  return Math.max(0, Math.round(100 - Math.min(status.percentUsed, 100)));
+}

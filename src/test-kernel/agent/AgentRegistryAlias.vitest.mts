@@ -465,6 +465,35 @@ describe('agent registry legacy aliases', () => {
     );
   });
 
+  it('refuses to map a source-qualified legacy alias onto a namesake shadow', async () => {
+    // A custom tool-use `assistant` outranks the built-in namesake, so it is
+    // the only `assistant` left in the visible roster. `builtInToolUse:chat`
+    // aliases to the *built-in* assistant specifically, so it must resolve to
+    // nothing rather than fall back onto the custom entry that merely shares
+    // the name.
+    const customDir = await createCustomAgentDir({
+      'assistant.yaml': [
+        'name: assistant',
+        'description: Custom tool-use agent shadowing a built-in name.',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  tools: []',
+        'prompts:',
+        '  systemPrompt: Custom tool-use assistant.',
+      ],
+    });
+
+    await initPlatformWithState({
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['custom:assistant'],
+    });
+    useAgentDirectories({ custom: async () => customDir });
+
+    await refresh({ includeRemote: false });
+
+    expect(getVisibleAgent('toolUse', 'assistant')?.source).toBe('custom');
+    expect(getVisibleAgent('toolUse', 'builtInToolUse:chat')).toBeUndefined();
+  });
+
   it('migrates a cross-source legacy key to the canonical key in its category', async () => {
     // A stale `builtInWorkflow:chat` in the tool-use list aliases to
     // `assistant`, which only exists as a built-in tool-use agent. Rewriting

@@ -1,7 +1,6 @@
 import { Box, Text } from 'ink';
 import { useState } from 'react';
 
-import { type CliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   loadCliModelAccessOverview,
   type CliModelAccessOverview,
@@ -15,10 +14,11 @@ import {
 
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { ListForm } from './_shared/ListForm';
 
 interface ModelAccessFormProps {
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly availableRows?: number;
   readonly onSelect: (value: CliModelAccessSelection) => void;
   readonly onCancel: () => void;

@@ -9,16 +9,12 @@
  * depending on the Codex OAuth machinery.
  */
 import { getCodexStatus } from '@auth/codex';
-import {
-  isPreferCodexSubscription,
-  isCodexSubscriptionToolUseOnly,
-} from '@model/codex/codexPreference';
+import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import type { ChatGptAuthStatus } from '@shared/schemas';
 
 export async function getChatGptAuthStatus(): Promise<ChatGptAuthStatus> {
   return {
     ...(await getCodexStatus()),
     preferSubscription: isPreferCodexSubscription(),
-    subscriptionToolUseOnly: isCodexSubscriptionToolUseOnly(),
   };
 }

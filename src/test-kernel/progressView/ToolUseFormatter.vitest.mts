@@ -198,6 +198,62 @@ return { papers, question: args.question };`;
     expect(container.textContent).not.toContain('Failed to render');
   });
 
+  // Entries as `buildClaudeToolUseLog` (src/tools/claudeAgentShared.ts) and
+  // `buildCodexMcpToolLog` (src/tools/codexShared.ts) persist them into a
+  // stream log: a namespaced `claude:<tool>` name, and `mcp:<server>/<tool>`.
+  it('strips the provider namespace from a delegated sub-agent tool title', () => {
+    const message = toolUseMessage('claude-edit', {
+      toolName: 'claude:Edit',
+      summary: 'paper.tex',
+      input: {
+        file_path: 'paper.tex',
+        old_string: 'We use a CNN.',
+        new_string: 'We use a transformer.',
+      },
+      status: 'completed',
+    });
+
+    const container = document.createElement('div');
+    render(formatToolUseTemplate(message), container);
+
+    const title = container.querySelector('.tool-use-title')?.textContent;
+    expect(title).toBe('Edit — paper.tex');
+  });
+
+  it('gives a delegated bash call the same command preview as the native tool', () => {
+    const message = toolUseMessage('claude-bash', {
+      toolName: 'claude:Bash',
+      input: { command: 'npm test' },
+      output: 'passed',
+      status: 'completed',
+    });
+
+    const container = document.createElement('div');
+    render(formatToolUseTemplate(message), container);
+
+    expect(container.querySelector('.tool-use-title')?.textContent).toBe(
+      'Bash — npm test',
+    );
+    expect(
+      container.querySelector('terminal-output.tool-output-terminal'),
+    ).not.toBeNull();
+  });
+
+  it('keeps the MCP provenance marker in the tool title', () => {
+    const message = toolUseMessage('mcp-search', {
+      toolName: 'mcp:github/search',
+      input: { query: 'texra' },
+      output: { status: 'completed' },
+    });
+
+    const container = document.createElement('div');
+    render(formatToolUseTemplate(message), container);
+
+    expect(container.querySelector('.tool-use-title')?.textContent).toContain(
+      'MCP github/search',
+    );
+  });
+
   it('caps executions wait timeout displays at the tool maximum', () => {
     const input = {
       path: '/executions/abc123',

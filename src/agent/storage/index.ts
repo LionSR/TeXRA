@@ -23,6 +23,7 @@ export {
   ResultMetaSchema,
 } from './resultMeta';
 export {
+  listExecutionEditedFiles,
   listExecutionWorkspaceFiles,
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';

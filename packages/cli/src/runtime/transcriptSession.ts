@@ -5,9 +5,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-import { StreamLogStore } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 
 export type InteractiveTranscriptPolicy =
   | { readonly onPersistentOpenFailure: 'fail' }
@@ -56,6 +56,10 @@ async function initializePersistentSession(
       forget: (stream) => GoalStore.forget(stream, result.session),
       forgetMany: (streams) => GoalStore.forgetMany(streams, result.session),
     },
+    onCanonicalStreamDeleted: (stream) => {
+      result.session.status.clearStream(stream);
+      releaseStreamResources(stream, result.session);
+    },
   });
   await stores.sweepOrphanedStreams(new Set(result.session.transcripts.keys()));
   return result;
@@ -89,31 +93,28 @@ export async function initializeInteractiveTranscriptSession(
     ) {
       return persistentSession(existing);
     }
-    const warning = formatEphemeralWarning(existing.transcripts.mode.reason);
+    const warning = ephemeralTranscriptWarning(
+      existing.transcripts.mode.reason,
+    );
     policy.showPersistentWarning(warning);
     return { session: existing, canResume: false, warning };
   }
 
-  let transcripts: StreamLogStore;
-  try {
-    transcripts = await openPersistentStore();
-  } catch (error) {
-    if (policy.onPersistentOpenFailure === 'fail') throw error;
-
-    const reason = `Persistent transcript opening failed: ${toErrorMessage(error)}`;
-    const warning = formatEphemeralWarning(reason);
-    const session = initializeDefaultSession({
-      transcripts: StreamLogStore.ephemeral(reason),
-      responseTextProcessing: texraResponseTextProcessing,
-    });
-    await session.waitUntilReady();
-    policy.showPersistentWarning(warning);
-    return { session, canResume: false, warning };
+  if (policy.onPersistentOpenFailure === 'fail') {
+    return initializePersistentSession(await openPersistentStore());
   }
 
-  return initializePersistentSession(transcripts);
-}
+  const transcripts = await StreamLogStore.openOrEphemeral(openPersistentStore);
+  if (transcripts.mode.kind !== 'ephemeral') {
+    return initializePersistentSession(transcripts);
+  }
 
-function formatEphemeralWarning(reason: string): string {
-  return `Transcript persistence is unavailable for this session. Its conversation cannot be resumed. ${reason}`;
+  const warning = ephemeralTranscriptWarning(transcripts.mode.reason);
+  const session = initializeDefaultSession({
+    transcripts,
+    responseTextProcessing: texraResponseTextProcessing,
+  });
+  await session.waitUntilReady();
+  policy.showPersistentWarning(warning);
+  return { session, canResume: false, warning };
 }
