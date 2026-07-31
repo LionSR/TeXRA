@@ -41,7 +41,6 @@ function buildServices(
 // satisfies it (checked at each node.post() call site below).
 const PREP_RES = {
   lastResponse: undefined,
-  touchedFiles: [] as string[],
   afterError: false,
 };
 

@@ -11,14 +11,9 @@ interface DiffInfo {
   title: string;
 }
 
-let disposables: vscode.Disposable[] = [];
+let refreshListener: vscode.Disposable | undefined;
 let diffInfo: DiffInfo | undefined;
 let lastRefresh = 0;
-
-function clearDisposables(): void {
-  disposables.forEach((d) => d.dispose());
-  disposables = [];
-}
 
 function refreshDiff(): void {
   if (!diffInfo) {
@@ -44,14 +39,15 @@ export function registerDiffRefresh(
   right: vscode.Uri,
   title: string,
 ): void {
-  clearDisposables();
+  refreshListener?.dispose();
   diffInfo = { left, right, title };
-  disposables.push(vscode.window.onDidChangeTextEditorViewColumn(refreshDiff));
+  refreshListener = vscode.window.onDidChangeTextEditorViewColumn(refreshDiff);
   logger.debug(CHANNEL, 'Registered diff refresh listeners');
 }
 
 export function disposeDiffRefresh(): void {
-  clearDisposables();
+  refreshListener?.dispose();
+  refreshListener = undefined;
   diffInfo = undefined;
   logger.debug(CHANNEL, 'Disposed diff refresh listeners');
 }

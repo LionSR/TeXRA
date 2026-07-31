@@ -105,10 +105,6 @@ class MemoryConfigStore {
   }
 }
 
-async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
-  return loadSourceModule('@desktop/main/desktopSettingsIpc');
-}
-
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
@@ -173,7 +169,9 @@ function flushAsyncWork(): Promise<void> {
 
 describe('desktop settings IPC', () => {
   beforeAll(async () => {
-    ({ createDesktopSettingsIpc } = await loadDesktopSettingsIpc());
+    ({ createDesktopSettingsIpc } = await loadSourceModule(
+      '@desktop/main/desktopSettingsIpc',
+    ));
   });
 
   afterEach(() => {

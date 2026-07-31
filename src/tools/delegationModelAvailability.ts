@@ -6,6 +6,9 @@ import { unique } from '@utils/core';
 
 const AVAILABLE_MODELS_LINE = /^Available models:.*$/m;
 
+const NO_DELEGATION_MODELS_MESSAGE =
+  'No models are currently available for delegation in the active API mode. Switch API mode or configure a provider API key before delegating.';
+
 export function availableModelNamesFromOptions(
   models: readonly ModelOptionData[],
 ): string[] {
@@ -40,9 +43,7 @@ export function selectDelegationModelFromAvailableNames(input: {
     input.availableModels.map((model) => model.trim()).filter(Boolean),
   );
   if (availableModels.length === 0) {
-    throw new Error(
-      'No models are currently available for delegation in the active API mode. Switch API mode or configure a provider API key before delegating.',
-    );
+    throw new Error(NO_DELEGATION_MODELS_MESSAGE);
   }
 
   const decision = decideRunModel(
@@ -58,9 +59,7 @@ export function selectDelegationModelFromAvailableNames(input: {
     (model) => availableModels.includes(model),
   );
   if (!decision) {
-    throw new Error(
-      'No models are currently available for delegation in the active API mode. Switch API mode or configure a provider API key before delegating.',
-    );
+    throw new Error(NO_DELEGATION_MODELS_MESSAGE);
   }
   if (decision.unavailable) {
     const requestedModel = normalizeModelName(input.requestedModel);

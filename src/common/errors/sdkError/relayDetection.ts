@@ -1,5 +1,5 @@
 import { StatusCodes } from 'http-status-codes';
-import { isObject, isString } from '@utils/core';
+import { isString } from '@utils/core';
 
 import {
   errorBodyCandidates,
@@ -39,10 +39,10 @@ export function inferStatusCodeFromBody(
   rawErrorBody: unknown,
 ): number | undefined {
   // Nested-first, per the docstring above (reversed from errorBodyCandidates'
-  // direct-first default).
-  const candidates = [...errorBodyCandidates(rawErrorBody)].reverse();
+  // direct-first default). `errorBodyCandidates` returns a fresh array, so the
+  // in-place reverse touches nothing the caller holds.
+  const candidates = errorBodyCandidates(rawErrorBody).reverse();
   for (const candidate of candidates) {
-    if (!isObject(candidate)) continue;
     for (const field of ['type', 'code'] as const) {
       const value = candidate[field];
       if (!isString(value)) continue;
@@ -55,13 +55,13 @@ export function inferStatusCodeFromBody(
 
 export function isRelayError(rawErrorBody: unknown): boolean {
   return errorBodyCandidates(rawErrorBody).some(
-    (candidate) => isObject(candidate) && '_relay' in candidate,
+    (candidate) => '_relay' in candidate,
   );
 }
 
 function hasRelayBooleanFlag(rawErrorBody: unknown, field: string): boolean {
   return errorBodyCandidates(rawErrorBody).some(
-    (candidate) => isObject(candidate) && candidate[field] === true,
+    (candidate) => candidate[field] === true,
   );
 }
 

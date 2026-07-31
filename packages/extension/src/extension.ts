@@ -115,8 +115,6 @@ import { registerCommands } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
-let disposeStatusListener: (() => void) | undefined;
-let progressViewProviderInstance: ProgressViewProvider | undefined;
 // Re-instantiated on every activate(): runShutdown() trips an internal
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
@@ -299,7 +297,7 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    progressViewProviderInstance?.flushState(),
+    ProgressViewProvider.getInstance()?.flushState(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
@@ -513,7 +511,6 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   const progressViewProvider = new ProgressViewProvider(context);
-  progressViewProviderInstance = progressViewProvider;
   await progressViewProvider.initialize();
 
   logger.info('extension', 'TeXRA extension activated');
@@ -712,7 +709,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  disposeStatusListener = subscribeStatusBarSessionEvents({
+  const disposeStatusListener = subscribeStatusBarSessionEvents({
     session: statusBarSession,
     tracker: statusBarUsageTracker,
     onStatusChanged: () => {

@@ -86,14 +86,18 @@ export class StreamLog {
       return entry.seqNo === seqNo ? entry : { ...entry, seqNo };
     });
     this.seqCounter = this.entries.length;
-    this.settlementSeqCounter = Math.max(
-      this.entries.length,
-      ...this.entries.map((entry) => entry.settlementSeqNo ?? 0),
-    );
+    // The settlement head is never below the entry count; one pass over the
+    // entries raises it to the highest order already allocated on disk while
+    // building the id index and the running-state counters.
+    this.settlementSeqCounter = this.entries.length;
 
     for (const [i, entry] of this.entries.entries()) {
       this.indexById.set(entry.id, i);
       this.countEntry(entry, 1);
+      const settlementSeqNo = entry.settlementSeqNo ?? 0;
+      if (settlementSeqNo > this.settlementSeqCounter) {
+        this.settlementSeqCounter = settlementSeqNo;
+      }
     }
   }
 
@@ -291,14 +295,6 @@ export class StreamLog {
     }
     deltas.sort((a, b) => a.seqNo - b.seqNo);
     return deltas.map(({ delta }) => delta);
-  }
-
-  drainDirtyUpdates(
-    maxSeqInclusive: number = this.seqCounter,
-  ): StreamLogEntry[] {
-    const updates = this.getDirtyUpdates(maxSeqInclusive);
-    this.ackDirtyUpdates(updates);
-    return updates;
   }
 
   clearDirtyUpdates(maxSeqInclusive: number = this.seqCounter): void {

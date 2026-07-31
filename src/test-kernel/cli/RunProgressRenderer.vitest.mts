@@ -176,6 +176,15 @@ function handleRunConfig(
   renderer?.handleSessionEvent(runConfigEvent(overrides));
 }
 
+/** Input-less root run the heartbeat and live-line cases below all start from. */
+function handleOrchestratorRootRun(renderer: TestRunProgressRenderer): void {
+  handleRunConfig(renderer, {
+    streamId: 'root-stream',
+    agent: 'orchestrator',
+    inputFiles: [],
+  });
+}
+
 function handleRoundStage(
   renderer: TestRunProgressRenderer,
   streamId: string,
@@ -333,6 +342,13 @@ async function captureStreamWrites(
   }
 
   return output;
+}
+
+function ndjsonRecords(output: string): Record<string, unknown>[] {
+  return output
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 function decodeStreamChunk(
@@ -525,11 +541,7 @@ describe('CLI run progress renderer', () => {
     const timers = fakeTimers();
     const renderer = ansiRenderer(output, { nowMs: () => now, ...timers });
 
-    handleRunConfig(renderer, {
-      streamId: 'root-stream',
-      agent: 'orchestrator',
-      inputFiles: [],
-    });
+    handleOrchestratorRootRun(renderer);
     now = 950;
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
@@ -555,11 +567,7 @@ describe('CLI run progress renderer', () => {
     const timers = fakeTimers();
     const renderer = ansiRenderer(output, timers);
 
-    handleRunConfig(renderer, {
-      streamId: 'root-stream',
-      agent: 'orchestrator',
-      inputFiles: [],
-    });
+    handleOrchestratorRootRun(renderer);
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
 
     renderer?.preserve();
@@ -611,11 +619,7 @@ describe('CLI run progress renderer', () => {
       nowMs: () => now,
     });
 
-    handleRunConfig(renderer, {
-      streamId: 'root-stream',
-      agent: 'orchestrator',
-      inputFiles: [],
-    });
+    handleOrchestratorRootRun(renderer);
     handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
     now = 11000;
     handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.COMPLETED);
@@ -645,11 +649,7 @@ describe('CLI run progress renderer', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
-    handleRunConfig(renderer, {
-      streamId: 'root-stream',
-      agent: 'orchestrator',
-      inputFiles: [],
-    });
+    handleOrchestratorRootRun(renderer);
     handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
 
     expect(output.text).toBe(
@@ -661,11 +661,7 @@ describe('CLI run progress renderer', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
-    handleRunConfig(renderer, {
-      streamId: 'root-stream',
-      agent: 'orchestrator',
-      inputFiles: [],
-    });
+    handleOrchestratorRootRun(renderer);
     handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.FAILED);
     // Post-terminal activity must not un-freeze the renderer (STREAM_PHASE.FAILED
     // must be recognized as a terminal outcome phase, same as COMPLETED/CANCELLED).
@@ -898,10 +894,7 @@ describe('CLI run progress renderer', () => {
       detach();
     });
 
-    const records = output
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const records = ndjsonRecords(output);
 
     expect(records).toEqual([
       expect.objectContaining({
@@ -948,10 +941,7 @@ describe('CLI run progress renderer', () => {
       await host.close();
     });
 
-    const records = output
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const records = ndjsonRecords(output);
 
     expect(records).toEqual([
       expect.objectContaining({
@@ -990,10 +980,7 @@ describe('CLI run progress renderer', () => {
       await host.close();
     });
 
-    const records = output
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const records = ndjsonRecords(output);
 
     const expectedRecords = Object.values(
       RUNTIME_PRESENTATION_NDJSON_CASES,

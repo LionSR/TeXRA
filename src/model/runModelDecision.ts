@@ -32,7 +32,9 @@ export interface RunModelDecision {
   readonly model: string;
   readonly reason: RunModelDecisionReason;
   readonly unavailable?: true;
-  readonly fallbackFrom?: NormalizedRunModelCandidate & {
+  readonly fallbackFrom?: {
+    readonly model: string;
+    readonly reason: RunModelDecisionReason;
     readonly mode: RunModelFallbackMode;
   };
 }
@@ -76,7 +78,7 @@ export function decideRunModel(
     return {
       model: fallback.model,
       reason: fallback.reason,
-      fallbackFrom: { ...candidate, mode },
+      fallbackFrom: { model: candidate.model, reason: candidate.reason, mode },
     };
   }
 

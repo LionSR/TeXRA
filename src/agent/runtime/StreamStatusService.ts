@@ -226,13 +226,17 @@ export class StreamStatusMachine {
   }
 
   entries(): IterableIterator<[StreamTabId, StreamPhase]> {
-    return this.getAll().entries();
+    const phases = new Map<StreamTabId, StreamPhase>();
+    for (const [stream, state] of this.getAllStreamStates()) {
+      phases.set(stream, state.phase);
+    }
+    return phases.entries();
   }
 
   /**
    * Combined per-stream phase + substate, merging in in-flight reservations
-   * exactly once. `getAll()` and `getAllSubstates()` are thin projections of
-   * this so the two views can never diverge on which streams they cover.
+   * exactly once. `entries()` is a thin phase-only projection of this, so the
+   * two views can never diverge on which streams they cover.
    */
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
     const values = new Map<StreamTabId, StreamPhaseState>();
@@ -244,24 +248,6 @@ export class StreamStatusMachine {
         phase: STREAM_PHASE.RUNNING,
         substate: STREAM_SUBSTATE.STARTING,
       });
-    }
-    return values;
-  }
-
-  getAll(): Map<StreamTabId, StreamPhase> {
-    const values = new Map<StreamTabId, StreamPhase>();
-    for (const [stream, state] of this.getAllStreamStates()) {
-      values.set(stream, state.phase);
-    }
-    return values;
-  }
-
-  getAllSubstates(): Map<StreamTabId, StreamSubstate> {
-    const values = new Map<StreamTabId, StreamSubstate>();
-    for (const [stream, state] of this.getAllStreamStates()) {
-      if (state.substate) {
-        values.set(stream, state.substate);
-      }
     }
     return values;
   }

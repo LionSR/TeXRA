@@ -15,7 +15,6 @@ import {
   type ProgressViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 
-import { isToolUseState, isWorkflowState } from '../store';
 import { setStreamStateForId } from '../progressState';
 import { updateWorkflowState, updateRounds } from '../stateUtils';
 
@@ -61,14 +60,13 @@ export const runTrackingHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data) => {
     const { stream, runId, usage } = data;
-    setStreamStateForId(stream, (prev) => {
-      if (isToolUseState(prev) || isWorkflowState(prev)) {
-        return create(prev, (draft) => {
-          draft.runUsage[runId] = usage;
-          draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
-        });
-      }
-      return prev;
-    });
+    // Both stream kinds carry runUsage/sessionUsage (BaseStreamStateSchema),
+    // so no kind narrowing is needed here.
+    setStreamStateForId(stream, (prev) =>
+      create(prev, (draft) => {
+        draft.runUsage[runId] = usage;
+        draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
+      }),
+    );
   },
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;

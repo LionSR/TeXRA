@@ -132,20 +132,13 @@ function tui(presentationHost = host()): {
       }),
   };
   const detachInteractions = defaultSession().useHostInteractions(interactions);
-  let disposed = false;
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
-    detachInteractions();
-    interactions.dispose?.();
-  };
-  onTestFinished(dispose);
+  onTestFinished(detachInteractions);
   return {
     presentationHost,
     cliContext,
     interactions,
     prepareRetry,
-    dispose,
+    dispose: detachInteractions,
   };
 }
 
@@ -154,17 +147,29 @@ function relayRetry(params: {
   provider?: string;
   message?: string;
 }): RetryPermission {
+  const message = params.message ?? 'Relay monthly limit reached.';
   return {
     streamId: params.streamId,
     operation: 'model request',
-    errorMessage: params.message ?? 'Relay monthly limit reached.',
+    errorMessage: message,
     errorDetails: {
-      message: params.message ?? 'Relay monthly limit reached.',
+      message,
       exhaustionReason: 'relay-limit',
       isRelayError: true,
       ...(params.provider ? { provider: params.provider } : {}),
     },
   } as RetryPermission;
+}
+
+/** Relay retry on the shared `same-stream` route the route-replacement cases
+ *  below queue two requests against. */
+function requestSameStreamRetry(
+  interactions: HostInteractions,
+  message: string,
+): ReturnType<NonNullable<HostInteractions['requestRetry']>> {
+  return interactions.requestRetry?.(
+    relayRetry({ streamId: 'same-stream', provider: 'openai', message }),
+  );
 }
 
 function chatGptSubscriptionRetry(streamId: string): RetryPermission {
@@ -1121,20 +1126,8 @@ describe('TUI retry approvals', () => {
       .mockResolvedValueOnce(false);
 
     const { interactions } = tui();
-    void interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'first retry',
-      }),
-    );
-    void interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'second retry',
-      }),
-    );
+    void requestSameStreamRetry(interactions, 'first retry');
+    void requestSameStreamRetry(interactions, 'second retry');
 
     await waitForApproval('retry', { errorMessage: 'second retry' });
 
@@ -1151,22 +1144,10 @@ describe('TUI retry approvals', () => {
       .mockResolvedValueOnce(true);
 
     const { interactions } = tui();
-    void interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'first retry',
-      }),
-    );
+    void requestSameStreamRetry(interactions, 'first retry');
     await waitForApproval('retry', { errorMessage: 'first retry' });
 
-    const second = interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'second retry',
-      }),
-    );
+    const second = requestSameStreamRetry(interactions, 'second retry');
 
     await vi.waitFor(() => {
       expect(currentApproval.get()).toBeUndefined();
@@ -1181,22 +1162,10 @@ describe('TUI retry approvals', () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
 
     const { interactions } = tui();
-    void interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'first retry',
-      }),
-    );
+    void requestSameStreamRetry(interactions, 'first retry');
     await waitForApproval('retry', { errorMessage: 'first retry' });
 
-    void interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'second retry',
-      }),
-    );
+    void requestSameStreamRetry(interactions, 'second retry');
 
     await waitForApproval('retry', { errorMessage: 'second retry' });
   });
@@ -1214,24 +1183,12 @@ describe('TUI retry approvals', () => {
       });
 
     const { interactions, prepareRetry } = tui();
-    void interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'first retry',
-      }),
-    );
+    void requestSameStreamRetry(interactions, 'first retry');
     await vi.waitFor(() => {
       expect(mocks.setCliApiMode).toHaveBeenCalledTimes(1);
     });
 
-    const second = interactions.requestRetry?.(
-      relayRetry({
-        streamId: 'same-stream',
-        provider: 'openai',
-        message: 'second retry',
-      }),
-    );
+    const second = requestSameStreamRetry(interactions, 'second retry');
     await Promise.resolve();
     await vi.waitFor(() =>
       expect(mocks.setCliApiMode).toHaveBeenCalledTimes(2),

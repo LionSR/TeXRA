@@ -1610,15 +1610,6 @@ export class StreamSnapshotStore {
     return map;
   }
 
-  /** Stream IDs that still have execution sidecar state. */
-  getTaskStateStreams(): Set<StreamTabId> {
-    const streams = new Set<StreamTabId>();
-    for (const [stream, record] of this.records) {
-      if (record.runConfig !== undefined) streams.add(stream);
-    }
-    return streams;
-  }
-
   /**
    * Workflow stream IDs whose taskState's agentConfig matches `match`. Used by
    * command-palette pack/clean to clear missing-output markers across every tab

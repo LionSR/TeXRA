@@ -17,12 +17,6 @@ export interface BuildFileAttachmentOptions {
   description?: string;
   /** Override detected MIME type */
   mimeType?: string;
-  /** Include base64 data in the attachment */
-  includeBase64?: boolean;
-  /** Maximum allowed file size in bytes */
-  maxBytes?: number;
-  /** Optional root directory override (e.g. a git worktree) */
-  root?: string;
   /**
    * Pre-resolved path. When provided, skips the internal resolveAndFormat()
    * call — use this to avoid double-resolution when the caller already
@@ -31,7 +25,7 @@ export interface BuildFileAttachmentOptions {
   resolved?: WorkspacePathResolution;
 }
 
-const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
+const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
 
 export interface BuildBytesAttachmentOptions {
   /** Display path surfaced to the model. */
@@ -81,9 +75,6 @@ export async function buildFileAttachment({
   filePath,
   description,
   mimeType,
-  includeBase64 = false,
-  maxBytes = DEFAULT_ATTACHMENT_MAX_BYTES,
-  root,
   resolved,
 }: BuildFileAttachmentOptions): Promise<ToolFileAttachment> {
   if (!isNonEmptyString(filePath)) {
@@ -92,7 +83,7 @@ export async function buildFileAttachment({
 
   const { path, display } = resolved
     ? { path: resolved, display: toPosixPath(resolved.relative) }
-    : resolveAndFormat(filePath, root);
+    : resolveAndFormat(filePath);
   const exists = await WorkspaceFS.exists(path.fsPath);
   if (!exists) {
     throw new ToolError(`Attachment not found: ${display}`);
@@ -103,8 +94,8 @@ export async function buildFileAttachment({
     `Failed to inspect attachment ${display}`,
   );
 
-  if (stats.size > maxBytes) {
-    const limitMb = (maxBytes / (1024 * 1024)).toFixed(1);
+  if (stats.size > ATTACHMENT_MAX_BYTES) {
+    const limitMb = (ATTACHMENT_MAX_BYTES / (1024 * 1024)).toFixed(1);
     throw new ToolError(
       `Attachment ${display} exceeds maximum size of ${limitMb} MiB.`,
     );
@@ -124,9 +115,7 @@ export async function buildFileAttachment({
     bytes: buffer,
     description,
   });
-  const base64Data =
-    includeBase64 && attachment.bytes ? buffer.toString('base64') : undefined;
   buffer.fill(0);
 
-  return base64Data ? { ...attachment, base64Data } : attachment;
+  return attachment;
 }

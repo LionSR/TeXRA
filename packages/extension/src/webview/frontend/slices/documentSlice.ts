@@ -152,8 +152,7 @@ export const documentHandlers = {
     // file to the multi-list head so it becomes the "primary" file.
     if (isDocumentFileType(fileType)) {
       const listId = MULTI_FILE_LISTS[fileType].key;
-      const mf = multiFiles$.get();
-      const existing = mf[listId] ?? [];
+      const existing = multiFiles$.get()[listId];
       const next = [filePath, ...existing.filter((f) => f !== filePath)];
       updateMultiFiles(listId, next);
       return;
@@ -197,8 +196,7 @@ export const documentHandlers = {
 
     const mf = multiFiles$.get();
     const filesToAdd = message.files ?? [];
-    const existing = mf[listId] ?? [];
-    const merged = unique([...existing, ...filesToAdd]);
+    const merged = unique([...mf[listId], ...filesToAdd]);
     multiFiles$.set({ ...mf, [listId]: merged });
     saveState();
   },

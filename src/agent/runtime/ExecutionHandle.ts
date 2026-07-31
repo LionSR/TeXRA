@@ -75,7 +75,6 @@ export interface LiveToolUseFlowContext {
 export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
-  private _deliveryTargetStreamId: StreamTabId | undefined;
   private interruptHandler?: ExecutionInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private acceptsPendingInterrupt = false;
@@ -119,8 +118,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly trace?: AgentTrace,
   ) {
     this._parentStreamId = parentStreamId;
-    this._deliveryTargetStreamId =
-      parentStreamId === childStreamId ? undefined : parentStreamId;
   }
 
   /** Settle {@link result} with the terminal outcome (idempotent). */
@@ -149,11 +146,17 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   get isChildExecution(): boolean {
-    return this._deliveryTargetStreamId !== undefined;
+    return this._parentStreamId !== this.childStreamId;
   }
 
+  /**
+   * The parent this run's results route to, or `undefined` once the run is its
+   * own parent (a root run, or a subagent promoted by {@link detach}). Derived
+   * from `_parentStreamId` rather than mirrored into a second field, so detach
+   * has one write and the two views can never disagree.
+   */
   get deliveryTargetStreamId(): StreamTabId | undefined {
-    return this._deliveryTargetStreamId;
+    return this.isChildExecution ? this._parentStreamId : undefined;
   }
 
   /** Whether lifecycle startup must preserve an already-cancelled status. */
@@ -163,7 +166,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   /** Promote this subagent to a top-level execution (detach from parent). */
   detach(): void {
-    this._deliveryTargetStreamId = undefined;
     this._parentStreamId = this.childStreamId;
   }
 

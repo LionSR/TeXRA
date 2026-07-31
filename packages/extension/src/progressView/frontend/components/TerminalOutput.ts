@@ -285,16 +285,10 @@ export class TerminalOutput extends LitElement {
   ): Promise<void> {
     if (!text) return;
 
+    // Whichever lands first wins; a promise ignores every later resolve.
     await new Promise<void>((resolve) => {
-      let resolved = false;
-      const complete = (): void => {
-        if (resolved) return;
-        resolved = true;
-        resolve();
-      };
-
-      terminal.write(text, complete);
-      setTimeout(complete, 100);
+      terminal.write(text, () => resolve());
+      setTimeout(() => resolve(), 100);
     });
   }
 
