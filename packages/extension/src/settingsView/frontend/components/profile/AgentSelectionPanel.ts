@@ -105,9 +105,6 @@ export class AgentSelectionPanel extends LitElement {
   @state() private groupedSources: Map<AgentSourceType, AgentSelectionItem[]> =
     new Map();
 
-  /** Key of agent pending delete confirmation, or null */
-  @state() private pendingDeleteKey: string | null = null;
-
   /** Flat list in visual display order, for keyboard navigation */
   private displayOrder: AgentSelectionItem[] = [];
 
@@ -139,8 +136,6 @@ export class AgentSelectionPanel extends LitElement {
         this.selectedKey =
           this.displayOrder.length > 0 ? agentKey(this.displayOrder[0]) : null;
       }
-      // Clear stale delete confirmation when agent list changes
-      this.pendingDeleteKey = null;
     }
   }
 
@@ -150,7 +145,6 @@ export class AgentSelectionPanel extends LitElement {
 
   private selectAgent(agent: AgentSelectionItem): void {
     this.selectedKey = agentKey(agent);
-    this.pendingDeleteKey = null;
   }
 
   private handleListKeydown(event: KeyboardEvent): void {
@@ -206,21 +200,9 @@ export class AgentSelectionPanel extends LitElement {
   }
 
   private handleDeleteCustomAgent(agent: AgentSelectionItem): void {
-    const key = agentKey(agent);
-    if (this.pendingDeleteKey === key) {
-      // Confirmed — request the delete
-      this.pendingDeleteKey = null;
-      postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
-        agentName: agent.name,
-      });
-    } else {
-      // First click — show confirmation
-      this.pendingDeleteKey = key;
-    }
-  }
-
-  private cancelDelete(): void {
-    this.pendingDeleteKey = null;
+    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
+      agentName: agent.name,
+    });
   }
 
   private handleViewRemotePrompt(agent: AgentSelectionItem): void {
@@ -460,8 +442,6 @@ export class AgentSelectionPanel extends LitElement {
     const { tone, badge } = SOURCE_META[agent.source];
     const builtIn = tone === 'builtin';
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
-    const showDeleteConfirm =
-      isCustom && this.pendingDeleteKey === agentKey(agent);
 
     return html`
       <div class="agent-detail-pane">
@@ -530,36 +510,6 @@ export class AgentSelectionPanel extends LitElement {
         <div class="agent-detail-actions">
           ${this.renderDetailActions(agent)}
         </div>
-
-        ${
-          showDeleteConfirm
-            ? html`
-                <div class="agent-delete-confirm">
-                  <span class="agent-delete-confirm-text">
-                    Delete custom agent "${agent.name}"? This cannot be undone.
-                  </span>
-                  <div class="agent-delete-confirm-actions">
-                    ${renderLabeledActionButton({
-                      icon: 'trash',
-                      text: 'Delete',
-                      label: 'Confirm delete custom agent',
-                      className: 'agent-action-btn',
-                      kind: 'danger',
-                      onClick: () => this.handleDeleteCustomAgent(agent),
-                    })}
-                    ${renderLabeledActionButton({
-                      icon: 'xmark',
-                      text: 'Cancel',
-                      label: 'Cancel delete custom agent',
-                      className: 'agent-action-btn',
-                      kind: 'ghost',
-                      onClick: () => this.cancelDelete(),
-                    })}
-                  </div>
-                </div>
-              `
-            : nothing
-        }
       </div>
     `;
   }
