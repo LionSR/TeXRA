@@ -37,9 +37,15 @@ export async function renderCliPrompt<T>(
   options: CliPromptOptions,
 ): Promise<T | undefined> {
   let resolved: T | undefined;
+  // A separate latch, not `??=`: callers cancel by resolving `undefined`, and
+  // `??=` would leave that unlatched so a later stray resolve could turn a
+  // cancel into a committed choice.
+  let hasResolved = false;
   const instance = render(
     element((value) => {
-      resolved ??= value;
+      if (hasResolved) return;
+      hasResolved = true;
+      resolved = value;
     }),
     {
       ...(options.interactive ? { interactive: true } : {}),
