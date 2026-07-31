@@ -139,7 +139,7 @@ export interface ExtractedModelResponse {
   normalizedUsage: NormalizedUsage | undefined;
 }
 
-export type ExtractModelResponseOptions = {
+type ExtractModelResponseOptions = {
   /**
    * Ask the handler to normalize nullish provider usage. A handler may still
    * return undefined when its provider exposes no usage data.

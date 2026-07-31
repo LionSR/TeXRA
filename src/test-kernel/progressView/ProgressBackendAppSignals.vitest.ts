@@ -1,7 +1,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import type {
@@ -52,27 +52,43 @@ class MemoryAppSignals implements AppSignalsLike {
   }
 }
 
+/** Everything a test attaches, released in reverse order by one owner. */
+const testDisposables: { dispose(): void }[] = [];
+
+afterEach(() => {
+  for (const disposable of testDisposables.splice(0).reverse()) {
+    disposable.dispose();
+  }
+});
+
+function track<T extends { dispose(): void }>(disposable: T): T {
+  testDisposables.push(disposable);
+  return disposable;
+}
+
 function createBackend(): ProgressBackend {
-  return new ProgressBackend({
-    storage: new FakeStateStore(),
-    sendMessage: () => true,
-    hasTarget: () => true,
-    approvals: {
-      canSend: () => true,
-      overrides: {
-        retry: { show: vi.fn(), dismiss: vi.fn() },
-        agentProposal: { show: vi.fn(), dismiss: vi.fn() },
+  return track(
+    new ProgressBackend({
+      storage: new FakeStateStore(),
+      sendMessage: () => true,
+      hasTarget: () => true,
+      approvals: {
+        canSend: () => true,
+        overrides: {
+          retry: { show: vi.fn(), dismiss: vi.fn() },
+          agentProposal: { show: vi.fn(), dismiss: vi.fn() },
+        },
       },
-    },
-    lifecycle: {
-      stopStream: vi.fn(),
-      cleanupDeletedStream: vi.fn(),
-      cleanupDeletedStreams: vi.fn(),
-      rebuildRenderedStreams: vi.fn(),
-      activateStream: vi.fn(),
-      notifyDeletionRetained: vi.fn(),
-    },
-  });
+      lifecycle: {
+        stopStream: vi.fn(),
+        cleanupDeletedStream: vi.fn(),
+        cleanupDeletedStreams: vi.fn(),
+        rebuildRenderedStreams: vi.fn(),
+        activateStream: vi.fn(),
+        notifyDeletionRetained: vi.fn(),
+      },
+    }),
+  );
 }
 
 function setStatus(
@@ -98,56 +114,38 @@ describe('attachProgressBackendAppSignals', () => {
   it('marks running progress tasks cancelled on extension deactivation', () => {
     const backend = createBackend();
     const signals = new MemoryAppSignals();
-    const backendSubscription = backend.setupEventListeners();
-    const appSignalSubscription = attachProgressBackendAppSignals(
-      backend,
-      signals,
-    );
+    track(backend.setupEventListeners());
+    track(attachProgressBackendAppSignals(backend, signals));
     const running = 'appsignals:running' as StreamTabId;
     const complete = 'appsignals:complete' as StreamTabId;
 
-    try {
-      setStatus(backend, running, STREAM_PHASE.RUNNING);
-      setStatus(backend, complete, STREAM_PHASE.COMPLETED);
+    setStatus(backend, running, STREAM_PHASE.RUNNING);
+    setStatus(backend, complete, STREAM_PHASE.COMPLETED);
 
-      signals.emit('extensionDeactivating', undefined);
+    signals.emit('extensionDeactivating', undefined);
 
-      expect(backend.state.streamStatus.get(running)).toBe(
-        STREAM_PHASE.CANCELLED,
-      );
-      expect(backend.state.streamStatus.get(complete)).toBe(
-        STREAM_PHASE.COMPLETED,
-      );
-    } finally {
-      appSignalSubscription.dispose();
-      backendSubscription.dispose();
-      backend.dispose();
-    }
+    expect(backend.state.streamStatus.get(running)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
+    expect(backend.state.streamStatus.get(complete)).toBe(
+      STREAM_PHASE.COMPLETED,
+    );
   });
 
   it('detaches the app-signal listener cleanly', () => {
     const backend = createBackend();
     const signals = new MemoryAppSignals();
-    const backendSubscription = backend.setupEventListeners();
-    const appSignalSubscription = attachProgressBackendAppSignals(
-      backend,
-      signals,
+    track(backend.setupEventListeners());
+    const appSignalSubscription = track(
+      attachProgressBackendAppSignals(backend, signals),
     );
     const running = 'appsignals:disposed' as StreamTabId;
 
-    try {
-      setStatus(backend, running, STREAM_PHASE.RUNNING);
-      appSignalSubscription.dispose();
+    setStatus(backend, running, STREAM_PHASE.RUNNING);
+    appSignalSubscription.dispose();
 
-      signals.emit('extensionDeactivating', undefined);
+    signals.emit('extensionDeactivating', undefined);
 
-      expect(backend.state.streamStatus.get(running)).toBe(
-        STREAM_PHASE.RUNNING,
-      );
-    } finally {
-      appSignalSubscription.dispose();
-      backendSubscription.dispose();
-      backend.dispose();
-    }
+    expect(backend.state.streamStatus.get(running)).toBe(STREAM_PHASE.RUNNING);
   });
 });

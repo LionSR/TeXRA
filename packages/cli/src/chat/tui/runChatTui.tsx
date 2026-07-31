@@ -128,6 +128,7 @@ import {
   chatTuiCanStartRootRun,
   chatTuiCanStopVisibleRun,
   chatTuiIsResumableIdleOnExit,
+  chatTuiRunPending,
   clearTuiSessionRunState,
   markChatTuiRunCompleted,
   markChatTuiRunPending,
@@ -496,7 +497,7 @@ export async function runChat(
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
     chatTuiCanStopVisibleRun({
-      runPending: Boolean(session.runPromise && !session.runCompleted),
+      runPending: chatTuiRunPending(session),
       streamId: session.streamId,
       status: rootStreamStatus(),
     });
@@ -532,7 +533,7 @@ export async function runChat(
     const activeStatus = activeStreamId
       ? streamsSignal.get().get(activeStreamId)?.status
       : undefined;
-    const isRunPending = Boolean(session.runPromise && !session.runCompleted);
+    const isRunPending = chatTuiRunPending(session);
 
     if (
       (isRunPending && activeStatus !== STREAM_PHASE.WAITING) ||

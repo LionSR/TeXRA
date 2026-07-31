@@ -307,7 +307,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   protected async pollOne(
-    _key: string,
+    key: string,
     state: SubscriptionState,
   ): Promise<void> {
     const { pr } = state;
@@ -328,7 +328,7 @@ export class PRPollingSource extends PollingSourceBase<
       const parsed = this.validateOrSkip(
         prRes,
         GhPullRequestSchema,
-        `Skipping PR poll for ${prKeyToString(pr)}: malformed pull-request payload`,
+        `Skipping PR poll for ${key}: malformed pull-request payload`,
       );
       if (!parsed) return;
       const prData = parsed.data;
@@ -345,7 +345,7 @@ export class PRPollingSource extends PollingSourceBase<
         newState === 'closed'
       ) {
         this.emit(state, formatPRClosed(state.slug, pr.pullNumber, newMerged));
-        this.detach(prKeyToString(pr));
+        this.detach(key);
         return;
       }
       state.state = newState;
@@ -410,13 +410,12 @@ export class PRPollingSource extends PollingSourceBase<
       // transition above is the primary path, but this covers any edge
       // (future refactors, unexpected state) where we could otherwise
       // return early every tick without ever cleaning up.
-      const prKey = prKeyToString(pr);
-      if (this.has(prKey)) {
+      if (this.has(key)) {
         this.emit(
           state,
           formatPRClosed(state.slug, pr.pullNumber, state.merged),
         );
-        this.detach(prKey);
+        this.detach(key);
       }
       state.initialized = true;
       return;

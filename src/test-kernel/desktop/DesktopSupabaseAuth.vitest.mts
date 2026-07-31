@@ -164,6 +164,18 @@ function nonceFor(oauthClient: ReturnType<typeof createOAuthClient>): string {
   return new URLSearchParams(callback?.query).get('app_nonce') ?? '';
 }
 
+/** Routes the callback carrying the nonce the latest sign-in attempt minted. */
+function routeMatchingCallback(
+  router: DesktopProtocolCallbackRouter,
+  oauthClient: ReturnType<typeof createOAuthClient>,
+  tokens: { accessToken: string; refreshToken: string } = {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+  },
+): void {
+  router.routeUrl(authCallbackUrl({ ...tokens, nonce: nonceFor(oauthClient) }));
+}
+
 function installAuthenticatedSupabaseProvider() {
   const ensureFreshToken = vi.fn(async () => 'fresh-access-token');
   const getSessionTokens = vi.fn(async () => ({
@@ -280,13 +292,7 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
 
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledWith(
@@ -328,13 +334,7 @@ describe('desktop Supabase auth', () => {
     );
     expect(completed).toBe(false);
 
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
 
     await expect(completion).resolves.toBe(true);
     expect(coordinator.storeSession).toHaveBeenCalledOnce();
@@ -421,13 +421,7 @@ describe('desktop Supabase auth', () => {
       expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
     );
 
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
 
     await expect(completion).resolves.toBe(false);
     await vi.waitFor(() =>
@@ -530,13 +524,7 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
     auth.dispose();
     const persistedCallbackState = createDesktopAuthCallbackState(stateStore);
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
 
     createTestAuth({
       router,
@@ -667,13 +655,7 @@ describe('desktop Supabase auth', () => {
 
     await auth.signIn();
     await auth.signOut();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
 
     await Promise.resolve();
 
@@ -697,13 +679,10 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'first',
-        refreshToken: 'first',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient, {
+      accessToken: 'first',
+      refreshToken: 'first',
+    });
     router.routeUrl(
       authCallbackUrl({ accessToken: 'second', refreshToken: 'second' }),
     );
@@ -735,13 +714,7 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
     await vi.waitFor(() => {
       expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
     });
@@ -775,13 +748,10 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'stale-access-token',
-        refreshToken: 'stale-refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient, {
+      accessToken: 'stale-access-token',
+      refreshToken: 'stale-refresh-token',
+    });
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
@@ -818,13 +788,10 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'stale-access-token',
-        refreshToken: 'stale-refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient, {
+      accessToken: 'stale-access-token',
+      refreshToken: 'stale-refresh-token',
+    });
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
@@ -840,13 +807,10 @@ describe('desktop Supabase auth', () => {
     expect(callbackState.hasPendingSignIn()).toBe(true);
     expect(onSessionChanged).not.toHaveBeenCalled();
 
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient, {
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+    });
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledTimes(2);
       expect(onSessionChanged).toHaveBeenCalledOnce();
@@ -877,13 +841,10 @@ describe('desktop Supabase auth', () => {
       });
 
       await auth.signIn();
-      router.routeUrl(
-        authCallbackUrl({
-          accessToken: 'stale-access-token',
-          refreshToken: 'stale-refresh-token',
-          nonce: nonceFor(oauthClient),
-        }),
-      );
+      routeMatchingCallback(router, oauthClient, {
+        accessToken: 'stale-access-token',
+        refreshToken: 'stale-refresh-token',
+      });
       await vi.waitFor(() => {
         expect(onSessionChanged).toHaveBeenCalledOnce();
       });
@@ -921,13 +882,7 @@ describe('desktop Supabase auth', () => {
       });
 
       await auth.signIn();
-      router.routeUrl(
-        authCallbackUrl({
-          accessToken: 'access-token',
-          refreshToken: 'refresh-token',
-          nonce: nonceFor(oauthClient),
-        }),
-      );
+      routeMatchingCallback(router, oauthClient);
       await vi.waitFor(() => {
         expect(coordinator.createSessionFromCallback).toHaveBeenCalledOnce();
       });
@@ -961,13 +916,10 @@ describe('desktop Supabase auth', () => {
     await expect(first).resolves.toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient, {
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+    });
 
     await expect(second).resolves.toBe(true);
     expect(coordinator.storeSession).toHaveBeenCalledOnce();
@@ -991,13 +943,7 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    router.routeUrl(
-      authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        nonce: nonceFor(oauthClient),
-      }),
-    );
+    routeMatchingCallback(router, oauthClient);
 
     await vi.waitFor(() => {
       expect(showErrorMessage).toHaveBeenCalledWith(

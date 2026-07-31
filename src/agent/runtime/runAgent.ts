@@ -9,7 +9,7 @@ import {
 } from '@agent/storage/executionLease';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
@@ -83,8 +83,7 @@ export async function runAgent(
     ...executeAgentOptions
   } = options;
 
-  const executionId =
-    request.executionId ?? (generateExecutionId() as ExecutionId);
+  const executionId = request.executionId ?? generateExecutionId();
   const shouldRegister =
     registerExecutionOption ?? request.executionId === undefined;
   const runSession = executeAgentOptions.session ?? defaultSession();
@@ -106,9 +105,10 @@ export async function runAgent(
       config.agentCategory,
     );
   } else {
-    const lease = canAcquireResumeLease
-      ? await acquireResumedExecutionLease(executionId, canAcquireResumeLease)
-      : await acquireResumedExecutionLease(executionId);
+    const lease = await acquireResumedExecutionLease(
+      executionId,
+      canAcquireResumeLease,
+    );
     if (lease === 'cancelled') {
       throw new ResumeAdmissionCancelledError(executionId);
     }

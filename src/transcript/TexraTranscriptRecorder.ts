@@ -166,11 +166,9 @@ export function attachTranscriptRecorder(
         data: { status: state.ended ? 'completed' : 'running' },
         verbose: isDebugModeEnabled(),
       } satisfies StreamLogAppendInput;
-      const appended = state.ended
-        ? writer.appendSettled(entry)
-        : writer.append(entry);
-      state.created = !!appended;
-      if (!state.created) state.enabled = false;
+      if (state.ended) writer.appendSettled(entry);
+      else writer.append(entry);
+      state.created = true;
       return;
     }
 

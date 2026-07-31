@@ -222,7 +222,7 @@ export class ReadFileTool extends defineTool({
 }
 
 /** Guard against very large EML files exhausting memory during parsing. */
-const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches DEFAULT_ATTACHMENT_MAX_BYTES
+const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches ATTACHMENT_MAX_BYTES
 
 const IMAGE_EXTENSIONS = new Set([
   '.png',

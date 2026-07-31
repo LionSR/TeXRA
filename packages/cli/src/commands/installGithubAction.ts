@@ -169,17 +169,19 @@ async function runInstallGithubAction(
     return CliExitCode.Usage;
   }
 
-  const baseRef = branchExists ? null : resolveBaseRef(root, base);
-  if (!branchExists && !baseRef) {
-    writeTextStderr(
-      `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
-    );
-    return CliExitCode.Usage;
+  let checkout: ReturnType<typeof git>;
+  if (branchExists) {
+    checkout = git(root, 'checkout', branch);
+  } else {
+    const baseRef = resolveBaseRef(root, base);
+    if (!baseRef) {
+      writeTextStderr(
+        `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
+      );
+      return CliExitCode.Usage;
+    }
+    checkout = git(root, 'checkout', '-b', branch, baseRef);
   }
-
-  const checkout = branchExists
-    ? git(root, 'checkout', branch)
-    : git(root, 'checkout', '-b', branch, baseRef ?? base);
   if (!checkout.success) {
     writeTextStderr(
       `Failed to check out branch "${branch}": ${checkout.stderr ?? ''}`,
@@ -282,7 +284,7 @@ async function runInstallGithubAction(
   // `gh pr create --web` (it prefills the title/body) and fall back to opening
   // the compare URL directly when gh is unavailable or cannot open the page.
   const prPageUrl = compareUrl(slug, base, branch);
-  let opened = false;
+  let opened: boolean;
   if (ghAvailable(root)) {
     const pr = gh(
       root,

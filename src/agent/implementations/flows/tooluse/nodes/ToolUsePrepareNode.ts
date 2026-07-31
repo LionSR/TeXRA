@@ -10,11 +10,6 @@ import { hasDelegationTool } from '@shared/constants/delegationTools';
 import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, CyclePrepResult } from './types';
 
-interface PrepareExecResult {
-  kind: 'success';
-  result: CyclePrepResult;
-}
-
 /**
  * Session-init node: runs **once per tool-use session** to build the initial
  * message array or restore from a persisted snapshot.
@@ -27,7 +22,7 @@ export class ToolUsePrepareNode<C> extends Node<
   ToolUseRunShared,
   ToolUseServices<C>
 > {
-  async exec(_prepRes: void): Promise<PrepareExecResult> {
+  async exec(_prepRes: void): Promise<CyclePrepResult> {
     const {
       userVarChannels,
       logger,
@@ -71,24 +66,21 @@ export class ToolUsePrepareNode<C> extends Node<
         rebuiltPrompts.instructionSuffix,
       );
       return {
-        kind: 'success',
-        result: {
-          messages: resumeShared.messages,
-          runState: resumeShared.stateSlices.runStateSnapshot,
-          workspaceState: AgentWorkspaceState.fromSnapshot(
-            resumeShared.stateSlices.workspaceSnapshot,
-          ),
-          userChannels: {
-            input: Object.freeze({
-              ...resumeShared.stateSlices.userChannels.input,
-            }),
-            transient: {
-              ...resumeShared.stateSlices.userChannels.transient,
-            },
+        messages: resumeShared.messages,
+        runState: resumeShared.stateSlices.runStateSnapshot,
+        workspaceState: AgentWorkspaceState.fromSnapshot(
+          resumeShared.stateSlices.workspaceSnapshot,
+        ),
+        userChannels: {
+          input: Object.freeze({
+            ...resumeShared.stateSlices.userChannels.input,
+          }),
+          transient: {
+            ...resumeShared.stateSlices.userChannels.transient,
           },
-          shouldSkipCycle: true,
-          systemPrompt: systemMessage,
         },
+        shouldSkipCycle: true,
+        systemPrompt: systemMessage,
       };
     }
 
@@ -135,22 +127,19 @@ export class ToolUsePrepareNode<C> extends Node<
     }
 
     return {
-      kind: 'success',
-      result: {
-        messages,
-        runState,
-        workspaceState,
-        userChannels: userVarChannels,
-        shouldSkipCycle: false,
-        systemPrompt: systemMessage,
-      },
+      messages,
+      runState,
+      workspaceState,
+      userChannels: userVarChannels,
+      shouldSkipCycle: false,
+      systemPrompt: systemMessage,
     };
   }
 
   async post(
     shared: ToolUseRunShared,
     _prepRes: void,
-    execRes: PrepareExecResult,
+    execRes: CyclePrepResult,
   ): Promise<string | undefined> {
     const {
       messages,
@@ -159,7 +148,7 @@ export class ToolUsePrepareNode<C> extends Node<
       userChannels,
       shouldSkipCycle,
       systemPrompt,
-    } = execRes.result;
+    } = execRes;
     shared.messages = [...messages];
     shared.shouldSkipCycle = shouldSkipCycle;
     shared.systemPrompt = systemPrompt;

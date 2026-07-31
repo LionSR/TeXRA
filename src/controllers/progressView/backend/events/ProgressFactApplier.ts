@@ -294,9 +294,7 @@ export class ProgressFactApplier {
   }
 
   public handleInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateInquiryThread(thread);
-    }
+    this.webviewUpdater.updateInquiryThread(thread);
   }
 
   public handleUpdateStreamDescription({
@@ -304,9 +302,7 @@ export class ProgressFactApplier {
     description,
   }: UpdateStreamDescriptionPayload): void {
     this.state.setStreamDescription(streamId, description);
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateStreamDescription(streamId, description);
-    }
+    this.webviewUpdater.updateStreamDescription(streamId, description);
   }
 
   public handleSetParentStream({
@@ -314,12 +310,10 @@ export class ProgressFactApplier {
     parentStreamId,
   }: SetParentStreamPayload): void {
     this.state.setStreamParent(childStreamId, parentStreamId);
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateParentStream(
-        childStreamId,
-        parentStreamId ?? undefined,
-      );
-    }
+    this.webviewUpdater.updateParentStream(
+      childStreamId,
+      parentStreamId ?? undefined,
+    );
   }
 
   public handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
@@ -385,9 +379,7 @@ export class ProgressFactApplier {
   }
 
   public handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updatePlan(streamId, plan);
-    }
+    this.webviewUpdater.updatePlan(streamId, plan);
   }
 
   public handleUpdateQueuedFollowUps({
@@ -573,12 +565,9 @@ export class ProgressFactApplier {
       roundStage,
     }));
 
-    if (
-      this.webviewUpdater.isAvailable() &&
-      this.state.activeStream === streamId
-    ) {
-      this.webviewUpdater.updateRoundStage(streamId, roundStage);
-    }
+    this.sendIfActive(streamId, () =>
+      this.webviewUpdater.updateRoundStage(streamId, roundStage),
+    );
   }
 
   /**

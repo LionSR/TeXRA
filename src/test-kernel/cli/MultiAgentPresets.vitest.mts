@@ -21,6 +21,7 @@ import {
   cliMultiAgentPresetTeamLaunchBlockReason,
   planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
+  type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
 
 function agent(
@@ -58,6 +59,24 @@ function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
   return preset.toolUseAgents.map((name) =>
     agent(name, AgentCategory.ToolUse, name === root ? ['delegate_agent'] : []),
   );
+}
+
+// The lean-project team with two of its seven members and no delegating root.
+function partialLeanProjectPlan(): CliMultiAgentPresetRunPlan {
+  return planRun(findPreset('lean-project'), {
+    toolUseAgents: [
+      agent('lean', AgentCategory.ToolUse),
+      agent('latexFixer', AgentCategory.ToolUse),
+    ],
+  });
+}
+
+// The physicist team reduced to its delegating root plus one member.
+function degradedPhysicistToolUse(): AgentEntry[] {
+  return [
+    agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+    agent('review', AgentCategory.ToolUse),
+  ];
 }
 
 describe('CLI multi-agent presets', () => {
@@ -116,13 +135,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('lists missing preset members as unavailable when no team can launch', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUseAgents: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('latexFixer', AgentCategory.ToolUse),
-      ],
-    });
+    const plan = partialLeanProjectPlan();
 
     const output = formatCliMultiAgentPresetList([plan]);
 
@@ -137,13 +150,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('omits the login recovery hint after a remote agent load was attempted', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUseAgents: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('latexFixer', AgentCategory.ToolUse),
-      ],
-    });
+    const plan = partialLeanProjectPlan();
 
     const output = formatCliMultiAgentPresetList([plan], {
       includeLoginHint: false,
@@ -154,13 +161,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('marks missing team roots as unavailable', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUseAgents: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('latexFixer', AgentCategory.ToolUse),
-      ],
-    });
+    const plan = partialLeanProjectPlan();
 
     expect(plan.rootAgent).toBeUndefined();
     expect(cliMultiAgentPresetAvailability(plan).status).toBe('unavailable');
@@ -171,12 +172,8 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('keeps degraded presets launchable when they still have delegation', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUseAgents: [
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-        agent('review', AgentCategory.ToolUse),
-      ],
+    const plan = planRun(findPreset('physicist'), {
+      toolUseAgents: degradedPhysicistToolUse(),
     });
 
     expect(cliMultiAgentPresetAvailability(plan).status).toBe('degraded');
@@ -184,13 +181,9 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats compact launcher summaries from planned availability', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
+    const plan = planRun(findPreset('physicist'), {
       workflowAgents: [agent('correct', AgentCategory.Workflow)],
-      toolUseAgents: [
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-        agent('review', AgentCategory.ToolUse),
-      ],
+      toolUseAgents: degradedPhysicistToolUse(),
     });
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
@@ -203,12 +196,8 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('formats run warnings from planned missing team members', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUseAgents: [
-        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-        agent('review', AgentCategory.ToolUse),
-      ],
+    const plan = planRun(findPreset('physicist'), {
+      toolUseAgents: degradedPhysicistToolUse(),
     });
 
     expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
@@ -361,13 +350,7 @@ describe('CLI multi-agent presets', () => {
 
   it('serializes planned availability for machine-readable list output', () => {
     const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUseAgents: [
-        agent('lean', AgentCategory.ToolUse),
-        agent('latexFixer', AgentCategory.ToolUse),
-      ],
-    });
-    const record = cliMultiAgentPresetListRecord(plan);
+    const record = cliMultiAgentPresetListRecord(partialLeanProjectPlan());
 
     expect(record.id).toBe('lean-project');
     expect(record.toolUseAgents).toEqual(preset.toolUseAgents);

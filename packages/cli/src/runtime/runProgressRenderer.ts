@@ -49,7 +49,7 @@ interface RenderState {
 }
 
 export interface RunProgressRenderer {
-  handleSessionEvent(event: SessionEvent): boolean;
+  handleSessionEvent(event: SessionEvent): void;
   clear(): void;
   preserve(): void;
 }
@@ -86,9 +86,8 @@ export function attachRunProgressRenderer(
 ): () => void {
   if (!renderer) return () => undefined;
 
-  const handleEvent = (event: SessionEvent): void => {
+  const handleEvent = (event: SessionEvent): void =>
     renderer.handleSessionEvent(event);
-  };
   const detachSessionFacts = events.subscribe(handleEvent, {
     scope: 'session',
   });
@@ -118,8 +117,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private liveLine = false;
   private rootStreamId: StreamTabId | undefined;
   private rootStreamStatus: StreamPhase | undefined;
-  private rootStreamTerminal = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+
+  /** Derived from the one status field, never mirrored into a second flag. */
+  private get rootStreamTerminal(): boolean {
+    return isTerminalOutcomePhase(this.rootStreamStatus);
+  }
 
   constructor(init: RunProgressRendererInit) {
     this.write = init.write ?? writeRawStderr;
@@ -132,11 +135,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.startedAt = this.nowMs();
   }
 
-  handleSessionEvent(event: SessionEvent): boolean {
+  handleSessionEvent(event: SessionEvent): void {
     if (event.scope === 'session') {
-      return this.handleSessionFact(event.event);
+      this.handleSessionFact(event.event);
+      return;
     }
-    return this.handleRunFact(event.streamId, event.event);
+    this.handleRunFact(event.streamId, event.event);
   }
 
   clear(): void {
@@ -155,12 +159,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
-  private handleSessionFact(event: SessionFact): boolean {
+  private handleSessionFact(event: SessionFact): void {
     switch (event.type) {
       case 'updateStreamStatus': {
         const { status, streamId } = event.payload;
         this.applyStatus(streamId, status);
-        return true;
+        return;
       }
       case 'updateStreamDescription':
         if (!this.rootStreamTerminal) {
@@ -169,7 +173,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
             event.payload.description,
           );
         }
-        return true;
+        return;
       case 'goalStateChanged':
       case 'inquiryThreadUpdated':
       case 'clearMissingOutputs':
@@ -178,28 +182,28 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       case 'setActiveStream':
       case 'setParentStream':
       case 'removeStream':
-        return false;
+        return;
     }
-    return assertNever(event, 'Unhandled run-progress renderer session fact');
+    assertNever(event, 'Unhandled run-progress renderer session fact');
   }
 
-  private handleRunFact(streamId: StreamTabId, event: AgentEvent): boolean {
+  private handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
     switch (event.type) {
       case 'run.config':
         if (this.applyRunConfig(event.streamId, event.config)) {
           this.updateHeartbeat();
           this.render(true);
         }
-        return true;
+        return;
       case 'conversation.progress':
-        if (this.rootStreamTerminal) return true;
+        if (this.rootStreamTerminal) return;
         if (this.applyConversationProgress(streamId, event.progress)) {
           this.updateHeartbeat();
           this.render();
         }
-        return true;
+        return;
       case 'stage.start':
-        if (this.rootStreamTerminal || event.kind !== 'round') return true;
+        if (this.rootStreamTerminal || event.kind !== 'round') return;
         if (
           this.applyRoundStage(streamId, {
             index: event.index ?? 0,
@@ -211,15 +215,15 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.updateHeartbeat();
           this.render();
         }
-        return true;
+        return;
       case 'child.activity':
-        if (this.rootStreamTerminal) return true;
+        if (this.rootStreamTerminal) return;
         this.applyActiveSubagents(event.parentStreamId, event.items);
         this.updateHeartbeat();
         this.render(true);
-        return true;
+        return;
       default:
-        return false;
+        return;
     }
   }
 
@@ -278,7 +282,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
     this.rootStreamStatus = status;
     this.state.phase = formatRunProgressStatus(status);
-    this.rootStreamTerminal = isTerminalOutcomePhase(status);
     if (this.rootStreamTerminal) {
       this.state.activeSubagents = undefined;
     }

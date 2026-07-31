@@ -2,7 +2,7 @@
 import type { CheckboxValues } from '@shared/schemas';
 import type { SessionType } from './constants';
 
-export interface SessionDefaults {
+interface SessionDefaults {
   fileInputEnabled: boolean;
   resetFiles: boolean;
   checkboxOverrides?: Partial<CheckboxValues>;

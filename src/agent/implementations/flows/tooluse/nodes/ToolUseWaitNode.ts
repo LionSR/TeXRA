@@ -11,18 +11,15 @@ import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { STREAM_PHASE } from '@shared/schemas';
 import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
 
-import { findLastAssistantText, extractTouchedFiles } from './types';
+import { findLastAssistantText } from './types';
 import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 interface WaitPrepResult {
+  /** Latest assistant text, read only by the root-mode `onIdle` notification. */
   lastResponse: string | undefined;
-  touchedFiles: string[];
   /** True when entering after a failed/cancelled cycle. */
   afterError: boolean;
-  /** Run cost accumulated so far — carried on the WAITING turn facts so the
-   *  child-run loop can settle cost even for a suspended-then-abandoned turn. */
-  totalCostUsd?: number;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -34,22 +31,18 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
-    const { modelHandler, isSubagent, onIdle } = this.services;
+    const { modelHandler, onIdle } = this.services;
 
-    // Subagent mode needs these turn facts for every delivery (the loop's
-    // one delivery site). Root mode only needs `lastResponse`, and only when
-    // `onIdle` is wired (a host projecting the transcript before it blocks).
-    const wantsLastResponse = isSubagent === true || onIdle !== undefined;
+    // Only a wired `onIdle` reads the response text (a host projecting the
+    // transcript before the flow blocks). A suspended subagent turn's facts
+    // are read off the flow result by the child-run loop, not from here.
     return {
       afterError: !!(shared.lastError || shared.userCancelledRetry),
-      touchedFiles: isSubagent ? extractTouchedFiles(shared.stateSlices) : [],
-      lastResponse: wantsLastResponse
+      lastResponse: onIdle
         ? findLastAssistantText(shared.messages, (m) =>
             modelHandler.extractAssistantText(m),
           )
         : undefined,
-      totalCostUsd:
-        shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost,
     };
   }
 
@@ -111,10 +104,9 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     // With no externally consumed batch, subagent mode always exits WAITING
-    // here, carrying this cycle's turn facts
-    // (lastResponse/touchedFiles/totalCostUsd). The child-run loop formats and
-    // delivers after suspension, then owns the next queue wait. This keeps
-    // every ordinary suspension symmetric and leaves one delivery site.
+    // here. The child-run loop formats and delivers this cycle's turn facts
+    // after suspension, then owns the next queue wait. This keeps every
+    // ordinary suspension symmetric and leaves one delivery site.
     if (isSubagent === true) {
       ownerSession.status.transitionToWaiting(streamId, 'wait', {
         trace: this.services.logger,

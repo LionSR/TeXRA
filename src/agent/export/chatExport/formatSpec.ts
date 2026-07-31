@@ -27,13 +27,12 @@ export interface FormatSpec {
 }
 
 /** Metadata fields rendered in the document header. */
-export const HEADER_FIELDS: Array<{ key: keyof DocumentMeta; label: string }> =
-  [
-    { key: 'date', label: 'Date' },
-    { key: 'agent', label: 'Agent' },
-    { key: 'model', label: 'Model' },
-    { key: 'description', label: 'Summary' },
-  ];
+export const HEADER_FIELDS = [
+  { key: 'date', label: 'Date' },
+  { key: 'agent', label: 'Agent' },
+  { key: 'model', label: 'Model' },
+  { key: 'description', label: 'Summary' },
+] as const satisfies readonly { key: keyof DocumentMeta; label: string }[];
 
 function collectFiles(config: ExportConfig): Array<[string, string]> {
   const files: Array<[string, string]> = [];

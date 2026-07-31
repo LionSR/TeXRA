@@ -18,6 +18,7 @@ import {
   typoSuggestionThreshold,
 } from '@utils/text/editDistance';
 import {
+  documentsNegatedBooleanForm,
   GLOBAL_ARGS,
   GLOBAL_BOOL_FLAGS,
   GLOBAL_VALUE_FLAGS,
@@ -98,16 +99,11 @@ function collectLeadingGlobalFlags(
  * is hit first.
  */
 function firstPositionalIndex(rawArgs: readonly string[]): number | undefined {
-  for (let i = 0; i < rawArgs.length;) {
-    const arg = rawArgs[i];
-    if (arg === undefined || arg === '--') return undefined;
-    if (!arg.startsWith('-')) return i;
-
-    const tokenCount = knownGlobalFlagTokenCount(rawArgs, i);
-    if (tokenCount === undefined) return undefined;
-    i += tokenCount;
-  }
-  return undefined;
+  const { restIndex, stoppedOnUnknownFlag } =
+    collectLeadingGlobalFlags(rawArgs);
+  if (stoppedOnUnknownFlag) return undefined;
+  const token = rawArgs[restIndex];
+  return token === undefined || token === '--' ? undefined : restIndex;
 }
 
 // ---------------------------------------------------------------------------
@@ -472,14 +468,7 @@ function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
     }
   }
 
-  // Accept the negated `--no-<name>` form for booleans that document one:
-  // those defaulting to `true` (passed via the negative) and opt-in toggles
-  // that advertise a `negativeDescription` (e.g. `--no-websocket`). Otherwise
-  // `texra run --no-websocket` is rejected as an unknown flag.
-  if (
-    def.type === 'boolean' &&
-    (def.default === true || 'negativeDescription' in def)
-  ) {
+  if (documentsNegatedBooleanForm(def)) {
     addLongFlag(specs, `no-${name}`, { takesValue: false });
   }
 }
@@ -551,18 +540,9 @@ function validateShortFlag(
 }
 
 function helpTargetRawArgs(rawArgs: readonly string[]): readonly string[] {
-  for (let i = 0; i < rawArgs.length;) {
-    const token = rawArgs[i];
-    if (token === undefined || token === '--') break;
-    if (token.startsWith('-')) {
-      const tokenCount = knownGlobalFlagTokenCount(rawArgs, i);
-      if (tokenCount === undefined) break;
-      i += tokenCount;
-      continue;
-    }
-    return token === 'help' ? rawArgs.slice(i + 1) : rawArgs;
-  }
-  return rawArgs;
+  const index = firstPositionalIndex(rawArgs);
+  if (index === undefined || rawArgs[index] !== 'help') return rawArgs;
+  return rawArgs.slice(index + 1);
 }
 
 export async function detectUnknownCliFlag(

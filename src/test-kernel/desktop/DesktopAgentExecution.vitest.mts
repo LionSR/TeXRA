@@ -762,7 +762,6 @@ describe('DesktopProgressBridge', () => {
     vi.doUnmock('@agent/storage/detectWaitingStreams');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
-    vi.doUnmock('@agent/runtime/restartRepair');
     vi.doUnmock('vscode');
     vi.restoreAllMocks();
   });

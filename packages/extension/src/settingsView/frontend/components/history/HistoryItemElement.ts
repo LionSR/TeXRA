@@ -367,24 +367,17 @@ export class HistoryItemElement extends LitElement {
       ? 'warning'
       : 'brand';
 
-    const extraDetails: TemplateResult[] = [];
-    const pushSection = (
-      label: string | TemplateResult,
-      entries: Array<[string, HistoryConfigValue]>,
-    ): void => {
-      // renderConfigSection filters empty entries and returns null when none remain.
-      const section = this.renderConfigSection(label, entries);
-      if (section) extraDetails.push(section);
-    };
-
-    for (const section of presentation.sections) {
-      pushSection(
-        section.icon
-          ? html`${waIcon(section.icon)} ${section.label}`
-          : section.label,
-        section.entries,
-      );
-    }
+    // renderConfigSection filters empty entries and returns null when none remain.
+    const extraDetails = presentation.sections
+      .map((section) =>
+        this.renderConfigSection(
+          section.icon
+            ? html`${waIcon(section.icon)} ${section.label}`
+            : section.label,
+          section.entries,
+        ),
+      )
+      .filter((section) => section !== null);
 
     const metaParts: Array<string | TemplateResult> = [
       presentation.timestamp,

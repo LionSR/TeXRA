@@ -103,7 +103,7 @@ function createWaitNodeServices(
 }
 
 function waitPrep(afterError = false) {
-  return { afterError, lastResponse: undefined, touchedFiles: [] };
+  return { afterError, lastResponse: undefined };
 }
 
 /**
@@ -147,11 +147,10 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    // No in-flow delivery site anymore — the wait node only carries the turn
-    // facts on `prep`; the child-run loop formats and delivers after
-    // suspension (see childRunLoop.ts).
+    // No in-flow delivery site anymore — the child-run loop reads the turn
+    // facts off the flow result and delivers after suspension (see
+    // childRunLoop.ts), so the node itself carries none.
     expect(prep.lastResponse).toBeUndefined();
-    expect(prep.touchedFiles).toEqual([]);
 
     const transition = await withTestRunContext(
       interactions,

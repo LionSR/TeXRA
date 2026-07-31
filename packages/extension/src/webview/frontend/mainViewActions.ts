@@ -137,9 +137,11 @@ export function announce(message: string): void {
  * Validates that a selection exists in options.
  * Returns current value if found, otherwise falls back to first available option.
  */
-export function validateSelection<
-  T extends { value: string; disabled?: boolean },
->(options: T[], currentValue: string, preferEnabled = false): string {
+function validateSelection<T extends { value: string; disabled?: boolean }>(
+  options: T[],
+  currentValue: string,
+  preferEnabled: boolean,
+): string {
   const current = options.find((opt) => opt.value === currentValue);
   if (current && (!preferEnabled || !current.disabled)) {
     return currentValue;
@@ -202,16 +204,14 @@ export function updateCheckboxValue(id: string, checked: boolean): void {
 }
 
 export function removeFile(listId: keyof MultiFiles, file: string): void {
-  const files = (multiFiles$.get()[listId] ?? []).filter(
-    (f: string) => f !== file,
-  );
+  const files = multiFiles$.get()[listId].filter((f) => f !== file);
   updateMultiFiles(listId, files);
 }
 
 export function selectMultipleFiles(listId: keyof MultiFiles): void {
   // Hint the OS dialog with the head of the multi-list (the "primary"
   // file post-collapse) so it opens at the right folder.
-  const currentFile = (multiFiles$.get()[listId] ?? [])[0];
+  const currentFile = multiFiles$.get()[listId][0];
   postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
     fileType: MULTI_FILE_LIST_BY_KEY[listId].fileType,
     currentFile,

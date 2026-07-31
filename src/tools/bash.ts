@@ -447,7 +447,7 @@ export class BashTool extends defineTool({
     );
     let loggedChars = 0;
     let logCapReached = false;
-    // Capture the run's session inside the tool's ALS; finalizeBackground below
+    // Capture the run's session inside the tool's ALS; deliverAndFinalize below
     // unregisters after the process ends, possibly outside the ALS.
     const runSession = currentSession();
     const session = new BashBackgroundSession();
@@ -499,13 +499,6 @@ export class BashTool extends defineTool({
       ),
     );
 
-    const finalizeBackground = (
-      options?: Parameters<typeof childStream.finalize>[0],
-    ): Promise<void> => {
-      detachInterruptHandler();
-      return childStream.finalize(options);
-    };
-
     const logBackgroundFailure = (action: string, err: unknown): void => {
       logger.error(`Failed to ${action} background bash result`, {
         data: err,
@@ -541,11 +534,12 @@ export class BashTool extends defineTool({
 
     const deliverAndFinalize = async (
       text: string,
-      finalizeOptions: Parameters<typeof finalizeBackground>[0],
+      finalizeOptions: Parameters<typeof childStream.finalize>[0],
     ): Promise<void> => {
       // The child is terminal before the continuation is submitted, so a
       // synchronously claimed parent recovery can never observe it as running.
-      await finalizeBackground(finalizeOptions);
+      detachInterruptHandler();
+      await childStream.finalize(finalizeOptions);
       try {
         const delivery = await deliverChildRunFollowUp({
           targetStreamId: parentStreamId,

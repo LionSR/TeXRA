@@ -159,8 +159,7 @@ export class ToolUseDispatchNode<C> extends Node<
    * are never auto-retried (default maxRetries, exec never throws), and
    * cancellation runs through the batch abort controller, not `this.signal`.
    */
-  async _exec(items: unknown[]): Promise<unknown[]> {
-    const calls = Array.isArray(items) ? (items as SdkToolCall[]) : [];
+  async _exec(calls: SdkToolCall[]): Promise<(ToolExecutionResult | null)[]> {
     if (calls.length === 0) return [];
 
     const results: (ToolExecutionResult | null)[] = new Array<null>(
@@ -653,15 +652,12 @@ export class ToolUseDispatchNode<C> extends Node<
       }
     }
 
-    const extracted = allResults.map((er) => er.extracted);
-    const calls = allResults.map((er) => er.call);
-
     // For handlers that carry provider-side reasoning across multiple parallel
     // calls, batch all tool calls into a single message to preserve thought
     // signatures / reasoning_content.
     const { modelHandler } = this.services;
     const shouldBatch =
-      calls.length > 1 &&
+      allResults.length > 1 &&
       modelHandler.requiresBatchedParallelToolResults &&
       modelHandler.createBatchedToolUseFollowUpMessages !== undefined;
 
@@ -671,10 +667,10 @@ export class ToolUseDispatchNode<C> extends Node<
     if (shouldBatch && modelHandler.createBatchedToolUseFollowUpMessages) {
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages(
-          calls.map((call, index) => ({
-            call,
-            result: extracted[index].sanitizedResult,
-            attachments: extracted[index].attachments,
+          allResults.map((execResult) => ({
+            call: execResult.call,
+            result: execResult.extracted.sanitizedResult,
+            attachments: execResult.extracted.attachments,
           })),
           workspace,
           assistantText || undefined,
@@ -682,7 +678,7 @@ export class ToolUseDispatchNode<C> extends Node<
       shared.messages.push(...followUpMsgs);
     } else {
       for (const [index, execResult] of allResults.entries()) {
-        const { sanitizedResult, attachments } = extracted[index];
+        const { sanitizedResult, attachments } = execResult.extracted;
         const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
           this.services.client,
           execResult.call,

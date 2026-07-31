@@ -140,8 +140,7 @@ export async function resumeQueuedToolUseFromResumeData(
       tools: options.tools,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
-      parentStreamId:
-        options.parentStreamId ?? resume.parentStreamId ?? undefined,
+      parentStreamId: options.parentStreamId ?? resume.parentStreamId,
       workflowPhase: options.workflowPhase,
       onFollowUpConsumed: () => {
         followUps = [];

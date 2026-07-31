@@ -466,7 +466,7 @@ export function formatPostCompactionContext(
 
   const lines: string[] = ['<post-compaction-context>', `<note>${note}</note>`];
 
-  if (subagents.length > 0) {
+  if (hasChildren) {
     lines.push(`<active-subagents count="${subagents.length}">`);
     for (const sa of subagents) {
       const statusAttr = sa.status ? ` status="${escapeAttr(sa.status)}"` : '';
