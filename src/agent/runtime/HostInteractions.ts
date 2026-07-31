@@ -7,7 +7,7 @@ import type {
 import type {
   AgentProposal,
   Plan,
-  ProgressPermissionKind,
+  ProgressPermissionKind as PendingInteractionKind,
   ProviderErrorPartial,
   StreamTabId,
   UserQuestionAnswers,
@@ -21,6 +21,8 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
+
+export type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 
 const logger = createChannelTrace('SessionHostInteractions');
 
@@ -161,8 +163,6 @@ export type UserQuestionSettlement =
       readonly feedback?: string;
       readonly answers?: never;
     };
-
-export type PendingInteractionKind = ProgressPermissionKind;
 
 export type SettledInteractionKind = keyof HostInteractionResultByKind;
 

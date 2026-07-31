@@ -14,6 +14,7 @@ import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHan
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
+import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 import {
   ClaudeAgentSessions,
   CodexThreads,
@@ -25,6 +26,7 @@ export type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/define';
 export type { DefinedToolClass } from '@tools/core/define';
+export type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 export type {
   AgentFlowResult,
   ToolUseFlowResult,
@@ -34,14 +36,7 @@ export type {
 /** Select pending host interactions to cancel. */
 export interface HostInteractionCancelSelector {
   readonly streamId?: string | null;
-  readonly kind?:
-    | 'toolEdit'
-    | 'bash'
-    | 'planApproval'
-    | 'proposal'
-    | 'retry'
-    | 'userQuestion'
-    | 'externalInquiry';
+  readonly kind?: PendingInteractionKind;
   readonly cause?: string;
 }
 
