@@ -143,6 +143,39 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  // The CLI and the VS Code extension open the process session without
+  // `restartRepair: 'deferred'`; desktop is the only host that defers repair
+  // while it claims legacy stream identities.
+  it('starts one repair pass at construction when the host does not defer it', async () => {
+    const eagerExecutionId = 'eager1234567' as ExecutionId;
+    const eagerStreamId = `eager#${eagerExecutionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    appendRunningGroup(transcripts, eagerStreamId, 'eager-running-group');
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(eagerExecutionId);
+    await executionStore.writeMeta({ timestamp: '2026-07-26T00:00:00.000Z' });
+    await executionStore.write(flowKey(eagerExecutionId), validFlowRecord);
+    const detectWaiting = vi
+      .spyOn(waitingDetection, 'detectWaitingStreams')
+      .mockResolvedValue(new Set());
+
+    const session = new SessionHandle({ transcripts });
+    try {
+      await vi.waitFor(() => expect(detectWaiting).toHaveBeenCalledOnce());
+      await session.waitUntilReady();
+
+      expect(detectWaiting).toHaveBeenCalledOnce();
+      expect(session.status.get(eagerStreamId)).toBe(STREAM_PHASE.FAILED);
+      expect(transcripts.get(eagerStreamId)?.getRange(0).at(-1)).toMatchObject({
+        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+        data: { status: RUN_OUTCOME.FAILED },
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('preserves recovery state when present execution metadata is malformed', async () => {
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, streamId, 'malformed-meta-running-group');

@@ -1,5 +1,3 @@
-// Test support imports
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';

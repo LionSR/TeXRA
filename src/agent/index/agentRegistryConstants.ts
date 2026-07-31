@@ -35,6 +35,3 @@ export const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
 export const LEGACY_AGENT_ALIASES: Record<string, string> = {
   chat: 'assistant',
 };
-
-/** Default workflow agent when no workflow preference exists. */
-export const DEFAULT_WORKFLOW_AGENT = 'correct';

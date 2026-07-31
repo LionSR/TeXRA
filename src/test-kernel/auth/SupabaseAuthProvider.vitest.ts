@@ -46,7 +46,10 @@ vi.mock('@model/computeModelOptions', () => ({
 }));
 
 // Local imports
-import type { SupabaseSessionCoordinator } from '@auth/SupabaseSession';
+import type {
+  SupabaseSession,
+  SupabaseSessionCoordinator,
+} from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 
@@ -55,6 +58,8 @@ function createProvider(options: {
   failure?: 'invalid' | 'transient';
 }): {
   provider: SupabaseAuthProvider;
+  session: SupabaseSession;
+  fire: ReturnType<typeof vi.fn>;
   clearSessionIfCurrent: ReturnType<typeof vi.fn>;
   getStoredSessionState: ReturnType<typeof vi.fn>;
   showSignInPrompt: ReturnType<typeof vi.fn>;
@@ -64,7 +69,8 @@ function createProvider(options: {
     async () => 'invalid',
   );
   const showSignInPrompt = vi.fn();
-  const session = {
+  const fire = vi.fn();
+  const session: SupabaseSession = {
     id: 'user-id',
     accessToken: 'expired-access',
     refreshToken: 'refresh-token',
@@ -74,6 +80,8 @@ function createProvider(options: {
   const coordinator = {
     loadSession: vi.fn(async () => session),
     refreshSession: vi.fn(async () => null),
+    storeSession: vi.fn(async () => {}),
+    clearSession: vi.fn(async () => {}),
     getStoredSessionState,
     getLastRefreshFailure: vi.fn(() => options.failure ?? null),
     clearSessionIfCurrent,
@@ -82,9 +90,7 @@ function createProvider(options: {
     SupabaseAuthProvider.prototype,
   ) as SupabaseAuthProvider;
   Object.assign(provider, {
-    _onDidChangeSessions: {
-      fire: vi.fn(),
-    },
+    _onDidChangeSessions: { fire },
     sessionCoordinator: coordinator as unknown as SupabaseSessionCoordinator,
     notifier: {
       showError: vi.fn(),
@@ -95,6 +101,8 @@ function createProvider(options: {
 
   return {
     provider,
+    session,
+    fire,
     clearSessionIfCurrent,
     getStoredSessionState,
     showSignInPrompt,
@@ -213,5 +221,45 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
     await expect(provider.clearStoredSession()).resolves.toBe(false);
 
     expect(clearSessionIfCurrent).not.toHaveBeenCalled();
+  });
+});
+
+describe('SupabaseAuthProvider model availability', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Listeners recompute model options from the session-change event, so an
+  // event published ahead of the invalidation serves the stale option list.
+  it('invalidates model availability before publishing a new session', async () => {
+    const { provider, session, fire } = createProvider({
+      expiresAt: Date.now() + 60_000,
+    });
+
+    // The login path stores through a private method; no public entry point
+    // reaches it without a live OAuth round trip.
+    await (
+      provider as unknown as {
+        storeSession(session: SupabaseSession, notify: boolean): Promise<void>;
+      }
+    ).storeSession(session, true);
+
+    expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+    expect(
+      providerMocks.invalidateModelOptionsCache.mock.invocationCallOrder[0],
+    ).toBeLessThan(fire.mock.invocationCallOrder[0]);
+  });
+
+  it('invalidates model availability before publishing a sign-out', async () => {
+    const { provider, session, fire } = createProvider({
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await provider.removeSession(session.id);
+
+    expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
+    expect(
+      providerMocks.invalidateModelOptionsCache.mock.invocationCallOrder[0],
+    ).toBeLessThan(fire.mock.invocationCallOrder[0]);
   });
 });

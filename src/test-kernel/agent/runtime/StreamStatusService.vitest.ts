@@ -56,9 +56,9 @@ describe('StreamStatusMachine', () => {
     const second = new StreamStatusMachine();
     const streamId = 'stream-status-instance-test' as StreamTabId;
 
-    seedStreamStatusForTest(first, streamId, STREAM_STATUS.WAITING);
+    seedStreamStatusForTest(first, streamId, STREAM_PHASE.WAITING);
 
-    expect(first.get(streamId)).toBe(STREAM_STATUS.WAITING);
+    expect(first.get(streamId)).toBe(STREAM_PHASE.WAITING);
     expect(second.get(streamId)).toBeUndefined();
   });
 

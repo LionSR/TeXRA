@@ -538,7 +538,7 @@ describe('desktop Supabase auth', () => {
       }),
     );
 
-    const recreatedAuth = createTestAuth({
+    createTestAuth({
       router,
       coordinator,
       oauthClient: createOAuthClient(),
@@ -575,7 +575,7 @@ describe('desktop Supabase auth', () => {
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
       const expiredCallbackState = createDesktopAuthCallbackState(stateStore);
-      const recreatedAuth = createTestAuth({
+      createTestAuth({
         router,
         coordinator,
         oauthClient: createOAuthClient(),
@@ -1070,11 +1070,6 @@ describe('desktop Supabase auth', () => {
         visibility: ['public', 'researcher'],
       },
     ]);
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator: createCoordinator(),
-      oauthClient: createOAuthClient(),
-    });
 
     const message = await buildProfileMessage({
       getProviderKeyStatuses: async () => [],
@@ -1108,11 +1103,6 @@ describe('desktop Supabase auth', () => {
     const getAgentsBySource = vi
       .spyOn(agentRegistry, 'getAgentsBySource')
       .mockReturnValue([]);
-    const auth = createTestAuth({
-      router: createDesktopProtocolCallbackRouter(),
-      coordinator: createCoordinator(),
-      oauthClient: createOAuthClient(),
-    });
 
     const message = await buildProfileMessage({
       getProviderKeyStatuses: async () => [],

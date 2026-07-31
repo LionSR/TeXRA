@@ -1,7 +1,10 @@
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
+import type { ExecutionId } from '@shared/schemas';
 
 /** Minimal in-memory stand-in for ExecutionKVStore; only read/write/getExecutionId are exercised by PersistedFlow. */
-export function createFakeKv(executionId = 'test-exec-0001'): ExecutionKVStore {
+export function createFakeKv(
+  executionId = 'test-exec-0001' as ExecutionId,
+): ExecutionKVStore {
   const store = new Map<string, unknown>();
   return {
     read: async <T>(key: string) => store.get(key) as T | undefined,
@@ -16,6 +19,7 @@ export function createFakeKv(executionId = 'test-exec-0001'): ExecutionKVStore {
     clear: async () => store.clear(),
     getExecutionId: () => executionId,
     readMeta: async () => null,
+    readMetaStrict: async () => null,
     readConfig: async () => null,
     readReport: async () => null,
     readTodos: async () => [],
@@ -33,5 +37,5 @@ export function createFakeKv(executionId = 'test-exec-0001'): ExecutionKVStore {
     writeWorkspaceFiles: async () => {},
     writeChild: async () => {},
     writeResultMeta: async () => {},
-  } as unknown as ExecutionKVStore;
+  };
 }

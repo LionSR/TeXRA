@@ -1,4 +1,5 @@
 // Local imports
+import type { StateStore } from '@platform/interfaces';
 import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
@@ -34,10 +35,21 @@ export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
   await tryGlobalState()?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
 }
 
-/** Get the set of tool group IDs disabled by the user. */
-export function getDisabledToolIds(): ReadonlySet<string> {
-  const raw =
-    tryGlobalState()?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
+/**
+ * Get the set of tool group IDs disabled by the user.
+ *
+ * Omitting `store` reads the ambient platform global state; hosts that own an
+ * explicit global-state port (the desktop settings controllers) pass it so the
+ * read and the matching write hit the same store.
+ *
+ * The parameter deliberately excludes `null`: a default parameter fires only
+ * on `undefined`, so allowing both spellings of "absent" would make
+ * `f(id, on, undefined)` write to the ambient store while `f(id, on, null)`
+ * silently dropped the write.
+ */
+export function getDisabledToolIds(store?: StateStore): ReadonlySet<string> {
+  const resolved = store ?? tryGlobalState();
+  const raw = resolved?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
   return new Set(raw);
 }
 
@@ -45,12 +57,14 @@ export function getDisabledToolIds(): ReadonlySet<string> {
 export async function setToolEnabled(
   toolId: string,
   enabled: boolean,
+  store?: StateStore,
 ): Promise<void> {
-  const set = new Set(getDisabledToolIds());
+  const resolved = store ?? tryGlobalState();
+  const set = new Set(getDisabledToolIds(resolved ?? undefined));
   if (enabled) {
     set.delete(toolId);
   } else {
     set.add(toolId);
   }
-  await tryGlobalState()?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+  await resolved?.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
 }
