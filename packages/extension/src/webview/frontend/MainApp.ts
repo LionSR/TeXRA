@@ -573,48 +573,36 @@ export class MainApp extends MainAppBase {
           </section>
         </div>
 
-        ${
-          this.isDesktopHost
-            ? nothing
-            : html`
-                <latexdiffs-section
-                  .visible=${latexdiffsVisible$.get()}
-                  .baseFile=${sf.baseFile}
-                  .baseFileOptions=${fo.baseFile ?? []}
-                  .editedFile=${sf.editedFile}
-                  .editedFileOptions=${fo.editedFile ?? []}
-                  .commit=${commit$.get()}
-                  .commitOptions=${fo.commit ?? []}
-                  .isGitRepo=${isGitRepo$.get()}
-                  @latexdiffs-toggle=${this.onLatexDiffsToggle}
-                  @latexdiffs-action=${({
+        <latexdiffs-section
+          .visible=${latexdiffsVisible$.get()}
+          .baseFile=${sf.baseFile}
+          .baseFileOptions=${fo.baseFile ?? []}
+          .editedFile=${sf.editedFile}
+          .editedFileOptions=${fo.editedFile ?? []}
+          .commit=${commit$.get()}
+          .commitOptions=${fo.commit ?? []}
+          .isGitRepo=${isGitRepo$.get()}
+          @latexdiffs-toggle=${this.onLatexDiffsToggle}
+          @latexdiffs-action=${({
                     detail,
                   }: CustomEvent<LatexDiffsActionDetail>) =>
                     runLatexDiffsAction(detail.action)}
-                  @base-file-change=${({
-                    detail,
-                  }: CustomEvent<BaseFileChangeDetail>) =>
+          @base-file-change=${({ detail }: CustomEvent<BaseFileChangeDetail>) =>
                     setBaseFile(detail.value)}
-                  @edited-file-change=${({
+          @edited-file-change=${({
                     detail,
                   }: CustomEvent<EditedFileChangeDetail>) =>
                     setEditedFile(detail.value)}
-                  @get-current-file=${({
-                    detail,
-                  }: CustomEvent<FileActionDetail>) =>
+          @get-current-file=${({ detail }: CustomEvent<FileActionDetail>) =>
                     getCurrentFile(detail.type)}
-                  @empty-file=${({ detail }: CustomEvent<FileActionDetail>) =>
+          @empty-file=${({ detail }: CustomEvent<FileActionDetail>) =>
                     emptyFile(detail.type)}
-                  @refresh-edited-files=${() => refreshEditedFiles()}
-                  @commit-change=${({
-                    detail,
-                  }: CustomEvent<CommitChangeDetail>) =>
+          @refresh-edited-files=${() => refreshEditedFiles()}
+          @commit-change=${({ detail }: CustomEvent<CommitChangeDetail>) =>
                     setCommit(detail.value)}
-                  @refresh-commits=${() =>
+          @refresh-commits=${() =>
                     postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS)}
-                ></latexdiffs-section>
-              `
-        }
+        ></latexdiffs-section>
       </div>
     `;
   }
