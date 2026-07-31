@@ -63,8 +63,12 @@ function isEmbeddableUrl(rawUrl: string): boolean {
   return parsed?.protocol === 'https:' || parsed?.protocol === 'http:';
 }
 
-/** The only non-web scheme that the embedded browser may hand to the OS. */
-function isAllowedExternalUrl(rawUrl: string): boolean {
+/**
+ * The only non-web scheme that the embedded browser may hand to the OS. This
+ * is a different policy from `desktopNavigationPolicy.isAllowedExternalUrl`,
+ * which governs which https hosts the app's own window may open externally.
+ */
+function isHandOffableUrl(rawUrl: string): boolean {
   return tryParseUrl(rawUrl)?.protocol === 'mailto:';
 }
 
@@ -77,7 +81,7 @@ export function createDesktopBrowserViews(
   const reportError = (error: unknown) => options.onError?.(error);
 
   function openAllowedExternalUrl(url: string): void {
-    if (!isAllowedExternalUrl(url)) {
+    if (!isHandOffableUrl(url)) {
       reportError(new Error(`Blocked external browser URL: ${url}`));
       return;
     }

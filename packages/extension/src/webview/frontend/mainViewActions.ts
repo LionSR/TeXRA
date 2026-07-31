@@ -456,8 +456,6 @@ function polishInstruction(): void {
     text: instructionText,
     agent: executionMessage.agent,
     model: model$.get(),
-    editedFile: files.editedFile,
-    baseFile: files.baseFile,
     inputFiles: files.inputFiles,
     inputFilesActive: files.inputFilesActive,
     contextFiles: files.contextFiles,

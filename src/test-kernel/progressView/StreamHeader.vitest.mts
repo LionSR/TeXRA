@@ -13,7 +13,11 @@ import {
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  dispatchKey,
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 type AgentStreamTabInfo = Extract<StreamTabInfo, { kind: 'agent' }>;
 
@@ -30,28 +34,15 @@ function baseStream(
   };
 }
 
-async function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
-  const element = document.createElement('stream-header') as StreamHeader;
-  element.stream = baseStream();
-  element.status = STREAM_PHASE.RUNNING;
-  // Buttons default to hidden until the host confirms which commands it
-  // supports (`isKnownUnsupported` treats `null` as "unknown, so hide").
-  element.unsupportedCommands = new Set();
-  Object.assign(element, props);
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
-}
-
-function dispatchKey(target: Element, key: string): void {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
+function mount(props: Partial<StreamHeader> = {}): Promise<StreamHeader> {
+  return mountComponent<StreamHeader>('stream-header', {
+    stream: baseStream(),
+    status: STREAM_PHASE.RUNNING,
+    // Buttons default to hidden until the host confirms which commands it
+    // supports (`isKnownUnsupported` treats `null` as "unknown, so hide").
+    unsupportedCommands: new Set(),
+    ...props,
+  });
 }
 
 // Single shared DOM/customElements registration for the whole file: each

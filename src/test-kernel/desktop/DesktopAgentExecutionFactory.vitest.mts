@@ -26,10 +26,9 @@ import {
   createStubDesktopAgentExecutionHost,
   disposeAfterTest,
   makeFakeTrace,
-  type DesktopAgentExecutionModule,
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.mjs';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 type DesktopExecution = {
   handleExecute(message: unknown): Promise<void>;
@@ -230,9 +229,9 @@ async function createExecution(options: {
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
     prepareMainViewTeamExecutionRequest: vi.fn(),
   }));
-  const { createDesktopAgentExecution } = (await import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
-  )) as DesktopAgentExecutionModule;
+  const { createDesktopAgentExecution } = await loadSourceModule(
+    '@desktop/main/desktopAgentExecution',
+  );
   const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
   const { SessionHandle } = await import('@agent/runtime/SessionHandle');
   const { initializeDesktopProcessStores } =

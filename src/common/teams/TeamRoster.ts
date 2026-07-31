@@ -20,14 +20,17 @@ export interface TeamRosterResolution {
   readonly unresolvedNames: string[];
 }
 
+/** Outcome of matching a preset id against the catalog's known presets. */
+export type TeamRosterPresetResolution =
+  | {
+      readonly ok: true;
+      readonly preset: AgentModePreset;
+      readonly resolution: TeamRosterResolution;
+    }
+  | { readonly ok: false; readonly reason: 'unknownPreset' };
+
 export interface TeamRosterCatalog {
-  resolvePreset(presetId: string):
-    | {
-        readonly ok: true;
-        readonly preset: AgentModePreset;
-        readonly resolution: TeamRosterResolution;
-      }
-    | { readonly ok: false; readonly reason: 'unknownPreset' };
+  resolvePreset(presetId: string): TeamRosterPresetResolution;
   commitPresetResolution(
     preset: AgentModePreset,
     resolution: TeamRosterResolution,

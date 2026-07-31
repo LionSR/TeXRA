@@ -22,10 +22,12 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import type { ConfigKeyValueStore } from '@shared/config/configKeys';
 import {
   canonicalConfigKey,
   configKeyVariants,
   createWatcherRegistry,
+  firstStoredValue,
 } from '@shared/config/configKeys';
 
 /** Filesystem locations used by the default Node platform. */
@@ -35,16 +37,29 @@ export interface NodePlatformOptions {
   readonly storageDir?: string;
 }
 
+function asConfigKeyValueStore(
+  map: ReadonlyMap<string, unknown>,
+): ConfigKeyValueStore {
+  return {
+    has: (key) => map.has(key),
+    get<T>(key: string): T | undefined {
+      return map.get(key) as T | undefined;
+    },
+  };
+}
+
 class MemoryConfigProvider implements ConfigProvider {
   private readonly global = new Map<string, unknown>();
   private readonly workspace = new Map<string, unknown>();
+  private readonly globalStore = asConfigKeyValueStore(this.global);
+  private readonly workspaceStore = asConfigKeyValueStore(this.workspace);
   private readonly watchers = createWatcherRegistry();
 
   get<T>(key: string, defaultValue?: T): T {
     const keys = configKeyVariants(key);
-    const workspaceValue = this.firstStoredValue<T>(this.workspace, keys);
+    const workspaceValue = firstStoredValue<T>(this.workspaceStore, keys);
     if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = this.firstStoredValue<T>(this.global, keys);
+    const globalValue = firstStoredValue<T>(this.globalStore, keys);
     if (globalValue !== undefined) return globalValue;
     return defaultValue as T;
   }
@@ -70,8 +85,8 @@ class MemoryConfigProvider implements ConfigProvider {
   inspect<T = unknown>(key: string): ConfigInspection<T> {
     const keys = configKeyVariants(key);
     return {
-      globalValue: this.firstStoredValue<T>(this.global, keys),
-      workspaceValue: this.firstStoredValue<T>(this.workspace, keys),
+      globalValue: firstStoredValue<T>(this.globalStore, keys),
+      workspaceValue: firstStoredValue<T>(this.workspaceStore, keys),
       effectiveValue: this.get<T>(key),
     };
   }
@@ -88,16 +103,6 @@ class MemoryConfigProvider implements ConfigProvider {
     listener: () => void,
   ): Disposable {
     return this.watchers.add({ key, listener });
-  }
-
-  private firstStoredValue<T>(
-    values: ReadonlyMap<string, unknown>,
-    keys: readonly string[],
-  ): T | undefined {
-    for (const candidate of keys) {
-      if (values.has(candidate)) return values.get(candidate) as T;
-    }
-    return undefined;
   }
 }
 

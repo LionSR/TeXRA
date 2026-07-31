@@ -4,8 +4,8 @@ import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.
 
 /**
  * Small icon-only close button shared by the desktop's imperative dialog
- * overlays (settings, diff, PDF) — each wires it to its own `dialog.open =
- * false` handler.
+ * overlays (PDF, prompt) — each wires it to its own `dialog.open = false`
+ * handler.
  */
 function createDialogCloseButton(
   className: string,
@@ -32,7 +32,7 @@ function createDialogCloseButton(
 
 /**
  * Shared scaffolding for the desktop's imperative `wa-dialog` overlays
- * (settings, diff, PDF). Each overlay used to hand-build the same shell —
+ * (PDF, prompt). Each overlay used to hand-build the same shell —
  * `withoutHeader` / `lightDismiss` / `aria-label`, an optional titled header,
  * an absolutely-positioned close button, and the `appRoot.append`. Centralizing
  * it keeps overlays owning only their content and behavior, and stops the
@@ -47,7 +47,7 @@ export interface OverlayDialogOptions {
   prefix: string;
   ariaLabel: string;
   closeLabel: string;
-  /** The overlay's content element (iframe, diff view, settings-app). */
+  /** The overlay's content element (PDF iframe, prompt form). */
   content: HTMLElement;
   /** When set, wraps `content` in a titled `<section>` header shell. */
   title?: string;
@@ -57,7 +57,7 @@ export interface OverlayDialogOptions {
 
 export interface OverlayDialogHandle {
   dialog: WaDialog;
-  /** Present only when `title` was supplied (the diff/PDF header overlays). */
+  /** Present only when `title` was supplied (the PDF/prompt header overlays). */
   titleEl?: HTMLElement;
   subtitleEl?: HTMLElement;
 }

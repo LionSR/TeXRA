@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { runGuardedLatexCommand } from '@commands/_shared/latexCommandGuard';
+import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,

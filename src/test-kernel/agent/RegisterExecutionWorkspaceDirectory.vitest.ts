@@ -1,7 +1,7 @@
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import * as logger from '@logger/logUtils';
 import {
@@ -9,7 +9,6 @@ import {
   RUN_OUTCOME,
   type ExecutionId,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const mocks = vi.hoisted(() => ({
   getExecutionStore: vi.fn(),
@@ -34,20 +33,12 @@ import {
 import { inspectExecutionLease } from '@agent/storage/executionLease';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-const baseConfig = {
+const baseConfig = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'deepseekT',
   instruction: 'Check the proof.',
   agentCategory: 'toolUse',
-  inputFiles: [],
-  outputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  editedFile: null,
-  editedFiles: [],
-  memories: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-} as AgentConfig;
+});
 
 function resultMeta(outcome: string, response: string) {
   return {

@@ -1,6 +1,3 @@
-// Node imports
-import { strict as assert } from 'node:assert';
-
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +23,7 @@ import {
 } from '@agent/utils/userVars';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
 import {
   createFakePlatform,
   FakeConfigProvider,
@@ -74,11 +72,11 @@ describe('getToolFlags', () => {
     try {
       fakeConfig.set('texra.debug.saveInputPrompt', true);
       const enabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
-      assert.equal(enabledFlags.PRINT_INPUT_PROMPT, true);
+      expect(enabledFlags.PRINT_INPUT_PROMPT).toBe(true);
 
       fakeConfig.set('texra.debug.saveInputPrompt', false);
       const disabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
-      assert.equal(disabledFlags.PRINT_INPUT_PROMPT, false);
+      expect(disabledFlags.PRINT_INPUT_PROMPT).toBe(false);
     } finally {
       await fakeConfig.update('texra.debug.saveInputPrompt', undefined);
     }
@@ -92,7 +90,7 @@ describe('getToolFlags', () => {
     const setting: AgentSetting = { ...baseSetting, rounds: 1 };
 
     const flags = getToolFlags(baseConfig, setting, prompt);
-    assert.equal(flags.ROUNDS, 3);
+    expect(flags.ROUNDS).toBe(3);
   });
 });
 
@@ -124,7 +122,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       basePrompt,
       '/agents/generic',
       { isOpenai: false, isAnthropic: false, isGoogle: false },
-      { ...noopTrace, warn },
+      spiedTrace({ warn }),
       { workspacePath: '/workspace' },
     );
 

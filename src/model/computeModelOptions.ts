@@ -6,11 +6,13 @@ import {
 } from '@model/includedModelAccess';
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { coalesceAsync } from '@utils/core';
 import {
   getPreferKimiCode,
@@ -32,8 +34,8 @@ import {
 import {
   buildBaseModelOption,
   buildBasicModelOptionsData,
+  DEFAULT_MODELS,
 } from './modelOptionsBasic';
-import { getVisibleModels } from './modelOptionsState';
 import {
   allowsModelRelay,
   isOpenRouterRoutingUnsupported,
@@ -363,6 +365,11 @@ async function buildAvailabilityContext(
     agentCategory: access.agentCategory,
     serverSideKeyService,
   };
+}
+
+/** Read the enabled model list from host state at the composition boundary. */
+function getVisibleModels(state: Pick<StateStore, 'get'>): string[] {
+  return state.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
 }
 
 function buildDefaultModelOptionsAccess(

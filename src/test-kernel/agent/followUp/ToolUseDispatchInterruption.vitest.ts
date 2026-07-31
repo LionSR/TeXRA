@@ -2,8 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import {
   createToolUseRoundFlow,
@@ -11,10 +9,10 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
-import { testRunScope, withTestRunContext } from '../progressTestUtils';
+import { withTestRunContext } from '../progressTestUtils';
+import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
 
 type FunctionCallMessage = { type: string; call_id: string };
 
@@ -44,25 +42,9 @@ function createRoundFixture(interruptAfterCheck: number) {
   }));
 
   const services = {
-    runScope: testRunScope('test-stream'),
+    ...baseRoundServices('ToolUseDispatchInterruption'),
     checkInterruption,
-    client: {},
-    config: { agent: 'test-agent', model: 'test-model' },
-    fileService: {
-      createLocation: (filePath: string) => ({ absolutePath: filePath }),
-    },
-    logger: createRunTrace(
-      'ToolUseDispatchInterruption',
-      StreamLogStore.ephemeral('test'),
-    ).trace,
-    modelHandler: {
-      config: { provider: 'openai', fullName: 'test-model' },
-      addMediaToUserMessage: vi.fn(async () => []),
-      capabilities: { supportsVision: true },
-      createAssistantMessageFromResponse: vi.fn(
-        (_response: unknown, text: string) =>
-          ({ type: 'message', role: 'assistant', content: text }) as never,
-      ),
+    modelHandler: roundModelHandler({
       createResponse,
       createToolUseFollowUpMessages: vi.fn(
         async (
@@ -85,16 +67,10 @@ function createRoundFixture(interruptAfterCheck: number) {
           ] as ProviderMessage[],
       ),
       createUserFollowUpMessages: vi.fn(),
-      extractAssistantContent: () => [],
       extractResponse: (response: { toolCalls?: boolean }) => ({
         text: '',
         usage: null,
         stopReason: response.toolCalls ? 'tool_calls' : 'stop',
-      }),
-      extractServerToolData: () => ({
-        contentBlocks: [],
-        webFetchResults: [],
-        webSearchResults: [],
       }),
       extractToolUse: (response: { toolCalls?: boolean }) =>
         response.toolCalls
@@ -115,20 +91,10 @@ function createRoundFixture(interruptAfterCheck: number) {
               },
             ]
           : [],
-      getWireRouteKey: () => 'openai:test-route',
-      getModelRetryRouteKey: () => 'openai:test-route:model',
-      getStreamingConfig: () => false,
-      isEndTurnStop: (stopReason: string) => stopReason === 'stop',
-      processThinkingBlock: () => null,
-      setOutputStreaming: vi.fn(),
-    },
-    prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
-    run: AgentRunStateSnapshotSchema.parse({}),
-    onRoundFinalized: () => {},
+    }),
     session: {
       hasQueuedFollowUp: () => false,
     },
-    setAbortController: () => {},
     setting: {
       temperature: 0,
       tools: [{ name: 'toolA' }, { name: 'toolB' }],
@@ -137,8 +103,6 @@ function createRoundFixture(interruptAfterCheck: number) {
       toolA: { call: toolACall, definition: { name: 'toolA' } } as never,
       toolB: { call: toolBCall, definition: { name: 'toolB' } } as never,
     }),
-    userVarChannels: { input: {}, transient: {} },
-    workspace: AgentWorkspaceState.create(),
   } as unknown as ToolUseRoundServices;
 
   const shared: ToolUseRoundShared = {

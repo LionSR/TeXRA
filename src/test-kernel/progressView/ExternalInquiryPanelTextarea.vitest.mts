@@ -8,7 +8,10 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 interface PostedMessage {
   command: string;
@@ -45,16 +48,12 @@ function createPermission(
   };
 }
 
-async function mountPanel(
+function mountPanel(
   permission: ExternalInquiryPanel['permission'] = createPermission(),
 ): Promise<ExternalInquiryPanel> {
-  const element = document.createElement(
-    'external-inquiry-panel',
-  ) as ExternalInquiryPanel;
-  element.permission = permission;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<ExternalInquiryPanel>('external-inquiry-panel', {
+    permission,
+  });
 }
 
 function recordPermissionActions(

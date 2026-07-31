@@ -22,7 +22,7 @@ import {
 
 // Local file imports
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
-import { testModelInfo } from './launchContextTestUtils';
+import { testModelInfo } from '../runtime/launchContextTestUtils';
 
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();

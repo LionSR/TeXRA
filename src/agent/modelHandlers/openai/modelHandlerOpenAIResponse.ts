@@ -6,11 +6,7 @@ import OpenAI, { OpenAIError } from 'openai';
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports
-import {
-  logCompactionActivity,
-  logContextManagementEvent,
-  logProgressStatus,
-} from '@agent/trace';
+import { logCompactionActivity, logProgressStatus } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -426,15 +422,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     logger: () => this.logger,
     provider: this.config.provider,
   });
-
-  /**
-   * Guards against concurrent createResponse() calls on the same handler.
-   * The chain-state and background-lifecycle collaborators each assume a
-   * single in-flight turn; concurrent calls would race on the chain anchor
-   * and corrupt the conversation. See the class doc ("THREAD SAFETY") for
-   * the contract.
-   */
-  private inFlight = false;
 
   /** Internal compaction recovery already attempted during this public call. */
   private compactionRetrySource: 'threshold' | 'overflow' | null = null;
@@ -1473,22 +1460,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.logger.debug('Fallback: adjusting max_output_tokens', {
       data: { before: maxOutputTokens, after: capped, inputEstimate },
     });
-    logContextManagementEvent(
-      this.logger,
-      `Estimated token count (${inputEstimate}) + max output tokens (${maxOutputTokens}) exceeds context window (${contextWindow}). Reducing to ${capped}.`,
-      {
-        action: 'max_tokens_reduced',
-        tokensBefore: inputEstimate,
-        contextWindow,
-        utilizationBefore:
-          validation.utilizationPercent ??
-          computeUtilizationPercent(inputEstimate, contextWindow),
-        originalMaxTokens: maxOutputTokens,
-        reducedMaxTokens: capped,
-        details:
-          'OpenAI Response: max_output_tokens reduced from fallback estimate',
-      },
-    );
+    this.logMaxTokensReduced({
+      tokensBefore: inputEstimate,
+      tokensBeforeIsEstimate: true,
+      contextWindow,
+      utilizationPercent: validation.utilizationPercent,
+      originalMaxTokens: maxOutputTokens,
+      reducedMaxTokens: capped,
+      details:
+        'OpenAI Response: max_output_tokens reduced from fallback estimate',
+    });
     return capped;
   }
 
@@ -1507,28 +1488,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Single-turn guard. The base {@link ModelHandler.createResponse} owns the
-   * SDK error-tag wrap; we supply only the in-flight guard. Concurrent
-   * callers would race on the chain-state collaborator's anchor and
-   * conversation bookkeeping, so fail loudly instead of corrupting the
-   * conversation silently.
+   * Single-turn guard: concurrent callers would race on the chain-state
+   * collaborator's anchor and conversation bookkeeping.
    */
-  protected override async withCreateResponseGuard<T>(
+  protected override withCreateResponseGuard<T>(
     run: () => Promise<T>,
   ): Promise<T> {
-    if (this.inFlight) {
-      throw new Error(
-        'modelHandlerOpenAIResponse.createResponse invoked while a prior ' +
-          'call is still in flight; this handler is single-turn per instance.',
-      );
-    }
-    this.inFlight = true;
-    this.compactionRetrySource = null;
-    try {
-      return await run();
-    } finally {
-      this.inFlight = false;
-    }
+    return this.withSingleTurnGuard('modelHandlerOpenAIResponse', () => {
+      this.compactionRetrySource = null;
+      return run();
+    });
   }
 
   override get supportsForcedToolChoice(): boolean {

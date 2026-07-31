@@ -10,6 +10,7 @@ import {
 import {
   KEY_HINT_SEPARATOR,
   KeyHints,
+  keyHintText,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
@@ -29,6 +30,7 @@ import {
   scrollBoundedRows,
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
+import { textDisplayWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {
@@ -56,20 +58,14 @@ const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS = 3;
 const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
 
-function keyHintsColumns(hints: readonly KeyHint[]): number {
-  return hints.reduce(
-    (width, hint, index) =>
-      width +
-      (index === 0 ? 0 : KEY_HINT_SEPARATOR.length) +
-      hint.key.length +
-      1 +
-      hint.action.length,
-    0,
-  );
-}
-
+// Measured through the canonical `keyHintText` projection so the fit check
+// sees exactly what `KeyHints` renders. Strictly narrower than the budget:
+// the footer sits inside the card decoration and must not touch its edge.
 function keyHintsFit(hints: readonly KeyHint[], maxColumns: number): boolean {
-  return keyHintsColumns(hints) < maxColumns;
+  return (
+    textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR)) <
+    maxColumns
+  );
 }
 
 export function externalInquiryKeyHintsForWidth({

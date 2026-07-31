@@ -145,11 +145,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         );
       },
 
-      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: (m) =>
-        this.postToActiveView({
-          command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
-          model: m.model,
-        }),
+      // The webview applies the model selection itself and the host keeps no
+      // model state; MODEL_SELECTED has no outbound counterpart to echo to.
+      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: () => {
+        /* State saved client-side */
+      },
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
         safeExecuteCommand(
           'workbench.action.openSettings',

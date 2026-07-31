@@ -6,8 +6,8 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { unsupported } from '@shared/utils/dispatcher';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+// Local imports - test support
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 /** Default reason for the handlers this test doesn't stub explicitly. */
 const NOT_UNDER_TEST = 'not covered by this test';
@@ -30,34 +30,12 @@ function fillRegistry(
   return full as ProgressViewInboundHandlerRegistry;
 }
 
-interface DesktopProgressIpcBridgeStub {
-  completeWebviewReady(): Promise<void>;
-  progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
-}
-
-interface DesktopProgressIpcModule {
-  createDesktopProgressIpc(options: {
-    source: {
-      get(): DesktopProgressIpcBridgeStub | undefined;
-      ensure(): Promise<DesktopProgressIpcBridgeStub>;
-    };
-    onUnsupportedCommand?: (
-      message: { command: string },
-      reason?: string,
-    ) => void;
-    onAsyncError?: (error: unknown) => void;
-  }): {
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-  };
-}
+type DesktopProgressIpcModule =
+  typeof import('@desktop/main/desktopProgressIpc');
 
 async function loadDesktopProgressIpc(): Promise<DesktopProgressIpcModule> {
   vi.resetModules();
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopProgressIpc.ts'))
-  ) as Promise<DesktopProgressIpcModule>;
+  return loadSourceModule('@desktop/main/desktopProgressIpc');
 }
 
 function createProgress(
@@ -69,7 +47,7 @@ function createProgress(
   };
 }
 
-function readySource(progress: DesktopProgressIpcBridgeStub) {
+function readySource(progress: ReturnType<typeof createProgress>) {
   return { get: () => progress, ensure: async () => progress };
 }
 

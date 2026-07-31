@@ -10,7 +10,10 @@ import {
 } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(
   () => import('@progressView/frontend/components/UsagePanel'),
@@ -25,12 +28,8 @@ function usage(overrides: Partial<TokenUsageStats>): TokenUsageStats {
   };
 }
 
-async function mountUsagePanel(stats: TokenUsageStats): Promise<UsagePanel> {
-  const element = document.createElement('usage-panel') as UsagePanel;
-  element.usage = stats;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mountUsagePanel(stats: TokenUsageStats): Promise<UsagePanel> {
+  return mountComponent<UsagePanel>('usage-panel', { usage: stats });
 }
 
 function panelText(element: UsagePanel): string {

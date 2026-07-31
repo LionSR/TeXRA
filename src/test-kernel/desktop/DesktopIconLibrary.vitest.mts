@@ -12,8 +12,9 @@ import {
   TEXRA_ICON_NAMES,
 } from '@shared/wa/webAwesomeIcons';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+// Local imports - test support
+import { desktopSourcePath } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 type IconResolver = NonNullable<ReturnType<typeof getIconLibrary>>['resolver'];
 
@@ -21,9 +22,7 @@ let texraResolver: IconResolver;
 let defaultResolver: IconResolver;
 
 beforeAll(async () => {
-  await import(
-    moduleFileUrl(desktopSourcePath('renderer', 'desktopIconLibrary.ts'))
-  );
+  await loadSourceModule('@desktop/renderer/desktopIconLibrary');
   const texraLibrary = getIconLibrary(TEXRA_ICON_LIBRARY);
   const defaultLibrary = getIconLibrary('default');
   if (!texraLibrary || !defaultLibrary) {

@@ -6,18 +6,17 @@ import type { WorktreeChip } from '@progressView/frontend/components/WorktreeChi
 import type { WorktreeInfo } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(
   () => import('@progressView/frontend/components/WorktreeChip'),
 );
 
-async function mountChip(info: WorktreeInfo): Promise<WorktreeChip> {
-  const element = document.createElement('worktree-chip') as WorktreeChip;
-  element.info = info;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mountChip(info: WorktreeInfo): Promise<WorktreeChip> {
+  return mountComponent<WorktreeChip>('worktree-chip', { info });
 }
 
 describe('worktree-chip', () => {

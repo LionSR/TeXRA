@@ -114,7 +114,6 @@ function createRoundDataStore() {
 }
 
 function createProcessingContext(
-  host: ReturnType<typeof createRecordingHost>['host'],
   logger: AgentTrace,
   xmlManager: XmlOutputManager,
   store: ReturnType<typeof createRoundDataStore>,
@@ -122,7 +121,6 @@ function createProcessingContext(
   return {
     baseFiles: [],
     streamId: 'stream:processor',
-    interactions: host,
     logger,
     xmlManager,
     setRoundOutputs: store.setRoundOutputs,
@@ -365,7 +363,7 @@ describe('output progress events', () => {
     },
   ])('$name', async ({ split, outputPath, round }) => {
     const projected = createRecordedRuntime('stream:processor');
-    const { events, host, logger } = projected;
+    const { events, logger } = projected;
     const store = createRoundDataStore();
     const xmlManager = {
       splitScratchpadMultipleOutputXml: split,
@@ -373,7 +371,7 @@ describe('output progress events', () => {
 
     try {
       await new OutputFileProcessor(
-        createProcessingContext(host, logger, xmlManager, store),
+        createProcessingContext(logger, xmlManager, store),
       ).processMultipleOutputs(
         createLocation(outputPath),
         round,
@@ -401,7 +399,7 @@ describe('output progress events', () => {
       .spyOn(AbsoluteFS, 'read')
       .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');
     const projected = createRecordedRuntime('stream:processor');
-    const { events, host, logger } = projected;
+    const { events, logger } = projected;
     const warnings: string[] = [];
     const detachWarnings = logger.subscribe((event) => {
       if (event.type === 'log' && event.level === 'warn') {
@@ -414,12 +412,7 @@ describe('output progress events', () => {
       } as unknown as XmlOutputManager;
 
       await new OutputFileProcessor(
-        createProcessingContext(
-          host,
-          logger,
-          xmlManager,
-          createRoundDataStore(),
-        ),
+        createProcessingContext(logger, xmlManager, createRoundDataStore()),
       ).processMultipleOutputs(
         createLocation('/tmp/output.xml'),
         5,

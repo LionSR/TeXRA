@@ -183,7 +183,7 @@ export function createExtensionCommandActions(
     convertPdfToImages: latexConvertPdfToImages,
     extractTikzFigures: latexExtractTikzFigures,
     compileTikzFigures: latexCompileTikzFigures,
-    cloneOverleafProject: () => gitCloneOverleafProject(context),
+    cloneOverleafProject: gitCloneOverleafProject,
     removeApiKey: apiRemoveApiKey,
     showImportOptions: sysShowImportOptions,
     async toggleView() {

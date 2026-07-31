@@ -3,10 +3,8 @@ import { z } from 'zod';
 
 // Local imports
 import {
-  AcceptEditedCommandArgsSchema,
   CleanConfigSchema,
   CleanMultipleCommandArgsSchema,
-  CompareCommandArgsSchema,
   FileOpCommandArgsSchema,
   PackConfigSchema,
   PackMultipleCommandArgsSchema,
@@ -22,7 +20,12 @@ import {
 } from '@shared/commands/registry';
 import { AgentCategorySchema, type AgentCategory } from '@shared/schemas/agent';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-import type { AcceptCopyMeta, FileLocation } from '@shared/schemas/output';
+import {
+  AcceptCopyMetaSchema,
+  FileLocationSchema,
+  type AcceptCopyMeta,
+  type FileLocation,
+} from '@shared/schemas/output';
 import {
   SETTINGS_TAB,
   type SettingsTab,
@@ -67,6 +70,33 @@ const ShowAgentsArgsSchema = z.tuple([AgentCategorySchema.optional()]);
  * of being rejected by the dispatcher as unhandled.
  */
 const ShowProgressViewArgsSchema = z.tuple([z.unknown().optional()]);
+
+/** Positional arguments for opening a comparison between two files. */
+const CompareCommandArgsSchema = z
+  .tuple([
+    FileLocationSchema.nullish(),
+    FileLocationSchema.nullish(),
+    FileLocationSchema,
+  ])
+  .refine(
+    ([inputLocation, baseLocation]) =>
+      inputLocation != null || baseLocation != null,
+    { error: 'inputLocation or baseLocation required' },
+  );
+
+/** Positional arguments for accepting an edited file. */
+const AcceptEditedCommandArgsSchema = z
+  .tuple([
+    FileLocationSchema.nullish(),
+    FileLocationSchema.nullish(),
+    FileLocationSchema,
+    AcceptCopyMetaSchema.optional(),
+  ])
+  .refine(
+    ([inputLocation, baseLocation]) =>
+      inputLocation != null || baseLocation != null,
+    { error: 'inputLocation or baseLocation required' },
+  );
 
 /**
  * Catalog ids whose extension registration is driven by the shared

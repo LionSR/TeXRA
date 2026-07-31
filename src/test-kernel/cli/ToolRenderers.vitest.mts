@@ -7,9 +7,14 @@ import {
   toolUseDisplayLines,
   toolUseStyledLines,
 } from '@cli/chat/tui/panes/toolRenderers';
+import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
+import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
 
 // Local imports - shared schemas
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+
+// Local imports - test support
+import { loadInk } from '@test/support/inkTestHarness.mts';
 
 function toolUse(
   toolName: string,
@@ -28,6 +33,35 @@ function toolUse(
     status: TOOL_USE_STATUS.COMPLETED,
     ...overrides,
   };
+}
+
+function patchRows(entry: NormalizedToolUse): readonly string[] {
+  // The patch block follows the single header row in the display lines.
+  return toolUseDisplayLines(entry).slice(1);
+}
+
+async function renderBoundedTool(
+  entry: NormalizedToolUse,
+  maxRows: number,
+): Promise<string> {
+  const { ink, React } = await loadInk();
+  const { BoundedTranscriptEntry } =
+    await import('@cli/chat/tui/panes/TranscriptEntry');
+  const transcriptEntry: ConversationEntry = {
+    finalized: false,
+    id: 'bounded-tool',
+    role: 'tool',
+    text: '',
+    toolUse: entry,
+  };
+  return ink.renderToString(
+    React.createElement(BoundedTranscriptEntry, {
+      entry: transcriptEntry,
+      maxRows,
+      width: 80,
+    }),
+    { columns: 80 },
+  );
 }
 
 describe('CLI tool display lines', () => {
@@ -374,5 +408,132 @@ describe('CLI tool display lines', () => {
     expect(toolHeaderPreviewBudget(20, 'a-rather-long-tool-name')).toBe(0);
     // Unknown width falls back to the historical fixed budget.
     expect(toolHeaderPreviewBudget(undefined, 'bash')).toBe(80);
+  });
+});
+
+describe('ToolUseRow edit patch rendering', () => {
+  it('renders an Edit input as an inline patch preview', () => {
+    const rows = patchRows(
+      toolUse('Edit', {
+        path: 'paper.tex',
+        old_string: 'We use a CNN.\n',
+        new_string: 'We use a transformer.\n',
+      }),
+    );
+
+    expect(rows).toMatchInlineSnapshot(`
+      [
+        "⎿ paper.tex",
+        "  @@ -1,1 +1,1 @@",
+        "  -We use a CNN.",
+        "  +We use a transformer.",
+      ]
+    `);
+  });
+
+  it('renders MultiEdit edits as patch previews for the target file', () => {
+    const rows = patchRows(
+      toolUse('MultiEdit', {
+        file_path: 'paper.tex',
+        edits: [
+          {
+            old_string: 'first claim\n',
+            new_string: 'revised first claim\n',
+          },
+          {
+            old_string: 'second claim\n',
+            new_string: 'revised second claim\n',
+          },
+        ],
+      }),
+    );
+
+    expect(rows).toMatchInlineSnapshot(`
+      [
+        "⎿ paper.tex",
+        "  @@ -1,1 +1,1 @@",
+        "  -first claim",
+        "  +revised first claim",
+        "⎿ paper.tex",
+        "  @@ -1,1 +1,1 @@",
+        "  -second claim",
+        "  +revised second claim",
+      ]
+    `);
+  });
+
+  it('falls back for non-edit tools and failed edits', () => {
+    // Bash keeps its output pipeline (no patch rows beyond the header).
+    expect(
+      toolUseDisplayLines(
+        toolUse('Bash', {
+          command: 'echo hi',
+        }),
+      ),
+    ).toEqual(['● Bash (echo hi)', '⎿ (no output)']);
+    // A failed edit shows the error corner instead of a patch preview.
+    expect(
+      toolUseDisplayLines(
+        toolUse(
+          'Edit',
+          {
+            path: 'paper.tex',
+            old_string: 'old',
+            new_string: 'new',
+          },
+          { errorText: 'edit failed', isError: true },
+        ),
+      ),
+    ).toEqual(['● Edit (paper.tex)', '⎿ edit failed']);
+  });
+
+  it('maps semantic spans to Ink text styles', () => {
+    const lines = toolUseStyledLines(
+      toolUse(
+        'bash',
+        { command: 'false' },
+        { errorText: 'command failed', isError: true },
+      ),
+    );
+    const errorLine = lines.at(-1);
+    expect(errorLine?.kind).toBe('row');
+    if (errorLine?.kind !== 'row') throw new Error('expected an error row');
+
+    expect(toolDisplaySpanTextProps(errorLine.spans[0])).toEqual({
+      bold: undefined,
+      color: undefined,
+      dimColor: true,
+    });
+    expect(toolDisplaySpanTextProps(errorLine.spans[1])).toEqual({
+      bold: undefined,
+      color: 'red',
+      dimColor: false,
+    });
+  });
+
+  it('renders a styled tail when a tool exceeds its bounded viewport', async () => {
+    const rendered = await renderBoundedTool(
+      toolUse(
+        'bash',
+        { command: 'npm test' },
+        {
+          errorText: 'Command failed (exit 2)',
+          isError: true,
+          outputText: Array.from(
+            { length: 20 },
+            (_, index) => `line ${index + 1}`,
+          ).join('\n'),
+          exitCode: 2,
+        },
+      ),
+      2,
+    );
+
+    expect(rendered.split('\n').map((line) => line.trimStart())).toEqual([
+      '⎿ exit 2',
+      '⎿ Command failed (exit 2)',
+    ]);
+    expect(rendered).not.toContain('line 20');
+    expect(rendered).not.toContain('● bash');
   });
 });

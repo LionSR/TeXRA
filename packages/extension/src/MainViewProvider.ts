@@ -59,7 +59,6 @@ export class MainViewProvider
   private _activeMode: SidebarMode = 'main';
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
-  private _progressContentProvider?: BundledViewContentProvider;
 
   /** Last computed funnel state, so credential hooks can detect the
    *  in-session State 0 → 1 transition. Session-scoped by design. */
@@ -365,7 +364,6 @@ export class MainViewProvider
 
   public setProgressViewProvider(pvp: ProgressViewProvider): void {
     this._progressViewProvider = pvp;
-    this._progressContentProvider = pvp.getContentProvider();
   }
 
   public getActiveMode(): SidebarMode {
@@ -385,12 +383,7 @@ export class MainViewProvider
     if (!webviewView || mode === this._activeMode) return;
 
     // Guard provider availability before mutating any state.
-    if (
-      mode === 'progress' &&
-      (!this._progressContentProvider || !this._progressViewProvider)
-    ) {
-      return;
-    }
+    if (mode === 'progress' && !this._progressViewProvider) return;
 
     this._activeMode = mode;
     await setActiveSidebarView(
@@ -405,10 +398,10 @@ export class MainViewProvider
     this._messageDisposable = undefined;
 
     if (mode === 'progress') {
-      webviewView.webview.html = this._progressContentProvider!.getHtmlContent(
-        webviewView.webview,
-      );
       const pvp = this._progressViewProvider!;
+      webviewView.webview.html = pvp
+        .getContentProvider()
+        .getHtmlContent(webviewView.webview);
       this._messageDisposable = webviewView.webview.onDidReceiveMessage(
         (message) => pvp.handleSidebarMessage(message, webviewView),
       );

@@ -8,7 +8,7 @@ import {
   AgentPromptSchema,
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import {
   runToolUseFlow,
@@ -19,34 +19,23 @@ import { createRunScope } from '@agent/runtime/RunScope';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Test support imports
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
-const CONFIG: AgentConfig = {
-  inputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  outputFiles: [],
-  editedFile: null,
+const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'test-model',
   instruction: 'Use the supplied tools.',
   agentCategory: AgentCategory.ToolUse,
-  editedFiles: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-  memories: [],
   workingDirectory: process.cwd(),
-  cliOutputFile: null,
-  cliMultiAgentPresetId: null,
   outputSchema: {
     type: 'object',
     properties: { answer: { type: 'string' } },
     required: ['answer'],
   },
-};
+});
 
 function tool(name: string): ITool {
   return {

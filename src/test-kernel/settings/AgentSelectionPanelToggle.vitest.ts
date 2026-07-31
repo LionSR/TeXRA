@@ -11,7 +11,10 @@ vi.mock('@shared/hostBridge', () => ({
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_SOURCE } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsView/data';
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 type AgentSelectionPanelElement = HTMLElement & {
   agents: AgentSelectionItem[];
@@ -27,15 +30,11 @@ const workflowAgent: AgentSelectionItem = {
   enabled: true,
 };
 
-async function renderAgentSelectionPanel(): Promise<AgentSelectionPanelElement> {
-  const panel = document.createElement(
-    'agent-selection-panel',
-  ) as AgentSelectionPanelElement;
-  panel.agents = [workflowAgent];
-  panel.category = 'workflow';
-  document.body.append(panel);
-  await panel.updateComplete;
-  return panel;
+function renderAgentSelectionPanel(): Promise<AgentSelectionPanelElement> {
+  return mountComponent<AgentSelectionPanelElement>('agent-selection-panel', {
+    agents: [workflowAgent],
+    category: 'workflow',
+  });
 }
 
 describe('AgentSelectionPanel enabled toggle', () => {

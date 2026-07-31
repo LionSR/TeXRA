@@ -2,11 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  AcceptCopyMetaSchema,
-  ExecutionIdSchema,
-  FileLocationSchema,
-} from '@shared/schemas';
+import { ExecutionIdSchema } from '@shared/schemas';
 
 /** Non-empty string for the required file-operation identity fields. */
 const RequiredString = z.string().min(1);
@@ -72,30 +68,3 @@ export const CleanMultipleCommandArgsSchema = z.tuple([
   FileOpParamsSchema.shape.model,
   z.array(z.string()).prefault([]),
 ]);
-
-/** Positional arguments for opening a comparison between two files. */
-export const CompareCommandArgsSchema = z
-  .tuple([
-    FileLocationSchema.nullish(),
-    FileLocationSchema.nullish(),
-    FileLocationSchema,
-  ])
-  .refine(
-    ([inputLocation, baseLocation]) =>
-      inputLocation != null || baseLocation != null,
-    { error: 'inputLocation or baseLocation required' },
-  );
-
-/** Positional arguments for accepting an edited file. */
-export const AcceptEditedCommandArgsSchema = z
-  .tuple([
-    FileLocationSchema.nullish(),
-    FileLocationSchema.nullish(),
-    FileLocationSchema,
-    AcceptCopyMetaSchema.optional(),
-  ])
-  .refine(
-    ([inputLocation, baseLocation]) =>
-      inputLocation != null || baseLocation != null,
-    { error: 'inputLocation or baseLocation required' },
-  );

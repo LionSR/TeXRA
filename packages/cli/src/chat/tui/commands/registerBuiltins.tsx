@@ -48,6 +48,7 @@ import {
   applyCliModelAccessInput,
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
+  showCliAuthStatus,
 } from './handlers/apiModeCommands';
 import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
 import {
@@ -63,6 +64,12 @@ import {
   showCliMemoryList,
   showCliMemoryPreview,
 } from './handlers/memoryCommands';
+import {
+  requestCliSessionCompaction,
+  showCliGoalModeHelp,
+  showCliSessionStatus,
+  showCliSlashCommandHelp,
+} from './handlers/sessionCommands';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
@@ -513,12 +520,14 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Show available slash commands',
     category: 'session',
     echo: 'never',
+    handler: showCliSlashCommandHelp,
   });
   registerSlashCommand({
     name: 'clear',
     description: 'Start a fresh chat session',
     category: 'session',
     echo: 'ifPersists',
+    handler: (_remainder, context) => context.resetSession(),
   });
   registerSlashCommand({
     name: 'agent',
@@ -526,7 +535,7 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['agents'],
     category: 'configuration',
     echo: 'ifPersists',
-    argHandler: applyInitialCliAgentSelection,
+    handler: applyInitialCliAgentSelection,
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
@@ -535,7 +544,7 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['models'],
     category: 'configuration',
     echo: 'ifPersists',
-    argHandler: applyCliModelSelection,
+    handler: applyCliModelSelection,
     formComponent: ModelListFormAdapter,
   });
   registerSlashCommand({
@@ -544,7 +553,7 @@ export function registerBuiltinSlashCommands(options?: {
       'Choose ChatGPT, Kimi Code, included TeXRA, or personal model access',
     category: 'configuration',
     echo: 'ifPersists',
-    argHandler: applyCliModelAccessInput,
+    handler: applyCliModelAccessInput,
     formComponent: ModelAccessFormAdapter,
   });
   registerSlashCommand({
@@ -553,6 +562,16 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['keys'],
     category: 'configuration',
     echo: 'never',
+    // A remainder never reaches the form: it could be the key itself, so it is
+    // refused and dropped rather than pre-filled.
+    handler: (remainder) => {
+      if (remainder) {
+        setTransientNotice(
+          'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
+        );
+      }
+      openCliSlashCommandForm('key', '');
+    },
     formComponent: ProviderApiKeyFormAdapter,
     formEscapeAction: 'close',
     redactInput: true,
@@ -562,13 +581,14 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Show both accounts and active model access',
     category: 'account',
     echo: 'ifPersists',
+    handler: showCliAuthStatus,
   });
   registerSlashCommand({
     name: 'login',
     description: 'Sign in to ChatGPT or Researcher Access',
     category: 'account',
     echo: 'ifPersists',
-    argHandler: (remainder, context) =>
+    handler: (remainder, context) =>
       loginFromChat(remainder, context.cliContext),
     formComponent: LoginFormAdapter,
   });
@@ -577,7 +597,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Sign out of one account or all accounts',
     category: 'account',
     echo: 'ifPersists',
-    argHandler: (remainder) => logoutFromChat(remainder),
+    handler: (remainder) => logoutFromChat(remainder),
     formComponent: LogoutFormAdapter,
   });
   registerSlashCommand({
@@ -585,7 +605,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Switch approval policy',
     category: 'configuration',
     echo: 'ifPersists',
-    argHandler: applyCliApprovalPolicySelection,
+    handler: applyCliApprovalPolicySelection,
     formRemainders: ['status'],
     formComponent: ApprovalPolicyFormAdapter,
     formEscapeAction: 'cancel',
@@ -595,12 +615,15 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Auto-approve privileged actions',
     category: 'configuration',
     echo: 'ifPersists',
+    handler: (remainder, context) =>
+      applyCliApprovalPolicySelection(remainder || 'yolo', context),
   });
   registerSlashCommand({
     name: 'status',
     description: 'Show session details',
     category: 'session',
     echo: 'ifPersists',
+    handler: (_remainder, context) => showCliSessionStatus(context),
   });
   registerSlashCommand({
     name: 'goal',
@@ -608,13 +631,14 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['goals'],
     category: 'session',
     echo: 'never',
+    handler: showCliGoalModeHelp,
   });
   registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session',
     category: 'session',
     echo: 'ifPersists',
-    argHandler: async (remainder, context) => {
+    handler: async (remainder, context) => {
       const id = parseCliHistoryId(remainder);
       if (!id) throw new Error(`Invalid execution id: ${remainder}`);
       await context.resumeExecution(id);
@@ -626,7 +650,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'List stored memories',
     category: 'configuration',
     echo: 'never',
-    argHandler: async (remainder) => {
+    handler: async (remainder) => {
       if (remainder.toLowerCase() === 'list') await showCliMemoryList();
       else await showCliMemoryPreview(remainder);
     },
@@ -690,6 +714,7 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Request context compaction',
     category: 'session',
     echo: 'ifPersists',
+    handler: requestCliSessionCompaction,
   });
   registerSlashCommand({
     name: 'exit',
@@ -697,5 +722,10 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['quit'],
     category: 'session',
     echo: 'never',
+    handler: (_remainder, context) => {
+      context.session.stopRequested = true;
+      context.interruptActive();
+      context.requestInputExit();
+    },
   });
 }

@@ -3,38 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-interface DesktopCrashReportingModule {
-  DESKTOP_CRASH_REPORTING_DSN_SECRET: string;
-  getDesktopCrashReportingStatus(
-    globalState: FakeStateStore,
-    secrets: FakeSecrets,
-  ): Promise<{ enabled: boolean; configured: boolean }>;
-  setDesktopCrashReportingDsn(
-    secrets: FakeSecrets,
-    dsn: string | undefined,
-  ): Promise<void>;
-  setDesktopCrashReportingEnabled(
-    globalState: FakeStateStore,
-    enabled: boolean,
-  ): Promise<void>;
-  scrubDesktopCrashEvent(
-    event: Record<string, unknown>,
-    paths: readonly string[],
-  ): Record<string, unknown> | null;
-}
-
-async function loadDesktopCrashReporting(): Promise<DesktopCrashReportingModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopCrashReporting.ts'))
-  ) as Promise<DesktopCrashReportingModule>;
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('desktop crash reporting', () => {
   it('keeps crash reporting disabled and unconfigured by default', async () => {
-    const { getDesktopCrashReportingStatus } =
-      await loadDesktopCrashReporting();
+    const { getDesktopCrashReportingStatus } = await loadSourceModule(
+      '@desktop/main/desktopCrashReporting',
+    );
 
     await expect(
       getDesktopCrashReportingStatus(new FakeStateStore(), new FakeSecrets()),
@@ -47,7 +22,7 @@ describe('desktop crash reporting', () => {
       getDesktopCrashReportingStatus,
       setDesktopCrashReportingDsn,
       setDesktopCrashReportingEnabled,
-    } = await loadDesktopCrashReporting();
+    } = await loadSourceModule('@desktop/main/desktopCrashReporting');
     const globalState = new FakeStateStore();
     const secrets = new FakeSecrets();
 
@@ -66,16 +41,23 @@ describe('desktop crash reporting', () => {
   });
 
   it('drops non-native events for the v1 crash-reporting scope', async () => {
-    const { scrubDesktopCrashEvent } = await loadDesktopCrashReporting();
+    const { scrubDesktopCrashEvent } = await loadSourceModule(
+      '@desktop/main/desktopCrashReporting',
+    );
 
-    expect(scrubDesktopCrashEvent({ platform: 'javascript' }, [])).toBeNull();
+    expect(
+      scrubDesktopCrashEvent({ type: undefined, platform: 'javascript' }, []),
+    ).toBeNull();
   });
 
   it('scrubs workspace and app paths from native crash events', async () => {
-    const { scrubDesktopCrashEvent } = await loadDesktopCrashReporting();
+    const { scrubDesktopCrashEvent } = await loadSourceModule(
+      '@desktop/main/desktopCrashReporting',
+    );
 
     const scrubbed = scrubDesktopCrashEvent(
       {
+        type: undefined,
         platform: 'native',
         message: 'Crash in /Users/alice/paper/main.tex',
         exception: {

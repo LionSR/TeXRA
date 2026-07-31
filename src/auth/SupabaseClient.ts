@@ -22,8 +22,6 @@ import type {
   StoredSessionState,
 } from './TokenProvider';
 
-export type { StoredSessionState } from './TokenProvider';
-
 /**
  * Singleton Supabase client with authentication helpers.
  * This is the single source of truth for auth initialization state.
