@@ -1,5 +1,7 @@
 // Project durable session and run facts into the local TUI state.
 
+import { isDeepStrictEqual } from 'node:util';
+
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -74,10 +76,7 @@ function sameStringList(
   left: readonly string[],
   right: readonly string[],
 ): boolean {
-  return (
-    left.length === right.length &&
-    left.every((item, index) => item === right[index])
-  );
+  return isDeepStrictEqual(left, right);
 }
 
 function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {

@@ -11,7 +11,7 @@ import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import * as logger from '@logger/logUtils';
 import { pathToLocation } from '@utils/files';
-import { pluralize } from '@utils/text/stringUtils';
+import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'TestCommands';
 
@@ -74,7 +74,7 @@ export async function handleExtractTikzFigures(): Promise<void> {
         const items = labeledTikzPictures.map(([label, pictures]) => ({
           label: `${label} (${pictures.length} TikZ ${pluralize(pictures.length, 'picture')})`,
           description: `Figure with label: ${label}`,
-          detail: `${pictures[0].slice(0, 100)}...`,
+          detail: truncateWithEllipsis(pictures[0], 100),
         }));
 
         const selected = await vscode.window.showQuickPick(items, {
