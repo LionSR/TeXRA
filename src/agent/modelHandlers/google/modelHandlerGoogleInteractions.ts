@@ -1189,16 +1189,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   protected override async createResponseImpl(
     options: CreateResponseOptions<Step, GoogleGenAI>,
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
-    const {
-      client,
-      messages,
-      temperature,
-      systemPrompt,
-      endTag,
-      signal,
-      tools,
-      finalTool,
-    } = options;
+    const { client, messages, systemPrompt, endTag, signal, tools, finalTool } =
+      options;
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
       throw new Error('Messages array cannot be empty.');
@@ -1208,7 +1200,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     this.compactionResult = undefined;
 
     const stateful = this.serverStateEnabled();
-    const generationConfig = this.buildGenerationConfig(temperature, endTag);
+    const generationConfig = this.buildGenerationConfig(endTag);
     const interactionsTools = tools?.length
       ? this.toInteractionsTools(tools)
       : undefined;
@@ -1882,12 +1874,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // Request building helpers
   // ===========================================================================
 
-  private buildGenerationConfig(
-    temperature: number,
-    endTag?: string,
-  ): GenerationConfig {
+  // No temperature: the Interactions generation_config has no such field (the
+  // chat GenerateContentConfig still does). Sampling temperature is not
+  // configurable on this wire, so callers' values are ignored here rather than
+  // sent and silently dropped by the API.
+  private buildGenerationConfig(endTag?: string): GenerationConfig {
     const generationConfig: GenerationConfig = {
-      temperature,
       max_output_tokens: this.getEffectiveMaxOutputTokens(),
       ...(endTag ? { stop_sequences: [endTag] } : {}),
     };
