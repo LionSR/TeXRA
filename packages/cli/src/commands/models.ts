@@ -56,7 +56,7 @@ async function loadModelAccessList(
 
 async function listModels(
   context: CliContext,
-  options: CliModelListOptions = {},
+  options: CliModelListOptions,
 ): Promise<number> {
   const result = await loadModelAccessList(context, options);
   if ('error' in result) {
@@ -68,14 +68,12 @@ async function listModels(
   if (context.outputFormat === 'text' && listedModels.length === 0) {
     writeTextStderr(formatNoListableModelsMessage(result.apiMode, options));
   }
+  const records = listedModels.map(({ model }) => cliModelRecord(model));
   emitCliResult(
     context,
     {
-      json: listedModels.map(({ model }) => cliModelRecord(model)),
-      ndjson: listedModels.map(({ model }) => ({
-        kind: 'model',
-        model: cliModelRecord(model),
-      })),
+      json: records,
+      ndjson: records.map((model) => ({ kind: 'model', model })),
       text: listedModels
         .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
         .join('\n'),
@@ -111,9 +109,10 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.Usage;
   }
 
+  const record = cliModelRecord(entry.model);
   emitCliResult(context, {
-    json: cliModelRecord(entry.model),
-    ndjson: { kind: 'model', model: cliModelRecord(entry.model) },
+    json: record,
+    ndjson: { kind: 'model', model: record },
     text: formatCliModelDetails(entry, result.apiMode),
   });
   return CliExitCode.Success;

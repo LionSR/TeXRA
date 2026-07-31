@@ -261,7 +261,7 @@ export async function discoverLatestExecutionOutputs(query: {
         query.inputFile,
         candidate.agentConfig.inputFiles.slice(1),
       );
-      if (scanned && Object.keys(scanned).length > 0) {
+      if (scanned) {
         return { executionId: candidate.id, rounds: scanned };
       }
     }

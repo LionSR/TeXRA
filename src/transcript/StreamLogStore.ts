@@ -432,8 +432,11 @@ export class StreamLogStore {
       // queue the intent so it runs once the load completes. Otherwise the
       // rapid in-flight → stale flip would finish the load into memory
       // with no subsequent eviction trigger.
-      if (state?.writer !== undefined || state?.pendingLoad !== undefined) {
-        this.ensureStreamState(streamId).pendingRelease = true;
+      if (
+        state &&
+        (state.writer !== undefined || state.pendingLoad !== undefined)
+      ) {
+        state.pendingRelease = true;
       }
       return;
     }

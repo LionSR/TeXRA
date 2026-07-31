@@ -294,15 +294,13 @@ export class TextEditorTool extends defineTool({
     }
 
     // Check if the path is a directory (only view command can be used on directories)
-    try {
-      const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath));
-      if (isDirectory(stats.type) && command !== 'view') {
-        throw new ToolError(
-          `The path ${displayPath} is a directory and only the 'view' command can be used on directories`,
-        );
-      }
-    } catch (error) {
-      rethrowWithContext(error, `Error validating path`);
+    const stats = await AbsoluteFS.stat(WorkspaceFS.fullPath(filePath)).catch(
+      (error: unknown) => rethrowWithContext(error, 'Error validating path'),
+    );
+    if (isDirectory(stats.type) && command !== 'view') {
+      throw new ToolError(
+        `The path ${displayPath} is a directory and only the 'view' command can be used on directories`,
+      );
     }
   }
 

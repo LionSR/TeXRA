@@ -150,7 +150,9 @@ class UsageLogServiceImpl {
   private retryBatch: UsageLogBatch | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private activeFlush: Promise<UsageLogFlushOutcome> | null = null;
-  private config: UsageLogConfig = DEFAULT_CONFIG;
+  // Copied, never aliased: `dispose()` writes `config.enabled`, so a
+  // dispose-before-initialize would otherwise flip DEFAULT_CONFIG for good.
+  private config: UsageLogConfig = { ...DEFAULT_CONFIG };
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
 

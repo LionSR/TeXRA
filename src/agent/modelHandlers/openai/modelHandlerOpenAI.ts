@@ -211,10 +211,8 @@ export class ModelHandlerOpenAI<
         // summarization system prompt. Apply provider-specific normalization
         // (e.g. DeepSeek's convertContentToString, mergeConsecutiveRoles) so
         // the compaction call doesn't get rejected.
-        const normalizedConversation = this.prepareNormalizedMessages(
-          conversationMessages,
-          this.getMessageNormalizationOptions(),
-        );
+        const normalizedConversation =
+          this.prepareNormalizedMessages(conversationMessages);
 
         const summaryParams = this.buildCompactionSummaryParams(
           normalizedConversation,
@@ -667,10 +665,7 @@ export class ModelHandlerOpenAI<
     const updatedMessages = didCompact ? compactedMessages : undefined;
 
     // Apply message normalization if subclass specifies options
-    const messages = this.prepareNormalizedMessages(
-      messagesToUse,
-      this.getMessageNormalizationOptions(),
-    );
+    const messages = this.prepareNormalizedMessages(messagesToUse);
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
@@ -719,16 +714,14 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Normalizes messages and logs diagnostics about any changes.
+   * Normalizes messages under {@link getMessageNormalizationOptions} and logs
+   * diagnostics about any changes.
    * @param messages Original message array passed to the handler.
-   * @param options Normalization options passed to the OpenAI utilities.
-   * @param providerLabel Label used to identify the provider in logs.
    */
-  protected prepareNormalizedMessages<T extends ChatCompletionMessageParam>(
+  private prepareNormalizedMessages<T extends ChatCompletionMessageParam>(
     messages: T[],
-    options?: NormalizeOpenAIMessageContentOptions,
-    providerLabel: string = this.config.provider,
   ): T[] {
+    const options = this.getMessageNormalizationOptions();
     const normalizedMessages = options
       ? normalizeOpenAIMessageContent(messages, options)
       : messages;
@@ -738,7 +731,7 @@ export class ModelHandlerOpenAI<
         data: {
           beforeCount: messages.length,
           afterCount: normalizedMessages.length,
-          providerLabel,
+          providerLabel: this.config.provider,
         },
       });
     }

@@ -192,23 +192,29 @@ export const GLOBAL_VALUE_FLAGS = new Set<string>(
   ),
 );
 
+/**
+ * Whether a boolean arg documents a negated `--no-<name>` spelling: those
+ * defaulting to `true` (passed via the negative, like `--no-color`) and opt-in
+ * toggles that advertise a `negativeDescription` (like `--no-websocket`, which
+ * has no default). citty rewrites any `--no-<name>` to `<name>: false`; both
+ * leading-flag reordering and unknown-flag detection register the spelling so
+ * `texra --no-color agents list` and `texra --no-websocket run polish` parse.
+ */
+export function documentsNegatedBooleanForm(def: {
+  readonly type?: string;
+  readonly default?: boolean | number | string;
+}): boolean {
+  return (
+    def.type === 'boolean' &&
+    (def.default === true || 'negativeDescription' in def)
+  );
+}
+
 export const GLOBAL_BOOL_FLAGS = new Set<string>(
   Object.entries(AGENT_RUN_GLOBAL_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
     const flags = flagSpellings(name, def);
-    // Register the negated `--no-<name>` spelling so leading-flag reordering and
-    // unknown-command detection recognize it (e.g. `texra --no-color agents
-    // list`, `texra --no-websocket run polish`). citty rewrites any
-    // `--no-<name>` to `<name>: false`; we register the spelling for booleans
-    // that document a negated form — those defaulting to `true` (passed via the
-    // negative, like `--no-color`) and opt-in toggles that advertise a
-    // `negativeDescription` (like `--no-websocket`, which has no default).
-    if (
-      ('default' in def && def.default === true) ||
-      'negativeDescription' in def
-    ) {
-      flags.push(`--no-${name}`);
-    }
+    if (documentsNegatedBooleanForm(def)) flags.push(`--no-${name}`);
     return flags;
   }),
 );

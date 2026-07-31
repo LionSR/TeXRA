@@ -102,7 +102,7 @@ async function resolveDesktopResumeState(
 function resumeDesktopStream(
   streamId: StreamTabId,
   context: DesktopResumeContext,
-  recovery?: RecoveryContinuation,
+  recovery: RecoveryContinuation,
 ): Promise<boolean> {
   if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
   const terminalResult = trackTerminalResultPresentation(

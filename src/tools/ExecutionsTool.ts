@@ -494,11 +494,14 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     const timer = setTimeout(() => ac.abort(), timeout * 1000);
     // Abort early if a follow-up is sent to this stream (user wants to break the wait).
     const cleanupFollowUp = listenForFollowUp(ac);
-    const waitPromise = register(ac.signal);
-    if (settled()) ac.abort();
-    await waitPromise;
-    clearTimeout(timer);
-    cleanupFollowUp();
+    try {
+      const waitPromise = register(ac.signal);
+      if (settled()) ac.abort();
+      await waitPromise;
+    } finally {
+      clearTimeout(timer);
+      cleanupFollowUp();
+    }
   }
 
   private async listExecutions(
@@ -950,7 +953,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     out.push(
       `Showing lines ${first}-${last} of ${lines.length}${hint}.`,
       '',
-      applyViewRange(lines.join('\n'), [first, last]),
+      lines.slice(first - 1, last).join('\n'),
       '',
       footer,
     );

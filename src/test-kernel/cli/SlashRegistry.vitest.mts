@@ -92,6 +92,17 @@ describe('slashRegistry', () => {
     return command;
   }
 
+  /** Open a registered slash command's form and render its adapter node. */
+  function openSlashForm<TProps>(name: string): {
+    readonly props?: TProps;
+    readonly isClosed: () => boolean;
+  } {
+    expect(openRegisteredCliSlashForm(requireSlashCommand(name), '')).toBe(
+      true,
+    );
+    return renderOpenForm<TProps>();
+  }
+
   function renderOpenForm<TProps>(): {
     readonly props?: TProps;
     readonly isClosed: () => boolean;
@@ -194,12 +205,9 @@ describe('slashRegistry', () => {
   it('chains selectable agent picks into the API-mode-aware model picker', async () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     registerBuiltinSlashCommands();
-    const agent = requireSlashCommand('agent');
-    expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
-
-    const agentNode = renderOpenForm<{
+    const agentNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('agent');
     agentNode.props?.onSelect?.('review');
     await settleFormSelection();
 
@@ -221,12 +229,9 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands({
       canSelectModel: () => false,
     });
-    const agent = requireSlashCommand('agent');
-    expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
-
-    const agentNode = renderOpenForm<{
+    const agentNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('agent');
     agentNode.props?.onSelect?.('review');
     await settleFormSelection();
 
@@ -241,12 +246,9 @@ describe('slashRegistry', () => {
       canSelectAgent: () => false,
       canSelectModel: () => true,
     });
-    const agent = requireSlashCommand('agent');
-    expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
-
-    const agentNode = renderOpenForm<{
+    const agentNode = openSlashForm<{
       selectable?: boolean;
-    }>();
+    }>('agent');
 
     expect(agentNode.props).toMatchObject({ selectable: false });
     expect(activeForm.get()?.commandName).toBe('agent');
@@ -258,13 +260,10 @@ describe('slashRegistry', () => {
       canSelectAgent: () => false,
       canSelectModel: () => true,
     });
-    const model = requireSlashCommand('model');
-    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
-
-    const modelNode = renderOpenForm<{
+    const modelNode = openSlashForm<{
       onSelect?: (value: string) => void;
       selectable?: boolean;
-    }>();
+    }>('model');
     modelNode.props?.onSelect?.('gpt55');
 
     expect(modelNode.props).toMatchObject({ selectable: true });
@@ -294,12 +293,9 @@ describe('slashRegistry', () => {
           ? 'different conversation format; start new chat'
           : undefined,
     });
-    const model = requireSlashCommand('model');
-    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
-
-    const modelNode = renderOpenForm<{
+    const modelNode = openSlashForm<{
       getModelSwitchDisabledReason?: (model: string) => string | undefined;
-    }>();
+    }>('model');
 
     expect(modelNode.props?.getModelSwitchDisabledReason?.('sonnet46T')).toBe(
       'different conversation format; start new chat',
@@ -314,12 +310,9 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands({
       onModelSelect: () => selection.promise,
     });
-    const model = requireSlashCommand('model');
-    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
-
-    const modelNode = renderOpenForm<{
+    const modelNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('model');
     modelNode.props?.onSelect?.('gpt55');
     await settleFormSelection();
 
@@ -379,12 +372,9 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const model = requireSlashCommand('model');
-    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
-
-    const modelNode = renderOpenForm<{
+    const modelNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('model');
     modelNode.props?.onSelect?.('gpt55');
     await settleFormSelection();
 
@@ -403,12 +393,9 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const api = requireSlashCommand('api');
-    expect(openRegisteredCliSlashForm(api, '')).toBe(true);
-
-    const apiNode = renderOpenForm<{
+    const apiNode = openSlashForm<{
       onSelect?: (value: CliModelAccessSelection) => void;
-    }>();
+    }>('api');
     apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
     await settleFormSelection();
 
@@ -422,12 +409,9 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands({
       onModelAccessSelect: () => selection.promise,
     });
-    const api = requireSlashCommand('api');
-    expect(openRegisteredCliSlashForm(api, '')).toBe(true);
-
-    const apiNode = renderOpenForm<{
+    const apiNode = openSlashForm<{
       onSelect?: (value: CliModelAccessSelection) => void;
-    }>();
+    }>('api');
     apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
     await settleFormSelection();
 
@@ -506,12 +490,10 @@ describe('slashRegistry', () => {
         });
       },
     });
-    const login = requireSlashCommand('login');
 
-    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
-    const loginNode = renderOpenForm<{
+    const loginNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('login');
     loginNode.props?.onSelect?.('chatgpt');
     await settleFormSelection();
 
@@ -534,12 +516,10 @@ describe('slashRegistry', () => {
         output.writeProgress(instruction, { copyable: true });
       },
     });
-    const login = requireSlashCommand('login');
 
-    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
-    const loginNode = renderOpenForm<{
+    const loginNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('login');
     loginNode.props?.onSelect?.('chatgpt');
     await waitFor(() => formProgress.get()?.status === 'succeeded');
     expect(formProgress.get()?.archiveCopyable).toBeTypeOf('function');
@@ -590,12 +570,10 @@ describe('slashRegistry', () => {
         return selection.promise;
       },
     });
-    const login = requireSlashCommand('login');
 
-    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
-    const loginNode = renderOpenForm<{
+    const loginNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('login');
     loginNode.props?.onSelect?.('chatgpt');
     formProgress.get()?.cancel();
 
@@ -621,12 +599,10 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const login = requireSlashCommand('login');
 
-    expect(openRegisteredCliSlashForm(login, '')).toBe(true);
-    const loginNode = renderOpenForm<{
+    const loginNode = openSlashForm<{
       onSelect?: (value: string) => void;
-    }>();
+    }>('login');
     loginNode.props?.onSelect?.('chatgpt');
     await settleFormSelection();
 
@@ -650,12 +626,10 @@ describe('slashRegistry', () => {
         outcomes.push('action settled');
       },
     });
-    const api = requireSlashCommand('api');
 
-    expect(openRegisteredCliSlashForm(api, '')).toBe(true);
-    const apiNode = renderOpenForm<{
+    const apiNode = openSlashForm<{
       onSelect?: (value: CliModelAccessSelection) => void;
-    }>();
+    }>('api');
     apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
     resetCliState(INCLUDED_CHAT_SESSION);
     selection.resolve();
@@ -678,12 +652,10 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands({
       onLogoutSelect: () => completion,
     });
-    const logout = requireSlashCommand('logout');
 
-    expect(openRegisteredCliSlashForm(logout, '')).toBe(true);
-    const logoutNode = renderOpenForm<{
+    const logoutNode = openSlashForm<{
       onSelect?: (value: 'all') => void;
-    }>();
+    }>('logout');
     logoutNode.props?.onSelect?.('all');
     formProgress.get()?.cancel();
 

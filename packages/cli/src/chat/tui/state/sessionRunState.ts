@@ -132,10 +132,18 @@ export function chatTuiCanStopVisibleRun(facts: ChatTuiRunStopFacts): boolean {
   );
 }
 
+/** Whether the session still holds an unfinished root-run claim. Sole
+ *  derivation of that fact: the availability predicate, the published
+ *  `rootRunPending` signal, and every caller-side "a run is in flight" check
+ *  read it here instead of re-deriving `runPromise && !runCompleted`. */
+export function chatTuiRunPending(session: PendingTuiRunSessionState): boolean {
+  return Boolean(session.runPromise) && !session.runCompleted;
+}
+
 export function chatTuiCanStartRootRun(
   session: PendingTuiRunSessionState,
 ): boolean {
-  return !session.runPromise || session.runCompleted;
+  return !chatTuiRunPending(session);
 }
 
 /**
@@ -147,9 +155,9 @@ export function chatTuiCanStartRootRun(
 export function publishChatTuiRunState(
   session: PublishedTuiRunSessionState,
 ): void {
-  const canStart = chatTuiCanStartRootRun(session);
-  rootRunStartAvailable.set(canStart);
-  rootRunPending.set(!canStart);
+  const runPending = chatTuiRunPending(session);
+  rootRunStartAvailable.set(!runPending);
+  rootRunPending.set(runPending);
   rootRunStreamId.set(session.streamId);
 }
 

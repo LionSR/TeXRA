@@ -25,9 +25,9 @@ import type { BundledAgentDirectoryName } from '@agent/index/BundledAgentDirecto
 function pendingReconcileCount(): number {
   return (
     BundledAgentDirectorySync as unknown as {
-      reconcileByStorageRoot: Map<string, Promise<boolean>>;
+      reconcileByStorageRoot: { mutexes: Map<string, unknown> };
     }
-  ).reconcileByStorageRoot.size;
+  ).reconcileByStorageRoot.mutexes.size;
 }
 
 class FsAgentDirectoryStorage implements AgentDirectoryStorage {

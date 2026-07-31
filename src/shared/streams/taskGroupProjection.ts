@@ -26,13 +26,13 @@ import {
  */
 function taskGroupEndStatus(
   value: TaskGroupStatus | EndGroupStatus | undefined,
-  fallback: TaskGroupStatus,
 ): TaskGroupStatus {
   const native = TaskGroupStatusSchema.safeParse(value);
   if (native.success) return native.data;
-  if (value === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
   if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
-  return fallback;
+  // Legacy `stopped`, an unrecognized value, and an absent one all read as a
+  // group that ended without a recorded failure.
+  return STREAM_PHASE.COMPLETED;
 }
 
 /**
@@ -115,7 +115,7 @@ export function upsertTaskGroupFromStreamLog(
     return true;
   }
 
-  const status = taskGroupEndStatus(payload.status, STREAM_PHASE.COMPLETED);
+  const status = taskGroupEndStatus(payload.status);
   const endTime = payload.endTime;
 
   if (groupIndex === -1) {
