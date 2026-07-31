@@ -103,11 +103,11 @@ export function isPackageManagerInstall(
   return segments.includes('node_modules') || segments.includes('cellar');
 }
 
-export function buildUpdateCommand(
-  method: InstallMethod,
-  pkg: string = CLI_PACKAGE_NAME,
-): { command: string; args: readonly string[] } {
-  const target = `${pkg}@latest`;
+export function buildUpdateCommand(method: InstallMethod): {
+  command: string;
+  args: readonly string[];
+} {
+  const target = `${CLI_PACKAGE_NAME}@latest`;
   switch (method) {
     case 'pnpm':
       return { command: 'pnpm', args: ['add', '-g', target] };

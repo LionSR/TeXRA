@@ -236,7 +236,7 @@ async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
   interactions: SessionHostInteractions,
-  reservedStreamId: StreamTabId | undefined,
+  streamId: StreamTabId,
   resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
   const fullConfig = input.config;
@@ -304,11 +304,6 @@ async function assembleAgentLaunchContext(
           session.responseTextProcessing,
         ),
   );
-
-  const streamId =
-    input.streamTabIdOverride ??
-    reservedStreamId ??
-    getStreamTabId(config.agent, fullConfig.model, { executionId });
 
   const transcriptWriter = await session.transcripts.loadAndAcquireWriter(
     streamId,
@@ -556,9 +551,12 @@ export async function buildAgentLaunchContext(
   if (!input.streamTabIdOverride && (!config.agent || !config.model)) {
     throw new AgentError('Missing required fields: model and/or agent');
   }
-  const reservedStreamId = input.streamTabIdOverride
-    ? undefined
-    : getStreamTabId(config.agent, config.model, { executionId });
+  // One derivation of this run's stream id: an override is used as-is, and
+  // otherwise the derived id is both the reservation and the run's identity.
+  const streamId =
+    input.streamTabIdOverride ??
+    getStreamTabId(config.agent, config.model, { executionId });
+  const reservedStreamId = input.streamTabIdOverride ? undefined : streamId;
   if (reservedStreamId) {
     acquireStreamOrThrow(reservedStreamId, streamStatus);
   }
@@ -569,7 +567,7 @@ export async function buildAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
       interactions,
-      reservedStreamId,
+      streamId,
       resources,
     );
     resources.transfer();

@@ -63,14 +63,9 @@ describe('StreamLog', () => {
     });
     expect(log.hasRunningGroup).toBe(false);
 
-    expect(log.getDirtyUpdates().map((entry) => entry.id)).toEqual([
-      'run',
-      'message-2500',
-    ]);
-    expect(log.drainDirtyUpdates().map((entry) => entry.id)).toEqual([
-      'run',
-      'message-2500',
-    ]);
+    const dirty = log.getDirtyUpdates();
+    expect(dirty.map((entry) => entry.id)).toEqual(['run', 'message-2500']);
+    log.ackDirtyUpdates(dirty);
     expect(log.getDirtyUpdates()).toEqual([]);
   });
 
@@ -86,7 +81,7 @@ describe('StreamLog', () => {
     });
 
     expect(log.update('message', { text: 'unchanged' })).toBeUndefined();
-    expect(log.drainDirtyUpdates()).toEqual([]);
+    expect(log.getDirtyUpdates()).toEqual([]);
   });
 
   it('assigns one durable settlement order when rows become printable', () => {

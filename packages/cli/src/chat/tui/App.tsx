@@ -189,12 +189,18 @@ export function App(props: AppProps): React.JSX.Element {
     activeStreamId,
     pending,
   });
-  const childListTarget = resolveChildListTarget({
-    activeStreamId,
-    childStreamEntries,
-    parentStream,
-    streams,
-  });
+  // Walks the child-stream tree, so keep it at data-change frequency rather
+  // than recomputing on every keystroke and elapsed-second render.
+  const childListTarget = useMemo(
+    () =>
+      resolveChildListTarget({
+        activeStreamId,
+        childStreamEntries,
+        parentStream,
+        streams,
+      }),
+    [activeStreamId, childStreamEntries, parentStream, streams],
+  );
 
   const stdin = useStdin();
   const foregroundOpen =

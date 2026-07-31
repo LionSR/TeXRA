@@ -102,7 +102,7 @@ export async function generateSessionDescription(
     const agentEntry = getAgent(config.agent, AgentCategory.ToolUse);
     const agentDescription = agentEntry?.description;
 
-    const helperResult = await createHelperModelKit();
+    const helperResult = await createHelperModelKit(session);
     if (!helperResult.kit) {
       warnWithoutRejecting(helperResult.reason);
       return;

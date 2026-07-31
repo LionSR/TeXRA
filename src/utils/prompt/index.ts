@@ -111,6 +111,11 @@ async function resolveValue(value: unknown): Promise<unknown> {
   return Object.fromEntries(entries);
 }
 
+// One environment for every prompt render, as in polishModel.ts: configuring
+// nunjucks builds a filesystem loader, and renderString compiles its template
+// per call regardless, so a per-call environment was pure setup cost.
+const promptEnv = nunjucks.configure({ autoescape: false });
+
 /**
  * Render a prompt string using nunjucks templating
  * @param prompt The prompt template string
@@ -122,6 +127,8 @@ export async function renderPrompt(
   variables: Record<string, unknown>,
 ): Promise<string> {
   const resolvedVariables = await resolveValue(variables);
-  const env = nunjucks.configure({ autoescape: false });
-  return env.renderString(prompt, resolvedVariables as Record<string, unknown>);
+  return promptEnv.renderString(
+    prompt,
+    resolvedVariables as Record<string, unknown>,
+  );
 }

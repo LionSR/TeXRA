@@ -77,13 +77,7 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
   }
 }
 
-function nextRenderableTranscriptEntry(
-  entries: readonly ConversationEntry[],
-  index: number,
-): ConversationEntry | undefined {
-  return entries.slice(index + 1).find(isRenderableTranscriptEntry);
-}
-
+/** Callers gate on {@link isRenderableTranscriptEntry} before asking. */
 function userPromptAwaitsLiveContinuation(
   entries: readonly ConversationEntry[],
   index: number,
@@ -93,12 +87,14 @@ function userPromptAwaitsLiveContinuation(
   if (
     entry?.role !== 'user' ||
     isInquiryContinuationText(entry.text) ||
-    !isRenderableTranscriptEntry(entry) ||
     !isActivePhase(status)
   ) {
     return false;
   }
-  return nextRenderableTranscriptEntry(entries, index) === undefined;
+  return !entries.some(
+    (later, laterIndex) =>
+      laterIndex > index && isRenderableTranscriptEntry(later),
+  );
 }
 
 /** Whether an entry belongs in append-only terminal scrollback now. */
@@ -154,14 +150,15 @@ export function orderedStaticTranscriptEntries(
   entries: readonly ConversationEntry[],
   status: StreamPhase | undefined,
 ): readonly ConversationEntry[] {
-  const candidates = entries
-    .map((entry, index) => ({ entry, index }))
-    .filter(({ index }) => isStaticTranscriptEntryAt(entries, index, status))
-    .map(({ entry, index }) => ({
-      entry,
-      index,
-      key: transcriptOrderKey(entry, index),
-    }));
+  const candidates: Array<{
+    entry: ConversationEntry;
+    index: number;
+    key: readonly [number, number];
+  }> = [];
+  for (const [index, entry] of entries.entries()) {
+    if (!isStaticTranscriptEntryAt(entries, index, status)) continue;
+    candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
+  }
 
   const alreadyOrdered = candidates.every(
     (candidate, i) =>

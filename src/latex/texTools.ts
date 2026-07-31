@@ -46,7 +46,7 @@ async function readCompileLogTail(
 
 export function buildKpathseaSearchPath(
   prependPaths: readonly string[],
-  existingValue: string | undefined = undefined,
+  existingValue: string | undefined,
   delimiter: string = path.delimiter,
 ): string | undefined {
   const prefix = prependPaths

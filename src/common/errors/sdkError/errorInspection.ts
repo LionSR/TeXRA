@@ -8,10 +8,13 @@ import { pickStatus } from './sdkErrorKinds';
  *  body itself, then its nested `.error` (some SDKs preserve the full
  *  `{ error: {...} }` envelope, others unwrap it before it reaches us).
  *  Shared by every relay/ChatGPT-subscription/credit-depletion body detector,
- *  each of which must check both forms. Returns `[]` for a non-object body. */
-export function errorBodyCandidates(rawErrorBody: unknown): unknown[] {
+ *  each of which must check both forms. Only object candidates are returned,
+ *  so detectors read fields directly instead of re-guarding each element. */
+export function errorBodyCandidates(
+  rawErrorBody: unknown,
+): Record<string, unknown>[] {
   if (!isObject(rawErrorBody)) return [];
-  return [rawErrorBody, (rawErrorBody as { error?: unknown }).error];
+  return [rawErrorBody, rawErrorBody.error].filter(isObject);
 }
 
 /** Pick a non-blank string field off an error-body object. Shared by the

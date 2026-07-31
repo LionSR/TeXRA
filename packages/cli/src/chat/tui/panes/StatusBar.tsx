@@ -1,6 +1,6 @@
 import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
@@ -162,6 +162,18 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     : undefined;
   const now = useLiveNowMs(runStartedAt !== undefined, runStartedAt);
 
+  // Rebuilds the retained + active child rows, so keep it off the 1 Hz
+  // elapsed-time re-render path.
+  const displayStreamId = target.displayStreamId;
+  const subagentCount = useMemo(
+    () =>
+      displayStreamId === undefined
+        ? 0
+        : visibleSubagentRows(displayStreamId, childStreamEntries, streams)
+            .length,
+    [childStreamEntries, displayStreamId, streams],
+  );
+
   const display = buildStatusBarDisplay({
     status: statusSlice?.status,
     substate: statusSlice?.substate,
@@ -175,14 +187,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     usage: statusSlice?.usage,
     roundStage: statusSlice?.roundStage,
-    subagents:
-      target.displayStreamId !== undefined
-        ? visibleSubagentRows(
-            target.displayStreamId,
-            childStreamEntries,
-            streams,
-          ).length
-        : 0,
+    subagents: subagentCount,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
     model: accessTarget.model,

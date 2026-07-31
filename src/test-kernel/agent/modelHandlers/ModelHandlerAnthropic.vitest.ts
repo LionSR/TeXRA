@@ -1171,6 +1171,24 @@ describe('ModelHandlerAnthropic model capabilities', () => {
   });
 });
 
+/**
+ * A logged, non-streaming handler pinned to a compaction-capable model with
+ * the compaction threshold at 0, the setup every forced-compaction test needs.
+ */
+function createForcedCompactionHandler(
+  agentCategory: AgentCategory = AgentCategory.Workflow,
+): ModelHandlerAnthropic {
+  const handler = createAnthropicHandler({
+    supportsTokenCounting: false,
+    supportsReasoning: false,
+  });
+  handler.config.fullName = 'claude-opus-4-6';
+  handler.setAgentCategory(agentCategory);
+  stubHandlerForTest(handler);
+  stubCompactionThresholdPercent(0);
+  return handler;
+}
+
 describe('ModelHandlerAnthropic forced compaction', () => {
   it('round-trips forced compaction state into the next workflow invocation', async () => {
     const handler = createAnthropicHandler({
@@ -1332,21 +1350,12 @@ describe('ModelHandlerAnthropic forced compaction', () => {
   });
 
   it('uses the Anthropic minimum trigger for manual compaction requests', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.ToolUse);
+    const handler = createForcedCompactionHandler(AgentCategory.ToolUse);
     handler.requestCompaction();
-
-    stubHandlerForTest(handler);
 
     const messages = helloMessages();
     const { client, messageOptions } =
       createCapturingAnthropicClient('claude-opus-4-6');
-
-    stubCompactionThresholdPercent(0);
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -1368,15 +1377,8 @@ describe('ModelHandlerAnthropic forced compaction', () => {
   });
 
   it('preserves forced compaction across a transient request retry', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.Workflow);
+    const handler = createForcedCompactionHandler();
     handler.requestCompaction();
-    stubHandlerForTest(handler);
-    stubCompactionThresholdPercent(0);
 
     const messageOptions: any[] = [];
     const create = vi.fn(async (options: any) => {
@@ -1409,14 +1411,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
   });
 
   it('preserves a newer compaction request when an older request succeeds', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.Workflow);
-    stubHandlerForTest(handler);
-    stubCompactionThresholdPercent(0);
+    const handler = createForcedCompactionHandler();
 
     const messageOptions: any[] = [];
     let resolveFirstResponse: ((response: any) => void) | undefined;
@@ -1458,14 +1453,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
   });
 
   it('does not leak an abandoned forced compaction into a later call', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.Workflow);
-    stubHandlerForTest(handler);
-    stubCompactionThresholdPercent(0);
+    const handler = createForcedCompactionHandler();
 
     const abandonedRequestId = handler.requestCompaction();
     handler.clearCompactionRequest(abandonedRequestId);
@@ -1482,14 +1470,7 @@ describe('ModelHandlerAnthropic forced compaction', () => {
   });
 
   it('does not let an older recovery clear a newer compaction request', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.Workflow);
-    stubHandlerForTest(handler);
-    stubCompactionThresholdPercent(0);
+    const handler = createForcedCompactionHandler();
 
     const abandonedRequestId = handler.requestCompaction();
     handler.requestCompaction();

@@ -39,7 +39,7 @@ function getFilePatterns(
   base: string,
   model: string,
   agent: string,
-  numRounds: number = 3,
+  numRounds: number,
 ): string[] {
   const patterns: string[] = [];
   const legacyModel = normalizeLegacyModel(model);

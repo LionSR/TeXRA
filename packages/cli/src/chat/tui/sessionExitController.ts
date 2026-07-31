@@ -44,7 +44,11 @@ import {
   collectResumeUsage,
   formatResumeHint,
 } from './state/resumeHint';
-import { chatTuiSigintAction, type TuiSession } from './state/sessionRunState';
+import {
+  chatTuiRunPending,
+  chatTuiSigintAction,
+  type TuiSession,
+} from './state/sessionRunState';
 import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 
@@ -331,7 +335,7 @@ export function createSessionExitController(
     // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
     // this state from a resume slot that is still rehydrating.
     const resumableIdle = ctx.isResumableIdle();
-    if (session.runPromise && !session.runCompleted && !resumableIdle) {
+    if (chatTuiRunPending(session) && !resumableIdle) {
       session.stopRequested = true;
       ctx.interruptActive();
       // Only await a run we actually interrupted/finished. A resumableIdle run

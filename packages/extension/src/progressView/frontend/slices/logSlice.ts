@@ -15,6 +15,10 @@ import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjectio
 import { appState } from '../progressState';
 import type { StreamLogs, StreamState } from '../store';
 
+/** Built once: `applyEntry` runs per delta entry in the streaming path. */
+const OptionalContextStateData =
+  ContextStateDataSchema.optional().catch(undefined);
+
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
   return {
     id: entry.id,
@@ -53,9 +57,7 @@ function applyEntry(
   );
 
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
-    const contextState = ContextStateDataSchema.optional()
-      .catch(undefined)
-      .parse(entry.data);
+    const contextState = OptionalContextStateData.parse(entry.data);
     if (contextState) {
       streamState.contextState = contextState;
       stateChanged = true;

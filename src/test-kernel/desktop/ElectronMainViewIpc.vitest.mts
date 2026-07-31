@@ -256,10 +256,8 @@ describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
     vi.doUnmock('@agent/index');
-    vi.doUnmock('@agent/index/agentRegistry');
     vi.doUnmock('@auth/SupabaseClient');
     vi.doUnmock('@model/computeModelOptions');
-    vi.doUnmock('@model/modelOptionsBasic');
   });
 
   it('pushes theme and debug state over the fixed host bridge channel', async () => {

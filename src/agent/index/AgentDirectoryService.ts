@@ -47,16 +47,10 @@ export interface AgentDirectoryServiceOptions {
   absoluteDirectories: AbsoluteDirectoryAccess;
   issueReporter: AgentDirectoryIssueReporter;
   logger: AgentDirectoryServiceLogger;
-  defaultCustomDirectoryName?: string;
 }
 
 export class AgentDirectoryService {
-  private readonly defaultCustomDirectoryName: string;
-
-  constructor(private readonly options: AgentDirectoryServiceOptions) {
-    this.defaultCustomDirectoryName =
-      options.defaultCustomDirectoryName ?? CUSTOM_AGENTS_STORAGE_DIR;
-  }
+  constructor(private readonly options: AgentDirectoryServiceOptions) {}
 
   async builtIn(): Promise<string> {
     return this.ensureBuiltInDir(BUILTIN_WORKFLOW_AGENTS_DIR);
@@ -116,7 +110,7 @@ export class AgentDirectoryService {
 
   private async ensureDefaultCustomDir(): Promise<string> {
     try {
-      await this.options.storage.ensureDir(this.defaultCustomDirectoryName);
+      await this.options.storage.ensureDir(CUSTOM_AGENTS_STORAGE_DIR);
     } catch (error) {
       this.options.logger.error(
         'Failed to create default custom agents directory',
@@ -128,7 +122,7 @@ export class AgentDirectoryService {
     }
 
     const defaultPath = this.options.storage.fullPath(
-      this.defaultCustomDirectoryName,
+      CUSTOM_AGENTS_STORAGE_DIR,
     );
     this.options.logger.debug(
       `Using default custom agents directory: ${defaultPath}`,

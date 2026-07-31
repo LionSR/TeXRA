@@ -54,7 +54,6 @@ import type {
 } from '@shared/schemas/toolResult';
 import { joinNonEmpty } from '@utils/text/stringUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
-import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
@@ -64,7 +63,6 @@ import {
 } from './anthropicUsage';
 import {
   getAnthropicMaxPdfPages,
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   estimateTokensFromText,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
@@ -773,10 +771,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Set up context management before token counting so estimates use matching options.
-    const compactionThresholdPercent = getConfig<number>(
-      'texra.model.compactionThresholdPercent',
-      DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-    );
+    const compactionThresholdPercent = this.getCompactionThresholdPercent();
     const pendingCompactionRequestId = this.getPendingCompactionRequestId();
     const compactionConsumed = setupContextManagement(
       {

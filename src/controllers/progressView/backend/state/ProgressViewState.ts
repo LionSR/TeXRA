@@ -21,7 +21,6 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type RunOutcome,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
@@ -468,24 +467,6 @@ export class ProgressViewState {
           : child,
       ),
     };
-  }
-
-  getAllStreamStates(): ReadonlyMap<StreamTabId, StreamExecutionState> {
-    return this._streamStates;
-  }
-
-  async endRunningTaskGroups(
-    now: number = Date.now(),
-    streamIds?: readonly StreamTabId[],
-    status?: RunOutcome,
-  ): Promise<StreamTabId[]> {
-    const affectedFromLogs = streamIds
-      ? await this.streamLogs.endRunningGroupsForStreams(streamIds, now, status)
-      : await this.streamLogs.endRunningGroups(now, [], status);
-    if (affectedFromLogs.length > 0) {
-      await this.streamLogs.save();
-    }
-    return affectedFromLogs;
   }
 
   // -- Lifecycle --------------------------------------------------------------

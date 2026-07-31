@@ -584,15 +584,15 @@ async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
   request: TuiRetryRequest,
   options: {
-    isCurrent?: () => boolean;
+    isCurrent: () => boolean;
     prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
-    preparationSignal?: AbortSignal;
+    preparationSignal: AbortSignal;
     commitQueue: PQueue;
   },
 ): Promise<void> {
-  const isCurrent = () => options.isCurrent?.() ?? true;
+  const isCurrent = options.isCurrent;
   if (!isCurrent()) return;
-  const signal = options.preparationSignal ?? new AbortController().signal;
+  const signal = options.preparationSignal;
 
   const requestedProvider = request.errorDetails?.provider;
   if (!requestedProvider || !isApiProvider(requestedProvider)) {

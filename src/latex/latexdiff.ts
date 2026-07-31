@@ -29,8 +29,6 @@ const LaTeXdiffResultSchema = z.object({
 });
 export type LaTeXdiffResult = z.infer<typeof LaTeXdiffResultSchema>;
 
-const CHANNEL = 'LaTeXCommands';
-
 function hasDocumentEnvironment(content: string): boolean {
   return (
     content.includes('\\begin{document}') && content.includes('\\end{document}')
@@ -41,7 +39,7 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
-  constructor(private readonly channel: string = CHANNEL) {
+  constructor(private readonly channel: string) {
     this.fileProcessor = new DiffFileProcessor();
     // Pass a thunk so DiffCommandExecutor reads the current workspace value
     // each time it runs a diff. Module-scope instances (in latexdiffCommands.ts

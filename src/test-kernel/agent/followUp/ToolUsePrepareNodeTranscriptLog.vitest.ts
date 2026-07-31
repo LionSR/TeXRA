@@ -125,15 +125,15 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
 
     const result = await node.exec(undefined);
 
-    expect(result.result.systemPrompt).toBe(
+    expect(result.systemPrompt).toBe(
       `${rebuiltPrompts.systemPrompt}\n${rebuiltPrompts.instructionSuffix}`,
     );
-    expect(result.result.messages).toBe(resumeShared.messages);
-    expect(result.result.messages[0]).toEqual({
+    expect(result.messages).toBe(resumeShared.messages);
+    expect(result.messages[0]).toEqual({
       role: 'system',
       content: [{ type: 'text', text: 'stale system' }],
     });
-    expect(result.result.shouldSkipCycle).toBe(true);
+    expect(result.shouldSkipCycle).toBe(true);
     // initializeMessages is the fresh-session path; resume must not call it.
     expect(services.modelHandler.initializeMessages).not.toHaveBeenCalled();
   });
