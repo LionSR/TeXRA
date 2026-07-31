@@ -891,17 +891,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // Stop / continue (PORT — keyed on Interaction status, not FinishReason)
   // ===========================================================================
 
-  protected appendUserText(
-    messages: Step[],
-    text: string,
-    placement: 'last-user' | 'continuation',
-  ): void {
-    const last = messages.at(-1);
-    if (placement === 'last-user' && last?.type === 'user_input') {
-      (last.content ??= []).push(this.textMedia(text));
-      return;
-    }
-
+  protected appendUserText(messages: Step[], text: string): void {
     messages.push({
       type: 'user_input',
       content: [this.textMedia(text)],

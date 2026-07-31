@@ -1221,17 +1221,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  protected appendUserText(
-    messages: MessageParam[],
-    text: string,
-    placement: 'last-user' | 'continuation',
-  ): void {
-    const lastMessage = placement === 'last-user' ? messages.at(-1) : undefined;
-    if (lastMessage && Array.isArray(lastMessage.content)) {
-      lastMessage.content.push(textBlock(text));
-      return;
-    }
-
+  protected appendUserText(messages: MessageParam[], text: string): void {
     messages.push({ role: 'user', content: [textBlock(text)] });
   }
 
