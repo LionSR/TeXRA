@@ -7,51 +7,12 @@ import * as vscode from 'vscode';
 // Local imports
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
-import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import * as logger from '@logger/logUtils';
 import { pathToLocation } from '@utils/files';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'TestCommands';
-
-export async function handleExtractFigurePaths(): Promise<void> {
-  await runGuardedLatexCommand(
-    {
-      channel: CHANNEL,
-      action: 'extract figure paths',
-      errorMessage: 'extractFigurePaths command failed',
-    },
-    async ({ relativePath: filePath }) => {
-      logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
-
-      const figurePaths = await extractFigurePathsFromLatex(
-        pathToLocation(filePath),
-      );
-
-      if (figurePaths.length > 0) {
-        const selected = await vscode.window.showQuickPick(figurePaths, {
-          placeHolder: 'Found figures (select to copy path)',
-          prompt: 'Select a figure path to copy to the clipboard',
-          canPickMany: false,
-        });
-
-        if (selected) {
-          await vscode.env.clipboard.writeText(selected);
-          await showLoggedInfoMessage(
-            CHANNEL,
-            `Copied figure path: ${selected}`,
-          );
-        }
-      } else {
-        await showLoggedInfoMessage(
-          CHANNEL,
-          'No figures found in the current file',
-        );
-      }
-    },
-  );
-}
 
 export async function handleExtractTikzFigures(): Promise<void> {
   await runGuardedLatexCommand(

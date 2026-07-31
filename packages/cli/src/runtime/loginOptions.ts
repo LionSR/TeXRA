@@ -3,7 +3,6 @@ import {
   isOAuthProvider,
   type OAuthProvider,
 } from '@auth/config';
-import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CLI_OAUTH_PROVIDER_INPUTS } from './oauthProviderDisplay';
 
@@ -54,19 +53,6 @@ export function parseCliLogoutTarget(
     default:
       return undefined;
   }
-}
-
-export function resolveLoginProvider(
-  positional: string | undefined,
-  flag: string | undefined,
-): { readonly provider: string; readonly explicit: boolean } {
-  if (isNonEmptyString(flag)) {
-    return { provider: flag.trim(), explicit: true };
-  }
-  if (isNonEmptyString(positional)) {
-    return { provider: positional.trim(), explicit: true };
-  }
-  return { provider: DEFAULT_OAUTH_PROVIDER, explicit: false };
 }
 
 export function unsupportedLoginProviderMessage(provider: string): string {

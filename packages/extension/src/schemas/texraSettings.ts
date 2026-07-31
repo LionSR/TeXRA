@@ -20,10 +20,10 @@ import {
  * VS Code-facing TeXRA settings — Core + VS Code-only extension.
  *
  * This file lives in the extension package because it composes a host-specific
- * view of the settings tree (with VS Code-only entries like
- * `auth.enableVSCodeGitHub` and the `apiKeys.set` / `apiKeys.remove` UI
- * triggers) and provides the JSON-schema generator + flattener used to keep
- * `packages/extension/package.json` aligned with the Zod definitions.
+ * view of the settings tree (with VS Code-only entries like the
+ * `apiKeys.set` / `apiKeys.remove` UI triggers) and provides the JSON-schema
+ * generator + flattener used to keep `packages/extension/package.json` aligned
+ * with the Zod definitions.
  *
  * Other hosts compose their own equivalents (`CliSettingsSchema`,
  * `DesktopSettingsSchema`) in their own packages, all rooted at the same

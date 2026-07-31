@@ -12,7 +12,6 @@
  */
 
 import type { Disposable } from '@platform/interfaces';
-import { getConfig } from '@utils/config/configUtils';
 import { shouldDropBotEvent } from './botFilter';
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -78,16 +77,6 @@ import {
   type GhReviewComment,
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
-
-const GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY =
-  'texra.git.emitPrCiStartedEvents';
-
-function shouldEmitCIStartedEvents(): boolean {
-  return getConfig<boolean>(
-    GITHUB_PR_POLLING_EMIT_CI_STARTED_CONFIG_KEY,
-    false,
-  );
-}
 
 function createInitialState(pr: PRKey): SubscriptionState {
   return {
@@ -566,18 +555,16 @@ export class PRPollingSource extends PollingSourceBase<
         !state.currentShaState.ciStarted
       ) {
         state.currentShaState.ciStarted = true;
-        if (shouldEmitCIStartedEvents()) {
-          this.emit(
-            state,
-            formatCIStarted(
-              state.slug,
-              pr.pullNumber,
-              headSha,
-              runs,
-              checksRes.data.total_count,
-            ),
-          );
-        }
+        this.emit(
+          state,
+          formatCIStarted(
+            state.slug,
+            pr.pullNumber,
+            headSha,
+            runs,
+            checksRes.data.total_count,
+          ),
+        );
       }
 
       const { newFailures, currentFailureKeys } = computeNewCheckFailures(

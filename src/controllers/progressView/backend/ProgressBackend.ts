@@ -26,11 +26,7 @@ import {
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import type { StateStore } from '@platform/interfaces';
-import type {
-  ProgressViewOutboundMessage,
-  SetActiveStreamPayload,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
@@ -62,7 +58,6 @@ export interface ProgressBackendOptions {
   approvals: ProgressBackendApprovalOptions;
   lifecycle: ProgressBackendLifecycleOptions;
   getStreamControls?: GetProgressStreamControls;
-  onSetActiveStream?: (payload: SetActiveStreamPayload) => void;
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
   /**
@@ -99,9 +94,6 @@ export class ProgressBackend {
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
-  private readonly onSetActiveStream?: (
-    payload: SetActiveStreamPayload,
-  ) => void;
   private readonly stateOwnership: 'backend' | 'session';
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private storageGeneration = 0;
@@ -153,7 +145,6 @@ export class ProgressBackend {
       options.getStreamControls,
     );
     this.setApprovalBypassState = ui.setApprovalBypassState;
-    this.onSetActiveStream = options.onSetActiveStream;
   }
 
   async stopStream(stream: StreamTabId): Promise<void> {
@@ -413,9 +404,6 @@ export class ProgressBackend {
         if (this.disposed) return;
         if (sessionEvent.scope !== 'session') return;
         this.factApplier.handleSessionFact(sessionEvent.event);
-        if (sessionEvent.event.type === 'setActiveStream') {
-          this.onSetActiveStream?.(sessionEvent.event.payload);
-        }
       },
       { scope: 'session' },
     );

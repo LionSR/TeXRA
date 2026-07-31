@@ -40,14 +40,9 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 };
 
 /**
- * Edge function URL for GitHub token exchange.
- * Used in VS Code web/Codespaces where standard OAuth callbacks don't work.
- */
-export const GITHUB_TOKEN_EXCHANGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/exchange`;
-
-/**
  * Edge function URL for custom token refresh.
- * Used for sessions created via VS Code GitHub auth (not standard Supabase OAuth).
+ * Used for sessions minted by the auth edge functions rather than by a
+ * standard Supabase OAuth callback.
  */
 export const GITHUB_TOKEN_REFRESH_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/auth-github/refresh`;
 
@@ -204,7 +199,7 @@ export function getExtensionId(): string {
  * Get the OAuth callback URI for redirects.
  * Used by both OAuth and magic link flows.
  *
- * Note: This returns the base URI. Use getExternalAuthCallbackUri() for
+ * Note: This returns the base URI. Use getExternalAuthCallbackInfo() for
  * the environment-appropriate callback URL (handles Codespaces, Remote SSH, etc.)
  */
 export function getAuthCallbackUri(uriScheme: string): string {
@@ -256,15 +251,6 @@ export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbac
     return { fullUrl: getAuthCallbackUri('vscode') };
   }
   return externalAuthCallbackResolver();
-}
-
-/**
- * Get the environment-appropriate OAuth callback URI as a simple string.
- * Use getExternalAuthCallbackInfo() when you need access to parsed components.
- */
-export async function getExternalAuthCallbackUri(): Promise<string> {
-  const info = await getExternalAuthCallbackInfo();
-  return info.fullUrl;
 }
 
 /**

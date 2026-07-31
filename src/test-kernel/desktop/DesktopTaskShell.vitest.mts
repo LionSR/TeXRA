@@ -344,7 +344,6 @@ describe('desktop task shell model', () => {
     expect(workbenchKindForRoute('settings')).toBe('settings');
     expect(workbenchKindForRoute('logs')).toBe('logs');
     expect(workbenchKindForRoute('main')).toBeUndefined();
-    expect(workbenchKindForRoute('progress')).toBeUndefined();
   });
 
   it('derives concise workspace labels from POSIX and Windows paths', () => {

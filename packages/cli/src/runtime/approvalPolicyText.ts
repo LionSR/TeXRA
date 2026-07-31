@@ -14,26 +14,15 @@ export function formatCliApprovalPolicy(policy: CliApprovalPolicy): string {
   }
 }
 
+// Only the three documented names are accepted. Earlier builds also took
+// `default`/`interactive`/`on`/`off`/`deny`/`auto`/`full`/`danger`, but those
+// undocumented synonyms only bloated the accepted-value list, and `on`/`off`
+// were ambiguous about which policy they meant.
 export function parseCliApprovalPolicy(
   input: string,
 ): CliApprovalPolicy | undefined {
   const normalized = input.trim().toLowerCase();
-  if ((CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)) {
-    return normalized as CliApprovalPolicy;
-  }
-  switch (normalized) {
-    case 'default':
-    case 'interactive':
-    case 'on':
-      return 'ask';
-    case 'off':
-    case 'deny':
-      return 'never';
-    case 'auto':
-    case 'full':
-    case 'danger':
-      return 'yolo';
-    default:
-      return undefined;
-  }
+  return (CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)
+    ? (normalized as CliApprovalPolicy)
+    : undefined;
 }

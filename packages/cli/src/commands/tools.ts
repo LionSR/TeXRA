@@ -220,15 +220,11 @@ const toolsListCommand = defineCliCommand({
   run: (context) => listTools(context),
 });
 
-// Built per key so the usage banner (citty reads `meta.name`) matches the
-// invoked alias: `texra tools status --help` prints `tools status`, not `show`.
-function toolsShowCommandNamed(name: 'show' | 'status') {
-  return defineCliCommand({
-    meta: { name, description: 'Show one tool integration' },
-    args: TOOL_ID_ARGS,
-    run: (context, ctx) => showTool(context, ctx.args.id),
-  });
-}
+const toolsStatusCommand = defineCliCommand({
+  meta: { name: 'status', description: 'Show one tool integration' },
+  args: TOOL_ID_ARGS,
+  run: (context, ctx) => showTool(context, ctx.args.id),
+});
 
 function toggleCommand(name: 'enable' | 'disable', enabled: boolean) {
   return defineCliCommand({
@@ -264,10 +260,7 @@ export const toolsCommand = defineCommand({
   meta: { name: 'tools', description: 'Inspect external tool integrations' },
   subCommands: {
     list: toolsListCommand,
-    // `show` is canonical (matches agents/models/history); `status` stays as a
-    // back-compat alias.
-    show: toolsShowCommandNamed('show'),
-    status: toolsShowCommandNamed('status'),
+    status: toolsStatusCommand,
     enable: toggleCommand('enable', true),
     disable: toggleCommand('disable', false),
     install: toolsInstallCommand,

@@ -42,7 +42,6 @@ type DesktopLocalCommandId =
 const DESKTOP_MENU_GROUPS = [
   [
     'texra.showMainView',
-    'texra.showProgressView',
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
@@ -52,9 +51,6 @@ const DESKTOP_MENU_GROUPS = [
     'texra.mainView.reset',
   ],
   [
-    'texra.execute',
-    'texra.runSetupAssistant',
-    'texra.showImportOptions',
     'texra.showMemory',
     'texra.showAgentHistory',
     'texra.showModels',
@@ -62,9 +58,6 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showTools',
     'texra.showMultiAgent',
     'texra.showGitSettings',
-    'texra.openGettingStarted',
-    'texra.cleanOutput',
-    'texra.cleanBuild',
   ],
 ] as const satisfies readonly (readonly (
   CommandId | DesktopLocalCommandId
@@ -96,7 +89,6 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: 'floppy-disk',
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: 'folder-open',
   'texra.showMainView': 'pencil',
-  'texra.showProgressView': 'eye',
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: 'file-lines',
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: 'folder',
   'texra.openSettings': 'gear',
@@ -104,9 +96,6 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'window-maximize',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
   'texra.mainView.reset': 'file-circle-plus',
-  'texra.execute': 'play',
-  'texra.runSetupAssistant': 'rocket',
-  'texra.showImportOptions': 'download',
   'texra.showMemory': 'database',
   'texra.showAgentHistory': 'clock-rotate-left',
   'texra.showModels': 'server',
@@ -114,9 +103,6 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showTools': 'screwdriver-wrench',
   'texra.showMultiAgent': 'diagram-project',
   'texra.showGitSettings': 'code-branch',
-  'texra.openGettingStarted': 'graduation-cap',
-  'texra.cleanOutput': 'eraser',
-  'texra.cleanBuild': 'trash',
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
 } as const satisfies Record<DesktopCommandId, TeXRAIconName>;
@@ -127,8 +113,6 @@ export interface DesktopCommandMenuEntry {
   category: string;
   icon: TeXRAIconName;
   accelerator?: string;
-  enabled: boolean;
-  unavailableReason?: string;
 }
 
 /** Menu template shape produced before Electron materializes native menus. */
@@ -188,7 +172,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Save',
       category: 'File',
       accelerator: 'CommandOrControl+S',
-      enabled: true,
     },
   ],
   [
@@ -197,7 +180,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
       label: 'Desktop Documentation',
       category: 'Help',
-      enabled: true,
     },
   ],
   [
@@ -206,7 +188,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
-      enabled: true,
     },
   ],
   [
@@ -216,7 +197,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Toggle Bottom Bar',
       category: 'View',
       accelerator: 'CommandOrControl+J',
-      enabled: true,
     },
   ],
   [
@@ -226,7 +206,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Toggle Side Panel',
       category: 'View',
       accelerator: 'CommandOrControl+Alt+B',
-      enabled: true,
     },
   ],
   [
@@ -236,7 +215,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Toggle Summary Bar',
       category: 'View',
       accelerator: 'CommandOrControl+Alt+S',
-      enabled: true,
     },
   ],
   [
@@ -246,7 +224,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       label: 'Open Folder',
       category: 'File',
       accelerator: 'CommandOrControl+O',
-      enabled: true,
     },
   ],
   [
@@ -255,7 +232,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
       label: 'Open Logs Folder',
       category: 'TeXRA',
-      enabled: true,
     },
   ],
   [
@@ -264,46 +240,9 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
       label: 'Show Startup Team Chooser',
       category: 'Help',
-      enabled: true,
     },
   ],
 ]);
-
-const DESKTOP_UNAVAILABLE_COMMAND_ENTRIES = [
-  [
-    'texra.execute',
-    'Use the Launcher execute button after choosing an agent and files.',
-  ],
-  [
-    'texra.runSetupAssistant',
-    'The setup assistant agent is still VS Code-only.',
-  ],
-  ['texra.showImportOptions', 'Project import choices are still VS Code-only.'],
-  [
-    'texra.openGettingStarted',
-    'The VS Code walkthrough is not available in desktop.',
-  ],
-  [
-    'texra.cleanOutput',
-    'Workspace cleanup commands are not wired in desktop yet.',
-  ],
-  [
-    'texra.cleanBuild',
-    'Workspace cleanup commands are not wired in desktop yet.',
-  ],
-] as const satisfies readonly (readonly [CommandId, string])[];
-
-type DesktopUnavailableCommandId =
-  (typeof DESKTOP_UNAVAILABLE_COMMAND_ENTRIES)[number][0];
-
-type DesktopAvailableCommandId = Exclude<
-  DesktopCommandId,
-  DesktopUnavailableCommandId
->;
-
-const DESKTOP_UNAVAILABLE_COMMANDS = new Map<CommandId, string>(
-  DESKTOP_UNAVAILABLE_COMMAND_ENTRIES,
-);
 
 export function getDesktopCommandMenuEntries(
   ids: readonly DesktopCommandId[] = DESKTOP_COMMAND_IDS,
@@ -322,7 +261,6 @@ export function getDesktopCommandMenuEntries(
 
     const entry = commandCatalogById.get(id);
     if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
-    const unavailableReason = DESKTOP_UNAVAILABLE_COMMANDS.get(id);
 
     const accelerator =
       entry.keybinding == null
@@ -334,8 +272,6 @@ export function getDesktopCommandMenuEntries(
       category: entry.category,
       icon: DESKTOP_COMMAND_ICONS[id],
       ...(accelerator && { accelerator }),
-      enabled: unavailableReason == null,
-      ...(unavailableReason && { unavailableReason }),
     };
   });
 }
@@ -354,7 +290,6 @@ function action(
 
 const DESKTOP_COMMAND_HANDLERS = {
   'texra.showMainView': action((a) => a.showRoute('main')),
-  'texra.showProgressView': action((a) => a.showRoute('progress')),
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.showRoute('logs')),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: action((a) =>
     a.toggleBottomBar(),
@@ -387,7 +322,7 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: action((a) =>
     a.openDesktopDocs(),
   ),
-} as const satisfies Record<DesktopAvailableCommandId, DesktopCommandHandler>;
+} as const satisfies Record<DesktopCommandId, DesktopCommandHandler>;
 
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
@@ -404,13 +339,9 @@ export function dispatchDesktopCommand(
         );
         return;
       }
-      // The unavailable-command IDs (texra.execute etc.) are valid menu
-      // entries with no handler by design — silent fallthrough is correct.
-      // Only IDs absent from both the registry AND the unavailable list
-      // indicate a stale IPC payload or schema drift; surface those at
-      // error level so the bug shows up in support logs without crashing
-      // the click handler / IPC dispatcher.
-      if (DESKTOP_UNAVAILABLE_COMMANDS.has(failure.id as CommandId)) return;
+      // Every desktop command id has a handler, so an unhandled id means a
+      // stale IPC payload or schema drift. Surface it at error level so the
+      // bug shows up in support logs without crashing the click handler.
       console.error(`[desktop] dispatch: unhandled command ${failure.id}`);
     },
   );
@@ -471,12 +402,7 @@ export function buildDesktopMenuTemplate(
     if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
     return {
       label: entry.label,
-      ...(entry.unavailableReason && { toolTip: entry.unavailableReason }),
-      enabled: entry.enabled,
-      click: () => {
-        if (!entry.enabled) return;
-        dispatchDesktopCommand(id, actions);
-      },
+      click: () => dispatchDesktopCommand(id, actions),
     };
   };
   const customMenu: DesktopMenuTemplateItem = {

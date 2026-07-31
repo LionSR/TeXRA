@@ -52,7 +52,7 @@ interface LeadingGlobalFlags {
  * when the token is not a recognized global flag. Value flags consume two
  * tokens unless they use inline `=value` form or have no following value.
  */
-export function knownGlobalFlagTokenCount(
+function knownGlobalFlagTokenCount(
   rawArgs: readonly string[],
   index: number,
 ): number | undefined {
@@ -293,9 +293,6 @@ export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
   const rest = rawArgs.slice(restIndex + 1);
   if (shortcut === '--version' || shortcut === '-v' || shortcut === '-V') {
     return ['version', ...leadingGlobals, ...rest];
-  }
-  if (shortcut === '--logout') {
-    return ['logout', ...leadingGlobals, ...rest];
   }
   if (shortcut === '--resume') {
     const id = rest[0];

@@ -24,7 +24,6 @@ import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import {
   commandOf,
   createStubDesktopAgentSettingsController,
-  createStubDesktopCrashReportingSettingsController,
   createStubDesktopCredentialSettingsController,
   createStubDesktopHistorySettingsController,
   createStubDesktopSettingsUiHost,
@@ -126,9 +125,6 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     agentSettingsController:
       overrides.agentSettingsController ??
       createStubDesktopAgentSettingsController(),
-    crashReportingSettingsController:
-      overrides.crashReportingSettingsController ??
-      createStubDesktopCrashReportingSettingsController(),
     credentialSettingsController:
       overrides.credentialSettingsController ??
       createStubDesktopCredentialSettingsController({
@@ -365,41 +361,6 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       toolPathProtectionEnabled: false,
     });
-  });
-
-  it('delegates crash-reporting commands to the required controller', async () => {
-    const get = vi.fn(async () => undefined);
-    const setEnabled = vi.fn(async () => undefined);
-    const setDsn = vi.fn(async () => undefined);
-    const crashReportingSettingsController =
-      createStubDesktopCrashReportingSettingsController({
-        actions: { get, setEnabled, setDsn },
-      });
-    const { settings } = createSettingsFixture({
-      crashReportingSettingsController,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
-      }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
-        enabled: true,
-      }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(get).toHaveBeenCalledOnce();
-    expect(setEnabled).toHaveBeenCalledWith(true);
-    expect(setDsn).toHaveBeenCalledOnce();
   });
 
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
@@ -749,11 +710,6 @@ describe('desktop settings IPC', () => {
     const agentSettingsController = createStubDesktopAgentSettingsController();
     const postAgentStartupData = vi.fn(async () => undefined);
     agentSettingsController.postStartupData = postAgentStartupData;
-    const postCrashReportingStartupData = vi.fn(async () => undefined);
-    const crashReportingSettingsController =
-      createStubDesktopCrashReportingSettingsController({
-        postStartupData: postCrashReportingStartupData,
-      });
     const postToolingStartupData = vi.fn(async () => undefined);
     const postLatexConfigValues = vi.fn();
     const toolingSettingsController =
@@ -767,7 +723,6 @@ describe('desktop settings IPC', () => {
 
     const { settings, posted } = createCapturedSettingsFixture({
       agentSettingsController,
-      crashReportingSettingsController,
       historySettingsController,
       toolingSettingsController,
       workspaceState,
@@ -785,7 +740,6 @@ describe('desktop settings IPC', () => {
 
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
     expect(postToolingStartupData).toHaveBeenCalledOnce();
-    expect(postCrashReportingStartupData).toHaveBeenCalledOnce();
     expect(postHistoryData).toHaveBeenCalledOnce();
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 

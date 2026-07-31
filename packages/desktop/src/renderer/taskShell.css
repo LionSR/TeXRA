@@ -243,17 +243,6 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   color: var(--wa-color-text-normal);
 }
 
-.task-sidebar-badge {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
-
-.task-sidebar-badge::part(base) {
-  min-width: 18px;
-  min-height: 18px;
-  padding: 0 5px;
-}
-
 .task-sidebar-scroll {
   --divider-width: 1px;
   --divider-hit-area: 12px;

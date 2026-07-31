@@ -304,11 +304,6 @@ export class DesktopProgressBridge {
               : formatStreamDeletionRetention(activeCount, failedCount),
           ),
       },
-      onSetActiveStream: (payload) => {
-        if (payload.streamId && payload.suppressViewSwitch !== true) {
-          this.routeToProgress();
-        }
-      },
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
@@ -1062,10 +1057,6 @@ export class DesktopProgressBridge {
     );
   }
 
-  private routeToProgress(): void {
-    this.postToRenderer(buildDesktopSetRouteMessage('progress'));
-  }
-
   /**
    * Open the settings overlay, optionally on a specific tab, through the same
    * owner the rail and menu commands use, so a stream-initiated navigation
@@ -1085,12 +1076,10 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
 
     switch (event) {
-      case 'requestEnsureProgressView': {
-        const data =
-          payload as RuntimePresentationEventPayloads['requestEnsureProgressView'];
-        if (!data.fallbackNotification) this.routeToProgress();
+      // The desktop task shell keeps the conversation canvas permanently on
+      // screen, so there is no separate progress surface to reveal.
+      case 'requestEnsureProgressView':
         return;
-      }
       case 'requestShowError': {
         const { message } =
           payload as RuntimePresentationEventPayloads['requestShowError'];
@@ -1186,7 +1175,7 @@ export class DesktopProgressBridge {
   }
 
   /**
-   * Route this window to the progress view and select the given stream.
+   * Select the given stream as this window's active stream.
    * Mirrors the extension's `revealProgressStream` for the desktop Settings
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
    * run works the same way on both hosts.
@@ -1207,7 +1196,6 @@ export class DesktopProgressBridge {
     if (!streamMatchesCategoryFilter(this.state, streamId, filter)) {
       this.state.agentCategoryFilter = 'all';
     }
-    this.routeToProgress();
     this.setActiveStream(streamId);
     return 'revealed';
   }

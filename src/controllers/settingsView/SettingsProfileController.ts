@@ -34,15 +34,6 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     min: 0,
     defaultValue: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   },
-  {
-    key: 'texra.model.retry.backoffMs',
-    label: 'Retry backoff',
-    description:
-      'Base backoff delay in milliseconds between retry attempts for model calls',
-    min: 0,
-    unit: 'ms',
-    defaultValue: DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
-  },
 ];
 
 export type SettingsProfileConfigValue = boolean | number;

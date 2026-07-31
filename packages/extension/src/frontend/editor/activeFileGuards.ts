@@ -136,11 +136,8 @@ interface GuardedFileCommandOptions {
  * document must exist and match `allowedExtensions`, guard failures are logged
  * through the command's channel, and anything the operation throws is surfaced
  * once through that same channel.
- *
- * Single owner of the guard/log/surface frame the LaTeX, figure, linter, XML,
- * and YAML command modules all wrap around their handlers.
  */
-export async function runGuardedFileCommand(
+async function runGuardedFileCommand(
   options: GuardedFileCommandOptions,
   operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
 ): Promise<void> {

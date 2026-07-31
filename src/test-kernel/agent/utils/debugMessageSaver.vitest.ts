@@ -15,7 +15,7 @@ import { WorkspaceFS, StorageFS } from '@utils/files';
 // getConfig reads through the platform config provider; enable the
 // debug-object saving flag there instead of patching the ESM export.
 setupPlatform({
-  config: { 'texra.debug.saveDebugObjects': true },
+  config: { 'texra.debug.saveModelIO': true },
 });
 
 describe('maybeSaveDebugObject', () => {

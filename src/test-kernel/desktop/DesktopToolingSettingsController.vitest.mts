@@ -6,12 +6,9 @@ import { LatexToolingController } from '@controllers/settingsView/LatexToolingCo
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  HOMEBREW_INSTALL_COMMAND,
-  LATEX_WORKSHOP_EXT_ID,
-} from '@shared/constants/latex';
+import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { assertSupported } from '@shared/utils/dispatcher';
+import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import { isStored } from '@test/support/settingsStoresFake';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -62,7 +59,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
   const openedUrls: string[] = [];
-  const presentedExtensions: string[] = [];
   const globalState = overrides.globalState ?? new FakeStateStore();
   const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const dashboard: ControllerOptions['dashboard'] = {
@@ -87,9 +83,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
     navigation: {
       openExternal: async (url) => {
         openedUrls.push(url);
-      },
-      presentExtensionInstall: async (extensionId) => {
-        presentedExtensions.push(extensionId);
       },
     },
     commands: {
@@ -119,7 +112,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
     globalState,
     openedUrls,
     posted,
-    presentedExtensions,
     reportedErrors,
     workspaceState,
   };
@@ -357,21 +349,35 @@ describe('DefaultDesktopToolingSettingsController', () => {
     expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
   });
 
-  it('routes URLs and extension references through explicit navigation', async () => {
-    const { controller, openedUrls, presentedExtensions } = createFixture();
+  it('routes install URLs through explicit navigation', async () => {
+    const { controller, openedUrls } = createFixture();
 
     await assertSupported(controller.toolsActions.openInstallUrl)(
       'https://example.com/install',
     );
-    await assertSupported(controller.toolsActions.installExtension)(
-      'publisher.extension',
-    );
-    await assertSupported(controller.latexActions.installLatexWorkshop)();
 
     expect(openedUrls).toEqual(['https://example.com/install']);
-    expect(presentedExtensions).toEqual([
-      'publisher.extension',
-      LATEX_WORKSHOP_EXT_ID,
-    ]);
+  });
+
+  it('declares extension installs unsupported and strips their dashboard affordance', async () => {
+    const { controller, posted } = createFixture({
+      dashboard: {
+        buildItems: async () => [
+          { ...DASHBOARD_ITEM, installExtensionId: 'leanprover.lean4' },
+        ],
+      },
+    });
+
+    expect(isUnsupported(controller.toolsActions.installExtension)).toBe(true);
+    expect(isUnsupported(controller.latexActions.installLatexWorkshop)).toBe(
+      true,
+    );
+
+    await assertSupported(controller.toolsActions.recheckStatus)();
+
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items: [DASHBOARD_ITEM],
+    });
   });
 });

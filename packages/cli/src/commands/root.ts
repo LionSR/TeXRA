@@ -45,7 +45,6 @@ import { helpCommand } from './help';
 import { HISTORY_SUBCOMMAND_NAMES, historyCommand } from './history';
 import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
-import { latexdiffCommand } from './latex';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
@@ -96,7 +95,6 @@ export const rootCommand = withUsageSections(
       skills: skillsCommand,
       tools: toolsCommand,
       'multi-agent': multiAgentCommand,
-      latexdiff: latexdiffCommand,
       models: modelsCommand,
       // `login`/`logout` are convenience shortcuts; the full auth surface
       // (login, logout, status, usage, token) lives under `auth`.

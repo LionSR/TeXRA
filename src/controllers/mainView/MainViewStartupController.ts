@@ -1,3 +1,6 @@
+// Local imports - platform
+import { tryGlobalState } from '@platform/platform';
+
 // Local imports - common
 import type {
   AgentOptionData,
@@ -6,6 +9,7 @@ import type {
   TeamOptionData,
 } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - controllers
 import type { MainViewAuthStatus } from './MainViewTypes';
@@ -43,15 +47,29 @@ type MainViewStartupMessage = Extract<
 export class MainViewStartupController {
   constructor(private readonly deps: MainViewStartupControllerDeps) {}
 
+  /**
+   * Banner dismissals live in global state and are written only by the
+   * banner's own close button. They were `texra.ui.show*Banner` settings until
+   * they moved here, so a pre-move `false` still counts as dismissed; nothing
+   * writes the legacy key back.
+   */
+  private isBannerDismissed(
+    key: GlobalStateKey,
+    legacySettingPath: string,
+  ): boolean {
+    if (tryGlobalState()?.get<boolean>(key) === true) return true;
+    return this.deps.getConfig<boolean>(legacySettingPath, true) === false;
+  }
+
   getOrchestratorBannerMessage(): MainViewStartupMessage {
-    const showOrchestratorBanner = this.deps.getConfig<boolean>(
+    const dismissed = this.isBannerDismissed(
+      GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED,
       'ui.showOrchestratorBanner',
-      true,
     );
     return {
-      command: showOrchestratorBanner
-        ? MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER
-        : MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
+      command: dismissed
+        ? MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER
+        : MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
     };
   }
 
@@ -63,7 +81,10 @@ export class MainViewStartupController {
 
     const showLoginBanner =
       !authStatus.authenticated &&
-      this.deps.getConfig<boolean>('ui.showLoginBanner', true);
+      !this.isBannerDismissed(
+        GlobalStateKey.LOGIN_BANNER_DISMISSED,
+        'ui.showLoginBanner',
+      );
 
     return [
       {

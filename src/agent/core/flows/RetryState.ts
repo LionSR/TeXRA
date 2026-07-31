@@ -25,20 +25,23 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
 
+/**
+ * Base delay between node-level retry attempts. `ModelRetryGate` applies its
+ * own failure-scaled backoff on top, so this is an implementation constant
+ * rather than something a user tunes separately from the attempt count.
+ */
+const RETRY_BACKOFF_MS = 1000;
+
 /** Returns one initial attempt plus configured retries and their base backoff. */
 function getNodeRetryConfig(): { maxRetries: number; backoffMs: number } {
   const maxAutoAttempts = getConfig<number>(
     'texra.model.retry.maxAttempts',
     DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   );
-  const backoffMs = getConfig<number>(
-    'texra.model.retry.backoffMs',
-    DEFAULT_CORE_SETTINGS.model.retry.backoffMs,
-  );
 
   return {
     maxRetries: 1 + Math.max(0, maxAutoAttempts),
-    backoffMs,
+    backoffMs: RETRY_BACKOFF_MS,
   };
 }
 

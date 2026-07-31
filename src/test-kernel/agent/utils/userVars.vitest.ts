@@ -40,10 +40,8 @@ const baseSetting: AgentSetting = {
   temperature: 1,
   isRewrite: true,
   rounds: 1,
-  requiredFiles: {},
   requiredFilesInternal: {},
   defaultOutputFiles: [],
-  filePatternsContain: [],
   tools: [],
 };
 
@@ -68,15 +66,25 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
 });
 
 describe('getToolFlags', () => {
-  it('uses texra.debug.saveInputPrompt setting for PRINT_INPUT_PROMPT', async () => {
+  it('uses texra.debug.saveModelIO setting for PRINT_INPUT_PROMPT', async () => {
     try {
-      fakeConfig.set('texra.debug.saveInputPrompt', true);
+      fakeConfig.set('texra.debug.saveModelIO', true);
       const enabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
       expect(enabledFlags.PRINT_INPUT_PROMPT).toBe(true);
 
-      fakeConfig.set('texra.debug.saveInputPrompt', false);
+      fakeConfig.set('texra.debug.saveModelIO', false);
       const disabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
       expect(disabledFlags.PRINT_INPUT_PROMPT).toBe(false);
+    } finally {
+      await fakeConfig.update('texra.debug.saveModelIO', undefined);
+    }
+  });
+
+  it('still honors the pre-merge texra.debug.saveInputPrompt key', async () => {
+    try {
+      fakeConfig.set('texra.debug.saveInputPrompt', true);
+      const flags = getToolFlags(baseConfig, baseSetting, basePrompt);
+      expect(flags.PRINT_INPUT_PROMPT).toBe(true);
     } finally {
       await fakeConfig.update('texra.debug.saveInputPrompt', undefined);
     }

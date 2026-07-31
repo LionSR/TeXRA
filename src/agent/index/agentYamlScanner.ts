@@ -29,8 +29,8 @@ interface ParsedAgentYaml {
 }
 
 /**
- * Extract tool names from raw YAML tool configs.
- * Tools can be plain strings ("web_search") or objects ({ name: "web_search", ... }).
+ * Extract tool names from declared tool configs. An entry is a registry name,
+ * or — for definitions registered as values — a whole tool definition.
  */
 export function extractToolNames(
   rawTools: unknown[] | undefined,
@@ -218,7 +218,6 @@ function scanYaml(
         ? AgentCategory.ToolUse
         : AgentCategory.Workflow;
 
-    const internal = rawSettings.internal === true || undefined;
     let rounds: number | undefined;
     if (
       category === AgentCategory.Workflow &&
@@ -247,7 +246,6 @@ function scanYaml(
         ? defaultOutputFiles
         : undefined,
       rounds,
-      internal,
     };
   } catch (err) {
     logger.warn(

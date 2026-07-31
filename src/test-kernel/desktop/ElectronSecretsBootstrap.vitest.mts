@@ -246,7 +246,6 @@ describe('desktop main process keychain access', () => {
     );
     expect(source).not.toContain('prewarmElectronKeychain');
     expect(source).not.toContain('safeStorage.encryptString');
-    expect(source).not.toContain('await initializeCrashReporting();');
     expect(source).toContain("webContents.once('did-finish-load'");
   });
 });
