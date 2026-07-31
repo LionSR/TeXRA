@@ -118,7 +118,7 @@ install [--run]|auth`
 - `texra doctor` → grouped PASS/WARN/FAIL rows (Node, dirs, auth, model
   access, LaTeX toolchain: latexmk, pdflatex, latexdiff, latexindent…)
 
-**Auth**: `texra login [--device] [--no-browser] [--provider github|google]`;
+**Auth**: `texra login [github|google] [--device] [--no-browser]`;
 `texra auth` = status (`Signed in as <label> (<tier>).`); `texra setup-token
 [--name --expires --print-env]` (CI relay token → `TEXRA_RELAY_TOKEN`);
 BYOK via `ANTHROPIC_API_KEY` etc.; `--api-mode personal|included`.

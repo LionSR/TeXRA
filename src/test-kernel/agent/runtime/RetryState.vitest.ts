@@ -66,6 +66,9 @@ import {
   testRunScope,
 } from '../progressTestUtils';
 
+/** Mirrors the RETRY_BACKOFF_MS implementation constant in RetryState.ts. */
+const RETRY_BACKOFF_SECONDS = 1;
+
 interface TestRetryServices {
   config: { model: string };
   runScope: RunScope;
@@ -358,7 +361,7 @@ describe('RetryState', () => {
     expect(node.maxRetries).toBe(
       1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
     );
-    expect(node.wait).toBe(DEFAULT_CORE_SETTINGS.model.retry.backoffMs / 1000);
+    expect(node.wait).toBe(RETRY_BACKOFF_SECONDS);
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {
@@ -437,7 +440,7 @@ describe('RetryState', () => {
         setAbortController: vi.fn(),
       });
       const retry = node._exec(undefined);
-      const delayMs = DEFAULT_CORE_SETTINGS.model.retry.backoffMs;
+      const delayMs = RETRY_BACKOFF_SECONDS * 1000;
 
       await vi.advanceTimersByTimeAsync(delayMs - 1);
       expect(node.attempts).toBe(1);

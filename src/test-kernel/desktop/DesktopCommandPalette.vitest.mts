@@ -37,7 +37,7 @@ interface DesktopCommandPaletteModule {
     delta: number,
   ): number;
   executeCommandPaletteEntry(
-    entry: { id: string; label: string; enabled: boolean } | undefined,
+    entry: { id: string; label: string } | undefined,
     onExecute: (id: string) => boolean | Promise<boolean>,
   ): boolean;
 }
@@ -84,20 +84,16 @@ describe('desktop command palette', () => {
       label: 'Show Launcher',
       category: 'TeXRA',
       accelerator: 'Command+Option+M',
-      enabled: true,
     },
     {
-      id: 'texra.showProgressView',
-      label: 'Show Progress',
+      id: 'texra.desktop.showLogs',
+      label: 'Show Logs',
       category: 'TeXRA',
-      accelerator: 'Command+Option+P',
-      enabled: true,
     },
     {
       id: 'texra.showModels',
       label: 'Show Models',
       category: 'TeXRA',
-      enabled: true,
     },
   ];
 
@@ -105,8 +101,8 @@ describe('desktop command palette', () => {
     const { filterCommandPaletteEntries } = await loadDesktopCommandPalette();
 
     expect(
-      filterCommandPaletteEntries(entries, 'progress').map((entry) => entry.id),
-    ).toEqual(['texra.showProgressView']);
+      filterCommandPaletteEntries(entries, 'logs').map((entry) => entry.id),
+    ).toEqual(['texra.desktop.showLogs']);
     expect(
       filterCommandPaletteEntries(entries, 'texra models').map(
         (entry) => entry.id,
@@ -124,28 +120,6 @@ describe('desktop command palette', () => {
     expect(getNextCommandPaletteIndex(2, 3, 1)).toBe(0);
     expect(getNextCommandPaletteIndex(0, 3, -1)).toBe(2);
     expect(getNextCommandPaletteIndex(0, 0, 1)).toBe(-1);
-  });
-
-  it('does not dispatch disabled command palette entries', async () => {
-    const { executeCommandPaletteEntry } = await loadDesktopCommandPalette();
-    const actions = {
-      showSettings: vi.fn(),
-    };
-
-    expect(
-      executeCommandPaletteEntry(
-        {
-          id: 'texra.showModels',
-          label: 'Show Models',
-          enabled: false,
-        },
-        () => {
-          actions.showSettings();
-          return true;
-        },
-      ),
-    ).toBe(false);
-    expect(actions.showSettings).not.toHaveBeenCalled();
   });
 
   // wa-dialog + wa-input wiring (Lit-rendered web components). The DOM
@@ -271,13 +245,13 @@ describe('desktop command palette', () => {
     await flushDialogTicks();
 
     const button = controller.element.querySelector<HTMLButtonElement>(
-      '.desktop-command-palette-item[data-command-id="texra.showProgressView"]',
+      '.desktop-command-palette-item[data-command-id="texra.showMainView"]',
     );
     expect(button).not.toBeNull();
     button!.click();
     await flushDialogTicks();
 
-    expect(actions.showRoute).toHaveBeenCalledWith('progress');
+    expect(actions.showRoute).toHaveBeenCalledWith('main');
     expect(controller.element.open).toBe(false);
   });
 

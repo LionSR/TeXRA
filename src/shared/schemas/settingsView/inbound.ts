@@ -257,16 +257,6 @@ const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
 const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
   CMD.SET_CHATGPT_PREFER_SUBSCRIPTION,
 );
-const GetDesktopCrashReportingMessageSchema = commandOnly(
-  CMD.GET_DESKTOP_CRASH_REPORTING,
-);
-const SetDesktopCrashReportingEnabledMessageSchema = enabledFlag(
-  CMD.SET_DESKTOP_CRASH_REPORTING_ENABLED,
-);
-const SetDesktopCrashReportingDsnMessageSchema = commandOnly(
-  CMD.SET_DESKTOP_CRASH_REPORTING_DSN,
-);
-
 const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
 
 const UnsubscribePRMessageSchema = z.object({
@@ -444,9 +434,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignInChatGptMessageSchema,
     SignOutChatGptMessageSchema,
     SetChatGptPreferSubscriptionMessageSchema,
-    GetDesktopCrashReportingMessageSchema,
-    SetDesktopCrashReportingEnabledMessageSchema,
-    SetDesktopCrashReportingDsnMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,

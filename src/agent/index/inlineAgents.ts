@@ -174,7 +174,6 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
               userRequestTemplateCount(parsed.prompts.userRequest),
             )
           : undefined,
-      internal: settings.internal === true || undefined,
     },
     definition: clonePlainContainers({ ...parsed, settings }),
   };

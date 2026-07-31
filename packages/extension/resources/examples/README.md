@@ -7,9 +7,8 @@ Follow the checklist below to see the extension in action:
 2. Inspect `draft.tex` and decide which sections you'd like TeXRA to improve.
 3. [Stage your input, reference, and auxiliary files](command:texra.mainView.focus) from the TeXRA main view.
 4. Pick an agent and model that match your task (the walkthrough highlights common choices).
-5. Enable auto-extraction to collect image paths and TikZ blocks before the run. You can also try the
-   dedicated commands: [Extract figure paths](command:texra.extractFigurePaths) and
-   [Extract TikZ figures](command:texra.extractTikzFigures).
+5. Enable auto-extraction to collect image paths and TikZ blocks before the run. You can also run
+   [Extract TikZ figures](command:texra.extractTikzFigures) on its own.
 6. [Execute the agent](command:texra.execute) and watch the ProgressBoard update in real time.
 7. Open the generated outputs, compare them with the original file, and iterate.
 

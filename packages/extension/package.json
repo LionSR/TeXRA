@@ -213,55 +213,8 @@
         }
       },
       {
-        "title": "User Interface",
-        "properties": {
-          "texra.ui.showApiKeyReminders": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show API key reminders in the status bar and main view when no API keys are configured",
-            "scope": "resource"
-          },
-          "texra.ui.showLoginBanner": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show login banner prompting users to sign in for access to remote agents",
-            "scope": "resource"
-          },
-          "texra.ui.showGettingStartedBanner": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show getting started banner with import options when no LaTeX files are found",
-            "scope": "resource"
-          },
-          "texra.ui.showOrchestratorBanner": {
-            "type": "boolean",
-            "default": true,
-            "description": "Show orchestrator and session reminder text in the main view",
-            "scope": "resource"
-          },
-          "texra.auth.enableVSCodeGitHub": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable VS Code native GitHub authentication (experimental)",
-            "scope": "resource"
-          }
-        }
-      },
-      {
         "title": "Model Settings",
         "properties": {
-          "texra.model.useImprovedConnection": {
-            "type": "boolean",
-            "default": false,
-            "description": "Use improved connection for API requests",
-            "scope": "resource"
-          },
-          "texra.model.improvedConnectionDomain": {
-            "type": "string",
-            "description": "Domain to use when using improved connection",
-            "default": "proxy.texra.ai",
-            "scope": "resource"
-          },
           "texra.model.useOpenAIResponsesAPI": {
             "type": "boolean",
             "default": true,
@@ -540,12 +493,6 @@
       {
         "title": "LaTeX Formatter",
         "properties": {
-          "texra.latex.showLatexindentWarning": {
-            "type": "boolean",
-            "default": false,
-            "description": "Show warning when latexindent is not installed",
-            "order": 2
-          },
           "texra.latex.latexindentConfig": {
             "type": "string",
             "default": "",
@@ -713,13 +660,6 @@
             "maximum": 100,
             "description": "Number of recent commits to show in the commit selection dropdown",
             "order": 1
-          },
-          "texra.git.emitPrCiStartedEvents": {
-            "type": "boolean",
-            "default": false,
-            "description": "Emit a PR subscription event when GitHub check runs first appear for a new head commit.",
-            "scope": "resource",
-            "order": 2
           }
         }
       },
@@ -819,16 +759,10 @@
             "description": "Whether to show verbose debug messages in the logger view",
             "scope": "resource"
           },
-          "texra.debug.saveDebugObjects": {
+          "texra.debug.saveModelIO": {
             "type": "boolean",
             "default": false,
-            "description": "Save message and response objects to JSON files for debugging purposes",
-            "scope": "resource"
-          },
-          "texra.debug.saveInputPrompt": {
-            "type": "boolean",
-            "default": false,
-            "description": "Save the final input prompt sent to the model as an XML file for debugging purposes",
+            "description": "Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.",
             "scope": "resource"
           }
         }
@@ -858,13 +792,6 @@
             "default": true,
             "description": "Require user approval before tool-use agents execute bash commands",
             "scope": "resource"
-          },
-          "texra.toolUse.persistence.ttlHours": {
-            "type": "number",
-            "default": 336,
-            "minimum": 1,
-            "description": "Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup",
-            "scope": "resource"
           }
         }
       },
@@ -876,13 +803,6 @@
             "default": 2,
             "minimum": 0,
             "description": "Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.",
-            "scope": "resource"
-          },
-          "texra.model.retry.backoffMs": {
-            "type": "number",
-            "default": 1000,
-            "minimum": 0,
-            "description": "Base backoff delay in milliseconds between retry attempts for model calls",
             "scope": "resource"
           }
         }
@@ -927,20 +847,10 @@
         "icon": "$(indent)"
       },
       {
-        "command": "texra.getRecentCommits",
-        "title": "Get Recent Commits",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.cloneOverleafProject",
         "title": "Clone Overleaf/ShareLaTeX Project",
         "category": "TeXRA",
         "icon": "$(repo-clone)"
-      },
-      {
-        "command": "texra.refreshCommits",
-        "title": "Refresh Commits",
-        "category": "TeXRA"
       },
       {
         "command": "texra.indentCurrentTeX",
@@ -953,13 +863,6 @@
         "command": "texra.resumeAgent",
         "title": "Resume Tool-Use Agent",
         "category": "TeXRA"
-      },
-      {
-        "command": "texra.applyReplacements",
-        "title": "Apply LaTeX Replacements to Current File",
-        "category": "TeXRA",
-        "icon": "$(symbol-text)",
-        "enablement": "!virtualWorkspace"
       },
       {
         "command": "texra.fixCompilation",
@@ -976,26 +879,6 @@
         "enablement": "!virtualWorkspace"
       },
       {
-        "command": "texra.countPdfPages",
-        "title": "Count PDF Pages",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.encodeImageToBase64",
-        "title": "Encode Image to Base64",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.convertPdfToImages",
-        "title": "Convert PDF to Images",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.extractFigurePaths",
-        "title": "Extract Figure Paths from LaTeX",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.extractTikzFigures",
         "title": "Extract TikZ Figures from Current File",
         "category": "TeXRA"
@@ -1003,21 +886,6 @@
       {
         "command": "texra.compileTikzFigures",
         "title": "Compile TikZ Figures from Current File",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.testConnection",
-        "title": "Test API Connection",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.testAgentLoading",
-        "title": "Test Agent Loading",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.loadSpecificAgent",
-        "title": "Load Specific Agent",
         "category": "TeXRA"
       },
       {
@@ -1030,16 +898,6 @@
         "title": "Import or Create LaTeX Project",
         "category": "TeXRA",
         "icon": "$(cloud-download)"
-      },
-      {
-        "command": "texra.parseXml",
-        "title": "Parse XML Structure",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.parseYaml",
-        "title": "Parse YAML Structure",
-        "category": "TeXRA"
       },
       {
         "command": "texra.stopAgent",
@@ -1109,22 +967,6 @@
         "title": "View Profile",
         "category": "TeXRA",
         "icon": "$(account)"
-      },
-      {
-        "command": "texra.testTextEditor",
-        "title": "Test Text Editor Tool",
-        "category": "TeXRA",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "texra.showLinterMessages",
-        "title": "Show Linter Messages",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.countLinterMessages",
-        "title": "Count Linter Messages",
-        "category": "TeXRA"
       },
       {
         "command": "texra.openDoc",
@@ -1357,13 +1199,12 @@
           {
             "id": "texra.gettingStarted.autoExtract",
             "title": "Manual path: auto-extract figures (optional)",
-            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run them manually:\n\n[Extract figure paths](command:texra.extractFigurePaths) | [Extract TikZ figures](command:texra.extractTikzFigures)",
+            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run TikZ extraction manually:\n\n[Extract TikZ figures](command:texra.extractTikzFigures)",
             "media": {
               "image": "resources/walkthroughs/media/auto-extract-options.png",
               "altText": "Screenshot showing auto-extraction options"
             },
             "completionEvents": [
-              "onCommand:texra.extractFigurePaths",
               "onCommand:texra.extractTikzFigures"
             ]
           },
@@ -1391,7 +1232,7 @@
           {
             "id": "texra.gettingStarted.housekeeping",
             "title": "Manual path: clean up when you're done",
-            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar, or right-click any `.tex` file.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
+            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
@@ -1445,34 +1286,9 @@
     "menus": {
       "editor/title": [
         {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.indentCurrentTeX",
-          "group": "navigation"
-        },
-        {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.applyReplacements",
-          "group": "navigation"
-        },
-        {
           "when": "texra.activated && editorLangId == latex",
           "command": "texra.fixCompilation",
           "group": "navigation"
-        },
-        {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.getTeXCount",
-          "group": "navigation"
-        },
-        {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.cleanOutput",
-          "group": "2_texra_housekeeping@1"
-        },
-        {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.cleanBuild",
-          "group": "2_texra_housekeeping@2"
         }
       ],
       "view/title": [
@@ -1544,30 +1360,6 @@
           "group": "inline@2"
         }
       ],
-      "editor/context": [
-        {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.cleanOutput",
-          "group": "z_texra@1"
-        },
-        {
-          "when": "texra.activated && editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.cleanBuild",
-          "group": "z_texra@2"
-        }
-      ],
-      "explorer/context": [
-        {
-          "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.cleanOutput",
-          "group": "z_texra@1"
-        },
-        {
-          "when": "texra.activated && resourceLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "texra.cleanBuild",
-          "group": "z_texra@2"
-        }
-      ],
       "commandPalette": [
         {
           "command": "texra.agentReview.run",
@@ -1626,15 +1418,7 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.getRecentCommits",
-          "when": "texra.activated"
-        },
-        {
           "command": "texra.cloneOverleafProject",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.refreshCommits",
           "when": "texra.activated"
         },
         {
@@ -1643,11 +1427,7 @@
         },
         {
           "command": "texra.resumeAgent",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.applyReplacements",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.fixCompilation",
@@ -1655,22 +1435,6 @@
         },
         {
           "command": "texra.getTeXCount",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.countPdfPages",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.encodeImageToBase64",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.convertPdfToImages",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.extractFigurePaths",
           "when": "texra.activated"
         },
         {
@@ -1682,18 +1446,6 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.testConnection",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
-          "command": "texra.testAgentLoading",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
-          "command": "texra.loadSpecificAgent",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
           "command": "texra.downloadArXivSource",
           "when": "texra.activated"
         },
@@ -1702,16 +1454,8 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.parseXml",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
-          "command": "texra.parseYaml",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
           "command": "texra.stopAgent",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.execute",
@@ -1719,11 +1463,11 @@
         },
         {
           "command": "texra.pack",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.clean",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.createAgentWithAI",
@@ -1754,20 +1498,8 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.testTextEditor",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
-          "command": "texra.showLinterMessages",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
-          "command": "texra.countLinterMessages",
-          "when": "texra.activated && config.texra.logger.debugMode"
-        },
-        {
           "command": "texra.openDoc",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.mainView.reset",
@@ -1836,6 +1568,10 @@
         {
           "command": "texra.unresolveCommentThread",
           "when": "false"
+        },
+        {
+          "command": "texra.compactResponse",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [
@@ -1869,18 +1605,6 @@
         "command": "texra.showProgressView",
         "key": "ctrl+alt+p",
         "mac": "cmd+option+p",
-        "when": "texra.activated"
-      },
-      {
-        "command": "texra.cleanOutput",
-        "key": "ctrl+alt+shift+c",
-        "mac": "cmd+option+shift+c",
-        "when": "texra.activated"
-      },
-      {
-        "command": "texra.cleanBuild",
-        "key": "ctrl+alt+shift+b",
-        "mac": "cmd+option+shift+b",
         "when": "texra.activated"
       },
       {

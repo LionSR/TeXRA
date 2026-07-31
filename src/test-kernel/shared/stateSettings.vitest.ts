@@ -9,7 +9,11 @@ import { describe, it, vi } from 'vitest';
 // Local imports
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
 import * as logger from '@logger/logUtils';
-import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
+import {
+  CLI_CORE_SETTING_CONSUMERS,
+  CORE_SETTING_PATHS,
+  EXTENSION_ONLY_CORE_SETTING_CONSUMERS,
+} from '@shared/schemas/coreSettings';
 import {
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -437,6 +441,11 @@ describe('state settings catalog', () => {
   });
 });
 
+const CLI_CORE_SETTING_PATHS = Object.values(CLI_CORE_SETTING_CONSUMERS).flat();
+const EXTENSION_ONLY_CORE_SETTING_PATHS = Object.values(
+  EXTENSION_ONLY_CORE_SETTING_CONSUMERS,
+).flat();
+
 describe('knownKeys derivation', () => {
   it('recognizes config-slot CLI keys, but warns on state.json keys in config.json', () => {
     for (const entry of CLI_STATE_SETTINGS) {
@@ -454,6 +463,58 @@ describe('knownKeys derivation', () => {
       KNOWN_TEXRA_KEYS.has(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE),
       false,
     );
+  });
+
+  it('recognizes Core keys a non-VS-Code host reads', () => {
+    for (const path of CLI_CORE_SETTING_PATHS) {
+      assert.ok(
+        KNOWN_TEXRA_KEYS.has(`texra.${path}`),
+        `texra.${path} is CLI-consumed but not recognized`,
+      );
+    }
+  });
+
+  it('warns on Core keys only the VS Code extension reads', () => {
+    for (const path of EXTENSION_ONLY_CORE_SETTING_PATHS) {
+      assert.equal(
+        KNOWN_TEXRA_KEYS.has(`texra.${path}`),
+        false,
+        `texra.${path} is extension-only, so config.json entries must warn`,
+      );
+    }
+  });
+});
+
+describe('core settings host split', () => {
+  it('files every Core setting path on exactly one side', () => {
+    assert.deepEqual(
+      [...CLI_CORE_SETTING_PATHS, ...EXTENSION_ONLY_CORE_SETTING_PATHS].sort(),
+      [...CORE_SETTING_PATHS].sort(),
+      'every Core setting must be filed as CLI-consumed or extension-only',
+    );
+  });
+
+  it('names an existing consumer file on the side it is filed under', () => {
+    for (const consumer of Object.keys(CLI_CORE_SETTING_CONSUMERS)) {
+      assert.ok(
+        existsSync(resolve(REPO_ROOT, consumer)),
+        `CLI consumer does not exist: ${consumer}`,
+      );
+      assert.ok(
+        !consumer.startsWith('packages/extension/'),
+        `CLI consumer lives inside the extension host: ${consumer}`,
+      );
+    }
+    for (const consumer of Object.keys(EXTENSION_ONLY_CORE_SETTING_CONSUMERS)) {
+      assert.ok(
+        existsSync(resolve(REPO_ROOT, consumer)),
+        `extension consumer does not exist: ${consumer}`,
+      );
+      assert.ok(
+        consumer.startsWith('packages/extension/'),
+        `extension-only consumer lives outside the extension host: ${consumer}`,
+      );
+    }
   });
 });
 

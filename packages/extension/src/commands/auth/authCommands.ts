@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
-import { z } from 'zod';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
+import { type OAuthProvider } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { relayTokenSignOutNotice } from '@auth/relayToken';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
@@ -10,17 +9,10 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'authCommands';
 
-type AuthMethod = OAuthProvider | 'github-browser' | 'email';
-
-const EMAIL_LOGIN_ENABLED = false;
-
-function isVSCodeGitHubEnabled(): boolean {
-  return getConfig('auth.enableVSCodeGitHub', false);
-}
+type AuthMethod = OAuthProvider | 'github-browser';
 
 async function getExistingSession(
   authReady?: boolean,
@@ -40,8 +32,7 @@ interface SignInOption {
   method: AuthMethod;
 }
 
-/** All possible sign-in options - filtered at runtime based on feature flags. */
-const ALL_SIGN_IN_OPTIONS: readonly SignInOption[] = [
+const SIGN_IN_OPTIONS: readonly SignInOption[] = [
   {
     label: '$(globe) Google',
     description: 'Sign in with Google',
@@ -52,25 +43,7 @@ const ALL_SIGN_IN_OPTIONS: readonly SignInOption[] = [
     description: 'Sign in with GitHub via web browser',
     method: 'github-browser',
   },
-  {
-    label: '$(mail) Email',
-    description: 'Sign in with a magic link sent to your email',
-    method: 'email',
-  },
-  {
-    label: '$(github) GitHub (VS Code)',
-    description: 'Sign in using VS Code GitHub authentication',
-    method: 'github',
-  },
 ];
-
-function getSignInOptions(): SignInOption[] {
-  return ALL_SIGN_IN_OPTIONS.filter((option) => {
-    if (option.method === 'email') return EMAIL_LOGIN_ENABLED;
-    if (option.method === 'github') return isVSCodeGitHubEnabled();
-    return true;
-  });
-}
 
 // "<prefix> <email>" info toast; the tier suffix is only fetched and
 // appended when `includeTier` is set.
@@ -90,9 +63,8 @@ async function showSignedInMessage(
  * Run the interactive sign-in flow.
  *
  * Returns `true` when the user is authenticated by the time this resolves
- * (already signed in, or completed an OAuth flow). Returns `false` when
- * the user cancelled, hit an error, or chose email sign-in (which
- * completes asynchronously after the user clicks the OTP link).
+ * (already signed in, or completed an OAuth flow). Returns `false` when the
+ * user cancelled or hit an error.
  */
 export async function signIn(): Promise<boolean> {
   try {
@@ -141,7 +113,7 @@ export async function signIn(): Promise<boolean> {
     }
 
     const selected = await vscode.window.showQuickPick<SignInOption>(
-      getSignInOptions(),
+      [...SIGN_IN_OPTIONS],
       {
         title: 'TeXRA Sign In',
         placeHolder: 'Choose a sign-in method',
@@ -150,11 +122,6 @@ export async function signIn(): Promise<boolean> {
       },
     );
     if (!selected) return false;
-
-    if (selected.method === 'email') {
-      await signInWithEmail();
-      return false;
-    }
 
     const session = await vscode.authentication.getSession(
       AUTH_PROVIDER_ID,
@@ -170,40 +137,6 @@ export async function signIn(): Promise<boolean> {
   } catch (error) {
     void showLoggedErrorMessage(CHANNEL, 'Sign in failed', error);
     return false;
-  }
-}
-
-async function signInWithEmail(): Promise<void> {
-  const email = await vscode.window.showInputBox({
-    prompt: 'Enter your email address',
-    placeHolder: 'you@example.com',
-    validateInput: (value) => {
-      if (!value) return 'Email is required';
-      if (!z.email().safeParse(value).success) {
-        return 'Please enter a valid email address';
-      }
-      return undefined;
-    },
-  });
-  if (!email) return;
-
-  try {
-    // Use the implicit-flow client so the magic link carries tokens directly
-    // (not a PKCE code), which completes wherever the email is opened.
-    const supabase = SupabaseClient.getOtpClient();
-    const redirectUri = await getExternalAuthCallbackUri();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectUri },
-    });
-
-    if (error) throw new Error(error.message);
-
-    void vscode.window.showInformationMessage(
-      `Magic link sent to ${email}. Click the link in your email - VS Code will sign you in automatically.`,
-    );
-  } catch (error) {
-    void showLoggedErrorMessage(CHANNEL, 'Failed to send magic link', error);
   }
 }
 

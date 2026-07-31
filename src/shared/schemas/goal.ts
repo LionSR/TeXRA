@@ -7,17 +7,6 @@ import { StreamTabIdSchema } from './identifiers';
 export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
 
 /**
- * Pre-rename keys, honored read-only for back-compat when a user explicitly set
- * one. The feature was called "Odyssey" before June 2026: `texra.odyssey.enabled`
- * was its canonical key and `texra.experimental.odyssey.enabled` the original
- * experimental flag. New configs use `GOAL_FEATURE_FLAG_KEY`.
- */
-export const LEGACY_GOAL_FEATURE_FLAG_KEYS = [
-  'texra.odyssey.enabled',
-  'texra.experimental.odyssey.enabled',
-] as const;
-
-/**
  * A goal is a live pursuit: it exists only while the autonomous loop is running
  * (`active`) or waiting for the user (`paused`). Finishing or abandoning one
  * drops the record entirely rather than parking it in a terminal state.

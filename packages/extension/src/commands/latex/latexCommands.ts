@@ -17,7 +17,6 @@ import {
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
-import replacementEngine from '@replacement/engine';
 import { AgentCategory } from '@shared/schemas';
 import { delay } from '@utils/core';
 
@@ -68,36 +67,6 @@ export async function handleFixCompilation(): Promise<void> {
         // This is a "run latexFixer" command, so prefer the helper model.
         preferHelperModel: true,
       });
-    },
-  );
-}
-
-export async function handleApplyReplacements(): Promise<void> {
-  await runGuardedLatexCommand(
-    {
-      channel: CHANNEL,
-      action: 'apply replacements',
-      saveDocument: true,
-      errorMessage: 'Error applying LaTeX replacements',
-    },
-    async ({ editor }) => {
-      const document = editor.document;
-      const text = document.getText();
-
-      const processedText = replacementEngine.applyAll(text);
-      const fullRange = new vscode.Range(
-        document.positionAt(0),
-        document.positionAt(text.length),
-      );
-
-      await editor.edit((editBuilder) => {
-        editBuilder.replace(fullRange, processedText);
-      });
-
-      await showLoggedInfoMessage(
-        CHANNEL,
-        'LaTeX replacements applied successfully',
-      );
     },
   );
 }

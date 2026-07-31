@@ -175,7 +175,7 @@ const TextEditorInputSchema = z.discriminatedUnion('command', [
 export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
 
 /** Command type derived from TextEditorInputSchema */
-export type EditorCommand = TextEditorInput['command'];
+type EditorCommand = TextEditorInput['command'];
 
 /**
  * Implementation of Anthropic's text editor tool for VS Code

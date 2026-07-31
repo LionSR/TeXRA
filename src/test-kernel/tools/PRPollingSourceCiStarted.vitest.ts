@@ -158,22 +158,12 @@ function checkRunsResponse(runs: GhCheckRun[]): {
   };
 }
 
-async function createHarness(
-  options: {
-    emitCiStartedEvents?: boolean;
-  } = {},
-): Promise<{
+async function createHarness(): Promise<{
   ghGet: Mock;
   source: CiStartedSource;
 }> {
   vi.resetModules();
-  const emitCiStartedEvents = options.emitCiStartedEvents ?? false;
   const ghGet = vi.fn();
-  vi.doMock('@utils/config/configUtils', () => ({
-    getConfig: vi.fn((_key: string, defaultValue: unknown) =>
-      emitCiStartedEvents ? true : defaultValue,
-    ),
-  }));
   mockGitHubClient(ghGet);
   const { PRPollingSource } = await import('@tools/github/PRPollingSource');
   return {
@@ -198,33 +188,11 @@ function queuePollResponses(
 describe('PRPollingSource CI-started events', () => {
   afterEach(() => {
     vi.doUnmock('@tools/github/githubClient');
-    vi.doUnmock('@utils/config/configUtils');
     vi.resetModules();
   });
 
-  it('keeps CI-started events disabled by default while recording observed runs', async () => {
+  it('seeds existing check runs without replaying a CI-started event', async () => {
     const { ghGet, source } = await createHarness();
-    const events: string[] = [];
-    const state = createState(events);
-
-    queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
-
-    await source.pollOne('owner/repo/pulls/7', state);
-
-    expect(events).toEqual([]);
-    expect(state.currentShaState?.ciStarted).toBe(true);
-  });
-
-  it.each([
-    { label: 'while disabled without emitting', enabled: false },
-    {
-      label: 'without replaying a CI-started event when enabled',
-      enabled: true,
-    },
-  ])('seeds existing check runs $label', async ({ enabled }) => {
-    const { ghGet, source } = await createHarness({
-      emitCiStartedEvents: enabled,
-    });
     const events: string[] = [];
     const state = createState(events, {
       initialized: false,
@@ -243,9 +211,7 @@ describe('PRPollingSource CI-started events', () => {
   });
 
   it('emits a CI-started event once when check runs first appear', async () => {
-    const { ghGet, source } = await createHarness({
-      emitCiStartedEvents: true,
-    });
+    const { ghGet, source } = await createHarness();
     const events: string[] = [];
     const state = createState(events);
 
@@ -267,9 +233,7 @@ describe('PRPollingSource CI-started events', () => {
   });
 
   it('resets CI-started state on a new head SHA', async () => {
-    const { ghGet, source } = await createHarness({
-      emitCiStartedEvents: true,
-    });
+    const { ghGet, source } = await createHarness();
     const events: string[] = [];
     const state = createState(events, {
       headSha: OLD_SHA,

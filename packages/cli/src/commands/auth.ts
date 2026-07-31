@@ -1,6 +1,8 @@
 import { defineCommand } from 'citty';
 
+import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -9,7 +11,6 @@ import {
   hasLoginTransportConflict,
   isCliLoginProvider,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
-  resolveLoginProvider,
   unsupportedLoginProviderMessage,
   type CliLoginInit,
 } from '../runtime/loginOptions';
@@ -47,7 +48,6 @@ import { authTokenCommand } from './relayTokens';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 type LoginCommandArgs = {
-  readonly provider?: string;
   readonly providerArg?: string;
   readonly 'no-browser'?: boolean;
   readonly noBrowser?: boolean;
@@ -60,12 +60,10 @@ type LoginCommandArgs = {
 };
 
 export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
-  const positional = optString(args.providerArg);
-  const flag = optString(args.provider);
-  const provider = resolveLoginProvider(positional, flag);
+  const provider = optString(args.providerArg)?.trim();
   return {
-    provider: provider.provider,
-    providerExplicit: provider.explicit,
+    provider: isNonEmptyString(provider) ? provider : DEFAULT_OAUTH_PROVIDER,
+    providerExplicit: isNonEmptyString(provider),
     noBrowser: booleanArg(args, 'no-browser'),
     device: args.device === true,
     selectAccount: booleanArg(args, 'select-account'),
@@ -180,10 +178,6 @@ export const loginCommand = withUsageSections(
     },
     args: {
       ...GLOBAL_ARGS,
-      provider: {
-        type: 'string',
-        description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS} (alternative to positional)`,
-      },
       providerArg: {
         type: 'positional',
         required: false,

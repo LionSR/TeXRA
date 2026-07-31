@@ -8,24 +8,16 @@ import {
   getExtensionId,
   getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
-  GITHUB_TOKEN_EXCHANGE_URL,
   isOAuthProvider,
   type OAuthProvider,
 } from '@auth/config';
-import {
-  DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
-  createHostAuthCoordinator,
-} from '@auth/SupabaseAuthCoordinator';
+import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-  parseTokenExchangeResponse,
   SupabaseSessionCoordinator,
-  toStorableSupabaseSession,
   type SupabaseSession,
 } from '@auth/SupabaseSession';
 import { classifyAuthFailureStatus } from '@auth/TokenProvider';
-import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
@@ -43,14 +35,6 @@ export interface AuthNotifier {
   showInfo(message: string): void;
   showSignInPrompt(reason: 'expired' | 'invalid'): Promise<void>;
 }
-
-/** GitHub token type prefixes for diagnostic logging. */
-const GITHUB_TOKEN_TYPE_MAP: Record<string, string> = {
-  ghp_: 'classic PAT',
-  gho_: 'OAuth token',
-  ghu_: 'user-to-server token',
-  ghs_: 'server-to-server token',
-};
 
 /**
  * Authentication provider for Supabase integration.
@@ -115,7 +99,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     this.uriHandler = handler;
 
-    // Set up persistent listener for magic link callbacks
+    // Set up persistent listener for late URI auth callbacks
     // This handles cases where user clicks magic link outside of active OAuth flow
     this.uriHandlerSubscription = handler.onDidReceiveCallback(async (uri) => {
       await this.handleMagicLinkCallback(uri);
@@ -131,7 +115,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Handle magic link callback when user clicks email link.
+   * Handle a late implicit-token auth callback URI.
    * This runs for all auth callbacks, but only processes if no session exists
    * and no OAuth flow is currently active.
    */
@@ -275,133 +259,27 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Create authentication session via OAuth.
+   * Create authentication session via the Supabase OAuth flow, in the browser
+   * with an environment-appropriate callback URI.
    *
-   * For GitHub: Uses VS Code's built-in GitHub authentication provider.
-   * This works seamlessly across all environments (desktop, Codespaces, Remote SSH)
-   * and avoids OAuth callback complexity. The GitHub token is exchanged for a
-   * Supabase session via Edge Function.
-   *
-   * For GitHub (Browser): Uses traditional Supabase OAuth flow via web browser.
-   * This is an alternative when VS Code's built-in auth is not preferred.
-   *
-   * For other providers (Google): Uses traditional Supabase OAuth flow with
-   * environment-appropriate callback URIs.
-   *
-   * @param scopes - Scopes array, may contain provider hint as "provider:github", "provider:github-browser", or "provider:google"
+   * @param scopes - Scopes array, may contain provider hint as "provider:github-browser" or "provider:google"
    */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
-    // Extract provider from scopes (format: "provider:github", "provider:github-browser", or "provider:google")
     const requestedProvider = scopes
       .find((s) => s.startsWith('provider:'))
       ?.split(':')[1];
 
-    // Route to appropriate auth flow based on provider
     if (requestedProvider === 'github-browser') {
-      logger.info(
-        CHANNEL,
-        'Using browser-based GitHub auth (Supabase OAuth flow)',
-      );
       return this.createSessionViaSupabaseOAuth('github');
     }
 
-    if (!requestedProvider || requestedProvider === 'github') {
-      // Default to VS Code's built-in GitHub auth - works everywhere and is simpler
-      logger.info(
-        CHANNEL,
-        'Using VS Code GitHub auth (works on desktop and Codespaces)',
-      );
-      return this.createSessionViaVSCodeGitHub();
-    }
-
-    // Other providers (Google) use traditional Supabase OAuth flow
     return this.createSessionViaSupabaseOAuth(
       isOAuthProvider(requestedProvider)
         ? requestedProvider
         : DEFAULT_OAUTH_PROVIDER,
     );
-  }
-
-  /**
-   * Create session using VS Code's built-in GitHub authentication.
-   * Works on desktop, Codespaces, Remote SSH - anywhere VS Code runs.
-   * Exchanges the GitHub token for a Supabase session via Edge Function.
-   */
-  private async createSessionViaVSCodeGitHub(): Promise<vscode.AuthenticationSession> {
-    try {
-      // Use VS Code's built-in GitHub auth - works perfectly in Codespaces
-      const githubSession = await vscode.authentication.getSession(
-        'github',
-        ['user:email'],
-        { createIfNone: true },
-      );
-
-      if (!githubSession) {
-        throw new Error('GitHub authentication was cancelled');
-      }
-
-      // Log token format to help diagnose auth issues (token prefix indicates type)
-      const tokenPrefix = githubSession.accessToken.slice(0, 4);
-      const tokenType = GITHUB_TOKEN_TYPE_MAP[tokenPrefix] ?? 'unknown format';
-
-      logger.info(
-        CHANNEL,
-        `Got VS Code GitHub session for ${githubSession.account.label} (scopes: ${githubSession.scopes.join(', ') || 'default'}, token type: ${tokenType})`,
-      );
-
-      // Exchange GitHub token for Supabase session via Edge Function
-      const response = await fetchWithTimeout(
-        GITHUB_TOKEN_EXCHANGE_URL,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ github_token: githubSession.accessToken }),
-        },
-        DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
-        'Authentication server timeout. Please try again.',
-      );
-
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        const errorMsg =
-          errorData.error || `Token exchange failed: ${response.status}`;
-        logger.error(
-          CHANNEL,
-          `GitHub token exchange failed (${response.status}): ${errorMsg} [token type: ${tokenType}]`,
-        );
-        // Provide user-friendly error messages for common issues
-        if (response.status === 401) {
-          throw new Error(
-            'GitHub token validation failed. Please try signing out of GitHub in VS Code and signing in again.',
-          );
-        }
-        throw new Error(errorMsg);
-      }
-
-      const data = await parseTokenExchangeResponse(response, logger);
-      const session = toStorableSupabaseSession(data, {
-        fallbackLabel: githubSession.account.label,
-        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      });
-
-      await this.storeSession(session);
-      this.notifier.showInfo(`Signed in as ${session.account.label}`);
-      logger.info(
-        CHANNEL,
-        `VS Code GitHub auth successful for ${session.account.label}`,
-      );
-
-      return this.toVSCodeSession(session);
-    } catch (error) {
-      this.notifier.showError(
-        `Authentication failed: ${toErrorMessage(error)}`,
-      );
-      throw error;
-    }
   }
 
   /**

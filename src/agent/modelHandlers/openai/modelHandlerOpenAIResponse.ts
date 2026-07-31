@@ -473,7 +473,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * WebSocket transport connects directly to the OpenAI Responses API via the
    * official SDK and is incompatible with any non-default base URL, including:
    * - Server-side keys relay (Supabase Edge Function)
-   * - Improved connection proxy (proxy.texra.ai)
    * - OpenRouter routing
    * - Custom per-provider or per-model endpoints
    *

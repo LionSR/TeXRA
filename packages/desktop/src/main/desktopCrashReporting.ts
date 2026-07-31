@@ -1,23 +1,10 @@
 import escapeRegExp from 'escape-string-regexp';
-import type { PlatformSecrets } from '@platform/secrets';
-import type { StateStore } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
 import type { ErrorEvent } from '@sentry/electron/main';
 
-export const DESKTOP_CRASH_REPORTING_DSN_SECRET =
-  'texra.desktop.crashReporting.dsn';
-
 const REDACTED_PATH = '<redacted-path>';
 
-export interface DesktopCrashReportingStatus {
-  enabled: boolean;
-  configured: boolean;
-}
-
 export interface DesktopCrashReportingInitOptions {
-  globalState: StateStore;
-  secrets: PlatformSecrets;
   sensitivePaths: readonly (string | undefined)[];
   log?: Pick<Console, 'debug' | 'error'>;
 }
@@ -82,60 +69,18 @@ function createDesktopCrashEventScrubber(
   };
 }
 
-export async function getDesktopCrashReportingStatus(
-  globalState: StateStore,
-  secrets: PlatformSecrets,
-): Promise<DesktopCrashReportingStatus> {
-  return {
-    enabled: globalState.get(
-      GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED,
-      false,
-    ),
-    configured: (await secrets.get(DESKTOP_CRASH_REPORTING_DSN_SECRET)) != null,
-  };
-}
-
-export async function setDesktopCrashReportingEnabled(
-  globalState: StateStore,
-  enabled: boolean,
-): Promise<void> {
-  await globalState.update(
-    GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED,
-    enabled,
-  );
-}
-
-export async function setDesktopCrashReportingDsn(
-  secrets: PlatformSecrets,
-  dsn: string | undefined,
-): Promise<void> {
-  const trimmed = dsn?.trim();
-  if (trimmed) {
-    await secrets.set(DESKTOP_CRASH_REPORTING_DSN_SECRET, trimmed);
-  } else {
-    await secrets.delete(DESKTOP_CRASH_REPORTING_DSN_SECRET);
-  }
-}
-
+/**
+ * Native crash capture is a developer-build affordance: it turns on only when
+ * TEXRA_SENTRY_DSN is set in the environment, and there is no UI for it.
+ */
 export async function initializeDesktopCrashReporting({
-  globalState,
-  secrets,
   sensitivePaths,
   log = console,
-}: DesktopCrashReportingInitOptions): Promise<boolean> {
-  const enabled = globalState.get(
-    GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED,
-    false,
-  );
-  if (!enabled) {
-    log.debug?.('Desktop crash reporting disabled.');
-    return false;
-  }
-
-  const dsn = await secrets.get(DESKTOP_CRASH_REPORTING_DSN_SECRET);
+}: DesktopCrashReportingInitOptions): Promise<void> {
+  const dsn = process.env.TEXRA_SENTRY_DSN?.trim();
   if (!dsn) {
-    log.debug?.('Desktop crash reporting enabled without a Sentry DSN.');
-    return false;
+    log.debug?.('Desktop crash reporting disabled: TEXRA_SENTRY_DSN unset.');
+    return;
   }
 
   const scrubCrashEvent = createDesktopCrashEventScrubber(sensitivePaths);
@@ -148,9 +93,7 @@ export async function initializeDesktopCrashReporting({
       attachScreenshot: false,
       beforeSend: (event) => scrubCrashEvent(event),
     });
-    return true;
   } catch (error) {
     log.error?.('Failed to initialize desktop crash reporting', error);
-    return false;
   }
 }

@@ -25,12 +25,10 @@ import { getRendererPlatform } from './rendererPlatform';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
-// Single command row. `meta` is the trailing label (an accelerator hint, an
-// unavailable reason, a category, etc.). `category` is an optional, separate
-// field included in the search haystack without being displayed — useful when
-// `meta` is reserved for an accelerator but the row should still match
-// category-name queries. `enabled === false` renders the row but disables
-// click/Enter dispatch.
+// Single command row. `meta` is the trailing label (an accelerator hint, a
+// category, etc.). `category` is an optional, separate field included in the
+// search haystack without being displayed — useful when `meta` is reserved for
+// an accelerator but the row should still match category-name queries.
 interface CommandPaletteEntry {
   readonly id: string;
   readonly label: string;
@@ -38,7 +36,6 @@ interface CommandPaletteEntry {
   readonly icon: TeXRAIconName;
   readonly meta?: string;
   readonly category?: string;
-  readonly enabled: boolean;
 }
 
 interface CommandPaletteGroup {
@@ -111,7 +108,7 @@ export function executeCommandPaletteEntry(
   entry: CommandPaletteEntry | undefined,
   onExecute: (id: string) => boolean | Promise<boolean>,
 ): boolean {
-  if (!entry?.enabled) return false;
+  if (!entry) return false;
   // Sync handlers report their actual result; async handlers (typed-args
   // registry, #3784) return a Promise — treat that as "handled" so the
   // palette closes immediately and the work runs in the background.
@@ -175,7 +172,7 @@ export function createDesktopCommandPalette({
 
   const applyQuery = (nextQuery: string): void => {
     query = nextQuery;
-    visibleEntries = visibleCommandPaletteEntries(allEntries, query);
+    visibleEntries = filterCommandPaletteEntries(allEntries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
   };
@@ -272,7 +269,6 @@ export function createDesktopCommandPalette({
                         size="s"
                         role="option"
                         data-command-id=${entry.id}
-                        ?disabled=${!entry.enabled}
                         aria-selected=${
                           index === activeIndex ? 'true' : 'false'
                         }
@@ -391,7 +387,6 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
       'Stream',
     icon: 'terminal',
     category: 'Streams',
-    enabled: true,
   };
 }
 
@@ -413,24 +408,13 @@ function toPaletteEntry(
   return {
     id: entry.id,
     label: entry.label,
-    description: entry.unavailableReason,
     icon: entry.icon,
     meta: formatDesktopAccelerator(
       shortcut?.accelerator ?? entry.accelerator,
       platform,
     ),
     category: entry.category,
-    enabled: entry.enabled,
   };
-}
-
-function visibleCommandPaletteEntries(
-  entries: readonly CommandPaletteEntry[],
-  query: string,
-): CommandPaletteEntry[] {
-  const filtered = filterCommandPaletteEntries(entries, query);
-  if (query.trim()) return filtered;
-  return filtered.filter((entry) => entry.enabled);
 }
 
 function groupCommandPaletteEntries(

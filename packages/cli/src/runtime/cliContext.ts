@@ -7,7 +7,6 @@ import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
-import { setWebSocketEnabledOverride } from '@utils/config/providerConfig';
 
 import {
   CLI_APPROVAL_POLICIES,
@@ -270,12 +269,6 @@ export interface CliGlobalArgs {
    * user explicitly selects another approval policy.
    */
   readonly noInput?: boolean;
-  /**
-   * `--websocket` / `--no-websocket`: per-run override of the OpenAI WebSocket
-   * transport. `undefined` defers to the stored `texra.websocket.openai`
-   * setting (the CLI has no other way to flip that global-state key).
-   */
-  readonly webSocketEnabled?: boolean;
   readonly includeInteropSkills?: boolean;
   readonly skillSourcePaths?: readonly string[];
 }
@@ -391,11 +384,6 @@ export async function buildCliContext(
 ): Promise<CliContext> {
   const ambient = init.ambient ?? readCliAmbientState();
   const env = init.env ?? process.env;
-  // The CLI has no setter for the `texra.websocket.openai` global-state key, so
-  // `--websocket`/`--no-websocket` applies as a per-process override that the
-  // OpenAI handler's transport selection reads via getWebSocketEnabled().
-  // `undefined` leaves the stored UI toggle authoritative.
-  setWebSocketEnabledOverride(init.globalArgs.webSocketEnabled);
   const cwd = await resolveCliCwd(init.globalArgs.cwd);
   const loadedConfig = await loadWorkspaceCliConfig(cwd);
   const configWarnings = [...loadedConfig.warnings];

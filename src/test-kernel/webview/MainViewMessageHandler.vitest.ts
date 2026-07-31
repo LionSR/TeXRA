@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - IPC contracts
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Type imports
 import type * as vscode from 'vscode';
@@ -13,7 +14,7 @@ import type * as vscode from 'vscode';
 const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),
   executeCommand: vi.fn(),
-  updateConfig: vi.fn(),
+  globalStateUpdate: vi.fn(),
   checkCoreDependencies: vi.fn(),
   getToolDocsCommand: vi.fn(),
   getProviderKeyUrl: vi.fn(),
@@ -88,8 +89,12 @@ vi.mock('@utils/config/constants', () => ({
 }));
 vi.mock('@utils/config/configUtils', () => ({
   getConfig: vi.fn(),
-  updateConfig: mocks.updateConfig,
+  updateConfig: vi.fn(),
 }));
+vi.mock('@common/state', async () => {
+  const keys = await import('@shared/state/stateKeys');
+  return { ...keys, globalSM: { update: mocks.globalStateUpdate } };
+});
 vi.mock('@utils/config/providerConfig', () => ({
   getProviderKeyUrl: mocks.getProviderKeyUrl,
 }));
@@ -127,7 +132,7 @@ describe('MainViewMessageHandler interaction mappings', () => {
     vi.clearAllMocks();
     mocks.safeExecuteCommand.mockResolvedValue(undefined);
     mocks.executeCommand.mockResolvedValue(undefined);
-    mocks.updateConfig.mockResolvedValue(undefined);
+    mocks.globalStateUpdate.mockResolvedValue(undefined);
     mocks.checkCoreDependencies.mockResolvedValue([]);
     mocks.getToolDocsCommand.mockReturnValue(undefined);
     mocks.getProviderKeyUrl.mockReturnValue(undefined);
@@ -316,15 +321,15 @@ describe('MainViewMessageHandler interaction mappings', () => {
     ]);
   });
 
-  it('writes the distinct configuration keys for both dismissed banners', async () => {
+  it('writes the distinct dismissed-state keys for both dismissed banners', async () => {
     await dispatch({ command: MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER });
     await dispatch({
       command: MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER,
     });
 
-    expect(mocks.updateConfig.mock.calls).toEqual([
-      ['ui.showLoginBanner', false],
-      ['ui.showOrchestratorBanner', false],
+    expect(mocks.globalStateUpdate.mock.calls).toEqual([
+      [GlobalStateKey.LOGIN_BANNER_DISMISSED, true],
+      [GlobalStateKey.ORCHESTRATOR_BANNER_DISMISSED, true],
     ]);
   });
 });

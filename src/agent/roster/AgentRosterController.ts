@@ -28,7 +28,6 @@ export interface AgentRosterEntry {
   readonly name: string;
   readonly source: AgentSource;
   readonly category: AgentCategory;
-  readonly internal?: boolean;
 }
 
 export class InvalidAgentTeamError extends Error {}
@@ -258,15 +257,11 @@ export class AgentRosterController<
   ): Entry | undefined {
     const resolved = this.deps.resolveAgent?.(category, identifier);
     if (resolved) {
-      return resolved.category === category && !resolved.internal
-        ? resolved
-        : undefined;
+      return resolved.category === category ? resolved : undefined;
     }
     return this.deps
       .getAgents(category)
-      .find(
-        (entry) => !entry.internal && agentMatchesIdentifier(entry, identifier),
-      );
+      .find((entry) => agentMatchesIdentifier(entry, identifier));
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */

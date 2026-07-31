@@ -6,7 +6,6 @@ import {
   type ModelRoutingConfig,
 } from '@model/openRouterRouting';
 import { tryParseUrl } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getDashScopeUseChina,
@@ -21,7 +20,6 @@ import {
 // where the Settings dashboard writes custom endpoints. The legacy settings.json
 // keys (texra.model.baseUrl*) are no longer read — globalSM is the single source.
 
-const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 /** Normalize a URL-like string to `host/path` form (no protocol, no trailing slashes). */
@@ -33,13 +31,6 @@ function normalizeUrl(input: string): string {
   if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
-
-const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
-  [ModelProvider.GOOGLE]: 'generativelanguage',
-  [ModelProvider.OPENAI]: 'openai/v1',
-  [ModelProvider.ANTHROPIC]: 'anthropic',
-  [ModelProvider.XAI]: 'xai',
-};
 
 /**
  * Provider default base URLs. Providers whose endpoint depends on the
@@ -149,20 +140,14 @@ export function usesServerSideKeysRoute(
  * Priority order (mutually exclusive):
  * 1. Custom base URL (per-model override) — `route: 'custom'`
  * 2. Server-side keys relay (experimental, for Ultra users) — `route: 'serverSideKeys'`
- * 3. Improved connection proxy (proxy.texra.ai)
- * 4. OpenRouter
- * 5. Per-provider custom endpoint (dashboard settings)
- * 6. Provider default URLs
+ * 3. OpenRouter
+ * 4. Per-provider custom endpoint (dashboard settings)
+ * 5. Provider default URLs
  *
- * Tiers 3-6 are the internal cascade of `route: 'direct'` (see
+ * Tiers 3-5 are the internal cascade of `route: 'direct'` (see
  * {@link resolveDirectBaseUrl}): none of them is caller-selectable, since
  * which one applies depends on global settings and provider metadata read
  * here, not on a decision the caller has already made.
- *
- * Note: Server-side keys and proxy.texra.ai are MUTUALLY EXCLUSIVE.
- * When server-side keys are enabled, the relay handles everything
- * and proxy.texra.ai is not used — enforced structurally here since
- * `route: 'serverSideKeys'` and `route: 'direct'` cannot both be selected.
  */
 export function resolveBaseUrl(config: ProxyConfig): string | null {
   switch (config.route) {
@@ -189,9 +174,8 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
 /**
  * The standard routing cascade used whenever neither a custom base URL nor
- * server-side keys apply: improved-connection proxy (if enabled and the
- * provider/route has a proxy path), then OpenRouter, then a per-provider
- * dashboard endpoint, then provider defaults (including region toggles).
+ * server-side keys apply: OpenRouter, then a per-provider dashboard endpoint,
+ * then provider defaults (including region toggles).
  */
 function resolveDirectBaseUrl(config: {
   provider: ModelProvider;
@@ -199,29 +183,6 @@ function resolveDirectBaseUrl(config: {
   logger?: ProxyLogger;
 }): string | null {
   const { provider, useOpenRouter, logger } = config;
-  const useImprovedConnection = getConfig<boolean>(
-    'texra.model.useImprovedConnection',
-    false,
-  );
-
-  if (useImprovedConnection) {
-    const customDomain = getConfig<string>(
-      'texra.model.improvedConnectionDomain',
-      '',
-    ).trim();
-    const domain = normalizeUrl(customDomain || DEFAULT_PROXY_DOMAIN);
-
-    if (!customDomain) {
-      logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
-    }
-
-    // OpenRouter uses 'openrouter' path; other providers use their configured paths
-    const path = useOpenRouter ? 'openrouter' : PROXY_PATHS[provider];
-    if (path) {
-      logger?.debug(`Using proxy for ${provider}: ${domain}/${path}`);
-      return `https://${domain}/${path}`;
-    }
-  }
 
   if (useOpenRouter) return OPENROUTER_BASE_URL;
 

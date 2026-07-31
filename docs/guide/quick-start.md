@@ -125,7 +125,7 @@ Reflection rounds are controlled by the selected agent—most writing agents alr
 <p class="hero-caption">The two helper menus in the Input and Media file-group headers. Active helpers tint their buttons; here Attach TeX Count and Figures are on.</p>
 
 ::: tip Save Prompts for Later
-For advanced debugging, enable the `texra.debug.saveInputPrompt` setting (in `.texra/config.json` or VS Code settings) to store the generated prompt alongside other debug artifacts.
+For advanced debugging, enable the `texra.debug.saveModelIO` setting (in `.texra/config.json` or VS Code settings) to store the generated prompt alongside other debug artifacts.
 :::
 
 ### Execute and Watch the Run
