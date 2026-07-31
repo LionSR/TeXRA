@@ -21,7 +21,10 @@ import { GoalStore } from '@tools/goal';
 import { readCompletedRunConversation } from '@transcript';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
-import { formatCliHistoryAgentLabel } from './historyLabels';
+import {
+  formatCliHistoryAgentLabel,
+  formatCliHistorySubject,
+} from './historyLabels';
 import {
   createConversationPreview,
   createConversationTranscript,
@@ -359,18 +362,10 @@ export function formatCliHistoryText(
         entry.timestamp,
         formatCliHistoryAgentLabel(entry),
         entry.status,
-        historyListSubject(entry),
+        formatCliHistorySubject(entry, '-'),
       ].join('\t'),
     )
     .join('\n');
-}
-
-function historyListSubject(
-  entry: Pick<CliHistoryEntry, 'description' | 'inputBasename'>,
-): string {
-  if (entry.inputBasename !== '-') return entry.inputBasename;
-  const description = entry.description?.replaceAll(/\s+/g, ' ').trim();
-  return description || '-';
 }
 
 export function formatCliHistoryNotFoundText(

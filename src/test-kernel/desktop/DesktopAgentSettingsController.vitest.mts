@@ -12,6 +12,8 @@ import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { isStored } from '@test/support/settingsStoresFake';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
+import { commandOf } from './desktopSettingsTestSupport';
+
 type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
 
 interface ControllerFixtureOptions {
@@ -110,10 +112,6 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   };
 }
 
-function messageCommand(message: unknown): string | undefined {
-  return (message as { command?: string }).command;
-}
-
 function physicistCatalog(): AgentCatalog {
   const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
     source: 'builtInWorkflow',
@@ -165,7 +163,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     await controller.postStartupData();
 
     expect(loadAgents).toHaveBeenCalledOnce();
-    expect(posted.map(messageCommand)).toEqual(
+    expect(posted.map(commandOf)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -190,7 +188,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
       expect.not.arrayContaining(['builtInWorkflow:polish', 'polish']),
     );
-    expect(posted.map(messageCommand)).toEqual(
+    expect(posted.map(commandOf)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
         MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
@@ -208,12 +206,11 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(
       posted.some(
         (message) =>
-          messageCommand(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toBe(true);
     const teamOptionsMessage = posted.find(
-      (message) =>
-        messageCommand(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+      (message) => commandOf(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
     ) as { optionsData?: unknown } | undefined;
     expect(teamOptionsMessage).toBeDefined();
     const teamOptions = z
@@ -239,7 +236,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
     await setCustomDir();
 
-    expect(posted.map(messageCommand)).toEqual(
+    expect(posted.map(commandOf)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
         MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
@@ -275,7 +272,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(
       posted.find(
         (message) =>
-          messageCommand(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
       ),
     ).toMatchObject({
       command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
@@ -283,15 +280,13 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
     expect(
       posted.some(
-        (message) =>
-          messageCommand(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+        (message) => commandOf(message) === MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
       ),
     ).toBe(true);
     expect(
       posted.some(
         (message) =>
-          messageCommand(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       ),
     ).toBe(true);
     expect(infoMessages).toEqual(['Applied "Physicist" team']);

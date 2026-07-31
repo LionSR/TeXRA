@@ -9,15 +9,14 @@
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
-import { toNewestFirstByTimestamp } from '@utils/core';
 
 import { historyItems } from '../settingsState';
 
 export const historyHandlers = {
+  // Ordering is owned by the sole producer, `buildHistoryMessage`, over an
+  // already newest-first `listExecutions()`; the view renders what it is given.
   [SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY]: (data) => {
-    historyItems.set(
-      toNewestFirstByTimestamp(data.historyItems, (item) => item.timestamp),
-    );
+    historyItems.set(data.historyItems);
   },
 
   [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: () => {

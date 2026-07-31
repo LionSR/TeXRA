@@ -33,7 +33,6 @@ import { clearFollowUpInputTransientStateStore } from './followUpInputState';
 import {
   createInitialState,
   EMPTY_STREAM_LOGS,
-  getStreamState,
   isToolUseState,
   type StreamState,
 } from './store';
@@ -385,7 +384,7 @@ export function setStreamStateForId(
   if (!current) {
     const streamInfo = state.streamById.get(streamId);
     if (!streamInfo) return;
-    current = getStreamState(state, streamId, streamInfo.agentCategory);
+    current = createStreamState(streamInfo.agentCategory);
   }
   const updated = updater(current);
   if (updated === current) return;

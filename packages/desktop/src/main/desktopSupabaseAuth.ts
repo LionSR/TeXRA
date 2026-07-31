@@ -92,19 +92,18 @@ export interface DesktopOAuthClient {
   };
 }
 
+/**
+ * The session-storage surface this module drives. Token freshness and readiness
+ * are not part of it: the coordinator registers itself with `SupabaseClient` as
+ * the process-wide token provider, and every desktop token read goes through
+ * there.
+ */
 export interface DesktopAuthCoordinator {
-  loadSession(): Promise<SupabaseSession | null>;
   storeSession(session: SupabaseSession): Promise<void>;
   clearSession(): Promise<void>;
   createSessionFromCallback(
     uri: AuthCallbackUriParts,
   ): Promise<SupabaseCallbackResult>;
-  whenReady(): Promise<void>;
-  ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
-  getSessionTokens(): Promise<{
-    accessToken: string;
-    refreshToken: string;
-  } | null>;
 }
 
 export function createDesktopAuthCallbackState(

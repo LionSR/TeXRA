@@ -93,13 +93,6 @@ vi.mock('@tools/approval', () => ({
 const PARENT_STREAM_ID = 'parent-stream' as StreamTabId;
 const CHILD_STREAM_ID = 'child-stream' as StreamTabId;
 
-/** Real session whose interactions slot is the host's fake port. */
-function sessionFor(interactions: HostInteractions): SessionHandle {
-  const session = createTestSession();
-  session.useHostInteractions(interactions);
-  return session;
-}
-
 /** The run context shared by nearly every case (host/stopAfterCycle/session vary). */
 function parentRunContext(
   overrides: Partial<{
@@ -127,6 +120,29 @@ function callDelegateReview(agent = 'review') {
     working_directory: null,
     execution_id: null,
   });
+}
+
+/** The same delegation routed through the host's proposal port, with the host
+ *  fake answering `decision`. The session owns the fake port, so it is created
+ *  and disposed per case. */
+async function delegateWithProposalDecision(
+  decision:
+    | { readonly action: 'reject' }
+    | { readonly action: 'approve'; readonly model: string },
+) {
+  mocks.isProposalBypassed.mockReturnValue(false);
+  const session = createTestSession();
+  session.useHostInteractions({
+    cancel: vi.fn(),
+    requestAgentProposal: vi.fn().mockResolvedValue(decision),
+  } satisfies HostInteractions);
+  try {
+    return await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
+    );
+  } finally {
+    session.dispose();
+  }
 }
 
 const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
@@ -917,41 +933,16 @@ describe('headless delegation', () => {
   it('adds a substantive handoff requirement to tool-use subagent instructions', async () => {
     await withRunContext(parentRunContext(), () => callDelegateReview());
 
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instruction: expect.stringContaining(
-          'Your final response is delivered verbatim to the parent orchestrator.',
-        ),
-      }),
-      expect.any(String),
-      expect.anything(),
+    const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
+    expect(instruction).toContain(
+      'Your final response is delivered verbatim to the parent orchestrator.',
     );
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instruction: expect.stringContaining(
-          'Do not finish with only status/process notes',
-        ),
-      }),
-      expect.any(String),
-      expect.anything(),
+    expect(instruction).toContain(
+      'Do not finish with only status/process notes',
     );
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instruction: expect.stringContaining(
-          'Follow any tool, network, file, approval',
-        ),
-      }),
-      expect.any(String),
-      expect.anything(),
-    );
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instruction: expect.stringContaining(
-          'report the conflict instead of guessing permission',
-        ),
-      }),
-      expect.any(String),
-      expect.anything(),
+    expect(instruction).toContain('Follow any tool, network, file, approval');
+    expect(instruction).toContain(
+      'report the conflict instead of guessing permission',
     );
   });
 
@@ -1098,17 +1089,7 @@ describe('headless delegation', () => {
   });
 
   it('discourages equivalent delegation retries after a no-feedback rejection', async () => {
-    mocks.isProposalBypassed.mockReturnValue(false);
-    const interactions = {
-      cancel: vi.fn(),
-      requestAgentProposal: vi.fn().mockResolvedValue({ action: 'reject' }),
-    } satisfies HostInteractions;
-
-    const session = sessionFor(interactions);
-    const result = await withRunContext(parentRunContext({ session }), () =>
-      callDelegateReview(),
-    );
-    session.dispose();
+    const result = await delegateWithProposalDecision({ action: 'reject' });
 
     expect(result.summary).toBe("User rejected delegation to 'review'");
     expect(result.status).toBe('error');
@@ -1121,7 +1102,6 @@ describe('headless delegation', () => {
   });
 
   it('rejects an approved model override unavailable in the active API mode', async () => {
-    mocks.isProposalBypassed.mockReturnValue(false);
     // Only deepseekT is available; gpt5 is not — the override must be rejected
     // synchronously, mirroring the initial delegate path's availability gate.
     mocks.computeModelOptionsData.mockResolvedValue([
@@ -1132,18 +1112,11 @@ describe('headless delegation', () => {
         requiresKey: false,
       },
     ]);
-    const interactions = {
-      cancel: vi.fn(),
-      requestAgentProposal: vi
-        .fn()
-        .mockResolvedValue({ action: 'approve', model: 'gpt5' }),
-    } satisfies HostInteractions;
 
-    const session = sessionFor(interactions);
-    const result = await withRunContext(parentRunContext({ session }), () =>
-      callDelegateReview(),
-    );
-    session.dispose();
+    const result = await delegateWithProposalDecision({
+      action: 'approve',
+      model: 'gpt5',
+    });
 
     expect(result.status).toBe('error');
     expect(result.summary).toBe(
@@ -1153,7 +1126,6 @@ describe('headless delegation', () => {
   });
 
   it('launches with an approved model override that is available', async () => {
-    mocks.isProposalBypassed.mockReturnValue(false);
     mocks.computeModelOptionsData.mockResolvedValue([
       {
         value: 'deepseekT',
@@ -1163,18 +1135,11 @@ describe('headless delegation', () => {
       },
       { value: 'gpt5', label: 'GPT-5', disabled: false, requiresKey: false },
     ]);
-    const interactions = {
-      cancel: vi.fn(),
-      requestAgentProposal: vi
-        .fn()
-        .mockResolvedValue({ action: 'approve', model: 'gpt5' }),
-    } satisfies HostInteractions;
 
-    const session = sessionFor(interactions);
-    const result = await withRunContext(parentRunContext({ session }), () =>
-      callDelegateReview(),
-    );
-    session.dispose();
+    const result = await delegateWithProposalDecision({
+      action: 'approve',
+      model: 'gpt5',
+    });
 
     expect(result.status).toBe('executed');
     expect(result.summary).toBe("Launched 'review' (async)");

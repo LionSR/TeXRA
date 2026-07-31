@@ -6,33 +6,25 @@ import {
   isUserVisibleExecution,
   listExecutions,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_LEASE_STALE_MS } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files';
 
 function config(agent: string): AgentConfig {
-  return {
-    inputFiles: [],
-    contextFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-    editedFile: null,
+  return AgentConfigSchema.parse({
     agent,
     model: 'deepseekT',
     instruction: 'Test execution listing.',
     agentCategory: AgentCategory.ToolUse,
-    editedFiles: [],
-    toolConfig: DEFAULT_TOOL_CONFIG,
-    memories: [],
     workingDirectory: '/workspace',
-    cliOutputFile: null,
-    cliMultiAgentPresetId: null,
-  };
+  });
 }
 
 async function writeExecution(

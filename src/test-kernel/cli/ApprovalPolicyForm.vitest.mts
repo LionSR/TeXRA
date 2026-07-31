@@ -4,28 +4,23 @@ import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { APPROVAL_POLICY_ITEMS } from '@cli/chat/tui/forms/ApprovalPolicyForm';
 
 describe('ApprovalPolicyForm', () => {
-  it('describes approval policies consistently', () => {
-    const expectedItems = [
+  it('offers every policy in ask/never/auto-approve order, described by the shared formatter', () => {
+    expect(APPROVAL_POLICY_ITEMS).toEqual([
       {
         value: 'ask',
         label: 'Ask',
-        description: 'ask before privileged actions',
+        description: formatCliApprovalPolicy('ask'),
       },
       {
         value: 'never',
         label: 'Never',
-        description: 'deny privileged actions',
+        description: formatCliApprovalPolicy('never'),
       },
       {
         value: 'yolo',
         label: 'Auto-approve',
-        description: 'auto-approve privileged actions',
+        description: formatCliApprovalPolicy('yolo'),
       },
-    ] as const;
-
-    expect(APPROVAL_POLICY_ITEMS).toEqual(expectedItems);
-    for (const item of expectedItems) {
-      expect(formatCliApprovalPolicy(item.value)).toBe(item.description);
-    }
+    ]);
   });
 });

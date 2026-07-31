@@ -50,7 +50,6 @@ export async function assembleTrace(
     (
       await resolvePersistedStreamIdForExecution(executionId, {
         streamLogStore,
-        fallbackStreamId,
       })
     )?.streamId ?? fallbackStreamId;
 

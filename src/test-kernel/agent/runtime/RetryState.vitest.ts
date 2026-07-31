@@ -1,9 +1,5 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
-
-// Test support imports
 
 // Third-party imports
 import { APIError as OpenAIAPIError } from 'openai';

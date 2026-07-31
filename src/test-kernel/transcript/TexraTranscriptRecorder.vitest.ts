@@ -19,23 +19,25 @@ import { isObject } from '@utils/core';
 function attachRecorder(streamId: StreamTabId): {
   trace: TraceEmitter;
   rows: () => StreamLogEntry[];
+  row: (id: string | undefined) => StreamLogEntry | undefined;
 } {
   const trace = new TraceEmitter();
   const store = StreamLogStore.ephemeral('test');
   store.ensureStream(streamId);
   attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
-  return { trace, rows: () => store.get(streamId)?.getRange(0) ?? [] };
+  const rows = (): StreamLogEntry[] => store.get(streamId)?.getRange(0) ?? [];
+  return { trace, rows, row: (id) => rows().find((entry) => entry.id === id) };
 }
 
 describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)', () => {
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:group-start-native' as StreamTabId,
     );
 
     const stage = trace.openStage('r0', { kind: 'round' });
 
-    const startEntry = rows().find((e) => e.id === stage.id);
+    const startEntry = row(stage.id);
 
     expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
     expect(isObject(startEntry?.data) && startEntry.data.status).toBe(
@@ -44,14 +46,14 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
   });
 
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:group-end-default-outcome' as StreamTabId,
     );
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end();
 
-    const endEntry = rows().find((e) => e.id === stage.id);
+    const endEntry = row(stage.id);
 
     expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
@@ -60,14 +62,14 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
   });
 
   it('writes an explicit RunOutcome passed to stage.end() verbatim', () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:group-end-explicit-outcome' as StreamTabId,
     );
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end(RUN_OUTCOME.CANCELLED);
 
-    const endEntry = rows().find((e) => e.id === stage.id);
+    const endEntry = row(stage.id);
 
     expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
       RUN_OUTCOME.CANCELLED,
@@ -75,7 +77,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
   });
 
   it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:group-end-run-failure' as StreamTabId,
     );
 
@@ -86,7 +88,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
       }),
     ).rejects.toThrow('boom');
 
-    const endEntry = rows().find((e) => e.id === stage.id);
+    const endEntry = row(stage.id);
 
     expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
       RUN_OUTCOME.FAILED,
@@ -96,35 +98,35 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
 
 describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:kind-preserved' as StreamTabId,
     );
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.end();
 
-    const roundEntry = rows().find((e) => e.id === round.id);
+    const roundEntry = row(round.id);
 
     expect(roundEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(roundEntry?.data) && roundEntry.data.kind).toBe('round');
   });
 
   it("preserves the root run stage's kind onto its persisted GROUP_END row", () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:run-kind-preserved' as StreamTabId,
     );
 
     const runStage = trace.openStage('Run: agent', { kind: 'run' });
     runStage.end();
 
-    const runEntry = rows().find((e) => e.id === runStage.id);
+    const runEntry = row(runStage.id);
 
     expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(runEntry?.data) && runEntry.data.kind).toBe('run');
   });
 
   it('preserves phase position metadata on the terminal row', () => {
-    const { trace, rows } = attachRecorder(
+    const { trace, row } = attachRecorder(
       'stream:phase-position-preserved' as StreamTabId,
     );
 
@@ -135,7 +137,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     });
     phase.end();
 
-    const entry = rows().find((candidate) => candidate.id === phase.id);
+    const entry = row(phase.id);
     expect(entry).toMatchObject({
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: {
@@ -250,7 +252,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
 describe('attachTranscriptRecorder workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const streamId = 'stream:terminal-settlement' as StreamTabId;
-    const { trace, rows } = attachRecorder(streamId);
+    const { trace, row, rows } = attachRecorder(streamId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -277,14 +279,14 @@ describe('attachTranscriptRecorder workflow task state', () => {
       cause: STREAM_TRANSITION_CAUSE.USER_STOP,
     });
 
-    expect(rows().find((entry) => entry.id === phase.id)).toMatchObject({
+    expect(row(phase.id)).toMatchObject({
       settlementSeqNo: 1,
     });
-    expect(rows().find((entry) => entry.id === response.id)).toMatchObject({
+    expect(row(response.id)).toMatchObject({
       settlementSeqNo: 2,
       data: { status: 'completed' },
     });
-    expect(rows().find((entry) => entry.id === 'tool:pending')).toMatchObject({
+    expect(row('tool:pending')).toMatchObject({
       settlementSeqNo: 3,
       data: {
         status: 'failed',
@@ -292,9 +294,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
         isError: true,
       },
     });
-    expect(
-      rows().find((entry) => entry.id === 'task:planned'),
-    ).not.toHaveProperty('settlementSeqNo');
+    expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
 
     // The terminal status is the authoritative boundary for recorder-owned
     // streams/tools. Late provider cleanup cannot mutate a row already made
@@ -314,12 +314,12 @@ describe('attachTranscriptRecorder workflow task state', () => {
       status: TOOL_USE_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'late result' },
     });
-    expect(rows().find((entry) => entry.id === response.id)).toMatchObject({
+    expect(row(response.id)).toMatchObject({
       settlementSeqNo: 2,
       text: 'Partial answer',
       data: { status: 'completed' },
     });
-    expect(rows().find((entry) => entry.id === 'tool:pending')).toMatchObject({
+    expect(row('tool:pending')).toMatchObject({
       settlementSeqNo: 3,
       data: {
         status: 'failed',
@@ -337,7 +337,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
         reason: 'not-reached',
       },
     });
-    expect(rows().find((entry) => entry.id === 'task:planned')).toMatchObject({
+    expect(row('task:planned')).toMatchObject({
       settlementSeqNo: 4,
       data: { status: 'skipped', reason: 'not-reached' },
     });

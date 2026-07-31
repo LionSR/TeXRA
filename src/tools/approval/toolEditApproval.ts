@@ -55,8 +55,9 @@ export { setToolEditApprovalSessionBypass, isApprovalBypassedForStream };
  *
  * Shared host-agnostic logic for the VS Code (`nativeToolEditApproval`) and
  * desktop (`desktopToolEditApproval`) approval surfaces. Each host computes
- * `relativePath` in its own way and performs any host-specific routing (e.g.
- * revealing the progress view) around this call.
+ * `relativePath` in its own way; opening the view is owned here so a prompt
+ * cannot be published to a hidden view on one host and a visible one on
+ * another.
  */
 export function prepareToolEditApprovalPrompt(
   interactions: Pick<SessionHostInteractions, 'emit'>,

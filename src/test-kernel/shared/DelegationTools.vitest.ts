@@ -9,7 +9,7 @@ import {
 import type { RegisteredToolName } from '@tools/registry';
 
 it('keeps canonical delegation tool names registered', () => {
-  expectTypeOf<CanonicalDelegationToolName>().toMatchTypeOf<RegisteredToolName>();
+  expectTypeOf<CanonicalDelegationToolName>().toExtend<RegisteredToolName>();
 });
 
 it('preserves canonical and historical delegation tool names', () => {

@@ -17,6 +17,8 @@ import { isStored } from '@test/support/settingsStoresFake';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
+import { commandOf } from './desktopSettingsTestSupport';
+
 /**
  * Wraps `store.update` with a synchronous hook fired before the write, so a
  * test can interleave state persistence with other async event sources in a
@@ -117,10 +119,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
     reportedErrors,
     workspaceState,
   };
-}
-
-function commandOf(message: unknown): string | undefined {
-  return (message as { command?: string }).command;
 }
 
 describe('DefaultDesktopToolingSettingsController', () => {

@@ -89,6 +89,33 @@ function occurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
 
+/** A completed tool row; only the fields each case varies are parameters. */
+function completedToolEntry(fields: {
+  id: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  outputText: string;
+  finalized: boolean;
+}): ConversationEntry {
+  return {
+    id: fields.id,
+    role: 'tool',
+    text: '',
+    finalized: fields.finalized,
+    toolUse: {
+      toolName: fields.toolName,
+      errorText: '',
+      outputText: fields.outputText,
+      userInstructionText: '',
+      input: fields.input,
+      isError: false,
+      isUserFeedback: false,
+      headerSummary: '',
+      status: 'completed',
+    },
+  };
+}
+
 describe('Static band resize', () => {
   it('replaces finalized transcript geometry at the new width', async () => {
     // Dynamic import so FORCE_COLOR is set first and the patched workspace Ink
@@ -119,25 +146,15 @@ describe('Static band resize', () => {
       finalized: false,
     };
     const hiddenPrintLine = 'full-output-middle-line';
-    const tool: ConversationEntry = {
+    const tool = completedToolEntry({
       id: 'full-output-tool',
-      role: 'tool',
-      text: '',
+      toolName: 'Bash',
+      input: { command: 'long-command' },
+      outputText: Array.from({ length: 15 }, (_, index) =>
+        index === 7 ? hiddenPrintLine : `tool line ${index}`,
+      ).join('\n'),
       finalized: false,
-      toolUse: {
-        toolName: 'Bash',
-        errorText: '',
-        outputText: Array.from({ length: 15 }, (_, index) =>
-          index === 7 ? hiddenPrintLine : `tool line ${index}`,
-        ).join('\n'),
-        userInstructionText: '',
-        input: { command: 'long-command' },
-        isError: false,
-        isUserFeedback: false,
-        headerSummary: '',
-        status: 'completed',
-      },
-    };
+    });
 
     resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/resize-proof' });
     patchStream(streamId, (slice) => ({
@@ -218,23 +235,13 @@ describe('Static band resize', () => {
     const streamId = 'execution-label-stream' as StreamTabId;
     const executionId = 'late-subagent-id';
     const executionPath = `/executions/${executionId}/report`;
-    const executionEntry: ConversationEntry = {
+    const executionEntry = completedToolEntry({
       id: 'execution-view',
-      role: 'tool',
-      text: '',
+      toolName: 'executions',
+      input: { path: executionPath },
+      outputText: 'report',
       finalized: true,
-      toolUse: {
-        toolName: 'executions',
-        errorText: '',
-        outputText: 'report',
-        userInstructionText: '',
-        input: { path: executionPath },
-        isError: false,
-        isUserFeedback: false,
-        headerSummary: '',
-        status: 'completed',
-      },
-    };
+    });
 
     resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/execution-label-proof' });
     patchStream(streamId, (slice) => ({
@@ -301,23 +308,14 @@ describe('Static band resize', () => {
     const streamId = 'listener-count-stream' as StreamTabId;
     const toolEntries: ConversationEntry[] = Array.from(
       { length: 70 },
-      (_, index) => ({
-        id: `tool-${index}`,
-        role: 'tool' as const,
-        text: '',
-        finalized: true,
-        toolUse: {
+      (_, index) =>
+        completedToolEntry({
+          id: `tool-${index}`,
           toolName: 'Bash',
-          errorText: '',
-          outputText: `result ${index}`,
-          userInstructionText: '',
           input: { command: `printf ${index}` },
-          isError: false,
-          isUserFeedback: false,
-          headerSummary: '',
-          status: 'completed' as const,
-        },
-      }),
+          outputText: `result ${index}`,
+          finalized: true,
+        }),
     );
 
     resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/listener-proof' });

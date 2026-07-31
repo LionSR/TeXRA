@@ -25,7 +25,7 @@ const resolved = {
   unresolvedNames: [],
 };
 
-describe('extension team roster application', () => {
+describe('team roster application', () => {
   it('signs in, forces one refresh, and commits exactly once', async () => {
     const calls: string[] = [];
     let refreshed = false;
