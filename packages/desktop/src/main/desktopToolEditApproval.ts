@@ -71,7 +71,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   }
 
   /**
-   * The prompt itself routes the window to the progress view, so nothing has
+   * Active-stream selection surfaces the prompt in whichever view is open, so nothing has
    * to open ahead of it.
    */
   revealApprovalSurface(): Promise<void> {

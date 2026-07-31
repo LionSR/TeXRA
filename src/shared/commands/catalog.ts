@@ -53,11 +53,6 @@ export const commandCatalog = [
     shortTitle: 'Clean LLM Outputs',
     category: 'TeXRA',
     icon: '$(clear-all)',
-    keybinding: {
-      key: 'ctrl+alt+shift+c',
-      mac: 'cmd+option+shift+c',
-      when: 'texra.activated',
-    },
   },
   {
     id: 'texra.cleanBuild',
@@ -66,11 +61,6 @@ export const commandCatalog = [
     shortTitle: 'Clean Build Files',
     category: 'TeXRA',
     icon: '$(close-all)',
-    keybinding: {
-      key: 'ctrl+alt+shift+b',
-      mac: 'cmd+option+shift+b',
-      when: 'texra.activated',
-    },
   },
   {
     id: 'texra.indentTeX',
@@ -80,21 +70,11 @@ export const commandCatalog = [
     icon: '$(indent)',
   },
   {
-    id: 'texra.getRecentCommits',
-    title: 'Get Recent Commits',
-    category: 'TeXRA',
-  },
-  {
     id: 'texra.cloneOverleafProject',
     extensionRegistry: true,
     title: 'Clone Overleaf/ShareLaTeX Project',
     category: 'TeXRA',
     icon: '$(repo-clone)',
-  },
-  {
-    id: 'texra.refreshCommits',
-    title: 'Refresh Commits',
-    category: 'TeXRA',
   },
   {
     id: 'texra.indentCurrentTeX',
@@ -108,14 +88,6 @@ export const commandCatalog = [
     id: 'texra.resumeAgent',
     title: 'Resume Tool-Use Agent',
     category: 'TeXRA',
-  },
-  {
-    id: 'texra.applyReplacements',
-    extensionRegistry: true,
-    title: 'Apply LaTeX Replacements to Current File',
-    category: 'TeXRA',
-    icon: '$(symbol-text)',
-    enablement: '!virtualWorkspace',
   },
   {
     id: 'texra.fixCompilation',
@@ -134,30 +106,6 @@ export const commandCatalog = [
     enablement: '!virtualWorkspace',
   },
   {
-    id: 'texra.countPdfPages',
-    extensionRegistry: true,
-    title: 'Count PDF Pages',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.encodeImageToBase64',
-    extensionRegistry: true,
-    title: 'Encode Image to Base64',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.convertPdfToImages',
-    extensionRegistry: true,
-    title: 'Convert PDF to Images',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.extractFigurePaths',
-    extensionRegistry: true,
-    title: 'Extract Figure Paths from LaTeX',
-    category: 'TeXRA',
-  },
-  {
     id: 'texra.extractTikzFigures',
     extensionRegistry: true,
     title: 'Extract TikZ Figures from Current File',
@@ -167,24 +115,6 @@ export const commandCatalog = [
     id: 'texra.compileTikzFigures',
     extensionRegistry: true,
     title: 'Compile TikZ Figures from Current File',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.testConnection',
-    extensionRegistry: true,
-    title: 'Test API Connection',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.testAgentLoading',
-    extensionRegistry: true,
-    title: 'Test Agent Loading',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.loadSpecificAgent',
-    extensionRegistry: true,
-    title: 'Load Specific Agent',
     category: 'TeXRA',
   },
   {
@@ -199,18 +129,6 @@ export const commandCatalog = [
     title: 'Import or Create LaTeX Project',
     category: 'TeXRA',
     icon: '$(cloud-download)',
-  },
-  {
-    id: 'texra.parseXml',
-    extensionRegistry: true,
-    title: 'Parse XML Structure',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.parseYaml',
-    extensionRegistry: true,
-    title: 'Parse YAML Structure',
-    category: 'TeXRA',
   },
   {
     id: 'texra.stopAgent',
@@ -297,25 +215,6 @@ export const commandCatalog = [
     title: 'View Profile',
     category: 'TeXRA',
     icon: '$(account)',
-  },
-  {
-    id: 'texra.testTextEditor',
-    extensionRegistry: true,
-    title: 'Test Text Editor Tool',
-    category: 'TeXRA',
-    icon: '$(edit)',
-  },
-  {
-    id: 'texra.showLinterMessages',
-    extensionRegistry: true,
-    title: 'Show Linter Messages',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.countLinterMessages',
-    extensionRegistry: true,
-    title: 'Count Linter Messages',
-    category: 'TeXRA',
   },
   {
     id: 'texra.openDoc',
@@ -547,8 +446,6 @@ export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
 const commandKeybindingOrder = [
   'texra.showMainView',
   'texra.showProgressView',
-  'texra.cleanOutput',
-  'texra.cleanBuild',
   'texra.toggleView',
   'texra.execute',
 ] as const satisfies readonly CommandId[];

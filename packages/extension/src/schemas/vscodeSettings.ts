@@ -6,9 +6,6 @@ import { z } from 'zod';
  *
  * These settings are meaningful only when TeXRA runs inside VS Code:
  *
- * - `auth.enableVSCodeGitHub` literally toggles the VS Code GitHub
- *   authentication provider. Other hosts (CLI, Electron desktop) use
- *   different auth flows and ignore this key.
  * - `apiKeys.set` / `apiKeys.remove` are `null`-typed UI command triggers
  *   surfaced through VS Code's settings UI. They are not real configuration
  *   values; selecting them in the settings tree opens the API key dialog.
@@ -18,9 +15,6 @@ import { z } from 'zod';
  */
 
 export const DEFAULT_VSCODE_SETTINGS_EXTENSION = {
-  auth: {
-    enableVSCodeGitHub: false,
-  },
   apiKeys: {
     set: null,
     remove: null,
@@ -28,14 +22,6 @@ export const DEFAULT_VSCODE_SETTINGS_EXTENSION = {
 };
 
 export const VscodeSettingsExtensionShape = {
-  auth: z
-    .strictObject({
-      enableVSCodeGitHub: z
-        .boolean()
-        .describe('Enable VS Code native GitHub authentication (experimental)')
-        .prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION.auth.enableVSCodeGitHub),
-    })
-    .prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION.auth),
   apiKeys: z
     .strictObject({
       set: z.null().prefault(DEFAULT_VSCODE_SETTINGS_EXTENSION.apiKeys.set),
@@ -49,8 +35,4 @@ export const VscodeSettingsExtensionShape = {
 /**
  * Dotted leaf paths for every VS Code-only setting.
  */
-export const VSCODE_SETTING_PATHS = [
-  'auth.enableVSCodeGitHub',
-  'apiKeys.set',
-  'apiKeys.remove',
-] as const;
+export const VSCODE_SETTING_PATHS = ['apiKeys.set', 'apiKeys.remove'] as const;

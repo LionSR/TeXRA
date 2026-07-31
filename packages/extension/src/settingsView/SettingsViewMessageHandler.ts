@@ -75,7 +75,7 @@ import {
   type SettingsMessageFor,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
-import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
+import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   BASH_APPROVAL_CONFIG_TARGET,
   buildApprovalSettingsMessage,
@@ -572,11 +572,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         revealStream: async (streamId) => {
           await revealProgressStream(streamId);
         },
-      },
-      desktopCrashReporting: {
-        get: unsupported('Crash reporting is a desktop-app setting.'),
-        setEnabled: unsupported('Crash reporting is a desktop-app setting.'),
-        setDsn: unsupported('Crash reporting is a desktop-app setting.'),
       },
     };
 

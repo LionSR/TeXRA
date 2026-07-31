@@ -25,9 +25,6 @@ export interface ParsedGlobalArgs {
   // when the user passes `--no-color`.
   readonly color?: boolean;
   readonly 'no-input'?: boolean;
-  // Positively-named boolean; citty sets it to `false` for `--no-websocket`.
-  // Left `undefined` when unset so the stored toggle stays authoritative.
-  readonly websocket?: boolean;
   readonly 'include-interop'?: boolean;
   readonly source?: string | string[];
   // citty treats every `--no-*` token as a negated positive flag before it
@@ -64,10 +61,6 @@ export function pickGlobalArgs(
     // negative spelling as `input: false`, which is safe to recognize here
     // because command-specific `--input <file>` arrives as a string/array.
     noColor: args.color === false,
-    // Tri-state: true/false from --websocket/--no-websocket, else undefined to
-    // defer to the stored `texra.websocket.openai` setting.
-    webSocketEnabled:
-      typeof args.websocket === 'boolean' ? args.websocket : undefined,
     noInput: args['no-input'] === true || args.input === false,
     includeInteropSkills: args['include-interop'] === true,
     skillSourcePaths: options.skillSourcePaths ?? stringValues(args.source),

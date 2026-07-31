@@ -161,9 +161,6 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
   @property({ type: Boolean }) agentSkillsEnabled = true;
   @property({ attribute: false }) showAgentSkillsSettings = false;
-  @property({ attribute: false }) showDesktopCrashReporting = false;
-  @property({ attribute: false }) desktopCrashReportingEnabled = false;
-  @property({ attribute: false }) desktopCrashReportingConfigured = false;
 
   private handleRecheck(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
@@ -188,17 +185,6 @@ export class ToolsTab extends LitElement {
 
   private handleAgentSkillsToggle = (e: Event): void => {
     this.postToggle(SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED, e);
-  };
-
-  private handleDesktopCrashReportingToggle = (e: Event): void => {
-    this.postToggle(
-      SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED,
-      e,
-    );
-  };
-
-  private handleSetDesktopCrashReportingDsn = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN);
   };
 
   /** Section holding a single labelled toggle. */
@@ -252,57 +238,6 @@ export class ToolsTab extends LitElement {
       checked: this.agentSkillsEnabled,
       onChange: this.handleAgentSkillsToggle,
     });
-  }
-
-  private renderDesktopCrashReporting(): TemplateResult | typeof nothing {
-    if (!this.showDesktopCrashReporting) return nothing;
-    return html`
-      <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: 'download',
-          title: 'Desktop diagnostics',
-        })}
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">Native crash reporting</span>
-              <span class="settings-row-help">
-                Opt-in native crash capture. Reports are scrubbed before upload
-                and performance tracing stays disabled.
-              </span>
-            </div>
-            <div class="settings-row-control action-button-group">
-              <wa-switch
-                aria-label="Enable native crash reporting"
-                ?checked=${this.desktopCrashReportingEnabled}
-                @change=${this.handleDesktopCrashReportingToggle}
-              ></wa-switch>
-              <wa-tag
-                variant=${
-                  this.desktopCrashReportingConfigured ? 'success' : 'warning'
-                }
-                size="s"
-              >
-                ${
-                  this.desktopCrashReportingConfigured
-                    ? 'DSN set'
-                    : 'DSN missing'
-                }
-              </wa-tag>
-              ${renderLabeledActionButton({
-                icon: 'key',
-                text: this.desktopCrashReportingConfigured
-                  ? 'Replace DSN'
-                  : 'Set DSN',
-                kind: 'secondary',
-                appearance: 'outlined',
-                onClick: this.handleSetDesktopCrashReportingDsn,
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
   }
 
   private visibleItems(): ToolDashboardItem[] {
@@ -437,7 +372,6 @@ export class ToolsTab extends LitElement {
           }),
         })}
         ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
-        ${this.renderDesktopCrashReporting()}
         ${CATEGORY_ORDER.flatMap((cat) => {
           const catItems = groups.get(cat);
           return catItems ? [this.renderCategory(cat, catItems)] : [];

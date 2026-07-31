@@ -12,7 +12,6 @@ const unsupportedReason = 'not available in this host';
 const NON_INBOUND_SETTINGS_COMMANDS = new Set<string>([
   SETTINGS_VIEW_CMD.SET_TAB,
   SETTINGS_VIEW_CMD.UPDATE_CHATGPT_AUTH_STATUS,
-  SETTINGS_VIEW_CMD.UPDATE_DESKTOP_CRASH_REPORTING,
   SETTINGS_VIEW_CMD.UPDATE_GITHUB_TOKEN_STATUS,
   SETTINGS_VIEW_CMD.UPDATE_PR_SUBSCRIPTIONS,
 ]);
@@ -130,11 +129,6 @@ function createActions(): SettingsViewCommandActions {
       getList: action(),
       revealStream: action(),
     },
-    desktopCrashReporting: {
-      get: { unsupported: unsupportedReason },
-      setEnabled: action(),
-      setDsn: action(),
-    },
   };
 }
 
@@ -156,12 +150,9 @@ describe('createSettingsViewCommandHandlers', () => {
   it('preserves unsupported host decisions in the derived capability set', () => {
     const registry = createSettingsViewCommandHandlers(createActions());
 
-    expect(unsupportedCommands(registry).toSorted()).toEqual(
-      [
-        SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
-        SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
-      ].toSorted(),
-    );
+    expect(unsupportedCommands(registry)).toEqual([
+      SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+    ]);
   });
 
   it('projects representative command payloads to semantic host actions', () => {

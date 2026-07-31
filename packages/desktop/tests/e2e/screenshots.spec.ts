@@ -82,17 +82,6 @@ test('launcher screenshot', async ({}, testInfo) => {
   expect(launched.page.url()).toBeTruthy();
 });
 
-test('progress screenshot', async ({}, testInfo) => {
-  // With no active stream, the permanent task canvas stays on <main-app>.
-  // Capture it with the project/task sidebar — the default progress surface.
-  await setRoute(launched, 'progress');
-  await launched.page.screenshot({
-    path: getScreenshotPath(testInfo, 'progress.png'),
-    fullPage: false,
-  });
-  expect(launched.page.url()).toBeTruthy();
-});
-
 test('settings screenshot', async ({}, testInfo) => {
   // Open the Multi-Agent settings page — the most visually rich area.
   await setSettingsTab(launched, 4, 'multi-agent');

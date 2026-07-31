@@ -18,7 +18,6 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import * as providerConfigModule from '@utils/config/providerConfig';
-import * as configUtilsModule from '@utils/config/configUtils';
 
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
   exposeGetApiKey(): Promise<string> {
@@ -149,12 +148,6 @@ describe('ModelHandler.getApiKey resolution', () => {
       [apiKeySecretName('kimiCode')]: 'kimi-code-key',
     });
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
-    vi.spyOn(configUtilsModule, 'getConfig').mockImplementation(
-      <T>(path: string, defaultValue?: T) =>
-        (path === 'texra.model.useImprovedConnection'
-          ? true
-          : defaultValue) as T,
-    );
     const { canUseServerSideKeys } = stubServerSideKeyService({
       useIncludedAccess: true,
       hasServerAccess: true,

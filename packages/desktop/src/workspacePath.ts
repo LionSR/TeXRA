@@ -1,7 +1,6 @@
 import { isDesktopProtocolUrl } from './desktopProtocol.js';
 
 export interface WorkspacePathOptions {
-  env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_WORKSPACE_PATH'>>;
   argv?: readonly string[];
   storedWorkspacePath?: string;
 }
@@ -21,13 +20,9 @@ export const DESKTOP_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
 export function getWorkspacePathInput(
   options: WorkspacePathOptions = {},
 ): string | undefined {
-  const env = options.env ?? process.env;
   const argv = options.argv ?? process.argv.slice(1);
   const argvWorkspacePath = parseWorkspacePathFromArgv(argv);
   if (argvWorkspacePath) return argvWorkspacePath;
-
-  const configured = env.TEXRA_WORKSPACE_PATH?.trim();
-  if (configured) return configured;
 
   return options.storedWorkspacePath?.trim() || undefined;
 }

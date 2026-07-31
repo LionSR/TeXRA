@@ -1,7 +1,6 @@
 // Local imports
 import { createModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
-import type { DesktopCrashReportingSettingsController } from '@desktop/main/desktopCrashReportingSettingsController';
 import type { DesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import type {
   DesktopHistoryOptions,
@@ -95,20 +94,6 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
   };
 }
 
-export function createStubDesktopCrashReportingSettingsController(
-  overrides: Partial<DesktopCrashReportingSettingsController> = {},
-): DesktopCrashReportingSettingsController {
-  return {
-    actions: {
-      get: noOp,
-      setEnabled: noOp,
-      setDsn: noOp,
-    },
-    postStartupData: noOp,
-    ...overrides,
-  };
-}
-
 export function createStubDesktopCredentialSettingsController(
   state: SettingsStatePorts,
   overrides: Partial<DesktopCredentialSettingsController> = {},
@@ -150,14 +135,16 @@ export function createStubDesktopToolingSettingsController(
   return {
     toolsActions: {
       openInstallUrl: noOp,
-      installExtension: noOp,
+      installExtension: unsupported('Desktop cannot host VS Code extensions.'),
       recheckStatus: noOp,
       toggle: noOp,
       runCommand: noOp,
     },
     latexActions: {
       applySettings: noOp,
-      installLatexWorkshop: noOp,
+      installLatexWorkshop: unsupported(
+        'Desktop cannot host VS Code extensions.',
+      ),
       runInstallCommand: noOp,
       setConfigValue: noOp,
     },

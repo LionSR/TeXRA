@@ -69,9 +69,7 @@ describe('TexraSettingsSchema', () => {
     const parsed = TexraSettingsSchema.parse({});
 
     assert.equal(parsed.model.compactionThresholdPercent, 75);
-    assert.equal(parsed.toolUse.persistence.ttlHours, 336);
     assert.deepEqual(parsed.latex.customReplacements, {});
-    assert.equal(parsed.auth.enableVSCodeGitHub, false);
     assert.equal(parsed.apiKeys.set, null);
     assert.equal(parsed.apiKeys.remove, null);
     assert.deepEqual(parsed.files.included.editedExtensions, ['.txt', '.tex']);
@@ -96,9 +94,8 @@ describe('TexraSettingsSchema', () => {
     const flat = flattenTexraSettings();
 
     assert.equal(Object.keys(flat).length, TEXRA_SETTING_PATHS.length);
-    assert.equal(flat['texra.auth.enableVSCodeGitHub'], false);
     assert.equal(flat['texra.apiKeys.set'], null);
-    assert.equal(flat['texra.model.retry.backoffMs'], 1000);
+    assert.equal(flat['texra.model.retry.maxAttempts'], 2);
   });
 
   it('covers every package.json contributed setting key', () => {

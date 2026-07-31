@@ -151,30 +151,6 @@ describe('loadAgentSettingAndPrompts', () => {
     assert.strictEqual(prompts.userRequest, 'unified variant');
   });
 
-  it('accepts the internal registry-metadata field in agent settings', async () => {
-    const resolution = customResolution('latexFixer', AgentCategory.ToolUse);
-
-    fileContents.set(
-      normalize(resolution.definitionPath),
-      [
-        'name: latexFixer',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  internal: true',
-        'prompts:',
-        '  userRequest: fix it',
-        '',
-      ].join('\n'),
-    );
-
-    const [settings] = await loadAgentSettingAndPrompts(resolution);
-    assert.strictEqual(
-      settings.internal,
-      true,
-      'internal: true should round-trip through AgentSettingSchema',
-    );
-  });
-
   it('loads legacy workflow settings that still declare outputExt', async () => {
     const resolution = customResolution('legacy', AgentCategory.Workflow);
 

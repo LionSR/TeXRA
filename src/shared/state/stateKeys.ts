@@ -152,15 +152,17 @@ export enum GlobalStateKey {
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
 
-  // Desktop-only crash reporting
-  DESKTOP_CRASH_REPORTING_ENABLED = 'texra.desktop.crashReporting.enabled',
-
   // Desktop-only lightweight update check (see desktopUpdateChecker.ts)
   DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT = 'texra.desktop.updateCheck.lastCheckedAt',
   DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION = 'texra.desktop.updateCheck.lastNotifiedVersion',
 
   // CLI-only lightweight update check throttle (see packages/cli's updateChecker.ts)
   CLI_UPDATE_CHECK_LAST_CHECKED_AT = 'texra.cli.updateCheck.lastCheckedAt',
+
+  // Dismissable main-view hints. Written only by the banner's own close
+  // button, read only to decide whether to show that banner again.
+  LOGIN_BANNER_DISMISSED = 'texra.ui.loginBannerDismissed',
+  ORCHESTRATOR_BANNER_DISMISSED = 'texra.ui.orchestratorBannerDismissed',
 
   // Experimental
   INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',

@@ -1,7 +1,6 @@
 # Remote Agents
 
 <script setup>
-import RemoteAgentsProfile from '../.vitepress/components/RemoteAgentsProfile.vue';
 import CliRemoteHero from '../.vitepress/components/CliRemoteHero.vue';
 </script>
 
@@ -33,18 +32,14 @@ You can check your authentication status anytime by running **TeXRA: View Profil
 
 ### 2. Browse Available Agents
 
-Once signed in, you can explore remote agents from your profile:
+Once signed in, you can explore remote agents from the Agents tab:
 
 1. Open the Command Palette
-2. Run: **TeXRA: View Profile**
-3. Browse the **Remote Agents** table showing all available agents
-4. Click **Use** on any agent to add it to your agent selector
+2. Run: **TeXRA: Show Agents** to open the Agents tab in Settings
+3. Select any remote agent in the list to see its details
+4. Click **Show in agent selector** to add it to your agent selector
 
-The Profile panel shows your account at a glance — your email, user ID, and access level — above the table of remote agents you can pull in:
-
-<RemoteAgentsProfile />
-
-<p class="hero-caption">The View Profile panel: your access level sits above the Remote Agents table — click <strong>Use</strong> on any cloud agent to add it to your selector.</p>
+Your account at a glance — your email and access level — sits on the Account tab (**TeXRA: View Profile**).
 
 The selected agent will appear in your main TeXRA view alongside your built-in agents.
 
@@ -134,12 +129,13 @@ TeXRA is committed to supporting academic research. The Researcher Access Progra
 
 ### View Your Profile
 
-Check your account status and available agents:
+Check your account status:
 
 1. Open Command Palette
 2. Run: **TeXRA: View Profile**
-3. View your email, user ID, and access level
-4. Browse remote agents available to you
+3. View your email and access level on the Account tab
+
+Run **TeXRA: Show Agents** to browse the remote agents available to you.
 
 ### Sign Out
 

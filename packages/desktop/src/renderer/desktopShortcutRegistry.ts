@@ -66,13 +66,10 @@ export function createDesktopShortcutRegistry(
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void
   >();
-  const availableEntries = getDesktopCommandMenuEntries(
-    undefined,
-    platform,
-  ).filter((entry) => entry.enabled);
+  const menuEntries = getDesktopCommandMenuEntries(undefined, platform);
 
   function entries(): DesktopShortcutEntry[] {
-    return [desktopCommandPaletteShortcut(platform), ...availableEntries].map(
+    return [desktopCommandPaletteShortcut(platform), ...menuEntries].map(
       (entry) => {
         const override = overrides[entry.id];
         const accelerator =
@@ -99,7 +96,7 @@ export function createDesktopShortcutRegistry(
 
   function update(id: string, accelerator: string | undefined): void {
     if (
-      !availableEntries.some((entry) => entry.id === id) &&
+      !menuEntries.some((entry) => entry.id === id) &&
       id !== DESKTOP_COMMAND_PALETTE_ID
     ) {
       return;

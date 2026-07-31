@@ -1,45 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
-
 import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('desktop crash reporting', () => {
-  it('keeps crash reporting disabled and unconfigured by default', async () => {
-    const { getDesktopCrashReportingStatus } = await loadSourceModule(
-      '@desktop/main/desktopCrashReporting',
-    );
-
-    await expect(
-      getDesktopCrashReportingStatus(new FakeStateStore(), new FakeSecrets()),
-    ).resolves.toEqual({ enabled: false, configured: false });
-  });
-
-  it('stores opt-in state and Sentry DSN separately', async () => {
-    const {
-      DESKTOP_CRASH_REPORTING_DSN_SECRET,
-      getDesktopCrashReportingStatus,
-      setDesktopCrashReportingDsn,
-      setDesktopCrashReportingEnabled,
-    } = await loadSourceModule('@desktop/main/desktopCrashReporting');
-    const globalState = new FakeStateStore();
-    const secrets = new FakeSecrets();
-
-    await setDesktopCrashReportingEnabled(globalState, true);
-    await setDesktopCrashReportingDsn(secrets, ' https://example.invalid/1 ');
-
-    expect(
-      globalState.get(GlobalStateKey.DESKTOP_CRASH_REPORTING_ENABLED),
-    ).toBe(true);
-    expect(await secrets.get(DESKTOP_CRASH_REPORTING_DSN_SECRET)).toBe(
-      'https://example.invalid/1',
-    );
-    await expect(
-      getDesktopCrashReportingStatus(globalState, secrets),
-    ).resolves.toEqual({ enabled: true, configured: true });
-  });
-
   it('drops non-native events for the v1 crash-reporting scope', async () => {
     const { scrubDesktopCrashEvent } = await loadSourceModule(
       '@desktop/main/desktopCrashReporting',

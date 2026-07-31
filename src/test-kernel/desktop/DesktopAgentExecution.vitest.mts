@@ -882,15 +882,11 @@ describe('DesktopProgressBridge', () => {
     });
 
     expect(messages).toContainEqual({
-      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-      route: 'progress',
-    });
-    expect(messages).toContainEqual({
       command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
       agentName: 'missing-writer',
       customDirSet: true,
     });
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(1);
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
     expect(showErrorMessage).toHaveBeenCalledTimes(1);
     // Instructions are actionable guidance, not failures: they use the info
@@ -1647,7 +1643,7 @@ describe('DesktopProgressBridge', () => {
     expect(messages).toEqual([]);
   });
 
-  it('revealStream routes to progress and selects the stream (issue #7751 FS6)', async () => {
+  it('revealStream selects the stream (issue #7751 FS6)', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
@@ -1667,10 +1663,6 @@ describe('DesktopProgressBridge', () => {
 
     await bridge.revealStream('goal-owning-stream');
 
-    expect(messages).toContainEqual({
-      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-      route: 'progress',
-    });
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
     ).toContainEqual({
@@ -1685,7 +1677,7 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
-  it('revealStream keeps the current route when the stream is unknown', async () => {
+  it('revealStream posts nothing when the stream is unknown', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
@@ -1769,10 +1761,6 @@ describe('DesktopProgressBridge', () => {
       bridge = await opening;
       await bridge.revealStream('goal-owning-stream');
 
-      expect(messages).toContainEqual({
-        command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
-        route: 'progress',
-      });
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM),
       ).toContainEqual({
@@ -1783,27 +1771,6 @@ describe('DesktopProgressBridge', () => {
       transcriptOpen.resolve();
       bridge?.dispose();
     }
-  });
-
-  it('does not route to progress for suppressed background stream switches', async () => {
-    const messages: unknown[] = [];
-    const bridge = await createBridge(messages);
-
-    emitSessionFact(bridge, 'setActiveStream', {
-      streamId: 'child-stream',
-      agentCategory: AgentCategory.ToolUse,
-      suppressViewSwitch: true,
-    });
-    await settleProgressEvents();
-
-    expect(
-      messages.some(
-        (message) =>
-          (message as ProgressMessage).command ===
-            DESKTOP_SHELL_COMMANDS.SET_ROUTE &&
-          (message as { route?: string }).route === 'progress',
-      ),
-    ).toBe(false);
   });
 
   it('emits delete-stream cleanup and flushes fallback active stream logs', async () => {

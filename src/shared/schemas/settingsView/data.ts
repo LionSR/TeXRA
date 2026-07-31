@@ -427,13 +427,6 @@ export type UpdateChatGptAuthStatusMessage = z.infer<
   typeof UpdateChatGptAuthStatusMessageSchema
 >;
 
-/** Outbound: backend → frontend desktop crash reporting status. */
-const UpdateDesktopCrashReportingMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING),
-  enabled: z.boolean(),
-  configured: z.boolean(),
-});
-
 const PRSubscriptionOwnerSchema = z.object({
   streamId: StreamTabIdSchema,
   label: z.string(),
@@ -592,7 +585,6 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
   UpdateChatGptAuthStatusMessageSchema,
-  UpdateDesktopCrashReportingMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   UpdateLatexConfigValuesMessageSchema,

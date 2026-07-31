@@ -71,14 +71,8 @@ settings:
   rounds: 2 # Maximum number of passes (Round 0 plus reflection rounds). The actual count is max(rounds, number of userRequest entries); a run can still stop early once the model signals it is finished.
 
   # File Handling (Optional - Advanced)
-  # requiredFiles:
-  #   TEMPLATE: path/to/template.tex # Map variable names to required file paths relative to workspace.
   # requiredFilesInternal:
-  #   STYLE_GUIDE: styles/internal_style.css # Map variable names to files relative to the agent's YAML file location.
-  # filePatternsContain:
-  #   - pattern: 'bibliography' # Find files whose names contain this pattern.
-  #     varName: BIBLIOGRAPHY # Make content available via {{ BIBLIOGRAPHY_CONTENT }} in prompts.
-  #     categories: ['inputFiles', 'contextFiles'] # Search within these UI file categories (e.g. inputFiles, contextFiles, mediaFiles).
+  #   STYLE_GUIDE: styles/internal_style.css # Map variable names to files the agent bundles, relative to its YAML file location. Workspace files are attached per run as context files instead.
   # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
   #   - 'introduction.tex'
   #   - 'methods.tex'
@@ -94,7 +88,7 @@ prompts:
 
   userPrefix: |
     # Provides introductory text, main context (input files, user instruction).
-    # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ BIBLIOGRAPHY_CONTENT }}` (from filePatternsContain) are substituted here.
+    # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ ALL_CONTEXTS }}` are substituted here.
     [Define context, instructions, and input variables like `{{ INPUT_CONTENT }}`]
 
   userRequest:
@@ -143,8 +137,7 @@ agents should use `CONTEXT_*`.
 
 **Custom Variables (from `settings`):**
 
-- Files specified in `requiredFiles` or `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ TEMPLATE_CONTENT }}`).
-- Files matched by `filePatternsContain` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ BIBLIOGRAPHY_CONTENT }}`).
+- Files specified in `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ TEMPLATE_CONTENT }}`).
 - When agents finish, TeXRA automatically captures detected XML segments so orchestrated workflows can reuse them without going through the file picker again (details below).
 
 **Example Usage in `userPrefix`:**

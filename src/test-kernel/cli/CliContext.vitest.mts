@@ -17,10 +17,6 @@ import {
   type CliAmbientState,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
-import { LEGACY_GOAL_FEATURE_FLAG_KEYS } from '@shared/schemas/goal';
-
-// Pre-rename canonical key, still honored read-only for back-compat.
-const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
 
 const ambient = {
   isCi: true,
@@ -153,20 +149,6 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings.join('\n')).toContain('unknown');
     expect(loaded.warnings.join('\n')).toContain('model');
     expect(loaded.warnings.join('\n')).toContain('chat.other');
-  });
-
-  it('accepts the legacy Goal flag without unknown-key warnings', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        [LEGACY_GOAL_FEATURE_FLAG_KEY]: false,
-      }),
-    );
-
-    const loaded = await loadWorkspaceCliConfig(workspace);
-
-    expect(loaded.warnings.join('\n')).not.toContain(
-      LEGACY_GOAL_FEATURE_FLAG_KEY,
-    );
   });
 
   it('accepts the CLI-only ChatGPT Codex preference key', async () => {

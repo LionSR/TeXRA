@@ -1132,7 +1132,6 @@ function shellTemplate(): TemplateResult {
             filesExpanded: shellState.filesExpanded,
             hasWorkspace,
             initials: workspaceInitials(workspacePath),
-            pendingApprovalCount: pendingApprovalIds$.get().size,
             projectSectionPosition: shellState.projectSectionPosition,
             sessions: railTabs,
             streamCount: streams$.get().length,
@@ -1405,7 +1404,6 @@ function switchToStream(streamId: StreamTabId): void {
     }),
   );
   postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
-  setRoute('progress');
 }
 
 // Clear the active stream so the center swaps back to <main-app>. PRD § 6:
@@ -1583,11 +1581,10 @@ let railTabsWired = false;
 function wireRailTabs(): void {
   if (railTabsWired) return;
   railTabsWired = true;
-  railTabs.addEventListener('stream-switch', ((e: CustomEvent) => {
-    handleStreamSwitch(e);
-    // Switching to a stream pulls the user out of the launcher view.
-    setRouteState('progress');
-  }) as EventListener);
+  railTabs.addEventListener(
+    'stream-switch',
+    handleStreamSwitch as EventListener,
+  );
   railTabs.addEventListener(
     'stream-delete',
     handleStreamDelete as EventListener,

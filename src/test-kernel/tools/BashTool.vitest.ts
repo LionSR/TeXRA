@@ -169,10 +169,8 @@ function roundServices(opts: {
     setting: {
       agentCategory: AgentCategory.ToolUse,
       temperature: 0,
-      requiredFiles: {},
       requiredFilesInternal: {},
       defaultOutputFiles: [],
-      filePatternsContain: [],
       tools: [{ name: opts.toolName }],
     } satisfies AgentSetting,
     prompt: {

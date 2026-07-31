@@ -14,7 +14,7 @@ import {
   type SupabaseSessionStorage,
 } from './SupabaseSession';
 
-export const DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS = 30000;
+const DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS = 30000;
 
 interface SupabaseSecretStore {
   get(key: string): Promise<string | undefined>;

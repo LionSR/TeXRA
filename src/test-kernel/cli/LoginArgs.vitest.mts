@@ -11,30 +11,26 @@ import {
   hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
-  resolveLoginProvider,
   unsupportedLoginProviderMessage,
 } from '@cli/runtime/loginOptions';
 import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
 
 describe('CLI login arguments (texra login)', () => {
   it('marks bare texra login as using the fallback provider', () => {
-    expect(resolveLoginProvider(undefined, undefined)).toEqual({
+    expect(loginInitFromArgs({})).toMatchObject({
       provider: 'github',
-      explicit: false,
+      providerExplicit: false,
+    });
+    expect(loginInitFromArgs({ providerArg: '  ' })).toMatchObject({
+      provider: 'github',
+      providerExplicit: false,
     });
   });
 
-  it('prefers the --provider flag over the positional argument', () => {
-    expect(resolveLoginProvider('github', 'google')).toEqual({
+  it('takes the provider from the positional argument', () => {
+    expect(loginInitFromArgs({ providerArg: 'google' })).toMatchObject({
       provider: 'google',
-      explicit: true,
-    });
-  });
-
-  it('falls back to the positional argument when --provider is empty', () => {
-    expect(resolveLoginProvider('google', undefined)).toEqual({
-      provider: 'google',
-      explicit: true,
+      providerExplicit: true,
     });
   });
 
@@ -59,7 +55,7 @@ describe('CLI login arguments (texra login)', () => {
   it('reads login flags from camelCase argument keys', () => {
     expect(
       loginInitFromArgs({
-        provider: 'google',
+        providerArg: 'google',
         noBrowser: true,
         selectAccount: true,
         loginHint: 'person@example.com',
