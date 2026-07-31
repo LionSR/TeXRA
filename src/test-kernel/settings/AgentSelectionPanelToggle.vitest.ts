@@ -19,6 +19,7 @@ import {
 type AgentSelectionPanelElement = HTMLElement & {
   agents: AgentSelectionItem[];
   category: 'workflow' | 'toolUse';
+  unsupportedCommands: ReadonlySet<string> | null;
   updateComplete: Promise<boolean>;
 };
 
@@ -30,14 +31,25 @@ const workflowAgent: AgentSelectionItem = {
   enabled: true,
 };
 
-function renderAgentSelectionPanel(): Promise<AgentSelectionPanelElement> {
+const customAgent: AgentSelectionItem = {
+  name: 'my-agent',
+  category: 'workflow',
+  source: AGENT_SOURCE.CUSTOM,
+  hasPath: true,
+  enabled: true,
+};
+
+function renderAgentSelectionPanel(
+  agents: AgentSelectionItem[] = [workflowAgent],
+): Promise<AgentSelectionPanelElement> {
   return mountComponent<AgentSelectionPanelElement>('agent-selection-panel', {
-    agents: [workflowAgent],
+    agents,
     category: 'workflow',
+    unsupportedCommands: new Set(),
   });
 }
 
-describe('AgentSelectionPanel enabled toggle', () => {
+describe('AgentSelectionPanel', () => {
   useLitComponentTestDom(
     () =>
       import('@settingsView/frontend/components/profile/AgentSelectionPanel'),
@@ -91,5 +103,23 @@ describe('AgentSelectionPanel enabled toggle', () => {
     // The toggle's click handler stops propagation, so the row's own
     // click-to-select handler must not also fire.
     expect(rowClicked).toBe(false);
+  });
+
+  it('requests custom-agent deletion on the first click without an inline confirmation', async () => {
+    const panel = await renderAgentSelectionPanel([customAgent]);
+    const deleteButton = panel.shadowRoot!.querySelector(
+      '[aria-label="Delete custom agent"]',
+    ) as HTMLElement;
+
+    expect(deleteButton).not.toBeNull();
+    expect(panel.shadowRoot!.querySelector('.agent-delete-confirm')).toBeNull();
+
+    deleteButton.click();
+    await panel.updateComplete;
+
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, { agentName: 'my-agent' }],
+    ]);
+    expect(panel.shadowRoot!.querySelector('.agent-delete-confirm')).toBeNull();
   });
 });

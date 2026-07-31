@@ -227,26 +227,4 @@ export const agentSelectionPanelStyles: CSSResult = css`
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  .agent-delete-confirm {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-xs);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background: var(--wa-color-danger-fill-quiet);
-    border: var(--border-thin) solid var(--wa-color-danger-on-quiet);
-    border-radius: var(--border-radius);
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-normal);
-  }
-
-  .agent-delete-confirm-text {
-    flex: 1;
-  }
-
-  .agent-delete-confirm-actions {
-    display: flex;
-    gap: var(--wa-space-2xs);
-    flex-shrink: 0;
-  }
 `;
