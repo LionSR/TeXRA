@@ -584,24 +584,24 @@ export class MainApp extends MainAppBase {
           .isGitRepo=${isGitRepo$.get()}
           @latexdiffs-toggle=${this.onLatexDiffsToggle}
           @latexdiffs-action=${({
-                    detail,
-                  }: CustomEvent<LatexDiffsActionDetail>) =>
-                    runLatexDiffsAction(detail.action)}
+            detail,
+          }: CustomEvent<LatexDiffsActionDetail>) =>
+            runLatexDiffsAction(detail.action)}
           @base-file-change=${({ detail }: CustomEvent<BaseFileChangeDetail>) =>
-                    setBaseFile(detail.value)}
+            setBaseFile(detail.value)}
           @edited-file-change=${({
-                    detail,
-                  }: CustomEvent<EditedFileChangeDetail>) =>
-                    setEditedFile(detail.value)}
+            detail,
+          }: CustomEvent<EditedFileChangeDetail>) =>
+            setEditedFile(detail.value)}
           @get-current-file=${({ detail }: CustomEvent<FileActionDetail>) =>
-                    getCurrentFile(detail.type)}
+            getCurrentFile(detail.type)}
           @empty-file=${({ detail }: CustomEvent<FileActionDetail>) =>
-                    emptyFile(detail.type)}
+            emptyFile(detail.type)}
           @refresh-edited-files=${() => refreshEditedFiles()}
           @commit-change=${({ detail }: CustomEvent<CommitChangeDetail>) =>
-                    setCommit(detail.value)}
+            setCommit(detail.value)}
           @refresh-commits=${() =>
-                    postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS)}
+            postMessage(MAIN_VIEW_COMMANDS.REFRESH_COMMITS)}
         ></latexdiffs-section>
       </div>
     `;
