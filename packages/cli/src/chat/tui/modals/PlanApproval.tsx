@@ -7,10 +7,10 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   isCompactRows,
 } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import type { PlanApprovalPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
+import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
@@ -30,9 +30,8 @@ const PLAN_APPROVAL_TITLE = 'Approve plan?';
 export const PLAN_APPROVAL_GOAL_NOTICE =
   'Runs until done; only Bash is automatic.';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
-const PLAN_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
-const PLAN_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
-const PLAN_APPROVAL_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
+export const PLAN_APPROVAL_FEEDBACK_PLACEHOLDER =
+  'Feedback to send with rejection';
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
 const PLAN_APPROVAL_GOAL_ACTION = {
   key: 'r',
@@ -77,28 +76,6 @@ export function planApprovalCompactBodyRowsBudget({
     extraActions: goalEnabled ? [PLAN_APPROVAL_GOAL_ACTION] : [],
   });
   return Math.max(0, availableRows - chromeRows);
-}
-
-export function planApprovalFeedbackRows({
-  columns,
-  placeholder = PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
-  value,
-}: {
-  readonly columns: number;
-  readonly placeholder?: string;
-  readonly value: string;
-}): number {
-  const text = value.length > 0 ? value : placeholder;
-  const width = Math.max(
-    1,
-    columns -
-      CONFIRM_CARD_HORIZONTAL_DECORATION -
-      PLAN_APPROVAL_FEEDBACK_PREFIX_COLUMNS,
-  );
-  return (
-    PLAN_APPROVAL_FEEDBACK_MARGIN_ROWS +
-    Math.max(1, wrapAnsiToWidth(text, width).split('\n').length)
-  );
 }
 
 export function isPlanApprovalGoalActionVisible({
@@ -148,7 +125,11 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         extraFixedRows:
           (goalNoticeVisible ? PLAN_APPROVAL_GOAL_NOTICE_ROWS : 0) +
           (feedbackMode
-            ? planApprovalFeedbackRows({ columns, value: feedbackValue })
+            ? confirmCardFeedbackRows({
+                columns,
+                placeholder: PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
+                value: feedbackValue,
+              })
             : 0),
         title: PLAN_APPROVAL_TITLE,
       });

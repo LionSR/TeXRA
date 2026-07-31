@@ -175,8 +175,12 @@ function inheritedDefinitionBlock(
   };
 }
 
-function userRequestTemplateCount(rawPrompts: Record<string, unknown>): number {
-  const userRequest = rawPrompts.userRequest;
+/**
+ * Round floor for a workflow agent: one round per `userRequest` template.
+ * Shared with `inlineAgents` so a definition supplied as a value derives the
+ * same round count as the identical definition read from a YAML file.
+ */
+export function userRequestTemplateCount(userRequest: unknown): number {
   if (Array.isArray(userRequest)) return userRequest.length;
   return typeof userRequest === 'string' && userRequest ? 1 : 0;
 }
@@ -225,7 +229,10 @@ function scanYaml(
         .catch(INVALID_WORKFLOW_ROUNDS)
         .parse(rawSettings.rounds);
       if (!Number.isNaN(parsedRounds)) {
-        rounds = Math.max(parsedRounds, userRequestTemplateCount(rawPrompts));
+        rounds = Math.max(
+          parsedRounds,
+          userRequestTemplateCount(rawPrompts.userRequest),
+        );
       }
     }
 

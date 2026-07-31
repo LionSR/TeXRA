@@ -17,6 +17,7 @@ import {
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,
 } from '@telemetry/UsageLogService';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
@@ -42,15 +43,6 @@ function batchId(batch: unknown): string {
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
-}
-
-/** A promise a test can resolve on demand, used to stall a mocked fetch call. */
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
 }
 
 // ky passes a Request object; read each batch body from it. `beforeRespond`
@@ -90,7 +82,7 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
-      deferred();
+      createDeferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
       if (callCount === 1) {
@@ -120,9 +112,9 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
-      deferred();
+      createDeferred();
     const { promise: secondFetchReleased, resolve: releaseSecondFetch } =
-      deferred();
+      createDeferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
       if (callCount === 1) await firstFetchReleased;
@@ -162,7 +154,7 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
     const warn = vi.spyOn(logger, 'warn');
 
-    const { promise: fetchReleased, resolve: releaseFetch } = deferred();
+    const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async () => {
       await fetchReleased;
@@ -257,7 +249,7 @@ describe('UsageLogService', () => {
     vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
 
     const { promise: rejectionReleased, resolve: releaseRejection } =
-      deferred();
+      createDeferred();
     const batches: unknown[] = [];
     const fetchMock = stubFetch(batches, async (callCount) => {
       if (callCount === 2) throw new Error('network unavailable');
@@ -446,7 +438,8 @@ describe('UsageLogService', () => {
     // getRelayAccessToken() is awaited before the batch is sent, so an opt-out
     // that lands during that await must still take effect.
     it('honours an opt-out that lands while the token lookup is in flight', async () => {
-      const { promise: tokenReleased, resolve: releaseToken } = deferred();
+      const { promise: tokenReleased, resolve: releaseToken } =
+        createDeferred();
       vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockImplementation(
         async () => {
           await tokenReleased;

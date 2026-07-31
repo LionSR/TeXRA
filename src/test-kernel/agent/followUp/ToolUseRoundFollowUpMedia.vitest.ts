@@ -40,6 +40,37 @@ function baseRoundServices(traceLabel: string) {
   };
 }
 
+/**
+ * The model-handler surface a full round drives -- response extraction,
+ * server-tool data, routing, streaming. Scenarios override only the members
+ * whose behavior they exercise.
+ */
+function roundModelHandler(overrides: Record<string, unknown>) {
+  return {
+    addMediaToUserMessage: vi.fn(async () => []),
+    capabilities: { supportsVision: true },
+    config: { provider: 'openai', fullName: 'test-model' },
+    createAssistantMessageFromResponse: vi.fn(
+      (_response: unknown, text: string) =>
+        ({ type: 'message', role: 'assistant', content: text }) as never,
+    ),
+    extractAssistantContent: () => [],
+    extractServerToolData: () => ({
+      contentBlocks: [],
+      webFetchResults: [],
+      webSearchResults: [],
+    }),
+    extractToolUse: () => [],
+    getWireRouteKey: () => 'openai:test-route',
+    getModelRetryRouteKey: () => 'openai:test-route:model',
+    getStreamingConfig: () => false,
+    isEndTurnStop: (stopReason: string) => stopReason === 'stop',
+    processThinkingBlock: () => null,
+    setOutputStreaming: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {
     const createUserFollowUpMessages = vi.fn(
@@ -182,27 +213,14 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const services = {
       ...baseRoundServices('ToolUseRoundBlankToolResult'),
-      modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => []),
-        capabilities: { supportsVision: true },
-        config: { provider: 'openai', fullName: 'test-model' },
-        createAssistantMessageFromResponse: vi.fn(
-          (_response: unknown, text: string) =>
-            ({ type: 'message', role: 'assistant', content: text }) as never,
-        ),
+      modelHandler: roundModelHandler({
         createResponse,
         createToolUseFollowUpMessages,
         createUserFollowUpMessages,
-        extractAssistantContent: () => [],
         extractResponse: (response: { text?: string; toolCall?: boolean }) => ({
           text: response.text ?? '',
           usage: null,
           stopReason: response.toolCall ? 'tool_calls' : 'stop',
-        }),
-        extractServerToolData: () => ({
-          contentBlocks: [],
-          webFetchResults: [],
-          webSearchResults: [],
         }),
         extractToolUse: (response: { toolCall?: boolean }) =>
           response.toolCall
@@ -216,13 +234,7 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
                 },
               ]
             : [],
-        getWireRouteKey: () => 'openai:test-route',
-        getModelRetryRouteKey: () => 'openai:test-route:model',
-        getStreamingConfig: () => false,
-        isEndTurnStop: (stopReason: string) => stopReason === 'stop',
-        processThinkingBlock: () => null,
-        setOutputStreaming: vi.fn(),
-      },
+      }),
       session: {
         hasQueuedFollowUp: () => false,
       },
@@ -348,35 +360,15 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const services = {
       ...baseRoundServices('ToolUseRoundSystemPrompt'),
-      modelHandler: {
-        addMediaToUserMessage: vi.fn(async () => []),
-        capabilities: { supportsVision: true },
-        config: { provider: 'openai', fullName: 'test-model' },
-        createAssistantMessageFromResponse: vi.fn(
-          (_response: unknown, text: string) =>
-            ({ type: 'message', role: 'assistant', content: text }) as never,
-        ),
+      modelHandler: roundModelHandler({
         createResponse,
-        extractAssistantContent: () => [],
         extractResponse: (response: { text?: string }) => ({
           text: response.text ?? '',
           usage: null,
           stopReason: 'stop',
         }),
-        extractServerToolData: () => ({
-          contentBlocks: [],
-          webFetchResults: [],
-          webSearchResults: [],
-        }),
-        extractToolUse: () => [],
-        getWireRouteKey: () => 'openai:test-route',
-        getModelRetryRouteKey: () => 'openai:test-route:model',
-        getStreamingConfig: () => false,
-        isEndTurnStop: (stopReason: string) => stopReason === 'stop',
-        processThinkingBlock: () => null,
         requiresPerCallSystemPrompt,
-        setOutputStreaming: vi.fn(),
-      },
+      }),
       session: { hasQueuedFollowUp: () => false },
       setting: { temperature: 0, tools: [] },
       toolRegistry: new MapToolRegistry({}),

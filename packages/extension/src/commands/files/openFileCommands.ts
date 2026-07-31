@@ -12,12 +12,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'openFileCommands';
 
-const openFileCommands = {
-  openFileCompile: 'texra.openFileCompile',
-  openFile: 'texra.openFile',
-  openLabel: 'texra.openLabel',
-};
-
 interface OpenLabelOptions {
   notifyNotFound?: boolean;
 }
@@ -87,8 +81,8 @@ export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
 ): void {
   registerCommands(context, [
-    { id: openFileCommands.openFileCompile, handler: openBuildDisplayIfTex },
-    { id: openFileCommands.openFile, handler: openFile },
-    { id: openFileCommands.openLabel, handler: openLabel },
+    { id: 'texra.openFileCompile', handler: openBuildDisplayIfTex },
+    { id: 'texra.openFile', handler: openFile },
+    { id: 'texra.openLabel', handler: openLabel },
   ]);
 }

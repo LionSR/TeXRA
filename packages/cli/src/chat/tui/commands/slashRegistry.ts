@@ -37,13 +37,12 @@ export interface SlashCommand {
     remainder: string,
     context: SlashCommandContext,
   ) => void | Promise<void>;
-  /** Canonical structured form opened when the remainder is empty. */
-  readonly formName?: string;
   /** Additional exact remainders that open the canonical form. */
   readonly formRemainders?: readonly string[];
   /**
-   * Optional structured-form renderer. When present, picking the command
-   * mounts this component instead of routing through the input.
+   * Canonical structured form: opened when the remainder is empty (or matches
+   * `formRemainders`), and mounted instead of routing through the input when
+   * the command is picked from the palette.
    */
   readonly formComponent?: React.ComponentType<SlashFormProps>;
   /**

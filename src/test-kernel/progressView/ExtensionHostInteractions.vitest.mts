@@ -4,28 +4,14 @@ import * as vscode from 'vscode';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
-import type {
-  BashSettlement,
-  HostApprovalBypassStateUpdate,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
-  UserQuestionSettlement,
-} from '@agent/runtime/HostInteractions';
-import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
+import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  ExternalInquiryPermission,
-  PlanApprovalPermission,
-  RetryPermission,
-  StreamTabId,
-  ToolEditPermission,
-  UserQuestionPermission,
-} from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
+import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 
 const mocks = vi.hoisted(() => ({
   approveNativeToolEditApprovals: vi.fn(async () => undefined),
@@ -48,96 +34,6 @@ vi.mock('@frontend/latex/linter', () => ({
 vi.mock('@frontend/latex/inlineCriticism', () => ({
   pushManualCriticism: mocks.pushManualCriticism,
 }));
-
-type ShowSpy<T> = ReturnType<typeof vi.fn<(item: T) => void>>;
-type DismissSpy = ReturnType<typeof vi.fn<(id: string) => void>>;
-
-interface RecordingTransport<T> {
-  readonly show: ShowSpy<T>;
-  readonly dismiss: DismissSpy;
-}
-
-interface RecordingApprovalHandlerSet extends ApprovalRequestHandlerSet {
-  readonly transport: {
-    toolEdit: RecordingTransport<ToolEditPermission>;
-    bash: RecordingTransport<BashPermission>;
-    retry: RecordingTransport<RetryPermission>;
-    agentProposal: RecordingTransport<AgentProposalPermission>;
-    planApproval: RecordingTransport<PlanApprovalPermission>;
-    externalInquiry: RecordingTransport<ExternalInquiryPermission>;
-    userQuestion: RecordingTransport<UserQuestionPermission>;
-  };
-}
-
-function handler<
-  T extends { streamId: string },
-  K extends keyof T,
-  Result = never,
->(
-  idField: K,
-): {
-  handler: ApprovalRequestHandler<T, K, Result>;
-  transport: RecordingTransport<T>;
-} {
-  const transport = {
-    show: vi.fn<(item: T) => void>(),
-    dismiss: vi.fn<(id: string) => void>(),
-  };
-  return {
-    handler: new ApprovalRequestHandler<T, K, Result>(
-      idField,
-      transport.show,
-      transport.dismiss,
-      () => true,
-    ),
-    transport,
-  };
-}
-
-function createHandlers(): RecordingApprovalHandlerSet {
-  const toolEdit = handler<ToolEditPermission, 'requestId'>('requestId');
-  const bash = handler<BashPermission, 'requestId', BashSettlement>(
-    'requestId',
-  );
-  const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
-  const agentProposal = handler<
-    AgentProposalPermission,
-    'proposalId',
-    ProposalResult
-  >('proposalId');
-  const planApproval = handler<
-    PlanApprovalPermission,
-    'approvalId',
-    PlanApprovalResult
-  >('approvalId');
-  const externalInquiry = handler<ExternalInquiryPermission, 'requestId'>(
-    'requestId',
-  );
-  const userQuestion = handler<
-    UserQuestionPermission,
-    'requestId',
-    UserQuestionSettlement
-  >('requestId');
-
-  return {
-    toolEdit: toolEdit.handler,
-    bash: bash.handler,
-    retry: retry.handler,
-    agentProposal: agentProposal.handler,
-    planApproval: planApproval.handler,
-    externalInquiry: externalInquiry.handler,
-    userQuestion: userQuestion.handler,
-    transport: {
-      toolEdit: toolEdit.transport,
-      bash: bash.transport,
-      retry: retry.transport,
-      agentProposal: agentProposal.transport,
-      planApproval: planApproval.transport,
-      externalInquiry: externalInquiry.transport,
-      userQuestion: userQuestion.transport,
-    },
-  };
-}
 
 function createRuntimeHost() {
   return { emit: vi.fn() };
@@ -173,7 +69,8 @@ function createInteractions(options: {
   return createExtensionHostInteractions({
     interactions: options.presentationSink ?? createRuntimeHost(),
     session: options.session,
-    getApprovalHandlers: () => options.handlers ?? createHandlers(),
+    getApprovalHandlers: () =>
+      options.handlers ?? createRecordingApprovalHandlers(),
     setApprovalBypassState: options.setApprovalBypassState ?? vi.fn(),
   });
 }
@@ -290,7 +187,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('approves already-pending delegated work only in the selected stream', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const session = createTestSession();
     const interactions = createInteractions({ handlers, session });
 
@@ -368,7 +265,7 @@ describe('createExtensionHostInteractions', () => {
 
   it('shows and resolves plan approvals through existing handlers', async () => {
     const presentationSink = createRuntimeHost();
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const session = createTestSession();
     const sessionEvents = recordSessionEvents(session);
     const interactions = createInteractions({
@@ -429,7 +326,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('rejects a request when its show transport fails synchronously', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     handlers.transport.planApproval.show.mockImplementationOnce(() => {
       throw new Error('Progress view transport unavailable.');
     });
@@ -458,7 +355,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('surfaces retry requests without stealing active-stream focus (#8246)', () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const session = createTestSession();
     const sessionEvents = recordSessionEvents(session);
     const interactions = createInteractions({ handlers, session });
@@ -494,7 +391,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('does not let an old retry action resolve its replacement', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       handlers,
       session: createTestSession(),
@@ -538,7 +435,7 @@ describe('createExtensionHostInteractions', () => {
 
   it('cancels pending retry requests for a removed stream', async () => {
     const presentationSink = createRuntimeHost();
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       presentationSink,
       handlers,
@@ -575,7 +472,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('forwards a cancellation cause as bash reject feedback', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       handlers,
       session: createTestSession(),
@@ -599,7 +496,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('rejects a resolution whose kind does not match the pending request', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       handlers,
       session: createTestSession(),
@@ -626,7 +523,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('a retry-kind cancel clears only the retry, leaving the plan approval pending', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       handlers,
       session: createTestSession(),
@@ -666,7 +563,7 @@ describe('createExtensionHostInteractions', () => {
 
   it('shows external inquiries without waiting for a user decision', async () => {
     const presentationSink = createRuntimeHost();
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       presentationSink,
       handlers,
@@ -699,7 +596,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('cancels streamless user questions during unscoped cleanup', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       handlers,
       session: createTestSession(),
@@ -741,7 +638,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('settles submitted user questions with their answers', async () => {
-    const handlers = createHandlers();
+    const handlers = createRecordingApprovalHandlers();
     const interactions = createInteractions({
       handlers,
       session: createTestSession(),

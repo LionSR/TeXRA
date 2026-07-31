@@ -15,7 +15,6 @@
 
 export enum WorkspaceStateKey {
   AGENT_HISTORY = 'texra.agentHistory',
-  TASK_GROUPS = 'texra.taskGroups',
   /** Consolidated progress view preferences (replaces individual keys) */
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
 

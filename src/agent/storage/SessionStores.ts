@@ -52,6 +52,17 @@ export interface DeleteAllStreamsResult {
 export type DeleteStreamResult = 'deleted' | 'active' | 'failed';
 
 /**
+ * Result of removing an execution together with its adjacent stream state.
+ * `streams-deleted` and `retained` separate the two failure shapes: whether
+ * the adjacent cleanup had already committed when the removal failed, which
+ * decides whether the stream may be reported as gone.
+ */
+type ExecutionDeletionOutcome =
+  | { readonly kind: 'completed'; readonly result: DeleteExecutionResult }
+  | { readonly kind: 'streams-deleted'; readonly error: unknown }
+  | { readonly kind: 'retained'; readonly error: unknown };
+
+/**
  * Coordinates the durable footprint for a progress stream.
  *
  * `StreamLogStore` and `StreamSnapshotStore` keep separate on-disk formats;
@@ -208,32 +219,53 @@ export class SessionStores {
       }
       return 'deleted';
     }
-    let adjacentCleanupCompleted = false;
-    let result: DeleteExecutionResult;
-    try {
-      result = await this.deleteExecution(executionId, {
-        beforeDelete: async () => {
-          await this.deleteAdjacentStreamState(stream);
-          adjacentCleanupCompleted = true;
-        },
-      });
-    } catch (error) {
-      if (adjacentCleanupCompleted) {
+
+    const outcome = await this.deleteExecutionWithStreamState(executionId, () =>
+      this.deleteAdjacentStreamState(stream),
+    );
+    switch (outcome.kind) {
+      case 'completed':
+        return outcome.result.status === 'active' ? 'active' : 'deleted';
+      case 'streams-deleted':
         logger.warn(
           CHANNEL,
-          `Stream ${stream} was deleted, but execution ${executionId} cleanup was incomplete: ${toErrorMessage(error)}`,
-          { data: error },
+          `Stream ${stream} was deleted, but execution ${executionId} cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
+          { data: outcome.error },
         );
         return 'deleted';
-      }
-      logger.warn(
-        CHANNEL,
-        `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return 'failed';
+      case 'retained':
+        logger.warn(
+          CHANNEL,
+          `Stream ${stream} was retained because cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
+          { data: outcome.error },
+        );
+        return 'failed';
     }
-    return result.status === 'active' ? 'active' : 'deleted';
+  }
+
+  /**
+   * Remove an execution, running `cleanup` for its adjacent stream state under
+   * the same inactive-lease guard, so every deletion path shares one owner of
+   * the "did the stream state already commit?" invariant.
+   */
+  private async deleteExecutionWithStreamState(
+    executionId: ExecutionId,
+    cleanup: () => Promise<void>,
+  ): Promise<ExecutionDeletionOutcome> {
+    let cleanupCompleted = false;
+    try {
+      const result = await this.deleteExecution(executionId, {
+        beforeDelete: async () => {
+          await cleanup();
+          cleanupCompleted = true;
+        },
+      });
+      return { kind: 'completed', result };
+    } catch (error) {
+      return cleanupCompleted
+        ? { kind: 'streams-deleted', error }
+        : { kind: 'retained', error };
+    }
   }
 
   private async executionIdForStream(
@@ -241,6 +273,15 @@ export class SessionStores {
   ): Promise<ExecutionId | undefined> {
     return (
       this.snapshots.getExecutionId(stream) ??
+      (await this.persistedOrDerivedExecutionId(stream))
+    );
+  }
+
+  /** Persisted sidecar id, falling back to the id encoded in the stream name. */
+  private async persistedOrDerivedExecutionId(
+    stream: StreamTabId,
+  ): Promise<ExecutionId | undefined> {
+    return (
       (await this.snapshots.readPersistedExecutionId(stream)) ??
       executionIdFromStream(stream)
     );
@@ -288,9 +329,7 @@ export class SessionStores {
     const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
     for (const stream of snapshotStreams) {
-      const executionId =
-        (await this.snapshots.readPersistedExecutionId(stream)) ??
-        executionIdFromStream(stream);
+      const executionId = await this.persistedOrDerivedExecutionId(stream);
       if (executionId) executionIdsByStream.set(stream, executionId);
     }
     for (const stream of streamIds) {
@@ -331,48 +370,48 @@ export class SessionStores {
     await Promise.all(
       [...streamsByExecution].map(async ([executionId, streams]) => {
         let failedAdjacentStreams = new Set<StreamTabId>();
-        let adjacentCleanupCompleted = false;
-        try {
-          const result = await this.deleteExecution(executionId, {
-            beforeDelete: async () => {
-              const cleanup = await this.deleteAdjacentStreamStates(streams);
-              failedAdjacentStreams = cleanup.failed;
-              throwAdjacentCleanupFailures(cleanup.failures);
-              adjacentCleanupCompleted = true;
-            },
-          });
-          if (result.status === 'active') {
+        const outcome = await this.deleteExecutionWithStreamState(
+          executionId,
+          async () => {
+            const cleanup = await this.deleteAdjacentStreamStates(streams);
+            failedAdjacentStreams = cleanup.failed;
+            throwAdjacentCleanupFailures(cleanup.failures);
+          },
+        );
+
+        if (outcome.kind === 'completed') {
+          if (outcome.result.status === 'active') {
             for (const stream of streams) active.add(stream);
           } else {
             await this.notifyCanonicalDeletions(streams, canonicalStreams);
           }
-        } catch (error) {
-          if (adjacentCleanupCompleted) {
-            logger.warn(
-              CHANNEL,
-              `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(error)}`,
-              { data: error },
-            );
-            await this.notifyCanonicalDeletions(streams, canonicalStreams);
-            return;
-          }
+          return;
+        }
+        if (outcome.kind === 'streams-deleted') {
           logger.warn(
             CHANNEL,
-            `Failed to delete streams for execution ${executionId}: ${toErrorMessage(error)}`,
-            { data: error },
+            `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(outcome.error)}`,
+            { data: outcome.error },
           );
-          const retainedStreams =
-            failedAdjacentStreams.size > 0
-              ? failedAdjacentStreams
-              : streams.filter((stream) => this.streamLogs.has(stream));
-          for (const stream of retainedStreams) failed.add(stream);
-          if (failedAdjacentStreams.size > 0) {
-            await this.notifyCanonicalDeletions(
-              streams,
-              canonicalStreams,
-              failedAdjacentStreams,
-            );
-          }
+          await this.notifyCanonicalDeletions(streams, canonicalStreams);
+          return;
+        }
+        logger.warn(
+          CHANNEL,
+          `Failed to delete streams for execution ${executionId}: ${toErrorMessage(outcome.error)}`,
+          { data: outcome.error },
+        );
+        const retainedStreams =
+          failedAdjacentStreams.size > 0
+            ? failedAdjacentStreams
+            : streams.filter((stream) => this.streamLogs.has(stream));
+        for (const stream of retainedStreams) failed.add(stream);
+        if (failedAdjacentStreams.size > 0) {
+          await this.notifyCanonicalDeletions(
+            streams,
+            canonicalStreams,
+            failedAdjacentStreams,
+          );
         }
       }),
     );
@@ -397,38 +436,31 @@ export class SessionStores {
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         try {
-          const executionId =
-            (await this.snapshots.readPersistedExecutionId(stream)) ??
-            executionIdFromStream(stream);
+          const executionId = await this.persistedOrDerivedExecutionId(stream);
           if (executionId) {
-            let result: DeleteExecutionResult;
-            let adjacentCleanupCompleted = false;
-            try {
-              result = await this.deleteExecution(executionId, {
-                beforeDelete: async () => {
-                  await this.deleteAdjacentStreamState(stream);
-                  adjacentCleanupCompleted = true;
-                },
-              });
-            } catch (error) {
-              if (adjacentCleanupCompleted) {
-                sweptStreams.push(stream);
-                logger.warn(
-                  CHANNEL,
-                  `Orphaned stream ${stream} was removed, but execution ${executionId} cleanup was incomplete.`,
-                  { data: error },
-                );
-                return;
-              }
+            const outcome = await this.deleteExecutionWithStreamState(
+              executionId,
+              () => this.deleteAdjacentStreamState(stream),
+            );
+            if (outcome.kind === 'streams-deleted') {
+              sweptStreams.push(stream);
               logger.warn(
                 CHANNEL,
-                `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
-                { data: error },
+                `Orphaned stream ${stream} was removed, but execution ${executionId} cleanup was incomplete.`,
+                { data: outcome.error },
               );
               return;
             }
-            if (result.status === 'active') return;
-            if (result.status === 'deleted') {
+            if (outcome.kind === 'retained') {
+              logger.warn(
+                CHANNEL,
+                `Skipping orphaned execution cleanup for ${executionId}; startup will continue.`,
+                { data: outcome.error },
+              );
+              return;
+            }
+            if (outcome.result.status === 'active') return;
+            if (outcome.result.status === 'deleted') {
               sweptExecutionIds.push(executionId);
             }
           } else {

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
+import { wrapApiCall } from '@tools/utils';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
@@ -13,7 +14,6 @@ import {
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedRequest } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string().describe('arXiv identifier or URL for the paper.'),
@@ -47,20 +47,17 @@ export class ArxivMetadataTool extends defineTool({
 
     const requestId = normaliseArxivIdentifier(rawId);
 
-    let entries;
-    try {
-      // Use arxiv-client's ids() method for direct ID lookup.
-      entries = await rateLimitedRequest(
-        'arxiv',
-        ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
-        'arXiv metadata lookup',
-        () => createArxivClient().ids([requestId]).execute(),
-      );
-    } catch (error) {
-      throw new ToolError(
-        `Failed to query arXiv API: ${toErrorMessage(error)}`,
-      );
-    }
+    // Use arxiv-client's ids() method for direct ID lookup.
+    const entries = await wrapApiCall(
+      () =>
+        rateLimitedRequest(
+          'arxiv',
+          ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
+          'arXiv metadata lookup',
+          () => createArxivClient().ids([requestId]).execute(),
+        ),
+      'Failed to query arXiv API',
+    );
 
     if (!entries?.length) {
       throw new ToolError(`No metadata found for arXiv ID ${requestId}`);

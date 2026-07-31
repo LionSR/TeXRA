@@ -11,17 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('proper-lockfile', () => ({ lock: mocks.lock }));
 
 // Local imports - test support
-import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
-
-interface JsonStore {
-  set(key: string, value: unknown): Promise<void>;
-}
-
-interface JsonStoreModule {
-  JsonStore: {
-    open(filePath: string): Promise<JsonStore>;
-  };
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('JsonStore lock compromise boundary', () => {
   let tempDir: string | undefined;
@@ -59,8 +49,9 @@ describe('JsonStore lock compromise boundary', () => {
       },
     );
 
-    const { JsonStore } =
-      await loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts');
+    const { JsonStore } = await loadSourceModule(
+      '@platform/defaults/jsonStore',
+    );
     const store = await JsonStore.open(filePath);
 
     await expect(store.set('key', 'value')).rejects.toBe(compromised);

@@ -28,10 +28,7 @@ import type { SettingsAgentCatalogController } from '@controllers/settingsView/S
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -44,7 +41,10 @@ import {
 import { AbsoluteFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import type { SettingsHandlerContext } from './SettingsHandlerContext';
+import {
+  withHandlerErrorHandling,
+  type SettingsHandlerContext,
+} from './SettingsHandlerContext';
 
 /**
  * Agent selection, directory, and team handler delegate.
@@ -95,156 +95,144 @@ export class AgentHandlers {
   async handleOpenAgentYaml(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
   ): Promise<void> {
-    try {
-      const result = this.directoryController.planOpenAgentYaml({
-        source: data.agentSource,
-        name: data.agentName,
-      });
-      if (!result.ok && result.reason === 'missingAgent') {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
-        );
-        return;
-      }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to open agent YAML file',
+      async () => {
+        const result = this.directoryController.planOpenAgentYaml({
+          source: data.agentSource,
+          name: data.agentName,
+        });
+        if (!result.ok && result.reason === 'missingAgent') {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
+          );
+          return;
+        }
 
-      if (!result.ok) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
-        );
-        return;
-      }
+        if (!result.ok) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
+          );
+          return;
+        }
 
-      const doc = await vscode.workspace.openTextDocument(result.path);
-      await vscode.window.showTextDocument(doc, { preview: false });
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to open agent YAML file',
-        error,
-      );
-    }
+        const doc = await vscode.workspace.openTextDocument(result.path);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      },
+    );
   }
 
   async handleSetAgentEnabled(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
   ): Promise<void> {
-    try {
-      await this.visibilityController.setAgentEnabled({
-        category: data.category,
-        source: data.agentSource,
-        name: data.agentName,
-        enabled: data.enabled,
-      });
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to update agent visibility',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to update agent visibility',
+      async () => {
+        await this.visibilityController.setAgentEnabled({
+          category: data.category,
+          source: data.agentSource,
+          name: data.agentName,
+          enabled: data.enabled,
+        });
+        await this.refreshAfterAgentMutation();
+      },
+    );
   }
 
   async handleSetAllAgentsEnabled(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
   ): Promise<void> {
-    try {
-      await this.visibilityController.setAllAgentsEnabled({
-        category: data.category,
-        source: data.source,
-        enabled: data.enabled,
-      });
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to update agent visibility',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to update agent visibility',
+      async () => {
+        await this.visibilityController.setAllAgentsEnabled({
+          category: data.category,
+          source: data.source,
+          enabled: data.enabled,
+        });
+        await this.refreshAfterAgentMutation();
+      },
+    );
   }
 
   async handleOpenAgentFolder(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
   ): Promise<void> {
-    try {
-      const result = await this.directoryController.planOpenAgentFolder(
-        data.folderType,
-      );
-      if (!result.ok) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `No local directory for agent source: ${data.folderType}`,
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to open agent folder',
+      async () => {
+        const result = await this.directoryController.planOpenAgentFolder(
+          data.folderType,
         );
-        return;
-      }
-      await vscode.commands.executeCommand(
-        'revealFileInOS',
-        vscode.Uri.file(result.path),
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to open agent folder',
-        error,
-      );
-    }
+        if (!result.ok) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `No local directory for agent source: ${data.folderType}`,
+          );
+          return;
+        }
+        await vscode.commands.executeCommand(
+          'revealFileInOS',
+          vscode.Uri.file(result.path),
+        );
+      },
+    );
   }
 
   async handleRevealAgentFile(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
   ): Promise<void> {
-    try {
-      const result = this.directoryController.planRevealAgentFile({
-        source: data.agentSource,
-        name: data.agentName,
-      });
-      if (!result.ok) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Agent not found or has no file: ${data.agentName}`,
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to reveal agent file',
+      async () => {
+        const result = this.directoryController.planRevealAgentFile({
+          source: data.agentSource,
+          name: data.agentName,
+        });
+        if (!result.ok) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Agent not found or has no file: ${data.agentName}`,
+          );
+          return;
+        }
+        await vscode.commands.executeCommand(
+          'revealFileInOS',
+          vscode.Uri.file(result.path),
         );
-        return;
-      }
-      await vscode.commands.executeCommand(
-        'revealFileInOS',
-        vscode.Uri.file(result.path),
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to reveal agent file',
-        error,
-      );
-    }
+      },
+    );
   }
 
   async handleViewRemoteAgentPrompt(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
   ): Promise<void> {
-    try {
-      const result = await this.remotePromptController.getPromptConfig(
-        data.agentName,
-      );
-      if (!result.ok) {
-        await showLoggedMessage(this.ctx.channel, result.message);
-        return;
-      }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to view remote agent prompt',
+      async () => {
+        const result = await this.remotePromptController.getPromptConfig(
+          data.agentName,
+        );
+        if (!result.ok) {
+          await showLoggedMessage(this.ctx.channel, result.message);
+          return;
+        }
 
-      const doc = await vscode.workspace.openTextDocument({
-        content: result.config,
-        language: 'yaml',
-      });
-      await vscode.window.showTextDocument(doc, { preview: false });
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to view remote agent prompt',
-        error,
-      );
-    }
+        const doc = await vscode.workspace.openTextDocument({
+          content: result.config,
+          language: 'yaml',
+        });
+        await vscode.window.showTextDocument(doc, { preview: false });
+      },
+    );
   }
 
   async handleCreateAgent(
@@ -265,118 +253,114 @@ export class AgentHandlers {
   async handleCustomizeAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
   ): Promise<void> {
-    try {
-      const key = createKey(data.agentSource, data.agentName);
-      const entry = getAgent(key);
-      if (!entry?.path) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Agent not found or has no file: ${data.agentName}`,
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to create custom agent copy',
+      async () => {
+        const key = createKey(data.agentSource, data.agentName);
+        const entry = getAgent(key);
+        if (!entry?.path) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Agent not found or has no file: ${data.agentName}`,
+          );
+          return;
+        }
+
+        const customDir = await agentDirectories.custom();
+        const sourceDir = await agentDirectories.getDirectory(data.agentSource);
+
+        const result = this.fileController.planCustomizeAgent({
+          entry,
+          customDir,
+          sourceDir,
+        });
+        if (!result.ok) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Refusing to copy: target path escapes the custom agents directory.`,
+          );
+          return;
+        }
+
+        const { targetPath } = result.plan;
+
+        await AbsoluteFS.ensureDir(path.dirname(targetPath));
+
+        // Avoid overwriting an existing custom copy with user edits
+        if (await AbsoluteFS.exists(targetPath)) {
+          const overwrite = 'Overwrite';
+          const choice = await vscode.window.showWarningMessage(
+            `A custom copy already exists: ${path.basename(targetPath)}`,
+            { modal: true },
+            overwrite,
+          );
+          if (choice !== overwrite) return;
+        }
+
+        await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
+
+        const doc = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(targetPath),
         );
-        return;
-      }
+        await vscode.window.showTextDocument(doc, { preview: false });
 
-      const customDir = await agentDirectories.custom();
-      const sourceDir = await agentDirectories.getDirectory(data.agentSource);
-
-      const result = this.fileController.planCustomizeAgent({
-        entry,
-        customDir,
-        sourceDir,
-      });
-      if (!result.ok) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Refusing to copy: target path escapes the custom agents directory.`,
+        void vscode.window.showInformationMessage(
+          `Created custom copy: ${path.basename(targetPath)}`,
         );
-        return;
-      }
 
-      const { targetPath } = result.plan;
-
-      await AbsoluteFS.ensureDir(path.dirname(targetPath));
-
-      // Avoid overwriting an existing custom copy with user edits
-      if (await AbsoluteFS.exists(targetPath)) {
-        const overwrite = 'Overwrite';
-        const choice = await vscode.window.showWarningMessage(
-          `A custom copy already exists: ${path.basename(targetPath)}`,
-          { modal: true },
-          overwrite,
-        );
-        if (choice !== overwrite) return;
-      }
-
-      await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
-
-      const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(targetPath),
-      );
-      await vscode.window.showTextDocument(doc, { preview: false });
-
-      void vscode.window.showInformationMessage(
-        `Created custom copy: ${path.basename(targetPath)}`,
-      );
-
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to create custom agent copy',
-        error,
-      );
-    }
+        await this.refreshAfterAgentMutation();
+      },
+    );
   }
 
   async handleDeleteCustomAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
   ): Promise<void> {
-    try {
-      const key = createKey('custom', data.agentName);
-      const entry = getAgent(key);
-      if (!entry?.path) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Custom agent not found: ${data.agentName}`,
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to delete custom agent',
+      async () => {
+        const key = createKey('custom', data.agentName);
+        const entry = getAgent(key);
+        if (!entry?.path) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Custom agent not found: ${data.agentName}`,
+          );
+          return;
+        }
+
+        const customDir = await agentDirectories.custom();
+        const result = this.fileController.planDeleteCustomAgent({
+          entry,
+          customDir,
+        });
+        if (!result.ok) {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Refusing to delete: file is not inside the custom agents directory.`,
+          );
+          return;
+        }
+
+        const deleteChoice = 'Delete';
+        const confirmed = await vscode.window.showWarningMessage(
+          `Delete "${data.agentName}"? This cannot be undone.`,
+          { modal: true },
+          deleteChoice,
         );
-        return;
-      }
+        if (confirmed !== deleteChoice) return;
 
-      const customDir = await agentDirectories.custom();
-      const result = this.fileController.planDeleteCustomAgent({
-        entry,
-        customDir,
-      });
-      if (!result.ok) {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Refusing to delete: file is not inside the custom agents directory.`,
+        await AbsoluteFS.delete(result.plan.path, { recursive: false });
+
+        void vscode.window.showInformationMessage(
+          `Deleted custom agent: ${data.agentName}`,
         );
-        return;
-      }
 
-      const deleteChoice = 'Delete';
-      const confirmed = await vscode.window.showWarningMessage(
-        `Delete "${data.agentName}"? This cannot be undone.`,
-        { modal: true },
-        deleteChoice,
-      );
-      if (confirmed !== deleteChoice) return;
-
-      await AbsoluteFS.delete(result.plan.path, { recursive: false });
-
-      void vscode.window.showInformationMessage(
-        `Deleted custom agent: ${data.agentName}`,
-      );
-
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to delete custom agent',
-        error,
-      );
-    }
+        await this.refreshAfterAgentMutation();
+      },
+    );
   }
 
   // ── Custom agent directory handlers ──
@@ -390,30 +374,26 @@ export class AgentHandlers {
   }
 
   async handleSetCustomAgentDir(): Promise<void> {
-    try {
-      const selectedPath = await agentDirectories.promptCustom();
-      if (!selectedPath) return;
-      await this.refreshAgentDirUI();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to set custom agent directory',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to set custom agent directory',
+      async () => {
+        const selectedPath = await agentDirectories.promptCustom();
+        if (!selectedPath) return;
+        await this.refreshAgentDirUI();
+      },
+    );
   }
 
   async handleResetCustomAgentDir(): Promise<void> {
-    try {
-      await this.directoryController.resetCustomDir();
-      await this.refreshAgentDirUI();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to reset custom agent directory',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to reset custom agent directory',
+      async () => {
+        await this.directoryController.resetCustomDir();
+        await this.refreshAgentDirUI();
+      },
+    );
   }
 
   // ── Agent team handlers ──
@@ -431,130 +411,128 @@ export class AgentHandlers {
   async handleApplyAgentModePreset(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
   ): Promise<void> {
-    try {
-      const result = await withAgentCatalogAuthRefreshDeferred(() =>
-        applyTeamRosterWithPreflight(data.presetId, {
-          catalog: this.catalogController,
-          loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-          canAccessRemoteCatalog: () =>
-            SupabaseClient.canAccessRemoteAgentCatalog(),
-          choose: async (preset, unavailableNames) => {
-            const choice = await vscode.window.showInformationMessage(
-              `The "${preset.name}" team includes TeXRA-hosted members that are unavailable: ${unavailableNames.join(', ')}.`,
-              { modal: true },
-              'Sign in to TeXRA',
-              'Continue with available members',
-            );
-            if (choice === 'Sign in to TeXRA') return 'sign-in';
-            if (choice === 'Continue with available members') return 'continue';
-            return 'cancel';
-          },
-          signIn: async () =>
-            (await vscode.commands.executeCommand<boolean>(
-              AUTH_COMMANDS.SIGN_IN,
-            )) === true,
-          forceRefreshRemoteCatalog: () =>
-            refreshAgents({ includeRemote: true }),
-        }),
-      );
-
-      if (result.status === 'unknown') {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `Unknown team: ${data.presetId}`,
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to apply agent team',
+      async () => {
+        const result = await withAgentCatalogAuthRefreshDeferred(() =>
+          applyTeamRosterWithPreflight(data.presetId, {
+            catalog: this.catalogController,
+            loadLocalCatalog: () => loadAgents({ includeRemote: false }),
+            canAccessRemoteCatalog: () =>
+              SupabaseClient.canAccessRemoteAgentCatalog(),
+            choose: async (preset, unavailableNames) => {
+              const choice = await vscode.window.showInformationMessage(
+                `The "${preset.name}" team includes TeXRA-hosted members that are unavailable: ${unavailableNames.join(', ')}.`,
+                { modal: true },
+                'Sign in to TeXRA',
+                'Continue with available members',
+              );
+              if (choice === 'Sign in to TeXRA') return 'sign-in';
+              if (choice === 'Continue with available members') {
+                return 'continue';
+              }
+              return 'cancel';
+            },
+            signIn: async () =>
+              (await vscode.commands.executeCommand<boolean>(
+                AUTH_COMMANDS.SIGN_IN,
+              )) === true,
+            forceRefreshRemoteCatalog: () =>
+              refreshAgents({ includeRemote: true }),
+          }),
         );
-        return;
-      }
-      if (result.status === 'choice-required') return;
-      if (result.status === 'cancelled') return;
-      if (result.status === 'unavailable') {
-        await showLoggedMessage(
-          this.ctx.channel,
-          `The "${result.preset.name}" team is unavailable because these TeXRA-hosted members could not be loaded: ${result.unavailableNames.join(', ')}.`,
+
+        if (result.status === 'unknown') {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `Unknown team: ${data.presetId}`,
+          );
+          return;
+        }
+        if (result.status === 'choice-required') return;
+        if (result.status === 'cancelled') return;
+        if (result.status === 'unavailable') {
+          await showLoggedMessage(
+            this.ctx.channel,
+            `The "${result.preset.name}" team is unavailable because these TeXRA-hosted members could not be loaded: ${result.unavailableNames.join(', ')}.`,
+          );
+          return;
+        }
+
+        await this.refreshAfterAgentMutation(
+          this.catalogController.getPresetToolUseRoot(
+            result.preset.toolUseAgents,
+            result.preset.id,
+          ),
+          true,
         );
-        return;
-      }
 
-      await this.refreshAfterAgentMutation(
-        this.catalogController.getPresetToolUseRoot(
-          result.preset.toolUseAgents,
-          result.preset.id,
-        ),
-        true,
-      );
-
-      const unresolvedCount = result.resolution.unresolvedNames.length;
-      void vscode.window.showInformationMessage(
-        unresolvedCount === 0
-          ? `Applied "${result.preset.name}" team`
-          : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to apply agent team',
-        error,
-      );
-    }
+        const unresolvedCount = result.resolution.unresolvedNames.length;
+        void vscode.window.showInformationMessage(
+          unresolvedCount === 0
+            ? `Applied "${result.preset.name}" team`
+            : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
+        );
+      },
+    );
   }
 
   async handleSaveAgentModePreset(
     _data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SAVE_AGENT_MODE_PRESET>,
   ): Promise<void> {
-    try {
-      const name = await vscode.window.showInputBox({
-        prompt: 'Name for the new team',
-        placeHolder: 'e.g. My Research Team',
-        validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
-      });
-      if (!name) return; // cancelled
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to save agent team',
+      async () => {
+        const name = await vscode.window.showInputBox({
+          prompt: 'Name for the new team',
+          placeHolder: 'e.g. My Research Team',
+          validateInput: (v) => (v.trim() ? null : 'Name cannot be empty'),
+        });
+        if (!name) return; // cancelled
 
-      await loadAgents();
+        await loadAgents();
 
-      await this.catalogController.saveCurrentPreset(name);
+        await this.catalogController.saveCurrentPreset(name);
 
-      await Promise.all([
-        this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-        this.refreshAfterAgentMutation(undefined, true),
-      ]);
+        await Promise.all([
+          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
+          this.refreshAfterAgentMutation(undefined, true),
+        ]);
 
-      void vscode.window.showInformationMessage(`Saved team "${name.trim()}"`);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to save agent team',
-        error,
-      );
-    }
+        void vscode.window.showInformationMessage(
+          `Saved team "${name.trim()}"`,
+        );
+      },
+    );
   }
 
   async handleDeleteAgentModePreset(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
   ): Promise<void> {
-    try {
-      const target = this.catalogController.getCustomPreset(data.presetId);
-      if (!target) return;
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to delete agent team',
+      async () => {
+        const target = this.catalogController.getCustomPreset(data.presetId);
+        if (!target) return;
 
-      const confirm = await vscode.window.showWarningMessage(
-        `Delete team "${target.name}"?`,
-        { modal: true },
-        'Delete',
-      );
-      if (confirm !== 'Delete') return;
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete team "${target.name}"?`,
+          { modal: true },
+          'Delete',
+        );
+        if (confirm !== 'Delete') return;
 
-      await this.catalogController.deleteCustomPreset(data.presetId);
+        await this.catalogController.deleteCustomPreset(data.presetId);
 
-      await Promise.all([
-        this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-        this.refreshAfterAgentMutation(undefined, true),
-      ]);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to delete agent team',
-        error,
-      );
-    }
+        await Promise.all([
+          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
+          this.refreshAfterAgentMutation(undefined, true),
+        ]);
+      },
+    );
   }
 
   // ── Private helpers ──
@@ -562,53 +540,51 @@ export class AgentHandlers {
   private async createAgentFromTemplate(
     category: 'workflow' | 'toolUse',
   ): Promise<void> {
-    try {
-      const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
-      const name = await vscode.window.showInputBox({
-        prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
-        placeHolder: 'my_agent',
-        validateInput: (value) =>
-          this.fileController.validateTemplateName(value),
-      });
-      if (!name) return;
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to create agent from template',
+      async () => {
+        const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
+        const name = await vscode.window.showInputBox({
+          prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
+          placeHolder: 'my_agent',
+          validateInput: (value) =>
+            this.fileController.validateTemplateName(value),
+        });
+        if (!name) return;
 
-      const customDir = await agentDirectories.custom();
-      await AbsoluteFS.ensureDir(customDir);
+        const customDir = await agentDirectories.custom();
+        await AbsoluteFS.ensureDir(customDir);
 
-      const templatePlan = this.fileController.planTemplateAgent({
-        category,
-        name,
-        customDir,
-      });
+        const templatePlan = this.fileController.planTemplateAgent({
+          category,
+          name,
+          customDir,
+        });
 
-      if (await AbsoluteFS.exists(templatePlan.filePath)) {
-        await vscode.window.showWarningMessage(
-          `A file named "${templatePlan.fileName}" already exists in the custom agents folder.`,
+        if (await AbsoluteFS.exists(templatePlan.filePath)) {
+          await vscode.window.showWarningMessage(
+            `A file named "${templatePlan.fileName}" already exists in the custom agents folder.`,
+          );
+          return;
+        }
+
+        const template = await renderAgentTemplateFromBundle(
+          this.ctx.extensionContext,
+          templatePlan.templateKind,
+          {
+            agentName: templatePlan.baseName,
+            description: templatePlan.description,
+          },
         );
-        return;
-      }
 
-      const template = await renderAgentTemplateFromBundle(
-        this.ctx.extensionContext,
-        templatePlan.templateKind,
-        {
-          agentName: templatePlan.baseName,
-          description: templatePlan.description,
-        },
-      );
-
-      await AbsoluteFS.write(templatePlan.filePath, template);
-      const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(templatePlan.filePath),
-      );
-      await vscode.window.showTextDocument(doc);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to create agent from template',
-        error,
-      );
-    }
+        await AbsoluteFS.write(templatePlan.filePath, template);
+        const doc = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(templatePlan.filePath),
+        );
+        await vscode.window.showTextDocument(doc);
+      },
+    );
   }
 
   /** Refresh agent dir + selection after a directory change. */

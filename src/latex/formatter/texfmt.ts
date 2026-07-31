@@ -6,9 +6,11 @@ import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
 
+export const TEXFMT_CONFIG_KEY = 'texra.latex.texfmtConfig';
+
 export async function runTexFmt(filePath: string): Promise<boolean> {
   try {
-    const texfmtConfig = getConfig<string>('texra.latex.texfmtConfig');
+    const texfmtConfig = getConfig<string>(TEXFMT_CONFIG_KEY);
 
     const args: string[] = [];
     if (texfmtConfig) {

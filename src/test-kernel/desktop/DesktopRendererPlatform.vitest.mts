@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vitest';
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-interface DesktopRendererPlatformModule {
-  getRendererPlatform(view: Window | null): NodeJS.Platform;
-}
+type DesktopRendererPlatformModule =
+  typeof import('@desktop/renderer/rendererPlatform');
 
 async function loadDesktopRendererPlatform(): Promise<DesktopRendererPlatformModule> {
   return import(

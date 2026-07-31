@@ -12,6 +12,7 @@ import {
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import type { ExecutionId } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createWorkflowScriptStrategy,
@@ -324,14 +325,6 @@ return await agent('saved call')`;
   });
 });
 
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = (): void => undefined;
-  const promise = new Promise<void>((r) => {
-    resolve = r;
-  });
-  return { promise, resolve };
-}
-
 /** Let queued abort/skip handling settle without resolving a hung run. */
 async function drainMacrotasks(): Promise<void> {
   for (let tick = 0; tick < 5; tick += 1) {
@@ -359,9 +352,12 @@ function controllableRunAgent(config: {
   readonly attempts: () => number;
   readonly onCost: (cost: number) => void;
 } {
-  const attemptGates: ReturnType<typeof deferred>[] = [];
-  const gateFor = (attempt: number): ReturnType<typeof deferred> => {
-    while (attemptGates.length < attempt) attemptGates.push(deferred());
+  const attemptGates: ReturnType<typeof createDeferred<void>>[] = [];
+  const gateFor = (
+    attempt: number,
+  ): ReturnType<typeof createDeferred<void>> => {
+    while (attemptGates.length < attempt)
+      attemptGates.push(createDeferred<void>());
     return attemptGates[attempt - 1]!;
   };
   const execIdForAttempt = (attempt: number): ExecutionId =>

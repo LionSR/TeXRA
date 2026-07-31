@@ -7,21 +7,7 @@ import {
 import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-function memoryStore(
-  initial: Record<string, unknown> = {},
-): StateStore & { values: Map<string, unknown> } {
-  const values = new Map(Object.entries(initial));
-  return {
-    values,
-    get: <T>(key: string, fallback?: T): T =>
-      (values.has(key) ? values.get(key) : fallback) as T,
-    update: async (key, value) => {
-      if (value === undefined) values.delete(key);
-      else values.set(key, value);
-    },
-  };
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const agents = {
   workflow: [
@@ -47,7 +33,7 @@ function createControllers(
 ): SettingsAgentControllers {
   return createSettingsAgentControllers({
     workspaceState,
-    globalState: memoryStore(),
+    globalState: new FakeStateStore(),
     getCustomAgentDirectory: async () => '/agents/custom',
     getSourceDirectory: async () => undefined,
     getAgents: (category: AgentCategory) => [...agents[category]],
@@ -57,7 +43,7 @@ function createControllers(
 
 describe('createSettingsAgentControllers', () => {
   it('preserves a symbolic roster when an individual toggle is a no-op', async () => {
-    const workspaceState = memoryStore({
+    const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'all' },
     });
     const controllers = createControllers(workspaceState);
@@ -70,12 +56,12 @@ describe('createSettingsAgentControllers', () => {
     });
 
     expect(
-      workspaceState.values.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'all' });
   });
 
   it('writes visibility changes through the canonical roster controller', async () => {
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const controllers = createControllers(workspaceState);
 
     await controllers.state.setEnabledAgentKeys('toolUse', [
@@ -83,7 +69,7 @@ describe('createSettingsAgentControllers', () => {
     ]);
 
     expect(
-      workspaceState.values.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
       workflowAgentKeys: 'all',
@@ -92,7 +78,7 @@ describe('createSettingsAgentControllers', () => {
   });
 
   it('preserves unavailable members when settings toggles a visible agent', async () => {
-    const workspaceState = memoryStore({
+    const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
         kind: 'custom',
         workflowAgentKeys: 'all',
@@ -109,7 +95,7 @@ describe('createSettingsAgentControllers', () => {
     });
 
     expect(
-      workspaceState.values.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
       workflowAgentKeys: 'all',

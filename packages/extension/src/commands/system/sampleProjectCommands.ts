@@ -15,10 +15,6 @@ import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'SampleProjectCommands';
 
-export const sampleProjectCommands = {
-  createSampleProject: 'texra.createSampleProject',
-};
-
 /**
  * No-workspace variant for the welcome view: ask where to put the sample,
  * copy it there, and open the folder (which reloads the window into full

@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
@@ -13,6 +12,7 @@ import {
   ULTRA_TIER,
   UserTierSchema,
 } from '@auth/config';
+import { REPO_ROOT } from '@test/support/repoScan';
 
 import {
   FREE_TIER as RELAY_FREE_TIER,
@@ -23,11 +23,6 @@ import {
 
 const CLIENT_TIERS = UserTierSchema.options;
 const RELAY_TIERS = [RELAY_FREE_TIER, RELAY_MAX_TIER, RELAY_ULTRA_TIER];
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 
 const require = createRequire(import.meta.url);
 

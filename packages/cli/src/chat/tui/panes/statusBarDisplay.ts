@@ -294,10 +294,6 @@ function statusBarSegmentWidth(segment: StatusBarSegment): number {
   return textDisplayWidth(segment.text) + (segment.badge ? 2 : 0);
 }
 
-export function statusBarSegmentText(segment: StatusBarSegment): string {
-  return segment.text;
-}
-
 function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
   return segments.reduce(
     (total, segment, index) =>

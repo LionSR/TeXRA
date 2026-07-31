@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { test, expect } from '@playwright/test';
@@ -8,12 +7,12 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
-  setRoute,
   setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
 import {
   cleanupDirectory,
+  createIsolatedProfile,
   findWorkspaceStoragePath,
 } from './workspaceStorageFixture.js';
 
@@ -123,8 +122,7 @@ async function verifyMemoryEntryIsListed(launched: LaunchedApp): Promise<void> {
 }
 
 test('settings memory entries survive relaunch with shared user data', async () => {
-  const workspacePath = mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-'));
-  const userDataPath = mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
+  const { workspacePath, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
 
   try {

@@ -37,10 +37,7 @@ import {
   HISTORY_ITEM_NOT_FOUND_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
@@ -49,7 +46,10 @@ import {
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
 
-import type { SettingsHandlerContext } from './SettingsHandlerContext';
+import {
+  withHandlerErrorHandling,
+  type SettingsHandlerContext,
+} from './SettingsHandlerContext';
 
 type ChatExportFormat = 'md' | 'tex' | 'html';
 
@@ -106,97 +106,91 @@ export class HistoryHandlers {
   async handleDeleteAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
-    try {
-      const result = await deleteExecution(data.historyId as ExecutionId);
-      const outcome = describeDeleteExecutionResult(result);
-      switch (outcome.kind) {
-        case 'active':
-          await vscode.window.showWarningMessage(
-            ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
-          );
-          return;
-        case 'not-found':
-          await vscode.window.showWarningMessage(outcome.message);
-          return;
-        case 'deleted':
-          await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
-          return;
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to delete history item',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to delete history item',
+      async () => {
+        const result = await deleteExecution(data.historyId as ExecutionId);
+        const outcome = describeDeleteExecutionResult(result);
+        switch (outcome.kind) {
+          case 'active':
+            await vscode.window.showWarningMessage(
+              ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+            );
+            return;
+          case 'not-found':
+            await vscode.window.showWarningMessage(outcome.message);
+            return;
+          case 'deleted':
+            await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
+            return;
+        }
+      },
+    );
   }
 
   async handleClearHistory(): Promise<void> {
-    try {
-      const result = await deleteAllExecutions();
-      const outcome = describeClearHistoryResult(result);
-      if (outcome.kind === 'cleared') {
-        await vscode.window.showInformationMessage('Agent history cleared');
-        await this.ctx.withActiveWebview(async (w) => {
-          await w.postMessage({
-            command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to clear history',
+      async () => {
+        const result = await deleteAllExecutions();
+        const outcome = describeClearHistoryResult(result);
+        if (outcome.kind === 'cleared') {
+          await vscode.window.showInformationMessage('Agent history cleared');
+          await this.ctx.withActiveWebview(async (w) => {
+            await w.postMessage({
+              command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
+            });
           });
-        });
-      } else {
-        await vscode.window.showInformationMessage(outcome.message);
-        await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to clear history',
-        error,
-      );
-    }
+        } else {
+          await vscode.window.showInformationMessage(outcome.message);
+          await this.ctx.withActiveWebview((w) => this.sendHistoryData(w));
+        }
+      },
+    );
   }
 
   async handleExportChat(
     data: { historyId: string },
     format: ChatExportFormat,
   ): Promise<void> {
-    try {
-      // HTML no longer goes through buildExportInput/ChatExportInput — it
-      // reads the execution's trace directly via assembleTrace, which has
-      // its own independent (and differently-shaped) missing-data statuses.
-      if (format === 'html') {
-        await this.exportAndOpenHtml(data.historyId);
-        return;
-      }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to export chat',
+      async () => {
+        // HTML no longer goes through buildExportInput/ChatExportInput — it
+        // reads the execution's trace directly via assembleTrace, which has
+        // its own independent (and differently-shaped) missing-data statuses.
+        if (format === 'html') {
+          await this.exportAndOpenHtml(data.historyId);
+          return;
+        }
 
-      const result = await this.chatExportController.buildExportInput(
-        data.historyId,
-      );
-
-      if (result.status !== 'ok') {
-        void showLoggedMessage(
-          this.ctx.channel,
-          exportInputErrorMessage(result.status),
+        const result = await this.chatExportController.buildExportInput(
+          data.historyId,
         );
-        return;
-      }
 
-      const { exportInput } = result;
+        if (result.status !== 'ok') {
+          void showLoggedMessage(
+            this.ctx.channel,
+            exportInputErrorMessage(result.status),
+          );
+          return;
+        }
 
-      switch (format) {
-        case 'md':
-          await this.exportAndOpenMarkdown(data.historyId, exportInput);
-          return;
-        case 'tex':
-          await this.exportAndOpenLatex(data.historyId, exportInput);
-          return;
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to export chat',
-        error,
-      );
-    }
+        const { exportInput } = result;
+
+        switch (format) {
+          case 'md':
+            await this.exportAndOpenMarkdown(data.historyId, exportInput);
+            return;
+          case 'tex':
+            await this.exportAndOpenLatex(data.historyId, exportInput);
+            return;
+        }
+      },
+    );
   }
 
   // ==========================================================
@@ -270,7 +264,7 @@ export class HistoryHandlers {
     errorPrefix: string,
     action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
-    try {
+    await withHandlerErrorHandling(this.ctx, errorPrefix, async () => {
       const raw = await getExecutionStore(
         historyId as ExecutionId,
       ).readConfig();
@@ -283,8 +277,6 @@ export class HistoryHandlers {
       }
       const config = AgentConfigSchema.parse(raw);
       await action(config);
-    } catch (error) {
-      await showLoggedErrorMessage(this.ctx.channel, errorPrefix, error);
-    }
+    });
   }
 }

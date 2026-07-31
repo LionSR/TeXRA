@@ -1,20 +1,23 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 // Local imports - shared schemas and utilities
-import type { StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 
 // Local imports - TUI state
 import {
   approvalPayloadStreamId,
+  ROOT_APPROVAL_STREAM_KEY,
   type PendingApproval,
+  type PendingApprovalKind,
+  type PendingApprovalSummary,
 } from './state/approvalQueue';
+import type { StreamSlice } from './state/cliState';
 
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
 const APPROVAL_FOREGROUND_MAX_ROWS = 18;
-type ApprovalKind = PendingApproval['payload']['kind'];
 
 // A bare Esc and the second key of an `Esc 1..9` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
@@ -179,7 +182,7 @@ export function foregroundEscapeAction({
   foregroundKind,
 }: {
   readonly activeFormEscapeAction?: string;
-  readonly approvalKind?: ApprovalKind;
+  readonly approvalKind?: PendingApprovalKind;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
 }): string | undefined {
   switch (foregroundKind) {
@@ -198,7 +201,7 @@ export function foregroundEscapeAction({
 }
 
 function approvalForegroundMaxRows(
-  approvalKind: ApprovalKind | undefined,
+  approvalKind: PendingApprovalKind | undefined,
 ): number | undefined {
   if (approvalKind === undefined) return undefined;
 
@@ -221,7 +224,7 @@ export function foregroundMaxRowsForKind({
   approvalKind,
   kind,
 }: {
-  readonly approvalKind?: ApprovalKind;
+  readonly approvalKind?: PendingApprovalKind;
   readonly kind: ForegroundSurfaceKind | undefined;
 }): number | undefined {
   switch (kind) {
@@ -234,4 +237,53 @@ export function foregroundMaxRowsForKind({
     case undefined:
       return undefined;
   }
+}
+
+// Group the flat FIFO summaries per row, folding stream-less (session-wide)
+// approvals onto the root/main row. Grouping from the flat list keeps each
+// row's first shown kind the first-to-present even when the root's own and
+// session-wide items interleave in the global queue.
+export function groupPendingApprovalsByRow(
+  summaries: readonly PendingApprovalSummary[],
+  rootStreamId: StreamTabId | undefined,
+): Map<string, PendingApprovalKind[]> {
+  const grouped = new Map<string, PendingApprovalKind[]>();
+  for (const summary of summaries) {
+    const key =
+      summary.streamKey === ROOT_APPROVAL_STREAM_KEY
+        ? rootStreamId
+        : summary.streamKey;
+    if (key === undefined) continue;
+    const kinds = grouped.get(key);
+    if (kinds) kinds.push(summary.kind);
+    else grouped.set(key, [summary.kind]);
+  }
+  return grouped;
+}
+
+// A workflow-script grandchild `agent()` call is the only interactively
+// skip/retry-able row: it is a Workflow-category subagent whose parent
+// stream is itself the Workflow run (the run stream's parent is the
+// orchestrator, a non-Workflow category), which excludes the run stream
+// itself so its row never shows a control that would silently no-op.
+export function selectedChildRowWorkflowControllable({
+  parentStream,
+  selectedChildKillable,
+  selectedChildStreamId,
+  streams,
+}: {
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly selectedChildKillable: boolean;
+  readonly selectedChildStreamId: StreamTabId | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): boolean {
+  if (!selectedChildKillable || selectedChildStreamId === undefined) {
+    return false;
+  }
+  const parentOfSelectedChild = parentStream.get(selectedChildStreamId);
+  return (
+    streams.get(selectedChildStreamId)?.category === AgentCategory.Workflow &&
+    parentOfSelectedChild !== undefined &&
+    streams.get(parentOfSelectedChild)?.category === AgentCategory.Workflow
+  );
 }

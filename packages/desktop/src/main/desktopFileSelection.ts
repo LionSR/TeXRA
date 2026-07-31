@@ -70,6 +70,23 @@ async function listFiles(
   });
 }
 
+/**
+ * List the workspace files of one listable type under the current file-list
+ * settings. Empty when no workspace is open or the type has no configured
+ * rules.
+ */
+export async function listDesktopWorkspaceFiles(
+  fileType: ListableFileType,
+  // Not a default parameter: callers inject a getter that returns undefined to
+  // mean "no workspace", and a default would discard that and re-read the
+  // process-wide workspace instead.
+  workspacePath: string | undefined,
+): Promise<string[]> {
+  const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
+  if (!workspacePath || !config) return [];
+  return listFiles(workspacePath, config);
+}
+
 function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
   return isAbsolute(filePath) ? filePath : resolve(workspacePath, filePath);
 }
@@ -111,11 +128,8 @@ export function createDesktopFileSelection(
     });
   }
 
-  async function list(fileType: ListableFileType): Promise<string[]> {
-    const workspacePath = getWorkspacePath();
-    const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
-    if (!workspacePath || !config) return [];
-    return listFiles(workspacePath, config);
+  function list(fileType: ListableFileType): Promise<string[]> {
+    return listDesktopWorkspaceFiles(fileType, getWorkspacePath());
   }
 
   async function requestSingleFileList(

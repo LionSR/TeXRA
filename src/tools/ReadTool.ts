@@ -4,8 +4,7 @@ import { z } from 'zod';
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { isOversizedImage, MANY_IMAGE_MAX_DIMENSION } from '@tools/imageUtils';
-import { buildFileAttachment } from '@tools/attachments';
+import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView, READ_FILE_MAX_LINES } from '@tools/formatting';
 import {
   resolveAndFormat,
@@ -156,21 +155,14 @@ export class ReadFileTool extends defineTool({
     });
 
     if (emlImages.length > 0) {
-      result.files = emlImages.map((img) => {
-        if (isOversizedImage(img.bytes)) {
-          return {
-            path: img.filename,
-            mimeType: img.mimeType,
-            description: `Image attachment from email: ${img.filename} — Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
-          };
-        }
-        return {
+      result.files = emlImages.map((img) =>
+        buildBytesAttachment({
           path: img.filename,
           mimeType: img.mimeType,
           bytes: img.bytes,
           description: `Image attachment from email: ${img.filename}`,
-        };
-      });
+        }),
+      );
     }
 
     return result;

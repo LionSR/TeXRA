@@ -33,7 +33,7 @@ import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -177,9 +177,7 @@ export const setupTokenCommand = defineCliCommand({
       writeTextStderr(expires.error);
       return CliExitCode.Usage;
     }
-    const printEnv =
-      ctx.args['print-env'] === true ||
-      (ctx.args as Record<string, unknown>).printEnv === true;
+    const printEnv = booleanArg(ctx.args, 'print-env');
 
     const session = await withRelayTokenSession(context, (accessToken) =>
       mintRelayToken(accessToken, {

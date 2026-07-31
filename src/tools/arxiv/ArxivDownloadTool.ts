@@ -6,6 +6,7 @@ import { ArxivProcessor } from '@latex/arxivProcessor';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
+import { wrapApiCall } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -70,17 +71,14 @@ export class ArxivDownloadTool extends defineTool({
       throw new ToolError(validationError);
     }
 
-    let downloadResult: { path: string; alreadyExisted: boolean };
-    try {
-      downloadResult = await ArxivProcessor.downloadSource(arxivId, {
-        autoIndent: input.autoIndent,
-        destination: input.destination,
-      });
-    } catch (err) {
-      throw new ToolError(
-        `Failed to download arXiv source: ${toErrorMessage(err)}`,
-      );
-    }
+    const downloadResult = await wrapApiCall(
+      () =>
+        ArxivProcessor.downloadSource(arxivId, {
+          autoIndent: input.autoIndent,
+          destination: input.destination,
+        }),
+      'Failed to download arXiv source',
+    );
 
     const relativePath = WorkspaceFS.relativePath(downloadResult.path) || '.';
     const displayPath = toPosixPath(relativePath);

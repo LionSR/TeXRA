@@ -25,10 +25,7 @@ import { appendLocalAssistantTranscript } from '../state/transcript';
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from './helpText';
 import { showCliAuthStatus } from './handlers/apiModeCommands';
 import { applyCliApprovalPolicySelection } from './handlers/approvalCommand';
-import {
-  openCanonicalSlashForm,
-  type SlashCommandContext,
-} from './handlers/slashContext';
+import { type SlashCommandContext } from './handlers/slashContext';
 import {
   appendSlashCommandEcho,
   openRegisteredCliSlashForm,
@@ -91,11 +88,11 @@ export async function handleTuiSlashCommand(
   const rest = parsed.remainder.trim();
   const registered = findSlashCommand(command) ?? redactedIntent;
   const canonicalCommand = registered?.name ?? command;
-  const opensRegisteredForm =
-    registered?.formName !== undefined &&
-    (!rest || registered.formRemainders?.includes(rest.toLowerCase()));
-  if (opensRegisteredForm) {
-    openCanonicalSlashForm(registered.formName, registered, rest, () =>
+  if (
+    registered?.formComponent !== undefined &&
+    (!rest || registered.formRemainders?.includes(rest.toLowerCase()))
+  ) {
+    openRegisteredCliSlashForm(registered, rest, () =>
       appendSlashCommandEcho(line),
     );
     return true;
@@ -133,7 +130,7 @@ export async function handleTuiSlashCommand(
           'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
         );
       }
-      openCanonicalSlashForm('key', registered, '');
+      if (registered) openRegisteredCliSlashForm(registered, '');
       return true;
     case 'auth':
       await runGuardedSlashCommand(line, registered, showCliAuthStatus);

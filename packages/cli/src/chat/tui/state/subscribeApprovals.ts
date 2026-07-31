@@ -57,7 +57,6 @@ import {
   type BashPermission,
   type ExternalInquiryPermission,
   type PlanApprovalPermission,
-  type RetryPermission,
 } from '@shared/schemas';
 import {
   setBashApprovalSessionBypass,
@@ -156,14 +155,13 @@ export function createTuiHostInteractions(
         : { accepted: false, userMessage: decision.userMessage };
     },
     requestBashApproval(request) {
-      const requestId = `bash-${nanoid()}`;
-      return requestBashInteraction(request, context, host, requestId);
+      return requestBashInteraction(request, context);
     },
     requestPlanApproval(request) {
       return requestPlanInteraction(request, context);
     },
     requestAgentProposal(request) {
-      return requestProposalInteraction(request, context, host);
+      return requestProposalInteraction(request, context);
     },
     requestRetry(request, options) {
       return requestRetryInteraction(
@@ -177,8 +175,9 @@ export function createTuiHostInteractions(
     askUserQuestion(request) {
       return requestUserQuestionInteraction(request, context);
     },
-    openExternalInquiry(request) {
-      return openExternalInquiryInteraction(request, context);
+    async openExternalInquiry(request) {
+      handleExternalInquiry(request, context);
+      return { threadId: request.threadId };
     },
     setApprovalBypassState(update) {
       setTuiApprovalBypassState(update);
@@ -308,26 +307,17 @@ interface RouteWithPolicyOptions<P> {
   isCurrent?: () => boolean;
 }
 
-async function decideWithPolicy<
-  K extends 'bash' | 'plan' | 'proposal' | 'retry',
-  P,
->(
+// Retry carries its own policy lookup (`showRetryRequest`) and route
+// bookkeeping, so it enters through `decideAfterImmediatePolicy` directly.
+async function decideWithPolicy<K extends 'bash' | 'plan' | 'proposal', P>(
   context: CliContext,
   kind: K,
   payload: P,
-  options: RouteWithPolicyOptions<P> = {},
 ): Promise<ApprovalDecision> {
-  const policy =
-    kind === 'retry'
-      ? immediateDecisionForApproval(
-          'showRetryRequest',
-          payload as RetryPermission,
-          context,
-        )
-      : immediateDecision(context);
+  const policy = immediateDecision(context);
   if (policy) return policy;
 
-  return decideAfterImmediatePolicy(context, kind, payload, options);
+  return decideAfterImmediatePolicy(context, kind, payload);
 }
 
 async function decideAfterImmediatePolicy<
@@ -376,11 +366,9 @@ async function decideAfterImmediatePolicy<
 async function requestBashInteraction(
   request: HostBashApprovalRequest,
   context: CliContext,
-  host: CliRuntimeHost,
-  requestId: string,
 ): Promise<BashSettlement> {
   const payload: BashPermission = {
-    requestId,
+    requestId: `bash-${nanoid()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     allowBypass: true,
@@ -410,7 +398,6 @@ async function requestPlanInteraction(
 async function requestProposalInteraction(
   request: AgentProposalPermission,
   context: CliContext,
-  host: CliRuntimeHost,
 ): Promise<ProposalResult> {
   const decision = await decideWithPolicy(context, 'proposal', request);
   if (
@@ -548,14 +535,6 @@ async function requestUserQuestionInteraction(
         action: 'skip',
         feedback: decision.userMessage || 'User question skipped by user.',
       };
-}
-
-async function openExternalInquiryInteraction(
-  payload: ExternalInquiryPermission,
-  context: CliContext,
-): Promise<{ threadId: string }> {
-  handleExternalInquiry(payload, context);
-  return { threadId: payload.threadId };
 }
 
 export function enqueueTuiApproval(

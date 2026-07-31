@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt } from './auth.ts';
+import { sha256Hex } from './crypto.ts';
 
 /**
  * CROSS-REFERENCE: this exact prefix is duplicated in src/auth/relayToken.ts
@@ -24,16 +25,6 @@ const LAST_USED_REFRESH_MS = 60 * 1000;
 
 function isRelayCiToken(token: string): boolean {
   return token.startsWith(RELAY_CI_TOKEN_PREFIX);
-}
-
-export async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
 }
 
 type CiTokenAuthResult =

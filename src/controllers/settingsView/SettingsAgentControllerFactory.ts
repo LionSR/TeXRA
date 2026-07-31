@@ -21,7 +21,11 @@ import {
   type SettingsAgentCatalogState,
 } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
+import {
+  agentKey,
+  type AgentCategory,
+  type AgentSource,
+} from '@shared/schemas/agent';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
@@ -102,7 +106,7 @@ export function createSettingsAgentControllers(
       },
       getCustomDir: options.getCustomAgentDirectory,
       getSourceDir: options.getSourceDirectory,
-      getAgent: (source, name) => getAgent(`${source}:${name}`) ?? null,
+      getAgent: (source, name) => getAgent(agentKey(source, name)) ?? null,
     },
   });
   const visibility = new SettingsAgentVisibilityController({

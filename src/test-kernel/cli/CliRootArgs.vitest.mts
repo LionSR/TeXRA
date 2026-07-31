@@ -20,7 +20,6 @@ import {
   formatUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
-import { resolveLoginProvider } from '@cli/runtime/loginOptions';
 import {
   formatCliModelListError,
   isCliFetchStackLog,
@@ -1132,15 +1131,6 @@ describe('CLI model flag validation contract', () => {
     );
     expect(resolveKnownCliModelId('kimi-for-coding')).toBe('kimiCoding');
     expect(resolveKnownCliModelId('Kimi for Coding')).toBe('kimiCoding');
-  });
-});
-
-describe('CLI login arguments', () => {
-  it('prefers explicit provider flags over positional providers', () => {
-    expect(resolveLoginProvider('google', 'github')).toEqual({
-      provider: 'github',
-      explicit: true,
-    });
   });
 });
 

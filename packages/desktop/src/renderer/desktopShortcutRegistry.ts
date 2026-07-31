@@ -17,7 +17,6 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../desktopCommandSurface';
-import { isTextEntryShortcutTarget } from './desktopCommandPalette';
 import { getRendererPlatform } from './rendererPlatform';
 
 export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
@@ -120,7 +119,7 @@ export function createDesktopShortcutRegistry(
     );
     if (!entry) return;
     if (
-      isTextEntryShortcutTarget(view, options.document, event) &&
+      isTextEntryTarget(view, options.document, event) &&
       !hasPrimaryModifier(event)
     ) {
       return;
@@ -159,24 +158,67 @@ export function createDesktopShortcutRegistry(
   return registry;
 }
 
+/**
+ * Cross-realm element check. The registry is handed the renderer's `Document`,
+ * whose `Element` constructor need not be this module's global (tests install a
+ * separate DOM), so `instanceof` has to go through that view.
+ */
+function isElementFrom(
+  view: Window | null | undefined,
+  target: EventTarget | null,
+): target is Element {
+  const ElementConstructor = (
+    view as (Window & { Element?: typeof Element }) | null | undefined
+  )?.Element;
+  return ElementConstructor != null && target instanceof ElementConstructor;
+}
+
 function isRecordingShortcut(
   view: Window | null | undefined,
   event: KeyboardEvent,
 ): boolean {
-  const ElementConstructor = (
-    view as (Window & { Element?: typeof Element }) | null | undefined
-  )?.Element;
-  if (!ElementConstructor) return false;
   return event
     .composedPath()
     .some(
       (target) =>
-        target instanceof ElementConstructor &&
-        ElementConstructor.prototype.matches.call(
-          target,
-          '.shortcut-recorder[data-recording="true"]',
-        ),
+        isElementFrom(view, target) &&
+        target.matches('.shortcut-recorder[data-recording="true"]'),
     );
+}
+
+/**
+ * True when the keystroke is ordinary typing: it either travels through a text
+ * entry control or one is focused, possibly inside a shadow root.
+ */
+function isTextEntryTarget(
+  view: Window | null | undefined,
+  document: Document,
+  event: KeyboardEvent,
+): boolean {
+  if (event.composedPath().some((target) => isTextEntryElement(view, target))) {
+    return true;
+  }
+  return isTextEntryElement(view, getDeepActiveElement(document));
+}
+
+function isTextEntryElement(
+  view: Window | null | undefined,
+  target: EventTarget | null,
+): boolean {
+  if (!isElementFrom(view, target)) return false;
+  return (
+    target.closest(
+      'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+    ) != null
+  );
+}
+
+function getDeepActiveElement(document: Document): Element | null {
+  let activeElement = document.activeElement;
+  while (activeElement?.shadowRoot?.activeElement) {
+    activeElement = activeElement.shadowRoot.activeElement;
+  }
+  return activeElement;
 }
 
 function hasPrimaryModifier(event: KeyboardEvent): boolean {

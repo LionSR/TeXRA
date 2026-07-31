@@ -70,6 +70,16 @@ function applySetActiveStream(payload: SetActiveStreamPayload): void {
   }
 }
 
+function sameStringList(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
+}
+
 function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
   patchStream(streamId, (s) => {
     const files = {
@@ -80,14 +90,9 @@ function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
     };
     const sameFiles =
       s.files !== undefined &&
-      (Object.keys(files) as (keyof typeof files)[]).every((key) => {
-        const previous = s.files?.[key] ?? [];
-        const next = files[key];
-        return (
-          previous.length === next.length &&
-          previous.every((path, index) => path === next[index])
-        );
-      });
+      (Object.keys(files) as (keyof typeof files)[]).every((key) =>
+        sameStringList(s.files?.[key] ?? [], files[key]),
+      );
     if (
       s.model === config.model &&
       s.category === config.agentCategory &&
@@ -102,16 +107,6 @@ function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
       files,
     };
   });
-}
-
-function sameQueuedFollowUps(
-  left: readonly string[],
-  right: readonly string[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((item, index) => item === right[index])
-  );
 }
 
 function applyRoundStage(payload: UpdateRoundStagePayload): void {
@@ -270,7 +265,7 @@ function refreshQueuedFollowUps(
 ): void {
   const messages = defaultSession().followUps.getAll(streamId);
   patchStream(streamId, (s) => {
-    if (sameQueuedFollowUps(s.queuedFollowUpMessages, messages)) {
+    if (sameStringList(s.queuedFollowUpMessages, messages)) {
       return s;
     }
     return {

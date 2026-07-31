@@ -33,16 +33,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseApprovalDecision } from './approvalRequest.ts';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
+import { randomBase64Url, sha256Hex } from '../_shared/crypto.ts';
+import {
+  adminClient,
+  anonClient,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from '../_shared/edgeClients.ts';
 import {
   mintGoTrueSession,
   sessionResponseBody,
 } from '../_shared/goTrueSession.ts';
-import { sha256Hex } from '../_shared/relayCiToken.ts';
-import {
-  createEdgeClient,
-  randomBase64Url,
-  jsonResponse,
-} from '../_shared/responses.ts';
+import { errorResponse, jsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
@@ -69,17 +71,6 @@ const USER_CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ23456789';
 const USER_CODE_LENGTH = 8;
 const DEVICE_CODE_BYTES = 32;
 const USER_CODE_INSERT_ATTEMPTS = 4;
-
-// =============================================================================
-// Environment
-// =============================================================================
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
-const anonSupabase = createEdgeClient(supabaseUrl, supabaseAnonKey);
 
 // =============================================================================
 // Hono App
@@ -109,15 +100,11 @@ app.use('*', async (c, next) => {
 });
 
 app.use('*', async (c, next) => {
-  if (!adminSupabase || !anonSupabase) {
-    return jsonResponse(
-      c.req.raw,
-      { error: 'Server configuration error' },
-      500,
-    );
+  if (!adminClient || !anonClient) {
+    return errorResponse(c.req.raw, 'Server configuration error', 500);
   }
-  c.set('supabase', adminSupabase);
-  c.set('authClient', anonSupabase);
+  c.set('supabase', adminClient);
+  c.set('authClient', anonClient);
   await next();
 });
 
@@ -126,10 +113,6 @@ app.use('*', async (c, next) => {
 // =============================================================================
 
 type Context = HonoContext<{ Variables: Variables }>;
-
-function errorResponse(c: Context, error: string, status: number) {
-  return jsonResponse(c.req.raw, { error }, status);
-}
 
 function randomUserCode(): string {
   const bytes = new Uint8Array(USER_CODE_LENGTH * 2);
@@ -198,11 +181,19 @@ app.post('/code', async (c) => {
       // 23505 = unique_violation: user_code collision, retry with a new code.
       if (error.code !== '23505') {
         console.error('[DEVICE] insert failed:', error.message);
-        return errorResponse(c, 'Failed to start device authorization', 500);
+        return errorResponse(
+          c.req.raw,
+          'Failed to start device authorization',
+          500,
+        );
       }
     }
     if (!userCode) {
-      return errorResponse(c, 'Failed to start device authorization', 500);
+      return errorResponse(
+        c.req.raw,
+        'Failed to start device authorization',
+        500,
+      );
     }
 
     const verifyUri = verificationUri(c);
@@ -223,7 +214,7 @@ app.post('/code', async (c) => {
     );
   } catch (error) {
     console.error('[DEVICE] code error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
@@ -232,18 +223,30 @@ app.post('/approve', async (c) => {
   try {
     const auth = await authenticateJwt(bearerToken(c.req.raw));
     if (!auth) {
-      return errorResponse(c, 'Sign in before approving a device code', 401);
+      return errorResponse(
+        c.req.raw,
+        'Sign in before approving a device code',
+        401,
+      );
     }
 
     const body = await c.req.json().catch(() => null);
     const rawCode = typeof body?.user_code === 'string' ? body.user_code : '';
     const userCode = normalizeUserCode(rawCode);
     if (userCode.length !== USER_CODE_LENGTH) {
-      return errorResponse(c, 'Enter the code shown in your terminal', 400);
+      return errorResponse(
+        c.req.raw,
+        'Enter the code shown in your terminal',
+        400,
+      );
     }
     const approve = parseApprovalDecision(body);
     if (approve === null) {
-      return errorResponse(c, 'Approval decision must be true or false', 400);
+      return errorResponse(
+        c.req.raw,
+        'Approval decision must be true or false',
+        400,
+      );
     }
 
     const { data, error } = await c
@@ -260,11 +263,11 @@ app.post('/approve', async (c) => {
 
     if (error) {
       console.error('[DEVICE] approve failed:', error.message);
-      return errorResponse(c, 'Failed to update device code', 500);
+      return errorResponse(c.req.raw, 'Failed to update device code', 500);
     }
     if (!data?.length) {
       return errorResponse(
-        c,
+        c.req.raw,
         'That code was not found or has expired. Check your terminal for the current code.',
         404,
       );
@@ -282,7 +285,7 @@ app.post('/approve', async (c) => {
     );
   } catch (error) {
     console.error('[DEVICE] approve error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
@@ -293,7 +296,7 @@ app.post('/token', async (c) => {
     const deviceCode =
       typeof body?.device_code === 'string' ? body.device_code : '';
     if (!deviceCode) {
-      return errorResponse(c, 'invalid_grant', 400);
+      return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
     const supabase = c.get('supabase');
@@ -306,10 +309,10 @@ app.post('/token', async (c) => {
 
     if (error) {
       console.error('[DEVICE] token lookup failed:', error.message);
-      return errorResponse(c, 'Internal server error', 500);
+      return errorResponse(c.req.raw, 'Internal server error', 500);
     }
     if (!row) {
-      return errorResponse(c, 'invalid_grant', 400);
+      return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
     const deleteRow = () =>
@@ -318,12 +321,12 @@ app.post('/token', async (c) => {
     const now = Date.now();
     if (new Date(row.expires_at).getTime() <= now) {
       await deleteRow();
-      return errorResponse(c, 'expired_token', 400);
+      return errorResponse(c.req.raw, 'expired_token', 400);
     }
 
     if (row.status === 'denied') {
       await deleteRow();
-      return errorResponse(c, 'access_denied', 400);
+      return errorResponse(c.req.raw, 'access_denied', 400);
     }
 
     if (row.status === 'pending') {
@@ -343,7 +346,7 @@ app.post('/token', async (c) => {
         })
         .eq('id', row.id);
       return errorResponse(
-        c,
+        c.req.raw,
         tooFast ? 'slow_down' : 'authorization_pending',
         400,
       );
@@ -363,7 +366,7 @@ app.post('/token', async (c) => {
         userError?.message ?? 'no email',
       );
       await deleteRow();
-      return errorResponse(c, 'Failed to create session', 500);
+      return errorResponse(c.req.raw, 'Failed to create session', 500);
     }
 
     const { data: claimed, error: claimError } = await supabase
@@ -374,46 +377,42 @@ app.post('/token', async (c) => {
       .select('id');
     if (claimError) {
       console.error('[DEVICE] claim failed:', claimError.message);
-      return errorResponse(c, 'Internal server error', 500);
+      return errorResponse(c.req.raw, 'Internal server error', 500);
     }
     if (!claimed?.length) {
       // Another poll already redeemed this device code.
-      return errorResponse(c, 'invalid_grant', 400);
+      return errorResponse(c.req.raw, 'invalid_grant', 400);
     }
 
     const session = await mintGoTrueSession(
       supabase,
       c.get('authClient'),
       email,
+      row.user_id,
+      '[DEVICE]',
     );
     if (!session) {
       // The claim is already burned — device codes are strictly single-use,
       // so a mint failure here ends the flow and the user re-runs login.
-      return errorResponse(c, 'Failed to create session', 500);
-    }
-    if (session.user.id !== row.user_id) {
-      console.error(
-        `[DEVICE] session user mismatch: approved ${row.user_id}, minted ${session.user.id}`,
-      );
-      return errorResponse(c, 'Failed to create session', 500);
+      return errorResponse(c.req.raw, 'Failed to create session', 500);
     }
 
     console.log(`[DEVICE] token issued for user ${row.user_id}`);
     return jsonResponse(c.req.raw, sessionResponseBody(session), 200);
   } catch (error) {
     console.error('[DEVICE] token error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
 // GET /verify - Browser verification page.
 app.get('/verify', (c) => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return errorResponse(c, 'Server configuration error', 500);
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return errorResponse(c.req.raw, 'Server configuration error', 500);
   }
   const scriptNonce = randomBase64Url(16);
   return new Response(
-    verifyPageHtml(supabaseUrl, supabaseAnonKey, scriptNonce),
+    verifyPageHtml(SUPABASE_URL, SUPABASE_ANON_KEY, scriptNonce),
     {
       status: 200,
       headers: {
@@ -427,7 +426,7 @@ app.get('/verify', (c) => {
         'Content-Security-Policy': [
           "default-src 'none'",
           `script-src 'nonce-${scriptNonce}' https://esm.sh`,
-          `connect-src 'self' ${new URL(supabaseUrl).origin}`,
+          `connect-src 'self' ${new URL(SUPABASE_URL).origin}`,
           "style-src 'unsafe-inline'",
           "base-uri 'none'",
           "form-action 'none'",
@@ -439,7 +438,7 @@ app.get('/verify', (c) => {
 });
 
 // 404 for other routes
-app.all('*', (c) => errorResponse(c, 'Not found', 404));
+app.all('*', (c) => errorResponse(c.req.raw, 'Not found', 404));
 
 Deno.serve(app.fetch);
 

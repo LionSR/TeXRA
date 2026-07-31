@@ -9,7 +9,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import type { StorageProvider } from '@platform/interfaces';
+import type {
+  AgentDirectoriesPort,
+  StorageProvider,
+} from '@platform/interfaces';
+import type { JsonStore } from '@platform/defaults/jsonStore';
+import type { bootstrapNodeAgentDirectories } from '@platform/defaults/nodeHost';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
@@ -19,47 +24,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
 
 // Local file imports
-import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
-
-interface JsonStore {
-  get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): Promise<void>;
-  snapshot(): Record<string, unknown>;
-}
-
-interface JsonStoreModule {
-  JsonStore: {
-    open(filePath: string): Promise<JsonStore>;
-  };
-}
-
-interface NodeHostModule {
-  bootstrapNodeAgentDirectories(options: {
-    channel: string;
-    resourcesPath: string;
-    currentVersion: string | undefined;
-    versionStateKey: string;
-  }): Promise<void>;
-  initializeNodeRuntimeSkills(options: {
-    cwd: string;
-    resourcesPath: string;
-    skillSourceOptions?: {
-      includeInterop?: boolean;
-      additionalPaths?: readonly string[];
-    };
-  }): void;
-}
-
-interface PlatformAgentDirectoriesModule {
-  createPlatformAgentDirectories(options: {
-    channel: string;
-    customDirectoryStore: { get(): string | undefined };
-  }): {
-    custom(): Promise<string>;
-    builtIn(): Promise<string>;
-    builtInToolUse(): Promise<string>;
-  };
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 async function writeText(filePath: string, content: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true });
@@ -77,10 +42,8 @@ describe('desktop agent directory bootstrap', () => {
   });
 
   async function createHarness(): Promise<{
-    bootstrapNodeAgentDirectories: NodeHostModule['bootstrapNodeAgentDirectories'];
-    agentDirectories: ReturnType<
-      PlatformAgentDirectoriesModule['createPlatformAgentDirectories']
-    >;
+    bootstrapNodeAgentDirectories: typeof bootstrapNodeAgentDirectories;
+    agentDirectories: AgentDirectoriesPort;
     globalStateStore: JsonStore;
     resourcesPath: string;
     storage: StorageProvider;
@@ -106,8 +69,8 @@ describe('desktop agent directory bootstrap', () => {
       { initPlatform, platform },
       { createPlatformAgentDirectories },
     ] = await Promise.all([
-      loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-      loadPlatformDefaultsModule<NodeHostModule>('nodeHost.ts'),
+      loadSourceModule('@platform/defaults/jsonStore'),
+      loadSourceModule('@platform/defaults/nodeHost'),
       import('@platform/platform'),
       import('@agent/index/platformAgentDirectories'),
     ]);
@@ -254,8 +217,9 @@ describe('desktop agent directory bootstrap', () => {
 
   it('registers runtime skills through the shared Node host defaults', async () => {
     const { resourcesPath } = await createHarness();
-    const { initializeNodeRuntimeSkills } =
-      await loadPlatformDefaultsModule<NodeHostModule>('nodeHost.ts');
+    const { initializeNodeRuntimeSkills } = await loadSourceModule(
+      '@platform/defaults/nodeHost',
+    );
     const { listRuntimeSkillSources } = await import('@skills/runtimeSkills');
 
     initializeNodeRuntimeSkills({

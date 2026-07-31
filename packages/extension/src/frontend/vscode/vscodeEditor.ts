@@ -31,6 +31,13 @@ export function lineToRange(
   return new vscode.Range(start, 0, end, Number.MAX_SAFE_INTEGER);
 }
 
+/** Find the already-visible editor for `uri`, if any. */
+function findVisibleEditor(uri: vscode.Uri): vscode.TextEditor | undefined {
+  return vscode.window.visibleTextEditors.find(
+    (e) => e.document.uri.fsPath === uri.fsPath,
+  );
+}
+
 /**
  * Show `existingEditor`'s document if one is already open for `uri`,
  * otherwise open and show `uri` fresh. Shared by `openFileInEditor` and
@@ -67,9 +74,7 @@ export async function openFileInEditor(
   try {
     const { line, column, preserveFocus = false } = options;
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === uri.fsPath,
-    );
+    const existingEditor = findVisibleEditor(uri);
 
     const editor = await showDocument(uri, existingEditor, preserveFocus);
 
@@ -101,9 +106,7 @@ export async function ensureFileOpen(
 ): Promise<{ editor: vscode.TextEditor; absolutePath: string } | undefined> {
   try {
     const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(filePath));
-    const existingEditor = vscode.window.visibleTextEditors.find(
-      (e) => e.document.uri.fsPath === uri.fsPath,
-    );
+    const existingEditor = findVisibleEditor(uri);
     const preserveFocus = options.preserveFocus ?? !existingEditor;
 
     const editor =

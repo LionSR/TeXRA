@@ -11,14 +11,16 @@ import * as vscode from 'vscode';
 import { codexCoordinator } from '@auth/codex';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   setCodexSubscriptionToolUseOnly,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 
-import type { SettingsHandlerContext } from './SettingsHandlerContext';
+import {
+  withHandlerErrorHandling,
+  type SettingsHandlerContext,
+} from './SettingsHandlerContext';
 
 /** ChatGPT-subscription sign-in handler delegate. */
 export class ChatGptSubscriptionHandlers {
@@ -46,17 +48,15 @@ export class ChatGptSubscriptionHandlers {
   }
 
   async handleSignOutChatGpt(): Promise<void> {
-    try {
-      await codexCoordinator().signOut();
-      void vscode.window.showInformationMessage('Signed out of ChatGPT.');
-      await this.refreshChatGptState();
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'ChatGPT sign-out failed',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'ChatGPT sign-out failed',
+      async () => {
+        await codexCoordinator().signOut();
+        void vscode.window.showInformationMessage('Signed out of ChatGPT.');
+        await this.refreshChatGptState();
+      },
+    );
   }
 
   async handleSetPreferSubscription(enabled: boolean): Promise<void> {
@@ -89,15 +89,12 @@ export class ChatGptSubscriptionHandlers {
     warning: (effective: boolean) => string;
     errorMessage: string;
   }): Promise<void> {
-    try {
+    await withHandlerErrorHandling(this.ctx, opts.errorMessage, async () => {
       const update = await opts.apply(opts.enabled);
       if (update.effective !== opts.enabled) {
         void vscode.window.showWarningMessage(opts.warning(update.effective));
       }
-    } catch (error) {
-      await showLoggedErrorMessage(this.ctx.channel, opts.errorMessage, error);
-    } finally {
-      await this.refreshChatGptState();
-    }
+    });
+    await this.refreshChatGptState();
   }
 }

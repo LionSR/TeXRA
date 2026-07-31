@@ -634,91 +634,67 @@ describe('CLI multi-agent presets', () => {
     );
   });
 
-  it('allows custom presets to default to a delegating member root', () => {
+  it.each([
+    {
+      name: 'allows custom presets to default to a delegating member root',
+      id: 'custom-review',
+      members: ['review'],
+      delegating: ['review'],
+      rootAgent: 'review' as string | undefined,
+      hasGaps: false,
+    },
+    {
+      name: 'prefers custom preset order before built-in root fallbacks',
+      id: 'custom-review',
+      members: ['review', 'engineer'],
+      delegating: ['review', 'engineer'],
+      rootAgent: 'review' as string | undefined,
+      hasGaps: false,
+    },
+    {
+      name: 'does not infer a non-delegating root for custom presets',
+      id: 'custom-review',
+      members: ['review'],
+      delegating: [],
+      rootAgent: undefined,
+      hasGaps: true,
+    },
+    {
+      name: 'does not allow custom presets to default to their simplifier agent',
+      id: 'custom-cleanup',
+      members: ['simplifier'],
+      delegating: ['simplifier'],
+      rootAgent: undefined,
+      hasGaps: true,
+    },
+  ])('$name', ({ id, members, delegating, rootAgent, hasGaps }) => {
     const plan = planRun(
       {
-        id: 'custom-review',
-        name: 'Custom review',
-        description: 'User-authored review team.',
+        id,
+        name: id,
+        description: 'User-authored team.',
         icon: 'cube',
         source: 'custom',
         workflowAgents: [],
-        toolUseAgents: ['review'],
+        toolUseAgents: members,
       },
       {
-        toolUseAgents: [
-          agent('review', AgentCategory.ToolUse, ['delegate_agent']),
-        ],
+        toolUseAgents: members.map((member) =>
+          agent(
+            member,
+            AgentCategory.ToolUse,
+            delegating.includes(member) ? ['delegate_agent'] : [],
+          ),
+        ),
       },
     );
 
-    expect(plan.rootAgent?.name).toBe('review');
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
-  });
-
-  it('prefers custom preset order before built-in root fallbacks', () => {
-    const plan = planRun(
-      {
-        id: 'custom-review',
-        name: 'Custom review',
-        description: 'User-authored review team.',
-        icon: 'cube',
-        source: 'custom',
-        workflowAgents: [],
-        toolUseAgents: ['review', 'engineer'],
-      },
-      {
-        toolUseAgents: [
-          agent('review', AgentCategory.ToolUse, ['delegate_agent']),
-          agent('engineer', AgentCategory.ToolUse, ['delegate_agent']),
-        ],
-      },
-    );
-
-    expect(plan.rootAgent?.name).toBe('review');
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
-  });
-
-  it('does not infer a non-delegating root for custom presets', () => {
-    const plan = planRun(
-      {
-        id: 'custom-review',
-        name: 'Custom review',
-        description: 'User-authored review team.',
-        icon: 'cube',
-        source: 'custom',
-        workflowAgents: [],
-        toolUseAgents: ['review'],
-      },
-      {
-        toolUseAgents: [agent('review', AgentCategory.ToolUse)],
-      },
-    );
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
-  });
-
-  it('does not allow custom presets to default to their simplifier agent', () => {
-    const plan = planRun(
-      {
-        id: 'custom-cleanup',
-        name: 'Custom cleanup',
-        description: 'User-authored cleanup team.',
-        icon: 'cube',
-        source: 'custom',
-        workflowAgents: [],
-        toolUseAgents: ['simplifier'],
-      },
-      {
-        toolUseAgents: [
-          agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
-        ],
-      },
-    );
-
-    expect(plan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
+    // Assert on rootAgent itself for the negative rows: `?.name` would also
+    // pass for a root that was inferred but happens to have no name, which is
+    // the regression these rows exist to catch.
+    if (rootAgent === undefined) expect(plan.rootAgent).toBeUndefined();
+    else expect(plan.rootAgent?.name).toBe(rootAgent);
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(hasGaps);
   });
 
   it('reports no gaps when every preset member resolves', () => {

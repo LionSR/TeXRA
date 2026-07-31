@@ -34,7 +34,7 @@ import {
   formatReviewComment,
   formatSubscriptionError,
 } from './formatPREvent';
-import { getNewestTimestamp, withSince } from './formatUtils';
+import { getNewestTimestamp, prRef, withSince } from './formatUtils';
 import {
   ghGet,
   GitHubAuthError,
@@ -149,7 +149,7 @@ export interface PRSubscribeInput extends PRKey {
 }
 
 export function prKeyToString(k: PRKey): string {
-  return `${k.owner}/${k.repo}/pulls/${k.pullNumber}`;
+  return prRef(`${k.owner}/${k.repo}`, k.pullNumber);
 }
 
 interface SubscriptionState extends BasePollSubscriptionState {
@@ -827,18 +827,15 @@ export class PRPollingSource extends PollingSourceBase<
           annotations_count: visibleAnnotations.length,
         },
       };
-      try {
-        listener(
-          formatCheckAnnotations(
-            state.slug,
-            state.pr.pullNumber,
-            visibleRun,
-            visibleAnnotations,
-          ),
-        );
-      } catch (err) {
-        this.logger.warn('Listener threw', { data: err });
-      }
+      this.emitToListener(
+        listener,
+        formatCheckAnnotations(
+          state.slug,
+          state.pr.pullNumber,
+          visibleRun,
+          visibleAnnotations,
+        ),
+      );
     }
   }
 

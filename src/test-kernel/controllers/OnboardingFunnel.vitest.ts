@@ -7,7 +7,6 @@ import {
   type OnboardingFunnelState,
   type OnboardingFunnelTransition,
 } from '@controllers/onboarding/onboardingFunnel';
-import type { StateStore } from '@platform/interfaces';
 import {
   backfillFirstRunDone,
   getDefaultTeamId,
@@ -17,18 +16,7 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
-  const store = new Map<string, unknown>(Object.entries(initial));
-  return {
-    get<T>(key: string, defaultValue?: T): T {
-      return (store.has(key) ? store.get(key) : defaultValue) as T;
-    },
-    async update(key: string, value: unknown): Promise<void> {
-      store.set(key, value);
-    },
-  };
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 describe('deriveOnboardingFunnelState', () => {
   it.each<[string, OnboardingFunnelInputs, OnboardingFunnelState]>([
@@ -135,7 +123,7 @@ describe('planOnboardingFunnelTransition', () => {
 
 describe('onboarding flags', () => {
   it('round-trips firstRunDone and defaultTeamId through global state', async () => {
-    const state = fakeStateStore();
+    const state = new FakeStateStore();
     expect(getFirstRunDone(state)).toBe(false);
     await setFirstRunDone(state, true);
     expect(getFirstRunDone(state)).toBe(true);
@@ -148,18 +136,18 @@ describe('onboarding flags', () => {
   it('treats a non-string defaultTeamId as unset', () => {
     expect(
       getDefaultTeamId(
-        fakeStateStore({ [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 7 }),
+        new FakeStateStore({ [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 7 }),
       ),
     ).toBeUndefined();
     expect(
       getDefaultTeamId(
-        fakeStateStore({ [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: '' }),
+        new FakeStateStore({ [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: '' }),
       ),
     ).toBeUndefined();
   });
 
   it('reads both funnel flags in one call', async () => {
-    const state = fakeStateStore();
+    const state = new FakeStateStore();
     expect(readOnboardingFlags(state)).toEqual({
       declined: false,
       firstRunDone: false,
@@ -175,7 +163,7 @@ describe('onboarding flags', () => {
 
 describe('backfillFirstRunDone', () => {
   it('marks prior installs with a credential as done', async () => {
-    const state = fakeStateStore();
+    const state = new FakeStateStore();
     await backfillFirstRunDone(state, {
       hasCredential: true,
       hasPriorInstall: true,
@@ -185,7 +173,7 @@ describe('backfillFirstRunDone', () => {
   });
 
   it('does not mark fresh credential-only installs as done', async () => {
-    const state = fakeStateStore();
+    const state = new FakeStateStore();
     await backfillFirstRunDone(state, {
       hasCredential: true,
       hasRunHistory: false,
@@ -194,7 +182,7 @@ describe('backfillFirstRunDone', () => {
   });
 
   it('marks upgraders with run history as done', async () => {
-    const state = fakeStateStore();
+    const state = new FakeStateStore();
     await backfillFirstRunDone(state, {
       hasCredential: false,
       hasRunHistory: true,
@@ -203,7 +191,7 @@ describe('backfillFirstRunDone', () => {
   });
 
   it('writes false for a fresh install so the backfill never re-evaluates', async () => {
-    const state = fakeStateStore();
+    const state = new FakeStateStore();
     await backfillFirstRunDone(state, {
       hasCredential: false,
       hasRunHistory: false,
@@ -220,7 +208,7 @@ describe('backfillFirstRunDone', () => {
   });
 
   it('never overwrites an existing flag', async () => {
-    const state = fakeStateStore({
+    const state = new FakeStateStore({
       [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true,
     });
     await backfillFirstRunDone(state, {

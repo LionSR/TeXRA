@@ -26,7 +26,7 @@ import {
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { extractToolNames } from './agentYamlScanner';
+import { extractToolNames, userRequestTemplateCount } from './agentYamlScanner';
 import type { AgentEntry } from './agentEntry';
 
 interface InlineAgent {
@@ -171,18 +171,11 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
           ? Math.max(
               // Materializes the schema's own default when unset.
               AgentWorkflowSettingSchema.shape.rounds.parse(settings.rounds),
-              userRequestCount(parsed),
+              userRequestTemplateCount(parsed.prompts.userRequest),
             )
           : undefined,
       internal: settings.internal === true || undefined,
     },
     definition: clonePlainContainers({ ...parsed, settings }),
   };
-}
-
-/** Round floor for a workflow agent, mirroring `agentYamlScanner`'s rule. */
-function userRequestCount(definition: AgentDefinition): number {
-  const userRequest = definition.prompts.userRequest;
-  if (Array.isArray(userRequest)) return userRequest.length;
-  return userRequest ? 1 : 0;
 }

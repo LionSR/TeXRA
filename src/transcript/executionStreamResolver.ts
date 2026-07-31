@@ -34,17 +34,48 @@ export interface PersistedStreamIdResolverOptions {
  */
 const META_SCAN_CONCURRENCY = 8;
 
-interface MetaMatchCandidate {
-  readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId | undefined;
+export interface ExecutionStreamScan {
+  /** Every stream with sidecars under `streamData/`, in enumeration order. */
+  readonly persistedStreams: StreamTabId[];
+  /** Persisted streams whose sidecar `meta.json` claims this execution. */
+  readonly metaMatched: StreamTabId[];
 }
 
-function findSuffixMatch(
+/**
+ * The one meta scan over persisted sidecars for an execution: list every
+ * `streamData/` stream once, read each one's `meta.json` executionId, and
+ * report which of them claim `executionId`. Shared by this resolver and the
+ * completed-run conversation reader's sibling search so both enumerate in the
+ * same order under the same bounded fan-out.
+ */
+export async function scanPersistedStreamsForExecution(
+  executionId: ExecutionId,
+  snapshotStore: StreamSnapshotStore,
+): Promise<ExecutionStreamScan> {
+  const persistedStreams = await snapshotStore.listPersistedStreams();
+  const scanned = await pMap(
+    persistedStreams,
+    async (streamId) => ({
+      streamId,
+      executionId: await snapshotStore.readPersistedExecutionId(streamId),
+    }),
+    { concurrency: META_SCAN_CONCURRENCY },
+  );
+  return {
+    persistedStreams,
+    metaMatched: scanned
+      .filter((candidate) => candidate.executionId === executionId)
+      .map((candidate) => candidate.streamId),
+  };
+}
+
+/** Streams whose id carries the `#executionId` suffix, in the given order. */
+export function findExecutionSuffixMatches(
   streams: readonly StreamTabId[],
   executionId: ExecutionId,
-): StreamTabId | undefined {
+): StreamTabId[] {
   const suffix = `#${executionId}`;
-  return streams.find((id) => id.endsWith(suffix));
+  return streams.filter((id) => id.endsWith(suffix));
 }
 
 /**
@@ -61,15 +92,15 @@ function findSuffixMatch(
  * this never re-reads the full per-stream sidecar set.
  */
 async function pickBestMetaMatch(
-  candidates: readonly MetaMatchCandidate[],
+  candidates: readonly StreamTabId[],
   snapshotStore: StreamSnapshotStore,
   streamLogStore: Pick<StreamLogStore, 'keys' | 'has'> | undefined,
 ): Promise<StreamTabId> {
-  if (candidates.length === 1) return candidates[0].streamId;
+  if (candidates.length === 1) return candidates[0];
 
   const withData = await pMap(
     candidates,
-    async ({ streamId }) => {
+    async (streamId) => {
       const hasLog = streamLogStore?.has(streamId) ?? false;
       return {
         streamId,
@@ -86,7 +117,7 @@ async function pickBestMetaMatch(
   return (
     withData.find((entry) => entry.hasLog)?.streamId ??
     withData.find((entry) => entry.hasWorkPlan)?.streamId ??
-    candidates[0].streamId
+    candidates[0]
   );
 }
 
@@ -122,38 +153,31 @@ export async function resolvePersistedStreamIdForExecution(
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const persistedStreams = await snapshotStore.listPersistedStreams();
+  const { persistedStreams, metaMatched } =
+    await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
-  const metaCandidates = (
-    await pMap(
-      persistedStreams,
-      async (streamId): Promise<MetaMatchCandidate> => ({
-        streamId,
-        executionId: await snapshotStore.readPersistedExecutionId(streamId),
-      }),
-      { concurrency: META_SCAN_CONCURRENCY },
-    )
-  ).filter((candidate) => candidate.executionId === executionId);
-
-  if (metaCandidates.length > 0) {
+  if (metaMatched.length > 0) {
     const streamId = await pickBestMetaMatch(
-      metaCandidates,
+      metaMatched,
       snapshotStore,
       options.streamLogStore,
     );
-    if (metaCandidates.length === 1) {
+    if (metaMatched.length === 1) {
       await writeExecutionStreamId(executionId, streamId);
     }
     return { streamId, source: 'streamDataMeta' };
   }
 
-  const matchedSidecar = findSuffixMatch(persistedStreams, executionId);
+  const matchedSidecar = findExecutionSuffixMatches(
+    persistedStreams,
+    executionId,
+  )[0];
   if (matchedSidecar) {
     return { streamId: matchedSidecar, source: 'streamDataSuffix' };
   }
 
   const matchedLog = options.streamLogStore
-    ? findSuffixMatch(options.streamLogStore.keys(), executionId)
+    ? findExecutionSuffixMatches(options.streamLogStore.keys(), executionId)[0]
     : undefined;
   if (matchedLog) {
     return { streamId: matchedLog, source: 'streamLogsSuffix' };

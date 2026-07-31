@@ -217,6 +217,26 @@ export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function camelCaseFlagName(name: string): string {
+  return name.replaceAll(/-([a-z])/g, (_match, letter: string) =>
+    letter.toUpperCase(),
+  );
+}
+
+/**
+ * Read a boolean flag from citty's parsed args under every spelling citty can
+ * produce: the declared hyphenated key, the camelCase alias, and — for a
+ * `no-`-prefixed flag — the positive key set to `false` (citty rewrites
+ * `--no-browser` into `browser: false`).
+ */
+export function booleanArg(args: object, name: string): boolean {
+  const record = args as Record<string, unknown>;
+  if (record[name] === true || record[camelCaseFlagName(name)] === true) {
+    return true;
+  }
+  return name.startsWith('no-') && record[name.slice(3)] === false;
+}
+
 export interface CommonAgentRunFlags {
   inputFiles: string[];
   contextFiles: string[];

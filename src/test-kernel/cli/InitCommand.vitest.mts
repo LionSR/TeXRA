@@ -308,49 +308,39 @@ describe('CLI init command', () => {
     expect(stdout).toContain('Next: run `texra` for the launcher');
   });
 
-  it('points non-interactive init at model recovery when the default model is unavailable', async () => {
-    mocks.getCliModelAccessList.mockResolvedValue([
-      modelAccess('deepseekproT', {
-        available: false,
-        status: 'missing key',
-        model: {
-          value: 'deepseekproT',
-          label: 'DeepSeek Pro',
-          availability: 'missing-key',
-          requiresKey: true,
-        },
-      }),
-    ]);
-    const root = await makeTempDir('texra-init-test-', tempDirs);
-    const result = await runCli([
-      '--cwd',
-      root,
-      'init',
-      '--print',
-      '--api-mode',
-      'personal',
-      '--gitignore',
-      '--no-color',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(stderr).toBe('');
-    expectUnavailableDefaultRecovery(stdout);
-  });
-
-  it('points init at model recovery when the fallback default has no access entry', async () => {
-    mocks.getCliModelAccessList.mockResolvedValue([
-      modelAccess('sonnet46T', {
-        available: false,
-        status: 'login required',
-        model: {
-          value: 'sonnet46T',
-          label: 'Sonnet',
-          availability: 'included-login-required',
-          disabled: true,
-        },
-      }),
-    ]);
+  it.each([
+    {
+      name: 'points non-interactive init at model recovery when the default model is unavailable',
+      accessList: [
+        modelAccess('deepseekproT', {
+          available: false,
+          status: 'missing key',
+          model: {
+            value: 'deepseekproT',
+            label: 'DeepSeek Pro',
+            availability: 'missing-key',
+            requiresKey: true,
+          },
+        }),
+      ],
+    },
+    {
+      name: 'points init at model recovery when the fallback default has no access entry',
+      accessList: [
+        modelAccess('sonnet46T', {
+          available: false,
+          status: 'login required',
+          model: {
+            value: 'sonnet46T',
+            label: 'Sonnet',
+            availability: 'included-login-required',
+            disabled: true,
+          },
+        }),
+      ],
+    },
+  ])('$name', async ({ accessList }) => {
+    mocks.getCliModelAccessList.mockResolvedValue(accessList);
     const root = await makeTempDir('texra-init-test-', tempDirs);
     const result = await runCli([
       '--cwd',

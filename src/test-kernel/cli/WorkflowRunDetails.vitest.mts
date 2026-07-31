@@ -37,8 +37,9 @@ const COMPILE_FAILURE: CompileFailure = {
 
 function workflowRunDetailLines(
   facts: Parameters<typeof selectWorkflowRunDetailLines>[0],
+  maxRows = Number.MAX_SAFE_INTEGER,
 ) {
-  return selectWorkflowRunDetailLines(facts, Number.MAX_SAFE_INTEGER);
+  return selectWorkflowRunDetailLines(facts, maxRows);
 }
 
 afterEach(() => {
@@ -134,7 +135,7 @@ describe('workflowRunDetailLines', () => {
   });
 
   it('shows a round-qualified alert when only one detail row fits', () => {
-    const [line] = selectWorkflowRunDetailLines(
+    const [line] = workflowRunDetailLines(
       {
         taskGroups: [
           {
@@ -235,7 +236,7 @@ describe('workflowRunDetailLines', () => {
   });
 
   it('keeps warning context ahead of generated files and future plans', () => {
-    const lines = selectWorkflowRunDetailLines(
+    const lines = workflowRunDetailLines(
       {
         taskGroups: [
           {

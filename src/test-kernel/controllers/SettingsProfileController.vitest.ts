@@ -8,6 +8,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const providerVscodeSettings = {
   openai: [
@@ -45,21 +46,6 @@ const providerVscodeSettings = {
   ],
 } satisfies Record<string, readonly ProviderVscodeSettingDef[]>;
 
-function createState(initial: Record<string, unknown> = {}): StateStore & {
-  data: Record<string, unknown>;
-} {
-  const data = { ...initial };
-  return {
-    data,
-    get: <T>(key: string, defaultValue?: T): T => {
-      return (Object.hasOwn(data, key) ? data[key] : defaultValue) as T;
-    },
-    update: async (key: string, value: unknown) => {
-      data[key] = value;
-    },
-  };
-}
-
 function createController(
   options: {
     state?: StateStore;
@@ -74,7 +60,7 @@ function createController(
   const includedAccessUpdates: boolean[] = [];
   const invalidations = { count: 0 };
   const config = options.config ?? {};
-  const state = options.state ?? createState();
+  const state = options.state ?? new FakeStateStore();
 
   return {
     controller: new SettingsProfileController({
@@ -121,7 +107,7 @@ function createController(
 
 describe('SettingsProfileController', () => {
   it('turns off OpenRouter when switching to included access', async () => {
-    const state = createState({ [GlobalStateKey.USE_OPENROUTER]: true });
+    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
     const { controller, includedAccessUpdates, invalidations } =
       createController({ state });
 
@@ -137,7 +123,7 @@ describe('SettingsProfileController', () => {
   });
 
   it('keeps OpenRouter unchanged when switching to personal keys', async () => {
-    const state = createState({ [GlobalStateKey.USE_OPENROUTER]: true });
+    const state = new FakeStateStore({ [GlobalStateKey.USE_OPENROUTER]: true });
     const { controller, includedAccessUpdates, invalidations } =
       createController({ state });
 
@@ -153,7 +139,7 @@ describe('SettingsProfileController', () => {
   });
 
   it('updates only whitelisted provider settings', async () => {
-    const state = createState();
+    const state = new FakeStateStore();
     const { controller, invalidations } = createController({ state });
 
     const rejected = await controller.setProviderVscodeSetting({
@@ -178,7 +164,7 @@ describe('SettingsProfileController', () => {
   });
 
   it('recomputes model options when Prefer Kimi Code is toggled', async () => {
-    const state = createState();
+    const state = new FakeStateStore();
     const { controller, invalidations } = createController({ state });
 
     const updated = await controller.setProviderVscodeSetting({

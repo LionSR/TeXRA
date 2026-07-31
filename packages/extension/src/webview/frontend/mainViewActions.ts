@@ -63,8 +63,8 @@ import {
 } from './mainViewState';
 import { saveState } from './persistence';
 import {
-  FILE_UPDATE_COMMANDS,
-  KEY_TO_FILE_TYPE,
+  MULTI_FILE_LIST_BY_KEY,
+  MULTI_FILE_LISTS,
   ONBOARDING_PLACEHOLDERS,
 } from './store';
 
@@ -187,11 +187,8 @@ export function updateMultiFiles(
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
   saveState();
 
-  const fileType = KEY_TO_FILE_TYPE[listId];
-  const command = FILE_UPDATE_COMMANDS[fileType];
-  if (command) {
-    postMessage(command, { fileType, files });
-  }
+  const { fileType, updateCommand } = MULTI_FILE_LIST_BY_KEY[listId];
+  postMessage(updateCommand, { fileType, files });
 }
 
 export function updateCheckboxValue(id: string, checked: boolean): void {
@@ -211,15 +208,12 @@ export function removeFile(listId: keyof MultiFiles, file: string): void {
   updateMultiFiles(listId, files);
 }
 
-export function selectMultipleFiles(listId: string): void {
+export function selectMultipleFiles(listId: keyof MultiFiles): void {
   // Hint the OS dialog with the head of the multi-list (the "primary"
   // file post-collapse) so it opens at the right folder.
-  const fileType = listId.replace('Files', '');
-  const mf = multiFiles$.get();
-  const listKey = listId as keyof MultiFiles;
-  const currentFile = (mf[listKey] ?? [])[0];
+  const currentFile = (multiFiles$.get()[listId] ?? [])[0];
   postMessage(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES, {
-    fileType,
+    fileType: MULTI_FILE_LIST_BY_KEY[listId].fileType,
     currentFile,
   });
 }
@@ -254,8 +248,7 @@ export function emptyFile(type: DocumentFileType | 'base' | 'edited'): void {
 }
 
 export function emptyFiles(type: MultipleDocumentFileType): void {
-  const listId = `${type}Files`;
-  updateMultiFiles(listId as keyof MultiFiles, []);
+  updateMultiFiles(MULTI_FILE_LISTS[type].key, []);
 }
 
 export function refreshEditedFiles(): void {

@@ -7,7 +7,6 @@ import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   KEY_HINT_SEPARATOR,
   KeyHints,
@@ -17,6 +16,7 @@ import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
+import { modalTextDisplayLines } from './ScrollableModalText';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import {
@@ -27,6 +27,7 @@ import {
 import {
   compactAwareMaxScrollOffset,
   scrollBoundedRows,
+  type ScrollableDisplayLine,
 } from '../render/scrollBounds';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
@@ -36,10 +37,7 @@ export interface ExternalInquiryProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export interface ExternalInquiryDisplayLine {
-  readonly kind: 'question' | 'overflow';
-  readonly text: string;
-}
+type ExternalInquiryDisplayLine = ScrollableDisplayLine<'text'>;
 
 type CopyStatus = 'idle' | 'copying' | 'copied' | 'failed';
 
@@ -143,21 +141,6 @@ export function externalInquiryQuestionRowsBudget({
   return Math.max(0, availableRows - EXTERNAL_INQUIRY_FIXED_ROWS - answerRows);
 }
 
-function externalInquiryQuestionLines({
-  question,
-  width,
-}: {
-  readonly question: string;
-  readonly width: number;
-}): ExternalInquiryDisplayLine[] {
-  const questionWidth = clampModalWidth(width);
-  return question.split('\n').flatMap((line) =>
-    wrapAnsiToWidth(line, questionWidth)
-      .split('\n')
-      .map((text): ExternalInquiryDisplayLine => ({ kind: 'question', text })),
-  );
-}
-
 function overflowLine(text: string): ExternalInquiryDisplayLine {
   return { kind: 'overflow', text };
 }
@@ -173,7 +156,7 @@ export function boundedExternalInquiryQuestionLines({
   readonly scrollOffset?: number;
   readonly width: number;
 }): ExternalInquiryDisplayLine[] {
-  const lines = externalInquiryQuestionLines({ question, width });
+  const lines = modalTextDisplayLines({ text: question, width });
   if (maxDisplayLines <= 0) return [];
   if (lines.length <= maxDisplayLines) return lines;
 
@@ -227,8 +210,8 @@ export function ExternalInquiry(
   });
   const questionLineCount = useMemo(
     () =>
-      externalInquiryQuestionLines({
-        question: props.payload.question,
+      modalTextDisplayLines({
+        text: props.payload.question,
         width: contentWidth,
       }).length,
     [contentWidth, props.payload.question],

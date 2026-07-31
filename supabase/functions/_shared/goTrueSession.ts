@@ -6,11 +6,19 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
  * Mint a native GoTrue session for an existing user. Generates an admin
  * magic-link token and consumes it immediately server-side, so GoTrue issues a
  * standard session with rotating refresh.
+ *
+ * The minted session must belong to `expectedUserId` — the user the caller
+ * already resolved from its own identity lookup. A mismatch means the email
+ * resolved to a different account, so the session is refused rather than
+ * handed back.
  */
 export async function mintGoTrueSession(
   adminClient: SupabaseClient<any>,
   authClient: SupabaseClient<any>,
   email: string,
+  expectedUserId: string,
+  // Log tag of the calling flow, so a mismatch stays greppable per flow.
+  logPrefix: string,
 ): Promise<Session | null> {
   // Supabase admin.generateLink returns link/OTP material for custom delivery.
   // Consume the hash immediately server-side; GoTrue mailer behavior depends on
@@ -21,7 +29,7 @@ export async function mintGoTrueSession(
   const tokenHash = linkData?.properties?.hashed_token;
   if (linkError || !tokenHash) {
     console.error(
-      '[AUTH] generateLink failed:',
+      `${logPrefix} generateLink failed:`,
       linkError?.message ?? 'no hashed_token',
     );
     return null;
@@ -33,7 +41,13 @@ export async function mintGoTrueSession(
   });
 
   if (error || !data.session) {
-    console.error('[AUTH] verifyOtp failed:', error?.message);
+    console.error(`${logPrefix} verifyOtp failed:`, error?.message);
+    return null;
+  }
+  if (data.session.user.id !== expectedUserId) {
+    console.error(
+      `${logPrefix} session user mismatch: resolved ${expectedUserId}, minted ${data.session.user.id}`,
+    );
     return null;
   }
 

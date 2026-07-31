@@ -2,12 +2,16 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test support
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 interface WindowLike {
   isDestroyed(): boolean;
 }
 
+/**
+ * The helper only reads `isDestroyed()`, so the tests drive it with plain
+ * stand-ins rather than real `BrowserWindow` instances.
+ */
 interface SecretStorageWarningDialogModule {
   getSecretStorageWarningParentWindow(browserWindow: {
     getAllWindows(): WindowLike[];
@@ -17,9 +21,10 @@ interface SecretStorageWarningDialogModule {
 
 describe('desktop secret-storage warning dialog', () => {
   async function loadDialogModule(): Promise<SecretStorageWarningDialogModule> {
-    return loadDesktopPlatformModule<SecretStorageWarningDialogModule>(
-      'secretStorageWarningDialog.ts',
+    const module = await loadSourceModule(
+      '@desktop/main/platform/secretStorageWarningDialog',
     );
+    return module as unknown as SecretStorageWarningDialogModule;
   }
 
   it('uses the focused BrowserWindow when one is active', async () => {

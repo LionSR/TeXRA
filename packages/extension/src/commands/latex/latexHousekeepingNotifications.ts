@@ -1,4 +1,9 @@
 // Local imports
+import {
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import type { LatexdiffPackResult } from '@housekeeping';
 import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
@@ -65,4 +70,29 @@ export function getLatexdiffPackNotifications(
         return [];
     }
   });
+}
+
+export async function showLatexHousekeepingNotification(
+  channel: string,
+  notification: LatexHousekeepingNotification,
+): Promise<void> {
+  switch (notification.severity) {
+    case 'info':
+      await showLoggedInfoMessage(channel, notification.message);
+      return;
+    case 'error':
+      await showLoggedErrorMessage(
+        channel,
+        notification.message,
+        notification.error,
+      );
+      return;
+    case 'message':
+      await showLoggedMessage(channel, notification.message);
+      return;
+    default:
+      // A severity added later must still surface, not vanish.
+      await showLoggedMessage(channel, notification.message);
+      return;
+  }
 }

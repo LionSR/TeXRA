@@ -173,18 +173,6 @@ export function generateEnvironmentLinebreakFixes(
 }
 
 /**
- * Generate patterns for mapping math commands to shorter versions
- * Example: \\alpha -> \\al
- */
-export function generateMathCommandShortcuts(
-  commandMap: PatternDict,
-): PatternDict {
-  return createPatterns(Object.entries(commandMap), ([fullCmd, shortCmd]) => [
-    [`\\${fullCmd}`, `\\${shortCmd}`],
-  ]);
-}
-
-/**
  * Generate patterns for mapping decorated math symbols to shorter versions
  * Example: \\boldsymbol{\\alpha} -> \\bal
  */
@@ -202,23 +190,12 @@ export function generateDecoratedMathShortcuts(
 }
 
 /**
- * Generate patterns for mathcal, mathbb and other font commands
- */
-export function generateMathFontShortcuts(
-  letters: string[],
-  fontCmd: string,
-  shortcutPrefix: string,
-): PatternDict {
-  return createPatterns(letters, (letter) => [
-    [`\\${fontCmd}{${letter}}`, `\\${shortcutPrefix}${letter}`],
-  ]);
-}
-
-/**
- * Generate patterns for decorated variables (tilde, hat, bar)
+ * Generate patterns for single-argument commands wrapping one letter, covering
+ * both decorators and math fonts.
  * Examples:
- * - \tilde{x} -> \tx (for single letters)
- * - \hat{H} -> \hH (for single letters)
+ * - \tilde{x} -> \tx
+ * - \hat{H} -> \hH
+ * - \mathcal{X} -> \cX
  */
 export function generateDecoratorShortcuts(
   decorator: string,
@@ -303,8 +280,8 @@ export function generateDifferentialSpacing(
 }
 
 /**
- * Generate patterns for mapping commands with custom shortcuts
- * Examples: \partial -> \der, \nabla -> \na
+ * Generate patterns for mapping commands to shorter versions
+ * Examples: \partial -> \der, \nabla -> \na, \alpha -> \al
  */
 export function generateCommandShortcuts(commandMap: PatternDict): PatternDict {
   return createPatterns(Object.entries(commandMap), ([command, shortcut]) => [

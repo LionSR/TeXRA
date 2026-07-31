@@ -6,9 +6,7 @@ import type {
 import { GREEK_LETTERS } from './constants';
 import { NonRegexReplacementCategory, RegexReplacementCategory } from './types';
 import {
-  generateMathCommandShortcuts,
   generateDecoratedMathShortcuts,
-  generateMathFontShortcuts,
   generateDecoratorShortcuts,
   generateNestedDecoratorShortcuts,
   generateDifferentialSpacing,
@@ -201,16 +199,16 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     ...generateCommandShortcuts(calculusCommandMap),
     // Vector variables: \vec{x} -> \vx
     ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
-    ...generateMathCommandShortcuts(greekShortcuts),
+    ...generateCommandShortcuts(greekShortcuts),
     ...generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
     // Mathcal: \mathcal{X} -> \cX
-    ...generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
+    ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
     // Mathbb: \mathbb{X} -> \eX
-    ...generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
+    ...generateDecoratorShortcuts('mathbb', mathbbLetters, 'e'),
     // Mathbf lowercase: \mathbf{x} -> \bx
-    ...generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
+    ...generateDecoratorShortcuts('mathbf', lowerLetters, 'b'),
     // Mathbf uppercase: \mathbf{X} -> \bX
-    ...generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
+    ...generateDecoratorShortcuts('mathbf', mathbfUpperLetters, 'b'),
     // Normalize legacy font commands {\rm X}, {\bf X}, {\cal X}
     ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
     ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),

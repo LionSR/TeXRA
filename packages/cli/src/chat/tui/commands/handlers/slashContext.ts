@@ -6,12 +6,6 @@ import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { type ExecutionId } from '@shared/schemas';
 
-import {
-  openCliSlashCommandForm,
-  openRegisteredCliSlashForm,
-} from '../slashForms';
-import { type SlashCommand } from '../slashRegistry';
-
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
@@ -62,19 +56,4 @@ export function abortableSlashCommand(
   return Object.assign(run(controller.signal), {
     abort: () => controller.abort(),
   });
-}
-
-/** Open a command's registered inline form, falling back to the generic form. */
-export function openCanonicalSlashForm(
-  commandName: string,
-  registered: SlashCommand | undefined,
-  remainder: string,
-  onPersist?: () => void,
-): void {
-  if (
-    registered &&
-    openRegisteredCliSlashForm(registered, remainder, onPersist)
-  )
-    return;
-  openCliSlashCommandForm(commandName, remainder, onPersist);
 }

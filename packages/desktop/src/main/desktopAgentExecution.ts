@@ -25,12 +25,6 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import {
-  getFileListConfig,
-  loadFileListSettings,
-  type ListableFileType,
-} from '@common/files/fileListingRules';
-import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
@@ -107,7 +101,6 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
@@ -121,6 +114,7 @@ import {
   createDesktopHostInteractions,
   type DesktopHostInteractions,
 } from './desktopHostInteractions.js';
+import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
@@ -1412,8 +1406,8 @@ export class DesktopProgressBridge {
     if (!workspacePath) return [];
 
     const files = [
-      ...(await this.listWorkspaceFiles('input')),
-      ...(await this.listWorkspaceFiles('context')),
+      ...(await listDesktopWorkspaceFiles('input', workspacePath)),
+      ...(await listDesktopWorkspaceFiles('context', workspacePath)),
     ];
     return files.map((file) =>
       path.isAbsolute(file) ? file : path.join(workspacePath, file),
@@ -1431,19 +1425,6 @@ export class DesktopProgressBridge {
     for (const handler of Object.values(this.backend.approvalHandlers)) {
       handler.releaseForStream(streamId);
     }
-  }
-
-  private async listWorkspaceFiles(
-    fileType: ListableFileType,
-  ): Promise<string[]> {
-    const workspacePath = platform().workspace.getWorkspacePath();
-    const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
-    if (!workspacePath || !config) return [];
-    return listWorkspaceFiles({
-      root: workspacePath,
-      config,
-      readDirectory: (directory) => platform().fs.readDirectory(directory),
-    });
   }
 }
 

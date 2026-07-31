@@ -136,7 +136,7 @@ function progressDetail(xml: string): string {
       if (completed || active || pending) {
         return `todos · ${completed ?? '0'} done, ${active ?? '0'} active, ${pending ?? '0'} pending`;
       }
-      const body = elementBody(xml, 'subagent-progress');
+      const body = elementBody(xml, DELIVERY_TAG.subagentProgress);
       if (!body) return 'todos updated';
       const parsed = safeParseJson(decodeXmlEntities(body));
       if (parsed.isErr() || !Array.isArray(parsed.value)) {
@@ -163,7 +163,7 @@ function progressDetail(xml: string): string {
         : 'conversation update';
     }
     case 'activity': {
-      const body = elementBody(xml, 'subagent-progress');
+      const body = elementBody(xml, DELIVERY_TAG.subagentProgress);
       return body ? decodeXmlEntities(body).split('\n')[0]! : 'activity';
     }
     default:

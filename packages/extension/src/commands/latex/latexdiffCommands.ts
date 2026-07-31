@@ -10,7 +10,6 @@ import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import {
   showLoggedErrorMessage,
-  showLoggedInfoMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
@@ -39,7 +38,10 @@ import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Local file imports
-import { getLatexdiffPackNotifications } from './latexHousekeepingNotifications';
+import {
+  getLatexdiffPackNotifications,
+  showLatexHousekeepingNotification,
+} from './latexHousekeepingNotifications';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
@@ -157,21 +159,7 @@ function reportLatexdiff(
   results: LatexdiffPackResult | LatexdiffPackResult[],
 ): void {
   for (const notification of getLatexdiffPackNotifications(results)) {
-    switch (notification.severity) {
-      case 'info':
-        void showLoggedInfoMessage(CHANNEL, notification.message);
-        break;
-      case 'error':
-        void showLoggedErrorMessage(
-          CHANNEL,
-          notification.message,
-          notification.error,
-        );
-        break;
-      default:
-        void showLoggedMessage(CHANNEL, notification.message);
-        break;
-    }
+    void showLatexHousekeepingNotification(CHANNEL, notification);
   }
 }
 

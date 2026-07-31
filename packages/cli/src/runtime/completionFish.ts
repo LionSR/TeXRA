@@ -1,25 +1,25 @@
 import {
   CLI_COMPLETION_SHELLS,
+  COMPLETION_SOURCES,
   completionFlagVariants,
   type CompletionCommand,
+  type CompletionSource,
 } from './completionCommandTree';
 
 // Dynamic completion sources, gated on TEXRA_COMPLETION_DYNAMIC so scripts can
 // opt out of shelling back into texra.
-function dynamicListSource(command: string, column: number): string {
-  return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${command} 2>/dev/null | awk "{print \\$${column}}")`;
+function dynamicListSource(source: CompletionSource): string {
+  return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${source.command} 2>/dev/null | awk "{print \\$${source.column}}")`;
 }
 
-const AGENTS_LIST_SOURCE = dynamicListSource('agents list --quiet', 2);
+const AGENTS_LIST_SOURCE = dynamicListSource(COMPLETION_SOURCES.agents);
 const WORKFLOW_AGENTS_LIST_SOURCE = dynamicListSource(
-  'agents list --quiet --all --category workflow',
-  2,
+  COMPLETION_SOURCES.workflowAgents,
 );
 const TOOL_USE_AGENTS_LIST_SOURCE = dynamicListSource(
-  'agents list --quiet --all --category toolUse',
-  2,
+  COMPLETION_SOURCES.toolUseAgents,
 );
-const MODELS_LIST_SOURCE = dynamicListSource('models list --quiet', 1);
+const MODELS_LIST_SOURCE = dynamicListSource(COMPLETION_SOURCES.models);
 const TOP_LEVEL_RUN_CONDITION =
   "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent'";
 

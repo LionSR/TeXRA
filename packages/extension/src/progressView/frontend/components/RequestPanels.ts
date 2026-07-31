@@ -18,6 +18,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { html as staticHtml, literal } from 'lit/static-html.js';
 
 // Side-effect imports - register WA icon, button, and tooltip components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -31,19 +32,16 @@ import {
   requestPanelSharedStyles,
 } from '@shared/styles';
 
+// Local imports - shared utilities
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+
 // Local imports - progress view helpers
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
-  createEmptyPermissionGroups,
-  findPanelForPermission,
-  getActivePermission,
   getPermissionKey,
-  groupPermissions,
-  isActiveExternalInquiryCarousel,
   isTextInput,
   selectExternalInquiryKey,
-  type PermissionGroups,
 } from './RequestPanelsState';
 
 // Local imports - progress view component types
@@ -59,69 +57,109 @@ import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
 import './UserQuestionPanel';
 
-/** Section configuration for rendering permission groups */
+/** One section per permission kind: its chrome and the element rendering it. */
 interface SectionConfig {
-  cssClass: string;
-  icon: TeXRAIconName;
-  title: string;
-  renderPanel: (p: PermissionState) => TemplateResult;
+  readonly kind: PermissionState['kind'];
+  readonly tag: ReturnType<typeof literal>;
+  readonly cssClass: string;
+  readonly icon: TeXRAIconName;
+  readonly title: string;
 }
 
-const SECTION_CONFIGS: Record<string, SectionConfig> = {
-  approval: {
+/** Sections in render order — one row per permission kind. */
+const SECTIONS: readonly SectionConfig[] = [
+  {
+    kind: PERMISSION_KIND.TOOL_EDIT,
+    tag: literal`tool-edit-request-panel`,
     cssClass: 'approval-requests',
     icon: 'code-compare',
     title: 'Tool edit approval',
-    renderPanel: (p) =>
-      html`<tool-edit-request-panel
-        .permission=${p}
-      ></tool-edit-request-panel>`,
   },
-  bash: {
+  {
+    kind: PERMISSION_KIND.BASH,
+    tag: literal`bash-request-panel`,
     cssClass: 'bash-approval-requests',
     icon: 'terminal',
     title: 'Command approval',
-    renderPanel: (p) =>
-      html`<bash-request-panel .permission=${p}></bash-request-panel>`,
   },
-  retry: {
+  {
+    kind: PERMISSION_KIND.RETRY,
+    tag: literal`retry-request-panel`,
     cssClass: 'retry-requests',
     icon: 'rotate-right',
     title: 'Retry request',
-    renderPanel: (p) =>
-      html`<retry-request-panel .permission=${p}></retry-request-panel>`,
   },
-  proposal: {
+  {
+    kind: PERMISSION_KIND.PROPOSAL,
+    tag: literal`proposal-request-panel`,
     cssClass: 'workflow-proposals',
     icon: 'rocket',
     title: 'Agent proposal',
-    renderPanel: (p) =>
-      html`<proposal-request-panel .permission=${p}></proposal-request-panel>`,
   },
-  planApproval: {
+  {
+    kind: PERMISSION_KIND.PLAN_APPROVAL,
+    tag: literal`plan-approval-request-panel`,
     cssClass: 'plan-approval-requests',
     icon: 'list-check',
     title: 'Plan approval',
-    renderPanel: (p) =>
-      html`<plan-approval-request-panel
-        .permission=${p}
-      ></plan-approval-request-panel>`,
   },
-  externalInquiry: {
+  {
+    kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
+    tag: literal`external-inquiry-panel`,
     cssClass: 'external-inquiry-requests',
     icon: 'globe',
     title: 'External inquiry',
-    renderPanel: (p) =>
-      html`<external-inquiry-panel .permission=${p}></external-inquiry-panel>`,
   },
-  userQuestion: {
+  {
+    kind: PERMISSION_KIND.USER_QUESTION,
+    tag: literal`user-question-panel`,
     cssClass: 'user-question-requests',
     icon: 'circle-question',
     title: 'Question',
-    renderPanel: (p) =>
-      html`<user-question-panel .permission=${p}></user-question-panel>`,
   },
-};
+];
+
+/**
+ * Marks every rendered panel so keyboard delegation can find them without a
+ * second list of element names to keep in sync with `SECTIONS`.
+ */
+const PANEL_MARKER_SELECTOR = '[data-request-panel]';
+
+function renderPanel(
+  section: SectionConfig,
+  permission: PermissionState,
+): TemplateResult {
+  return staticHtml`<${section.tag}
+    data-request-panel
+    .permission=${permission}
+  ></${section.tag}>`;
+}
+
+/**
+ * One pass over the queue. A kind with no section (malformed IPC data) lands
+ * in a bucket nothing renders, so it is dropped rather than throwing.
+ */
+function groupByKind(
+  permissions: readonly PermissionState[],
+): ReadonlyMap<PermissionState['kind'], PermissionState[]> {
+  const groups = new Map<PermissionState['kind'], PermissionState[]>();
+  for (const permission of permissions) {
+    const existing = groups.get(permission.kind);
+    if (existing) existing.push(permission);
+    else groups.set(permission.kind, [permission]);
+  }
+  return groups;
+}
+
+function externalInquiryKeys(
+  permissions: readonly PermissionState[],
+): string[] {
+  return permissions
+    .filter(
+      (permission) => permission.kind === PERMISSION_KIND.EXTERNAL_INQUIRY,
+    )
+    .map(getPermissionKey);
+}
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
@@ -137,22 +175,22 @@ export class RequestPanels extends LitElement {
   @state() private selectedExternalInquiryKey: string | null = null;
 
   /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
-  private permissionGroups: PermissionGroups = createEmptyPermissionGroups();
+  private permissionsByKind: ReadonlyMap<
+    PermissionState['kind'],
+    PermissionState[]
+  > = new Map();
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('permissions')) return;
 
-    const previousPermissions = changedProperties.get('permissions') ?? [];
-    const previousKeys =
-      groupPermissions(previousPermissions).externalInquiry.map(
-        getPermissionKey,
-      );
-    this.permissionGroups = groupPermissions(this.permissions);
-    const keys = this.permissionGroups.externalInquiry.map(getPermissionKey);
+    const previousKeys = externalInquiryKeys(
+      changedProperties.get('permissions') ?? [],
+    );
+    this.permissionsByKind = groupByKind(this.permissions);
     this.selectedExternalInquiryKey = selectExternalInquiryKey(
       this.selectedExternalInquiryKey,
       previousKeys,
-      keys,
+      externalInquiryKeys(this.permissions),
     );
   }
 
@@ -169,25 +207,18 @@ export class RequestPanels extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
 
-    const {
-      approval,
-      bash,
-      retry,
-      proposal,
-      planApproval,
-      externalInquiry,
-      userQuestion,
-    } = this.permissionGroups;
-
     return html`
-      ${this.renderSection(SECTION_CONFIGS.approval, approval)}
-      ${this.renderSection(SECTION_CONFIGS.bash, bash)}
-      ${this.renderSection(SECTION_CONFIGS.retry, retry)}
-      ${this.renderSection(SECTION_CONFIGS.proposal, proposal)}
-      ${this.renderSection(SECTION_CONFIGS.planApproval, planApproval)}
-      ${this.renderExternalInquirySection(externalInquiry)}
-      ${this.renderSection(SECTION_CONFIGS.userQuestion, userQuestion)}
+      ${SECTIONS.map((section) => {
+        const permissions = this.permissionsFor(section.kind);
+        return section.kind === PERMISSION_KIND.EXTERNAL_INQUIRY
+          ? this.renderExternalInquirySection(section, permissions)
+          : this.renderSection(section, permissions);
+      })}
     `;
+  }
+
+  private permissionsFor(kind: PermissionState['kind']): PermissionState[] {
+    return this.permissionsByKind.get(kind) ?? [];
   }
 
   // ===========================================================================
@@ -220,7 +251,7 @@ export class RequestPanels extends LitElement {
           ${repeat(
             permissions,
             (p) => getPermissionKey(p),
-            (p) => config.renderPanel(p),
+            (p) => renderPanel(config, p),
           )}
         </div>
       </section>
@@ -236,16 +267,16 @@ export class RequestPanels extends LitElement {
    * Shows one panel at a time with (1/N) counter and prev/next navigation.
    */
   private renderExternalInquirySection(
+    config: SectionConfig,
     perms: PermissionState[],
   ): TemplateResult | typeof nothing {
     if (perms.length === 0) return nothing;
 
     // Single inquiry — render normally, no carousel chrome
     if (perms.length === 1) {
-      return this.renderSection(SECTION_CONFIGS.externalInquiry, perms);
+      return this.renderSection(config, perms);
     }
 
-    const config = SECTION_CONFIGS.externalInquiry;
     const index = this.externalInquiryIndex;
     const current = perms[index];
     const nav = html`
@@ -280,24 +311,36 @@ export class RequestPanels extends LitElement {
       <section class=${config.cssClass}>
         ${this.renderSectionHeader(config, nav)}
         <div class="${config.cssClass}__list">
-          ${keyed(getPermissionKey(current), config.renderPanel(current))}
+          ${keyed(getPermissionKey(current), renderPanel(config, current))}
         </div>
       </section>
     `;
   }
 
+  private get externalInquiries(): PermissionState[] {
+    return this.permissionsFor(PERMISSION_KIND.EXTERNAL_INQUIRY);
+  }
+
   private get externalInquiryIndex(): number {
-    const index = this.permissionGroups.externalInquiry.findIndex(
+    const index = this.externalInquiries.findIndex(
       (permission) =>
         getPermissionKey(permission) === this.selectedExternalInquiryKey,
     );
     return Math.max(index, 0);
   }
 
+  /** True when the newest permission is one of several pending inquiries. */
+  private get externalInquiryCarouselActive(): boolean {
+    return (
+      this.permissions[0]?.kind === PERMISSION_KIND.EXTERNAL_INQUIRY &&
+      this.externalInquiries.length > 1
+    );
+  }
+
   /** Move the carousel selection by `delta`, clamped by the group bounds. */
   private stepExternalInquiry(delta: number): void {
     const permission =
-      this.permissionGroups.externalInquiry[this.externalInquiryIndex + delta];
+      this.externalInquiries[this.externalInquiryIndex + delta];
     if (permission) {
       this.selectedExternalInquiryKey = getPermissionKey(permission);
     }
@@ -331,12 +374,7 @@ export class RequestPanels extends LitElement {
     const key = event.key.toLowerCase();
 
     // Arrow keys navigate the external inquiry carousel
-    if (
-      isActiveExternalInquiryCarousel({
-        permissions: this.permissions,
-        externalInquiryPermissions: this.permissionGroups.externalInquiry,
-      })
-    ) {
+    if (this.externalInquiryCarouselActive) {
       if (key === 'arrowleft') {
         this.showPreviousInquiry();
         event.preventDefault();
@@ -368,12 +406,21 @@ export class RequestPanels extends LitElement {
    * would target the wrong panel when mixed kinds are pending.
    */
   private getActivePanel(): BaseRequestPanel | null {
-    const target = getActivePermission({
-      permissions: this.permissions,
-      externalInquiryPermissions: this.permissionGroups.externalInquiry,
-      externalInquiryIndex: this.externalInquiryIndex,
-    });
-    return findPanelForPermission(this.renderRoot, target);
+    const newest = this.permissions[0];
+    if (!newest) return null;
+
+    const target = this.externalInquiryCarouselActive
+      ? this.externalInquiries[this.externalInquiryIndex]
+      : newest;
+    if (!target) return null;
+
+    const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(
+      PANEL_MARKER_SELECTOR,
+    );
+    for (const panel of panels) {
+      if (panel.permission === target) return panel;
+    }
+    return null;
   }
 }
 

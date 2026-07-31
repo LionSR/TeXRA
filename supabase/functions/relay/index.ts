@@ -69,7 +69,12 @@
 
 import { Hono } from '@hono/hono';
 import { cors } from '@hono/hono/cors';
-import { createClient } from '@supabase/supabase-js';
+import { bearerToken } from '../_shared/auth.ts';
+import {
+  adminClient,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from '../_shared/edgeClients.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
 import {
   PROVIDER_CONFIGS,
@@ -129,17 +134,6 @@ const RELAY_VERSION = '1.10.0';
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
 
-// Env and the service-role client are fixed at cold start; no per-request state.
-// Public metadata remains available without the service role, but proxy routes
-// require this client before any server-side key can be used.
-const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const adminClient =
-  supabaseUrl && serviceRoleKey
-    ? createClient(supabaseUrl, serviceRoleKey)
-    : null;
-
 const OPENAI_GPT5_REASONING_EFFORT_CAPS: Record<string, ReasoningEffortCap> = {
   [FREE_TIER]: 'medium',
   [MAX_TIER]: 'high',
@@ -193,29 +187,17 @@ function getEnabledProviders(): string[] {
 }
 
 /**
- * Extract JWT token from request headers.
- * SDKs use provider-specific headers, not standard Authorization.
+ * Extract JWT token from request headers. SDKs use provider-specific headers
+ * (OpenAI: Authorization: Bearer, Anthropic: x-api-key, Google:
+ * x-goog-api-key), not just standard Authorization.
  */
 function extractJwtFromRequest(req: Request): string | null {
-  // OpenAI SDK: Authorization: Bearer {jwt}
-  const authHeader = req.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.slice(7);
-  }
-
-  // Anthropic SDK: x-api-key: {jwt}
-  const anthropicKey = req.headers.get('x-api-key');
-  if (anthropicKey) {
-    return anthropicKey;
-  }
-
-  // Google SDK: x-goog-api-key: {jwt}
-  const googleKey = req.headers.get('x-goog-api-key');
-  if (googleKey) {
-    return googleKey;
-  }
-
-  return null;
+  return (
+    bearerToken(req) ||
+    req.headers.get('x-api-key') ||
+    req.headers.get('x-goog-api-key') ||
+    null
+  );
 }
 
 /**
@@ -340,7 +322,7 @@ app.get('/tier-config', async (c) => {
   };
 
   // Try to include user status if authenticated (user JWT or CI relay token)
-  if (jwtToken && supabaseUrl) {
+  if (jwtToken && SUPABASE_URL) {
     try {
       const credential = await resolveRelayCredential(jwtToken, adminClient);
 
@@ -440,8 +422,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Missing authorization token', 401);
   }
 
-  // 3. Check Supabase config (authenticateJwt reads its own env internally)
-  if (!supabaseUrl || !supabaseAnonKey) {
+  // 3. Check Supabase config (authenticateJwt builds its own user-scoped client)
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error('Missing required Supabase environment variables');
     return jsonError('Server configuration error', 500);
   }

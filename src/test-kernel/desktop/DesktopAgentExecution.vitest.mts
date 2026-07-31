@@ -49,6 +49,7 @@ import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progres
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import {
@@ -786,25 +787,19 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('reports a completed root result while canonical initialization is gated exactly once', async () => {
-    let releaseInitialization!: () => void;
-    let markInitializationStarted!: () => void;
-    const initializationStarted = new Promise<void>((resolve) => {
-      markInitializationStarted = resolve;
-    });
-    const initializationGate = new Promise<void>((resolve) => {
-      releaseInitialization = resolve;
-    });
+    const initializationStarted = createDeferred();
+    const initializationGate = createDeferred();
     const onRunCompleted = vi.fn();
     const bridge = await createBridge([], {
       deferReady: true,
       detectWaitingStreams: vi.fn(async () => {
-        markInitializationStarted();
-        await initializationGate;
+        initializationStarted.resolve();
+        await initializationGate.promise;
         return new Set();
       }),
       onRunCompleted,
     });
-    await initializationStarted;
+    await initializationStarted.promise;
 
     const session = bridgeSession(bridge);
     session.publishRunEvent(
@@ -813,31 +808,25 @@ describe('DesktopProgressBridge', () => {
     );
     expect(onRunCompleted).toHaveBeenCalledOnce();
 
-    releaseInitialization();
+    initializationGate.resolve();
     await bridge.waitUntilReady();
     expect(onRunCompleted).toHaveBeenCalledOnce();
   });
 
   it('detaches the completed-result listener when disposed during initialization', async () => {
-    let releaseInitialization!: () => void;
-    let markInitializationStarted!: () => void;
-    const initializationStarted = new Promise<void>((resolve) => {
-      markInitializationStarted = resolve;
-    });
-    const initializationGate = new Promise<void>((resolve) => {
-      releaseInitialization = resolve;
-    });
+    const initializationStarted = createDeferred();
+    const initializationGate = createDeferred();
     const onRunCompleted = vi.fn();
     const bridge = await createBridge([], {
       deferReady: true,
       detectWaitingStreams: vi.fn(async () => {
-        markInitializationStarted();
-        await initializationGate;
+        initializationStarted.resolve();
+        await initializationGate.promise;
         return new Set();
       }),
       onRunCompleted,
     });
-    await initializationStarted;
+    await initializationStarted.promise;
 
     bridge.dispose();
     const session = bridgeSession(bridge);
@@ -847,7 +836,7 @@ describe('DesktopProgressBridge', () => {
     );
     expect(onRunCompleted).not.toHaveBeenCalled();
 
-    releaseInitialization();
+    initializationGate.resolve();
     await bridge.waitUntilReady();
     expect(onRunCompleted).not.toHaveBeenCalled();
   });
@@ -1447,12 +1436,11 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('does not expose the desktop bridge before transcript opening settles', async () => {
-    let finishTranscriptOpen!: () => void;
-    const transcriptOpenGate = new Promise<void>((resolve) => {
-      finishTranscriptOpen = resolve;
-    });
+    const transcriptOpen = createDeferred();
     const messages: unknown[] = [];
-    const opening = createBridge(messages, { transcriptOpenGate });
+    const opening = createBridge(messages, {
+      transcriptOpenGate: transcriptOpen.promise,
+    });
     const opened = vi.fn();
     void opening.then(opened);
     let bridge: TestableBridge | undefined;
@@ -1462,7 +1450,7 @@ describe('DesktopProgressBridge', () => {
       expect(opened).not.toHaveBeenCalled();
       expect(messages).toEqual([]);
 
-      finishTranscriptOpen();
+      transcriptOpen.resolve();
       bridge = await opening;
       await bridge.completeWebviewReady();
 
@@ -1471,7 +1459,7 @@ describe('DesktopProgressBridge', () => {
           .length,
       ).toBeGreaterThan(0);
     } finally {
-      finishTranscriptOpen();
+      transcriptOpen.resolve();
       bridge?.dispose();
     }
   });
@@ -1734,13 +1722,10 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('reveals a goal-owned stream after persistent opening completes', async () => {
-    let finishTranscriptOpen!: () => void;
-    const transcriptOpenGate = new Promise<void>((resolve) => {
-      finishTranscriptOpen = resolve;
-    });
+    const transcriptOpen = createDeferred();
     const messages: unknown[] = [];
     const opening = createBridge(messages, {
-      transcriptOpenGate,
+      transcriptOpenGate: transcriptOpen.promise,
       kvStoreBacking: new Map<string, unknown>([
         [
           `${STREAM_LOGS_DIR}/goal-owning-stream`,
@@ -1764,7 +1749,7 @@ describe('DesktopProgressBridge', () => {
       expect(opened).not.toHaveBeenCalled();
       expect(messages).toEqual([]);
 
-      finishTranscriptOpen();
+      transcriptOpen.resolve();
       bridge = await opening;
       await bridge.revealStream('goal-owning-stream');
 
@@ -1779,7 +1764,7 @@ describe('DesktopProgressBridge', () => {
         command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       });
     } finally {
-      finishTranscriptOpen();
+      transcriptOpen.resolve();
       bridge?.dispose();
     }
   });
@@ -2418,17 +2403,11 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('does not launch duplicate concurrent resume attempts', async () => {
-    let allowRetrieve: () => void = () => undefined;
-    const retrieveGate = new Promise<void>((resolve) => {
-      allowRetrieve = resolve;
-    });
-    let retrieveStarted: () => void = () => undefined;
-    const retrieveStartedPromise = new Promise<void>((resolve) => {
-      retrieveStarted = resolve;
-    });
+    const retrieveGate = createDeferred();
+    const retrieveStarted = createDeferred();
     const retrieveSessionResumeData = vi.fn(async () => {
-      retrieveStarted();
-      await retrieveGate;
+      retrieveStarted.resolve();
+      await retrieveGate.promise;
       return createToolUseResumeData({
         executionId: 'ec1001' as ExecutionId,
         streamId: 'stream-1' as StreamTabId,
@@ -2448,9 +2427,9 @@ describe('DesktopProgressBridge', () => {
       });
 
       const firstResume = bridge.tryResumeStream('stream-1');
-      await retrieveStartedPromise;
+      await retrieveStarted.promise;
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
-      allowRetrieve();
+      retrieveGate.resolve();
       await expect(firstResume).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledTimes(1);
     } finally {
@@ -3569,13 +3548,10 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.transcripts.ensureStream(childStreamId);
       owner.close();
 
-      let releaseLease!: () => void;
-      const leaseReleased = new Promise<void>((resolve) => {
-        releaseLease = resolve;
-      });
+      const leaseReleased = createDeferred();
       const waitForRelease = vi
         .spyOn(owner.sessionStores, 'waitForOwnedExecutionRelease')
-        .mockReturnValue(leaseReleased);
+        .mockReturnValue(leaseReleased.promise);
 
       try {
         owner.processSession.events.emit({
@@ -3601,7 +3577,7 @@ describe('DesktopProgressBridge', () => {
         await vi.waitFor(() => expect(pendingDrain).toHaveBeenCalled());
         expect(reopened).toBe(false);
 
-        releaseLease();
+        leaseReleased.resolve();
         const { bridgeB } = await reopening;
         try {
           bridgeB.syncFullView();
@@ -3612,7 +3588,7 @@ describe('DesktopProgressBridge', () => {
           bridgeB.dispose();
         }
       } finally {
-        releaseLease();
+        leaseReleased.resolve();
       }
     });
 
@@ -3625,20 +3601,14 @@ describe('DesktopProgressBridge', () => {
       });
       owner.processSession.transcripts.ensureStream(failedStreamId);
       const failure = new Error('execution metadata unavailable');
-      let markDeletionStarted!: () => void;
-      const deletionStarted = new Promise<void>((resolve) => {
-        markDeletionStarted = resolve;
-      });
-      let releaseDeletion!: () => void;
-      const deletionGate = new Promise<void>((resolve) => {
-        releaseDeletion = resolve;
-      });
+      const deletionStarted = createDeferred();
+      const deletionGate = createDeferred();
       vi.spyOn(
         owner.progressSnapshotStore,
         'readPersistedExecutionId',
       ).mockImplementationOnce(async () => {
-        markDeletionStarted();
-        await deletionGate;
+        deletionStarted.resolve();
+        await deletionGate.promise;
         throw failure;
       });
       const unhandled = vi.fn();
@@ -3653,14 +3623,14 @@ describe('DesktopProgressBridge', () => {
             payload: { streamId: failedStreamId },
           },
         });
-        await deletionStarted;
+        await deletionStarted.promise;
         const pendingDrain = vi.spyOn(
           owner.sessionStores,
           'waitForPendingStreamDeletions',
         );
         const reopening = owner.reopen();
         await vi.waitFor(() => expect(pendingDrain).toHaveBeenCalled());
-        releaseDeletion();
+        deletionGate.resolve();
 
         const { bridgeB } = await reopening;
         bridgeB.syncFullView();

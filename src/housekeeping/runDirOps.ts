@@ -12,10 +12,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { findRunDir } from '@utils/files/taskRunStorage';
 
 // Local file imports
-import { HISTORY_DIR } from './constants';
+import { CHANNEL, HISTORY_DIR } from './constants';
 import { generateTimestamp } from './utils';
-
-const CHANNEL = 'Housekeeping';
 
 /**
  * Snapshot a completed run's runDir into `workspace/History/`. Symlinks
