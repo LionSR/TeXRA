@@ -16,6 +16,9 @@ import type {
 } from '@platform/interfaces';
 import { installPlatform } from '@test/support/setupPlatform';
 
+// The shared `FakeConfigProvider` records one target per key, so it cannot hold
+// a folder override and a global value for the same key at once — the exact
+// state this suite needs.
 class FolderOverrideConfigProvider implements ConfigProvider {
   private readonly globalValues = new Map<string, unknown>();
   private readonly workspaceValues = new Map<string, unknown>();

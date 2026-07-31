@@ -6,8 +6,8 @@ import path from 'node:path';
 // Third-party imports
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+// Local imports - test support
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
 type DiffHostOptions = Parameters<
@@ -53,9 +53,9 @@ async function writeDiffPair(
 
 describe('createDesktopDiffHost', () => {
   beforeAll(async () => {
-    ({ createDesktopDiffHost } = (await import(
-      moduleFileUrl(desktopSourcePath('main', 'desktopDiffHost.ts'))
-    )) as DesktopDiffHostModule);
+    ({ createDesktopDiffHost } = await loadSourceModule(
+      '@desktop/main/desktopDiffHost',
+    ));
   });
 
   it('falls back to a generated patch file when no renderer is wired', async () => {

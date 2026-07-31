@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
 import { generateShortId } from '@utils/core';
 import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
-import { checkMultipleToolsInstalled } from '@utils/system/toolUtils';
+import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -78,20 +78,6 @@ async function cleanupTempFiles(
   }
 }
 
-/**
- * Select the appropriate image processing tool
- * @returns Tool name ('magick' or 'gm')
- */
-async function selectImageTool(): Promise<'magick' | 'gm'> {
-  const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
-    ['magick', 'gm'],
-    false,
-  );
-  if (hasMagick) return 'magick';
-  if (hasGm) return 'gm';
-  throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
-}
-
 /** Get the dimensions of an image file using ImageMagick or GraphicsMagick. */
 async function getImageDimensions(
   imagePath: string,
@@ -119,7 +105,10 @@ const API_MAX_IMAGE_DIMENSION = 8000;
 
 /** Resize an image if it exceeds the maximum dimensions. Returns the original path if no resize needed. */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
-  const tool = await selectImageTool();
+  const tool = await detectImageTool();
+  if (!tool) {
+    throw new Error('Neither ImageMagick nor GraphicsMagick is installed');
+  }
   const maxDimension = Math.min(
     getConfig<number>('texra.maxImageDimension', 2000),
     API_MAX_IMAGE_DIMENSION,
@@ -225,11 +214,7 @@ async function singlePagePdf2Png(
 ): Promise<string> {
   try {
     // Check for GraphicsMagick/ImageMagick installation
-    const toolsInstalled = await checkMultipleToolsInstalled(
-      ['magick', 'gm'],
-      false,
-    );
-    if (!toolsInstalled.some(Boolean)) {
+    if (!(await detectImageTool())) {
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 

@@ -12,6 +12,9 @@
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
+// Side-effect import to register the <user-message> custom element
+import '@progressView/frontend/components/UserMessage';
+
 // Third-party imports - Lit template utilities
 import { html } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';

@@ -25,7 +25,11 @@ import {
 } from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../config';
+import {
+  relayTierConfigUrl,
+  SERVER_SIDE_CACHE_TTL_MS,
+  type UserTier,
+} from '../config';
 import {
   TierModelConfigSchema,
   UserAccessStatusSchema,
@@ -188,7 +192,7 @@ export class TierService {
     authToken: string | undefined,
     signal: AbortSignal,
   ): Promise<TierFetchResult> {
-    const url = `${this.baseUrl}/functions/v1/relay/tier-config`;
+    const url = relayTierConfigUrl(this.baseUrl);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

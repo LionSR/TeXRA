@@ -6,7 +6,10 @@ import type { ToolEditRequestPanel } from '@progressView/frontend/components/Too
 import type { ToolEditPermission } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 function createPermission(
   data: Partial<ToolEditPermission>,
@@ -28,16 +31,12 @@ function createPermission(
   };
 }
 
-async function mountPanel(
+function mountPanel(
   permission: ToolEditRequestPanel['permission'],
 ): Promise<ToolEditRequestPanel> {
-  const element = document.createElement(
-    'tool-edit-request-panel',
-  ) as ToolEditRequestPanel;
-  element.permission = permission;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<ToolEditRequestPanel>('tool-edit-request-panel', {
+    permission,
+  });
 }
 
 type DiffView = HTMLElement & { originalText?: string; proposedText?: string };

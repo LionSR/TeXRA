@@ -74,7 +74,6 @@ export async function extractFilesFromXml(
       const processingContext: ProcessingContext = {
         baseFiles: deps.baseFiles,
         streamId: deps.streamId,
-        interactions: deps.interactions,
         logger: deps.logger,
         xmlManager,
         setRoundOutputs: (round: number, outputs) => {

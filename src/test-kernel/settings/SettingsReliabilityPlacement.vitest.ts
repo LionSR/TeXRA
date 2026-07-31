@@ -13,7 +13,10 @@ vi.mock('@shared/hostBridge', () => ({
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 const reliabilitySettings = [
   {
@@ -42,12 +45,10 @@ type ModelsTabElement = LitTestElement & {
   reliabilitySettings: typeof reliabilitySettings;
 };
 
-async function mountModelsTab(): Promise<ModelsTabElement> {
-  const tab = document.createElement('models-tab') as ModelsTabElement;
-  tab.reliabilitySettings = reliabilitySettings;
-  document.body.append(tab);
-  await tab.updateComplete;
-  return tab;
+function mountModelsTab(): Promise<ModelsTabElement> {
+  return mountComponent<ModelsTabElement>('models-tab', {
+    reliabilitySettings,
+  });
 }
 
 async function getReliabilitySection(
@@ -80,10 +81,7 @@ describe('settings reliability placement', () => {
   });
 
   it('does not render model reliability controls in Multi-Agent', async () => {
-    const tab = document.createElement('multi-agent-tab') as LitTestElement;
-    document.body.append(tab);
-
-    await tab.updateComplete;
+    const tab = await mountComponent<LitTestElement>('multi-agent-tab');
 
     expect(tab.shadowRoot?.textContent).not.toContain('Compaction threshold');
     expect(tab.shadowRoot?.textContent).not.toContain('Retry attempts');

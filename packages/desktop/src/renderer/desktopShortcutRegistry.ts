@@ -21,6 +21,23 @@ import { getRendererPlatform } from './rendererPlatform';
 
 export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
 
+/**
+ * The command palette has no menu entry, so its shortcut is declared here
+ * rather than coming from `getDesktopCommandMenuEntries`. Sole owner of that
+ * declaration: the shell's accelerator hints read it too, before this registry
+ * exists (a bootstrap failure leaves no registry at all).
+ */
+export function desktopCommandPaletteShortcut(
+  platform: NodeJS.Platform,
+): DesktopShortcutEntry {
+  return {
+    id: DESKTOP_COMMAND_PALETTE_ID,
+    label: 'Show Commands',
+    category: 'TeXRA',
+    accelerator: platform === 'darwin' ? 'Command+K' : 'Control+K',
+  };
+}
+
 interface DesktopShortcutRegistryOptions {
   readonly document: Document;
   readonly actions: DesktopCommandActions;
@@ -55,26 +72,22 @@ export function createDesktopShortcutRegistry(
   ).filter((entry) => entry.enabled);
 
   function entries(): DesktopShortcutEntry[] {
-    return [
-      {
-        id: DESKTOP_COMMAND_PALETTE_ID,
-        label: 'Show Commands',
-        category: 'TeXRA',
-        accelerator: platform === 'darwin' ? 'Command+K' : 'Control+K',
+    return [desktopCommandPaletteShortcut(platform), ...availableEntries].map(
+      (entry) => {
+        const override = overrides[entry.id];
+        const accelerator =
+          override === undefined ? entry.accelerator : (override ?? undefined);
+        return {
+          id: entry.id,
+          label: entry.label,
+          category: entry.category,
+          ...(entry.accelerator
+            ? { defaultAccelerator: entry.accelerator }
+            : {}),
+          ...(accelerator ? { accelerator } : {}),
+        };
       },
-      ...availableEntries,
-    ].map((entry) => {
-      const override = overrides[entry.id];
-      const accelerator =
-        override === undefined ? entry.accelerator : (override ?? undefined);
-      return {
-        id: entry.id,
-        label: entry.label,
-        category: entry.category,
-        ...(entry.accelerator ? { defaultAccelerator: entry.accelerator } : {}),
-        ...(accelerator ? { accelerator } : {}),
-      };
-    });
+    );
   }
 
   function notify(): void {

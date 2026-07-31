@@ -19,10 +19,10 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
-import * as logger from '@logger/logUtils';
 import { agentKey } from '@shared/schemas/agent';
-import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 import { AbsoluteFS } from '@utils/files';
+
+import { resolveAgentSettingTools } from './agentSettingTools';
 
 const CHANNEL = 'agentLoad';
 
@@ -63,7 +63,7 @@ export function validateAgentYamlContent(
   }
 
   if (!data.inherits) {
-    AgentSettingSchema.parse(resolveAgentSettingTools(data.settings));
+    AgentSettingSchema.parse(resolveAgentSettingTools(data.settings, CHANNEL));
     AgentPromptSchema.parse(data.prompts);
   }
 
@@ -100,21 +100,6 @@ function ensureAgentCategoryForSource<
   return settings;
 }
 
-function resolveAgentSettingTools(settings: AgentSettingInput): object {
-  if (!Array.isArray(settings.tools)) return settings;
-  return {
-    ...settings,
-    tools: resolveToolDefinitions(
-      settings.tools as RawToolConfig[],
-      (name, reason) =>
-        logger.warn(
-          CHANNEL,
-          `Tool "${name}" ${reason ?? 'not found in registry'}`,
-        ),
-    ),
-  };
-}
-
 export async function loadAgentSettingAndPrompts(
   resolution: ResolvedAgent,
   seen: ReadonlySet<string> = new Set(),
@@ -140,7 +125,7 @@ export async function loadAgentSettingAndPrompts(
             agentCategory: AgentCategory.Workflow,
           };
     return [
-      AgentSettingSchema.parse(resolveAgentSettingTools(settings)),
+      AgentSettingSchema.parse(resolveAgentSettingTools(settings, CHANNEL)),
       AgentPromptSchema.parse(definition.prompts),
     ];
   }
@@ -202,7 +187,7 @@ export async function loadAgentSettingAndPrompts(
 
   settings = ensureAgentCategoryForSource(settings, entry.source);
 
-  const resolvedSettings = resolveAgentSettingTools(settings);
+  const resolvedSettings = resolveAgentSettingTools(settings, CHANNEL);
 
   // Apply defaults and validate the final settings and prompts
   return [

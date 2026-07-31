@@ -18,7 +18,7 @@ import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
 
@@ -156,10 +156,7 @@ type ExecResult = {
 } | null;
 
 describe('ToolUseDispatchNode parallel dispatch', () => {
-  beforeAll(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
-  });
+  beforeAll(() => installPlatform({ workspacePath: '/workspace' }));
 
   it('preserves the unwrapped root instruction across nested delegation', async () => {
     let observedInstruction: string | undefined;

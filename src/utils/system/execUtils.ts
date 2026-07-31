@@ -191,7 +191,6 @@ export function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
 export async function executeCommand(
   command: string | string[],
   options: {
-    outputFile?: string;
     encoding?: ExecEncoding;
     channel?: string;
     truncate?: boolean;

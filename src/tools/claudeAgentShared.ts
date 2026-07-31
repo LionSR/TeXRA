@@ -1,22 +1,22 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
-import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
-import {
-  ClaudeAgentEffortSchema,
-  ClaudeAgentPermissionModeSchema,
-} from '@shared/schemas/agentCliSettings';
+import type {
+  ClaudeAgentEffort,
+  TokenUsageStats,
+  ToolUseLog,
+} from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 
-// Re-export native SDK types where our values match exactly.
-export type ClaudeAgentEffort = EffortLevel;
-
 /**
- * Compile-time guard: the effort-level schema and the SDK's `EffortLevel`
- * union must stay synchronized in both directions. If the SDK adds or removes
- * an effort level, this line produces a type error so `ClaudeAgentEffortSchema`
- * (the source of truth) and the SDK type are reviewed together.
+ * Compile-time guard: `ClaudeAgentEffort` in `@shared` (the single source of
+ * truth for the settings UI, the IPC schema, and the tool runtime) and the
+ * SDK's `EffortLevel` union must stay synchronized in both directions. If the
+ * SDK adds or removes an effort level, this line produces a type error so
+ * `ClaudeAgentEffortSchema` and the SDK type are reviewed together. Effort
+ * levels mirror the SDK's `EffortLevel` (low → max): Claude decides adaptively
+ * how much thinking to do, scaled by this hint.
  */
 type _AssertExact<T extends true> = T;
 type _IsExact<A, B> = [A] extends [B]
@@ -26,27 +26,11 @@ type _IsExact<A, B> = [A] extends [B]
   : false;
 
 type _EffortLevelsAligned = _AssertExact<
-  _IsExact<ClaudeAgentEffort, (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number]>
+  _IsExact<EffortLevel, ClaudeAgentEffort>
 >;
 
 export const CLAUDE_AGENT_NAME = 'claude_code';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
-
-/**
- * Permission modes exposed in the settings UI.
- * Subset of the SDK's PermissionMode — 'dontAsk' and 'auto' are internal only.
- * Derived from `ClaudeAgentPermissionModeSchema` (the single source of truth in
- * `@shared`) so the runtime list and the IPC schema can't drift.
- */
-export const CLAUDE_AGENT_PERMISSION_MODES =
-  ClaudeAgentPermissionModeSchema.options;
-export type ClaudeAgentPermissionMode =
-  (typeof CLAUDE_AGENT_PERMISSION_MODES)[number];
-
-/** Effort levels mirror the SDK's `EffortLevel` (low → max). Claude decides
- * adaptively how much thinking to do, scaled by this hint. Derived from
- * `ClaudeAgentEffortSchema` (the single source of truth in `@shared`). */
-export const CLAUDE_AGENT_EFFORT_LEVELS = ClaudeAgentEffortSchema.options;
 
 /**
  * Adaptive thinking is only supported on Fable 5, Opus 4.6+, and Sonnet 4.6+

@@ -1,7 +1,6 @@
-import { render, useApp, useWindowSize } from 'ink';
+import { useApp, useWindowSize } from 'ink';
 
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
-import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
+import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { CliConfigForm } from '../chat/tui/forms/CliConfigForm';
 
 export function ConfigApp(props: {
@@ -22,14 +21,9 @@ export async function runConfigTui(options: {
   readonly colorEnabled?: boolean;
   readonly onError?: (error: unknown) => void;
 }): Promise<void> {
-  const instance = render(<ConfigApp onError={options.onError} />, {
-    stdout: tuiOutputStreamForColor(
-      process.stdout,
-      options.colorEnabled ?? true,
-    ),
+  await renderCliPrompt(() => <ConfigApp onError={options.onError} />, {
+    stdout: process.stdout,
     stderr: process.stderr,
-    stdin: process.stdin,
+    colorEnabled: options.colorEnabled,
   });
-  await instance.waitUntilExit();
-  clearTerminalVisibleScreen();
 }

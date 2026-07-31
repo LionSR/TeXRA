@@ -1,12 +1,13 @@
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-
-import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
-import type { Thread } from '@openai/codex-sdk';
 import type {
   ClaudeAgentEffort,
   ClaudeAgentPermissionMode,
-} from './claudeAgentShared';
+  ExecutionId,
+  StreamTabId,
+} from '@shared/schemas';
+
+import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import type { Thread } from '@openai/codex-sdk';
 
 export interface ActiveCodexThread {
   thread: Thread;

@@ -21,8 +21,9 @@ import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal/promptLoader';
 import { PathAgentDirectoryBundleSource } from '@agent/index/AgentDirectorySync';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
-import type { SkillSourceOptions } from '@skills/index';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { defaultSkillSources } from '@skills/skillSources';
+import type { SkillSourceOptions } from '@skills/skillSources';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 // Local file imports

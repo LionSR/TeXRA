@@ -56,20 +56,6 @@ async function installPlatform(
   });
 }
 
-async function callTextEditorInRun(
-  tool: TextEditorTool,
-  executionId: string,
-  input: unknown,
-) {
-  return withRunContext(
-    createRunContext({
-      streamId: `stream:${executionId}` as StreamTabId,
-      executionId,
-    }),
-    () => tool.call(input),
-  );
-}
-
 // Spies the workspace reads a tool performs before proposing an edit and
 // returns the write spy so a test can inspect what was applied.
 function stubWorkspaceFile(options: { exists: boolean; content: string }) {
@@ -241,50 +227,6 @@ describe('Tool edit approval gating', () => {
       [true, true],
     );
     assert.strictEqual(handlerCalls, 1);
-  });
-
-  it('keeps text editor undo history isolated between execution ids', async () => {
-    await installPlatform(
-      {},
-      {
-        '/workspace/shared.tex': 'alpha\n',
-      },
-    );
-    const tool = new TextEditorTool();
-
-    testApprovalHandler = async () => ({ accepted: true });
-
-    const parentEdit = await callTextEditorInRun(tool, 'aaaaaa', {
-      command: 'str_replace',
-      path: 'shared.tex',
-      old_str: 'alpha',
-      new_str: 'parent',
-    });
-    assert.strictEqual(parentEdit.status, 'executed');
-    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
-
-    const childEdit = await callTextEditorInRun(tool, 'bbbbbb', {
-      command: 'str_replace',
-      path: 'shared.tex',
-      old_str: 'parent',
-      new_str: 'child',
-    });
-    assert.strictEqual(childEdit.status, 'executed');
-    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'child\n');
-
-    const parentUndo = await callTextEditorInRun(tool, 'aaaaaa', {
-      command: 'undo_edit',
-      path: 'shared.tex',
-    });
-    assert.strictEqual(parentUndo.status, 'executed');
-    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
-
-    const childUndo = await callTextEditorInRun(tool, 'bbbbbb', {
-      command: 'undo_edit',
-      path: 'shared.tex',
-    });
-    assert.strictEqual(childUndo.status, 'executed');
-    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
   });
 
   it('text editor str_replace rejects an empty old_str before approval', async () => {

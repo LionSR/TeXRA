@@ -1,6 +1,5 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -9,6 +8,12 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
+
+// Local file imports
+import {
+  GOOGLE_INTERACTIONS_TEST_CONFIG,
+  userStep,
+} from './googleInteractionsTestUtils';
 
 // Third-party imports
 import type { Interactions } from '@google/genai';
@@ -111,13 +116,7 @@ function createHandler(
   category: AgentCategory = AgentCategory.Workflow,
 ): ModelHandlerGoogleInteractions {
   const handler = new ModelHandlerGoogleInteractions(
-    buildTestModelConfig({
-      name: 'test-google-interactions',
-      label: 'Test Google Interactions',
-      fullName: 'gemini-3-pro-test',
-      shortName: 'gemini-3-pro-test',
-      provider: ModelProvider.GOOGLE,
-      contextWindow: 4096,
+    buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG, {
       capabilities: {
         supportsReasoning: true,
         supportsTokenCounting: false,
@@ -127,10 +126,6 @@ function createHandler(
   handler.setLogger({ ...noopTrace });
   handler.setAgentCategory(category);
   return handler;
-}
-
-function userStep(text: string): Step {
-  return { type: 'user_input', content: [{ type: 'text', text }] };
 }
 
 function modelOutput(text: string): Step {

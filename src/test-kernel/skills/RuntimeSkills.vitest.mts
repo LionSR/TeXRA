@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import {
@@ -10,45 +10,21 @@ import {
   loadRuntimeSkillCatalog,
   setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { writeSkill } from '@test/support/skillFixtures';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempRoots: string[] = [];
 
 async function createTempRoot(): Promise<string> {
-  const root = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'texra-runtime-skills-'),
-  );
-  tempRoots.push(root);
-  return root;
+  return makeTempDir('texra-runtime-skills-', tempRoots);
 }
 
-async function writeSkill(
-  root: string,
-  name: string,
-  description: string,
-): Promise<string> {
-  const skillDir = path.join(root, name);
-  await fs.mkdir(skillDir, { recursive: true });
-  const skillPath = path.join(skillDir, 'SKILL.md');
-  await fs.writeFile(
-    skillPath,
-    `---\nname: ${name}\ndescription: ${description}\n---\n\nUse ${name} when it applies.\n`,
-  );
-  return skillPath;
-}
-
-beforeEach(async () => {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform({ workspacePath: '/workspace' }));
-});
+setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
   setRuntimeSkillSources([]);
-  await Promise.all(
-    tempRoots.splice(0).map((root) => {
-      return fs.rm(root, { recursive: true, force: true });
-    }),
-  );
+  await cleanupTempDirs(tempRoots);
 });
 
 describe('runtime skills', () => {
@@ -84,7 +60,11 @@ describe('runtime skills', () => {
     const skillPath = await writeSkill(
       root,
       'manuscript-review',
-      'Review mathematical manuscripts.',
+      {
+        name: 'manuscript-review',
+        description: 'Review mathematical manuscripts.',
+      },
+      'Use manuscript-review when it applies.',
     );
     setRuntimeSkillSources([
       { scope: 'project', path: root, label: 'project' },

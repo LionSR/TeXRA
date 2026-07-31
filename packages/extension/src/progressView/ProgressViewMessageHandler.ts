@@ -363,8 +363,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           getExecutionId: this.getExecutionId,
           getOutputFiles: this.getOutputFiles,
           getAgentModel: (stream) => {
-            const taskState =
-              this.provider.state.snapshots.getTaskState(stream);
+            const taskState = this.getTaskState(stream);
             return taskState
               ? {
                   agent: taskState.agentConfig.agent,

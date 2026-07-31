@@ -29,17 +29,15 @@
  */
 
 import { type Context as HonoContext, Hono } from '@hono/hono';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseApprovalDecision } from './approvalRequest.ts';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 import { randomBase64Url, sha256Hex } from '../_shared/crypto.ts';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../_shared/edgeClients.ts';
 import {
-  adminClient,
-  anonClient,
-  SUPABASE_ANON_KEY,
-  SUPABASE_URL,
-} from '../_shared/edgeClients.ts';
+  requireSupabaseClients,
+  type SupabaseClientVariables,
+} from '../_shared/edgeMiddleware.ts';
 import {
   mintGoTrueSession,
   sessionResponseBody,
@@ -76,14 +74,11 @@ const USER_CODE_INSERT_ATTEMPTS = 4;
 // Hono App
 // =============================================================================
 
-type Variables = {
-  supabase: SupabaseClient<any>;
-  authClient: SupabaseClient<any>;
-};
-
 // The edge runtime hands over paths including the function slug
 // (/auth-device/code), same as the auth-github function.
-const app = new Hono<{ Variables: Variables }>().basePath('/auth-device');
+const app = new Hono<{ Variables: SupabaseClientVariables }>().basePath(
+  '/auth-device',
+);
 
 // CORS middleware. The verification page is served from this same origin, so
 // same-origin browser fetches (which may carry a *.supabase.co Origin not in
@@ -99,20 +94,13 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-app.use('*', async (c, next) => {
-  if (!adminClient || !anonClient) {
-    return errorResponse(c.req.raw, 'Server configuration error', 500);
-  }
-  c.set('supabase', adminClient);
-  c.set('authClient', anonClient);
-  await next();
-});
+app.use('*', requireSupabaseClients);
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
-type Context = HonoContext<{ Variables: Variables }>;
+type Context = HonoContext<{ Variables: SupabaseClientVariables }>;
 
 function randomUserCode(): string {
   const bytes = new Uint8Array(USER_CODE_LENGTH * 2);

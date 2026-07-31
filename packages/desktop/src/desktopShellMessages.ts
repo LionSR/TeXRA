@@ -14,6 +14,16 @@ export const DesktopSetRouteMessageSchema = z.object({
   route: DesktopRouteSchema,
 });
 
+export type DesktopSetRouteMessage = z.infer<
+  typeof DesktopSetRouteMessageSchema
+>;
+
+export function buildDesktopSetRouteMessage(
+  route: DesktopRoute,
+): DesktopSetRouteMessage {
+  return { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route };
+}
+
 export const DesktopSaveFileMessageSchema = z.object({
   command: z.literal(DESKTOP_SHELL_COMMANDS.SAVE_FILE),
 });

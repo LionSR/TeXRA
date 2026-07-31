@@ -7,7 +7,10 @@ import type { LatexdiffResults } from '@progressView/frontend/components/Latexdi
 import type { QueuedFollowUps } from '@progressView/frontend/components/QueuedFollowUps';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 function expectUniqueIds(root: ShadowRoot): void {
   const ids = [...root.querySelectorAll<HTMLElement>('[id]')].map(
@@ -26,20 +29,20 @@ describe('remaining progress-view tooltip contracts', () => {
   );
 
   it('anchors repeated context-stat hints with indexed ids', async () => {
-    const element = document.createElement(
+    const element = await mountComponent<ContextManagement>(
       'context-management',
-    ) as ContextManagement;
-    element.config = {
-      icon: 'clock-rotate-left',
-      label: 'Context Management',
-      color: 'var(--wa-color-text-normal)',
-    };
-    element.items = [
-      { icon: 'clock-rotate-left', label: 'Before', value: '10k' },
-      { icon: 'clock-rotate-left', label: 'After', value: '5k' },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
+      {
+        config: {
+          icon: 'clock-rotate-left',
+          label: 'Context Management',
+          color: 'var(--wa-color-text-normal)',
+        },
+        items: [
+          { icon: 'clock-rotate-left', label: 'Before', value: '10k' },
+          { icon: 'clock-rotate-left', label: 'After', value: '5k' },
+        ],
+      },
+    );
 
     const shadow = element.shadowRoot!;
     expect(shadow.querySelector('[title]')).toBeNull();
@@ -51,12 +54,9 @@ describe('remaining progress-view tooltip contracts', () => {
 
   it('only adds the queued-message tooltip when text is truncated', async () => {
     const full = 'x'.repeat(201);
-    const element = document.createElement(
-      'queued-follow-ups',
-    ) as QueuedFollowUps;
-    element.messages = ['short', full];
-    document.body.append(element);
-    await element.updateComplete;
+    const element = await mountComponent<QueuedFollowUps>('queued-follow-ups', {
+      messages: ['short', full],
+    });
 
     const shadow = element.shadowRoot!;
     expect(shadow.querySelector('[title]')).toBeNull();
@@ -70,23 +70,23 @@ describe('remaining progress-view tooltip contracts', () => {
   });
 
   it('anchors latexdiff messages to their indexed rows', async () => {
-    const element = document.createElement(
+    const element = await mountComponent<LatexdiffResults>(
       'latexdiff-results',
-    ) as LatexdiffResults;
-    element.entries = [
       {
-        baseFile: '/workspace/paper.tex',
-        revisedFile: '/workspace/paper-revised.tex',
-        diffFile: '/workspace/paper-diff.pdf',
-        displayName: 'paper.tex',
-        baseRound: null,
-        revisedRound: 1,
-        status: 'error',
-        message: 'LaTeXdiff failed',
+        entries: [
+          {
+            baseFile: '/workspace/paper.tex',
+            revisedFile: '/workspace/paper-revised.tex',
+            diffFile: '/workspace/paper-diff.pdf',
+            displayName: 'paper.tex',
+            baseRound: null,
+            revisedRound: 1,
+            status: 'error',
+            message: 'LaTeXdiff failed',
+          },
+        ],
       },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
+    );
 
     const shadow = element.shadowRoot!;
     expect(shadow.querySelector('[title]')).toBeNull();

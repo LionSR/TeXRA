@@ -8,22 +8,20 @@ import type { ApproveSplitButton } from '@progressView/frontend/components/Appro
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
-async function mount(options: {
+function mount(options: {
   canBypass?: boolean;
   canApproveAllDelegatedWork?: boolean;
 }): Promise<ApproveSplitButton> {
-  const element = document.createElement(
-    'approve-split-button',
-  ) as ApproveSplitButton;
-  element.approveTitle = 'Approve';
-  element.canBypass = options.canBypass ?? false;
-  element.canApproveAllDelegatedWork =
-    options.canApproveAllDelegatedWork ?? false;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<ApproveSplitButton>('approve-split-button', {
+    approveTitle: 'Approve',
+    canBypass: options.canBypass ?? false,
+    canApproveAllDelegatedWork: options.canApproveAllDelegatedWork ?? false,
+  });
 }
 
 function recordEvents(element: ApproveSplitButton): string[] {

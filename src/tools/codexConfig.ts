@@ -8,12 +8,10 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
-  CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
-  CodexSandboxModeSchema,
   parseCodexApprovalPolicy,
   parseCodexReasoningEffort,
   parseCodexSandboxMode,
+  type CodexReasoningEffort,
 } from '@shared/schemas/agentCliSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createEnumStateGetter } from './support/enumConfig';
@@ -37,12 +35,7 @@ export const CODEX_CLI_MODEL = 'gpt-5.5';
 // Reasoning effort
 // ============================================================================
 
-// Derived from `CodexReasoningEffortSchema` (the single source of truth in
-// `@shared`) so the runtime list and the IPC schema can't drift.
-export const CODEX_REASONING_EFFORTS = CodexReasoningEffortSchema.options;
-export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORTS)[number];
-
-export const getCodexReasoningEffort = createEnumStateGetter(
+const getCodexReasoningEffort = createEnumStateGetter(
   WorkspaceStateKey.CODEX_REASONING_EFFORT,
   CODEX_REASONING_EFFORT_DEFAULT,
   parseCodexReasoningEffort,
@@ -73,35 +66,26 @@ export function getCodexCliReasoningEffort(): CodexCliReasoningEffort {
 // Approval policy
 // ============================================================================
 
-// Derived from `CodexApprovalPolicySchema` (the single source of truth in
-// `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
-export const CODEX_APPROVAL_POLICIES =
-  CodexApprovalPolicySchema.options satisfies readonly ApprovalMode[];
-export type CodexApprovalPolicy = ApprovalMode;
-
-export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
-  createEnumStateGetter(
-    WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-    CODEX_APPROVAL_POLICY_DEFAULT,
-    parseCodexApprovalPolicy,
-  );
+// The schema in `@shared` is the single source of truth for the persisted
+// values; the SDK-typed return annotation is what keeps those values aligned
+// with the Codex union — a schema value the SDK doesn't accept fails here.
+export const getCodexApprovalPolicy: () => ApprovalMode = createEnumStateGetter(
+  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  parseCodexApprovalPolicy,
+);
 
 // ============================================================================
 // Sandbox mode
 // ============================================================================
 
-// Derived from `CodexSandboxModeSchema` (the single source of truth in
-// `@shared`); `satisfies` keeps the schema values aligned with the SDK union.
-export const CODEX_SANDBOX_MODES =
-  CodexSandboxModeSchema.options satisfies readonly SandboxMode[];
-export type CodexSandboxMode = SandboxMode;
-
-export const getCodexSandboxMode: () => CodexSandboxMode =
-  createEnumStateGetter(
-    WorkspaceStateKey.CODEX_SANDBOX_MODE,
-    CODEX_SANDBOX_MODE_DEFAULT,
-    parseCodexSandboxMode,
-  );
+// As above: the SDK-typed return annotation is the alignment guard between the
+// persisted schema values and the Codex sandbox union.
+export const getCodexSandboxMode: () => SandboxMode = createEnumStateGetter(
+  WorkspaceStateKey.CODEX_SANDBOX_MODE,
+  CODEX_SANDBOX_MODE_DEFAULT,
+  parseCodexSandboxMode,
+);
 
 /**
  * Build synthetic execution metadata for Codex child streams.

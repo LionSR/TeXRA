@@ -14,7 +14,10 @@ import type {
 import type { MainApp } from '@webview/frontend/MainApp';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 /**
  * Characterization tests for MainApp's persistence/restore machinery.
@@ -104,11 +107,8 @@ function contextsOf(element: MainApp): {
   };
 }
 
-async function mountMainApp(): Promise<MainApp> {
-  const element = document.createElement('main-app') as MainApp;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mountMainApp(): Promise<MainApp> {
+  return mountComponent<MainApp>('main-app');
 }
 
 function dispatchHostMessage(data: Record<string, unknown>): void {

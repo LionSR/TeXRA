@@ -8,6 +8,8 @@ import {
 import {
   commitTeamRoster,
   resolveTeamRoster,
+  type TeamRosterCatalog,
+  type TeamRosterPresetResolution,
   type TeamRosterResolution,
 } from '@common/teams/TeamRoster';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
@@ -63,7 +65,7 @@ export type SettingsAgentPresetApplyResult =
     }
   | { ok: false; reason: 'unknownPreset' };
 
-export class SettingsAgentCatalogController {
+export class SettingsAgentCatalogController implements TeamRosterCatalog {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
   buildSelectionItems(): {
@@ -158,13 +160,7 @@ export class SettingsAgentCatalogController {
     return { ok: true, preset, unresolvedNames: resolution.unresolvedNames };
   }
 
-  resolvePreset(presetId: string):
-    | {
-        readonly ok: true;
-        readonly preset: AgentModePreset;
-        readonly resolution: TeamRosterResolution;
-      }
-    | { readonly ok: false; readonly reason: 'unknownPreset' } {
+  resolvePreset(presetId: string): TeamRosterPresetResolution {
     const preset = this.getPreset(presetId);
     if (!preset) return { ok: false, reason: 'unknownPreset' };
     return {

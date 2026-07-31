@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - test DOM
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 type AccountTabElement = HTMLElement & {
   authenticated: boolean;
@@ -16,12 +19,10 @@ type AccountTabElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
-async function mountAccountTab(): Promise<AccountTabElement> {
-  const element = document.createElement('account-tab') as AccountTabElement;
-  element.authenticated = true;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mountAccountTab(): Promise<AccountTabElement> {
+  return mountComponent<AccountTabElement>('account-tab', {
+    authenticated: true,
+  });
 }
 
 describe('account usage status', () => {

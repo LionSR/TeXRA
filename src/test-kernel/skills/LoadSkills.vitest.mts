@@ -5,40 +5,17 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { discoverSkills, discoverSkillSources } from '@skills/loadSkills';
+import { writeSkill } from '@test/support/skillFixtures';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempRoots: string[] = [];
 
 async function createTempRoot(): Promise<string> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-skills-'));
-  tempRoots.push(root);
-  return root;
-}
-
-async function writeSkill(
-  root: string,
-  dirName: string,
-  frontmatter: { name: string; description?: string },
-  body = 'Use this skill carefully.',
-): Promise<string> {
-  const skillDir = path.join(root, dirName);
-  await fs.mkdir(skillDir, { recursive: true });
-  const lines = [`name: ${frontmatter.name}`];
-  if (frontmatter.description !== undefined) {
-    lines.push(`description: ${frontmatter.description}`);
-  }
-  await fs.writeFile(
-    path.join(skillDir, 'SKILL.md'),
-    `---\n${lines.join('\n')}\n---\n\n${body}\n`,
-  );
-  return skillDir;
+  return makeTempDir('texra-skills-', tempRoots);
 }
 
 afterEach(async () => {
-  await Promise.all(
-    tempRoots
-      .splice(0)
-      .map((root) => fs.rm(root, { recursive: true, force: true })),
-  );
+  await cleanupTempDirs(tempRoots);
 });
 
 describe('discoverSkills', () => {
@@ -131,11 +108,15 @@ describe('discoverSkills', () => {
 
   it('deduplicates symlinked skill packages by real path', async () => {
     const root = await createTempRoot();
-    const actualDir = await writeSkill(root, 'actual-skill', {
+    const actualSkill = await writeSkill(root, 'actual-skill', {
       name: 'actual-skill',
       description: 'A skill reached through a real directory and a symlink.',
     });
-    await fs.symlink(actualDir, path.join(root, 'linked-skill'), 'dir');
+    await fs.symlink(
+      path.dirname(actualSkill),
+      path.join(root, 'linked-skill'),
+      'dir',
+    );
 
     const result = await discoverSkills(root);
 

@@ -9,7 +9,7 @@ import {
   AgentPromptSchema,
   AgentWorkflowSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
@@ -30,28 +30,17 @@ import {
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { reflectionFlowShared } from './progressTestUtils';
 
-const CONFIG: AgentConfig = {
-  inputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  outputFiles: [],
-  editedFile: null,
+const CONFIG = AgentConfigSchema.parse({
   agent: 'reflection-test',
   model: 'gpt54',
   instruction: 'Continue.',
   agentCategory: AgentCategory.Workflow,
-  editedFiles: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-  memories: [],
   workingDirectory: '/workspace',
-  cliOutputFile: null,
-  cliMultiAgentPresetId: null,
-};
+});
 const SETTING = AgentWorkflowSettingSchema.parse({ rounds: 1 });
 const PROMPT = AgentPromptSchema.parse({ userRequest: 'Start the workflow.' });
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';

@@ -3,8 +3,6 @@
 // Node imports
 import { strict as assert } from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -396,19 +394,22 @@ describe('executeCommandSync', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildWorkspaceInfoBlock', () => {
-  it('tells agents when the workspace is not a git repository', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-workspace-info-'));
-    try {
-      const block = await buildWorkspaceInfoBlock(workspace);
+  const tempDirs: string[] = [];
 
-      expect(block).toContain(`Workspace: ${workspace}`);
-      expect(block).toContain(
-        'Git: no repository detected or git could not be checked',
-      );
-      expect(block).toContain('avoid git history/status checks');
-    } finally {
-      await rm(workspace, { recursive: true, force: true });
-    }
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
+  });
+
+  it('tells agents when the workspace is not a git repository', async () => {
+    const workspace = await makeTempDir('texra-workspace-info-', tempDirs);
+
+    const block = await buildWorkspaceInfoBlock(workspace);
+
+    expect(block).toContain(`Workspace: ${workspace}`);
+    expect(block).toContain(
+      'Git: no repository detected or git could not be checked',
+    );
+    expect(block).toContain('avoid git history/status checks');
   });
 });
 

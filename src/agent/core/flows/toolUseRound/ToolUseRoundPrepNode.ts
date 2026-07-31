@@ -1,15 +1,12 @@
 // Local imports - core flow primitives
 import { BaseNode } from '@agent/node';
-import { logUserMessage } from '@agent/trace';
 import {
   resetCycleState,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
-  appendFollowUpAsUserMessage,
-  followUpDisplayText,
+  applyFollowUpBatch,
   userFollowUpInstruction,
-  type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 
@@ -80,37 +77,12 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
         const instruction = userFollowUpInstruction(prepRes.queuedFollowUps);
         if (instruction) shared.currentUserInstruction = instruction;
       }
-      for (const followUp of prepRes.queuedFollowUps) {
-        // A non-synthetic follow-up's transcript row must be logged whether
-        // appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/
-        // oversized media file) -- otherwise a failed follow-up round leaves
-        // no record of what the user asked for. `finally` preserves the
-        // throw so the round still fails as before; a throw before any
-        // attachment was inserted just yields an empty attachments list,
-        // which is accurate (nothing was actually inserted). Synthetic
-        // follow-ups are still never logged, throw or not -- unchanged from
-        // before this fix.
-        let result: AppendFollowUpResult | undefined;
-        try {
-          result = await appendFollowUpAsUserMessage(
-            shared.messages,
-            followUp,
-            this.services,
-          );
-          shared.messages = result.messages;
-        } finally {
-          if (!prepRes.synthetic) {
-            logUserMessage(
-              this.services.logger,
-              followUpDisplayText(followUp),
-              result?.attachmentKinds ?? [],
-            );
-          }
-        }
-      }
-      if (!prepRes.synthetic) {
-        this.services.onFollowUpConsumed?.();
-      }
+      await applyFollowUpBatch(
+        shared,
+        prepRes.queuedFollowUps,
+        prepRes.synthetic,
+        this.services,
+      );
     }
 
     resetCycleState(shared, [

@@ -8,6 +8,11 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
+import {
+  fakeWorkspace,
+  StreamingGoogleInteractionsHandler,
+  userStep,
+} from './googleInteractionsTestUtils';
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
@@ -109,30 +114,6 @@ function mockConfig(background: boolean): void {
   );
   vi.spyOn(providerConfigModule, 'getProviderStreaming').mockReturnValue(false);
   vi.spyOn(providerConfigModule, 'getGlobalStreaming').mockReturnValue(false);
-}
-
-/** Handler that forces the real streaming SSE path (the production default). */
-class StreamingLiveHandler extends ModelHandlerGoogleInteractions {
-  override getStreamingConfig(): boolean {
-    return true;
-  }
-}
-
-function userStep(text: string): Step {
-  return { type: 'user_input', content: [{ type: 'text', text }] };
-}
-
-/** Minimal workspace stub for the tool follow-up (empty reasoning + resets). */
-function fakeWorkspace(): import('@agent/core/state/AgentWorkspaceState').AgentWorkspaceState {
-  const reasoning = { thinkingBlocks: [], thinkingAdded: false };
-  return {
-    reasoning,
-    resetServerToolContent: () => undefined,
-    resetReasoning: () => {
-      reasoning.thinkingBlocks = [];
-      reasoning.thinkingAdded = false;
-    },
-  } as never;
 }
 
 describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
@@ -322,7 +303,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
       }),
     } as unknown as AgentTrace;
 
-    const handler = new StreamingLiveHandler(liveConfig());
+    const handler = new StreamingGoogleInteractionsHandler(liveConfig());
     handler.setLogger(streamLogger);
     handler.setOutputStreaming(true);
     handler.setAgentCategory(AgentCategory.ToolUse);

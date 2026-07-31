@@ -3,9 +3,9 @@ import { strict as assert } from 'node:assert';
 import { describe, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import { tryOperation } from '@agent/output/outputOperations';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { spiedTrace } from '@test/support/spiedTrace';
 
 describe('tryOperation', () => {
   it.each([
@@ -38,7 +38,7 @@ describe('tryOperation', () => {
       loggedType,
     }) => {
       const warn = vi.fn();
-      const logger = { warn } as unknown as AgentTrace;
+      const logger = spiedTrace({ warn });
 
       const result = await tryOperation(
         async () => {

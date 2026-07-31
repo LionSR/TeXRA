@@ -1,7 +1,6 @@
 // Suites for src/agent/trace emit helpers (stage metadata, tool-use cards,
 // log-file categorization). RunTraceStream keeps its own suite.
 
-import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   type AgentEvent,
@@ -191,7 +190,7 @@ describe('logFileCategory', () => {
 
   it('handles empty file array gracefully (no-op)', () => {
     logFileCategory(logger, 'Input Files', []);
-    assert.equal(capturedMessages().length, 0);
+    expect(capturedMessages()).toHaveLength(0);
   });
 
   // Only files with `ok === true` count as loaded; missing/false/undefined
@@ -235,9 +234,9 @@ describe('logFileCategory', () => {
     logFileCategory(logger, label, files);
 
     const messages = capturedMessages();
-    assert.equal(messages.length, 1);
-    assert.equal(messages[0].messageType, MESSAGE_TYPES.FILE_LIST);
-    assert.equal(messages[0].text, expected);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].messageType).toBe(MESSAGE_TYPES.FILE_LIST);
+    expect(messages[0].text).toBe(expected);
   });
 
   it('includes source and sourceDisplay in entry data', () => {
@@ -246,11 +245,11 @@ describe('logFileCategory', () => {
     ]);
 
     const entries = capturedMessages()[0].data;
-    assert.equal(entries.length, 1);
-    assert.equal(entries[0].source, 'Input Files');
-    assert.equal(entries[0].sourceDisplay, 'Input Files');
-    assert.equal(entries[0].path, '/path/file.tex');
-    assert.equal(entries[0].ok, true);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].source).toBe('Input Files');
+    expect(entries[0].sourceDisplay).toBe('Input Files');
+    expect(entries[0].path).toBe('/path/file.tex');
+    expect(entries[0].ok).toBe(true);
   });
 
   it('maps ok properly in entries (undefined becomes false)', () => {
@@ -261,8 +260,8 @@ describe('logFileCategory', () => {
     ]);
 
     const entries = capturedMessages()[0].data;
-    assert.equal(entries[0].ok, true);
-    assert.equal(entries[1].ok, false);
-    assert.equal(entries[2].ok, false);
+    expect(entries[0].ok).toBe(true);
+    expect(entries[1].ok).toBe(false);
+    expect(entries[2].ok).toBe(false);
   });
 });

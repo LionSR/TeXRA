@@ -7,29 +7,15 @@ import {
   cleanupTempDirs,
   makeTempDir as makeSharedTempDir,
 } from '@test/support/tempDirPlatform';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { createExternalLocation } from '@utils/files';
 
-interface DesktopPreviewHostModule {
-  createDesktopPreviewHost(options: {
-    shell: {
-      openExternal(url: string): Promise<void>;
-      openPath(filePath: string): Promise<string>;
-    };
-    showErrorMessage?: (message: string) => Promise<void> | void;
-    postToRenderer?: (message: unknown) => boolean | void;
-    forceExternal?: boolean;
-  }): {
-    openBuildDisplay(location: { absolutePath: string }): Promise<void>;
-    openExternal(url: string): Promise<void>;
-    openPath(filePath: string): Promise<void>;
-  };
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 async function loadDesktopPreviewHost(
   compileLatex2Pdf = vi.fn(async () => ({ ok: true })),
   access?: (filePath: string) => Promise<void>,
   checkToolInstalled = vi.fn(async () => true),
-): Promise<DesktopPreviewHostModule> {
+): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
   vi.resetModules();
   vi.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
   vi.doMock('@latex/latexToolchain', () => ({
@@ -41,9 +27,7 @@ async function loadDesktopPreviewHost(
       access,
     }));
   }
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopPreviewHost.ts'))
-  ) as Promise<DesktopPreviewHostModule>;
+  return loadSourceModule('@desktop/main/desktopPreviewHost');
 }
 
 function makeShell(openPathResult = '') {
@@ -171,7 +155,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell });
 
-    await host.openBuildDisplay({ absolutePath: texPath });
+    await host.openBuildDisplay(createExternalLocation(texPath));
     expect(compileLatex2Pdf).toHaveBeenCalledWith(
       expect.objectContaining({ absolutePath: texPath }),
       { outputDirectory: dir },
@@ -194,7 +178,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell });
 
-    await host.openBuildDisplay({ absolutePath: pdfPath });
+    await host.openBuildDisplay(createExternalLocation(pdfPath));
     expect(compileLatex2Pdf).not.toHaveBeenCalled();
     expect(checkToolInstalled).not.toHaveBeenCalled();
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
@@ -221,7 +205,7 @@ describe('desktop preview host', () => {
 
     const message = `No LaTeX compiler found for ${texPath}. Install latexmk or pdflatex to compile and preview this file.`;
     await expect(
-      host.openBuildDisplay({ absolutePath: texPath }),
+      host.openBuildDisplay(createExternalLocation(texPath)),
     ).rejects.toThrow(message);
     expect(showErrorMessage).toHaveBeenCalledWith(message);
     expect(compileLatex2Pdf).not.toHaveBeenCalled();
@@ -253,7 +237,7 @@ describe('desktop preview host', () => {
 
     const message = `LaTeX build failed for ${texPath}. See the LaTeX log next to the source for details.`;
     await expect(
-      host.openBuildDisplay({ absolutePath: texPath }),
+      host.openBuildDisplay(createExternalLocation(texPath)),
     ).rejects.toThrow(message);
     expect(showErrorMessage).toHaveBeenCalledWith(message);
     expect(showErrorMessage).not.toHaveBeenCalledWith(
@@ -286,7 +270,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell, postToRenderer });
 
-    await host.openBuildDisplay({ absolutePath: texPath });
+    await host.openBuildDisplay(createExternalLocation(texPath));
     // The overlay path is taken; shell.openPath is NOT called.
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(postToRenderer).toHaveBeenCalledWith(
@@ -307,7 +291,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell, postToRenderer });
 
-    await host.openBuildDisplay({ absolutePath: texPath });
+    await host.openBuildDisplay(createExternalLocation(texPath));
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
   });
@@ -326,7 +310,7 @@ describe('desktop preview host', () => {
 
     const host = createDesktopPreviewHost({ shell, postToRenderer });
 
-    await host.openBuildDisplay({ absolutePath: texPath });
+    await host.openBuildDisplay(createExternalLocation(texPath));
     expect(postToRenderer).toHaveBeenCalledTimes(1);
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
     consoleErrorSpy.mockRestore();
@@ -344,7 +328,7 @@ describe('desktop preview host', () => {
       forceExternal: true,
     });
 
-    await host.openBuildDisplay({ absolutePath: texPath });
+    await host.openBuildDisplay(createExternalLocation(texPath));
     expect(postToRenderer).not.toHaveBeenCalled();
     expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
   });

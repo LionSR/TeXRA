@@ -3,60 +3,24 @@ import { describe, expect, it } from 'vitest';
 // Local imports - shared schemas
 import type { SessionContextValue } from '@shared/schemas';
 
-// Local imports - component type and context
+// Local imports - component type
 import type { InstructionPanel } from '@webview/frontend/components/InstructionPanel';
-import type { sessionContext } from '@webview/frontend/contexts/mainViewContexts';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
-import type { ContextProvider } from '@lit/context';
+import {
+  loadInstructionPanelModules,
+  makeSession,
+  mountInstructionPanel,
+} from './mainViewTestUtils';
 
-// @lit/context captures the global Event constructor at module-evaluation time,
-// so runtime imports must happen after the jsdom globals are installed.
-let ContextProviderCtor: typeof ContextProvider;
-let mainViewSessionContext: typeof sessionContext;
+const SESSION = makeSession({ instruction: 'Polish the abstract.' });
 
-const SESSION: SessionContextValue = {
-  sessionType: 'toolUse',
-  launchTarget: 'agent',
-  selectedTeamId: '',
-  instruction: 'Polish the abstract.',
-  placeholder: 'Describe the edit…',
-  workflowAgent: 'copy-editor',
-  toolUseAgent: 'assistant',
-  model: 'model-a',
-  workflowAgentOptions: [],
-  toolUseAgentOptions: [],
-  modelOptions: [],
-  teamOptions: [],
-  workspaceRootOptions: [],
-  workingDirectory: '',
-  isRecording: false,
-  isPolishing: false,
-  debugMode: false,
-  isOrchestratorSelected: false,
-  statusAnnouncement: '',
-};
-
-async function mountPanel(
+function mountPanel(
   desktopHost: boolean,
   session: SessionContextValue = SESSION,
 ): Promise<InstructionPanel> {
-  const wrapper = document.createElement('div');
-  const provider = new ContextProviderCtor(wrapper, {
-    context: mainViewSessionContext,
-    initialValue: session,
-  });
-  provider.hostConnected();
-
-  const element = document.createElement(
-    'instruction-panel',
-  ) as InstructionPanel;
-  element.desktopHost = desktopHost;
-  wrapper.append(element);
-  document.body.append(wrapper);
-  await element.updateComplete;
-  return element;
+  return mountInstructionPanel(session, { desktopHost });
 }
 
 function query<T extends HTMLElement>(
@@ -84,12 +48,7 @@ function dispatchEnter(
 }
 
 describe('instruction-panel desktop composer', () => {
-  useLitComponentTestDom(async () => {
-    ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
-    ({ sessionContext: mainViewSessionContext } =
-      await import('@webview/frontend/contexts/mainViewContexts'));
-    await import('@webview/frontend/components/InstructionPanel');
-  });
+  useLitComponentTestDom(loadInstructionPanelModules);
 
   it('opts into the desktop treatment without changing the extension default', async () => {
     const desktop = await mountPanel(true);

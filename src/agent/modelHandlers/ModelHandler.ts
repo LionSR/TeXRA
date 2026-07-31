@@ -85,6 +85,7 @@ import type {
 } from '@shared/schemas/toolResult';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { AbsoluteFS } from '@utils/files';
+import { extractScratchpad } from '@utils/text/xmlExtraction';
 import {
   getProviderStreaming,
   getGlobalStreaming,
@@ -115,7 +116,6 @@ import {
   usesServerSideKeysRoute,
   type ProxyConfig,
 } from './support/ProxyConfigResolver';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 /**
  * Generic SDK error tagging wrapper used by the base model handler.
@@ -209,6 +209,8 @@ export abstract class ModelHandler<
   >();
   private activeAttemptCredentialRoute: ModelCredentialRoute | undefined;
   private lastAttemptCredentialRoute: ModelCredentialRoute | undefined;
+  /** Set while {@link withSingleTurnGuard} is bracketing a `createResponse`. */
+  private singleTurnInFlight = false;
   public config: ResolvedModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;
@@ -1111,8 +1113,8 @@ export abstract class ModelHandler<
    * SDK-boundary error tagging via {@link sdkErrorTagger}, then delegates to
    * {@link createResponseImpl}. Subclasses normally override
    * {@link createResponseImpl} (and {@link sdkErrorTagger}); a subclass that
-   * needs to bracket the whole call (e.g. a single-turn `inFlight` assertion)
-   * overrides only {@link withCreateResponseGuard}.
+   * needs to bracket the whole call (e.g. the {@link withSingleTurnGuard}
+   * assertion) overrides only {@link withCreateResponseGuard}.
    *
    * @param options Options for creating the response
    * @returns Promise resolving to result containing response and optionally updated messages
@@ -1146,13 +1148,39 @@ export abstract class ModelHandler<
 
   /**
    * Hook to bracket a whole {@link createResponse} call (error tagging +
-   * {@link createResponseImpl}). Default: run directly. Override to add a guard
-   * such as the single-turn `inFlight` assertion that handlers chaining on a
-   * `previous_response_id` / conversation state need. Keeping the error-tag wrap
-   * in the base means subclasses supply only the guard, never re-copy the wrap.
+   * {@link createResponseImpl}). Default: run directly. Handlers that chain on
+   * a `previous_response_id` / conversation state override it with
+   * {@link withSingleTurnGuard}. Keeping the error-tag wrap in the base means
+   * subclasses supply only the guard, never re-copy the wrap.
    */
   protected withCreateResponseGuard<T>(run: () => Promise<T>): Promise<T> {
     return run();
+  }
+
+  /**
+   * {@link withCreateResponseGuard} implementation for handlers that are
+   * single-turn per instance. Concurrent callers would race the handler's
+   * conversation-chain bookkeeping, so the second call fails loudly instead of
+   * corrupting it silently.
+   *
+   * @param handlerName Module name reported in the assertion message.
+   */
+  protected async withSingleTurnGuard<T>(
+    handlerName: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    if (this.singleTurnInFlight) {
+      throw new Error(
+        `${handlerName}.createResponse invoked while a prior ` +
+          'call is still in flight; this handler is single-turn per instance.',
+      );
+    }
+    this.singleTurnInFlight = true;
+    try {
+      return await run();
+    } finally {
+      this.singleTurnInFlight = false;
+    }
   }
 
   /**
@@ -1466,12 +1494,18 @@ export abstract class ModelHandler<
       return [false, messages];
     }
 
-    const { fileContent } = await prepareExistingOutputContent(
-      outputLocation,
-      workspaceState,
-      this.logger,
-      this.postProcessResponse,
-    );
+    const raw = await AbsoluteFS.read(outputLocation.absolutePath);
+    const fileContent = this.postProcessResponse(raw);
+
+    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
+    if (scratchpad) this.logger.domain({ key: 'scratchpad', text: scratchpad });
+
+    await AbsoluteFS.write(outputLocation.absolutePath, fileContent);
+
+    // Updating workspace state is critical for multi-round agents on resume so
+    // subsequent rounds have the correct context.
+    workspaceState.assembly.accumulatedOutput = fileContent;
+    workspaceState.assembly.lastResponse = fileContent;
 
     messages.push(this.createAssistantMessageForPrefillText(fileContent));
 
@@ -1834,21 +1868,14 @@ export abstract class ModelHandler<
       );
 
       if (validation.adjustedMaxTokens !== currentMaxTokens) {
-        logContextManagementEvent(
-          this.logger,
-          `Token count (${inputTokens}) + max output tokens (${currentMaxTokens}) exceeds context window (${contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
-          {
-            action: 'max_tokens_reduced',
-            tokensBefore: inputTokens,
-            contextWindow,
-            utilizationBefore:
-              validation.utilizationPercent ??
-              computeUtilizationPercent(inputTokens, contextWindow),
-            originalMaxTokens: currentMaxTokens,
-            reducedMaxTokens: validation.adjustedMaxTokens,
-            details: detailLabel,
-          },
-        );
+        this.logMaxTokensReduced({
+          tokensBefore: inputTokens,
+          contextWindow,
+          utilizationPercent: validation.utilizationPercent,
+          originalMaxTokens: currentMaxTokens,
+          reducedMaxTokens: validation.adjustedMaxTokens,
+          details: detailLabel,
+        });
         applyReduced(validation.adjustedMaxTokens);
       }
     } catch (err) {
@@ -1867,6 +1894,58 @@ export abstract class ModelHandler<
         );
       }
     }
+  }
+
+  /**
+   * Emits the `max_tokens_reduced` context-management event.
+   *
+   * Both routes that shrink the output budget — the native token-count path in
+   * {@link applyTokenCountLimit} and the estimate-based fallback handlers use
+   * when counting is unavailable — report the same event, so its wording and
+   * payload have one owner here.
+   *
+   * @param params.tokensBeforeIsEstimate Whether `tokensBefore` came from an
+   *   estimate rather than a provider token count (changes the log wording).
+   * @param params.utilizationPercent Utilization already computed by
+   *   {@link validateTokenLimits}; recomputed here when absent.
+   */
+  protected logMaxTokensReduced(params: {
+    tokensBefore: number;
+    tokensBeforeIsEstimate?: boolean;
+    contextWindow: number;
+    utilizationPercent?: number;
+    originalMaxTokens: number;
+    reducedMaxTokens: number;
+    details: string;
+  }): void {
+    const {
+      tokensBefore,
+      tokensBeforeIsEstimate = false,
+      contextWindow,
+      utilizationPercent,
+      originalMaxTokens,
+      reducedMaxTokens,
+      details,
+    } = params;
+    const countLabel = tokensBeforeIsEstimate
+      ? 'Estimated token count'
+      : 'Token count';
+
+    logContextManagementEvent(
+      this.logger,
+      `${countLabel} (${tokensBefore}) + max output tokens (${originalMaxTokens}) exceeds context window (${contextWindow}). Reducing to ${reducedMaxTokens}.`,
+      {
+        action: 'max_tokens_reduced',
+        tokensBefore,
+        contextWindow,
+        utilizationBefore:
+          utilizationPercent ??
+          computeUtilizationPercent(tokensBefore, contextWindow),
+        originalMaxTokens,
+        reducedMaxTokens,
+        details,
+      },
+    );
   }
 
   /**
