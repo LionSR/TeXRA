@@ -473,11 +473,7 @@ export class TextEditorTool extends defineTool({
         originalContent: fileContent,
         proposedContent: newFileContent,
         sourceTool: 'text_editor:str_replace',
-        afterWrite: ({ appliedContent, baseContent }) => {
-          if (appliedContent !== baseContent) {
-            this.addToHistory(filePath, baseContent);
-          }
-        },
+        afterWrite: this.undoHistoryAfterWrite(filePath),
         present: ({ appliedContent }) => {
           const snippet = appliedContent
             .split('\n')
@@ -536,11 +532,7 @@ export class TextEditorTool extends defineTool({
         originalContent: fileContent,
         proposedContent: newFileContent,
         sourceTool: 'text_editor:insert',
-        afterWrite: ({ appliedContent, baseContent }) => {
-          if (appliedContent !== baseContent) {
-            this.addToHistory(filePath, baseContent);
-          }
-        },
+        afterWrite: this.undoHistoryAfterWrite(filePath),
         present: ({ appliedContent }) => {
           const previewLines = appliedContent.split('\n');
           const insertIndex = insertLine - 1;
@@ -609,6 +601,17 @@ export class TextEditorTool extends defineTool({
    */
   private currentExecutionId(): string {
     return getRunContextExecutionId(tryUseRunContext()) ?? '';
+  }
+
+  /** `afterWrite` callback recording pre-edit content for undo, only when the write actually changed the file. */
+  private undoHistoryAfterWrite(
+    filePath: string,
+  ): (edit: { appliedContent: string; baseContent: string }) => void {
+    return ({ appliedContent, baseContent }) => {
+      if (appliedContent !== baseContent) {
+        this.addToHistory(filePath, baseContent);
+      }
+    };
   }
 
   private addToHistory(filePath: string, content: string): void {

@@ -9,6 +9,8 @@ import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
 
+import { raceWithTimeout } from './raceWithTimeout';
+
 const CHANNEL = 'VscodeDiagnostics';
 
 export { DiagnosticSeverity } from 'vscode';
@@ -27,29 +29,18 @@ export async function waitForDiagnosticsChange(
 
   const targetKey = uri.toString().toLowerCase();
 
-  await new Promise<void>((resolve) => {
-    let settled = false;
+  const raced = await raceWithTimeout<void>(
+    (resolve) =>
+      vscode.languages.onDidChangeDiagnostics((event) => {
+        const hasMatch = event.uris.some(
+          (eventUri) => eventUri.toString().toLowerCase() === targetKey,
+        );
+        if (hasMatch) resolve();
+      }),
+    timeoutMs,
+  );
 
-    const disposable = vscode.languages.onDidChangeDiagnostics((event) => {
-      const hasMatch = event.uris.some(
-        (eventUri) => eventUri.toString().toLowerCase() === targetKey,
-      );
-      if (hasMatch) {
-        finish();
-      }
-    });
-
-    const timeoutHandle = setTimeout(() => {
-      logger.debug(CHANNEL, `Timed out waiting for diagnostics: ${uri.fsPath}`);
-      finish();
-    }, timeoutMs);
-
-    function finish(): void {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutHandle);
-      disposable.dispose();
-      resolve();
-    }
-  });
+  if (raced.timedOut) {
+    logger.debug(CHANNEL, `Timed out waiting for diagnostics: ${uri.fsPath}`);
+  }
 }

@@ -14,6 +14,7 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { StreamTabId } from '@shared/schemas';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { groupBy } from '@utils/core';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -356,7 +357,6 @@ export function appendStaticTranscriptItems({
   const unseenRequests = printRequests.filter(
     (request) => !seen.has(request.id),
   );
-  const requestsByUnseenAnchor = new Map<string, TranscriptPrintRequest[]>();
   const appendItem = (item: StaticTranscriptItem): void => {
     nextItems ??= [...currentItems];
     nextItems.push(item);
@@ -366,15 +366,18 @@ export function appendStaticTranscriptItems({
   // Requests carry the last static entry visible when the user invoked the
   // command. Interleave against that anchor so an owner round trip rebuilds
   // exactly the same chronology as incremental append-only rendering.
+  const anchoredRequests: TranscriptPrintRequest[] = [];
   for (const request of unseenRequests) {
     if (request.afterEntryId === undefined || seen.has(request.afterEntryId)) {
       appendItem({ id: request.id, kind: 'printedTranscript', request });
       continue;
     }
-    const anchored = requestsByUnseenAnchor.get(request.afterEntryId);
-    if (anchored) anchored.push(request);
-    else requestsByUnseenAnchor.set(request.afterEntryId, [request]);
+    anchoredRequests.push(request);
   }
+  const requestsByUnseenAnchor = groupBy(
+    anchoredRequests,
+    (request) => request.afterEntryId,
+  );
   for (const entry of orderedStaticEntries) {
     if (!seen.has(entry.id)) {
       appendItem({ id: entry.id, kind: 'entry', entry });

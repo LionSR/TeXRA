@@ -117,6 +117,19 @@ function resultFromExecutionError(err: unknown): ExecResult {
   };
 }
 
+function logExecutionErrorAndBuildResult(
+  err: unknown,
+  options: { quiet?: boolean; channel?: string },
+): ExecResult {
+  if (!options.quiet) {
+    logger.error(
+      options.channel ?? CHANNEL,
+      `Error executing command: ${toErrorMessage(err)}`,
+    );
+  }
+  return resultFromExecutionError(err);
+}
+
 function logCommandStderr(
   channel: string,
   stderr: string | null | undefined,
@@ -410,14 +423,7 @@ export async function executeCommand(
       outputLimitExceeded: maxBufferExceeded,
     });
   } catch (err) {
-    if (!options.quiet) {
-      logger.error(
-        options.channel ?? CHANNEL,
-        `Error executing command: ${toErrorMessage(err)}`,
-      );
-    }
-
-    return resultFromExecutionError(err);
+    return logExecutionErrorAndBuildResult(err, options);
   } finally {
     if (shellTimeoutId !== undefined) clearTimeout(shellTimeoutId);
     if (forceKillTimeoutId !== undefined) clearTimeout(forceKillTimeoutId);
@@ -473,13 +479,6 @@ export function executeCommandSync(
 
     return resultFromProcessOutput(stdout, stderr, exitCode, { timedOut });
   } catch (err) {
-    if (!options.quiet) {
-      logger.error(
-        options.channel ?? CHANNEL,
-        `Error executing command: ${toErrorMessage(err)}`,
-      );
-    }
-
-    return resultFromExecutionError(err);
+    return logExecutionErrorAndBuildResult(err, options);
   }
 }
