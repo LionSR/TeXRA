@@ -36,7 +36,10 @@ import {
   assignByContentSimilarity,
   collectLatexFencedBlocks as collectLatexFencedBlocksFromResponse,
 } from './extraction/contentSimilarity';
-import { extractFilenameHeaderDocuments } from './extraction/filenameHeaders';
+import {
+  extractFilenameHeaderDocuments,
+  normalizeDocumentName,
+} from './extraction/filenameHeaders';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
 async function writeRoundOutput(
@@ -144,10 +147,10 @@ export class XmlOutputManager {
     documents: ReadonlyArray<{ name: string }>,
   ): void {
     const recoveredNames = new Set(
-      documents.map((doc) => this.normalizeExpectedFileName(doc.name)),
+      documents.map((doc) => normalizeDocumentName(doc.name)),
     );
     const missing = expectedFiles.filter(
-      (name) => !recoveredNames.has(this.normalizeExpectedFileName(name)),
+      (name) => !recoveredNames.has(normalizeDocumentName(name)),
     );
     if (missing.length === 0) return;
 
@@ -155,10 +158,6 @@ export class XmlOutputManager {
       missing,
       xmlFile: outputLocation.absolutePath,
     });
-  }
-
-  private normalizeExpectedFileName(name: string): string {
-    return name.replaceAll('\\', '/').replace(/^(?:\.\/)+/, '');
   }
 
   private collectLatexFencedBlocks(

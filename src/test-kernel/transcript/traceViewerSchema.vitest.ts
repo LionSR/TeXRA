@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   EXECUTION_STATUS,
@@ -11,7 +14,6 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
   cleanupTempDirs,
@@ -27,24 +29,14 @@ import {
 const tempDirs: string[] = [];
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return {
-    inputFiles: [],
-    contextFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-    editedFile: null,
+  return AgentConfigSchema.parse({
     agent: 'orchestrator',
     model: 'deepseekT',
     instruction: 'Solve the problem.',
     agentCategory: AgentCategory.ToolUse,
-    editedFiles: [],
-    toolConfig: DEFAULT_TOOL_CONFIG,
-    memories: [],
     workingDirectory: '/workspace',
-    cliOutputFile: null,
-    cliMultiAgentPresetId: null,
     ...overrides,
-  };
+  });
 }
 
 /** A parseable trace payload; overrides shape each legacy/malformed case. */

@@ -50,26 +50,11 @@ type RendererMessage = Parameters<
 
 type SettingsFixtureOverrides = Omit<
   Partial<DesktopSettingsIpcOptions>,
-  | 'agentSettingsController'
-  | 'crashReportingSettingsController'
-  | 'credentialSettingsController'
-  | 'state'
-  | 'config'
-  | 'historySettingsController'
-  | 'ui'
-  | 'toolingSettingsController'
-  | 'postToRenderer'
+  'state' | 'ui'
 > & {
-  agentSettingsController?: DesktopSettingsIpcOptions['agentSettingsController'];
-  crashReportingSettingsController?: DesktopSettingsIpcOptions['crashReportingSettingsController'];
-  credentialSettingsController?: DesktopSettingsIpcOptions['credentialSettingsController'];
   globalState?: StateStore;
   workspaceState?: StateStore;
-  config?: DesktopSettingsIpcOptions['config'];
-  historySettingsController?: DesktopSettingsIpcOptions['historySettingsController'];
   ui?: Partial<DesktopSettingsIpcOptions['ui']>;
-  toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
-  postToRenderer?: DesktopSettingsIpcOptions['postToRenderer'];
 };
 
 type CapturedSettingsFixtureOverrides = Omit<

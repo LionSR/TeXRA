@@ -15,10 +15,12 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import {
   buildToolUseSection,
   wrapInPre,
+  buildFileLinkSpan,
   buildFileLinkWithLines,
   buildEditDiffSection,
   buildMemoryPathDisplay,
   buildExecutionsPathDisplay,
+  buildStatusBadge,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import {
@@ -281,7 +283,7 @@ function buildAcceptRunFilesSections(
         ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed">-${edit.lineChanges.removed}</span></span>`
         : nothing;
       // prettier-ignore
-      return html`<li class="detail-item">${waIcon('file')} <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(dest, dest)}${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
     })}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
@@ -327,7 +329,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled">${waIcon('image')} ${f}</wa-badge>`)}`));
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => buildStatusBadge('image', f))}`));
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
@@ -429,12 +431,12 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
     } else {
       statusIconName = 'check';
     }
-    const statusIconTemplate =
-      statusIconName === SPINNER_ICON_NAME
-        ? html`<wa-spinner></wa-spinner>`
-        : waIcon(statusIconName);
-    // prettier-ignore
-    sections.push(buildToolUseSection('Status:', html`<wa-badge variant="neutral" appearance="filled">${statusIconTemplate} ${mcpOutput.status}</wa-badge>`));
+    sections.push(
+      buildToolUseSection(
+        'Status:',
+        buildStatusBadge(statusIconName, mcpOutput.status),
+      ),
+    );
     renderedMcpOutput = true;
   }
 

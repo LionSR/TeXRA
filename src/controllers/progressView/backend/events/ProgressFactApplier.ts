@@ -466,14 +466,10 @@ export class ProgressFactApplier {
       // which may exclude the current stream and override state.activeStream —
       // completely bypassing the pending-permissions guard.
       this.maybeUpdateFilterForCategory(agentCategory);
-      const previous = this.state.activeStream;
-      this.state.activeStream = streamId;
-      // Release the previously-active stream if it reached a terminal
-      // status while visible — setStreamStatus skips release for the
-      // active stream, so this switch is our only chance.
-      if (previous && previous !== streamId) {
-        this.state.releasePreviousActive(previous);
-      }
+      // The switch also releases the previously-active stream if it reached a
+      // terminal status while visible — setStreamStatus skips release for the
+      // active stream, so this is our only chance.
+      this.state.switchActiveStream(streamId);
     }
 
     if (!this.webviewUpdater.isAvailable()) return;
@@ -870,20 +866,11 @@ export class ProgressFactApplier {
           this.state,
           this.state.agentCategoryFilter,
         ).map((stream) => stream.name);
-        const nextActiveStream =
-          selectableStreams.length === 0
-            ? ''
-            : this.state.pickValidActiveStream(selectableStreams);
         const previousActiveStream = this.state.activeStream;
+        const nextActiveStream =
+          this.state.rotateActiveStream(selectableStreams);
         if (nextActiveStream !== previousActiveStream) {
-          this.state.activeStream = nextActiveStream;
           activeStreamToSync = nextActiveStream;
-          if (
-            previousActiveStream &&
-            previousActiveStream !== nextActiveStream
-          ) {
-            this.state.releasePreviousActive(previousActiveStream);
-          }
         }
         activeStream = nextActiveStream;
       }

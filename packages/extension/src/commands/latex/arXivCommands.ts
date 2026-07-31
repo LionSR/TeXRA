@@ -12,11 +12,6 @@ import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'arXivCommands';
 
-// Command IDs
-export const arXivCommands = {
-  downloadArXivSource: 'texra.downloadArXivSource',
-};
-
 export async function downloadArXivSource(): Promise<void> {
   try {
     const arxivId = await vscode.window.showInputBox({

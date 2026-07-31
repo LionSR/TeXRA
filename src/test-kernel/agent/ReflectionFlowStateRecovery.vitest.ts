@@ -11,7 +11,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
   PersistedFlowStateError,
@@ -34,6 +33,7 @@ import {
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { reflectionFlowShared } from './progressTestUtils';
 
 const CONFIG: AgentConfig = {
   inputFiles: [],
@@ -130,22 +130,6 @@ function flowRecord(shared: unknown): FlowRecord {
   };
 }
 
-function validReflectionShared(): unknown {
-  return {
-    currentRound: 0,
-    totalRounds: 1,
-    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    context: null,
-    outputLocation: null,
-    conversation: [],
-    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-    roundStateSnapshots: [],
-    roundOutputs: [],
-    continueRounds: true,
-    endTurn: false,
-  };
-}
-
 describe('runReflectionFlow persisted-state recovery', () => {
   setupPlatform({ workspacePath: '/workspace' });
   afterEach(() => vi.restoreAllMocks());
@@ -206,7 +190,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
       reason: 'unsupported-record',
       stored: {
         flowName: 'texra',
-        shared: validReflectionShared(),
+        shared: reflectionFlowShared({ totalRounds: 1, context: null }),
         createdAt: '2026-01-01T00:00:00.000Z',
       },
     },
@@ -214,7 +198,7 @@ describe('runReflectionFlow persisted-state recovery', () => {
       name: 'future envelope schema version',
       reason: 'unsupported-record',
       stored: {
-        ...flowRecord(validReflectionShared()),
+        ...flowRecord(reflectionFlowShared({ totalRounds: 1, context: null })),
         schemaVersion: FLOW_RECORD_SCHEMA_VERSION + 1,
       },
     },

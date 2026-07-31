@@ -281,6 +281,62 @@ function makeAutoResumeData() {
   });
 }
 
+/**
+ * Installs a session whose interaction, event, status, and execution surfaces
+ * are the real runtime objects rather than per-mock stubs.
+ */
+function installOwnerSession(): {
+  readonly events: SessionEventHub;
+  readonly status: StreamStatusMachine;
+  readonly executions: ExecutionRegistry;
+  readonly interactions: SessionHostInteractions;
+} {
+  const events = new SessionEventHub();
+  const status = new StreamStatusMachine();
+  const executions = new ExecutionRegistry({ events, streamStatus: status });
+  const interactions = new SessionHostInteractions();
+  mocks.defaultSession.mockReturnValue({
+    useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
+      interactions.use(adapter),
+    interactions,
+    events,
+    followUps: { restore: mocks.followUpEnqueue },
+    approvals: { registerStreamParent: vi.fn() },
+    status,
+    executions,
+    transcripts: { ensureLoaded: vi.fn(async () => undefined) },
+  });
+  return { events, status, executions, interactions };
+}
+
+function trackRunningExecution(
+  executions: ExecutionRegistry,
+  executionId: string,
+  parentStreamId: StreamTabId,
+  streamId: StreamTabId,
+  agent: string,
+): void {
+  executions.trackAgentExecution(
+    new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      streamId,
+      agent,
+      'toolUse',
+    ),
+    { status: STREAM_PHASE.RUNNING },
+  );
+}
+
+function resumeWithAutoResumeData(): void {
+  mocks.resolveAndResumeStream.mockImplementationOnce(
+    async (
+      _streamId: StreamTabId,
+      ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
+    ) => ports.resumeToolUse(makeAutoResumeData()),
+  );
+}
+
 function makeInterruptedController(
   runPromise: Promise<void>,
   runCompleted: boolean,
@@ -297,12 +353,7 @@ function makeInterruptedController(
     runCompleted,
     stopRequested: true,
   });
-  mocks.resolveAndResumeStream.mockImplementationOnce(
-    async (
-      _streamId: StreamTabId,
-      ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
-    ) => ports.resumeToolUse(makeAutoResumeData()),
-  );
+  resumeWithAutoResumeData();
   return {
     ctrl: createChatSessionController(makeInit({ session, snapshotStore })),
     session,
@@ -324,12 +375,7 @@ async function expectInterruptedRetry(
   ctrl: ReturnType<typeof createChatSessionController>,
   expectedTexts: readonly string[],
 ): Promise<void> {
-  mocks.resolveAndResumeStream.mockImplementationOnce(
-    async (
-      _streamId: StreamTabId,
-      ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
-    ) => ports.resumeToolUse(makeAutoResumeData()),
-  );
+  resumeWithAutoResumeData();
   const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
   expect(retry.kind).toBe('accepted');
   if (retry.kind !== 'accepted') return;
@@ -663,10 +709,7 @@ describe('createChatSessionController', () => {
   it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {
     const rootStream = 'root-stream' as StreamTabId;
     const childStream = 'child-stream' as StreamTabId;
-    const events = new SessionEventHub();
-    const status = new StreamStatusMachine();
-    const executions = new ExecutionRegistry({ events, streamStatus: status });
-    const interactions = new SessionHostInteractions();
+    const { executions, interactions } = installOwnerSession();
     const adapterDecision = pDefer<{ action: 'approve' | 'reject' }>();
     const requestBashApproval = vi.fn(() => adapterDecision.promise);
     const disposeAdapter = vi.fn();
@@ -677,18 +720,6 @@ describe('createChatSessionController', () => {
       close: mocks.presentationHostClose,
       attachRunProgressRenderer: vi.fn(() => vi.fn()),
     } as unknown as CliRuntimeHost;
-    const ownerSession = {
-      useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
-        interactions.use(adapter),
-      interactions,
-      events,
-      followUps: { restore: mocks.followUpEnqueue },
-      approvals: { registerStreamParent: vi.fn() },
-      status,
-      executions,
-      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
-    };
-    mocks.defaultSession.mockReturnValue(ownerSession);
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
     mocks.createTuiHostInteractions.mockReturnValue({
       requestBashApproval,
@@ -781,10 +812,7 @@ describe('createChatSessionController', () => {
   });
 
   it('releases a later root host while an earlier detached child remains active', async () => {
-    const events = new SessionEventHub();
-    const status = new StreamStatusMachine();
-    const executions = new ExecutionRegistry({ events, streamStatus: status });
-    const interactions = new SessionHostInteractions();
+    const { executions } = installOwnerSession();
     const hostA = { emit: vi.fn(), close: vi.fn() };
     const hostB = { emit: vi.fn(), close: vi.fn() };
     const disposeAdapterA = vi.fn();
@@ -798,17 +826,6 @@ describe('createChatSessionController', () => {
     let rootAExecutionId: ExecutionId | undefined;
     let rootBExecutionId: ExecutionId | undefined;
 
-    mocks.defaultSession.mockReturnValue({
-      useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
-        interactions.use(adapter),
-      interactions,
-      events,
-      followUps: { restore: mocks.followUpEnqueue },
-      approvals: { registerStreamParent: vi.fn() },
-      status,
-      executions,
-      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
-    });
     mocks.createCliRuntimeHost
       .mockReturnValueOnce(hostA)
       .mockReturnValueOnce(hostB);
@@ -830,25 +847,19 @@ describe('createChatSessionController', () => {
         ) => {
           rootAExecutionId = executionId;
           childAExecutionId = 'child-a-exec' as ExecutionId;
-          executions.trackAgentExecution(
-            new AgentExecutionHandle(
-              executionId,
-              rootAStream,
-              rootAStream,
-              'root-a',
-              'toolUse',
-            ),
-            { status: STREAM_PHASE.RUNNING },
+          trackRunningExecution(
+            executions,
+            executionId,
+            rootAStream,
+            rootAStream,
+            'root-a',
           );
-          executions.trackAgentExecution(
-            new AgentExecutionHandle(
-              childAExecutionId,
-              rootAStream,
-              childAStream,
-              'child-a',
-              'toolUse',
-            ),
-            { status: STREAM_PHASE.RUNNING },
+          trackRunningExecution(
+            executions,
+            childAExecutionId,
+            rootAStream,
+            childAStream,
+            'child-a',
           );
           options.onStreamResolved?.(rootAStream);
           return runA.promise;
@@ -861,15 +872,12 @@ describe('createChatSessionController', () => {
           options: { readonly onStreamResolved?: (id: StreamTabId) => void },
         ) => {
           rootBExecutionId = executionId;
-          executions.trackAgentExecution(
-            new AgentExecutionHandle(
-              executionId,
-              rootBStream,
-              rootBStream,
-              'root-b',
-              'toolUse',
-            ),
-            { status: STREAM_PHASE.RUNNING },
+          trackRunningExecution(
+            executions,
+            executionId,
+            rootBStream,
+            rootBStream,
+            'root-b',
           );
           options.onStreamResolved?.(rootBStream);
           return runB.promise;
@@ -917,27 +925,13 @@ describe('createChatSessionController', () => {
   });
 
   it('retains a root host while a child is activating', async () => {
-    const events = new SessionEventHub();
-    const status = new StreamStatusMachine();
-    const executions = new ExecutionRegistry({ events, streamStatus: status });
-    const interactions = new SessionHostInteractions();
+    const { executions } = installOwnerSession();
     const presentationHost = { emit: vi.fn(), close: vi.fn() };
     const disposeAdapter = vi.fn();
     const rootStream = 'activation-root' as StreamTabId;
     const childStream = 'activation-child' as StreamTabId;
     const childExecutionId = 'activation-child-exec' as ExecutionId;
 
-    mocks.defaultSession.mockReturnValue({
-      useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
-        interactions.use(adapter),
-      interactions,
-      events,
-      followUps: { restore: mocks.followUpEnqueue },
-      approvals: { registerStreamParent: vi.fn() },
-      status,
-      executions,
-      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
-    });
     mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
     mocks.createTuiHostInteractions.mockReturnValue({
       cancel: vi.fn(),
@@ -949,15 +943,12 @@ describe('createChatSessionController', () => {
         executionId: ExecutionId,
         options: { readonly onStreamResolved?: (id: StreamTabId) => void },
       ) => {
-        executions.trackAgentExecution(
-          new AgentExecutionHandle(
-            executionId,
-            rootStream,
-            rootStream,
-            'root',
-            'toolUse',
-          ),
-          { status: STREAM_PHASE.RUNNING },
+        trackRunningExecution(
+          executions,
+          executionId,
+          rootStream,
+          rootStream,
+          'root',
         );
         options.onStreamResolved?.(rootStream);
         executions.reserveChildActivation({
@@ -983,15 +974,12 @@ describe('createChatSessionController', () => {
     expect(presentationHost.close).not.toHaveBeenCalled();
     expect(disposeAdapter).not.toHaveBeenCalled();
 
-    executions.trackAgentExecution(
-      new AgentExecutionHandle(
-        childExecutionId,
-        rootStream,
-        childStream,
-        'child',
-        'toolUse',
-      ),
-      { status: STREAM_PHASE.RUNNING },
+    trackRunningExecution(
+      executions,
+      childExecutionId,
+      rootStream,
+      childStream,
+      'child',
     );
     expect(presentationHost.close).not.toHaveBeenCalled();
 
@@ -1454,12 +1442,7 @@ describe('createChatSessionController', () => {
       executionId: 'exec-1',
       config,
     });
-    mocks.resolveAndResumeStream.mockImplementationOnce(
-      async (
-        _streamId: StreamTabId,
-        ports: { resumeToolUse(snapshot: unknown): Promise<boolean> },
-      ) => ports.resumeToolUse(makeAutoResumeData()),
-    );
+    resumeWithAutoResumeData();
     mocks.resumeQueuedToolUseFromResumeData.mockImplementationOnce(
       async (
         _streamId: StreamTabId,

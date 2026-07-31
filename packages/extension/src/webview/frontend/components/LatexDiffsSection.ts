@@ -309,14 +309,9 @@ export class LatexDiffsSection extends LitElement {
     if (!this.isGitRepo) {
       return html`<wa-option value="">Not a Git repository</wa-option>`;
     }
-    const entries = this.commitOptions.some((commit) =>
-      commit.startsWith('HEAD'),
-    )
-      ? this.commitOptions
-      : ['HEAD', ...this.commitOptions];
     return html`
       ${repeat(
-        entries,
+        this.commitOptions,
         (commit) => commit,
         (commit) => {
           const [hash] = commit.split(': ');

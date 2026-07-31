@@ -4,6 +4,7 @@
  * Provides the minimal surface that handler implementations need
  * from the main SettingsViewMessageHandler.
  */
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { LogUtilsOptions } from '@logger/logUtils';
 
 import type * as vscode from 'vscode';
@@ -21,4 +22,21 @@ export interface SettingsHandlerContext {
   withActiveWebview: (
     fn: (w: vscode.Webview) => Promise<void>,
   ) => Promise<void>;
+}
+
+/**
+ * Run `fn`, logging and surfacing any thrown error as a settings-view error
+ * message instead of letting it propagate. Shared by every handler delegate
+ * to avoid re-typing the same try/catch around each message handler.
+ */
+export async function withHandlerErrorHandling(
+  ctx: SettingsHandlerContext,
+  errorMessage: string,
+  fn: () => Promise<void>,
+): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    await showLoggedErrorMessage(ctx.channel, errorMessage, error);
+  }
 }

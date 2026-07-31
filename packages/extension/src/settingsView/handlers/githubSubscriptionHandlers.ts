@@ -12,10 +12,7 @@ import {
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
 import { SecretManager } from '@frontend/secretManager';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   getProgressStreamLabel,
   revealProgressStream,
@@ -25,7 +22,10 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
-import type { SettingsHandlerContext } from './SettingsHandlerContext';
+import {
+  withHandlerErrorHandling,
+  type SettingsHandlerContext,
+} from './SettingsHandlerContext';
 
 /** GitHub token and subscription handler delegate. */
 export class GitHubSubscriptionHandlers {
@@ -48,31 +48,27 @@ export class GitHubSubscriptionHandlers {
       ignoreFocusOut: true,
     });
     if (!token) return;
-    try {
-      await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
-      void vscode.window.showInformationMessage('GitHub token saved.');
-      await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to save GitHub token',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to save GitHub token',
+      async () => {
+        await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
+        void vscode.window.showInformationMessage('GitHub token saved.');
+        await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+      },
+    );
   }
 
   async handleRemoveGitHubToken(): Promise<void> {
-    try {
-      await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
-      void vscode.window.showInformationMessage('GitHub token removed.');
-      await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to remove GitHub token',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to remove GitHub token',
+      async () => {
+        await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
+        void vscode.window.showInformationMessage('GitHub token removed.');
+        await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+      },
+    );
   }
 
   async openGitHubTokenUrl(): Promise<void> {

@@ -269,40 +269,38 @@ export class AgentRosterController<
       );
   }
 
+  /** Team identity a selection resolves to, following inherit to the default. */
+  private teamIdOf(selection: AgentRosterSelection): string | null | undefined {
+    if (selection.kind === 'inherit') {
+      return this.getDefaultTeamId() ?? this.deps.fallbackTeamId;
+    }
+    return selection.kind === 'team' ? selection.teamId : undefined;
+  }
+
+  private hasPreset(teamId: string): boolean {
+    return allPresets(this.extraPresets()).some(
+      (preset) => preset.id === teamId,
+    );
+  }
+
   private resolveEffectiveSelection(
     selection: AgentRosterSelection,
   ): AgentRosterSnapshot<Entry>['effectiveSelection'] {
     if (selection.kind === 'inherit') {
-      const teamId = this.getDefaultTeamId() ?? this.deps.fallbackTeamId;
+      const teamId = this.teamIdOf(selection);
       if (!teamId) return { kind: 'all' };
       selection = { kind: 'team', teamId };
     }
-    if (
-      selection.kind === 'team' &&
-      !allPresets(this.extraPresets()).some(
-        (preset) => preset.id === selection.teamId,
-      )
-    ) {
+    if (selection.kind === 'team' && !this.hasPreset(selection.teamId)) {
       return { kind: 'all' };
     }
     return selection;
   }
 
   private missingTeamId(selection: AgentRosterSelection): string | undefined {
-    let teamId: string | null | undefined;
-    if (selection.kind === 'inherit') {
-      teamId = this.getDefaultTeamId() ?? this.deps.fallbackTeamId;
-    } else if (selection.kind === 'team') {
-      teamId = selection.teamId;
-    } else {
-      teamId = undefined;
-    }
+    const teamId = this.teamIdOf(selection);
     if (!teamId) return undefined;
-    return allPresets(this.extraPresets()).some(
-      (preset) => preset.id === teamId,
-    )
-      ? undefined
-      : teamId;
+    return this.hasPreset(teamId) ? undefined : teamId;
   }
 
   private effectiveCategorySelection(

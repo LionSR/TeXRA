@@ -28,16 +28,12 @@ export const FREE_TIER = 'free';
 // Types
 // =============================================================================
 
+/** The relay tier ladder. Every per-tier table below is keyed by this union. */
+type Tier = typeof FREE_TIER | typeof MAX_TIER | typeof ULTRA_TIER;
+
 interface TierModelsConfig {
   /** Model access: "*" for all models, or array of specific model short names */
   models: '*' | string[];
-}
-
-/** Monthly spending limits by tier (in USD) */
-interface TierSpendingLimits {
-  free: number;
-  Max: number;
-  Ultra: number;
 }
 
 /** Per-user request gates enforced by the relay edge function. */
@@ -48,20 +44,12 @@ interface TierRequestLimit {
   concurrent: number;
 }
 
-type TierRequestLimits = Record<'free' | 'Max' | 'Ultra', TierRequestLimit>;
-
 export interface TierModelConfig {
   /** All supported providers (same for all tiers) */
   providers: string[];
   /** Per-tier model access */
-  tiers: {
-    free?: TierModelsConfig;
-    Max?: TierModelsConfig;
-    Ultra?: TierModelsConfig;
-  };
+  tiers: Partial<Record<Tier, TierModelsConfig>>;
 }
-
-type MinTier = 'free' | 'Max' | 'Ultra';
 
 type AuthType = 'bearer' | 'x-api-key' | 'x-goog-api-key';
 
@@ -123,7 +111,7 @@ export const PROVIDER_CONFIGS = Object.freeze({
 interface RelayModel {
   shortName: string;
   apiPattern: string;
-  minTier: MinTier;
+  minTier: Tier;
   provider: string;
 }
 
@@ -150,7 +138,7 @@ const MAX_FREE_INPUT_PRICE = 1.5;
 const MAX_FREE_OUTPUT_PRICE = 9;
 
 /** Derive tier from model pricing (input AND output bounded for free). */
-function getTierFromPrice(inputPrice: number, outputPrice: number): MinTier {
+function getTierFromPrice(inputPrice: number, outputPrice: number): Tier {
   if (
     inputPrice <= MAX_FREE_INPUT_PRICE &&
     outputPrice <= MAX_FREE_OUTPUT_PRICE
@@ -183,8 +171,7 @@ function toRelayModel(config: ModelConfig): RelayModel {
 // =============================================================================
 
 // All providers the relay can actually forward to.
-const ALL_PROVIDERS = Object.keys(PROVIDER_CONFIGS);
-const RELAY_PROVIDERS = new Set<string>(ALL_PROVIDERS);
+const RELAY_PROVIDERS = new Set<string>(Object.keys(PROVIDER_CONFIGS));
 
 // Kimi Code membership models are pinned to Moonshot's coding endpoint and can
 // only be served with a per-user Kimi Code key, so the relay (which forwards
@@ -218,14 +205,16 @@ const RETIRED_MODEL_PATTERNS = Object.values(MODEL_CONFIGS)
 // Derived Arrays
 // =============================================================================
 
-const FREE_TIER_SHORT_NAMES = RELAY_MODELS.filter(
-  (m) =>
-    m.minTier === FREE_TIER &&
-    !ULTRA_ONLY_PROVIDER_SET.has(m.provider.toLowerCase()),
-).map((m) => m.shortName);
-
-const MAX_TIER_SHORT_NAMES = RELAY_MODELS.filter(
+// Max is every relay model outside the Ultra-only providers; free is the
+// subset of those that also sit under the free price ceiling.
+const MAX_TIER_MODELS = RELAY_MODELS.filter(
   (m) => !ULTRA_ONLY_PROVIDER_SET.has(m.provider.toLowerCase()),
+);
+
+const MAX_TIER_SHORT_NAMES = MAX_TIER_MODELS.map((m) => m.shortName);
+
+const FREE_TIER_SHORT_NAMES = MAX_TIER_MODELS.filter(
+  (m) => m.minTier === FREE_TIER,
 ).map((m) => m.shortName);
 
 // =============================================================================
@@ -233,7 +222,7 @@ const MAX_TIER_SHORT_NAMES = RELAY_MODELS.filter(
 // =============================================================================
 
 export const TIER_CONFIG: TierModelConfig = {
-  providers: [...ALL_PROVIDERS],
+  providers: [...RELAY_PROVIDERS],
   tiers: {
     free: { models: FREE_TIER_SHORT_NAMES },
     Max: { models: MAX_TIER_SHORT_NAMES },
@@ -247,7 +236,7 @@ export const TIER_CONFIG: TierModelConfig = {
  * These limits apply to relay usage only. Users can always use their own
  * API keys without any limits.
  */
-export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
+export const TIER_SPENDING_LIMITS: Record<Tier, number> = {
   free: 10, // $10/month
   Max: 50, // $50/month
   Ultra: 300, // $300/month - sponsor access
@@ -257,7 +246,7 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
  * Server-side fairness gates. These are deliberately loose enough for normal
  * interactive use while blocking bulk free-tier fanout before costs are logged.
  */
-const TIER_REQUEST_LIMITS: TierRequestLimits = {
+const TIER_REQUEST_LIMITS: Record<Tier, TierRequestLimit> = {
   free: { ratePerMinute: 20, concurrent: 4 },
   Max: { ratePerMinute: 60, concurrent: 8 },
   Ultra: { ratePerMinute: 120, concurrent: 16 },
@@ -271,18 +260,12 @@ const TIER_REQUEST_LIMITS: TierRequestLimits = {
  * Get the monthly spending limit for a tier.
  */
 export function getSpendingLimit(tier: string): number {
-  return (
-    TIER_SPENDING_LIMITS[tier as keyof TierSpendingLimits] ??
-    TIER_SPENDING_LIMITS.free
-  );
+  return TIER_SPENDING_LIMITS[tier as Tier] ?? TIER_SPENDING_LIMITS.free;
 }
 
 /** Get per-user request gates for a tier. */
 export function getRequestLimits(tier: string): TierRequestLimit {
-  return (
-    TIER_REQUEST_LIMITS[tier as keyof TierRequestLimits] ??
-    TIER_REQUEST_LIMITS.free
-  );
+  return TIER_REQUEST_LIMITS[tier as Tier] ?? TIER_REQUEST_LIMITS.free;
 }
 
 // =============================================================================

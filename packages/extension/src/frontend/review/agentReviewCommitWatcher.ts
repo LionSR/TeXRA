@@ -8,9 +8,6 @@
  * branch resets the baseline without reviewing.
  */
 
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -19,6 +16,7 @@ import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import * as logger from '@logger/logUtils';
 import { createFlushableDebounce } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -31,11 +29,7 @@ const COMMIT_DEBOUNCE_MS = 1500;
 function isWorkspaceRepository(repository: GitRepository): boolean {
   const workspacePath = WorkspaceFS.getPath();
   if (!workspacePath) return false;
-  const relative = path.relative(repository.rootUri.fsPath, workspacePath);
-  return (
-    relative === '' ||
-    (!relative.startsWith('..') && !path.isAbsolute(relative))
-  );
+  return isPathWithin(repository.rootUri.fsPath, workspacePath);
 }
 
 function watchRepository(

@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Node imports

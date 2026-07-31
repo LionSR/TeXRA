@@ -8,7 +8,7 @@ import { DEFAULT_MODEL_CAPABILITIES } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -19,7 +19,10 @@ import {
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import {
+  SessionEventHub,
+  type SessionEvent,
+} from '@agent/runtime/SessionEventHub';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
   MESSAGE_TYPES,
@@ -101,6 +104,31 @@ function createWaitNodeServices(
 
 function waitPrep(afterError = false) {
   return { afterError, lastResponse: undefined, touchedFiles: [] };
+}
+
+/**
+ * Projects everything `logger` emits onto an isolated hub as run events for
+ * `streamId` and records them, the way a live run's trace subscription does.
+ * `observe` sees each trace event before it reaches the hub.
+ */
+function recordRunEvents(
+  logger: TraceEmitter,
+  streamId: StreamTabId,
+  observe?: (event: AgentEvent) => void,
+): { readonly events: SessionEvent[]; readonly detach: () => void } {
+  const hub = new SessionEventHub();
+  const recorded = recordSessionEvents(hub, { scope: 'run' });
+  const detachTrace = logger.subscribe((event) => {
+    observe?.(event);
+    hub.emit({ scope: 'run', streamId, event });
+  });
+  return {
+    events: recorded.events,
+    detach: () => {
+      detachTrace();
+      recorded.detach();
+    },
+  };
 }
 
 describe('ToolUseWaitNode', () => {
@@ -419,11 +447,7 @@ describe('ToolUseWaitNode', () => {
       cancel: vi.fn(),
     });
     const logger = new TraceEmitter();
-    const hub = new SessionEventHub();
-    const recorded = recordSessionEvents(hub, { scope: 'run' });
-    const detachTrace = logger.subscribe((event) =>
-      hub.emit({ scope: 'run', streamId, event }),
-    );
+    const recorded = recordRunEvents(logger, streamId);
     const waitForFollowUp = vi.fn();
     const services = createWaitNodeServices({
       isSubagent: false,
@@ -463,7 +487,6 @@ describe('ToolUseWaitNode', () => {
       });
     } finally {
       recorded.detach();
-      detachTrace();
       await GoalStore.forget(streamId);
       cleanupApprovalsForStream(streamId);
     }
@@ -753,11 +776,7 @@ describe('ToolUseWaitNode', () => {
       error: vi.fn(),
       info: vi.fn(),
     });
-    const events = new SessionEventHub();
-    const recorded = recordSessionEvents(events, { scope: 'run' });
-    const detachTrace = logger.subscribe((event) => {
-      events.emit({ scope: 'run', streamId, event });
-    });
+    const recorded = recordRunEvents(logger, streamId);
     const waitForFollowUp = vi.fn(async () => null);
     const services = createWaitNodeServices({
       isSubagent: false,
@@ -794,7 +813,6 @@ describe('ToolUseWaitNode', () => {
         }),
       ]);
     } finally {
-      detachTrace();
       recorded.detach();
       clearStreamStatusForTest(streamStatus, streamId);
     }
@@ -828,11 +846,8 @@ describe('ToolUseWaitNode', () => {
       error: vi.fn(),
       info,
     });
-    const events = new SessionEventHub();
-    const recorded = recordSessionEvents(events, { scope: 'run' });
-    const detachTrace = logger.subscribe((event) => {
+    const recorded = recordRunEvents(logger, streamId, (event) => {
       if (event.type === 'status') sequence.push('status');
-      events.emit({ scope: 'run', streamId, event });
     });
     const streamStatus = new StreamStatusMachine();
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
@@ -880,7 +895,6 @@ describe('ToolUseWaitNode', () => {
       );
       expect(sequence.indexOf('status')).toBeLessThan(sequence.indexOf('info'));
     } finally {
-      detachTrace();
       recorded.detach();
     }
     expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(

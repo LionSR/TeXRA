@@ -63,6 +63,18 @@ const config = {
   agent: 'test-agent',
 } as unknown as AgentConfig;
 
+function startBashChild(executionId: ExecutionId) {
+  return createChildStream(executionId, parentStreamId, {
+    streamPrefix: 'bash',
+    streamCategory: AgentCategory.ToolUse,
+    runKind: 'process',
+    agentName: 'test-agent',
+    description: 'Run a background bash command',
+    config,
+    toolName: 'bash',
+  });
+}
+
 function startCodexChild(executionId: ExecutionId, description: string) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'codex',
@@ -131,19 +143,7 @@ describe('child stream progress events', () => {
       }
     });
     try {
-      const childStream = createChildStream(
-        orderingExecutionId,
-        parentStreamId,
-        {
-          streamPrefix: 'bash',
-          streamCategory: AgentCategory.ToolUse,
-          runKind: 'process',
-          agentName: 'test-agent',
-          description: 'Run a background bash command',
-          config,
-          toolName: 'bash',
-        },
-      );
+      const childStream = startBashChild(orderingExecutionId);
       void childStream.finalize({ autoClose: true });
 
       expect(assertSpy).toHaveBeenCalledWith(orderingChildStreamId);
@@ -161,15 +161,7 @@ describe('child stream progress events', () => {
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
-      const childStream = createChildStream(executionId, parentStreamId, {
-        streamPrefix: 'bash',
-        streamCategory: AgentCategory.ToolUse,
-        runKind: 'process',
-        agentName: 'test-agent',
-        description: 'Run a background bash command',
-        config,
-        toolName: 'bash',
-      });
+      const childStream = startBashChild(executionId);
 
       expect(childStream.childStreamId).toBe(childStreamId);
 
@@ -410,15 +402,7 @@ describe('child stream progress events', () => {
     });
 
     try {
-      const childStream = createChildStream(executionId, parentStreamId, {
-        streamPrefix: 'bash',
-        streamCategory: AgentCategory.ToolUse,
-        runKind: 'process',
-        agentName: 'test-agent',
-        description: 'Run a background bash command',
-        config,
-        toolName: 'bash',
-      });
+      const childStream = startBashChild(executionId);
 
       expect(active.events).toEqual([]);
       expect(facts).toEqual([
@@ -451,19 +435,7 @@ describe('child stream progress events', () => {
     });
 
     try {
-      const childStream = createChildStream(
-        noProjectionAutoCloseExecutionId,
-        parentStreamId,
-        {
-          streamPrefix: 'bash',
-          streamCategory: AgentCategory.ToolUse,
-          runKind: 'process',
-          agentName: 'test-agent',
-          description: 'Run a background bash command',
-          config,
-          toolName: 'bash',
-        },
-      );
+      const childStream = startBashChild(noProjectionAutoCloseExecutionId);
 
       await childStream.finalize({ autoClose: true });
 
@@ -484,15 +456,7 @@ describe('child stream progress events', () => {
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
-      const childStream = createChildStream(executionId, parentStreamId, {
-        streamPrefix: 'bash',
-        streamCategory: AgentCategory.ToolUse,
-        runKind: 'process',
-        agentName: 'test-agent',
-        description: 'Run a background bash command',
-        config,
-        toolName: 'bash',
-      });
+      const childStream = startBashChild(executionId);
 
       await childStream.finalize({ autoClose: true });
 

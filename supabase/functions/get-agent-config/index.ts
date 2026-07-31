@@ -9,27 +9,13 @@
 
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
-import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-function errorResponse(req: Request, error: string, status: number): Response {
-  return jsonResponse(req, { error }, status);
-}
-
-// =============================================================================
-// Environment
-// =============================================================================
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-// Service-role client that bypasses bucket policies for storage operations
-// (env is fixed at cold start; no per-request state)
-const adminClient = createEdgeClient(supabaseUrl, serviceRoleKey);
+// The service-role client bypasses bucket policies for storage operations.
+import {
+  adminClient,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from '../_shared/edgeClients.ts';
+import { errorResponse, jsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Request Handler
@@ -46,7 +32,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Check environment
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !adminClient) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
     console.error('[GET_AGENT_CONFIG] Missing required environment variables');
     return errorResponse(req, 'Server configuration error', 500);
   }

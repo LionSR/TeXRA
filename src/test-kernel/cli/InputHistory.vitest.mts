@@ -1,20 +1,17 @@
 // Persistent ↑/↓ + Ctrl-R input history for the chat TUI input bar.
 
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import * as path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+
+const tempDirs: string[] = [];
 
 describe('CLI TUI input history', () => {
-  let storageDir: string;
-
   beforeEach(async () => {
     // GlobalStorageFS resolves paths through the platform but writes with the
     // real node fs, so the fake platform needs a real temp directory.
-    storageDir = await mkdtemp(path.join(tmpdir(), 'texra-input-history-'));
+    const storageDir = await makeTempDir('texra-input-history-', tempDirs);
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
       await Promise.all([
         import('@platform/platform'),
@@ -30,7 +27,7 @@ describe('CLI TUI input history', () => {
   });
 
   afterEach(async () => {
-    await rm(storageDir, { recursive: true, force: true });
+    await cleanupTempDirs(tempDirs);
   });
 
   it('exposes indexed entries for ↑/↓ history browsing', async () => {

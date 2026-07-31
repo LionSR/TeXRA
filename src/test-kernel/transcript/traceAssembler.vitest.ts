@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
   EXECUTION_STATUS,
@@ -11,7 +14,6 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import {
   cleanupTempDirs,
   createTempDirPlatform,
@@ -39,24 +41,14 @@ async function appendLogEntry(
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return {
-    inputFiles: [],
-    contextFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-    editedFile: null,
+  return AgentConfigSchema.parse({
     agent: 'orchestrator',
     model: 'deepseekT',
     instruction: 'Solve the problem.',
     agentCategory: AgentCategory.ToolUse,
-    editedFiles: [],
-    toolConfig: DEFAULT_TOOL_CONFIG,
-    memories: [],
     workingDirectory: '/workspace',
-    cliOutputFile: null,
-    cliMultiAgentPresetId: null,
     ...overrides,
-  };
+  });
 }
 
 describe('assembleTrace', () => {

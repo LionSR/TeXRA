@@ -2,15 +2,14 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  getRunContextWorkingDirectory,
-  tryUseRunContext,
-} from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
-import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import {
+  currentToolRoot,
+  resolveWorkspaceRelativePath,
+} from '@tools/pathResolution';
 import {
   countBySeverity,
   formatCounts,
@@ -115,8 +114,7 @@ export class DiagnosticsTool extends defineTool({
 
   /** Resolve an input path to an absolute path against the active working directory. */
   private resolveAbsolutePath(filePath: string): string {
-    const workingDirectory = getRunContextWorkingDirectory(tryUseRunContext());
-    return resolveWorkspaceRelativePath(filePath, workingDirectory).absolute;
+    return resolveWorkspaceRelativePath(filePath, currentToolRoot()).absolute;
   }
 
   private async readDiagnostics(

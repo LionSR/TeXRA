@@ -34,10 +34,6 @@ import type {
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { GoalStatus } from '@shared/schemas/goal';
 
-export type ProgressViewMessageSender = (
-  message: ProgressViewOutboundMessage,
-) => void;
-
 /**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
@@ -46,7 +42,7 @@ export type ProgressViewMessageSender = (
  */
 export class WebviewUpdater {
   constructor(
-    private readonly send: ProgressViewMessageSender,
+    private readonly send: (message: ProgressViewOutboundMessage) => void,
     private readonly hasTarget: () => boolean,
     /**
      * Commands this host's inbound registry declares `unsupported(...)`
@@ -381,24 +377,11 @@ export class WebviewUpdater {
     const selectableNames = streams
       .filter((info) => filter === 'all' || info.agentCategory === filter)
       .map((info) => info.name);
-    // When the filter excludes every stream, there's no valid tab to keep
-    // active; pickValidActiveStream's `[] || current` fallback would sticky
-    // on a hidden-category stream, so clear instead.
-    const activeStream =
-      selectableNames.length === 0
-        ? ''
-        : state.pickValidActiveStream(selectableNames);
-    const previousActive = state.activeStream;
-    if (activeStream !== previousActive) {
-      state.activeStream = activeStream;
-      // The previously-active stream may have finished while visible —
-      // setStreamStatus skipped release for the active tab, and the
-      // filter-driven switch path doesn't go through setActiveStream.
-      // Release here so the completed log doesn't stay pinned.
-      if (previousActive && previousActive !== activeStream) {
-        state.releasePreviousActive(previousActive);
-      }
-    }
+    // The previously-active stream may have finished while visible —
+    // setStreamStatus skipped release for the active tab, and the
+    // filter-driven switch path doesn't go through setActiveStream, so the
+    // rotation below is what releases the completed log.
+    const activeStream = state.rotateActiveStream(selectableNames);
 
     if (!this.isAvailable()) {
       return activeStream;

@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPACT_EDIT_APPROVAL_MAX_ROWS,
   editApprovalDiffRowsBudget,
-  editApprovalFeedbackRows,
   formatEditApprovalHunkCount,
 } from '@cli/chat/tui/modals/EditApproval';
+import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
 
 describe('CLI edit approval layout', () => {
   it('reserves footer rows when the approval title wraps', () => {
@@ -47,7 +47,7 @@ describe('CLI edit approval layout', () => {
 
   it('accounts for wrapped feedback placeholders on narrow terminals', () => {
     expect(
-      editApprovalFeedbackRows({
+      confirmCardFeedbackRows({
         columns: 16,
         placeholder: 'Needs a smaller proof step',
         value: '',

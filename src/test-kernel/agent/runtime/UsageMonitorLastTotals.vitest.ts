@@ -1,5 +1,4 @@
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -23,23 +22,7 @@ import {
 
 // Local file imports
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
-
-const modelInfo = {
-  capabilities: {
-    supportsPromptCaching: false,
-    supportsAutoPromptCaching: false,
-    supportsReasoning: false,
-    cacheDiscountFactor: 0,
-  },
-  config: {
-    provider: ModelProvider.OPENAI,
-    name: 'test-model',
-    fullName: 'Test Model',
-    inputPrice: 0,
-    openRouterOnly: false,
-    requiresResponsesAPI: false,
-  },
-};
+import { testModelInfo } from './launchContextTestUtils';
 
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();
@@ -51,7 +34,7 @@ function createMonitorWithEvents() {
     hub.emit({ scope: 'run', streamId, event }),
   );
   const monitor = new UsageMonitor(
-    modelInfo,
+    testModelInfo,
     { logger, storageKey, streamId },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );

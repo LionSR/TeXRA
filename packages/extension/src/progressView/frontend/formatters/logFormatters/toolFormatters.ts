@@ -10,12 +10,8 @@
  * `./toolFormatters/`; this file owns `formatToolUseTemplate`.
  */
 
-// Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/details/details.js';
-
 // Third-party imports - Lit template utilities
 import { html, nothing, type TemplateResult } from 'lit';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared utilities
 import type { LogMessageData } from '@shared/schemas';
@@ -41,7 +37,6 @@ import {
   wrapInPre,
   getToolIconName,
   buildCodeBlock,
-  buildDetailsSummary,
   stopSummaryToggleKeydown,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
@@ -50,9 +45,9 @@ import { stringifyWithLanguage } from '../parseUtils';
 import { TOOL_LABEL_MAP, TRIVIAL_WRITE_OUTPUT } from '../constants';
 
 import {
-  buildBannerContent,
   buildTerminalSection,
   buildToolSection,
+  buildToolUseDetails,
   getToolTimeoutMs,
   truncateHeaderSummary,
 } from './toolFormatters/helpers';
@@ -194,7 +189,6 @@ export function formatToolUseTemplate(
 
   // Auto-open in-progress tools so users see the command immediately
   const shouldOpen = options?.defaultOpen ?? isInProgress;
-  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
 
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);
@@ -218,17 +212,17 @@ export function formatToolUseTemplate(
   // prettier-ignore
   const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
 
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
-    'banner-details': true,
-    'tool-use-details': true,
-    'tool-use-error': showAsError,
-    'tool-use-user-feedback': isUserFeedback,
-    'tool-use-in-progress': isInProgress,
-  })} ?open=${shouldOpen}>${buildDetailsSummary({
+  return buildToolUseDetails({
+    message,
     iconName,
     label: titleText,
-    labelClass: 'tool-use-title',
+    isError: showAsError,
+    content: contentTemplate,
+    defaultOpen: shouldOpen,
+    extraClasses: {
+      'tool-use-user-feedback': isUserFeedback,
+      'tool-use-in-progress': isInProgress,
+    },
     extraContent,
-  })}${bannerContentTemplate}</wa-details>`;
+  });
 }

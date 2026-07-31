@@ -41,16 +41,36 @@ const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
   [ModelProvider.XAI]: 'xai',
 };
 
-const BASE_URLS: Record<ModelProvider, string | null> = {
+/**
+ * Provider default base URLs. Providers whose endpoint depends on the
+ * China/international toggles supply a thunk, read only when that provider is
+ * the one being resolved.
+ */
+const BASE_URLS: Record<ModelProvider, string | (() => string) | null> = {
   [ModelProvider.GOOGLE]: null,
   [ModelProvider.OPENAI]: null,
   [ModelProvider.ANTHROPIC]: null,
   [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
   [ModelProvider.XAI]: 'https://api.x.ai/v1',
-  [ModelProvider.MOONSHOT]: null, // Resolved dynamically (China/international toggle)
-  [ModelProvider.DASHSCOPE]: null, // Resolved dynamically (China/international toggle)
-  [ModelProvider.MINIMAX]: null, // Resolved dynamically (China/international toggle)
-  [ModelProvider.GLM]: null, // Resolved dynamically (China/international toggle)
+  // China: api.moonshot.cn, International: api.moonshot.ai. Keys are
+  // platform-specific. Kimi Code models never reach here — their directAccess
+  // baseUrl wins as `route: 'custom'` at the top of the resolver.
+  [ModelProvider.MOONSHOT]: () =>
+    `https://${getMoonshotUseChina() ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
+  [ModelProvider.DASHSCOPE]: () =>
+    `https://${
+      getDashScopeUseChina()
+        ? 'dashscope.aliyuncs.com'
+        : 'dashscope-intl.aliyuncs.com'
+    }/compatible-mode/v1`,
+  // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
+  [ModelProvider.MINIMAX]: () =>
+    `https://${getMiniMaxUseChina() ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
+  // China: open.bigmodel.cn, International: api.z.ai
+  [ModelProvider.GLM]: () =>
+    `https://${getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai'}${
+      getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4'
+    }`,
   [ModelProvider.META]: 'https://api.meta.ai/v1',
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
@@ -212,37 +232,6 @@ function resolveDirectBaseUrl(config: {
     return `https://${normalizeUrl(customUrl)}`;
   }
 
-  // Providers with dynamic region-based URLs
-  switch (provider) {
-    case ModelProvider.DASHSCOPE: {
-      const domain = getDashScopeUseChina()
-        ? 'dashscope.aliyuncs.com'
-        : 'dashscope-intl.aliyuncs.com';
-      return `https://${domain}/compatible-mode/v1`;
-    }
-    case ModelProvider.MINIMAX: {
-      // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
-      const domain = getMiniMaxUseChina()
-        ? 'api.minimaxi.com'
-        : 'api.minimax.io';
-      return `https://${domain}/v1`;
-    }
-    case ModelProvider.MOONSHOT: {
-      // China: api.moonshot.cn, International: api.moonshot.ai. Keys are
-      // platform-specific. Kimi Code models never reach this switch — their
-      // directAccess baseUrl wins as customBaseUrl at the top of this resolver.
-      const domain = getMoonshotUseChina()
-        ? 'api.moonshot.cn'
-        : 'api.moonshot.ai';
-      return `https://${domain}/v1`;
-    }
-    case ModelProvider.GLM: {
-      // China: open.bigmodel.cn, International: api.z.ai
-      const domain = getGLMUseChina() ? 'open.bigmodel.cn' : 'api.z.ai';
-      const path = getGLMCodingPlan() ? '/api/coding/paas/v4' : '/api/paas/v4';
-      return `https://${domain}${path}`;
-    }
-    default:
-      return BASE_URLS[provider];
-  }
+  const baseUrl = BASE_URLS[provider];
+  return typeof baseUrl === 'function' ? baseUrl() : baseUrl;
 }

@@ -282,13 +282,10 @@ export class SettingsApp extends SettingsAppBase {
   }
 
   private renderSettingsNavigation(
+    activeGroup: SettingsNavGroup,
     activePanel: string,
     goalSupported: boolean,
   ): TemplateResult {
-    const activeGroup =
-      SETTINGS_NAV_GROUPS.find((group) =>
-        group.entries.some((entry) => entry.panel === activePanel),
-      ) ?? SETTINGS_NAV_GROUPS[0];
     const activeEntries = this.entriesForGroup(activeGroup, goalSupported);
 
     return html`
@@ -507,13 +504,17 @@ export class SettingsApp extends SettingsAppBase {
       !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
         ? SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT
         : requestedPanel;
-    const activeEntry = SETTINGS_NAV_GROUPS.flatMap(
-      (group) => group.entries,
-    ).find((entry) => entry.panel === activePanel);
+    const activeGroup =
+      SETTINGS_NAV_GROUPS.find((group) =>
+        group.entries.some((entry) => entry.panel === activePanel),
+      ) ?? SETTINGS_NAV_GROUPS[0];
+    const activeEntry = activeGroup.entries.find(
+      (entry) => entry.panel === activePanel,
+    );
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(activePanel, goalSupported)}
+        ${this.renderSettingsNavigation(activeGroup, activePanel, goalSupported)}
         <section
           class="settings-panel"
           role="tabpanel"

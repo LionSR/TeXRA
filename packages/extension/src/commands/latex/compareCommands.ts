@@ -10,7 +10,6 @@ import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
-  toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import {
   acceptEditedFileReplace,
@@ -24,6 +23,7 @@ import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import { legacyWorkflowOutputStem } from '@shared/constants/workflowOutput';
 import { AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';
 

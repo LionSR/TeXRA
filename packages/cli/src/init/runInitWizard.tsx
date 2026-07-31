@@ -276,27 +276,24 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
 export async function runInitWizard(
   options: InitWizardOptions,
 ): Promise<InitWizardResult | undefined> {
-  return new Promise((resolve) => {
-    let chosen: InitWizardResult | undefined;
-    const record = (result: InitWizardResult | undefined): void => {
-      chosen = result;
-    };
-
-    const instance = render(
-      <WizardApp options={options} onResolve={record} />,
-      {
-        stdout: tuiOutputStreamForColor(
-          process.stdout,
-          options.colorEnabled ?? true,
-        ),
-        stderr: process.stderr,
-        stdin: process.stdin,
-      },
-    );
-
-    void instance.waitUntilExit().then(() => {
-      clearTerminalScrollback();
-      resolve(chosen);
-    });
-  });
+  let chosen: InitWizardResult | undefined;
+  const instance = render(
+    <WizardApp
+      options={options}
+      onResolve={(result) => {
+        chosen = result;
+      }}
+    />,
+    {
+      stdout: tuiOutputStreamForColor(
+        process.stdout,
+        options.colorEnabled ?? true,
+      ),
+      stderr: process.stderr,
+      stdin: process.stdin,
+    },
+  );
+  await instance.waitUntilExit();
+  clearTerminalScrollback();
+  return chosen;
 }

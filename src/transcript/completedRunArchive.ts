@@ -8,12 +8,9 @@
  * — each fact keeps exactly ONE legacy read arm, here, tracked for D3
  * retirement in the #6981 ledger.
  */
-import pMap from 'p-map';
-
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
-import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import {
   MESSAGE_TYPES,
@@ -28,10 +25,13 @@ import {
   type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
-import { StorageFS } from '@utils/files';
 import { assertNever } from '@utils/core';
 
-import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
+import {
+  findExecutionSuffixMatches,
+  resolvePersistedStreamIdForExecution,
+  scanPersistedStreamsForExecution,
+} from './executionStreamResolver';
 import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
 import { StreamLogStore, STREAM_LOGS_DIR } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
@@ -55,20 +55,11 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
   };
 }
 
-function workPlanPath(streamId: StreamTabId): string {
-  return `${streamDataDir(streamId)}/${STREAM_DATA_KEYS.WORK_PLAN}.json`;
-}
-
 /** Sidecar `workPlan.json` mtime (ms since epoch), or `undefined` if absent. */
-async function sidecarModifiedAt(
-  streamId: StreamTabId,
-): Promise<number | undefined> {
-  try {
-    return (await StorageFS.stat(workPlanPath(streamId))).mtime;
-  } catch (err) {
-    if (isFileNotFoundError(err)) return undefined;
-    throw err;
-  }
+function sidecarModifiedAt(streamId: StreamTabId): Promise<number | undefined> {
+  return new KVStore(streamDataDir(streamId)).modifiedAt(
+    STREAM_DATA_KEYS.WORK_PLAN,
+  );
 }
 
 async function readLegacyTodos(
@@ -367,9 +358,6 @@ async function conversationFromStream(
   return log ? streamLogEntriesToConversation(log.toJSON()) : [];
 }
 
-/** Bounded fan-out for the sibling meta scan (mirrors the resolver's). */
-const CONVERSATION_CANDIDATE_SCAN_CONCURRENCY = 8;
-
 /**
  * Sibling sidecar streams for the same execution, tried only when the
  * resolver's pick reconstructs empty (cold path). #7433's resolver ranking
@@ -385,23 +373,11 @@ async function siblingConversationStreams(
   snapshotStore: StreamSnapshotStore,
   streamLogStore: StreamLogStore,
 ): Promise<StreamTabId[]> {
-  const persisted = await snapshotStore.listPersistedStreams();
-  const metaMatched = (
-    await pMap(
-      persisted,
-      async (streamId) => ({
-        streamId,
-        executionId: await snapshotStore.readPersistedExecutionId(streamId),
-      }),
-      { concurrency: CONVERSATION_CANDIDATE_SCAN_CONCURRENCY },
-    )
-  )
-    .filter((candidate) => candidate.executionId === executionId)
-    .map((candidate) => candidate.streamId);
-
-  const suffix = `#${executionId}`;
-  const suffixMatched = [...persisted, ...streamLogStore.keys()].filter((id) =>
-    id.endsWith(suffix),
+  const { persistedStreams, metaMatched } =
+    await scanPersistedStreamsForExecution(executionId, snapshotStore);
+  const suffixMatched = findExecutionSuffixMatches(
+    [...persistedStreams, ...streamLogStore.keys()],
+    executionId,
   );
 
   const seen = new Set<StreamTabId>([primary]);

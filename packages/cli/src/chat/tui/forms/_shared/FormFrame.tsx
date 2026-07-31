@@ -107,3 +107,49 @@ export function CompactFormKeyHints(props: {
     />
   );
 }
+
+/**
+ * Footer vocabulary for the pickers that render their own layout (`/agent`,
+ * `/model`): a selectable list advertises hotkey selection, a read-only or
+ * empty one advertises only how to close.
+ */
+export function PickerKeyHints(props: {
+  readonly selectable: boolean;
+  readonly hasItems: boolean;
+}): React.JSX.Element {
+  if (props.selectable && props.hasItems) {
+    return (
+      <KeyHints
+        hints={[
+          { key: '↑/↓', action: 'navigate' },
+          { key: '1-9/a-z', action: 'select' },
+        ]}
+      />
+    );
+  }
+  return (
+    <KeyHints
+      hints={[
+        ...(props.hasItems ? [{ key: '↑/↓', action: 'navigate' }] : []),
+        { key: 'Enter', action: 'close' },
+        { key: 'Esc', action: 'close' },
+      ]}
+      confirmCancel={false}
+    />
+  );
+}
+
+/** The same vocabulary in a compact frame, where one row must carry it all. */
+export function CompactPickerKeyHints(props: {
+  readonly selectable: boolean;
+}): React.JSX.Element {
+  return (
+    <CompactFormKeyHints
+      primary={
+        props.selectable
+          ? { key: '1-9/a-z/Enter', action: 'select' }
+          : { key: 'Enter', action: 'close' }
+      }
+    />
+  );
+}

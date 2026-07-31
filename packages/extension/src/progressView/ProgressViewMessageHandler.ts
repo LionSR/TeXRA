@@ -87,6 +87,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    */
   private readonly handlerRegistry: ProgressViewInboundHandlerRegistry;
 
+  // Snapshot accessors reused across the controller-wiring methods below;
+  // each controller only needs a subset of these.
+  private readonly getTaskState = (stream: StreamTabId) =>
+    this.provider.state.snapshots.getTaskState(stream);
+  private readonly getExecutionId = (stream: StreamTabId) =>
+    this.provider.state.snapshots.getExecutionId(stream);
+  private readonly getOutputFiles = (stream: StreamTabId) =>
+    this.provider.state.snapshots.getOutputFiles(stream);
+
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly host: PromptHost,
@@ -178,8 +187,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       },
       session: defaultSession(),
-      getTaskState: (stream) =>
-        this.provider.state.snapshots.getTaskState(stream),
+      getTaskState: this.getTaskState,
       restoreTaskState: async (taskState) => {
         await this.runViewCommand('texra.restoreState', [taskState]);
       },
@@ -339,10 +347,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return new ProgressViewHost({
       run: {
         state: {
-          getTaskState: (stream) =>
-            this.provider.state.snapshots.getTaskState(stream),
-          getExecutionId: (stream) =>
-            this.provider.state.snapshots.getExecutionId(stream),
+          getTaskState: this.getTaskState,
+          getExecutionId: this.getExecutionId,
         },
         executeAgent: async (request) => {
           // Workflow actions intentionally wait for the run to finish; the
@@ -354,10 +360,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       workflowFileActions: {
         state: {
           getActiveStream: () => this.provider.state.activeStream,
-          getExecutionId: (stream) =>
-            this.provider.state.snapshots.getExecutionId(stream),
-          getOutputFiles: (stream) =>
-            this.provider.state.snapshots.getOutputFiles(stream),
+          getExecutionId: this.getExecutionId,
+          getOutputFiles: this.getOutputFiles,
           getAgentModel: (stream) => {
             const taskState =
               this.provider.state.snapshots.getTaskState(stream);
@@ -539,12 +543,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
       state: {
-        getTaskState: (stream) =>
-          this.provider.state.snapshots.getTaskState(stream),
-        getExecutionId: (stream) =>
-          this.provider.state.snapshots.getExecutionId(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
+        getTaskState: this.getTaskState,
+        getExecutionId: this.getExecutionId,
+        getOutputFiles: this.getOutputFiles,
         getKnownWorkspaceOutputPaths: (stream) =>
           this.provider.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
@@ -595,14 +596,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return modelOptions;
       },
       state: {
-        getTaskState: (stream) =>
-          this.provider.state.snapshots.getTaskState(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
+        getTaskState: this.getTaskState,
+        getOutputFiles: this.getOutputFiles,
         getCompileFailures: (stream) =>
           this.provider.state.snapshots.getCompileFailures(stream),
-        getExecutionId: (stream) =>
-          this.provider.state.snapshots.getExecutionId(stream),
+        getExecutionId: this.getExecutionId,
       },
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
@@ -749,7 +747,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }
     }
 
-    const taskState = this.provider.state.snapshots.getTaskState(data.stream);
+    const taskState = this.getTaskState(data.stream);
     if (!taskState) {
       await this.host.info(
         'The original run configuration is no longer available. Choose the direct model and start the agent again.',
@@ -787,7 +785,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handlePolishFollowUp(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP>,
   ): Promise<void> {
-    const taskState = this.provider.state.snapshots.getTaskState(data.stream);
+    const taskState = this.getTaskState(data.stream);
     if (!taskState) return;
 
     await vscode.window.withProgress(

@@ -30,13 +30,6 @@ import { isGitRepository } from '@utils/system/isGitRepository';
 
 const CHANNEL = 'gitCommands';
 
-export const gitCommands = {
-  isGitRepository: 'texra.isGitRepository',
-  getRecentCommits: 'texra.getRecentCommits',
-  findCommitInHistory: 'texra.findCommitInHistory',
-  cloneOverleafProject: 'texra.cloneOverleafProject',
-};
-
 export function registerGitCommands(context: vscode.ExtensionContext): void {
   // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
   // return values to `executeCommand` callers (`boolean`,
@@ -46,9 +39,9 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
   // shared command registry in #3781 batch 3 (see
   // `extensionCommandSurface.ts`).
   registerCommands(context, [
-    { id: gitCommands.isGitRepository, handler: isGitRepository },
-    { id: gitCommands.getRecentCommits, handler: getRecentCommits },
-    { id: gitCommands.findCommitInHistory, handler: findCommitInHistory },
+    { id: 'texra.isGitRepository', handler: isGitRepository },
+    { id: 'texra.getRecentCommits', handler: getRecentCommits },
+    { id: 'texra.findCommitInHistory', handler: findCommitInHistory },
   ]);
 }
 

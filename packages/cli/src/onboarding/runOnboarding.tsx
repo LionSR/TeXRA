@@ -207,37 +207,33 @@ async function runOnboardingFlow(options: {
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
   const picker = onboardingPicker(options);
-  const resolution = await new Promise<OnboardingResolution>((resolve) => {
-    let chosen: OnboardingResolution = NO_ONBOARDING_RESULT;
-    const record = (next: OnboardingResolution): void => {
-      chosen = next;
-    };
-    const instance = render(
-      <OnboardingApp
-        pickerSubtitle={picker.subtitle}
-        pickerItems={picker.items}
-        onResolve={record}
-      />,
-      {
-        // Both callers reject non-TTY output before reaching this flow. Keep
-        // that product boundary authoritative when a real PTY also has CI set;
-        // Ink otherwise disables interactive rendering from its CI heuristic.
-        interactive: true,
-        stdout: tuiOutputStreamForColor(
-          process.stdout,
-          options.colorEnabled ?? true,
-        ),
-        stderr: process.stderr,
-        stdin: process.stdin,
-      },
-    );
-    void instance.waitUntilExit().then(() => {
-      // Wipe the picker out of the visible screen without erasing scrollback
-      // (matches runOrchestrationTui); the summary below lands in scrollback.
-      clearTerminalVisibleScreen();
-      resolve(chosen);
-    });
-  });
+  let chosen: OnboardingResolution | undefined;
+  const instance = render(
+    <OnboardingApp
+      pickerSubtitle={picker.subtitle}
+      pickerItems={picker.items}
+      onResolve={(next) => {
+        chosen = next;
+      }}
+    />,
+    {
+      // Both callers reject non-TTY output before reaching this flow. Keep
+      // that product boundary authoritative when a real PTY also has CI set;
+      // Ink otherwise disables interactive rendering from its CI heuristic.
+      interactive: true,
+      stdout: tuiOutputStreamForColor(
+        process.stdout,
+        options.colorEnabled ?? true,
+      ),
+      stderr: process.stderr,
+      stdin: process.stdin,
+    },
+  );
+  await instance.waitUntilExit();
+  // Wipe the picker out of the visible screen without erasing scrollback
+  // (matches runOrchestrationTui); the summary below lands in scrollback.
+  clearTerminalVisibleScreen();
+  const resolution: OnboardingResolution = chosen ?? NO_ONBOARDING_RESULT;
 
   if (resolution.declined) {
     // Best-effort: persist the decline so we don't re-prompt next launch. If the

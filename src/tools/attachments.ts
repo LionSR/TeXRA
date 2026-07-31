@@ -33,6 +33,47 @@ export interface BuildFileAttachmentOptions {
 
 const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
 
+export interface BuildBytesAttachmentOptions {
+  /** Display path surfaced to the model. */
+  path: string;
+  mimeType: string;
+  bytes: Uint8Array;
+  /** Optional description surfaced to the model. */
+  description?: string;
+}
+
+/**
+ * Package in-memory bytes as a tool attachment.
+ *
+ * Oversized images are reduced to metadata: their binary data is dropped to
+ * prevent non-retryable API 400 errors, and downstream handlers fall back to a
+ * read_file hint. The returned attachment owns a copy of `bytes`, so callers
+ * may zero their own buffer afterwards.
+ */
+export function buildBytesAttachment({
+  path,
+  mimeType,
+  bytes,
+  description,
+}: BuildBytesAttachmentOptions): ToolFileAttachment {
+  if (mimeType.startsWith('image/') && isOversizedImage(bytes)) {
+    return {
+      path,
+      mimeType,
+      description:
+        (description ? `${description} — ` : '') +
+        `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
+    };
+  }
+
+  return {
+    path,
+    mimeType,
+    bytes: Uint8Array.from(bytes),
+    ...(description && { description }),
+  };
+}
+
 /**
  * Build a tool attachment by reading a workspace file and packaging metadata.
  */
@@ -77,28 +118,15 @@ export async function buildFileAttachment({
   const inferredMime =
     mimeType ?? getMimeType(path.fsPath) ?? 'application/octet-stream';
 
-  // Strip binary data from oversized images to prevent non-retryable API 400 errors.
-  // Downstream handlers see no bytes → metadata-only fallback with read_file hint.
-  if (inferredMime.startsWith('image/') && isOversizedImage(buffer)) {
-    buffer.fill(0);
-    return {
-      path: display,
-      mimeType: inferredMime,
-      description:
-        (description ? `${description} — ` : '') +
-        `Image exceeds ${MANY_IMAGE_MAX_DIMENSION}px dimension limit; binary data stripped`,
-    };
-  }
-
-  const base64Data = includeBase64 ? buffer.toString('base64') : undefined;
-  const bytes = Uint8Array.from(buffer);
-  buffer.fill(0);
-
-  return {
+  const attachment = buildBytesAttachment({
     path: display,
     mimeType: inferredMime,
-    bytes,
-    ...(description && { description }),
-    ...(base64Data && { base64Data }),
-  };
+    bytes: buffer,
+    description,
+  });
+  const base64Data =
+    includeBase64 && attachment.bytes ? buffer.toString('base64') : undefined;
+  buffer.fill(0);
+
+  return base64Data ? { ...attachment, base64Data } : attachment;
 }

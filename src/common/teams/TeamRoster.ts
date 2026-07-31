@@ -1,5 +1,6 @@
 import {
   agentKeyOf,
+  agentMatchesIdentifier,
   type AgentCategory,
   type AgentSource,
 } from '@shared/schemas/agent';
@@ -76,7 +77,9 @@ function resolveAgentKeys(
   const entries = state.getAgents(category);
   const unresolved: string[] = [];
   const keys = names.map((name) => {
-    const entry = entries.find((candidate) => candidate.name === name);
+    const entry = entries.find((candidate) =>
+      agentMatchesIdentifier(candidate, name),
+    );
     if (entry) return agentKeyOf(entry);
     unresolved.push(name);
     return name;

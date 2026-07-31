@@ -6,56 +6,20 @@ import { join } from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
+// Local imports - platform
+import type { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import type { JsonStore } from '@platform/defaults/jsonStore';
+
 // Local imports - test support
-import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
-
-interface JsonStore {
-  set(key: string, value: unknown): Promise<void>;
-  snapshot(): Record<string, unknown>;
-}
-
-interface JsonConfigProvider {
-  get<T>(key: string, defaultValue?: T): T;
-  inspect<T = unknown>(
-    key: string,
-  ):
-    | {
-        globalValue?: T;
-        workspaceValue?: T;
-        effectiveValue?: T;
-      }
-    | undefined;
-  update<T>(
-    key: string,
-    value: T,
-    target?: 'global' | 'workspace',
-  ): Promise<void>;
-  isExplicitlySet(key: string): boolean;
-  watch(key: string, listener: () => void): { dispose(): void };
-}
-
-interface JsonStoreModule {
-  JsonStore: {
-    open(filePath: string): Promise<JsonStore>;
-  };
-}
-
-interface JsonConfigProviderModule {
-  JsonConfigProvider: new (options: {
-    workspace: JsonStore;
-    global: JsonStore;
-  }) => JsonConfigProvider;
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 async function loadDesktopConfigConstructors(): Promise<{
-  JsonStore: JsonStoreModule['JsonStore'];
-  JsonConfigProvider: JsonConfigProviderModule['JsonConfigProvider'];
+  JsonStore: typeof import('@platform/defaults/jsonStore').JsonStore;
+  JsonConfigProvider: typeof import('@platform/defaults/jsonConfigProvider').JsonConfigProvider;
 }> {
   const [{ JsonStore }, { JsonConfigProvider }] = await Promise.all([
-    loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-    loadPlatformDefaultsModule<JsonConfigProviderModule>(
-      'jsonConfigProvider.ts',
-    ),
+    loadSourceModule('@platform/defaults/jsonStore'),
+    loadSourceModule('@platform/defaults/jsonConfigProvider'),
   ]);
   return { JsonStore, JsonConfigProvider };
 }

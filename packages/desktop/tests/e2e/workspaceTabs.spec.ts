@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +10,7 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 // End-to-end coverage for the task-centric shell. The conversation is permanent
 // while workbench tabs can live in independently resizable Right and Bottom
@@ -44,7 +45,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
-  if (workspacePath) rmSync(workspacePath, { recursive: true, force: true });
+  if (workspacePath) cleanupDirectory(workspacePath);
 });
 
 /** Opens one of the workbench actions permanently exposed in the sidebar. */

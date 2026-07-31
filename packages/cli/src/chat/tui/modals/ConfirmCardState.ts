@@ -1,4 +1,8 @@
-import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import {
+  KEY_HINT_SEPARATOR,
+  keyHintText,
+  type KeyHint,
+} from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
@@ -22,16 +26,11 @@ export interface ConfirmCardKeyOptions {
   readonly rejectionMode: ConfirmCardRejectionMode;
 }
 
-export interface ConfirmCardHintAction {
-  readonly key: string;
-  readonly action: string;
-}
-
 export interface ConfirmCardHintOptions {
   readonly approveLabel?: string;
   readonly rejectLabel?: string;
   readonly alwaysAllowLabel?: string;
-  readonly extraActions?: readonly ConfirmCardHintAction[];
+  readonly extraActions?: readonly KeyHint[];
 }
 
 export interface ConfirmCardHintWidthOptions extends ConfirmCardHintOptions {
@@ -44,8 +43,8 @@ export interface ConfirmCardCompactHintLayoutOptions extends ConfirmCardHintOpti
 }
 
 export interface ConfirmCardCompactHintLayout {
-  readonly inlineHints: readonly ConfirmCardHintAction[];
-  readonly stackedHints: readonly ConfirmCardHintAction[];
+  readonly inlineHints: readonly KeyHint[];
+  readonly stackedHints: readonly KeyHint[];
   readonly stack: boolean;
 }
 
@@ -83,7 +82,7 @@ export function confirmCardKeyHints({
   rejectLabel = 'reject & note',
   alwaysAllowLabel,
   extraActions = [],
-}: ConfirmCardHintOptions): ConfirmCardHintAction[] {
+}: ConfirmCardHintOptions): KeyHint[] {
   return [
     { key: 'y', action: approveLabel },
     { key: 'n', action: rejectLabel },
@@ -95,7 +94,7 @@ export function confirmCardKeyHints({
   ];
 }
 
-export function confirmCardFeedbackHints(): ConfirmCardHintAction[] {
+export function confirmCardFeedbackHints(): KeyHint[] {
   return [
     { key: 'Enter', action: 'send note' },
     { key: 'Esc', action: 'back' },
@@ -104,12 +103,12 @@ export function confirmCardFeedbackHints(): ConfirmCardHintAction[] {
 
 // Reuses the canonical `keyHintText` projection (see its doc comment) so this
 // measures exactly what KeyHints renders, instead of re-deriving the format.
-function hintColumns(hints: readonly ConfirmCardHintAction[]): number {
+function hintColumns(hints: readonly KeyHint[]): number {
   return textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR));
 }
 
 function hintsFit(
-  hints: readonly ConfirmCardHintAction[],
+  hints: readonly KeyHint[],
   maxColumns: number | undefined,
 ): boolean {
   return maxColumns === undefined || hintColumns(hints) <= maxColumns;
@@ -130,13 +129,13 @@ function compactHintAction(action: string): string {
   }
 }
 
-function isCoreApprovalHint(hint: ConfirmCardHintAction): boolean {
+function isCoreApprovalHint(hint: KeyHint): boolean {
   return hint.key === 'y' || hint.key === 'n' || hint.key === 'Esc';
 }
 
 export function confirmCardKeyHintsForWidth(
   options: ConfirmCardHintWidthOptions,
-): ConfirmCardHintAction[] {
+): KeyHint[] {
   const fullHints = confirmCardKeyHints(options);
   if (hintsFit(fullHints, options.maxColumns)) return fullHints;
 

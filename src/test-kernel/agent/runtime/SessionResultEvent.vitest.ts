@@ -6,36 +6,28 @@ import '@test/support/defaultSessionTestSetup';
 // Test support imports
 
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentCategory,
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { createRunScope } from '@agent/runtime/RunScope';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
+import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn().mockResolvedValue({
@@ -65,64 +57,12 @@ function setupResultCase(): {
   });
 
   const n = counter++;
-  const executionId = `a${n.toString(16).padStart(5, '0')}` as ExecutionId;
-  const streamId = `stream:result-${n}` as StreamTabId;
-  const config = AgentConfigSchema.parse({
-    agent: 'assistant',
-    model: 'test-model',
-    agentCategory: AgentCategory.ToolUse,
-  });
-  const setting = AgentSettingSchema.parse({
-    agentCategory: AgentCategory.ToolUse,
-  });
-  const prompt = AgentPromptSchema.parse({});
-  const storageKey = executionId as unknown as StorageKey;
-  const session = defaultSession();
-  const streamStatus = session.status;
-  const runScope = createRunScope({
-    streamId,
-    executionId,
-    agentName: config.agent,
-    session,
-  });
-  const modelInfo = {
-    capabilities: {
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
-      supportsReasoning: false,
-      cacheDiscountFactor: 0,
-    },
-    config: {
-      provider: ModelProvider.OPENAI,
-      name: 'test-model',
-      fullName: 'Test Model',
-      inputPrice: 0,
-      openRouterOnly: false,
-      requiresResponsesAPI: false,
-    },
-  };
-
-  const ctx: AgentLaunchContext = {
-    config,
-    setting,
-    prompt,
-    runScope,
+  const ctx = createTestLaunchContext({
+    executionId: `a${n.toString(16).padStart(5, '0')}` as ExecutionId,
+    streamId: `stream:result-${n}` as StreamTabId,
     logger,
-    parentStage: logger.openStage('Run: assistant'),
-    storageKey,
-    userVarChannels: { input: Object.freeze({}), transient: {} },
-    attachedMemoryMisses: [],
-    usageMonitor: new UsageMonitor(
-      modelInfo,
-      { logger, storageKey, streamId },
-      { agentName: config.agent, agentCategory: setting.agentCategory },
-    ),
-    modelHandler: {
-      dispose: vi.fn(),
-    } as unknown as AgentLaunchContext['modelHandler'],
-    disposeTrace: vi.fn(),
-  };
-  return { logger, results, ctx, streamStatus };
+  });
+  return { logger, results, ctx, streamStatus: ctx.runScope.session.status };
 }
 
 describe('terminal result event (SDK Step 7d PR 6)', () => {

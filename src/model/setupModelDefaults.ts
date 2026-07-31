@@ -7,52 +7,68 @@ import {
 import { resolveModelSource } from './openRouterRouting';
 import { isCodexSubscriptionEligible } from './providerCapabilities';
 
-/**
- * Curated setup-probe model per provider — a well-known model used to verify
- * a provider's credential during onboarding. This table is a *preference*,
- * not the source of truth for whether that model is still servable: a
- * provider can retire the pinned model at any time (this has already
- * happened live for `xai: 'grok4'`), which would otherwise make the setup
- * assistant silently probe a dead model forever.
- * {@link SETUP_MODEL_BY_PROVIDER} below validates each preference through the
- * runtime model registry and substitutes a still-usable model for that
- * provider when the pin has gone stale, so it always resolves to a servable
- * model without needing this table hand-updated on every retirement.
- */
-const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
-  anthropic: 'opus5T',
-  openai: 'gpt55',
-  google: 'gemini31p',
-  deepseek: 'deepseekproT',
-  openRouter: 'sonnet46T',
-  xai: 'grok4',
-  moonshot: 'kimi25T',
-  kimiCode: 'kimiCoding',
-  dashscope: 'qwen3max',
-  minimax: 'minimax01',
-  glm: 'glm5',
-  meta: 'musespark11',
-};
+interface SetupProviderDefaults {
+  /**
+   * Curated setup-probe model — a well-known model used to verify this
+   * provider's credential during onboarding. A *preference*, not the source
+   * of truth for whether that model is still servable: a provider can retire
+   * the pinned model at any time (this has already happened live for
+   * `xai: 'grok4'`), which would otherwise make the setup assistant silently
+   * probe a dead model forever.
+   */
+  readonly preferredModel: string;
+  /**
+   * Model source this credential may probe when the pin has gone stale.
+   * `openRouter` has no static source of its own, so its preferred Anthropic
+   * model falls back within that family; managed direct services such as Kimi
+   * Code retain their own source.
+   */
+  readonly fallbackSource: string;
+}
 
 /**
- * Model source each setup credential may probe. `openRouter` has no static
- * source of its own, so its preferred Anthropic model falls back within that
- * family; managed direct services such as Kimi Code retain their own source.
+ * Per-provider setup defaults. {@link SETUP_MODEL_BY_PROVIDER} below validates
+ * each preferred pick through the runtime model registry and substitutes a
+ * still-usable model from `fallbackSource` when the pin has gone stale, so it
+ * always resolves to a servable model without needing this table hand-updated
+ * on every retirement.
  */
-const FALLBACK_MODEL_SOURCE: Readonly<Record<string, string>> = {
-  anthropic: ModelProvider.ANTHROPIC,
-  openai: ModelProvider.OPENAI,
-  google: ModelProvider.GOOGLE,
-  deepseek: ModelProvider.DEEPSEEK,
-  openRouter: ModelProvider.ANTHROPIC,
-  xai: ModelProvider.XAI,
-  moonshot: ModelProvider.MOONSHOT,
-  kimiCode: 'kimiCode',
-  dashscope: ModelProvider.DASHSCOPE,
-  minimax: ModelProvider.MINIMAX,
-  glm: ModelProvider.GLM,
-  meta: ModelProvider.META,
-};
+const SETUP_PROVIDER_DEFAULTS: Readonly<Record<string, SetupProviderDefaults>> =
+  {
+    anthropic: {
+      preferredModel: 'opus5T',
+      fallbackSource: ModelProvider.ANTHROPIC,
+    },
+    openai: { preferredModel: 'gpt55', fallbackSource: ModelProvider.OPENAI },
+    google: {
+      preferredModel: 'gemini31p',
+      fallbackSource: ModelProvider.GOOGLE,
+    },
+    deepseek: {
+      preferredModel: 'deepseekproT',
+      fallbackSource: ModelProvider.DEEPSEEK,
+    },
+    openRouter: {
+      preferredModel: 'sonnet46T',
+      fallbackSource: ModelProvider.ANTHROPIC,
+    },
+    xai: { preferredModel: 'grok4', fallbackSource: ModelProvider.XAI },
+    moonshot: {
+      preferredModel: 'kimi25T',
+      fallbackSource: ModelProvider.MOONSHOT,
+    },
+    kimiCode: { preferredModel: 'kimiCoding', fallbackSource: 'kimiCode' },
+    dashscope: {
+      preferredModel: 'qwen3max',
+      fallbackSource: ModelProvider.DASHSCOPE,
+    },
+    minimax: {
+      preferredModel: 'minimax01',
+      fallbackSource: ModelProvider.MINIMAX,
+    },
+    glm: { preferredModel: 'glm5', fallbackSource: ModelProvider.GLM },
+    meta: { preferredModel: 'musespark11', fallbackSource: ModelProvider.META },
+  };
 
 /** Whether `config` is safe to hand to the setup assistant for `setupProvider`. */
 function isUsableSetupModel(
@@ -77,7 +93,7 @@ function isUsableSetupModel(
  * model," not necessarily the newest release.
  */
 function fallbackSetupModel(setupProvider: string): string | undefined {
-  const modelSource = FALLBACK_MODEL_SOURCE[setupProvider];
+  const modelSource = SETUP_PROVIDER_DEFAULTS[setupProvider]?.fallbackSource;
   if (!modelSource) return undefined;
 
   const candidates = staticModelConfigEntries()
@@ -101,12 +117,12 @@ function fallbackSetupModel(setupProvider: string): string | undefined {
  */
 export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
   Object.fromEntries(
-    Object.entries(PREFERRED_SETUP_MODEL_BY_PROVIDER).map(
-      ([provider, preferred]) => [
+    Object.entries(SETUP_PROVIDER_DEFAULTS).map(
+      ([provider, { preferredModel }]) => [
         provider,
-        isUsableSetupModel(getRuntimeModelConfig(preferred), provider)
-          ? preferred
-          : (fallbackSetupModel(provider) ?? preferred),
+        isUsableSetupModel(getRuntimeModelConfig(preferredModel), provider)
+          ? preferredModel
+          : (fallbackSetupModel(provider) ?? preferredModel),
       ],
     ),
   );

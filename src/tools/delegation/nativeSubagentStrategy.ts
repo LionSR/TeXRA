@@ -60,7 +60,10 @@ import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
 } from '@tools/subagentResults';
-import { subagentDeliveryMessage } from './subagentDeliveryFormat';
+import {
+  buildSubagentResult,
+  formatBuiltSubagentDelivery,
+} from './subagentDeliveryFormat';
 
 export interface NativeSubagentStrategyParams {
   readonly config: AgentConfig;
@@ -198,7 +201,7 @@ export function createNativeSubagentStrategy(
   ): Promise<{ msg: string; resultMeta: ResultMeta }> => {
     if (!cachedDelivery) {
       const result = toDeliveryResult(turn, params.executionId);
-      cachedDelivery = await subagentDeliveryMessage(
+      const built = await buildSubagentResult(
         params.executionId,
         params.agentName,
         result,
@@ -207,6 +210,16 @@ export function createNativeSubagentStrategy(
           workingDirectory: params.workingDirectory,
         },
       );
+      cachedDelivery = {
+        msg: formatBuiltSubagentDelivery(
+          params.executionId,
+          params.agentName,
+          result,
+          built,
+          params.workingDirectory,
+        ),
+        resultMeta: built.resultMeta,
+      };
     }
     return cachedDelivery;
   };

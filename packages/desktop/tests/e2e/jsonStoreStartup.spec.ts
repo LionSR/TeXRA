@@ -1,5 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test } from '@playwright/test';
@@ -9,11 +8,13 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
-import { cleanupDirectory } from './workspaceStorageFixture.js';
+import {
+  cleanupDirectory,
+  createIsolatedProfile,
+} from './workspaceStorageFixture.js';
 
 test('desktop main bundle completes its locked startup write', async () => {
-  const workspacePath = mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-'));
-  const userDataPath = mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
+  const { workspacePath, userDataPath } = createIsolatedProfile();
   let launched: LaunchedApp | undefined;
 
   try {

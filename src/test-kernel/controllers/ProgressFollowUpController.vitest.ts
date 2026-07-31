@@ -10,19 +10,59 @@ import {
 import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 import {
   ProgressFollowUpController,
+  type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '@controllers/progressView/ProgressFollowUpController';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 
-function createWorkflowTaskState(
+// Local file imports
+import {
+  createOutputFile,
+  createWorkflowTaskState,
+  type OutputFileHarnessOptions,
+} from '../support/ProgressControllerHarnesses';
+
+const followUpWorkflowDefaults: Partial<AgentConfig> = {
+  inputFiles: ['main.tex'],
+  outputFiles: ['answer.tex'],
+};
+
+const runStorageOutputDefaults = {
+  source: 'main.tex',
+  location: { kind: 'runStorage' },
+  round: 2,
+} satisfies OutputFileHarnessOptions;
+
+type RunStorageOutputOverrides = Omit<OutputFileHarnessOptions, 'location'> & {
+  location?: Omit<
+    Extract<OutputFileInfo['location'], { kind: 'runStorage' }>,
+    'kind'
+  >;
+};
+
+/**
+ * Workflow state built from the shared harness, which also fills the legacy
+ * `inputFile` slot so the migration into the head of `inputFiles` stays
+ * covered.
+ */
+function createFollowUpWorkflowTaskState(
+  overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
+) {
+  return createWorkflowTaskState({
+    ...followUpWorkflowDefaults,
+    ...overrides,
+  });
+}
+
+/** Workflow state whose `inputFiles` are exactly the ones passed in. */
+function createExactInputsTaskState(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
 ): WorkflowTaskState {
   return {
     agentConfig: AgentConfigSchema.parse({
       agent: 'writer',
       model: 'gemini31p',
-      inputFiles: ['main.tex'],
-      outputFiles: ['answer.tex'],
+      ...followUpWorkflowDefaults,
       agentCategory: AgentCategory.Workflow,
       ...overrides,
     }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
@@ -35,22 +75,22 @@ function createWorkflowTaskState(
   };
 }
 
-function createRunStorageOutputFile(source: string): OutputFileInfo {
-  return {
-    source,
-    round: 2,
-    lineage: null,
-    diff: null,
+function createRunStorageOutputFile(
+  overrides: RunStorageOutputOverrides = {},
+): OutputFileInfo {
+  return createOutputFile({
+    ...runStorageOutputDefaults,
+    ...overrides,
     location: {
-      kind: 'runStorage',
-      absolutePath: '/tmp/exec/answer.tex',
-      relativePath: 'answer.tex',
-      executionId: 'exec-old',
+      ...runStorageOutputDefaults.location,
+      ...overrides.location,
     },
-  };
+  });
 }
 
-function createCompileFailure(): CompileFailure {
+function createCompileFailure(
+  overrides: Partial<CompileFailure> = {},
+): CompileFailure {
   return {
     round: 2,
     displayName: 'answer.tex',
@@ -67,6 +107,7 @@ function createCompileFailure(): CompileFailure {
       executionId: 'exec-old',
     },
     logRelativePath: 'answer.log',
+    ...overrides,
   };
 }
 
@@ -77,13 +118,20 @@ const emptyFollowUpState: ProgressFollowUpState = {
   getExecutionId: () => undefined,
 };
 
-function createController(
-  existingFiles: Set<string>,
-): ProgressFollowUpController {
+function createController({
+  existingFiles = new Set(['main.tex']),
+  modelOptions = [],
+  state = emptyFollowUpState,
+}: {
+  existingFiles?: Set<string>;
+  modelOptions?: readonly ProgressFollowUpModelOption[];
+  state?: ProgressFollowUpState;
+} = {}): ProgressFollowUpController {
   return new ProgressFollowUpController({
-    getAgentCategory: () => AgentCategory.ToolUse,
-    loadModelOptions: async () => [],
-    state: emptyFollowUpState,
+    getAgentCategory: (agent) =>
+      agent === 'tool-agent' ? AgentCategory.ToolUse : AgentCategory.Workflow,
+    loadModelOptions: async () => modelOptions,
+    state,
     workspace: {
       locatePath: (candidate) =>
         candidate.startsWith('/external/')
@@ -95,16 +143,182 @@ function createController(
 }
 
 describe('ProgressFollowUpController', () => {
-  it('keeps generated latexdiff artifacts and exposes the source as an extra target', async () => {
-    const plan = await createController(
-      new Set(['main.tex', 'main-diffea268c1.tex']),
-    ).planCompileFixer({
+  it('builds a tool-use follow-up restore plan from workflow outputs', () => {
+    const controller = createController();
+    const taskState = createFollowUpWorkflowTaskState();
+    const plan = controller.planToolUseFollowUp({
       streamId: 'stream-a',
-      taskState: createWorkflowTaskState({
+      taskState,
+      outputFiles: [createRunStorageOutputFile()],
+      agent: 'tool-agent',
+      model: 'gemini31p',
+      initialQuestion: ' Please inspect the proof. ',
+      executeImmediately: true,
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
+
+    expect(plan.kind).toBe('restoreState');
+    if (plan.kind !== 'restoreState') return;
+    expect(plan.executeImmediately).toBe(true);
+    expect(plan.taskState.agentConfig.agent).toBe('tool-agent');
+    expect(plan.taskState.agentConfig.agentCategory).toBe(
+      AgentCategory.ToolUse,
+    );
+    // The follow-up keeps the workflow's input files exactly as the task
+    // state recorded them (the harness's legacy `inputFile` slot migrates to
+    // the head of `inputFiles`, ahead of the declared 'main.tex').
+    expect(plan.taskState.agentConfig.inputFiles).toEqual(
+      taskState.agentConfig.inputFiles,
+    );
+    expect(plan.taskState.agentConfig.outputFiles.length).toBe(0);
+    expect(plan.taskState.agentConfig.instruction).toMatch(
+      /\/executions\/exec-123\/files\/answer\.tex/,
+    );
+    expect(plan.taskState.agentConfig.instruction).toMatch(
+      /User follow-up request: Please inspect the proof\./,
+    );
+  });
+
+  it('builds a stream-scoped tool-use plan from snapshot state', async () => {
+    const taskState = createFollowUpWorkflowTaskState();
+    const outputFile = createRunStorageOutputFile();
+    const controller = createController({
+      modelOptions: [{ value: 'gemini31p' }],
+      state: {
+        getTaskState: () => taskState,
+        getOutputFiles: () => ({ 2: [outputFile] }),
+        getCompileFailures: () => ({}),
+        getExecutionId: () => 'exec-123',
+      },
+    });
+
+    const plan = await controller.planToolUseFollowUpForStream({
+      streamId: 'stream-a',
+      agent: 'tool-agent',
+      model: 'gemini31p',
+      initialQuestion: 'Check the final paragraph.',
+      executeImmediately: false,
+    });
+
+    expect(plan.kind).toBe('restoreState');
+    if (plan.kind !== 'restoreState') return;
+    expect(plan.executeImmediately).toBe(false);
+    expect(plan.taskState.agentConfig.agent).toBe('tool-agent');
+    expect(plan.taskState.agentConfig.instruction).toMatch(
+      /\/executions\/exec-123\/files\/answer\.tex/,
+    );
+    expect(plan.taskState.agentConfig.instruction).toMatch(
+      /User follow-up request: Check the final paragraph\./,
+    );
+  });
+
+  it('rejects follow-up setup when the selected model is disabled', () => {
+    const plan = createController().planToolUseFollowUp({
+      streamId: 'stream-a',
+      taskState: createFollowUpWorkflowTaskState(),
+      outputFiles: [createRunStorageOutputFile()],
+      agent: 'tool-agent',
+      model: 'gemini31p',
+      executeImmediately: false,
+      modelOptions: [{ value: 'gemini31p', disabled: true }],
+    });
+
+    expect(plan).toEqual({
+      kind: 'warning',
+      message: 'Select an available model before starting a follow-up.',
+    });
+  });
+
+  it('plans latexFixer with generated output sources before input recovery', async () => {
+    const controller = createController({
+      existingFiles: new Set(['source.tex', 'main.tex']),
+    });
+    const output = createRunStorageOutputFile({ source: 'source.tex' });
+    const plan = await controller.planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createFollowUpWorkflowTaskState({
+        inputFiles: ['main.tex', 'source.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: { 2: [output] },
+      modelOptions: [{ value: 'other-model' }],
+      executionId: 'exec-123',
+    });
+
+    expect(plan.kind).toBe('execute');
+    if (plan.kind !== 'execute') return;
+    const config = plan.request.config;
+    expect(config.agent).toBe('latexFixer');
+    expect(config.model).toBe('other-model');
+    expect(config.inputFiles).toEqual(['source.tex', 'main.tex']);
+    expect(config.instruction ?? '').toMatch(
+      /Editable workspace targets: source\.tex, main\.tex/,
+    );
+    expect(config.instruction ?? '').toMatch(
+      /output \/executions\/exec-123\/files\/answer\.tex; compile log \/executions\/exec-123\/files\/answer\.log/,
+    );
+  });
+
+  it('uses original workflow inputs as recovery when source metadata is absent', async () => {
+    const controller = createController({
+      existingFiles: new Set(['main.tex', 'chapter.tex']),
+    });
+    const plan = await controller.planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createFollowUpWorkflowTaskState({
+        inputFiles: ['main.tex', 'chapter.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: {},
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
+
+    expect(plan.kind).toBe('execute');
+    if (plan.kind !== 'execute') return;
+    const config = plan.request.config;
+    expect(config.inputFiles).toEqual(['main.tex', 'chapter.tex']);
+    expect(config.instruction ?? '').toMatch(
+      /Editable workspace targets: main\.tex, chapter\.tex/,
+    );
+  });
+
+  it('warns when compile failures have no editable workspace source', async () => {
+    const plan = await createController({
+      existingFiles: new Set(),
+    }).planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createFollowUpWorkflowTaskState({
+        inputFiles: ['/external/main.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: {
+        2: [createRunStorageOutputFile({ source: '/external/main.tex' })],
+      },
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
+
+    expect(plan).toEqual({
+      kind: 'warning',
+      message:
+        'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
+    });
+  });
+
+  it('keeps generated latexdiff artifacts and exposes the source as an extra target', async () => {
+    const plan = await createController({
+      existingFiles: new Set(['main.tex', 'main-diffea268c1.tex']),
+    }).planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createExactInputsTaskState({
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: { 2: [createRunStorageOutputFile('main-diffea268c1.tex')] },
+      runOutputs: {
+        2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
+      },
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',
     });
@@ -127,15 +341,17 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('keeps strong generated latexdiff artifacts when the source is absent', async () => {
-    const plan = await createController(
-      new Set(['main-diffea268c1.tex']),
-    ).planCompileFixer({
+    const plan = await createController({
+      existingFiles: new Set(['main-diffea268c1.tex']),
+    }).planCompileFixer({
       streamId: 'stream-a',
-      taskState: createWorkflowTaskState({
+      taskState: createExactInputsTaskState({
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
-      runOutputs: { 2: [createRunStorageOutputFile('main-diffea268c1.tex')] },
+      runOutputs: {
+        2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
+      },
       modelOptions: [{ value: 'gemini31p' }],
       executionId: 'exec-123',
     });
@@ -149,18 +365,18 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('uses the inferred source when a generated latexdiff artifact is absent', async () => {
-    const plan = await createController(new Set(['main.tex'])).planCompileFixer(
-      {
-        streamId: 'stream-a',
-        taskState: createWorkflowTaskState({
-          inputFiles: ['main-diffea268c1.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: { 2: [createRunStorageOutputFile('main-diffea268c1.tex')] },
-        modelOptions: [{ value: 'gemini31p' }],
-        executionId: 'exec-123',
+    const plan = await createController().planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createExactInputsTaskState({
+        inputFiles: ['main-diffea268c1.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: {
+        2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
       },
-    );
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
 
     expect(plan.kind).toBe('execute');
     if (plan.kind !== 'execute') return;
@@ -171,18 +387,16 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('keeps missing latexdiff context when a source target is already present', async () => {
-    const plan = await createController(new Set(['main.tex'])).planCompileFixer(
-      {
-        streamId: 'stream-a',
-        taskState: createWorkflowTaskState({
-          inputFiles: ['main.tex', 'main-diffea268c1.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: {},
-        modelOptions: [{ value: 'gemini31p' }],
-        executionId: 'exec-123',
-      },
-    );
+    const plan = await createController().planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createExactInputsTaskState({
+        inputFiles: ['main.tex', 'main-diffea268c1.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: {},
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
 
     expect(plan.kind).toBe('execute');
     if (plan.kind !== 'execute') return;

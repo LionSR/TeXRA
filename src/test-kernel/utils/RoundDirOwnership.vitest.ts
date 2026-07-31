@@ -1,14 +1,12 @@
 import {
   lstat,
   mkdir,
-  mkdtemp,
   readFile,
   readlink,
   stat,
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -18,7 +16,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
   AbsoluteFS,
   createWorkspaceLocation,
@@ -34,8 +32,7 @@ const tempDirs: string[] = [];
  * and installs a platform pointing at it. Returns the workspace directory.
  */
 async function installTempWorkspace(prefix: string): Promise<string> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
-  tempDirs.push(tempDir);
+  const tempDir = await makeTempDir(prefix, tempDirs);
 
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');

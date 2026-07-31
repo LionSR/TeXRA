@@ -1,3 +1,6 @@
+/** Log channel shared by every housekeeping operation. */
+export const CHANNEL = 'Housekeeping';
+
 export const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 
 export const TEMP_EXTENSIONS = [

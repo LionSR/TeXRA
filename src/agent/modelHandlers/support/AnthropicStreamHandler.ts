@@ -12,7 +12,6 @@ import {
   extractWebFetchResultFields,
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
-  type WebSearchResult,
 } from '@agent/types/ServerToolTypes';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { StreamDiagnostics } from '@shared/schemas';
@@ -50,10 +49,12 @@ interface AnthropicStreamState {
   outputStream: ReturnType<AgentTrace['openStream']> | null;
   /** Index of most recent block (any type) */
   lastBlockIndex: number;
-  /** Track web search: tool_use_id → { index, accumulated input JSON } */
-  pendingSearches: Map<string, { index: number; input: string }>;
-  /** Track web fetch: tool_use_id → { index, accumulated input JSON } */
-  pendingFetches: Map<string, { index: number; input: string }>;
+  /**
+   * Track pending server tools (web search, web fetch):
+   * tool_use_id → { index, accumulated input JSON }. Ids are unique across
+   * tool kinds, so both share one map.
+   */
+  pendingServerTools: Map<string, { index: number; input: string }>;
   /** Flag to prevent processing events after finalize */
   finalized: boolean;
 }
@@ -112,8 +113,7 @@ export class AnthropicStreamHandler {
   private readonly state: AnthropicStreamState = {
     outputStream: null,
     lastBlockIndex: -1,
-    pendingSearches: new Map(),
-    pendingFetches: new Map(),
+    pendingServerTools: new Map(),
     finalized: false,
   };
   private readonly diagnostics: StreamDiagnosticsState = {
@@ -196,8 +196,7 @@ export class AnthropicStreamHandler {
     this.state.outputStream = null;
 
     // Clear state to prevent memory leaks
-    this.state.pendingSearches.clear();
-    this.state.pendingFetches.clear();
+    this.state.pendingServerTools.clear();
   }
 
   /**
@@ -279,13 +278,8 @@ export class AnthropicStreamHandler {
       }
     } else if (blockType === 'server_tool_use') {
       const block = event.content_block as ServerToolUseBlock;
-      if (block.name === 'web_search') {
-        this.state.pendingSearches.set(block.id, {
-          index: blockIndex,
-          input: '',
-        });
-      } else if (block.name === 'web_fetch') {
-        this.state.pendingFetches.set(block.id, {
+      if (block.name === 'web_search' || block.name === 'web_fetch') {
+        this.state.pendingServerTools.set(block.id, {
           index: blockIndex,
           input: '',
         });
@@ -356,17 +350,14 @@ export class AnthropicStreamHandler {
    * Handles web_search_tool_result blocks.
    */
   private handleWebSearchResult(block: WebSearchToolResultBlock): void {
-    const searchData = this.state.pendingSearches.get(block.tool_use_id);
-
-    // Parse query from accumulated input JSON
-    const query = this.parseStreamField(searchData?.input, 'query');
+    const query = this.takePendingInputField(block.tool_use_id, 'query');
 
     // Extract results from the block content
     const entries = mapAnthropicWebSearchEntries(block.content);
 
     // Emit to progress view
     if (entries.length > 0 || query) {
-      this.emitWebSearchResult({
+      emitServerToolResult(this.logger, this.config.progressViewEnabled, {
         query,
         results: entries,
         provider: 'anthropic',
@@ -374,19 +365,13 @@ export class AnthropicStreamHandler {
         status: 'completed',
       });
     }
-
-    // Clean up
-    this.state.pendingSearches.delete(block.tool_use_id);
   }
 
   /**
    * Handles web_fetch_tool_result blocks.
    */
   private handleWebFetchResult(block: WebFetchToolResultBlock): void {
-    const fetchData = this.state.pendingFetches.get(block.tool_use_id);
-
-    // Parse URL from accumulated input JSON
-    const fetchUrl = this.parseStreamField(fetchData?.input, 'url');
+    const fetchUrl = this.takePendingInputField(block.tool_use_id, 'url');
 
     // Native discriminated-union narrowing on block.content
     // (WebFetchBlock | WebFetchToolResultErrorBlock) replaces the prior
@@ -411,12 +396,12 @@ export class AnthropicStreamHandler {
           };
 
     // Emit to progress view
-    if (result.url || result.status === 'failed') {
-      this.emitWebFetchResult(result);
+    if (
+      (result.url || result.status === 'failed') &&
+      this.config.progressViewEnabled
+    ) {
+      logWebFetch(this.logger, result);
     }
-
-    // Clean up
-    this.state.pendingFetches.delete(block.tool_use_id);
   }
 
   /**
@@ -427,28 +412,25 @@ export class AnthropicStreamHandler {
     blockIndex: number,
     partialJson: string,
   ): void {
-    // Check both pending searches and pending fetches
-    for (const pendingMap of [
-      this.state.pendingSearches,
-      this.state.pendingFetches,
-    ]) {
-      for (const data of pendingMap.values()) {
-        if (data.index === blockIndex) {
-          if (data.input.length < MAX_SERVER_TOOL_INPUT_SIZE) {
-            const remaining = MAX_SERVER_TOOL_INPUT_SIZE - data.input.length;
-            data.input += partialJson.slice(0, remaining);
-          }
-          return;
+    for (const data of this.state.pendingServerTools.values()) {
+      if (data.index === blockIndex) {
+        if (data.input.length < MAX_SERVER_TOOL_INPUT_SIZE) {
+          const remaining = MAX_SERVER_TOOL_INPUT_SIZE - data.input.length;
+          data.input += partialJson.slice(0, remaining);
         }
+        return;
       }
     }
   }
 
   /**
-   * Extract a single string field from accumulated server-tool input JSON.
-   * Falls back to regex for partial JSON common during streaming.
+   * Consume a pending server tool's accumulated input JSON and extract a single
+   * string field from it. Falls back to regex for the partial JSON common
+   * during streaming.
    */
-  private parseStreamField(input: string | undefined, field: string): string {
+  private takePendingInputField(toolUseId: string, field: string): string {
+    const input = this.state.pendingServerTools.get(toolUseId)?.input;
+    this.state.pendingServerTools.delete(toolUseId);
     if (!input) return '';
     const parsed = safeParseJson(input);
     if (parsed.isOk())
@@ -463,21 +445,5 @@ export class AnthropicStreamHandler {
   private finalizeOutputStream(): void {
     this.state.outputStream?.finalize();
     this.state.outputStream = null;
-  }
-
-  /**
-   * Emits a web search result to the progress view.
-   */
-  private emitWebSearchResult(result: WebSearchResult): void {
-    emitServerToolResult(this.logger, this.config.progressViewEnabled, result);
-  }
-
-  /**
-   * Emits a web fetch result to the progress view.
-   */
-  private emitWebFetchResult(result: WebFetchResult): void {
-    if (this.config.progressViewEnabled) {
-      logWebFetch(this.logger, result);
-    }
   }
 }

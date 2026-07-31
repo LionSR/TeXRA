@@ -4,18 +4,19 @@ import { Box, Text, useWindowSize } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
   EDIT_DIFF_PADDING,
   isCompactRows,
   MIN_MODAL_CONTENT_WIDTH,
 } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { ConfirmCard } from './ConfirmCard';
-import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
+import {
+  confirmCardContentRowsBudget,
+  confirmCardFeedbackRows,
+} from './confirmCardRowsBudget';
 import {
   buildHunks,
   COMPACT_DIFF_DISPLAY_LINES,
@@ -30,8 +31,6 @@ import type { ApprovalDecision } from '../state/approvalQueue';
 
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
-const EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
-const EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
 const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Why reject?';
@@ -59,7 +58,7 @@ export function editApprovalDiffRowsBudget({
 }): number {
   const feedbackRows =
     feedbackMode === true
-      ? editApprovalFeedbackRows({
+      ? confirmCardFeedbackRows({
           columns,
           placeholder: feedbackPlaceholder,
           value: feedbackValue,
@@ -76,28 +75,6 @@ export function editApprovalDiffRowsBudget({
     compactFixedRows: EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE,
     extraFixedRows: feedbackRows,
   });
-}
-
-export function editApprovalFeedbackRows({
-  columns,
-  placeholder,
-  value,
-}: {
-  readonly columns: number;
-  readonly placeholder: string;
-  readonly value: string;
-}): number {
-  const text = value.length > 0 ? value : placeholder;
-  const width = Math.max(
-    1,
-    columns -
-      CONFIRM_CARD_HORIZONTAL_DECORATION -
-      EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS,
-  );
-  return (
-    EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS +
-    Math.max(1, wrapAnsiToWidth(text, width).split('\n').length)
-  );
 }
 
 export function formatEditApprovalHunkCount(count: number): string {

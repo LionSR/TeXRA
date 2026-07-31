@@ -36,7 +36,10 @@ import {
 } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 
-import type { SettingsHandlerContext } from './SettingsHandlerContext';
+import {
+  withHandlerErrorHandling,
+  type SettingsHandlerContext,
+} from './SettingsHandlerContext';
 
 /** How long cached LaTeX settings remain valid (ms). */
 const LATEX_SETTINGS_CACHE_TTL = 60_000;
@@ -129,34 +132,34 @@ export class LatexSettingsHandlers {
   async handleApplyLatexSettings(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
   ): Promise<void> {
-    try {
-      for (const {
-        key,
-        value,
-      } of this.recommendedSettingsController.buildUpdates({
-        field: data.field,
-        reset: data.reset ?? false,
-      })) {
-        await updateConfig(key, value, {
-          target: 'global',
-          prefix: false,
-        });
-      }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to update LaTeX settings',
+      async () => {
+        for (const {
+          key,
+          value,
+        } of this.recommendedSettingsController.buildUpdates({
+          field: data.field,
+          reset: data.reset ?? false,
+        })) {
+          await updateConfig(key, value, {
+            target: 'global',
+            prefix: false,
+          });
+        }
 
-      await this.ctx.withActiveWebview((w) => this.sendLatexSettingsStatus(w));
-      const verb = data.reset ? 'reset' : 'applied';
-      void vscode.window.showInformationMessage(
-        data.field
-          ? `LaTeX setting ${verb}`
-          : `All recommended LaTeX settings ${verb}`,
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to update LaTeX settings',
-        error,
-      );
-    }
+        await this.ctx.withActiveWebview((w) =>
+          this.sendLatexSettingsStatus(w),
+        );
+        const verb = data.reset ? 'reset' : 'applied';
+        void vscode.window.showInformationMessage(
+          data.field
+            ? `LaTeX setting ${verb}`
+            : `All recommended LaTeX settings ${verb}`,
+        );
+      },
+    );
   }
 
   async handleInstallLatexWorkshop(): Promise<void> {
@@ -206,16 +209,14 @@ export class LatexSettingsHandlers {
       );
       return;
     }
-    try {
-      await workspaceSM.update(plan.update.key, plan.update.value);
-      await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        `Failed to update ${data.field}`,
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      `Failed to update ${data.field}`,
+      async () => {
+        await workspaceSM.update(plan.update.key, plan.update.value);
+        await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
+      },
+    );
   }
 
   async handleRunInstallCommand(
@@ -242,23 +243,21 @@ export class LatexSettingsHandlers {
     extensionId: string,
     refresh?: (w: vscode.Webview) => Promise<void>,
   ): Promise<void> {
-    try {
-      await vscode.commands.executeCommand(
-        'workbench.extensions.installExtension',
-        extensionId,
-      );
-      void vscode.window.showInformationMessage(
-        `Extension "${extensionId}" installed`,
-      );
-      if (refresh) {
-        await this.ctx.withActiveWebview(refresh);
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        `Failed to install extension "${extensionId}"`,
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      `Failed to install extension "${extensionId}"`,
+      async () => {
+        await vscode.commands.executeCommand(
+          'workbench.extensions.installExtension',
+          extensionId,
+        );
+        void vscode.window.showInformationMessage(
+          `Extension "${extensionId}" installed`,
+        );
+        if (refresh) {
+          await this.ctx.withActiveWebview(refresh);
+        }
+      },
+    );
   }
 }

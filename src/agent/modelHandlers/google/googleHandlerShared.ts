@@ -15,11 +15,10 @@ import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
 /**
- * Shared helpers for the two Google handlers (generateContent chat handler and
- * the Interactions handler). Both use the SAME `GoogleGenAI` SDK, so client
- * setup and the media-attachment pipeline are identical in shape and were
- * previously copy-pasted across the two files. Capability getters that differ
- * only by a per-SDK literal map live on `GoogleModelHandlerBase` instead.
+ * Client setup and the media-attachment pipeline for the Google handlers. Both
+ * handlers use the SAME `GoogleGenAI` SDK, so these run once from
+ * `GoogleModelHandlerBase`; only the per-SDK media/text block shapes differ, and
+ * those are supplied by the subclass through `buildMedia`.
  */
 
 export interface GoogleClientCache {
@@ -94,12 +93,14 @@ export async function resolveGoogleClient(
   return client;
 }
 
+/** Where a media block's bytes come from: inline base64 or a File API uri. */
+export type GoogleMediaSource = { data: string } | { uri: string };
+
 interface UploadGoogleMediaEntriesOptions<T> {
   getClient: () => Promise<GoogleGenAI>;
   inlineLimit: number;
   logger: AgentTrace;
-  buildInline: (data: string, mimeType: string) => T;
-  buildUploaded: (uri: string, mimeType: string) => T;
+  buildMedia: (source: GoogleMediaSource, mimeType: string) => T;
   onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
@@ -117,14 +118,8 @@ export async function uploadGoogleMediaEntries<T>(
     return [];
   }
 
-  const {
-    getClient,
-    inlineLimit,
-    logger,
-    buildInline,
-    buildUploaded,
-    onInsertedEntry,
-  } = options;
+  const { getClient, inlineLimit, logger, buildMedia, onInsertedEntry } =
+    options;
   const client = await getClient();
   const parts: T[] = [];
   const summaries: GoogleMediaUploadSummary[] = [];
@@ -141,7 +136,7 @@ export async function uploadGoogleMediaEntries<T>(
         logger.debug(
           `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
         );
-        parts.push(buildInline(inlinePayload, mimeType));
+        parts.push(buildMedia({ data: inlinePayload }, mimeType));
         onInsertedEntry?.(entry);
         summaries.push({ path: fileName, ok: true });
         continue;
@@ -183,7 +178,7 @@ export async function uploadGoogleMediaEntries<T>(
       }
       const resolvedMimeType =
         uploaded.mimeType || entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-      parts.push(buildUploaded(fileUri, resolvedMimeType));
+      parts.push(buildMedia({ uri: fileUri }, resolvedMimeType));
       onInsertedEntry?.(entry);
       summaries.push({ path: fileName, ok: true });
     } catch (error) {

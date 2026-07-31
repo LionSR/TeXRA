@@ -22,7 +22,7 @@ import {
   formatIssueReopened,
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
-import { getNewestTimestamp, withSince } from './formatUtils';
+import { getNewestTimestamp, issueRef, withSince } from './formatUtils';
 import { ghGet } from './githubClient';
 import {
   DedupedResource,
@@ -47,7 +47,7 @@ export interface IssueKey {
 }
 
 export function issueKeyToString(k: IssueKey): string {
-  return `${k.owner}/${k.repo}/issues/${k.issueNumber}`;
+  return issueRef(`${k.owner}/${k.repo}`, k.issueNumber);
 }
 
 interface SubscriptionState extends BasePollSubscriptionState {

@@ -31,8 +31,13 @@
 
 import { bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
+import {
+  adminClient,
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+} from '../_shared/edgeClients.ts';
 import { resolveRelayCredential } from '../_shared/relayCiToken.ts';
-import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
+import { jsonResponse } from '../_shared/responses.ts';
 import {
   subscriptionSourceForUsage,
   UsageBatchSchema,
@@ -177,16 +182,9 @@ async function upsertUsageRows(
 // Environment Validation (fail fast)
 // =============================================================================
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
   console.error('[LOG_USAGE] Missing required environment variables');
 }
-
-// Service-role client for writes (env is fixed at cold start; no per-request state)
-const adminClient = createEdgeClient(supabaseUrl, supabaseServiceKey);
 
 // =============================================================================
 // Request Handler
@@ -204,7 +202,7 @@ Deno.serve(async (req: Request) => {
 
   // Module-level init only logs, so requests must get an explicit 500 here
   // rather than crashing on a null dereference deeper in the handler.
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !adminClient) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
     return errorResponse(req, 'Server configuration error', 500);
   }
 

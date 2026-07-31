@@ -153,12 +153,20 @@ const FULL_DECORATION_REGEX = /^[*_`]+|[*_`:]+$/g;
 const FILE_LIKE_LABEL_REGEX =
   /^\s*(?:\.[/\\])*[A-Za-z0-9_][A-Za-z0-9._/\\-]*\.[A-Za-z0-9]+:+\s*$/;
 
+/**
+ * Canonical form for comparing a model-reported document name against a
+ * known file: forward slashes, no leading `./` segments.
+ */
+export function normalizeDocumentName(name: string): string {
+  return normalizeFilePath(name).replace(/^(?:\.\/)+/, '');
+}
+
 function matchNormalizedCandidate(
   stripped: string,
   knownFiles: readonly string[],
 ): string | null {
   if (!stripped) return null;
-  const candidate = normalizeFilePath(stripped).replace(/^(?:\.\/)+/, '');
+  const candidate = normalizeDocumentName(stripped);
   const exact = knownFiles.find((f) => normalizeFilePath(f) === candidate);
   if (exact) return exact;
 
@@ -232,10 +240,7 @@ function safeDocumentName(source: string): string {
 }
 
 function sameNormalizedPath(a: string, b: string): boolean {
-  return (
-    normalizeFilePath(a).replace(/^(?:\.\/)+/, '') ===
-    normalizeFilePath(b).replace(/^(?:\.\/)+/, '')
-  );
+  return normalizeDocumentName(a) === normalizeDocumentName(b);
 }
 
 function stripDocumentsEnvelope(

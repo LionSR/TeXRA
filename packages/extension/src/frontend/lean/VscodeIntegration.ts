@@ -34,6 +34,7 @@ import {
   updateLeanServer,
 } from '@tools/lean/leanServerRegistry';
 import { WorkspaceFS } from '@utils/files';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const FILE_COMMAND_VSCODE_IDS: Record<LeanFileCommand, string> = {
@@ -125,16 +126,10 @@ function createLeanFileUri(absolutePath: string): LeanFileUri {
     scheme: 'file',
     fsPath: absolutePath,
     // Matches Lean 4 extension's FileUri.isInFolder → isFileInFolder logic.
-    // path.relative() is platform-safe here: both fsPath values use OS-native
-    // separators (guaranteed by vscode.Uri.file().fsPath).
-    isInFolder(folderUri: LeanFileUri): boolean {
-      const relative = path.relative(folderUri.fsPath, absolutePath);
-      return (
-        relative.length > 0 &&
-        !relative.startsWith('..') &&
-        !path.isAbsolute(relative)
-      );
-    },
+    // Platform-safe here: both fsPath values use OS-native separators
+    // (guaranteed by vscode.Uri.file().fsPath).
+    isInFolder: (folderUri: LeanFileUri) =>
+      isStrictlyWithin(folderUri.fsPath, absolutePath),
     toString: () => uri.toString(),
   };
 }

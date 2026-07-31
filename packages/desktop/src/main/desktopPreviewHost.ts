@@ -14,6 +14,10 @@ import {
   DESKTOP_PDF_COMMANDS,
   type DesktopShowPdfMessage,
 } from '../desktopPdfMessages.js';
+import {
+  tryShowInRenderer,
+  type DesktopOverlayPostOptions,
+} from './desktopIpcTypes.js';
 
 interface DesktopShellAdapter {
   openExternal(url: string): Promise<void>;
@@ -24,30 +28,9 @@ export interface DesktopPreviewHost extends ExternalOpener {
   openBuildDisplay: BuildDisplayFn;
 }
 
-export interface DesktopPreviewHostOptions {
+export interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
   showErrorMessage?: (message: string) => Promise<void> | void;
-  /**
-   * Posts a `desktop:showPdf` IPC message to the renderer so it can
-   * mount an `<iframe>` (Electron's built-in Chromium PDF viewer)
-   * inside the wa-dialog overlay. Return `false` (or throw) when the
-   * renderer is not reachable — e.g. the IPC bridge isn't wired yet
-   * at startup, or the BrowserWindow has been destroyed. The host
-   * then transparently falls back to `shell.openPath` so the user
-   * never gets a silent failure (mirrors the diff host's contract,
-   * caught by Copilot review on PR #3815).
-   *
-   * When undefined, `openBuildDisplay` skips the overlay entirely and
-   * uses the external-viewer flow — keeps tests and unattended
-   * invocations working.
-   */
-  postToRenderer?(message: unknown): boolean | void;
-  /**
-   * Force the legacy external-viewer flow (`shell.openPath`). Useful
-   * for headless tests and as an opt-out if the in-app overlay
-   * misbehaves. Defaults to `false` (prefer the in-app overlay).
-   */
-  forceExternal?: boolean;
 }
 
 export function createDesktopPreviewHost(
@@ -92,25 +75,18 @@ export function createDesktopPreviewHost(
     }
   }
 
-  // Try to render the PDF in the wa-dialog overlay. Returns `false` (so
-  // the caller falls back to `shell.openPath`) when the renderer rejects
-  // or throws — mirrors the diff host's contract.
+  // Renders the PDF in the wa-dialog overlay (an `<iframe>` on Electron's
+  // built-in Chromium viewer), or reports `false` so the caller falls back
+  // to `shell.openPath`.
   function tryShowPdfInRenderer(pdfPath: string, title: string): boolean {
-    if (!options.postToRenderer || options.forceExternal) return false;
-    try {
-      const result = options.postToRenderer({
+    return tryShowInRenderer(
+      { ...options, source: 'desktopPreviewHost', fallback: 'external viewer' },
+      {
         command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
         title,
         pdfPath,
-      } satisfies DesktopShowPdfMessage);
-      return result !== false;
-    } catch (error) {
-      console.error(
-        '[desktop] desktopPreviewHost: postToRenderer failed; falling back to external viewer',
-        error,
-      );
-      return false;
-    }
+      } satisfies DesktopShowPdfMessage,
+    );
   }
 
   async function openBuildDisplay(fileLocation: FileLocation): Promise<void> {

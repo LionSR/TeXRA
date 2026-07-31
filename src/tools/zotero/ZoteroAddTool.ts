@@ -17,26 +17,26 @@
  */
 
 // Third-party imports
-import ky from 'ky';
 import { type Work } from '@jamesgopsill/crossref-client';
-import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 import pTimeout from 'p-timeout';
 
 // Local imports
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { isTimeoutError } from '@tools/timeouts';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
 import { pluralize } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { type CslCreator, getZoteroPort } from './bbtClient';
+import {
+  callZoteroConnector,
+  checkZoteroRunning,
+  getZoteroPort,
+  type ConnectorResult,
+  type CslCreator,
+} from './bbtClient';
 
-const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
-const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 const CROSSREF_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
 
 /**
@@ -108,77 +108,6 @@ const ZoteroAddInputSchema = z.strictObject({
 });
 
 export type ZoteroAddInput = z.infer<typeof ZoteroAddInputSchema>;
-
-interface ConnectorResult {
-  status: 'success' | 'error';
-  message?: string;
-}
-
-/**
- * Check if Zotero is running by pinging the connector.
- * Throws a user-friendly ToolError if not reachable.
- */
-async function checkZoteroRunning(port: number): Promise<void> {
-  try {
-    await ky.get(`http://127.0.0.1:${port}/connector/ping`, {
-      timeout: false,
-      signal: AbortSignal.timeout(ZOTERO_PING_TIMEOUT_MS),
-      retry: 0,
-    });
-  } catch {
-    throw new ToolError(
-      `Zotero is not reachable on port ${port}. ` +
-        `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
-    );
-  }
-}
-
-/**
- * Call a Zotero Connector endpoint with unified error handling.
- */
-async function callZoteroConnector(
-  endpoint: string,
-  body: object,
-  port: number,
-): Promise<ConnectorResult> {
-  let response: Response;
-  try {
-    response = await ky.post(`http://127.0.0.1:${port}/connector/${endpoint}`, {
-      json: body,
-      timeout: false,
-      signal: AbortSignal.timeout(ZOTERO_CONNECTOR_TIMEOUT_MS),
-      retry: 0,
-      throwHttpErrors: false,
-    });
-  } catch (error: unknown) {
-    if (isTimeoutError(error)) {
-      return {
-        status: 'error',
-        message:
-          `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
-          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
-      };
-    }
-    return { status: 'error', message: toErrorMessage(error) };
-  }
-
-  if (
-    response.status === StatusCodes.OK ||
-    response.status === StatusCodes.CREATED
-  ) {
-    return { status: 'success' };
-  }
-
-  // Try to extract a machine-readable error message from the response body.
-  let errorMessage = `Unexpected response status: ${response.status}`;
-  try {
-    const data = (await response.json()) as { error?: string };
-    if (data?.error) errorMessage = String(data.error);
-  } catch {
-    // Body is not JSON or is empty; use the generic status message.
-  }
-  return { status: 'error', message: errorMessage };
-}
 
 /**
  * Map Crossref work types to Zotero item types.

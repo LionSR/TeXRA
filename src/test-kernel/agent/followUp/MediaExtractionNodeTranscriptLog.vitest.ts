@@ -2,30 +2,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { ConversationRoundStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MediaExtractionNode } from '@agent/implementations/flows/reflection/nodes/MediaExtractionNode';
-import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import type { FileLocation } from '@shared/schemas';
 
-function buildShared(
-  overrides: Partial<ReflectionFlowShared> = {},
-): ReflectionFlowShared {
-  return {
-    currentRound: 0,
-    totalRounds: 1,
-    workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    context: {
-      messages: [],
-      stateRoundSnapshot: ConversationRoundStateSnapshotSchema.parse({
-        roundIndex: 0,
-      }),
-    },
-    outputLocation: null,
-    ...overrides,
-  } as ReflectionFlowShared;
-}
+// Local file imports
+import { reflectionFlowShared } from '../progressTestUtils';
 
 function buildServices(
   overrides: Partial<ReflectionServices<unknown>> = {},
@@ -68,7 +51,7 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
       services.modelHandler.addMediaToUserMessage as ReturnType<typeof vi.fn>
     ).mockRejectedValue(new Error('media insertion failed'));
     const node = new MediaExtractionNode().setServices(services);
-    const shared = buildShared();
+    const shared = reflectionFlowShared();
 
     await expect(
       node.post(shared, buildPrepRes(0), MEDIA_FILES),
@@ -85,7 +68,7 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
       initialUserMessageForTranscript: 'Do the thing.',
     });
     const node = new MediaExtractionNode().setServices(services);
-    const shared = buildShared();
+    const shared = reflectionFlowShared();
 
     await node.post(shared, buildPrepRes(0), MEDIA_FILES);
 
@@ -100,7 +83,7 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
       services.modelHandler.addMediaToUserMessage as ReturnType<typeof vi.fn>
     ).mockRejectedValue(new Error('boom'));
     const node = new MediaExtractionNode().setServices(services);
-    const shared = buildShared({ currentRound: 1 });
+    const shared = reflectionFlowShared({ currentRound: 1 });
 
     await expect(
       node.post(shared, buildPrepRes(1), MEDIA_FILES),

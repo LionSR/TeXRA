@@ -1,7 +1,6 @@
 // Node imports
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +11,7 @@ import {
   runAgentCreator,
   TOOL_GROUPS,
 } from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
+import { REPO_ROOT } from '@test/support/repoScan';
 import { AbsoluteFS } from '@utils/files';
 
 const mocks = vi.hoisted(() => ({
@@ -249,10 +249,6 @@ describe('agent creator orchestration', () => {
 // picker) and the human-facing tool catalog doc are two hand-maintained
 // copies of the same tool-to-category grouping. They must agree, or the
 // picker and the docs silently disagree about which tools live where.
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 const CATALOG_PATH = resolve(
   REPO_ROOT,
   'packages/extension/resources/docs/agent-creation/tool_catalog.md',

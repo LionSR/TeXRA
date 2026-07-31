@@ -15,9 +15,7 @@ import {
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
-import { DEFAULT_MAX_ROUNDS } from './constants';
-
-const CHANNEL = 'Housekeeping';
+import { CHANNEL, DEFAULT_MAX_ROUNDS } from './constants';
 
 /**
  * Produce an ISO-8601 timestamp stripped of separators, suitable for use in
