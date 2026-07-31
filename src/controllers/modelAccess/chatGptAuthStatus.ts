@@ -13,14 +13,9 @@ import {
   isPreferCodexSubscription,
   isCodexSubscriptionToolUseOnly,
 } from '@model/codex/codexPreference';
+import type { ChatGptAuthStatus } from '@shared/schemas';
 
-export async function getChatGptAuthStatus(): Promise<{
-  signedIn: boolean;
-  email?: string;
-  accountId?: string;
-  preferSubscription: boolean;
-  subscriptionToolUseOnly: boolean;
-}> {
+export async function getChatGptAuthStatus(): Promise<ChatGptAuthStatus> {
   return {
     ...(await getCodexStatus()),
     preferSubscription: isPreferCodexSubscription(),

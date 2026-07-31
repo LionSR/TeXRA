@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { getFilterExtensions } from '@common/files';
-import { getFileLister } from '@frontend/files/fileLister';
 import { FILE_SELECTION_COMMAND_IDS } from '@frontend/files/fileSelectionRegistry';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFile, selectFiles } from '@frontend/ui/dialogs';
@@ -92,15 +91,6 @@ export function registerFileSelectionCommands(
       handler: selectEditedFile,
     },
     { id: FILE_SELECTION_COMMAND_IDS.getCurrentFile, handler: getCurrentFile },
-    { id: FILE_SELECTION_COMMAND_IDS.selectBaseFile, handler: selectBaseFile },
-    {
-      id: FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
-      handler: () => getFileLister().list('input'),
-    },
-    {
-      id: FILE_SELECTION_COMMAND_IDS.refreshBaseFiles,
-      handler: () => getFileLister().list('input'),
-    },
   ]);
 }
 
@@ -152,10 +142,3 @@ async function getCurrentFile(): Promise<string | null> {
 
   return isFileInput ? WorkspaceFS.relativePath(input.uri.fsPath) : null;
 }
-
-const selectBaseFile = createSinglePicker({
-  openLabel: 'Select Base File',
-  filters: () => ({
-    'Text files': getFilterExtensions('input'),
-  }),
-});

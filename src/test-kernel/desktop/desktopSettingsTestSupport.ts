@@ -17,6 +17,11 @@ import { repoPath } from './desktopTestPaths.mjs';
 
 const noOp = async (): Promise<void> => undefined;
 
+/** Reads the `command` discriminant off a message posted to the renderer. */
+export function commandOf(message: unknown): string | undefined {
+  return (message as { command?: string }).command;
+}
+
 export function createStubDesktopHistoryOptions(
   overrides: Partial<DesktopHistoryOptions> = {},
 ): DesktopHistoryOptions {
@@ -72,19 +77,11 @@ export function createStubDesktopAgentSettingsController(): DesktopAgentSettings
       setAllEnabled: noOp,
       openYaml: noOp,
       openFolder: noOp,
-      create: unsupported(
-        'Creating custom agents is not available in the desktop app yet.',
-      ),
-      customize: unsupported(
-        'Customizing agents is not available in the desktop app yet.',
-      ),
-      deleteCustom: unsupported(
-        'Deleting custom agents is not available in the desktop app yet.',
-      ),
+      create: noOp,
+      customize: noOp,
+      deleteCustom: noOp,
       revealFile: noOp,
-      viewRemotePrompt: unsupported(
-        'Viewing a remote agent prompt is not available in the desktop app yet.',
-      ),
+      viewRemotePrompt: noOp,
       setCustomDir: noOp,
       resetCustomDir: noOp,
       applyModePreset: noOp,

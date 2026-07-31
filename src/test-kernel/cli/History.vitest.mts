@@ -8,11 +8,13 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { GoalStore } from '@tools/goal';
 
 const mocks = vi.hoisted(() => ({
@@ -102,20 +104,14 @@ import {
   stageCliHistoryTraceViewerAssets,
 } from '@cli/runtime/history';
 
-const config = {
+const config = AgentConfigSchema.parse({
   agent: 'correct',
   model: 'deepseekT',
   instruction: 'Polish the introduction.',
   agentCategory: 'workflow',
   inputFiles: ['chapters/intro.tex'],
   outputFiles: ['chapters/intro.tex'],
-  contextFiles: [],
-  mediaFiles: [],
-  editedFile: null,
-  editedFiles: [],
-  memories: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-} as AgentConfig;
+});
 
 const tempDirs: string[] = [];
 
@@ -144,26 +140,21 @@ function mockToolCallConversation(
 }
 
 describe('CLI history runtime', () => {
-  beforeEach(async () => {
-    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@platform/defaults/nodeFilesystem'),
-        import('@test/support/FakePlatform'),
-      ]);
+  setupPlatform(async () => {
     const historyStoragePath = await makeTempDir(
       'texra-history-storage-',
       tempDirs,
     );
-    initPlatform(
-      createFakePlatform(
-        {
-          storagePath: historyStoragePath,
-          globalStoragePath: historyStoragePath,
-        },
-        { fs: nodeFilesystem },
-      ),
+    return createFakePlatform(
+      {
+        storagePath: historyStoragePath,
+        globalStoragePath: historyStoragePath,
+      },
+      { fs: nodeFilesystem },
     );
+  });
+
+  beforeEach(() => {
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -213,13 +204,13 @@ describe('CLI history runtime', () => {
   });
 
   it('hides internal process-bookkeeping and configless entries from the history list', async () => {
-    const processConfig = {
+    const processConfig = AgentConfigSchema.parse({
       ...config,
       agent: 'bash',
       agentCategory: 'toolUse',
       inputFiles: [],
       outputFiles: [],
-    } as AgentConfig;
+    });
     mocks.listExecutions.mockResolvedValue([
       {
         kind: 'agent',
@@ -249,14 +240,14 @@ describe('CLI history runtime', () => {
   });
 
   it('labels multi-agent team runs by preset in history lists', async () => {
-    const teamConfig = {
+    const teamConfig = AgentConfigSchema.parse({
       ...config,
       agent: 'engineer',
       agentCategory: 'toolUse',
       inputFiles: [],
       outputFiles: [],
       cliMultiAgentPresetId: ' software-engineer ',
-    } as AgentConfig;
+    });
     mocks.listExecutions.mockResolvedValue([
       {
         kind: 'agent',
@@ -277,12 +268,13 @@ describe('CLI history runtime', () => {
   });
 
   it('uses the history description for no-input chat rows', async () => {
-    const chatConfig = {
+    const chatConfig = AgentConfigSchema.parse({
       ...config,
       agent: 'assistant',
       agentCategory: 'toolUse',
       inputFiles: [],
-    } as AgentConfig;
+      outputFiles: [],
+    });
     mocks.listExecutions.mockResolvedValue([
       {
         kind: 'agent',
@@ -389,12 +381,12 @@ describe('CLI history runtime', () => {
   });
 
   it('shows the current resumable model without losing the startup model', async () => {
-    const toolUseConfig = {
+    const toolUseConfig = AgentConfigSchema.parse({
       ...config,
       agent: 'chat',
       model: 'gpt54',
       agentCategory: 'toolUse',
-    } as AgentConfig;
+    });
     mocks.readConfig.mockResolvedValue(toolUseConfig);
     mocks.deriveResumability.mockResolvedValue({
       resumable: true,
@@ -415,13 +407,15 @@ describe('CLI history runtime', () => {
   });
 
   it('shows the team preset in details without hiding the root agent', async () => {
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agent: 'engineer',
-      model: 'sonnet46T',
-      agentCategory: 'toolUse',
-      cliMultiAgentPresetId: ' software-engineer ',
-    } as AgentConfig);
+    mocks.readConfig.mockResolvedValue(
+      AgentConfigSchema.parse({
+        ...config,
+        agent: 'engineer',
+        model: 'sonnet46T',
+        agentCategory: 'toolUse',
+        cliMultiAgentPresetId: ' software-engineer ',
+      }),
+    );
 
     const details = await readCliHistoryDetails('team1' as ExecutionId);
     const text = formatCliHistoryDetailsText(details!);
@@ -432,10 +426,12 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces the explicit CLI output file in history details', async () => {
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      cliOutputFile: ' /tmp/texra-output/polished.tex ',
-    } as AgentConfig);
+    mocks.readConfig.mockResolvedValue(
+      AgentConfigSchema.parse({
+        ...config,
+        cliOutputFile: ' /tmp/texra-output/polished.tex ',
+      }),
+    );
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
     const text = formatCliHistoryDetailsText(details!);

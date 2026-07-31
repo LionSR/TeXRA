@@ -24,7 +24,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
     min: 0,
     max: 100,
     unit: '%',
-    defaultValue: 75,
+    defaultValue: DEFAULT_CORE_SETTINGS.model.compactionThresholdPercent,
   },
   {
     key: 'texra.model.retry.maxAttempts',

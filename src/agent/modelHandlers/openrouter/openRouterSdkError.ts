@@ -18,10 +18,7 @@ import { matchMappedSdkError } from '../support/sdkErrorMetadata';
  * `detectStatusCode`) to derive the kind so it is classified and surfaced
  * like the other providers.
  */
-export function tagOpenRouterSdkError(
-  err: unknown,
-  provider = 'openrouter',
-): void {
+export function tagOpenRouterSdkError(err: unknown, provider: string): void {
   matchMappedSdkError(
     err,
     provider,

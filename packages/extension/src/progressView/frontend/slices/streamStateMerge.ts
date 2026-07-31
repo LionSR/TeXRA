@@ -6,7 +6,7 @@ import {
   type StreamState,
 } from '@shared/schemas';
 
-export function metadataToStreamStatePartial(
+function metadataToStreamStatePartial(
   metadata: StreamMetadata,
 ): Partial<StreamState> {
   return {
@@ -20,10 +20,23 @@ export function metadataToStreamStatePartial(
   } as Partial<StreamState>;
 }
 
+/**
+ * Land a backend metadata patch on a stream's frontend state. Both slices that
+ * receive metadata (UPDATE_STREAMS and UPDATE_STREAM_METADATA) go through here,
+ * so the three cases (no state yet, same kind, changed kind) cannot be answered
+ * differently depending on which message arrived.
+ */
 export function mergeBackendOwnedState(
-  existing: StreamState,
+  existing: StreamState | undefined,
   metadata: StreamMetadata,
 ): StreamState {
+  if (!existing) {
+    return createStreamState(
+      metadata.kind,
+      metadataToStreamStatePartial(metadata),
+    );
+  }
+
   if (existing.kind !== metadata.kind) {
     // Kind changed: create fresh state with new-kind defaults, overlay metadata,
     // and preserve frontend-owned taskGroups.

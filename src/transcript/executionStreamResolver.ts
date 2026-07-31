@@ -8,11 +8,7 @@ import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StreamLogStore } from './StreamLogStore';
 
 type PersistedStreamIdResolutionSource =
-  | 'executionMeta'
-  | 'streamDataMeta'
-  | 'streamDataSuffix'
-  | 'streamLogsSuffix'
-  | 'fallback';
+  'executionMeta' | 'streamDataMeta' | 'streamDataSuffix' | 'streamLogsSuffix';
 
 export interface PersistedStreamIdResolution {
   readonly streamId: StreamTabId;
@@ -22,7 +18,6 @@ export interface PersistedStreamIdResolution {
 export interface PersistedStreamIdResolverOptions {
   readonly snapshotStore?: StreamSnapshotStore;
   readonly streamLogStore?: Pick<StreamLogStore, 'keys' | 'has'>;
-  readonly fallbackStreamId?: StreamTabId;
 }
 
 /**
@@ -138,9 +133,12 @@ async function pickBestMetaMatch(
  * *this* call, so an earlier call without a loaded `streamLogStore` could
  * settle on a worse (non-log-backed) candidate than a later call that does
  * have one — caching that would permanently shadow the better answer. The
- * suffix/fallback sources further below are heuristic guesses for when no
- * stream's meta.json actually claims this executionId at all, and caching a
- * guess as if it were a confirmed match could pin a wrong answer too.
+ * suffix sources further below are heuristic guesses for when no stream's
+ * meta.json actually claims this executionId at all, and caching a guess as
+ * if it were a confirmed match could pin a wrong answer too.
+ *
+ * `null` means no persisted stream carries this execution. Callers that have
+ * a derivable stream id own that substitution.
  */
 export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
@@ -183,7 +181,5 @@ export async function resolvePersistedStreamIdForExecution(
     return { streamId: matchedLog, source: 'streamLogsSuffix' };
   }
 
-  return options.fallbackStreamId
-    ? { streamId: options.fallbackStreamId, source: 'fallback' }
-    : null;
+  return null;
 }

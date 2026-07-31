@@ -7,7 +7,6 @@ import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import * as logUtils from '@logger/logUtils';
-import type { Platform } from '@platform/platform';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   RUN_DESCRIPTOR_SCHEMA_VERSION,
@@ -39,10 +38,6 @@ import {
 import { StorageFS } from '@utils/files';
 
 const tempDirs: string[] = [];
-
-function buildSnapshotPlatform(): Promise<Platform> {
-  return createTempDirPlatform('texra-snapshot-', tempDirs);
-}
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
@@ -177,7 +172,7 @@ function injectDuringExecutionConfigHydration(
 }
 
 describe('StreamSnapshotStore', () => {
-  setupPlatform(buildSnapshotPlatform);
+  setupPlatform(() => createTempDirPlatform('texra-snapshot-', tempDirs));
 
   afterEach(async () => {
     vi.restoreAllMocks();

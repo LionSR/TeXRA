@@ -125,10 +125,13 @@ function progressDetail(xml: string): string {
       const total = attr(xml, 'total');
       return current && total ? `round ${current}/${total}` : 'working';
     }
-    case 'plan':
-      return attr(xml, 'status') === 'cleared'
-        ? 'plan cleared'
-        : `plan · ${attr(xml, 'steps') ?? '0'} steps`;
+    case 'plan': {
+      if (attr(xml, 'status') === 'cleared') return 'plan cleared';
+      // The producer (`formatSubagentProgress`) attaches the plan objective as
+      // `summary`; there is no step count on the wire.
+      const summary = attr(xml, 'summary');
+      return summary ? `plan · ${decodeXmlEntities(summary)}` : 'plan updated';
+    }
     case 'todos': {
       const completed = attr(xml, 'completed');
       const active = attr(xml, 'active');

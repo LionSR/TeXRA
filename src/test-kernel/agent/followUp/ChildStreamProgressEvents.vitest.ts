@@ -12,7 +12,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
-  STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -49,8 +48,6 @@ const cancelledExecutionId = 'c11115' as ExecutionId;
 const cancelledChildStreamId = 'codex#c11115' as StreamTabId;
 const failedExecutionId = 'c11116' as ExecutionId;
 const failedChildStreamId = 'codex#c11116' as StreamTabId;
-const normalizedErrorExecutionId = 'c11117' as ExecutionId;
-const normalizedErrorChildStreamId = 'codex#c11117' as StreamTabId;
 const noProjectionAutoCloseExecutionId = 'c11118' as ExecutionId;
 const noProjectionAutoCloseChildStreamId = 'bash#c11118' as StreamTabId;
 const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
@@ -111,7 +108,6 @@ describe('child stream progress events', () => {
       stoppedChildStreamId,
       cancelledChildStreamId,
       failedChildStreamId,
-      normalizedErrorChildStreamId,
       noProjectionAutoCloseChildStreamId,
       workflowRelaunchChildStreamId,
       setupRetryChildStreamId,
@@ -187,13 +183,13 @@ describe('child stream progress events', () => {
         expect.arrayContaining([
           expect.objectContaining({
             streamId: childStreamId,
-            phase: STREAM_STATUS.RUNNING,
+            phase: STREAM_PHASE.RUNNING,
             cause: 'lifecycle',
           }),
           expect.objectContaining({
             streamId: childStreamId,
             phase: STREAM_PHASE.COMPLETED,
-            previousPhase: STREAM_STATUS.RUNNING,
+            previousPhase: STREAM_PHASE.RUNNING,
             cause: 'lifecycle',
           }),
         ]),
@@ -207,7 +203,7 @@ describe('child stream progress events', () => {
                 executionId,
                 childStreamId,
                 agentName: 'test-agent',
-                status: STREAM_STATUS.RUNNING,
+                status: STREAM_PHASE.RUNNING,
                 toolName: 'bash',
               }),
             ],
@@ -550,8 +546,8 @@ describe('child stream progress events', () => {
     expect(
       runEventsOfType(recorded.events, 'status').map((event) => event.phase),
     ).toEqual([
-      STREAM_STATUS.WAITING,
-      STREAM_STATUS.RUNNING,
+      STREAM_PHASE.WAITING,
+      STREAM_PHASE.RUNNING,
       STREAM_PHASE.FAILED,
     ]);
     expect(defaultSession().status.get(loopChildStreamId)).toBe(
@@ -649,6 +645,9 @@ describe('child stream progress events', () => {
       }),
     );
 
+    expect(defaultSession().status.get(failedChildStreamId)).toBe(
+      STREAM_PHASE.FAILED,
+    );
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
       outcome: 'failed',
@@ -657,42 +656,6 @@ describe('child stream progress events', () => {
       error: {
         kind: 'unexpected',
         message: 'child process exited 1',
-      },
-    });
-  });
-
-  it('fails finalization when the outcome carries an errorMessage', async () => {
-    const childStream = withSessionEventRecording(() =>
-      startCodexChild(
-        normalizedErrorExecutionId,
-        'Run a child loop with mismatched finalization inputs',
-      ),
-    );
-    const handle = defaultSession().executions.getAgentHandleByStream(
-      normalizedErrorChildStreamId,
-    );
-    expect(handle).toBeDefined();
-
-    await withSessionEventRecording(() =>
-      childStream.finalize({
-        outcome: {
-          kind: 'failed',
-          errorMessage: 'tool failed after reporting ready',
-        },
-      }),
-    );
-
-    expect(defaultSession().status.get(normalizedErrorChildStreamId)).toBe(
-      STREAM_PHASE.FAILED,
-    );
-    await expect(handle?.result).resolves.toMatchObject({
-      type: 'result',
-      outcome: 'failed',
-      executionId: normalizedErrorExecutionId,
-      streamId: normalizedErrorChildStreamId,
-      error: {
-        kind: 'unexpected',
-        message: 'tool failed after reporting ready',
       },
     });
   });

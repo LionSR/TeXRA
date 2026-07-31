@@ -255,13 +255,12 @@ export type UpdateCustomAgentDirMessage = z.infer<
 >;
 
 // ============================================================
-// Super YOLO enabled data schema
+// Multi-agent coordination data schema
 // ============================================================
 
-/** Outbound: backend → frontend Super YOLO enabled toggle + reliability settings */
+/** Outbound: backend → frontend reliability + orchestration settings */
 const UpdateSuperYoloEnabledMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
-  enabled: z.boolean(),
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),

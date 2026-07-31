@@ -3,7 +3,7 @@ import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease'
 import type { ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export type CliFinalizationFailureReporter = (error: Error) => void;
+type CliFinalizationFailureReporter = (error: Error) => void;
 type FailedFinalizationResult = Extract<
   Awaited<ReturnType<typeof finalizeExecution>>,
   { readonly status: 'failed' }

@@ -6,9 +6,11 @@ import { describe, it } from 'vitest';
 // Local imports - schemas
 import {
   buildTexraPackageConfiguration,
+  DEFAULT_TEXRA_SETTINGS,
   flattenTexraSettings,
   getTexraSettingDefault,
   TEXRA_SETTING_KEYS,
+  TEXRA_SETTING_PATHS,
   TexraSettingsSchema,
 } from '@extensionSchemas/texraSettings';
 import { PROVIDER_VSCODE_SETTINGS } from '@shared/constants/providers';
@@ -63,12 +65,40 @@ function getPackageConfigurationProperties(): Record<
 }
 
 describe('TexraSettingsSchema', () => {
-  it('parses default settings', () => {
+  it('parses an empty object to the full default tree', () => {
     const parsed = TexraSettingsSchema.parse({});
 
     assert.equal(parsed.model.compactionThresholdPercent, 75);
     assert.equal(parsed.toolUse.persistence.ttlHours, 336);
     assert.deepEqual(parsed.latex.customReplacements, {});
+    assert.equal(parsed.auth.enableVSCodeGitHub, false);
+    assert.equal(parsed.apiKeys.set, null);
+    assert.equal(parsed.apiKeys.remove, null);
+    assert.deepEqual(parsed.files.included.editedExtensions, ['.txt', '.tex']);
+    // T10: Google Interactions server-side state defaults ON.
+    assert.equal(parsed.model.useGoogleInteractionsServerState, true);
+    assert.deepEqual(parsed, DEFAULT_TEXRA_SETTINGS);
+  });
+
+  it('exposes every TEXRA_SETTING_PATH on the parsed tree', () => {
+    const parsed = TexraSettingsSchema.parse({});
+
+    for (const path of TEXRA_SETTING_PATHS) {
+      let value: unknown = parsed;
+      for (const segment of path.split('.')) {
+        value = (value as Record<string, unknown>)[segment];
+      }
+      assert.notEqual(value, undefined, `path ${path} should resolve`);
+    }
+  });
+
+  it('flattens the defaults to one entry per setting path', () => {
+    const flat = flattenTexraSettings();
+
+    assert.equal(Object.keys(flat).length, TEXRA_SETTING_PATHS.length);
+    assert.equal(flat['texra.auth.enableVSCodeGitHub'], false);
+    assert.equal(flat['texra.apiKeys.set'], null);
+    assert.equal(flat['texra.model.retry.backoffMs'], 1000);
   });
 
   it('covers every package.json contributed setting key', () => {

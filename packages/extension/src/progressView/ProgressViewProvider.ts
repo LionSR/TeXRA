@@ -588,11 +588,10 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   ): Promise<boolean> {
     const webview = this.getActiveWebview();
     if (!webview) return false;
-    try {
-      return await webview.postMessage(message);
-    } catch {
-      return false;
-    }
+    // Delivery failures are reported by the two callers that own them
+    // (`WebviewBridge.deliver` logs and retries the frame; `ProgressBackend`
+    // drops best-effort view refreshes), so this must not swallow them here.
+    return webview.postMessage(message);
   }
 
   private isViewActiveTarget(

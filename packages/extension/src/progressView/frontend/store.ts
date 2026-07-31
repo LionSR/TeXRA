@@ -1,7 +1,5 @@
 // Shared imports
 import {
-  AgentCategory,
-  createStreamState,
   type AgentCategoryFilter,
   type ContextStateData,
   type LogMessageData,
@@ -112,24 +110,4 @@ export function createInitialState(): ProgressState {
     followupOptionsByStream: new Map(),
     inquiries: new Map(),
   };
-}
-
-/**
- * Get stream state for a stream ID.
- * If state doesn't exist, creates a new state based on agentCategory.
- *
- * IMPORTANT: Always pass agentCategory when creating new stream state.
- * If agentCategory is undefined, defaults to WORKFLOW which may cause
- * tool-use streams to render incorrectly. Callers should look up the
- * category from streamInfo before calling this function.
- */
-export function getStreamState(
-  state: ProgressState,
-  streamId: StreamTabId,
-  agentCategory?: AgentCategory,
-): StreamState {
-  return (
-    state.streamStates.get(streamId) ??
-    createStreamState(agentCategory ?? AgentCategory.Workflow)
-  );
 }

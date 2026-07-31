@@ -14,7 +14,7 @@ import type {
  * outward, but producers no longer encode them through the `domain` escape
  * hatch.
  */
-export type RunFactPayloads = {
+type RunFactPayloads = {
   updateTodos: UpdateTodosPayload;
   updatePlan: UpdatePlanPayload;
   addOutputFiles: AddOutputFilesPayload;
@@ -23,7 +23,7 @@ export type RunFactPayloads = {
   goalPaused: GoalPausedPayload;
 };
 
-export type RunFactEventName = keyof RunFactPayloads;
+type RunFactEventName = keyof RunFactPayloads;
 
 export function emitRunFact<K extends RunFactEventName>(
   trace: AgentTrace,

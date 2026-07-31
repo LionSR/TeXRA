@@ -6,6 +6,7 @@ import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Local file imports
@@ -141,11 +142,15 @@ describe('ModelHandlerGoogleInteractions streaming', () => {
       'Hello world',
     );
 
-    const outputRecord = records.find((r) => r.type === 'modelResponse');
+    const outputRecord = records.find(
+      (r) => r.type === MESSAGE_TYPES.MODEL_RESPONSE,
+    );
     expect(outputRecord?.appends).toEqual(['Hello ', 'world']);
     expect(outputRecord?.finalized).toBe('Hello world');
 
-    const thinkingRecord = records.find((r) => r.type === 'thinking');
+    const thinkingRecord = records.find(
+      (r) => r.type === MESSAGE_TYPES.THINKING,
+    );
     expect(thinkingRecord?.appends).toEqual(['plan']);
 
     // Thought signature is captured onto the round-trip ThoughtStep and persisted

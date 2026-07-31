@@ -11,9 +11,11 @@ import { ModelProvider } from 'llm-zoo';
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 type StreamRecord = {
+  type: string;
   appends: string[];
   finalized?: string;
 };
@@ -21,8 +23,8 @@ type StreamRecord = {
 function createStreamRecorder(records: StreamRecord[]): AgentTrace {
   return {
     ...noopTrace,
-    openStream: () => {
-      const record: StreamRecord = { appends: [] };
+    openStream: (type: string) => {
+      const record: StreamRecord = { type, appends: [] };
       records.push(record);
       return {
         id: `stream-${records.length}`,
@@ -36,6 +38,11 @@ function createStreamRecorder(records: StreamRecord[]): AgentTrace {
       };
     },
   };
+}
+
+/** The response stream, selected by type rather than by open order. */
+function responseStream(records: StreamRecord[]): StreamRecord | undefined {
+  return records.find((record) => record.type === MESSAGE_TYPES.MODEL_RESPONSE);
 }
 
 class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
@@ -176,8 +183,8 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
     expect(handler.extractResponse(response.response, '').text).toBe(
       visibleText,
     );
-    expect(streamRecords[1]?.appends).toEqual([visibleText]);
-    expect(streamRecords[1]?.finalized).toBe(visibleText);
+    expect(responseStream(streamRecords)?.appends).toEqual([visibleText]);
+    expect(responseStream(streamRecords)?.finalized).toBe(visibleText);
 
     const [toolInfo] = handler.extractToolUse(response.response);
     expect(toolInfo?.callId).toBe('google-call-1');
@@ -217,8 +224,8 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
     });
 
     expect(handler.extractResponse(response.response, '').text).toBe('');
-    expect(streamRecords[1]?.appends).toEqual([]);
-    expect(streamRecords[1]?.finalized).toBe('');
+    expect(responseStream(streamRecords)?.appends).toEqual([]);
+    expect(responseStream(streamRecords)?.finalized).toBe('');
 
     const [toolInfo] = handler.extractToolUse(response.response);
     expect(toolInfo?.callId).toBe('google-call-1');
