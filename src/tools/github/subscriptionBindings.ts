@@ -11,9 +11,10 @@ import {
   type PRSubscribeInput,
 } from './PRPollingSource';
 import {
-  repoKeyOf,
+  repoKeyToString,
   SharedRepoPollingSource,
   type RepoKey,
+  type RepoSubscribeInput,
 } from './RepoPollingSource';
 import {
   StreamSubscriptionRegistry,
@@ -56,25 +57,13 @@ export function unbindAllForPR(key: string): number {
   return prSubscriptions.unbindAll(key);
 }
 
-export interface RepoBindInput {
-  owner: string;
-  repo: string;
-}
-
 const repoSubscriptions = new StreamSubscriptionRegistry<
   RepoKey,
-  RepoBindInput
+  RepoSubscribeInput
 >({
   name: 'RepoStreamSubscriptionRegistry',
-  source: {
-    has: (key) => SharedRepoPollingSource.has(key),
-    activeKeys: () => SharedRepoPollingSource.activeKeys(),
-    onKeysChanged: (listener) =>
-      SharedRepoPollingSource.onKeysChanged(listener),
-    subscribe: (input, listener) =>
-      SharedRepoPollingSource.subscribe(input.owner, input.repo, listener),
-  },
-  keyOf: (input) => repoKeyOf(input.owner, input.repo),
+  source: SharedRepoPollingSource,
+  keyOf: repoKeyToString,
   bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
 });
 
@@ -88,14 +77,14 @@ export function listRepoSubscriptionBindings(
 
 export function bindRepoSubscription(
   streamId: StreamTabId,
-  input: RepoBindInput,
+  input: RepoSubscribeInput,
 ): boolean {
   return repoSubscriptions.bind(streamId, input);
 }
 
 export function unbindRepoSubscription(
   streamId: StreamTabId,
-  input: RepoBindInput,
+  input: RepoSubscribeInput,
 ): boolean {
   return repoSubscriptions.unbind(streamId, input);
 }

@@ -3,13 +3,12 @@
 // per screen, Esc cancels. Returns the collected answers, or `undefined` when
 // the user backs out. Pure config logic lives in runtime/initConfig.
 
-import { render, Box, Text, useApp } from 'ink';
+import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
-import { clearTerminalScrollback } from '@cli/tui/terminalCleanup';
+import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import {
   CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
@@ -276,24 +275,13 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
 export async function runInitWizard(
   options: InitWizardOptions,
 ): Promise<InitWizardResult | undefined> {
-  let chosen: InitWizardResult | undefined;
-  const instance = render(
-    <WizardApp
-      options={options}
-      onResolve={(result) => {
-        chosen = result;
-      }}
-    />,
+  return renderCliPrompt<InitWizardResult | undefined>(
+    (resolve) => <WizardApp options={options} onResolve={resolve} />,
     {
-      stdout: tuiOutputStreamForColor(
-        process.stdout,
-        options.colorEnabled ?? true,
-      ),
+      stdout: process.stdout,
       stderr: process.stderr,
-      stdin: process.stdin,
+      colorEnabled: options.colorEnabled,
+      clear: 'scrollback',
     },
   );
-  await instance.waitUntilExit();
-  clearTerminalScrollback();
-  return chosen;
 }

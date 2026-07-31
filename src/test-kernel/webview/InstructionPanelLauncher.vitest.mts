@@ -1,70 +1,18 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - shared schemas
-import type { SessionContextValue, TeamOptionData } from '@shared/schemas';
-
-// Local imports - component type and context
+// Local imports - component type
 import type { InstructionPanel } from '@webview/frontend/components/InstructionPanel';
-import type { sessionContext } from '@webview/frontend/contexts/mainViewContexts';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
-import type { ContextProvider } from '@lit/context';
-
-// @lit/context's request/provider event classes capture the global `Event`
-// constructor at module-evaluation time, so every import that transitively
-// pulls it in (the context definition, ContextProvider) must stay dynamic —
-// evaluated only inside the hook below, after the jsdom globals are installed.
-let ContextProviderCtor: typeof ContextProvider;
-let mainViewSessionContext: typeof sessionContext;
-const sessionProviders = new WeakMap<
-  InstructionPanel,
-  { setValue(value: SessionContextValue): void }
->();
-
-function teamOption(
-  value: string,
-  overrides: Partial<TeamOptionData> = {},
-): TeamOptionData {
-  return {
-    value,
-    label: value,
-    icon: 'bookmark',
-    source: 'built-in',
-    description: '',
-    unavailableMembers: [],
-    rootAgentName: null,
-    ...overrides,
-  };
-}
-
-function makeSession(
-  overrides: Partial<SessionContextValue> = {},
-): SessionContextValue {
-  return {
-    sessionType: 'toolUse',
-    launchTarget: 'agent',
-    selectedTeamId: '',
-    instruction: '',
-    placeholder: 'Describe the edit…',
-    workflowAgent: 'copy-editor',
-    toolUseAgent: 'assistant',
-    model: 'model-a',
-    workflowAgentOptions: [],
-    toolUseAgentOptions: [],
-    modelOptions: [],
-    teamOptions: [],
-    workspaceRootOptions: [],
-    workingDirectory: '',
-    isRecording: false,
-    isPolishing: false,
-    debugMode: false,
-    isOrchestratorSelected: false,
-    statusAnnouncement: '',
-    ...overrides,
-  };
-}
+import {
+  loadInstructionPanelModules,
+  makeSession,
+  mountInstructionPanel as mountPanel,
+  teamOption,
+  updateInstructionPanelSession as updatePanelSession,
+} from './mainViewTestUtils';
 
 const TEAM_SESSION = makeSession({
   launchTarget: 'team',
@@ -79,37 +27,6 @@ const TEAM_SESSION = makeSession({
     }),
   ],
 });
-
-async function mountPanel(
-  session: SessionContextValue,
-  { showSessionHint = true }: { showSessionHint?: boolean } = {},
-): Promise<InstructionPanel> {
-  const wrapper = document.createElement('div');
-  const provider = new ContextProviderCtor(wrapper, {
-    context: mainViewSessionContext,
-    initialValue: session,
-  });
-  // ContextProvider treats plain elements as dumb hosts: the context-request
-  // listener is only attached on hostConnected(), which nothing calls for us.
-  provider.hostConnected();
-  const element = document.createElement(
-    'instruction-panel',
-  ) as InstructionPanel;
-  element.showSessionHint = showSessionHint;
-  wrapper.append(element);
-  document.body.append(wrapper);
-  sessionProviders.set(element, provider);
-  await element.updateComplete;
-  return element;
-}
-
-async function updatePanelSession(
-  element: InstructionPanel,
-  session: SessionContextValue,
-): Promise<void> {
-  sessionProviders.get(element)?.setValue(session);
-  await element.updateComplete;
-}
 
 function query<T extends HTMLElement>(
   element: InstructionPanel,
@@ -148,15 +65,12 @@ describe('instruction-panel launcher', () => {
   let MANAGE_TEAMS_OPTION_VALUE: string;
 
   useLitComponentTestDom(async () => {
-    // selectTemplates registers wa-option at module scope and @lit/context
-    // captures the global Event constructor, so both can only be imported
-    // after the test DOM globals are installed (this hook's job).
-    ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
-    ({ sessionContext: mainViewSessionContext } =
-      await import('@webview/frontend/contexts/mainViewContexts'));
+    // selectTemplates registers wa-option at module scope, so like the panel
+    // modules loaded above it can only be imported after the test DOM globals
+    // are installed (this hook's job).
+    await loadInstructionPanelModules();
     ({ BROWSE_ALL_AGENTS_OPTION_VALUE, MANAGE_TEAMS_OPTION_VALUE } =
       await import('@shared/utils/selectTemplates'));
-    await import('@webview/frontend/components/InstructionPanel');
   });
 
   describe('agent launcher', () => {

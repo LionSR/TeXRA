@@ -1,17 +1,8 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-type DesktopRendererPlatformModule =
-  typeof import('@desktop/renderer/rendererPlatform');
-
-async function loadDesktopRendererPlatform(): Promise<DesktopRendererPlatformModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('renderer', 'rendererPlatform.ts'))
-  ) as Promise<DesktopRendererPlatformModule>;
-}
+// Local imports - test support
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 function rendererWindow(platform: string): Window {
   return { navigator: { platform } } as unknown as Window;
@@ -19,7 +10,9 @@ function rendererWindow(platform: string): Window {
 
 describe('desktop renderer platform', () => {
   it('derives platform values from renderer navigator data', async () => {
-    const { getRendererPlatform } = await loadDesktopRendererPlatform();
+    const { getRendererPlatform } = await loadSourceModule(
+      '@desktop/renderer/rendererPlatform',
+    );
 
     expect(getRendererPlatform(rendererWindow('MacIntel'))).toBe('darwin');
     expect(getRendererPlatform(rendererWindow('Win32'))).toBe('win32');

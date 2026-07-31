@@ -20,8 +20,8 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { installPlatform } from '@test/support/setupPlatform';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
@@ -74,24 +74,18 @@ describe('cross-category agent resolution', () => {
       await writeFile(resolve(customDir, fileName), `${lines.join('\n')}\n`);
     }
 
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform(
-        {},
-        {
-          fs: nodeFilesystem,
-          agentDirectories: {
-            custom: async () => customDir,
-            builtIn: async () =>
-              resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-            builtInToolUse: async () =>
-              resolve(
-                REPO_ROOT,
-                'packages/extension/resources/tool_use_agents',
-              ),
-          },
+    await installPlatform(
+      {},
+      {
+        fs: nodeFilesystem,
+        agentDirectories: {
+          custom: async () => customDir,
+          builtIn: async () =>
+            resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+          builtInToolUse: async () =>
+            resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
         },
-      ),
+      },
     );
 
     await refresh({ includeRemote: false });

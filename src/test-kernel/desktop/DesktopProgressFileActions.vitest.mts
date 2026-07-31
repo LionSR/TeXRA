@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 
 import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 type DiffOutcome = {
   results: Array<{
@@ -24,21 +24,6 @@ type RunContext = {
     inputFile: string;
     outputFiles?: string[];
   };
-};
-
-type FileActionsInstance = {
-  runLatexdiffForRun(
-    baseFile: string,
-    editedFile: string,
-    context: RunContext,
-  ): Promise<void>;
-};
-
-type FileActionsModule = {
-  DesktopProgressFileActions: new (
-    options: unknown,
-    host: unknown,
-  ) => FileActionsInstance;
 };
 
 function outputInfo(filePath: string): OutputFileInfo {
@@ -64,7 +49,9 @@ async function loadFileActions(mocks: {
     diffFileName?: string;
   };
 }): Promise<{
-  actions: FileActionsInstance;
+  actions: InstanceType<
+    typeof import('@desktop/main/desktopProgressFileActions').DesktopProgressFileActions
+  >;
   openBuildDisplay: ReturnType<typeof vi.fn>;
   runLatexdiffForExecution: ReturnType<typeof vi.fn>;
   runDiff: ReturnType<typeof vi.fn>;
@@ -114,15 +101,15 @@ async function loadFileActions(mocks: {
     };
   });
 
-  const module = (await import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopProgressFileActions.ts'))
-  )) as FileActionsModule;
+  const { DesktopProgressFileActions } = await loadSourceModule(
+    '@desktop/main/desktopProgressFileActions',
+  );
 
   const openBuildDisplay = vi.fn();
-  const actions = new module.DesktopProgressFileActions(
+  const actions = new DesktopProgressFileActions(
     createStubDesktopAgentExecutionHost({ openBuildDisplay }),
     {
-      runExecution: vi.fn(),
+      startExecution: vi.fn(),
       listWorkspaceCandidateFiles: vi.fn(async () => []),
     },
   );

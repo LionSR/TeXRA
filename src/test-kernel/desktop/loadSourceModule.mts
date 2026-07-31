@@ -21,11 +21,36 @@ interface TestSourceModules {
   '@platform/defaults/jsonConfigProvider': typeof import('@platform/defaults/jsonConfigProvider');
   '@platform/defaults/jsonStore': typeof import('@platform/defaults/jsonStore');
   '@platform/defaults/nodeHost': typeof import('@platform/defaults/nodeHost');
+  '@desktop/desktopCommandSurface': typeof import('@desktop/desktopCommandSurface');
+  '@desktop/desktopDiffMessages': typeof import('@desktop/desktopDiffMessages');
+  '@desktop/desktopOnboardingMessages': typeof import('@desktop/desktopOnboardingMessages');
+  '@desktop/desktopPdfMessages': typeof import('@desktop/desktopPdfMessages');
+  '@desktop/main/desktopAgentExecution': typeof import('@desktop/main/desktopAgentExecution');
+  '@desktop/main/desktopCrashReporting': typeof import('@desktop/main/desktopCrashReporting');
+  '@desktop/main/desktopDiffHost': typeof import('@desktop/main/desktopDiffHost');
+  '@desktop/main/desktopExecutionIpc': typeof import('@desktop/main/desktopExecutionIpc');
+  '@desktop/main/desktopFileSelection': typeof import('@desktop/main/desktopFileSelection');
+  '@desktop/main/desktopHistoryHandlers': typeof import('@desktop/main/desktopHistoryHandlers');
+  '@desktop/main/desktopLogIpc': typeof import('@desktop/main/desktopLogIpc');
+  '@desktop/main/desktopNavigationPolicy': typeof import('@desktop/main/desktopNavigationPolicy');
+  '@desktop/main/desktopOnboardingIpc': typeof import('@desktop/main/desktopOnboardingIpc');
+  '@desktop/main/desktopPreviewHost': typeof import('@desktop/main/desktopPreviewHost');
+  '@desktop/main/desktopProgressFileActions': typeof import('@desktop/main/desktopProgressFileActions');
+  '@desktop/main/desktopProgressIpc': typeof import('@desktop/main/desktopProgressIpc');
+  '@desktop/main/desktopPromptController': typeof import('@desktop/main/desktopPromptController');
+  '@desktop/main/desktopSettingsIpc': typeof import('@desktop/main/desktopSettingsIpc');
+  '@desktop/main/desktopShellIpc': typeof import('@desktop/main/desktopShellIpc');
+  '@desktop/main/desktopToolEditApproval': typeof import('@desktop/main/desktopToolEditApproval');
+  '@desktop/main/desktopUpdateChecker': typeof import('@desktop/main/desktopUpdateChecker');
+  '@desktop/main/desktopViewStateIpc': typeof import('@desktop/main/desktopViewStateIpc');
   '@desktop/main/platform/dataRootMigration': typeof import('@desktop/main/platform/dataRootMigration');
   '@desktop/main/platform/electronSecrets': typeof import('@desktop/main/platform/electronSecrets');
   '@desktop/main/platform/pathFix': typeof import('@desktop/main/platform/pathFix');
   '@desktop/main/platform/paths': typeof import('@desktop/main/platform/paths');
   '@desktop/main/platform/secretStorageWarningDialog': typeof import('@desktop/main/platform/secretStorageWarningDialog');
+  '@desktop/renderer/desktopIconLibrary': typeof import('@desktop/renderer/desktopIconLibrary');
+  '@desktop/renderer/promptOverlay': typeof import('@desktop/renderer/promptOverlay');
+  '@desktop/renderer/rendererPlatform': typeof import('@desktop/renderer/rendererPlatform');
 }
 
 const ALIAS_ROOTS: Record<string, string | undefined> = {

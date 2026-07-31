@@ -25,9 +25,9 @@ import { platform } from '@platform/platform';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { installPlatform } from '@test/support/setupPlatform';
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
@@ -87,12 +87,9 @@ function useAgentDirectories(
 async function initPlatformWithState(
   workspaceState: Record<string, unknown>,
 ): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspaceState },
-      { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
-    ),
+  await installPlatform(
+    { workspaceState },
+    { fs: nodeFilesystem, agentDirectories: mutableAgentDirectories },
   );
 }
 

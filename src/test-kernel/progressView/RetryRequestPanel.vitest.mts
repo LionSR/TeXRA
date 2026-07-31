@@ -7,7 +7,10 @@ import type { ProviderErrorPartial } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(
   () => import('@progressView/frontend/components/RetryRequestPanel'),
@@ -31,14 +34,10 @@ function createRetryPermission(): RetryRequestPanel['permission'] {
   };
 }
 
-async function mountPanel(): Promise<RetryRequestPanel> {
-  const element = document.createElement(
-    'retry-request-panel',
-  ) as RetryRequestPanel;
-  element.permission = createRetryPermission();
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mountPanel(): Promise<RetryRequestPanel> {
+  return mountComponent<RetryRequestPanel>('retry-request-panel', {
+    permission: createRetryPermission(),
+  });
 }
 
 // `formatRetryDetails` is private; TS-private is not runtime-enforced, and

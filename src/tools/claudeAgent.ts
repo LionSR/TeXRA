@@ -43,8 +43,18 @@ import {
 } from '@agent/runtime/RunContext';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { MESSAGE_TYPES } from '@shared/schemas';
-import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
+import {
+  ClaudeAgentEffortSchema,
+  ClaudeAgentPermissionModeSchema,
+  MESSAGE_TYPES,
+} from '@shared/schemas';
+import type {
+  ClaudeAgentEffort,
+  ClaudeAgentPermissionMode,
+  StreamTabId,
+  ExecutionId,
+  ToolUseLog,
+} from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
@@ -75,12 +85,8 @@ import {
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
-  CLAUDE_AGENT_EFFORT_LEVELS,
   CLAUDE_AGENT_NAME,
-  CLAUDE_AGENT_PERMISSION_MODES,
   modelSupportsAdaptiveThinking,
-  type ClaudeAgentEffort,
-  type ClaudeAgentPermissionMode,
   type ClaudeMessageBlock,
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
@@ -105,24 +111,20 @@ const ClaudeAgentInputSchema = z.strictObject({
     .describe(
       'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
     ),
-  permission_mode: z
-    .enum(CLAUDE_AGENT_PERMISSION_MODES)
-    .nullish()
-    .describe(
-      'Permission behavior for the agent (defaults to user-configured mode, typically acceptEdits).',
-    ),
+  // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
+  // to the SDK and never offered here.
+  permission_mode: ClaudeAgentPermissionModeSchema.nullish().describe(
+    'Permission behavior for the agent (defaults to user-configured mode, typically acceptEdits).',
+  ),
   model: z
     .string()
     .nullish()
     .describe(
       "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-5'). Defaults to user-configured model.",
     ),
-  effort: z
-    .enum(CLAUDE_AGENT_EFFORT_LEVELS)
-    .nullish()
-    .describe(
-      'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
-    ),
+  effort: ClaudeAgentEffortSchema.nullish().describe(
+    'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
+  ),
   session_id: z
     .string()
     .nullish()

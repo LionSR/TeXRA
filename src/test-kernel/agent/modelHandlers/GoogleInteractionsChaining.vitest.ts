@@ -1,6 +1,5 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -8,6 +7,13 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
+
+// Local file imports
+import {
+  GOOGLE_INTERACTIONS_TEST_CONFIG,
+  StreamingGoogleInteractionsHandler,
+  userStep,
+} from './googleInteractionsTestUtils';
 
 // Third-party imports
 import type { Interactions } from '@google/genai';
@@ -84,21 +90,9 @@ function completedEvents(
   ];
 }
 
-class StreamingHandler extends ModelHandlerGoogleInteractions {
-  override getStreamingConfig(): boolean {
-    return true;
-  }
-}
-
 function createHandler(): ModelHandlerGoogleInteractions {
-  const handler = new StreamingHandler(
-    buildTestModelConfig({
-      name: 'test-google-interactions',
-      label: 'Test Google Interactions',
-      fullName: 'gemini-3-pro-test',
-      shortName: 'gemini-3-pro-test',
-      provider: ModelProvider.GOOGLE,
-      contextWindow: 4096,
+  const handler = new StreamingGoogleInteractionsHandler(
+    buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG, {
       capabilities: {
         supportsReasoning: true,
         supportsTokenCounting: false,
@@ -108,10 +102,6 @@ function createHandler(): ModelHandlerGoogleInteractions {
   handler.setLogger({ ...noopTrace });
   handler.setOutputStreaming(true);
   return handler;
-}
-
-function userStep(text: string): Step {
-  return { type: 'user_input', content: [{ type: 'text', text }] };
 }
 
 /** Shorthand for the `handler.createResponse({ client, messages, temperature: 0 })`

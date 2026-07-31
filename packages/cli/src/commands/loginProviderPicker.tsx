@@ -1,9 +1,8 @@
-import { render, Box, Text, useApp } from 'ink';
+import { Box, Text, useApp } from 'ink';
 
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
-import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
+import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
@@ -76,20 +75,8 @@ function LoginProviderPicker(props: {
 export async function promptForLoginProvider(
   colorEnabled = true,
 ): Promise<LoginPickerChoice | undefined> {
-  let selected: LoginPickerChoice | undefined;
-  const instance = render(
-    <LoginProviderPicker
-      onSelect={(provider) => {
-        selected = provider;
-      }}
-    />,
-    {
-      stdout: tuiOutputStreamForColor(process.stdout, colorEnabled),
-      stderr: process.stderr,
-      stdin: process.stdin,
-    },
+  return renderCliPrompt<LoginPickerChoice | undefined>(
+    (resolve) => <LoginProviderPicker onSelect={resolve} />,
+    { stdout: process.stdout, stderr: process.stderr, colorEnabled },
   );
-  await instance.waitUntilExit();
-  clearTerminalVisibleScreen();
-  return selected;
 }

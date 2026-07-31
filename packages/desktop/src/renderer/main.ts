@@ -112,6 +112,7 @@ import {
 } from './desktopCommandPalette';
 import {
   createDesktopShortcutRegistry,
+  desktopCommandPaletteShortcut,
   DESKTOP_COMMAND_PALETTE_ID,
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
@@ -204,9 +205,10 @@ const shortcutAcceleratorsById = new Map<string, string | undefined>(
     entry.accelerator,
   ]),
 );
+const commandPaletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
 shortcutAcceleratorsById.set(
-  DESKTOP_COMMAND_PALETTE_ID,
-  rendererPlatform === 'darwin' ? 'Command+K' : 'Control+K',
+  commandPaletteShortcut.id,
+  commandPaletteShortcut.accelerator,
 );
 
 function commandTitle(

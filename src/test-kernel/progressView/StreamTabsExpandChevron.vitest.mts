@@ -6,7 +6,10 @@ import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 function makeStream(name: string): StreamTabInfo {
   return {
@@ -24,10 +27,7 @@ function settleChildRender(): Promise<unknown> {
 }
 
 async function mountTabs(props: Partial<StreamTabs>): Promise<StreamTabs> {
-  const element = document.createElement('stream-tabs') as StreamTabs;
-  Object.assign(element, props);
-  document.body.append(element);
-  await element.updateComplete;
+  const element = await mountComponent<StreamTabs>('stream-tabs', props);
   await settleChildRender();
   return element;
 }

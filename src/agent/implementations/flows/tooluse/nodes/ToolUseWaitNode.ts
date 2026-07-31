@@ -1,14 +1,11 @@
 import { Node } from '@agent/node';
-import { logUserMessage } from '@agent/trace';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
-  appendFollowUpAsUserMessage,
-  followUpDisplayText,
+  applyFollowUpBatch,
   userFollowUpInstruction,
-  type AppendFollowUpResult,
 } from '@agent/followUp/followUpMessages';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { STREAM_PHASE } from '@shared/schemas';
@@ -172,7 +169,7 @@ export class ToolUseWaitNode<C> extends Node<
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const { onFollowUpConsumed, logger, runScope } = this.services;
+    const { logger, runScope } = this.services;
     const { streamId, session } = runScope;
 
     if (execRes.kind === 'waiting') {
@@ -205,41 +202,12 @@ export class ToolUseWaitNode<C> extends Node<
       }
     }
 
-    for (const followUp of execRes.followUps) {
-      // A non-synthetic follow-up's transcript row must be logged whether
-      // appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/
-      // oversized media file) -- otherwise a failed resume leaves no record
-      // of what the user asked for. `finally` preserves the throw so the
-      // resume still fails as before; a throw before any attachment was
-      // inserted just yields an empty attachments list, which is accurate
-      // (nothing was actually inserted). Synthetic follow-ups are still
-      // never logged, throw or not -- unchanged from before this fix.
-      let result: AppendFollowUpResult | undefined;
-      try {
-        result = await appendFollowUpAsUserMessage(
-          shared.messages,
-          followUp,
-          this.services,
-        );
-        shared.messages = result.messages;
-      } finally {
-        if (!execRes.synthetic) {
-          logUserMessage(
-            logger,
-            followUpDisplayText(followUp),
-            result?.attachmentKinds ?? [],
-          );
-        }
-      }
-    }
-
-    // Acknowledge consumption only after every item actually landed in
-    // `shared.messages`: an append failure (e.g. corrupt media) must leave
-    // the batch unacknowledged so the resume wrapper restores it for replay
-    // instead of treating the lost input as consumed.
-    if (!execRes.synthetic) {
-      onFollowUpConsumed?.();
-    }
+    await applyFollowUpBatch(
+      shared,
+      execRes.followUps,
+      execRes.synthetic,
+      this.services,
+    );
 
     return FlowTransition.CONTINUE;
   }

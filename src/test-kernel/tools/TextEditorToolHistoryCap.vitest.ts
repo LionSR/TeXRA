@@ -38,13 +38,14 @@ async function installPlatform(
 async function callTextEditor(
   tool: TextEditorTool,
   input: unknown,
-  session?: SessionHandle,
+  options: { executionId?: string; session?: SessionHandle } = {},
 ) {
+  const executionId = options.executionId ?? EXECUTION_ID;
   return withRunContext(
     createRunContext({
-      streamId: `stream:${EXECUTION_ID}` as StreamTabId,
-      executionId: EXECUTION_ID,
-      session,
+      streamId: `stream:${executionId}` as StreamTabId,
+      executionId,
+      session: options.session,
     }),
     () => tool.call(input),
   );
@@ -133,7 +134,7 @@ describe('TextEditorTool undo history lifecycle', () => {
           old_str: 'before',
           new_str: 'after',
         },
-        session,
+        { session },
       );
       assert.strictEqual(result.status, 'executed');
 
@@ -153,5 +154,52 @@ describe('TextEditorTool undo history lifecycle', () => {
     } finally {
       session.executions.untrack(EXECUTION_ID);
     }
+  });
+
+  it('keeps undo history isolated between execution ids', async () => {
+    await installPlatform({ '/workspace/shared.tex': 'alpha\n' });
+    const tool = new TextEditorTool();
+
+    const parentEdit = await callTextEditor(
+      tool,
+      {
+        command: 'str_replace',
+        path: 'shared.tex',
+        old_str: 'alpha',
+        new_str: 'parent',
+      },
+      { executionId: 'aaaaaa' },
+    );
+    assert.strictEqual(parentEdit.status, 'executed');
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
+
+    const childEdit = await callTextEditor(
+      tool,
+      {
+        command: 'str_replace',
+        path: 'shared.tex',
+        old_str: 'parent',
+        new_str: 'child',
+      },
+      { executionId: 'bbbbbb' },
+    );
+    assert.strictEqual(childEdit.status, 'executed');
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'child\n');
+
+    const parentUndo = await callTextEditor(
+      tool,
+      { command: 'undo_edit', path: 'shared.tex' },
+      { executionId: 'aaaaaa' },
+    );
+    assert.strictEqual(parentUndo.status, 'executed');
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
+
+    const childUndo = await callTextEditor(
+      tool,
+      { command: 'undo_edit', path: 'shared.tex' },
+      { executionId: 'bbbbbb' },
+    );
+    assert.strictEqual(childUndo.status, 'executed');
+    assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'parent\n');
   });
 });

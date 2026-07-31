@@ -217,7 +217,7 @@ export function shouldUseGoogleInteractionsAPI(
  * `createModelHandler` only (the live-routing path that actually instantiates a
  * handler), keeping the routing predicate pure.
  */
-export function assertGoogleInteractionsRoutable(
+function assertGoogleInteractionsRoutable(
   config: ModelConfig,
   useOpenRouter: boolean,
 ): void {

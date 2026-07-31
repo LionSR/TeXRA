@@ -1,18 +1,15 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-type DesktopNavigationPolicyModule =
-  typeof import('@desktop/main/desktopNavigationPolicy');
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('desktop navigation policy', () => {
   describe('isAllowedExternalUrl', () => {
     let isAllowedExternalUrl: (url: string) => boolean;
 
     beforeAll(async () => {
-      ({ isAllowedExternalUrl } = (await import(
-        moduleFileUrl(desktopSourcePath('main', 'desktopNavigationPolicy.ts'))
-      )) as DesktopNavigationPolicyModule);
+      ({ isAllowedExternalUrl } = await loadSourceModule(
+        '@desktop/main/desktopNavigationPolicy',
+      ));
     });
 
     it('allows the texra.ai apex and subdomains over https', () => {

@@ -5,15 +5,13 @@ import { describe, expect, it } from 'vitest';
 import type { LatexDiffsSection } from '@webview/frontend/components/LatexDiffsSection';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
-async function mount(): Promise<LatexDiffsSection> {
-  const element = document.createElement(
-    'latexdiffs-section',
-  ) as LatexDiffsSection;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mount(): Promise<LatexDiffsSection> {
+  return mountComponent<LatexDiffsSection>('latexdiffs-section');
 }
 
 /**

@@ -1,36 +1,14 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-interface DesktopPromptController {
-  request(input: {
-    title: string;
-    prompt: string;
-    password?: boolean;
-  }): Promise<string | undefined>;
-  handleMessage(
-    message: { command: string } & Record<string, unknown>,
-  ): boolean;
-  dispose(): void;
-}
-
-interface DesktopPromptControllerModule {
-  DesktopPromptController: new (renderer: {
-    postToRenderer(message: unknown): boolean;
-  }) => DesktopPromptController;
-}
-
-async function loadDesktopPromptController(): Promise<DesktopPromptControllerModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopPromptController.ts'))
-  ) as Promise<DesktopPromptControllerModule>;
-}
+// Local imports - test support
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('DesktopPromptController', () => {
   it('correlates text and password prompt results', async () => {
-    const { DesktopPromptController } = await loadDesktopPromptController();
+    const { DesktopPromptController } = await loadSourceModule(
+      '@desktop/main/desktopPromptController',
+    );
     const messages: Record<string, unknown>[] = [];
     const controller = new DesktopPromptController({
       postToRenderer: (message) => {
@@ -63,7 +41,9 @@ describe('DesktopPromptController', () => {
   });
 
   it('settles cancellation once and ignores duplicate results', async () => {
-    const { DesktopPromptController } = await loadDesktopPromptController();
+    const { DesktopPromptController } = await loadSourceModule(
+      '@desktop/main/desktopPromptController',
+    );
     let requestId = '';
     const controller = new DesktopPromptController({
       postToRenderer: (message) => {
@@ -90,7 +70,9 @@ describe('DesktopPromptController', () => {
   });
 
   it('cancels requests when delivery fails or the controller disposes', async () => {
-    const { DesktopPromptController } = await loadDesktopPromptController();
+    const { DesktopPromptController } = await loadSourceModule(
+      '@desktop/main/desktopPromptController',
+    );
     const undelivered = new DesktopPromptController({
       postToRenderer: () => false,
     });

@@ -32,8 +32,12 @@ export interface SlashCommand {
   readonly category?: SlashCommandCategory;
   /** Dispatch policy for the typed command line in native scrollback. */
   readonly echo?: 'ifPersists' | 'never';
-  /** Handle a non-empty command remainder. */
-  readonly argHandler?: (
+  /**
+   * Run the command. The trimmed remainder is empty for a bare `/name`; a
+   * command that also declares `formComponent` only reaches its handler with
+   * a remainder the form does not claim.
+   */
+  readonly handler?: (
     remainder: string,
     context: SlashCommandContext,
   ) => void | Promise<void>;

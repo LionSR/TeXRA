@@ -9,10 +9,7 @@ import * as yaml from 'yaml';
 import { getAgentsByCategory, resolveAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import {
-  getActiveEditorWithGuards,
-  logGuardFailure,
-} from '@frontend/editor/activeFileGuards';
+import { runGuardedFileCommand } from '@frontend/editor/activeFileGuards';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
@@ -110,41 +107,37 @@ export async function handleLoadSpecificAgent(): Promise<void> {
 }
 
 export async function handleParseYaml(): Promise<void> {
-  try {
-    const guardResult = await getActiveEditorWithGuards({
-      allowedExtensions: ['.yaml', '.yml'],
+  await runGuardedFileCommand(
+    {
+      channel: CHANNEL,
+      action: 'parse YAML',
       resourceName: 'YAML',
-    });
-
-    if (guardResult.status !== 'ok') {
-      logGuardFailure(CHANNEL, 'parse YAML', guardResult.status, 'YAML');
-      return;
-    }
-
-    const { editor } = guardResult;
-    const content = editor.document.getText();
-    logger.debug(
-      CHANNEL,
-      `Parsing YAML content from: ${editor.document.fileName}`,
-    );
-
-    try {
-      const parsedYaml = yaml.parse(content, {});
-      logger.info(CHANNEL, 'Successfully parsed YAML structure');
+      allowedExtensions: ['.yaml', '.yml'],
+      errorMessage: 'Error parsing YAML',
+    },
+    async ({ editor }) => {
+      const content = editor.document.getText();
       logger.debug(
         CHANNEL,
-        `Parsed structure: ${JSON.stringify(parsedYaml, null, 2)}`,
+        `Parsing YAML content from: ${editor.document.fileName}`,
       );
-    } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Failed to parse YAML', err);
-      await showInstructionWithSuppress(
-        'yamlParseFail',
-        'The YAML file contains syntax errors. Please correct them and run the command again.',
-        undefined,
-        false,
-      );
-    }
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, 'Error parsing YAML', err);
-  }
+
+      try {
+        const parsedYaml = yaml.parse(content, {});
+        logger.info(CHANNEL, 'Successfully parsed YAML structure');
+        logger.debug(
+          CHANNEL,
+          `Parsed structure: ${JSON.stringify(parsedYaml, null, 2)}`,
+        );
+      } catch (err) {
+        await showLoggedErrorMessage(CHANNEL, 'Failed to parse YAML', err);
+        await showInstructionWithSuppress(
+          'yamlParseFail',
+          'The YAML file contains syntax errors. Please correct them and run the command again.',
+          undefined,
+          false,
+        );
+      }
+    },
+  );
 }

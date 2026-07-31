@@ -30,6 +30,7 @@ import {
 } from '@shared/schemas';
 import { projectRunOutcome } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 
 // Local file imports
@@ -371,7 +372,7 @@ describe('executionRegistry', () => {
       'parent-waiting-kill-publish-result-test' as StreamTabId;
     const childStreamId =
       'child-waiting-kill-publish-result-test' as StreamTabId;
-    const trace: AgentTrace = { emit: vi.fn() } as unknown as AgentTrace;
+    const trace = spiedTrace({ emit: vi.fn() });
     const leaseScopeInvoked = vi.fn();
     const leaseScope: OwnedExecutionLeaseScope = (operation) => {
       leaseScopeInvoked();

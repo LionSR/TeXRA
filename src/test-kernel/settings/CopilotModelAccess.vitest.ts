@@ -14,7 +14,10 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 type ModelsTabElement = HTMLElement & {
   modelSelectionItems: ModelSelectionItem[];
@@ -34,14 +37,12 @@ const copilotModel: ModelSelectionItem = {
   requiresKey: false,
 };
 
-async function renderModelsTab(
+function renderModelsTab(
   modelSelectionItems: ModelSelectionItem[],
 ): Promise<ModelsTabElement> {
-  const tab = document.createElement('models-tab') as ModelsTabElement;
-  tab.modelSelectionItems = modelSelectionItems;
-  document.body.append(tab);
-  await tab.updateComplete;
-  return tab;
+  return mountComponent<ModelsTabElement>('models-tab', {
+    modelSelectionItems,
+  });
 }
 
 describe('Copilot model access settings', () => {

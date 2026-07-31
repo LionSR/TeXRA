@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { delay } from '@utils/core';
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 type ProviderKeyModalElement = HTMLElement & {
   provider: string;
@@ -21,13 +24,10 @@ async function flushDialogTicks(): Promise<void> {
 }
 
 async function mountModal(): Promise<ProviderKeyModalElement> {
-  const modal = document.createElement(
+  const modal = await mountComponent<ProviderKeyModalElement>(
     'provider-key-modal',
-  ) as ProviderKeyModalElement;
-  modal.provider = 'google';
-  modal.displayName = 'Google';
-  document.body.append(modal);
-  await modal.updateComplete;
+    { provider: 'google', displayName: 'Google' },
+  );
   await flushDialogTicks();
   return modal;
 }

@@ -14,7 +14,10 @@ vi.mock('@shared/hostBridge', () => ({
 import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
 import { SETTINGS_TAB, SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 
@@ -190,9 +193,7 @@ describe('hierarchical settings navigation', () => {
   });
 
   it('keeps unsupported Goals out of the Data & Activity pages', async () => {
-    const app = document.createElement('settings-app') as LitElementLike;
-    document.body.append(app);
-    await app.updateComplete;
+    const app = await mountComponent<LitElementLike>('settings-app');
 
     const dataGroup = navGroups.find(
       (group) => group.label === 'Data & Activity',

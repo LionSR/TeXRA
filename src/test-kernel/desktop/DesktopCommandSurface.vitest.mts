@@ -9,17 +9,8 @@ import {
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
-// Local imports - desktop test paths
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-type DesktopCommandSurfaceModule =
-  typeof import('@desktop/desktopCommandSurface');
-
-async function loadDesktopCommandSurface(): Promise<DesktopCommandSurfaceModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('desktopCommandSurface.ts'))
-  ) as Promise<DesktopCommandSurfaceModule>;
-}
+// Local imports - test support
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('desktop command surface', () => {
   it('builds desktop menu entries from the shared command catalog', async () => {
@@ -27,7 +18,7 @@ describe('desktop command surface', () => {
       DESKTOP_COMMAND_IDS,
       DESKTOP_LOCAL_COMMANDS,
       getDesktopCommandMenuEntries,
-    } = await loadDesktopCommandSurface();
+    } = await loadSourceModule('@desktop/desktopCommandSurface');
     const entries = getDesktopCommandMenuEntries(undefined, 'darwin');
 
     expect(entries.map((entry) => entry.id)).toEqual(DESKTOP_COMMAND_IDS);
@@ -152,7 +143,7 @@ describe('desktop command surface', () => {
 
   it('dispatches supported commands through typed shell actions', async () => {
     const { DESKTOP_LOCAL_COMMANDS, dispatchDesktopCommand } =
-      await loadDesktopCommandSurface();
+      await loadSourceModule('@desktop/desktopCommandSurface');
     const actions = {
       openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
@@ -244,7 +235,7 @@ describe('desktop command surface', () => {
 
   it('marks VS Code-only commands as unavailable instead of clickable no-ops', async () => {
     const { dispatchDesktopCommand, getDesktopCommandMenuEntries } =
-      await loadDesktopCommandSurface();
+      await loadSourceModule('@desktop/desktopCommandSurface');
     const actions = {
       showRoute: vi.fn(),
       showSettings: vi.fn(),
@@ -263,7 +254,9 @@ describe('desktop command surface', () => {
   });
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
-    const { buildDesktopMenuTemplate } = await loadDesktopCommandSurface();
+    const { buildDesktopMenuTemplate } = await loadSourceModule(
+      '@desktop/desktopCommandSurface',
+    );
     const actions = {
       openDesktopDocs: vi.fn(),
       openWorkspaceFolder: vi.fn(),

@@ -1,36 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { CheckForDesktopUpdateOptions } from '@desktop/main/desktopUpdateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
-interface DesktopLatestRelease {
-  version: string;
-}
-
-interface DesktopUpdateCheckerModule {
-  DESKTOP_RELEASES_PAGE_URL: string;
-  checkForDesktopUpdate(options: {
-    currentVersion: string;
-    globalState: FakeStateStore;
-    isPackaged: boolean;
-    notify: (release: DesktopLatestRelease) => Promise<void> | void;
-    now?: () => number;
-    fetchRelease?: () => Promise<DesktopLatestRelease | undefined>;
-    env?: NodeJS.ProcessEnv;
-  }): Promise<void>;
-}
-
-async function loadDesktopUpdateChecker(): Promise<DesktopUpdateCheckerModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopUpdateChecker.ts'))
-  ) as Promise<DesktopUpdateCheckerModule>;
-}
+type DesktopUpdateCheckerModule =
+  typeof import('@desktop/main/desktopUpdateChecker');
+type DesktopLatestRelease = Parameters<
+  CheckForDesktopUpdateOptions['notify']
+>[0];
 
 describe('desktop update checker', () => {
   it('exposes a known-constant releases page URL (never opens API-provided URLs)', async () => {
-    const { DESKTOP_RELEASES_PAGE_URL } = await loadDesktopUpdateChecker();
+    const { DESKTOP_RELEASES_PAGE_URL } = await loadSourceModule(
+      '@desktop/main/desktopUpdateChecker',
+    );
 
     expect(DESKTOP_RELEASES_PAGE_URL).toBe(
       'https://github.com/texra-ai/texra-desktop-releases/releases',
@@ -45,7 +31,9 @@ describe('desktop update checker', () => {
     let globalState: FakeStateStore;
 
     beforeEach(async () => {
-      ({ checkForDesktopUpdate } = await loadDesktopUpdateChecker());
+      ({ checkForDesktopUpdate } = await loadSourceModule(
+        '@desktop/main/desktopUpdateChecker',
+      ));
       globalState = new FakeStateStore();
     });
 

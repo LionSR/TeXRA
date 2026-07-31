@@ -847,6 +847,8 @@ function createWindow(options: {
     getStreamLabel: (streamId) => agentExecution?.getStreamLabel(streamId),
     promptForSecret: (input) =>
       promptController.request({ ...input, password: true }),
+    // Not previewHost.openExternal: that one shows an error dialog and
+    // rethrows a rewrapped error, which this surface's caller does not expect.
     openExternal: async (url) => {
       await shell.openExternal(url);
     },

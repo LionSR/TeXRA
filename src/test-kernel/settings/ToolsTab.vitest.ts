@@ -16,7 +16,10 @@ import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 useLitComponentTestDom(() => import('@settingsView/frontend/tabs/ToolsTab'));
 
@@ -35,17 +38,15 @@ function tool(
   };
 }
 
-async function mount(
+function mount(
   items: ToolDashboardItem[],
-  configure: (element: ToolsTab) => void = () => undefined,
+  props: Partial<ToolsTab> = {},
 ): Promise<ToolsTab> {
-  const element = document.createElement('tools-tab') as ToolsTab;
-  element.loaded = true;
-  element.items = items;
-  configure(element);
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<ToolsTab>('tools-tab', {
+    loaded: true,
+    items,
+    ...props,
+  });
 }
 
 describe('tools-tab availability summary', () => {
@@ -89,9 +90,7 @@ describe('tools-tab availability summary', () => {
   });
 
   it('renders and updates the shared agent-skills switch', async () => {
-    const element = await mount([], (toolsTab) => {
-      toolsTab.showAgentSkillsSettings = true;
-    });
+    const element = await mount([], { showAgentSkillsSettings: true });
     const skillSwitch = element.shadowRoot?.querySelector<
       HTMLElement & { checked?: boolean }
     >('wa-switch[aria-label="Make skills available to tool-use agents"]');
@@ -112,8 +111,8 @@ describe('tools-tab availability summary', () => {
   });
 
   it('renders and updates working-directory path protection', async () => {
-    const element = await mount([tool('file-ops', 'available')], (toolsTab) => {
-      toolsTab.toolPathProtectionEnabled = false;
+    const element = await mount([tool('file-ops', 'available')], {
+      toolPathProtectionEnabled: false,
     });
     const protectionSwitch = [
       ...(element.shadowRoot?.querySelectorAll('wa-switch') ?? []),

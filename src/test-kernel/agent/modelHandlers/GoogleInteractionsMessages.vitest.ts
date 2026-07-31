@@ -1,6 +1,5 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -8,18 +7,16 @@ import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/mode
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
+// Local file imports
+import { GOOGLE_INTERACTIONS_TEST_CONFIG } from './googleInteractionsTestUtils';
+
 // Third-party imports
 import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
 
-const GOOGLE_INTERACTIONS_TEST_CONFIG = Object.freeze({
-  name: 'test-google-interactions',
-  label: 'Test Google Interactions',
-  fullName: 'gemini-3-pro-test',
-  shortName: 'gemini-3-pro-test',
-  provider: ModelProvider.GOOGLE,
-  contextWindow: 4096,
+const MESSAGES_TEST_CONFIG = Object.freeze({
+  ...GOOGLE_INTERACTIONS_TEST_CONFIG,
   capabilities: Object.freeze({
     supportsVision: true,
     supportsTokenCounting: false,
@@ -28,7 +25,7 @@ const GOOGLE_INTERACTIONS_TEST_CONFIG = Object.freeze({
 
 function createHandler(): ModelHandlerGoogleInteractions {
   const handler = new ModelHandlerGoogleInteractions(
-    buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG),
+    buildTestModelConfig(MESSAGES_TEST_CONFIG),
   );
   handler.setLogger({ ...noopTrace });
   return handler;
@@ -131,7 +128,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
       }
     }
     const handler = new TinyInlineLimitHandler(
-      buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG),
+      buildTestModelConfig(MESSAGES_TEST_CONFIG),
     );
     handler.setLogger({ ...noopTrace });
 
