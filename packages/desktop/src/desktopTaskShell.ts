@@ -9,7 +9,7 @@
 // and disposed by the renderer; this module only describes what is visible.
 
 import type { TeXRAIconName } from '@shared/wa/iconNames';
-import { getBasename } from '@utils/core';
+import { clamp, getBasename } from '@utils/core';
 
 import type { DesktopRoute } from './desktopShellMessages.js';
 
@@ -409,10 +409,6 @@ export function toggleSummaryBar(
   return { ...state, summaryBarVisible: !state.summaryBarVisible };
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, Math.round(value)));
-}
-
 export function setBottomPanelHeight(
   state: DesktopTaskShellState,
   height: number,
@@ -420,7 +416,7 @@ export function setBottomPanelHeight(
   return {
     ...state,
     bottomPanelHeight: clamp(
-      height,
+      Math.round(height),
       BOTTOM_PANEL_MIN_HEIGHT,
       BOTTOM_PANEL_MAX_HEIGHT,
     ),
@@ -433,7 +429,11 @@ export function setSidebarWidth(
 ): DesktopTaskShellState {
   return {
     ...state,
-    sidebarWidth: clamp(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
+    sidebarWidth: clamp(
+      Math.round(width),
+      SIDEBAR_MIN_WIDTH,
+      SIDEBAR_MAX_WIDTH,
+    ),
   };
 }
 
@@ -444,7 +444,7 @@ export function setProjectSectionPosition(
   return {
     ...state,
     projectSectionPosition: clamp(
-      position,
+      Math.round(position),
       PROJECT_SECTION_MIN_POSITION,
       PROJECT_SECTION_MAX_POSITION,
     ),
@@ -457,7 +457,11 @@ export function setWorkbenchWidth(
 ): DesktopTaskShellState {
   return {
     ...state,
-    workbenchWidth: clamp(width, WORKBENCH_MIN_WIDTH, WORKBENCH_MAX_WIDTH),
+    workbenchWidth: clamp(
+      Math.round(width),
+      WORKBENCH_MIN_WIDTH,
+      WORKBENCH_MAX_WIDTH,
+    ),
   };
 }
 

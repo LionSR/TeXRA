@@ -75,6 +75,32 @@ export function unique<T>(iterable: Iterable<T>): T[] {
 }
 
 /**
+ * Bucket items into a `Map<K, V[]>` keyed by `keyFn`, preserving each
+ * bucket's first-occurrence insertion order. `valueFn` maps each item to
+ * the value stored in its bucket (defaults to the item itself). Equivalent
+ * to the upcoming `Map.groupBy`, kept as a helper because the repo's `lib`
+ * target (ES2023) doesn't declare it yet.
+ */
+export function groupBy<T, K, V = T>(
+  items: readonly T[],
+  keyFn: (item: T) => K,
+  valueFn?: (item: T) => V,
+): Map<K, V[]> {
+  const groups = new Map<K, V[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const value = valueFn ? valueFn(item) : (item as unknown as V);
+    const bucket = groups.get(key);
+    if (bucket) {
+      bucket.push(value);
+    } else {
+      groups.set(key, [value]);
+    }
+  }
+  return groups;
+}
+
+/**
  * Serialize a Map to a plain Record object. Keys are stringified.
  * @example mapToRecord(new Map([['a', 1]])) // { a: 1 }
  */

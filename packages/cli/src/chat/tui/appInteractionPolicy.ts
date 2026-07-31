@@ -2,7 +2,7 @@
 
 // Local imports - shared schemas and utilities
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import { assertNever } from '@utils/core';
+import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
 import {
@@ -247,18 +247,19 @@ export function groupPendingApprovalsByRow(
   summaries: readonly PendingApprovalSummary[],
   rootStreamId: StreamTabId | undefined,
 ): Map<string, PendingApprovalKind[]> {
-  const grouped = new Map<string, PendingApprovalKind[]>();
+  const keyed: { key: string; summary: PendingApprovalSummary }[] = [];
   for (const summary of summaries) {
     const key =
       summary.streamKey === ROOT_APPROVAL_STREAM_KEY
         ? rootStreamId
         : summary.streamKey;
-    if (key === undefined) continue;
-    const kinds = grouped.get(key);
-    if (kinds) kinds.push(summary.kind);
-    else grouped.set(key, [summary.kind]);
+    if (key !== undefined) keyed.push({ key, summary });
   }
-  return grouped;
+  return groupBy(
+    keyed,
+    (entry) => entry.key,
+    (entry) => entry.summary.kind,
+  );
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively

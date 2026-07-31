@@ -5,6 +5,7 @@
 
 // Local imports - shared schemas
 import type { StreamTabId } from '@shared/schemas';
+import { groupBy } from '@utils/core';
 
 // Local imports - CLI state
 import {
@@ -191,23 +192,14 @@ export function groupWorkflowPhaseEntries<
   T extends { readonly workflowPhase?: string },
 >(entries: readonly T[]): readonly T[] {
   const untagged: T[] = [];
-  const groups: T[][] = [];
-  const phaseGroups = new Map<string, T[]>();
+  const tagged: T[] = [];
   for (const entry of entries) {
-    const phase = entry.workflowPhase;
-    if (phase === undefined) {
-      untagged.push(entry);
-      continue;
-    }
-    let group = phaseGroups.get(phase);
-    if (!group) {
-      group = [];
-      phaseGroups.set(phase, group);
-      groups.push(group);
-    }
-    group.push(entry);
+    if (entry.workflowPhase === undefined) untagged.push(entry);
+    else tagged.push(entry);
   }
-  return groups.length > 0 ? [...untagged, ...groups.flat()] : entries;
+  if (tagged.length === 0) return entries;
+  const phaseGroups = groupBy(tagged, (entry) => entry.workflowPhase);
+  return [...untagged, ...[...phaseGroups.values()].flat()];
 }
 
 export function streamTreeEntries(

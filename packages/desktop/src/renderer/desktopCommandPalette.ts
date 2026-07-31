@@ -14,7 +14,7 @@ import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { isThenable } from '@utils/core';
+import { groupBy, isThenable } from '@utils/core';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -436,13 +436,7 @@ function visibleCommandPaletteEntries(
 function groupCommandPaletteEntries(
   entries: readonly CommandPaletteEntry[],
 ): CommandPaletteGroup[] {
-  const grouped = new Map<string, CommandPaletteEntry[]>();
-  for (const entry of entries) {
-    const category = entry.category ?? 'Other';
-    const group = grouped.get(category) ?? [];
-    group.push(entry);
-    grouped.set(category, group);
-  }
+  const grouped = groupBy(entries, (entry) => entry.category ?? 'Other');
   return [...grouped].map(([category, groupEntries]) => ({
     category,
     entries: groupEntries,
