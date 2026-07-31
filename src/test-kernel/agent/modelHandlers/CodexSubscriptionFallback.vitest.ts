@@ -22,13 +22,10 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type OpenAI from 'openai';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
 
-function initFakePlatformWithSubscription(
-  extraConfig: Record<string, unknown> = {},
-): Promise<void> {
+function initFakePlatformWithSubscription(): Promise<void> {
   return installPlatform({
     config: {
       'texra.chatgptCodex.preferSubscription': true,
-      ...extraConfig,
     },
     secrets: { [apiKeySecretName('openai')]: 'sk-openai-test' },
   });
@@ -168,43 +165,13 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(handler.getEffectiveContextWindow()).toBe(config.contextWindow);
   });
 
-  it('routes untagged helper handlers to the API-key path while the tool-use-only switch is on', async () => {
-    await initFakePlatformWithSubscription({
-      'texra.chatgptCodex.subscriptionToolUseOnly': true,
-    });
+  it('keeps untagged helper handlers on the subscription', async () => {
+    await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
-
-    expect(handler.getBaseUrl()).not.toBe(CODEX_BACKEND_BASE_URL);
-    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBeGreaterThan(0);
-  });
-
-  it('keeps tool-use agents on the subscription while the tool-use-only switch is on', async () => {
-    await initFakePlatformWithSubscription({
-      'texra.chatgptCodex.subscriptionToolUseOnly': true,
-    });
-
-    const handler = new ModelHandlerCodex(config);
-    handler.setAgentCategory(AgentCategory.ToolUse);
 
     expect(handler.getBaseUrl()).toBe(CODEX_BACKEND_BASE_URL);
     expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBe(0);
-  });
-
-  it('routes workflow agents to the API-key path while the tool-use-only switch is on', async () => {
-    await initFakePlatformWithSubscription({
-      'texra.chatgptCodex.subscriptionToolUseOnly': true,
-    });
-
-    // The Codex backend has no background mode and is less stable for long
-    // runs, so workflow agents must skip the subscription when this scope is on.
-    const handler = new ModelHandlerCodex(largeWindowConfig);
-    handler.setAgentCategory(AgentCategory.Workflow);
-
-    expect(handler.getBaseUrl()).not.toBe(CODEX_BACKEND_BASE_URL);
-    expect(handler.computePrice(ONE_MILLION_INPUT_TOKENS)).toBeGreaterThan(0);
-    // Falling back to the API key also restores the model's full window.
-    expect(handler.getEffectiveContextWindow()).toBe(1_050_000);
   });
 
   it('fails locally when a subscription request cannot fit the Codex cap without reducing output budget', async () => {
@@ -249,10 +216,8 @@ describe('ModelHandlerCodex subscription fallback', () => {
     expect(requestSpy).not.toHaveBeenCalled();
   });
 
-  it('keeps workflow agents on the subscription when the tool-use-only switch is off', async () => {
-    await initFakePlatformWithSubscription({
-      'texra.chatgptCodex.subscriptionToolUseOnly': false,
-    });
+  it('keeps workflow agents on the subscription', async () => {
+    await initFakePlatformWithSubscription();
 
     const handler = new ModelHandlerCodex(config);
     handler.setAgentCategory(AgentCategory.Workflow);

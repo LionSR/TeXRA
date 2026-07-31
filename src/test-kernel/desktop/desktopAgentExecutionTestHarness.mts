@@ -53,6 +53,7 @@ export function createStubDesktopAgentExecutionHost(
     chooseTeamAvailability: async () => 'cancel',
     signInForRemoteAgentCatalog: async () => false,
     showErrorMessage: async () => undefined,
+    showWarningMessage: async () => undefined,
     showInfoMessage: async () => undefined,
     onRunCompleted: () => undefined,
     ...overrides,

@@ -386,6 +386,26 @@ describe('desktop platform adapters', () => {
       ).resolves.toBe(true);
       expect(logger.warnMessages).toEqual([]);
     });
+
+    it('warns and continues startup when a migration throws', async () => {
+      const { runBestEffortMigration } = await loadSourceModule(
+        '@desktop/main/platform/dataRootMigration',
+      );
+      const logger = fakeMigrationLogger();
+
+      await expect(
+        runBestEffortMigration(
+          'workspace-alias',
+          () => Promise.reject(new Error('storage root is unresolvable')),
+          logger,
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(logger.warnMessages).toEqual([
+        '[desktop] workspace-alias migration failed; legacy data stays in place. Cause: storage root is unresolvable',
+      ]);
+      expect(logger.infoMessages).toEqual([]);
+    });
   });
 
   it('stores encrypted secrets, supports env overrides, and deletes persisted values', async () => {

@@ -31,6 +31,7 @@ const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
  *   <approve-split-button
  *     .approveTitle=${title}
  *     .canBypass=${canBypass}
+ *     .bypassAction=${bypassAction}
  *     @approve=${onApprove}
  *     @approve-session=${onYolo}
  *   ></approve-split-button>
@@ -39,8 +40,8 @@ const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
  * (edit/bash prompts) or `canApproveAllDelegatedWork` (agent proposals) is set
  * it becomes a
  * split button: the main click emits `approve`; the ▾ caret opens a menu whose
- * edit/command item emits `approve-session` and whose delegated-work item emits
- * `approve-all-delegated-work`. Selection is handled via Web
+ * `bypassAction` item emits `approve-session` and whose delegated-work item
+ * emits `approve-all-delegated-work`. Selection is handled via Web
  * Awesome's `wa-select` (Enter/Space dispatch `wa-select`, not a DOM click on
  * the item), so the menu stays keyboard-accessible.
  *
@@ -78,6 +79,12 @@ export class ApproveSplitButton extends LitElement {
 
   /** When true, surface the edit/bash run-approval menu item. */
   @property({ type: Boolean }) canBypass = false;
+
+  /**
+   * Label for that menu item. The grant is per-kind, so the prompt panel
+   * supplies wording naming only the kind it will auto-approve.
+   */
+  @property({ attribute: false }) bypassAction = '';
 
   /** When true, surface the proposal's run-scoped approve-all action. */
   @property({ type: Boolean }) canApproveAllDelegatedWork = false;
@@ -125,8 +132,7 @@ export class ApproveSplitButton extends LitElement {
             this.canBypass,
             () =>
               html`<wa-dropdown-item value=${YOLO_VALUE}>
-                ${waIcon('shield')}
-                ${DELEGATION_APPROVAL_COPY.progressViewEditCommandAction}
+                ${waIcon('shield')} ${this.bypassAction}
               </wa-dropdown-item>`,
           )}
           ${when(
@@ -142,7 +148,7 @@ export class ApproveSplitButton extends LitElement {
           ${
             this.canApproveAllDelegatedWork
               ? `${DELEGATION_APPROVAL_COPY.progressViewExplanation} (a)`
-              : `${DELEGATION_APPROVAL_COPY.progressViewEditCommandAction} (a)`
+              : `${this.bypassAction} (a)`
           }
         </wa-tooltip>
       </div>

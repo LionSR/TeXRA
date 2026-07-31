@@ -40,14 +40,14 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       },
     });
 
-    handlers.agentProposal.show(proposal);
+    handlers.proposal.show(proposal);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
       action: 'show',
       permission: { kind: PERMISSION_KIND.PROPOSAL, data: proposal },
     });
 
-    expect(handlers.agentProposal.dismiss(proposal.proposalId)).toBe(true);
+    expect(handlers.proposal.dismiss(proposal.proposalId)).toBe(true);
     expect(messages).toContainEqual({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
       action: 'resolve',
@@ -68,26 +68,26 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       canSend: () => true,
       overrides: {
         retry: { show: vi.fn(), dismiss: vi.fn() },
-        agentProposal: { show, dismiss },
+        proposal: { show, dismiss },
       },
     });
 
-    handlers.agentProposal.show(proposal);
+    handlers.proposal.show(proposal);
     expect(show).toHaveBeenCalledWith(proposal);
     expect(messages).toEqual([]);
 
-    expect(handlers.agentProposal.dismiss(proposal.proposalId)).toBe(true);
+    expect(handlers.proposal.dismiss(proposal.proposalId)).toBe(true);
     expect(dismiss).toHaveBeenCalledWith(proposal.proposalId);
     expect(messages).toEqual([]);
   });
 
-  it('routes cancellation through the exact listed interaction handlers', () => {
+  it('routes cancellation through the handler named by the interaction kind', () => {
     const cancellationScope = {};
     const request = { streamId: 'stream-1' };
     const cancelWhere = {
       bash: vi.fn(),
       planApproval: vi.fn(),
-      agentProposal: vi.fn(),
+      proposal: vi.fn(),
       retry: vi.fn(),
       userQuestion: vi.fn(),
     };
@@ -97,22 +97,21 @@ describe('ApprovalRequestHandlerSet helpers', () => {
         return predicate(request, cancellationScope) ? 1 : 0;
       });
     }
-    const handlers = {
-      bash: { cancelWhere: cancelWhere.bash },
-      planApproval: { cancelWhere: cancelWhere.planApproval },
-      agentProposal: { cancelWhere: cancelWhere.agentProposal },
-      retry: { cancelWhere: cancelWhere.retry },
-      userQuestion: { cancelWhere: cancelWhere.userQuestion },
-    } as unknown as ApprovalRequestHandlerSet;
-    const cases = [
-      ['bash', 'bash'],
-      ['plan', 'planApproval'],
-      ['proposal', 'agentProposal'],
-      ['retry', 'retry'],
-      ['userQuestion', 'userQuestion'],
-    ] as const;
+    const handlers = Object.fromEntries(
+      Object.entries(cancelWhere).map(([key, cancel]) => [
+        key,
+        { cancelWhere: cancel },
+      ]),
+    ) as unknown as ApprovalRequestHandlerSet;
+    const kinds = [
+      'bash',
+      'planApproval',
+      'proposal',
+      'retry',
+      'userQuestion',
+    ] as const satisfies readonly (keyof typeof cancelWhere)[];
 
-    for (const [kind, handlerKey] of cases) {
+    for (const kind of kinds) {
       expect(
         cancelApprovalRequestHandlers(handlers, [kind], {
           kind,
@@ -121,13 +120,13 @@ describe('ApprovalRequestHandlerSet helpers', () => {
           cause: 'Session closed.',
         }),
       ).toBe(1);
-      expect(cancelWhere[handlerKey]).toHaveBeenCalledOnce();
+      expect(cancelWhere[kind]).toHaveBeenCalledOnce();
       for (const cancel of Object.values(cancelWhere)) cancel.mockClear();
     }
 
     cancelApprovalRequestHandlers(
       handlers,
-      ['bash', 'plan', 'proposal', 'userQuestion'],
+      ['bash', 'planApproval', 'proposal', 'userQuestion'],
       { cause: 'Session closed.' },
     );
     expect(cancelWhere.retry).not.toHaveBeenCalled();
@@ -139,7 +138,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       bash: vi.fn<() => void>(),
       externalInquiry: vi.fn<() => void>(),
       retry: vi.fn<() => void>(),
-      agentProposal: vi.fn<() => void>(),
+      proposal: vi.fn<() => void>(),
       planApproval: vi.fn<() => void>(),
       userQuestion: vi.fn<() => void>(),
     } satisfies Record<
@@ -165,7 +164,7 @@ describe('ApprovalRequestHandlerSet helpers', () => {
       bash: vi.fn(() => false),
       externalInquiry: vi.fn(() => false),
       retry: vi.fn(() => false),
-      agentProposal: vi.fn(() => false),
+      proposal: vi.fn(() => false),
       planApproval: vi.fn(() => false),
       userQuestion: vi.fn(() => false),
     } satisfies Record<

@@ -35,6 +35,7 @@ import {
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   readonly registry: {
@@ -63,9 +64,10 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
     }) => Promise<string | undefined>;
     /**
      * Confirm a destructive or overwriting action. Used by the custom-agent
-     * delete and overwrite paths, which the extension guards with a modal.
+     * delete and overwrite paths and by team deletion, which the extension
+     * guards with a modal.
      */
-    readonly confirm?: (input: {
+    readonly confirm: (input: {
       title: string;
       message: string;
     }) => Promise<boolean>;
@@ -433,11 +435,11 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
 
       // Never clobber an existing custom copy, which may hold user edits.
       if (await AbsoluteFS.exists(targetPath)) {
-        const confirmed = await this.prompts.confirm?.({
+        const confirmed = await this.prompts.confirm({
           title: 'Overwrite custom copy?',
           message: `A custom copy already exists: ${path.basename(targetPath)}`,
         });
-        if (confirmed !== true) return;
+        if (!confirmed) return;
       }
 
       await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
@@ -475,11 +477,11 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         return;
       }
 
-      const confirmed = await this.prompts.confirm?.({
+      const confirmed = await this.prompts.confirm({
         title: 'Delete custom agent?',
         message: `Delete "${data.agentName}"? This cannot be undone.`,
       });
-      if (confirmed !== true) return;
+      if (!confirmed) return;
 
       await AbsoluteFS.delete(result.plan.path, { recursive: false });
       await this.notifications.showInfoMessage(
@@ -573,8 +575,11 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         ),
       ),
     ]);
+    const unresolvedCount = result.resolution.unresolvedNames.length;
     await this.notifications.showInfoMessage(
-      `Applied "${result.preset.name}" team`,
+      unresolvedCount === 0
+        ? `Applied "${result.preset.name}" team`
+        : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
     );
   }
 
@@ -592,13 +597,21 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async deleteAgentModePreset(presetId: string): Promise<void> {
-    const deleted = await this.catalogController.deleteCustomPreset(presetId);
-    if (!deleted) {
+    const target = this.catalogController.getCustomPreset(presetId);
+    if (!target) {
       await this.notifications.showErrorMessage(
         `Unknown custom team: ${presetId}`,
       );
       return;
     }
+
+    const confirmed = await this.prompts.confirm({
+      title: 'Delete team?',
+      message: `Delete team "${target.name}"?`,
+    });
+    if (!confirmed) return;
+
+    await this.catalogController.deleteCustomPreset(presetId);
     this.postAgentModePresets();
     await this.postMainTeamOptionsData();
   }

@@ -1,18 +1,21 @@
 // Local imports
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   decideRunModel,
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
-import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
+import {
+  isModelOptionAvailable,
+  type ModelAvailabilityKind,
+  type ModelOptionData,
+} from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { unique } from '@utils/core';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
-import type { CliApiMode } from './apiAccessMode';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;
@@ -51,7 +54,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
 } satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
 export interface CliModelAccessListOptions {
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
   readonly models?: readonly string[];
   readonly agentCategory?: AgentCategory;
 }
@@ -91,7 +94,8 @@ export interface CliNoAvailableModelsRecoveryOptions {
 export type CliNoRunnableModelsMessageOptions =
   CliNoAvailableModelsRecoveryOptions;
 
-export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
+export type NoRunnableModelAccessReason =
+  ApiAccessMode | 'includedLoginRequired';
 
 const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
   // The ChatGPT subscription is the user's own credential, and the Codex
@@ -106,7 +110,7 @@ const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
     'openrouter-key',
     'subscription-access',
   ]),
-} satisfies Record<CliApiMode, ReadonlySet<ModelAvailabilityKind>>;
+} satisfies Record<ApiAccessMode, ReadonlySet<ModelAvailabilityKind>>;
 
 const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'included-access': 'included: available',
@@ -122,6 +126,7 @@ const INCLUDED_ACCESS_STATUS_BY_AVAILABILITY = {
   'copilot-unavailable': 'copilot: unavailable in CLI',
   'provider-unavailable': 'unavailable through selected provider',
   retired: 'retired',
+  'unknown-model': 'unknown model',
 } satisfies Record<ModelAvailabilityKind, string>;
 
 const NO_RUNNABLE_MODEL_ACCESS_COPY = {
@@ -175,13 +180,9 @@ function cliModelRecoveryActions(
   };
 }
 
-function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
-  return model.disabled !== true && model.requiresKey !== true;
-}
-
 function isCliModelOptionAllowedInMode(
   model: ModelOptionData,
-  apiMode?: CliApiMode,
+  apiMode?: ApiAccessMode,
 ): boolean {
   if (apiMode == null) return true;
 
@@ -194,17 +195,17 @@ function isCliModelOptionAllowedInMode(
 
 function isCliModelOptionRunnableInMode(
   model: ModelOptionData,
-  apiMode?: CliApiMode,
+  apiMode?: ApiAccessMode,
 ): boolean {
   return (
-    isCliModelOptionBasicallyAvailable(model) &&
+    isModelOptionAvailable(model) &&
     isCliModelOptionAllowedInMode(model, apiMode)
   );
 }
 
 export function runnableCliModelAccessEntries(
   models: readonly CliModelAccess[],
-  apiMode?: CliApiMode,
+  apiMode?: ApiAccessMode,
 ): CliModelAccess[] {
   return models.filter(
     (entry) =>
@@ -214,7 +215,7 @@ export function runnableCliModelAccessEntries(
 
 export function noRunnableModelAccessReason(
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): NoRunnableModelAccessReason {
   if (
     apiMode === 'included' &&
@@ -262,7 +263,7 @@ export function formatCliNoRunnableModelsMessage(
 
 function formatModelAccessStatus(model: ModelOptionData): string {
   if (model.availabilityLabel) return model.availabilityLabel.toLowerCase();
-  if (!model.disabled && !model.requiresKey) return 'available';
+  if (isModelOptionAvailable(model)) return 'available';
   if (model.requiresKey) {
     const provider = model.provider ? `${model.provider} ` : '';
     return `missing ${provider}key`;
@@ -272,7 +273,7 @@ function formatModelAccessStatus(model: ModelOptionData): string {
 
 export function formatModelStatusForCliMode(
   model: CliModelAccess,
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): string {
   if (apiMode === 'personal') {
     return model.model.provider === 'kimiCode'
@@ -292,7 +293,7 @@ export type GetModelSwitchDisabledReason = (
 
 export function modelSelectItemsForCliMode(
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ): readonly CliModelPickerItem[] {
   return runnableCliModelAccessEntries(models, apiMode).map((model) => {
@@ -309,7 +310,7 @@ export function modelSelectItemsForCliMode(
 
 export function modelAccessLaunchBlockDescriptionForCliMode(
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): string {
   return formatCliNoRunnableModelsLaunchBlock(
     noRunnableModelAccessReason(models, apiMode),
@@ -318,7 +319,7 @@ export function modelAccessLaunchBlockDescriptionForCliMode(
 
 export function emptyModelListMessageForCliMode(
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
   return formatCliNoRunnableModelsMessage(
@@ -328,7 +329,7 @@ export function emptyModelListMessageForCliMode(
 }
 
 export function formatCliNoAvailableModelsRecovery(
-  apiMode?: CliApiMode,
+  apiMode?: ApiAccessMode,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
   const {
@@ -349,44 +350,13 @@ export function formatCliNoAvailableModelsRecovery(
 
 function toCliModelAccess(
   model: ModelOptionData,
-  apiMode?: CliApiMode,
+  apiMode?: ApiAccessMode,
 ): CliModelAccess {
   return {
     model,
     available: isCliModelOptionRunnableInMode(model, apiMode),
     status: formatModelAccessStatus(model),
   };
-}
-
-function toIncludedLoginRequiredAccess(entry: CliModelAccess): CliModelAccess {
-  if (
-    entry.model.availability === 'subscription-access' ||
-    entry.model.availability === 'retired'
-  ) {
-    return entry;
-  }
-  return {
-    model: {
-      ...entry.model,
-      availability: 'included-login-required',
-      availabilityLabel: 'Login required',
-      requiresKey: false,
-      disabled: true,
-    },
-    available: false,
-    status: 'login required',
-  };
-}
-
-async function includedAccessRequiresLogin(
-  options: CliModelAccessListOptions,
-): Promise<boolean> {
-  if (options.apiMode !== 'included') return false;
-  // An auth-state read failure means we can't prove a session, so require login.
-  const authenticated = await SupabaseClient.isAuthenticated().catch(
-    () => false,
-  );
-  return !authenticated;
 }
 
 export async function getCliModelAccessList(
@@ -396,13 +366,7 @@ export async function getCliModelAccessList(
     options.models,
     options.agentCategory,
   );
-  const access = models.map((model) =>
-    toCliModelAccess(model, options.apiMode),
-  );
-  if (await includedAccessRequiresLogin(options)) {
-    return access.map(toIncludedLoginRequiredAccess);
-  }
-  return access;
+  return models.map((model) => toCliModelAccess(model, options.apiMode));
 }
 
 export function findCliModelAccessEntry(
@@ -444,7 +408,7 @@ export function listableModelAccessEntries(
 }
 
 export function formatNoListableModelsMessage(
-  apiMode: CliApiMode | undefined,
+  apiMode: ApiAccessMode | undefined,
   options: CliModelListOptions = {},
 ): string {
   const statusHint =
@@ -460,7 +424,7 @@ export function formatNoListableModelsMessage(
 
 function formatCliModelRecovery(
   entry: CliModelAccess,
-  apiMode: CliApiMode | undefined,
+  apiMode: ApiAccessMode | undefined,
 ): string | undefined {
   if (entry.available) return undefined;
 
@@ -510,7 +474,7 @@ function formatCliModelRecovery(
 
 export function formatCliModelDetails(
   entry: CliModelAccess,
-  apiMode?: CliApiMode,
+  apiMode?: ApiAccessMode,
 ): string {
   const { model, status } = entry;
   const lines: string[] = [];
@@ -574,11 +538,7 @@ export async function loadCliModelAccessEntry(
     );
   }
 
-  let hiddenModel = toCliModelAccess(hiddenModelOption, options.apiMode);
-  if (await includedAccessRequiresLogin(options)) {
-    hiddenModel = toIncludedLoginRequiredAccess(hiddenModel);
-  }
-  return hiddenModel;
+  return toCliModelAccess(hiddenModelOption, options.apiMode);
 }
 
 type CliAvailableModelsMessageOptions = Pick<

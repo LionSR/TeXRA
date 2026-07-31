@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { type CodexSessionCoordinator } from '@auth/codex';
+import { CodexAuthError, type CodexSessionCoordinator } from '@auth/codex';
 
 const mocks = vi.hoisted(() => ({
   pollDeviceToken: vi.fn(),
@@ -44,5 +44,32 @@ describe('Codex device login', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(completeDeviceLogin).not.toHaveBeenCalled();
+  });
+
+  it('gives up at the expiry the server reported, not the local fallback', async () => {
+    mocks.requestDeviceUserCode.mockResolvedValue({
+      device_auth_id: 'device-auth-id',
+      user_code: 'ABCD-EFGH',
+      interval: 0.01,
+      // 1 ms: already elapsed by the time the first poll returns.
+      expires_in: 0.001,
+    });
+    let polls = 0;
+    mocks.pollDeviceToken.mockImplementation(async () => {
+      polls += 1;
+      if (polls > 3) throw new Error('polled past the reported expiry');
+      throw new CodexAuthError('authorization_pending', 'pending');
+    });
+
+    await expect(
+      loginWithDeviceCode({
+        coordinator: {
+          completeDeviceLogin: vi.fn(),
+        } as unknown as CodexSessionCoordinator,
+        onPrompt: vi.fn(),
+      }),
+    ).rejects.toThrow('Device-code sign-in timed out.');
+
+    expect(polls).toBe(1);
   });
 });

@@ -8,6 +8,7 @@ import { platform } from '@platform/platform';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { readAgentSkillsEnabled } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { getFirstRunDone } from '@shared/state/onboardingState';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { updateConfig } from '@utils/config/configUtils';
 
 import {
@@ -50,7 +51,7 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
-import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
+import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
@@ -79,7 +80,7 @@ import { type CliContext } from '../runtime/cliContext';
 async function canLaunchWithDefaultModel(
   context: CliContext,
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): Promise<boolean> {
   if (models.length === 0) return true;
 
@@ -124,11 +125,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // nothing and return instead — the platform's own handler, still installed
   // by initInteractiveCliPlatform, covers those the same way it would a
   // headless command.
-  await initInteractiveCliPlatform({
-    ...context,
-    quietLogs: true,
-    bestEffortIncludedModelAccess: true,
-  });
+  await initInteractiveCliPlatform({ ...context, quietLogs: true });
   // First-run gate: a credential-less interactive user picks sign-in or a key
   // here instead of landing on a launcher full of "login required" models. On
   // success the apiMode/models read below re-reads the freshly-set credentials
@@ -162,7 +159,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     return result.exitCode;
   }
 
-  let launcherApiModeOverride: CliApiMode | undefined;
+  let launcherApiModeOverride: ApiAccessMode | undefined;
   launcher: while (true) {
     const history = await listCliHistoryEntries();
     const presets = readCliMultiAgentPresets();

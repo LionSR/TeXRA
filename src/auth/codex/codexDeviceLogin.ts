@@ -11,7 +11,11 @@ import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
 import { CodexAuthError, type CodexSession } from './codexSessionTypes';
 import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient';
 
-const DEVICE_TIMEOUT_MS = 15 * 60 * 1000;
+/**
+ * Fallback lifetime for the user code when the endpoint omits `expires_in`.
+ * The server's value wins whenever it sends one (RFC 8628).
+ */
+const DEVICE_TIMEOUT_FALLBACK_MS = 15 * 60 * 1000;
 
 interface CodexDevicePrompt {
   /** The one-time code the user types at the verification URL. */
@@ -48,7 +52,11 @@ export async function loginWithDeviceCode(
     verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
   });
 
-  const deadline = Date.now() + DEVICE_TIMEOUT_MS;
+  const expiresInMs =
+    userCodeResponse.expires_in == null
+      ? DEVICE_TIMEOUT_FALLBACK_MS
+      : userCodeResponse.expires_in * 1000;
+  const deadline = Date.now() + expiresInMs;
   while (Date.now() < deadline) {
     await sleep(intervalMs, undefined, { signal: options.signal });
     options.onPoll?.();

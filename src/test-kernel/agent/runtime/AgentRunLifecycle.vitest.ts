@@ -42,6 +42,10 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { agentKey } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import {
+  executionLeasePath,
+  writeForeignLease,
+} from '@test/support/executionLeaseFixtures';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
@@ -178,17 +182,7 @@ describe('runFlowWithLifecycle', () => {
 
     try {
       const result = await runFlowWithLifecycle(ctx, async (handle) => {
-        await StorageFS.ensureDir('executionLeases');
-        await StorageFS.writeAtomic(
-          `executionLeases/${executionId}.json`,
-          JSON.stringify({
-            version: 1,
-            executionId,
-            ownerToken: '00000000-0000-4000-8000-000000000099',
-            acquiredAt: Date.now(),
-            heartbeatAt: Date.now(),
-          }),
-        );
+        await writeForeignLease(executionId);
         await vi.advanceTimersByTimeAsync(15_000);
 
         expect(handle.executionLeaseLost).toBe(true);
@@ -200,9 +194,7 @@ describe('runFlowWithLifecycle', () => {
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
     } finally {
       await releaseOwnedExecutionLease(executionId);
-      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
-        () => {},
-      );
+      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       clearStreamStatusForTest(streamStatus, streamId);
       vi.useRealTimers();
     }

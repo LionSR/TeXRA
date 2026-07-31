@@ -12,28 +12,28 @@ interface WindowLike {
  * The helper only reads `isDestroyed()`, so the tests drive it with plain
  * stand-ins rather than real `BrowserWindow` instances.
  */
-interface SecretStorageWarningDialogModule {
-  getSecretStorageWarningParentWindow(browserWindow: {
+interface WarningDialogModule {
+  getDesktopWarningParentWindow(browserWindow: {
     getAllWindows(): WindowLike[];
     getFocusedWindow(): WindowLike | null;
   }): WindowLike | undefined;
 }
 
-describe('desktop secret-storage warning dialog', () => {
-  async function loadDialogModule(): Promise<SecretStorageWarningDialogModule> {
+describe('desktop warning dialog', () => {
+  async function loadDialogModule(): Promise<WarningDialogModule> {
     const module = await loadSourceModule(
-      '@desktop/main/platform/secretStorageWarningDialog',
+      '@desktop/main/platform/warningDialog',
     );
-    return module as unknown as SecretStorageWarningDialogModule;
+    return module as unknown as WarningDialogModule;
   }
 
   it('uses the focused BrowserWindow when one is active', async () => {
-    const { getSecretStorageWarningParentWindow } = await loadDialogModule();
+    const { getDesktopWarningParentWindow } = await loadDialogModule();
     const focusedWindow = { isDestroyed: () => false };
     const otherWindow = { isDestroyed: () => false };
 
     expect(
-      getSecretStorageWarningParentWindow({
+      getDesktopWarningParentWindow({
         getFocusedWindow: () => focusedWindow,
         getAllWindows: () => [otherWindow],
       }),
@@ -41,12 +41,12 @@ describe('desktop secret-storage warning dialog', () => {
   });
 
   it('falls back to an existing non-destroyed BrowserWindow', async () => {
-    const { getSecretStorageWarningParentWindow } = await loadDialogModule();
+    const { getDesktopWarningParentWindow } = await loadDialogModule();
     const destroyedWindow = { isDestroyed: () => true };
     const liveWindow = { isDestroyed: () => false };
 
     expect(
-      getSecretStorageWarningParentWindow({
+      getDesktopWarningParentWindow({
         getFocusedWindow: () => null,
         getAllWindows: () => [destroyedWindow, liveWindow],
       }),
@@ -54,10 +54,10 @@ describe('desktop secret-storage warning dialog', () => {
   });
 
   it('preserves app-level warning fallback before any window exists', async () => {
-    const { getSecretStorageWarningParentWindow } = await loadDialogModule();
+    const { getDesktopWarningParentWindow } = await loadDialogModule();
 
     expect(
-      getSecretStorageWarningParentWindow({
+      getDesktopWarningParentWindow({
         getFocusedWindow: () => null,
         getAllWindows: () => [],
       }),

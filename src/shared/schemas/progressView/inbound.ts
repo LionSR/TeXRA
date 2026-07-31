@@ -10,6 +10,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { SwitchViewMessageSchema } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
@@ -84,6 +85,15 @@ const EnableDelegatedWorkApprovalMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS),
   /** The proposal whose ordinary approval message follows this command. */
   initiatingProposalId: z.string().min(1),
+});
+
+const EnableApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
+  /**
+   * Prompt that granted the bypass. A grant is per-kind: approving always from
+   * an edit prompt leaves shell commands gated and vice versa.
+   */
+  kind: z.enum([PERMISSION_KIND.TOOL_EDIT, PERMISSION_KIND.BASH]),
 });
 
 const SendFollowUpMessageSchema = StreamScopedBaseSchema.extend({
@@ -310,8 +320,9 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     // message follows and may carry model or agent overrides.
     EnableDelegatedWorkApprovalMessageSchema,
     // Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
-    // inline "Yolo (this session)" prompt button means "enable", never "flip".
-    streamScopedCommand(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
+    // inline "approve always" prompt button means "enable", never "flip", and
+    // grants only the kind of the prompt it came from.
+    EnableApprovalBypassMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,
     PlanApprovalActionMessageSchema,

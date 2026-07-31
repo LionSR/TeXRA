@@ -8,6 +8,7 @@ import {
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import type { PlanApprovalPermission } from '@shared/schemas';
+import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
 import { ConfirmCard } from './ConfirmCard';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
@@ -27,8 +28,6 @@ export interface PlanApprovalProps {
 
 export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
-export const PLAN_APPROVAL_GOAL_NOTICE =
-  'Runs until done; only Bash is automatic.';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 export const PLAN_APPROVAL_FEEDBACK_PLACEHOLDER =
   'Feedback to send with rejection';
@@ -55,7 +54,7 @@ export function isCompactPlanApprovalRows(
 export function planApprovalGoalNoticeLine(width: number): string {
   const lineWidth = Math.max(1, width);
   return fillRows(
-    truncateToWidth(PLAN_APPROVAL_GOAL_NOTICE, lineWidth),
+    truncateToWidth(PLAN_GOAL_COPY.cliNotice, lineWidth),
     lineWidth,
   );
 }

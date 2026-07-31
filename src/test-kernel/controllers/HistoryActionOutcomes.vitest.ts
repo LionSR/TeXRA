@@ -7,6 +7,8 @@ import {
   describeLatexExportResult,
   exportedFileMessage,
   exportInputErrorMessage,
+  HISTORY_CLEARED_MESSAGE,
+  HISTORY_CONFIG_UNREADABLE_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
 import type { ExecutionId } from '@shared/schemas';
@@ -118,9 +120,15 @@ describe('HistoryActionOutcomes', () => {
     ).toEqual({ kind: 'deleted' });
   });
 
-  it('exposes the shared active-execution message constant', () => {
+  it('exposes the message constants both hosts share', () => {
     expect(ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE).toBe(
       'Cannot delete an execution that is active in TeXRA',
+    );
+    expect(HISTORY_CLEARED_MESSAGE).toBe('Agent history cleared');
+    // readConfig() returns null for missing and corrupt alike, so the copy
+    // must not narrow the cause to "not found".
+    expect(HISTORY_CONFIG_UNREADABLE_MESSAGE).toBe(
+      'History item not found or unreadable (missing, corrupt, or from an incompatible version)',
     );
   });
 

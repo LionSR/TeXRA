@@ -4,7 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getToolUsePersistenceEnabled: vi.fn(() => true),
   registerCommand: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resumeQueuedToolUseFromResumeData: vi.fn(async () => true),
@@ -18,10 +17,6 @@ vi.mock('vscode', () => ({
   window: {
     showWarningMessage: mocks.showWarningMessage,
   },
-}));
-vi.mock('@utils/config/constants', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/config/constants')>()),
-  getToolUsePersistenceEnabled: mocks.getToolUsePersistenceEnabled,
 }));
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({
   resumeQueuedToolUseFromResumeData: mocks.resumeQueuedToolUseFromResumeData,
@@ -52,7 +47,6 @@ function registerHandler() {
 }
 
 beforeEach(() => {
-  mocks.getToolUsePersistenceEnabled.mockReturnValue(true);
   mocks.registerCommand.mockReset();
   mocks.retrieveSessionResumeData.mockReset();
   mocks.resumeQueuedToolUseFromResumeData.mockReset().mockResolvedValue(true);
@@ -60,16 +54,7 @@ beforeEach(() => {
 });
 
 describe('resumeExtensionToolUseFromResumeData', () => {
-  it('refuses to resume when tool-use persistence is disabled', async () => {
-    mocks.getToolUsePersistenceEnabled.mockReturnValue(false);
-
-    await expect(
-      resumeExtensionToolUseFromResumeData(snapshot()),
-    ).resolves.toBe(false);
-    expect(mocks.resumeQueuedToolUseFromResumeData).not.toHaveBeenCalled();
-  });
-
-  it('delegates to the shared leaf with the explicit follow-up when enabled', async () => {
+  it('delegates to the shared leaf with the explicit follow-up', async () => {
     await expect(
       resumeExtensionToolUseFromResumeData(
         snapshot(),
@@ -141,16 +126,6 @@ describe('registerResumeAgentCommand', () => {
       expect.any(Object),
     );
     statusSpy.mockRestore();
-  });
-
-  it('does not read resume storage when persistence is disabled', async () => {
-    mocks.getToolUsePersistenceEnabled.mockReturnValue(false);
-
-    await expect(registerHandler()({ snapshot: snapshot() })).resolves.toEqual({
-      success: false,
-    });
-    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
-    expect(mocks.resumeQueuedToolUseFromResumeData).not.toHaveBeenCalled();
   });
 
   it('reports retrieval failures through the existing resume warning', async () => {

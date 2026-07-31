@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   createChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   requireVisibleAgent: vi.fn(),
+  selectAvailableDelegationModel: vi.fn(),
   childLoggerError: vi.fn(),
 }));
 
@@ -69,6 +70,7 @@ vi.mock('@tools/approval', () => ({
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/delegation/proposalFlow')>()),
   requireVisibleAgent: mocks.requireVisibleAgent,
+  selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
@@ -157,6 +159,7 @@ beforeEach(async () => {
   await WorkspaceFS.write('references.bib', '@book{example}');
   await WorkspaceFS.write('figure.pdf', 'pdf');
   mocks.registerExecution.mockResolvedValue(undefined);
+  mocks.selectAvailableDelegationModel.mockResolvedValue('parent-model');
   mocks.startChildRunLoop.mockReturnValue({
     completion: Promise.resolve(),
   });
@@ -579,6 +582,42 @@ describe('WorkflowScriptTool', () => {
     expect(result).toMatchObject({
       status: 'error',
       error: expect.stringContaining("Unknown workflow agent 'missing-agent'"),
+    });
+    expect(result.error).toContain('Script file: .texra/workflow-scripts/');
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
+  it('gates the run model through delegation model availability', async () => {
+    mocks.selectAvailableDelegationModel.mockResolvedValueOnce('served-model');
+
+    await callTool();
+
+    expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
+      parentModel: 'parent-model',
+      agentCategory: 'workflow',
+    });
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionIdFor('tool-test'),
+      expect.objectContaining({ model: 'served-model' }),
+      'tool-test',
+      executionId,
+    );
+  });
+
+  it('rejects an unserveable run model before registering a detached run', async () => {
+    mocks.selectAvailableDelegationModel.mockRejectedValueOnce(
+      new Error('No models are currently available for delegation.'),
+    );
+
+    const result = await callTool();
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining(
+        'No models are currently available for delegation.',
+      ),
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
     expect(mocks.registerExecution).not.toHaveBeenCalled();

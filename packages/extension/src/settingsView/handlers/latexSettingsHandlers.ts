@@ -14,10 +14,8 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  DEFAULT_LATEX_SETTINGS_STATUS,
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-  type LatexSettingsStatus,
 } from '@shared/schemas/settingsViewMessages';
 import {
   LATEX_WORKSHOP_EXT_ID,
@@ -40,9 +38,6 @@ import {
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
-
-/** How long cached LaTeX settings remain valid (ms). */
-const LATEX_SETTINGS_CACHE_TTL = 60_000;
 
 /**
  * LaTeX settings handler delegate.
@@ -85,47 +80,12 @@ export class LatexSettingsHandlers {
   private readonly configPersistenceController =
     new LatexConfigPersistenceController();
 
-  /** Cached LaTeX settings to avoid redundant tool detection on repeat opens. */
-  private latexSettingsCache: {
-    settings: LatexSettingsStatus;
-    timestamp: number;
-  } | null = null;
-
   constructor(private readonly ctx: SettingsHandlerContext) {}
 
   async sendLatexSettingsStatus(webview: vscode.Webview): Promise<void> {
-    const now = Date.now();
-    if (
-      !this.latexSettingsCache ||
-      now - this.latexSettingsCache.timestamp >= LATEX_SETTINGS_CACHE_TTL
-    ) {
-      try {
-        const settings = await this.toolingController.detectStatus();
-        this.latexSettingsCache = { settings, timestamp: now };
-      } catch (error) {
-        // Detection failed (e.g. a tool probe threw). Do NOT cache a fabricated
-        // "nothing installed" status: caching it would mislead the user for the
-        // whole TTL (making an installed setup look broken) and hide the real
-        // failure. Post a best-effort default for this render only and retry
-        // detection on the next open.
-        this.ctx.logger.error(
-          this.ctx.channel,
-          `Failed to load LaTeX settings status: ${toErrorMessage(error)}`,
-        );
-        await webview.postMessage({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-          settings: {
-            ...DEFAULT_LATEX_SETTINGS_STATUS,
-            platform: normalizePlatform(process.platform),
-          },
-        });
-        return;
-      }
-    }
-
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-      settings: this.latexSettingsCache.settings,
+      settings: await this.toolingController.detectStatus(),
     });
   }
 

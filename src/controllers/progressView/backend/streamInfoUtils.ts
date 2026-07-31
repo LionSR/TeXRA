@@ -7,6 +7,25 @@ import { buildStreamTabInfo } from './streamTabInfo';
 import type { ProgressViewState } from './state/ProgressViewState';
 
 /**
+ * Whether a stream is visible under a category filter.
+ *
+ * Pure metadata comparison: unlike {@link buildStreamInfo} it does no worktree
+ * resolution, so membership checks don't spawn git processes for an answer
+ * that only depends on the stream's category.
+ */
+export function streamMatchesCategoryFilter(
+  state: Pick<ProgressViewState, 'getStreamMetadata'>,
+  id: string,
+  filter: AgentCategoryFilter,
+): boolean {
+  if (filter === 'all') return true;
+  // A stream is Workflow until its run config resolves its real category.
+  const category =
+    state.getStreamMetadata(id).agentCategory ?? AgentCategory.Workflow;
+  return category === filter;
+}
+
+/**
  * Build a StreamTabInfo object for a single stream ID.
  * Returns null if the stream doesn't match the filter.
  */
@@ -15,12 +34,9 @@ export function buildStreamInfo(
   id: string,
   filter: AgentCategoryFilter,
 ): StreamTabInfo | null {
+  if (!streamMatchesCategoryFilter(state, id, filter)) return null;
+
   const metadata = state.getStreamMetadata(id);
-
-  // A stream is Workflow until its run config resolves its real category.
-  const category = metadata.agentCategory ?? AgentCategory.Workflow;
-  if (filter !== 'all' && category !== filter) return null;
-
   const workingDirectory = metadata.run?.workingDirectory;
   let worktreeInfo;
   if (workingDirectory) {

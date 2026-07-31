@@ -59,6 +59,7 @@ function workflowAgentSlice(
     substate: undefined,
     runStartedAt: undefined,
     description: undefined,
+    latestLine: undefined,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,
@@ -385,7 +386,6 @@ describe('CLI child list display model', () => {
 
   it('keeps status markers steady and status colors independent of focus', () => {
     expect(CHILD_STATUS_MARKER).toBe('● ');
-    expect(childStatusColor(undefined)).toBe('green');
     expect(childStatusColor('running')).toBe('green');
     expect(childStatusColor('waiting')).toBe('yellow');
     expect(childStatusColor('error')).toBe('red');
@@ -394,6 +394,14 @@ describe('CLI child list display model', () => {
     expect(childStatusColor('stopped')).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
+  });
+
+  it('paints an unreported or unrecognised phase neutral, never success', () => {
+    // A slice exists before any status fact arrives (`emptySlice`), and a
+    // future STREAM_PHASE reaches this build as an unmapped string. Neither
+    // establishes success, so neither may render green.
+    expect(childStatusColor(undefined)).toBe('gray');
+    expect(childStatusColor('compacting')).toBe('gray');
   });
 
   it('summarizes what a row is waiting on from its pending approval kinds', () => {

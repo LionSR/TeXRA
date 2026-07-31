@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   expectedOutputFilesForOutputDir,
+  formatWorkflowTextResult,
   resolveWorkflowOutput,
+  type CliWorkflowRunResult,
 } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
@@ -407,5 +409,61 @@ describe('CLI workflow output resolution', () => {
     await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
       'A2',
     );
+  });
+
+  it('copies the last output of the final round for a multi-document workflow', async () => {
+    const cwd = await makeTempDir();
+    const runMain = await writeRunFile(cwd, 'r2/main.tex', 'MAIN2');
+    const runAppendix = await writeRunFile(cwd, 'r2/appendix.tex', 'APPENDIX2');
+    const runMain1 = await writeRunFile(cwd, 'r1/main.tex', 'MAIN1');
+
+    const result = await resolveWorkflowOutput(
+      'out/paper.tex',
+      undefined,
+      workflowResult([
+        { absolutePath: runMain1, relativePath: 'r1/main.tex', round: 1 },
+        { absolutePath: runMain, relativePath: 'r2/main.tex', round: 2 },
+        {
+          absolutePath: runAppendix,
+          relativePath: 'r2/appendix.tex',
+          round: 2,
+        },
+      ]),
+      testContext(cwd),
+      {
+        runDirectory: join(cwd, 'run'),
+      },
+    );
+
+    expect(result).toMatchObject({
+      copiedOutput: join(cwd, 'out', 'paper.tex'),
+    });
+    // Last of the final round: the CLI has always kept the later element on a
+    // round tie, so the consolidation onto finalWorkflowOutput preserves it.
+    await expect(readFile(join(cwd, 'out', 'paper.tex'), 'utf8')).resolves.toBe(
+      'APPENDIX2',
+    );
+  });
+
+  it('reports the last output of the final round as the text result', () => {
+    const result: CliWorkflowRunResult = {
+      ...workflowResult([
+        { absolutePath: '/run/r1/main.tex', relativePath: 'r1/main.tex' },
+        {
+          absolutePath: '/run/r2/main.tex',
+          relativePath: 'r2/main.tex',
+          round: 2,
+        },
+        {
+          absolutePath: '/run/r2/appendix.tex',
+          relativePath: 'r2/appendix.tex',
+          round: 2,
+        },
+      ]),
+      workingDirectory: '/run',
+      runDirectory: '/run',
+    };
+
+    expect(formatWorkflowTextResult(result)).toBe('/run/r2/appendix.tex');
   });
 });

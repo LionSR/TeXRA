@@ -17,7 +17,10 @@ import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import {
+  spendingQuotaRemainingPercent,
+  spendingQuotaState,
   type RoundStage,
+  type SpendingStatus,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -95,6 +98,9 @@ export interface StatusBarDisplayInput {
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly model: string;
   readonly modelAccess: CliModelAccessRoute;
+  /** Latest relay spend snapshot, when the tier config has been fetched with
+   *  auth. Only meaningful while the route is `included`. */
+  readonly relayQuota?: SpendingStatus;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
   readonly transcriptMode?: 'persistent' | 'ephemeral';
   readonly approvalPolicy?: CliApprovalPolicy;
@@ -183,6 +189,40 @@ function accessModeSegment(access: CliModelAccessRoute): StatusBarSegment {
     : { text: label, color: 'dim' };
 }
 
+// Relay spend only constrains the included-access route; a subscription or a
+// personal key spends nothing against the monthly quota, so the warning would
+// be noise there. Thresholds come from `spendingQuotaState` so the CLI and the
+// Settings quota meter warn at the same point.
+function relayQuotaSegment(
+  quota: SpendingStatus | undefined,
+  access: CliModelAccessRoute,
+): StatusBarSegment | undefined {
+  if (quota === undefined || access !== 'included') return undefined;
+  const state = spendingQuotaState(quota);
+  switch (state) {
+    case 'ok':
+      return undefined;
+    case 'warning': {
+      const remaining = spendingQuotaRemainingPercent(quota);
+      return {
+        text: `quota ${remaining}% left`,
+        compactText: `quota ${remaining}%`,
+        color: COLOR_WARNING,
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.relayQuota,
+      };
+    }
+    case 'exhausted':
+      return {
+        text: 'quota exhausted',
+        compactText: 'quota 0%',
+        color: COLOR_ERROR,
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.relayQuota,
+      };
+    default:
+      return state satisfies never;
+  }
+}
+
 function formatUsage(
   usage: TokenUsageStats | undefined,
   model: string,
@@ -247,6 +287,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   approvalPolicy: 55,
   approvalDepth: 60,
   rootActive: 65,
+  relayQuota: 68,
   elapsed: 70,
   thinking: 75,
   compacting: 80,
@@ -919,6 +960,7 @@ export function buildStatusBarDisplay(
     ...[
       rootActiveSegment(input),
       accessModeSegment(input.modelAccess),
+      relayQuotaSegment(input.relayQuota, input.modelAccess),
       approvalPolicySegment(input.approvalPolicy),
       roundSegment(input.roundStage),
       formatUsage(input.usage, input.model),

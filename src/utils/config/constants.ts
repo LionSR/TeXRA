@@ -3,9 +3,6 @@ import type { StateStore } from '@platform/interfaces';
 import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-// Local file imports
-import { getConfig } from './configUtils';
-
 // Settings query constants for VS Code settings UI
 export const SETTINGS_QUERY = {
   EXTENSION: '@ext:texra-ai.texra',
@@ -24,16 +21,6 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 // dashboard shows a toggle so the user can turn them on. Seeding happens in
 // `seedDisabledToolDefaults()` during host startup; existing profiles are
 // never re-seeded.
-
-/** Determine whether tool-use session persistence is enabled. */
-export function getToolUsePersistenceEnabled(): boolean {
-  return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
-}
-
-/** Set whether the memory tool is enabled for tool-use sessions. */
-export async function setToolUseMemoryEnabled(enabled: boolean): Promise<void> {
-  await tryGlobalState()?.update(GlobalStateKey.MEMORY_ENABLED, enabled);
-}
 
 /**
  * Get the set of tool group IDs disabled by the user.

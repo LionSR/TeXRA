@@ -1,10 +1,10 @@
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import type {
   CliApprovalPolicy,
   CliOutputFormat,
 } from '../schemas/cliSettings';
-import type { CliApiMode } from './apiAccessMode';
 import type { CliGlobalArgs } from './cliContext';
 
 /**
@@ -20,7 +20,7 @@ export interface ParsedGlobalArgs {
   readonly cwd?: string;
   readonly 'output-format'?: CliOutputFormat;
   readonly 'approval-policy'?: CliApprovalPolicy;
-  readonly 'api-mode'?: CliApiMode | string;
+  readonly 'api-mode'?: ApiAccessMode | string;
   // Positively-named boolean (default `true`); citty sets this to `false`
   // when the user passes `--no-color`.
   readonly color?: boolean;

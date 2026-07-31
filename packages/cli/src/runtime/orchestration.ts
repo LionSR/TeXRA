@@ -1,6 +1,7 @@
 import type { AgentEntry } from '@agent/index';
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -31,7 +32,6 @@ import {
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
-import type { CliApiMode } from './apiAccessMode';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -109,7 +109,7 @@ export function isCliOrchestrationModelPickAction(
 export function orchestrationModelAccessView(
   items: readonly CliOrchestrationItem[],
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
   options: {
     readonly allowDefaultModelLaunch?: boolean;
   } = {},

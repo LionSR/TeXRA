@@ -15,11 +15,14 @@ import {
 
 function mount(options: {
   canBypass?: boolean;
+  bypassAction?: string;
   canApproveAllDelegatedWork?: boolean;
 }): Promise<ApproveSplitButton> {
   return mountComponent<ApproveSplitButton>('approve-split-button', {
     approveTitle: 'Approve',
     canBypass: options.canBypass ?? false,
+    bypassAction:
+      options.bypassAction ?? DELEGATION_APPROVAL_COPY.progressViewEditAction,
     canApproveAllDelegatedWork: options.canApproveAllDelegatedWork ?? false,
   });
 }
@@ -56,8 +59,11 @@ describe('approve-split-button', () => {
     expect(events).toEqual(['approve']);
   });
 
-  it('renders the run-scoped edit and command action when canBypass is true', async () => {
-    const element = await mount({ canBypass: true });
+  it('names only the kind the panel grants when canBypass is true', async () => {
+    const element = await mount({
+      canBypass: true,
+      bypassAction: DELEGATION_APPROVAL_COPY.progressViewCommandAction,
+    });
 
     expect(element.shadowRoot?.querySelector('.approve-split')).toBeTruthy();
     const item = element.shadowRoot?.querySelector<HTMLElement>(
@@ -65,9 +71,14 @@ describe('approve-split-button', () => {
     );
     expect(item).toBeTruthy();
     expect(item?.textContent).toContain(
-      DELEGATION_APPROVAL_COPY.progressViewEditCommandAction,
+      DELEGATION_APPROVAL_COPY.progressViewCommandAction,
     );
+    expect(item?.textContent).not.toContain('file edits');
     expect(item?.textContent).not.toContain('Yolo');
+    const tooltip = element.shadowRoot?.querySelector('wa-tooltip');
+    expect(tooltip?.textContent).toContain(
+      DELEGATION_APPROVAL_COPY.progressViewCommandAction,
+    );
   });
 
   it('emits approve on the main button click in split mode', async () => {
@@ -81,7 +92,7 @@ describe('approve-split-button', () => {
     expect(events).toEqual(['approve']);
   });
 
-  it('emits approve-session only for the edit and command menu item', async () => {
+  it('emits approve-session only for the run-scoped bypass menu item', async () => {
     const element = await mount({ canBypass: true });
     const events = recordEvents(element);
     const menu = element.shadowRoot?.querySelector('.approve-split-menu');

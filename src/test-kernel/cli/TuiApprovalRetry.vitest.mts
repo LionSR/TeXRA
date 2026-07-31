@@ -19,9 +19,11 @@ const mocks = vi.hoisted(() => ({
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   notify: vi.fn(),
+  openRouter: false,
   secrets: {},
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
+  updateGlobalState: vi.fn(),
 }));
 
 vi.mock('@model/codex/codexPreference', () => ({
@@ -56,9 +58,19 @@ vi.mock('@model/apiProviders', async (importActual) => {
   };
 });
 
-vi.mock('@platform/platform', () => ({
-  platform: () => ({ secrets: mocks.secrets }),
-}));
+vi.mock('@platform/platform', async () => {
+  const { GlobalStateKey } = await import('@shared/state/stateKeys');
+  return {
+    platform: () => ({
+      secrets: mocks.secrets,
+      globalState: {
+        get: (key: string, fallback: unknown) =>
+          key === GlobalStateKey.USE_OPENROUTER ? mocks.openRouter : fallback,
+        update: mocks.updateGlobalState,
+      },
+    }),
+  };
+});
 
 import type {
   HostInteractions,
@@ -83,6 +95,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type RetryPermission } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 import {
@@ -235,10 +248,20 @@ beforeEach(() => {
   mocks.apiMode = 'included';
   patchSessionMeta({ apiMode: 'included' });
   mocks.preferSubscription = true;
+  mocks.openRouter = false;
   mocks.apiKeyExistsUncached.mockResolvedValue(true);
   mocks.hasUsableApiKey.mockResolvedValue(false);
+  mocks.updateGlobalState.mockImplementation(
+    async (key: string, value: unknown) => {
+      if (key === GlobalStateKey.USE_OPENROUTER) {
+        mocks.openRouter = value === true;
+      }
+    },
+  );
+  // Mirrors setCliApiMode: included access turns OpenRouter routing off.
   mocks.setCliApiMode.mockImplementation(async (mode) => {
     mocks.apiMode = mode;
+    if (mode === 'included') mocks.openRouter = false;
   });
   mocks.setCliCodexSubscription.mockImplementation(async (enabled) => {
     mocks.preferSubscription = enabled;
@@ -256,6 +279,7 @@ afterEach(() => {
   mocks.notify.mockReset();
   mocks.setCliApiMode.mockReset();
   mocks.setCliCodexSubscription.mockReset();
+  mocks.updateGlobalState.mockReset();
 });
 
 describe('TUI retry approvals', () => {
@@ -403,7 +427,7 @@ describe('TUI retry approvals', () => {
       streamId,
     });
     void enqueueApproval({
-      kind: 'plan',
+      kind: 'planApproval',
       payload: {
         approvalId: 'plan-excluded',
         streamId,
@@ -464,13 +488,13 @@ describe('TUI retry approvals', () => {
     });
     await expect(bash).resolves.toEqual({ action: 'approve' });
     expect(pendingApprovalSummaries.get()).toEqual([
-      { streamKey: streamId, kind: 'plan' },
+      { streamKey: streamId, kind: 'planApproval' },
       { streamKey: streamId, kind: 'retry' },
       { streamKey: streamId, kind: 'externalInquiry' },
       { streamKey: streamId, kind: 'userQuestion' },
       { streamKey: 'other-approval-stream', kind: 'bash' },
     ]);
-    expect(currentApproval.get()?.payload.kind).toBe('plan');
+    expect(currentApproval.get()?.payload.kind).toBe('planApproval');
   });
 
   it('keeps an ordinary proposal approval limited to the current request', async () => {
@@ -829,6 +853,31 @@ describe('TUI retry approvals', () => {
     });
     expect(mocks.apiMode).toBe('included');
     expect(mocks.preferSubscription).toBe(false);
+  });
+
+  it('restores OpenRouter routing when the credential switch rolls back', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    mocks.openRouter = true;
+    mocks.setCliCodexSubscription.mockRejectedValueOnce(
+      new Error('subscription write failed'),
+    );
+
+    const { interactions } = tui();
+    const { result } = await beginSubscriptionSwitch(
+      interactions,
+      'openrouter-rollback',
+    );
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason: expect.stringContaining('subscription write failed'),
+    });
+    expect(mocks.apiMode).toBe('included');
+    expect(mocks.openRouter).toBe(true);
+    expect(mocks.updateGlobalState).toHaveBeenCalledWith(
+      GlobalStateKey.USE_OPENROUTER,
+      true,
+    );
   });
 
   it('reports unconfirmed persistence when API-mode rollback restores memory before rejecting', async () => {

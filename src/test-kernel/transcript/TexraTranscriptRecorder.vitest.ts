@@ -494,6 +494,96 @@ describe('attachTranscriptRecorder workflow task state', () => {
   });
 });
 
+describe('attachTranscriptRecorder record-time secret redaction', () => {
+  const API_KEY = 'sk-live1234567890abcdef';
+
+  it('redacts a secret in a plain log row before it is persisted', () => {
+    const { trace, rows } = attachRecorder('stream:redact-log' as StreamTabId);
+
+    trace.info(`Configured with ${API_KEY}`);
+
+    expect(rows()[0]?.text).toBe('Configured with [redacted]');
+  });
+
+  it("redacts an error row's provider detail, not just its summary", () => {
+    const { trace, rows } = attachRecorder(
+      'stream:redact-error' as StreamTabId,
+    );
+
+    trace.error(`Request failed for ${API_KEY}`, {
+      messageType: MESSAGE_TYPES.ERROR,
+      data: {
+        message: `401 from https://api.example.com/v1?key=${API_KEY}`,
+        statusCode: 401,
+      },
+    });
+
+    expect(rows()[0]).toMatchObject({
+      text: 'Request failed for [redacted]',
+      data: {
+        message: '401 from https://api.example.com/v1?key=[redacted]',
+        statusCode: 401,
+      },
+    });
+  });
+
+  it('redacts a secret split across streamed chunks once the stream settles', () => {
+    const { trace, row } = attachRecorder(
+      'stream:redact-chunks' as StreamTabId,
+    );
+
+    const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+    output.append('Use sk-live');
+    output.append('1234567890abcdef now');
+    output.finalize();
+
+    expect(row(output.id)?.text).toBe('Use [redacted] now');
+  });
+
+  it('redacts the authoritative finalized response text', () => {
+    const { trace, rows } = attachRecorder(
+      'stream:redact-finalized' as StreamTabId,
+    );
+
+    trace.responseFinalized(`Set API_KEY=${API_KEY} in your shell.`);
+
+    expect(rows()[0]?.text).toBe('Set API_KEY=[redacted] in your shell.');
+  });
+
+  it('redacts a stage label', () => {
+    const { trace, row } = attachRecorder('stream:redact-stage' as StreamTabId);
+
+    const stage = trace.openStage(`Probe ${API_KEY}`, { kind: 'phase' });
+
+    expect(row(stage.id)?.text).toBe('Probe [redacted]');
+  });
+
+  it("redacts a failed workflow call's label and provider error", () => {
+    const { trace, rows } = attachRecorder(
+      'stream:redact-workflow-task' as StreamTabId,
+    );
+
+    trace.emit({
+      type: 'workflow.task',
+      logId: 'task-card',
+      task: {
+        id: 'audit-core',
+        label: `Audit ${API_KEY}`,
+        status: 'failed',
+        error: `401 rejected key ${API_KEY}`,
+      },
+    });
+
+    expect(rows()[0]).toMatchObject({
+      text: 'Audit [redacted]',
+      data: {
+        label: 'Audit [redacted]',
+        error: '401 rejected key [redacted]',
+      },
+    });
+  });
+});
+
 describe('attachTranscriptRecorder timer failure boundary', () => {
   it('latches a delayed write failure instead of throwing from the timer', () => {
     vi.useFakeTimers();

@@ -70,7 +70,11 @@ function createFixture(overrides: FixtureOverrides = {}) {
     getCachedCheckResults: async () => [],
     refreshAvailability: async () => undefined,
     refreshDisabledCache: async () => undefined,
-    findCommand: async (toolId, kind) => `${kind}:${toolId}`,
+    planTerminalAction: async (toolId, kind) => ({
+      kind: 'terminal',
+      name: toolId,
+      command: `${kind}:${toolId}`,
+    }),
     ...overrides.dashboard,
   };
   const controller = new DefaultDesktopToolingSettingsController({
@@ -136,7 +140,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
         },
         getCachedCheckResults: async () => undefined,
         refreshAvailability: () => refreshPending,
-        findCommand: async () => undefined,
       },
     });
 
@@ -148,7 +151,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
       SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
     ]);
-    expect(buildInputs).toEqual([[]]);
+    // A cold probe cache stays `undefined` so the dashboard build runs the
+    // probes; coercing it to `[]` would render "zero external tools".
+    expect(buildInputs).toEqual([undefined]);
 
     finishRefresh?.();
     await vi.waitFor(() => {
@@ -168,7 +173,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
         refreshAvailability: async () => {
           throw refreshError;
         },
-        findCommand: async () => undefined,
       },
     });
 
@@ -203,7 +207,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
         refreshDisabledCache: async () => {
           events.push('dashboard:disabled');
         },
-        findCommand: async () => undefined,
       },
     });
 
@@ -217,6 +220,23 @@ describe('DefaultDesktopToolingSettingsController', () => {
       'dashboard:build',
       'renderer:post',
     ]);
+  });
+
+  it('keeps a cold probe cache uncoerced when toggling a tool', async () => {
+    const buildInputs: (ExternalToolCheckResult[] | undefined)[] = [];
+    const { controller } = createFixture({
+      dashboard: {
+        buildItems: async (results) => {
+          buildInputs.push(results);
+          return [DASHBOARD_ITEM];
+        },
+        getCachedCheckResults: async () => undefined,
+      },
+    });
+
+    await assertSupported(controller.toolsActions.toggle)('zotero', false);
+
+    expect(buildInputs).toEqual([undefined]);
   });
 
   it('completes a fresh availability check before rebuilding the dashboard', async () => {
@@ -237,7 +257,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
         refreshAvailability: async () => {
           events.push('dashboard:refresh');
         },
-        findCommand: async () => undefined,
       },
     });
 
@@ -251,15 +270,19 @@ describe('DefaultDesktopToolingSettingsController', () => {
     ]);
   });
 
-  it('resolves configured tool commands and ignores absent commands', async () => {
-    const findCommand = vi
-      .fn<ControllerOptions['dashboard']['findCommand']>()
-      .mockResolvedValueOnce('npm install codex')
-      .mockResolvedValueOnce(undefined);
-    const { controller, commands } = createFixture({
+  it('runs planned tool commands and reports why a plan produced none', async () => {
+    const planTerminalAction = vi
+      .fn<ControllerOptions['dashboard']['planTerminalAction']>()
+      .mockResolvedValueOnce({
+        kind: 'terminal',
+        name: 'TeXRA: OpenAI Codex CLI',
+        command: 'npm install codex',
+      })
+      .mockResolvedValueOnce({ kind: 'none', reason: 'missingCommand' });
+    const { controller, commands, reportedErrors } = createFixture({
       dashboard: {
         buildItems: async () => [],
-        findCommand,
+        planTerminalAction,
       },
     });
 
@@ -272,9 +295,12 @@ describe('DefaultDesktopToolingSettingsController', () => {
       kind: 'auth',
     });
 
-    expect(findCommand).toHaveBeenNthCalledWith(1, 'codex', 'install');
-    expect(findCommand).toHaveBeenNthCalledWith(2, 'codex', 'auth');
+    expect(planTerminalAction).toHaveBeenNthCalledWith(1, 'codex', 'install');
+    expect(planTerminalAction).toHaveBeenNthCalledWith(2, 'codex', 'auth');
     expect(commands).toEqual(['npm install codex']);
+    expect(reportedErrors.map((error) => (error as Error).message)).toEqual([
+      'No auth command for tool "codex" (missingCommand)',
+    ]);
   });
 
   it('validates LaTeX writes before persistence and reposts after the write', async () => {

@@ -9,9 +9,10 @@ import {
   readLegacyDirEntries,
 } from '@platform/defaults/legacyDataMigration';
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Type imports - platform
-import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 
 export type DesktopDataRootMigrationLogger = LegacyDataMigrationLogger;
 
@@ -25,6 +26,29 @@ function desktopPrefixed(
     info: (message) => logger.info(`[desktop] ${message}`),
     warn: (message) => logger.warn(`[desktop] ${message}`),
   };
+}
+
+/**
+ * Run one best-effort legacy migration during platform init.
+ *
+ * The per-entry move paths below are already loud-but-non-throwing, but the
+ * surrounding path resolution is not: a throw from there would abort desktop
+ * startup over data that only needs moving once. Mirrors the extension's
+ * per-bucket guard in `sharedStorageRoot.ts` — warn with the cause, leave the
+ * legacy data in place, and let the host finish starting.
+ */
+export async function runBestEffortMigration(
+  label: string,
+  migrate: () => Promise<void>,
+  logger: DesktopDataRootMigrationLogger = console,
+): Promise<void> {
+  try {
+    await migrate();
+  } catch (error) {
+    desktopPrefixed(logger).warn(
+      `${label} migration failed; legacy data stays in place. Cause: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 /**

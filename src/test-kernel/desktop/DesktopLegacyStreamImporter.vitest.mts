@@ -6,6 +6,12 @@ import { join } from 'node:path';
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { StreamTabId } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { StreamLogStore } from '@transcript';
+
 const writeFileAtomicMock = vi.hoisted(() => vi.fn());
 
 vi.mock('write-file-atomic', () => ({
@@ -195,5 +201,76 @@ describe('DesktopLegacyStreamImporter', () => {
       restoredStreams: { streams: LegacyRow[] };
     };
     expect(persisted.restoredStreams.streams).toEqual([unmatchedRow]);
+  });
+});
+
+describe('DesktopProcessStores legacy import policy', () => {
+  const legacyStream = 'workflow@1' as StreamTabId;
+  let tempDir: string | undefined;
+  let filePath: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'texra-legacy-stream-policy-'));
+    filePath = join(tempDir, 'streams.json');
+    writeFileAtomicMock.mockReset().mockImplementation(async (target, data) => {
+      await writeFile(target, data);
+    });
+  });
+
+  afterEach(async () => {
+    if (tempDir == null) return;
+    await rm(tempDir, { recursive: true, force: true });
+    tempDir = undefined;
+  });
+
+  async function importLegacyStreams(
+    transcripts: StreamLogStore,
+  ): Promise<SessionHandle> {
+    const session = createTestSession({ transcripts });
+    vi.spyOn(session.snapshots, 'listPersistedStreams').mockResolvedValue([
+      legacyStream,
+    ]);
+    const { initializeDesktopProcessStores } =
+      await import('@desktop/main/desktopProcessStores');
+    const processStores = await initializeDesktopProcessStores({
+      session,
+      legacyStreamFilePath: filePath,
+    });
+    processStores.dispose();
+    return session;
+  }
+
+  it('claims and retires a legacy row on a persistent transcript index', async () => {
+    await writeFile(
+      filePath,
+      serializeLegacyRows([makeLegacyRow('workflow@1')]),
+    );
+
+    const session = await importLegacyStreams(await StreamLogStore.open());
+
+    try {
+      expect(session.transcripts.has(legacyStream)).toBe(true);
+      await expect(readFile(filePath)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('leaves the legacy file for the next launch when transcripts degraded to ephemeral', async () => {
+    const original = serializeLegacyRows([makeLegacyRow('workflow@1')]);
+    await writeFile(filePath, original);
+
+    const session = await importLegacyStreams(
+      StreamLogStore.ephemeral('transcript open failed'),
+    );
+
+    try {
+      expect(session.transcripts.has(legacyStream)).toBe(false);
+      expect(await readFile(filePath, 'utf8')).toBe(original);
+    } finally {
+      session.dispose();
+    }
   });
 });

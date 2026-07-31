@@ -27,7 +27,6 @@ import {
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { createRehydratedChildStream } from '@tools/childStream';
 import {
@@ -46,7 +45,10 @@ import {
   formatWorkflowScriptReference,
 } from './workflowScriptStrategy';
 import { rejectOversizedBibAttachments } from './inputFields';
-import { requireVisibleAgent } from './proposalFlow';
+import {
+  requireVisibleAgent,
+  selectAvailableDelegationModel,
+} from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 const WorkflowScriptToolInputSchema = z
@@ -325,11 +327,21 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       if (totalCostUsd !== undefined) recordSubagentCost?.(totalCostUsd);
     };
 
+    // Same availability gate as delegate_agent/delegate_workflow: a run model
+    // the active API mode cannot serve fails here, with the available list,
+    // instead of mid-run on the first provider call.
+    const runModel = await runPhase(() =>
+      selectAvailableDelegationModel({
+        parentModel: parent.model,
+        agentCategory: AgentCategory.Workflow,
+      }),
+    );
+
     const runConfigPayload: AgentConfigPayload = {
       agent: defaultAgent.name,
       agentSource: defaultAgent.source,
       agentCategory: AgentCategory.Workflow,
-      model: parent.model ?? DEFAULT_AGENT_MODEL,
+      model: runModel,
       instruction: `Workflow script '${meta.name}'`,
       inputFiles: [...files.inputFiles],
       contextFiles: [...files.contextFiles],

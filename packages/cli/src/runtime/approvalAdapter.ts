@@ -11,13 +11,10 @@ import type {
   RetryResult,
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import type {
-  BashPermission,
-  RetryPermission,
-  UserQuestionAnswers,
-} from '@shared/schemas';
+import type { RetryPermission, UserQuestionAnswers } from '@shared/schemas';
 
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
+import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -72,7 +69,7 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   ) => void;
 }
 
-function toToolEditResult(
+export function toToolEditResult(
   decision: ApprovalDecision,
   proposedContent: string,
 ): ToolEditApprovalResult {
@@ -124,14 +121,19 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   return decision;
 }
 
-/** Approve/reject settlement shared by the bash, plan, and proposal ports —
- *  none of them offers the extra actions their result unions allow. */
-function toApprovalSettlement(
+/** Approve/reject settlement shared by the bash, plan, and proposal ports of
+ *  both CLI hosts — none of them offers the extra actions their result unions
+ *  allow, except the TUI's plan `approve_and_goal`, which the TUI overlays on
+ *  the approve branch. A rejection without a user message omits `feedback`
+ *  rather than sending an explicit `undefined`. */
+export function toApprovalSettlement(
   decision: ApprovalDecision,
 ): { action: 'approve' } | { action: 'reject'; feedback?: string } {
-  return decision.accepted
-    ? { action: 'approve' }
-    : { action: 'reject', feedback: decision.userMessage };
+  if (decision.accepted) return { action: 'approve' };
+  return {
+    action: 'reject',
+    ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
+  };
 }
 
 function toRetryResult(
@@ -203,16 +205,9 @@ export function createHeadlessCliHostInteractions(
       return decideToolEdit(request, context, hooks);
     },
     async requestBashApproval(request) {
-      const payload: BashPermission = {
-        requestId: 'headless-bash',
-        command: request.command,
-        ...(request.cwd ? { cwd: request.cwd } : {}),
-        allowBypass: true,
-        streamId: request.streamId ?? '',
-      };
       const decision = await decideApprovalEvent(
         'showBashPermission',
-        payload,
+        prepareBashApprovalPrompt(request),
         context,
         hooks,
       );

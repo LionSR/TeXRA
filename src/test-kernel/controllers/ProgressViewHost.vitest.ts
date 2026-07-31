@@ -4,93 +4,120 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import { describe, it, vi } from 'vitest';
 
+const tryResumeStreamMock = vi.hoisted(() =>
+  vi.fn(async (_streamId: string) => true),
+);
+
+vi.mock('@platform/platform', () => ({
+  platform: () => ({ agentResume: { tryResumeStream: tryResumeStreamMock } }),
+}));
+
 // Local imports
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local file imports
-import { createWorkflowTaskState } from '../support/ProgressControllerHarnesses';
+import {
+  createAgentConfig,
+  createWorkflowTaskState,
+} from '../support/ProgressControllerHarnesses';
+
+interface HostHarness {
+  readonly host: ProgressViewHost;
+  readonly executed: unknown[];
+  readonly openedLabels: string[];
+  readonly infoMessages: string[];
+  readonly settledProposals: unknown[];
+}
+
+function createHostHarness(taskState: TaskState): HostHarness {
+  const executed: unknown[] = [];
+  const openedLabels: string[] = [];
+  const infoMessages: string[] = [];
+  const settledProposals: unknown[] = [];
+
+  const host = new ProgressViewHost({
+    run: {
+      state: {
+        getTaskState: () => taskState,
+        getExecutionId: () => 'exec-1',
+      },
+      executeAgent: async (request) => {
+        executed.push(request);
+      },
+    },
+    workflowFileActions: {
+      state: {
+        getActiveStream: () => 'stream-a',
+        getExecutionId: () => 'exec-1',
+        getOutputFiles: () => ({}),
+        getAgentModel: () => undefined,
+      },
+      host: {
+        compareFiles: vi.fn(),
+        acceptEditedFile: vi.fn(),
+        mergeFile: vi.fn(),
+        latexdiffFile: vi.fn(),
+        openDirectory: vi.fn(),
+        openLabel: async (label) => {
+          openedLabels.push(label);
+          return false;
+        },
+        readFile: async () => '',
+        showInfo: async (message) => {
+          infoMessages.push(message);
+        },
+        showError: vi.fn(),
+      },
+      sendFollowUp: vi.fn(),
+    },
+    agentProposal: {
+      getPendingProposal: () => undefined,
+      restoreTaskState: async () => false,
+      settleProposal: (proposalId, result) => {
+        settledProposals.push({ proposalId, result });
+      },
+    },
+    commands: {
+      lifecycle: {
+        setActiveStream: vi.fn(),
+        setAgentFilter: vi.fn(),
+        deleteStream: vi.fn(),
+        deleteAllStreams: vi.fn(),
+        stopStream: vi.fn(),
+      },
+      followUp: {
+        sendFollowUp: vi.fn(),
+        reportImageSaveError: vi.fn(),
+      },
+      bypass: { showInfo: vi.fn() },
+      file: {
+        openFile: vi.fn(),
+        openFileCompile: vi.fn(),
+      },
+      approval: {
+        approvePendingDelegatedWork: vi.fn(async () => undefined),
+        handleToolEditApprovalAction: vi.fn(),
+        handleBashApprovalAction: vi.fn(),
+        handlePlanApprovalAction: vi.fn(),
+        handleUserQuestionAction: vi.fn(),
+      },
+      externalInquiry: {
+        dismiss: vi.fn(),
+      },
+    },
+  });
+
+  return { host, executed, openedLabels, infoMessages, settledProposals };
+}
 
 describe('ProgressViewHost', () => {
   it('constructs shared controllers and command handlers from host adapters', async () => {
     const taskState: TaskState = createWorkflowTaskState();
-    const executed: unknown[] = [];
-    const openedLabels: string[] = [];
-    const infoMessages: string[] = [];
-    const settledProposals: unknown[] = [];
-
-    const host = new ProgressViewHost({
-      run: {
-        state: {
-          getTaskState: () => taskState,
-          getExecutionId: () => 'exec-1',
-        },
-        executeAgent: async (request) => {
-          executed.push(request);
-        },
-      },
-      workflowFileActions: {
-        state: {
-          getActiveStream: () => 'stream-a',
-          getExecutionId: () => 'exec-1',
-          getOutputFiles: () => ({}),
-          getAgentModel: () => undefined,
-        },
-        host: {
-          compareFiles: vi.fn(),
-          acceptEditedFile: vi.fn(),
-          mergeFile: vi.fn(),
-          latexdiffFile: vi.fn(),
-          openDirectory: vi.fn(),
-          openLabel: async (label) => {
-            openedLabels.push(label);
-            return false;
-          },
-          readFile: async () => '',
-          showInfo: async (message) => {
-            infoMessages.push(message);
-          },
-          showError: vi.fn(),
-        },
-        sendFollowUp: vi.fn(),
-      },
-      agentProposal: {
-        getPendingProposal: () => undefined,
-        restoreTaskState: async () => false,
-        settleProposal: (proposalId, result) => {
-          settledProposals.push({ proposalId, result });
-        },
-      },
-      commands: {
-        lifecycle: {
-          setActiveStream: vi.fn(),
-          setAgentFilter: vi.fn(),
-          deleteStream: vi.fn(),
-          deleteAllStreams: vi.fn(),
-          stopStream: vi.fn(),
-        },
-        followUp: {
-          sendFollowUp: vi.fn(),
-          reportImageSaveError: vi.fn(),
-        },
-        bypass: {},
-        file: {
-          openFile: vi.fn(),
-          openFileCompile: vi.fn(),
-        },
-        approval: {
-          approvePendingDelegatedWork: vi.fn(async () => undefined),
-          handleToolEditApprovalAction: vi.fn(),
-          handleBashApprovalAction: vi.fn(),
-          handlePlanApprovalAction: vi.fn(),
-          handleUserQuestionAction: vi.fn(),
-        },
-        externalInquiry: {
-          dismiss: vi.fn(),
-        },
-      },
-    });
+    const harness = createHostHarness(taskState);
+    const { host } = harness;
 
     await host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
       command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
@@ -110,17 +137,50 @@ describe('ProgressViewHost', () => {
       action: 'approve',
     });
 
-    assert.deepEqual(executed, [
+    assert.deepEqual(harness.executed, [
       { config: taskState.agentConfig },
       { config: taskState.agentConfig, executionId: 'exec-1' },
     ]);
-    assert.deepEqual(openedLabels, ['main-thm']);
-    assert.deepEqual(infoMessages, ['Label "main-thm" not found.']);
-    assert.deepEqual(settledProposals, [
+    assert.equal(tryResumeStreamMock.mock.calls.length, 0);
+    assert.deepEqual(harness.openedLabels, ['main-thm']);
+    assert.deepEqual(harness.infoMessages, ['Label "main-thm" not found.']);
+    assert.deepEqual(harness.settledProposals, [
       {
         proposalId: 'proposal-1',
         result: { action: 'approve' },
       },
     ]);
+  });
+
+  it('resumes a tool-use stream through the host resume port', async () => {
+    tryResumeStreamMock.mockClear();
+    const taskState = {
+      agentConfig: createAgentConfig({ agentCategory: AgentCategory.ToolUse }),
+    } as TaskState;
+    const harness = createHostHarness(taskState);
+
+    await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
+      command: PROGRESS_VIEW_COMMANDS.RESUME,
+      stream: 'stream-a',
+    });
+
+    assert.deepEqual(tryResumeStreamMock.mock.calls, [['stream-a']]);
+    assert.deepEqual(harness.executed, []);
+  });
+
+  it('starts a fresh run for a tool-use stream on Run New', async () => {
+    tryResumeStreamMock.mockClear();
+    const taskState = {
+      agentConfig: createAgentConfig({ agentCategory: AgentCategory.ToolUse }),
+    } as TaskState;
+    const harness = createHostHarness(taskState);
+
+    await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
+      command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
+      stream: 'stream-a',
+    });
+
+    assert.deepEqual(harness.executed, [{ config: taskState.agentConfig }]);
+    assert.equal(tryResumeStreamMock.mock.calls.length, 0);
   });
 });

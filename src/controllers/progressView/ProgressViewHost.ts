@@ -4,6 +4,7 @@ import {
   isWorkflowTaskState,
   type TaskState,
 } from '@agent/core/state/TaskState';
+import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local file imports
@@ -15,7 +16,6 @@ import {
   type ProgressViewFileCommandActions,
   type ProgressViewFollowUpCommandActions,
   type ProgressViewLifecycleCommandActions,
-  type ProgressViewRunCommandActions,
 } from './ProgressViewCommandHandlers';
 import {
   ProgressAgentProposalController,
@@ -38,7 +38,6 @@ type ProgressViewApprovalHostActions = Omit<
 
 interface ProgressViewHostCommandOptions {
   readonly lifecycle: ProgressViewLifecycleCommandActions;
-  readonly resumeStream?: ProgressViewRunCommandActions['resumeStream'];
   readonly followUp: ProgressViewFollowUpCommandActions;
   readonly bypass: ProgressViewBypassCommandOptions;
   readonly file: ProgressViewFileHostActions;
@@ -56,6 +55,12 @@ interface ProgressViewRunDependencies {
   executeAgent(request: ExecutionRequest): Promise<void>;
 }
 
+/**
+ * Resume the run behind a stream. Workflow runs relaunch through the host's
+ * executor with the original execution id; tool-use runs carry canonical
+ * session state, so they go through the host resume port that restores it
+ * instead of starting a fresh run.
+ */
 async function resumeStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
@@ -63,10 +68,12 @@ async function resumeStream(
   const taskState = dependencies.state.getTaskState(stream);
   if (!taskState) return;
 
-  const executionId = isWorkflowTaskState(taskState)
-    ? dependencies.state.getExecutionId(stream)
-    : undefined;
+  if (!isWorkflowTaskState(taskState)) {
+    await platform().agentResume.tryResumeStream(stream);
+    return;
+  }
 
+  const executionId = dependencies.state.getExecutionId(stream);
   await dependencies.executeAgent({
     config: taskState.agentConfig,
     ...(executionId && { executionId }),
@@ -106,9 +113,7 @@ export class ProgressViewHost {
     this.commandHandlers = createProgressViewCommandHandlers({
       lifecycle: options.commands.lifecycle,
       run: {
-        resumeStream:
-          options.commands.resumeStream ??
-          ((stream) => resumeStream(options.run, stream)),
+        resumeStream: (stream) => resumeStream(options.run, stream),
         runNewStream: (stream) => runNewStream(options.run, stream),
       },
       followUp: options.commands.followUp,

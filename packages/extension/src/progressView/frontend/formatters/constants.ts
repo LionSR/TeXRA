@@ -49,7 +49,8 @@ export const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
 // old/new diff, a file link, or a file link + content) lives in
 // `@shared/tools/toolKind` — the single source of truth shared with the CLI chat
 // TUI's `toolRenderers.tsx` (see issue #7120). Use `toolDisplayKind()` from
-// that module instead of adding tool-name lists here.
+// that module instead of adding tool-name lists here. Friendly header labels
+// live next to it in `@shared/tools/toolDisplayName`.
 
 /**
  * Tools whose input AND output are code that benefits from syntax highlighting.
@@ -115,17 +116,6 @@ export const DIFF_MARKER_THRESHOLD = 2;
 
 // Tool output patterns for filtering trivial responses
 export const TRIVIAL_WRITE_OUTPUT = 'written';
-
-/**
- * Friendly display labels for tool names that shouldn't be shown verbatim.
- */
-export const TOOL_LABEL_MAP: Record<string, string> = {
-  delegate_workflow_script: 'Workflow script',
-  codex_patch: 'Codex Files',
-  codex_thread: 'Codex Thread',
-  codex_todo: 'Codex Plan',
-  codex_turn: 'Codex Turn',
-};
 
 /**
  * Tool icon mapping for different tool types.

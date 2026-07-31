@@ -1,6 +1,7 @@
+import * as path from 'node:path';
+
 import * as vscode from 'vscode';
 
-import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -13,31 +14,29 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
-import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import { streamMatchesCategoryFilter } from '@controllers/progressView/backend/streamInfoUtils';
+import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 
 import { appSignals } from '@eventBus/AppSignals';
+import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
-import {
-  buildVisibleBasicModelOptionsData,
-  computeModelOptionsData,
-} from '@model/computeModelOptions';
-import {
-  AgentCategory,
-  type AgentProposalPermission,
-  type ProgressViewOutboundMessage,
-  type ProgressViewPlacement,
-  type StreamTabId,
+import type {
+  AgentProposalPermission,
+  ProgressViewOutboundMessage,
+  ProgressViewPlacement,
+  StreamTabId,
 } from '@shared/schemas';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { agentName } from '@shared/schemas/agent';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
 import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
@@ -59,6 +58,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private static _instance: ProgressViewProvider | undefined;
 
   public readonly backend: ProgressBackend;
+  public readonly toolEditApprovals: ToolEditApprovalController;
   public readonly state: ProgressBackend['state'];
   public readonly webviewBridge: ProgressBackend['webviewBridge'];
   public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
@@ -83,7 +83,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 
+    const runtimeSession = defaultSession();
     this.backend = new ProgressBackend({
+      session: runtimeSession,
       storage: workspaceSM,
       sendMessage: (message) => this.sendToActiveProgressWebview(message),
       hasTarget: () => this.getActiveWebview() !== undefined,
@@ -103,21 +105,12 @@ export class ProgressViewProvider extends BaseWebviewProvider {
             dismiss: (id) =>
               this.webviewUpdater.resolvePermission(PERMISSION_KIND.RETRY, id),
           },
-          agentProposal: {
-            show: (p) => {
-              this.webviewUpdater.showPermission({
-                kind: PERMISSION_KIND.PROPOSAL,
-                data: p,
-                modelOptionsData: buildVisibleBasicModelOptionsData(),
-              });
-              void this.sendProposalModelOptions(p);
-            },
-            dismiss: (id) =>
-              this.webviewUpdater.resolvePermission(
-                PERMISSION_KIND.PROPOSAL,
-                id,
-              ),
-          },
+          proposal: createAgentProposalTransport({
+            getWebviewUpdater: () => this.backend.webviewUpdater,
+            isPending: (proposalId) =>
+              this.backend.approvalHandlers.proposal.get(proposalId) !==
+              undefined,
+          }),
         },
       },
       lifecycle: {
@@ -127,7 +120,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
           this.messageHandler.cleanupDeletedStream(stream),
         cleanupDeletedStreams: (options) =>
           this.messageHandler.cleanupDeletedStreams(options),
-        rebuildRenderedStreams: () => this.syncFullView(),
+        rebuildRenderedStreams: (options) => this.syncRenderedStreams(options),
         activateStream: (stream) => this.setActiveStream(stream),
         notifyDeletionRetained: async (activeCount, failedCount) => {
           await vscode.window.showInformationMessage(
@@ -151,10 +144,25 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         styleKey: 'progressStyleUri',
       },
     );
+    const presentationHost = createAgentPresentationHost(this);
+    const storageRoot = context.storageUri ?? context.globalStorageUri;
+    this.toolEditApprovals = new ToolEditApprovalController({
+      interactions: presentationHost,
+      session: runtimeSession,
+      host: new VscodeToolEditApprovalHost(
+        path.join(storageRoot.fsPath, 'tool-edit-previews'),
+      ),
+      showToolEditPermission: (payload) =>
+        this.backend.approvalHandlers.toolEdit.show(payload),
+      resolveToolEditPermission: (requestId) =>
+        this.backend.approvalHandlers.toolEdit.dismiss(requestId),
+      detachCause: SESSION_DISPOSED_CAUSE,
+    });
     const interactions = createExtensionHostInteractions({
-      interactions: createAgentPresentationHost(this),
-      session: defaultSession(),
+      interactions: presentationHost,
+      session: runtimeSession,
       getApprovalHandlers: () => this.backend.approvalHandlers,
+      getToolEditApprovals: () => this.toolEditApprovals,
       setApprovalBypassState: this.backend.setApprovalBypassState,
     });
     this.messageHandler = new ProgressViewMessageHandler(
@@ -164,19 +172,20 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     );
     const progressBackendSubscription = this.backend.setupEventListeners();
     this.detachHostInteractions =
-      defaultSession().useHostInteractions(interactions);
+      runtimeSession.useHostInteractions(interactions);
     // Terminal-error toasts come from the run's `result` event (the lifecycle
     // no longer emits them directly). This re-emits `requestShow*` through
     // the session's interactions, reaching the presentation dispatch above
     // exactly once, whichever host is currently attached.
     const detachTerminalResultToast = attachTerminalResultToast(
-      defaultSession(),
-      defaultSession().interactions,
+      runtimeSession,
+      runtimeSession.interactions,
       { replayWhenAttached: true },
     );
     this._disposables.push(
       progressBackendSubscription,
       { dispose: this.detachHostInteractions },
+      { dispose: () => this.toolEditApprovals.dispose() },
       { dispose: detachTerminalResultToast },
     );
 
@@ -247,49 +256,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this._sidebarReady = false;
   }
 
-  /**
-   * Load model options and re-send the proposal with the dropdown data.
-   * Sent as a second SHOW message — the frontend upserts it over the initial
-   * (model-option-less) permission.
-   *
-   * Guards against the RESOLVE-between-two-SHOWs race: if the user
-   * approves/rejects while model options are loading, the proposal is
-   * removed from the agent-proposal handler. We check before sending so the
-   * late SHOW doesn't re-create an undismissable ghost proposal.
-   *
-   * Uses a 30-second TTL cache to avoid redundant async work when
-   * multiple proposals arrive in quick succession.
-   */
-  private async sendProposalModelOptions(
-    proposal: AgentProposalPermission,
-  ): Promise<void> {
-    // Model options have a visible-model fallback that does not require
-    // ServerSideKeyService, so the dropdown still appears if availability
-    // loading fails. Agent options have no static equivalent, so the agent
-    // dropdown is omitted when the registry fetch fails.
-    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
-    const loadAgentOptions = async () => {
-      const all = await computeAgentOptionsData();
-      const raw = isWorkflow ? all.workflow : all.toolUse;
-      // proposal.agent is a plain name, so keep identity separate from label.
-      return raw.map((opt) => ({ ...opt, value: agentName(opt.value) }));
-    };
-    const [modelOptions, agentOptions] = await Promise.all([
-      computeModelOptionsData(undefined, undefined, {
-        agentCategory: proposal.agentCategory,
-      }).catch(() => buildVisibleBasicModelOptionsData()),
-      loadAgentOptions().catch(() => undefined),
-    ]);
-    if (!this.backend.approvalHandlers.agentProposal.get(proposal.proposalId))
-      return;
-    this.webviewUpdater.showPermission({
-      kind: PERMISSION_KIND.PROPOSAL,
-      data: proposal,
-      modelOptionsData: modelOptions,
-      agentOptionsData: agentOptions,
-    });
-  }
-
   public static getInstance(): ProgressViewProvider | undefined {
     return this._instance;
   }
@@ -304,6 +270,19 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   public syncFullView(): void {
+    this.syncRenderedStreams({ syncActiveStream: true });
+  }
+
+  /**
+   * Resend stream metadata, and the active stream's content when asked for.
+   * A metadata-only refresh is what the backend requests after a deletion that
+   * left the active stream untouched.
+   */
+  private syncRenderedStreams({
+    syncActiveStream,
+  }: {
+    syncActiveStream: boolean;
+  }): void {
     if (!this.getActiveWebview()) return;
 
     if (!this.isActivePlacementReady()) return;
@@ -320,6 +299,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       this.backend.factApplier.getAllStreamStates(),
       theme,
     );
+    if (!syncActiveStream) return;
 
     // Skip content sync when streams exist but filter excludes all of them
     const hasStreams = this.state.streamLogs.keys().length > 0;
@@ -378,7 +358,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public getPendingAgentProposal(
     proposalId: string,
   ): AgentProposalPermission | undefined {
-    return this.backend.approvalHandlers.agentProposal.get(proposalId);
+    return this.backend.approvalHandlers.proposal.get(proposalId);
   }
 
   private canSendToWebview(): boolean {
@@ -436,8 +416,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     // otherwise SET_ACTIVE_STREAM can target a stream hidden by the current
     // category filter and appear to do nothing.
     if (
-      buildStreamInfo(this.state, streamId, this.state.agentCategoryFilter) ===
-      null
+      !streamMatchesCategoryFilter(
+        this.state,
+        streamId,
+        this.state.agentCategoryFilter,
+      )
     ) {
       this.state.agentCategoryFilter = 'all';
       this.syncFullView();
@@ -546,10 +529,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public async popBackToSidebar(): Promise<void> {
     this.disposePanelResources(true);
     await this.showInSidebar();
-  }
-
-  public async flushState(): Promise<void> {
-    await this.state.flush();
   }
 
   public override dispose(): void {

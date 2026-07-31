@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
+import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
@@ -13,17 +14,8 @@ import { createTestSession as createIsolatedTestSession } from '@test/support/se
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 
 const mocks = vi.hoisted(() => ({
-  approveNativeToolEditApprovals: vi.fn(async () => undefined),
-  cancelNativeToolEditApprovals: vi.fn(),
-  nativeRequestApproval: vi.fn(),
   getLinterMessages: vi.fn(async () => []),
   pushManualCriticism: vi.fn(() => true),
-}));
-
-vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
-  approveNativeToolEditApprovals: mocks.approveNativeToolEditApprovals,
-  cancelNativeToolEditApprovals: mocks.cancelNativeToolEditApprovals,
-  nativeRequestApproval: mocks.nativeRequestApproval,
 }));
 
 vi.mock('@frontend/latex/linter', () => ({
@@ -36,6 +28,15 @@ vi.mock('@frontend/latex/inlineCriticism', () => ({
 
 function createRuntimeHost() {
   return { emit: vi.fn() };
+}
+
+/** Stands in for the session's tool-edit approval controller. */
+function createToolEditApprovals() {
+  return {
+    approvePendingForStream: vi.fn(async (): Promise<void> => {}),
+    cancel: vi.fn(),
+    requestApproval: vi.fn(),
+  };
 }
 
 const testSessions: SessionHandle[] = [];
@@ -70,12 +71,18 @@ function createInteractions(options: {
   session: SessionHandle;
 }) {
   const handlers = createRecordingApprovalHandlers();
+  const toolEditApprovals = createToolEditApprovals();
   return {
     handlers,
+    toolEditApprovals,
     interactions: createExtensionHostInteractions({
       interactions: options.presentationSink ?? createRuntimeHost(),
       session: options.session,
       getApprovalHandlers: () => handlers,
+      getToolEditApprovals: () =>
+        toolEditApprovals as unknown as ReturnType<
+          ProgressHostInteractionsOptions['getToolEditApprovals']
+        >,
       setApprovalBypassState: options.setApprovalBypassState ?? vi.fn(),
     }),
   };
@@ -194,7 +201,9 @@ describe('createExtensionHostInteractions', () => {
 
   it('approves already-pending delegated work only in the selected stream', async () => {
     const session = createTestSession();
-    const { handlers, interactions } = createInteractions({ session });
+    const { handlers, interactions, toolEditApprovals } = createInteractions({
+      session,
+    });
 
     const initiatingProposal = interactions.requestAgentProposal?.({
       proposalId: 'proposal-current',
@@ -235,11 +244,10 @@ describe('createExtensionHostInteractions', () => {
     ).resolves.toBeUndefined();
     await expect(parallelProposal).resolves.toEqual({ action: 'approve' });
     await expect(parallelBash).resolves.toEqual({ action: 'approve' });
-    expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
+    expect(handlers.transport.proposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
     );
-    expect(mocks.approveNativeToolEditApprovals).toHaveBeenCalledWith(
-      session,
+    expect(toolEditApprovals.approvePendingForStream).toHaveBeenCalledWith(
       'stream-a',
     );
 
@@ -450,9 +458,9 @@ describe('createExtensionHostInteractions', () => {
     expect(handlers.transport.retry.dismiss).toHaveBeenCalledWith('stream-a');
   });
 
-  it('routes tool-edit cancellation through the native approval owner', () => {
+  it('routes tool-edit cancellation through the session approval controller', () => {
     const session = createTestSession();
-    const { interactions } = createInteractions({ session });
+    const { interactions, toolEditApprovals } = createInteractions({ session });
     const selector = {
       kind: 'toolEdit' as const,
       streamId: 'stream-a' as StreamTabId,
@@ -461,10 +469,7 @@ describe('createExtensionHostInteractions', () => {
 
     interactions.cancel(selector);
 
-    expect(mocks.cancelNativeToolEditApprovals).toHaveBeenCalledWith(
-      session,
-      selector,
-    );
+    expect(toolEditApprovals.cancel).toHaveBeenCalledWith(selector);
   });
 
   it('forwards a cancellation cause as bash reject feedback', async () => {
@@ -657,11 +662,11 @@ describe('createExtensionHostInteractions', () => {
     );
   });
 
-  it('delegates tool edit approval to the native VS Code port', async () => {
-    const nativeResult = { accepted: true };
-    mocks.nativeRequestApproval.mockResolvedValue(nativeResult);
+  it('delegates tool edit approval to the session approval controller', async () => {
+    const approvalResult = { accepted: true };
     const session = createTestSession();
-    const { interactions } = createInteractions({ session });
+    const { interactions, toolEditApprovals } = createInteractions({ session });
+    toolEditApprovals.requestApproval.mockResolvedValue(approvalResult);
     const request = {
       path: 'paper.tex',
       originalContent: 'A',
@@ -671,10 +676,11 @@ describe('createExtensionHostInteractions', () => {
     };
 
     await expect(interactions.requestToolEditApproval?.(request)).resolves.toBe(
-      nativeResult,
+      approvalResult,
     );
-    expect(mocks.nativeRequestApproval).toHaveBeenCalledWith(request, {
-      session,
-    });
+    expect(toolEditApprovals.requestApproval).toHaveBeenCalledWith(
+      request,
+      undefined,
+    );
   });
 });

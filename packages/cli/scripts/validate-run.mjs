@@ -836,12 +836,12 @@ function validateRunCommand() {
       'text run output should print the filesystem copy path when --output is used',
     );
     assert(
-      text.stderr.includes(' · done ·'),
-      `text run progress should end with a neutral done label\nstderr:\n${text.stderr}`,
+      text.stderr.includes(' · completed ·'),
+      `text run progress should end with the shared completed label\nstderr:\n${text.stderr}`,
     );
     assert(
       !text.stderr.includes(' · stopped ·'),
-      `text run progress should not leak the internal stopped stream status\nstderr:\n${text.stderr}`,
+      `a successful text run should not report the cancelled stopped label\nstderr:\n${text.stderr}`,
     );
 
     const json = run(

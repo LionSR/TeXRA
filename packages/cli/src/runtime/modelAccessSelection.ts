@@ -1,4 +1,5 @@
 import { getCodexStatus } from '@auth/codex';
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { apiKeyExists } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
@@ -7,21 +8,17 @@ import {
 } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   getPreferKimiCode,
   setPreferKimiCode,
 } from '@utils/config/providerConfig';
 
-import {
-  chatGptAccountLabel,
-  shouldUseChatGptDeviceCode,
-  signInCliChatGpt,
-} from './chatgptLogin';
+import { shouldUseChatGptDeviceCode, signInCliChatGpt } from './chatgptLogin';
 import {
   effectiveCliApiMode,
   getCliApiMode,
   setCliApiMode,
-  type CliApiMode,
 } from './apiAccessMode';
 import {
   formatCliModelAccessRoute,
@@ -32,20 +29,20 @@ import type { CliContext } from './cliContext';
 
 export interface CliModelAccessSelectionResult {
   /** API fallback retained beneath subscription-based access. */
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly message: string;
 }
 
 /** Apply a launcher access choice to the context used by the selected session. */
 export function contextForCliModelAccess(
   context: CliContext,
-  apiMode: CliApiMode | undefined,
+  apiMode: ApiAccessMode | undefined,
 ): CliContext {
   return apiMode ? { ...context, apiMode } : context;
 }
 
 export async function readCliModelAccessStatus(
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): Promise<CliModelAccessStatus> {
   const [chatGpt, kimiCodeKeySet] = await Promise.all([
     getCodexStatus(),
@@ -64,7 +61,7 @@ export async function readCliModelAccessStatus(
   };
 }
 
-function selectedApiFallback(context: CliContext | undefined): CliApiMode {
+function selectedApiFallback(context: CliContext | undefined): ApiAccessMode {
   return context ? effectiveCliApiMode(context) : getCliApiMode();
 }
 
@@ -78,10 +75,13 @@ export async function updateCliModelAccess(
   } = { writeProgress: () => undefined },
 ): Promise<CliModelAccessSelectionResult> {
   if (selection.kind === 'api-fallback') {
-    await setCliApiMode(selection.apiMode);
+    const update = await setCliApiMode(selection.apiMode);
+    const openRouterNotice = update.openRouterDisabled
+      ? ' OpenRouter has been turned off (not compatible with Included Access).'
+      : '';
     return {
       apiMode: selection.apiMode,
-      message: `API fallback: ${formatCliModelAccessRoute(selection.apiMode)}.`,
+      message: `API fallback: ${formatCliModelAccessRoute(selection.apiMode)}.${openRouterNotice}`,
     };
   }
 
@@ -127,7 +127,7 @@ export async function updateCliModelAccess(
   }
 
   const status = await getCodexStatus();
-  let accountLabel = status.email ?? status.accountId ?? 'your account';
+  let accountLabel = codexAccountLabel(status);
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
     const session = await signInCliChatGpt(
@@ -138,7 +138,7 @@ export async function updateCliModelAccess(
       },
       options,
     );
-    accountLabel = chatGptAccountLabel(session);
+    accountLabel = codexAccountLabel(session);
   }
 
   const update = await setPreferCodexSubscription(true);

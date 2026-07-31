@@ -23,6 +23,7 @@ function makeSlice(
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    latestLine: undefined,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,

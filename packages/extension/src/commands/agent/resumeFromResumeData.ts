@@ -4,7 +4,8 @@
  * Used by:
  *   - `texra.sendFollowUp` (auto-resume when a follow-up lands on a
  *     WAITING / children_running stream).
- *   - `AgentResumePort.tryResumeStream` (inquiry continuation path).
+ *   - `AgentResumePort.tryResumeStream` (the progress view's Resume button on
+ *     tool-use streams, and the inquiry continuation path).
  *
  * This is a thin adapter: the host-neutral {@link resolveAndResumeStream}
  * orchestrator owns the guard, retrieval, and tool-use/workflow branch; the
@@ -39,6 +40,9 @@ export function tryResumeFromResumeData(
       // (outside any run ALS), so its status plane is the same one every other
       // unmigrated default-session caller reads through `defaultSession()`.
       streamStatus: session.status,
+      // A stream deleted while asynchronous resume preparation runs must not be
+      // resurrected by the resume that was already in flight.
+      isCancellationRequested: () => !session.transcripts.has(streamId),
       resolveResumeState: async (id) => {
         const progressState = ProgressViewProvider.getInstance()?.state;
         if (!progressState) {
@@ -69,6 +73,13 @@ export function tryResumeFromResumeData(
           executionId,
           modelHandlerCompatibilityKey,
         }),
+      reportNoResumableSession: async (id) => {
+        logger.warn(`No resumable session state for stream: ${id}`);
+        await session.interactions.showInfoMessage(
+          'This run has no resumable session state. Start a new run instead.',
+          { replayWhenAttached: true },
+        );
+      },
       reportFailure: (id, error) => {
         logger.error(`Failed to resume stream: ${id}`, { data: error });
       },

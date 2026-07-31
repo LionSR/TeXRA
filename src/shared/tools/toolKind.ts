@@ -11,6 +11,8 @@
  * so a renamed or removed registered tool is caught without introducing a
  * shared-to-tools dependency.
  */
+import { normalizeToolName } from './toolDisplayName';
+
 export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash';
 
 /**
@@ -43,12 +45,15 @@ export type CanonicalToolDisplayName = Exclude<
   'str_replace_based_edit_tool'
 >;
 
-/** Look up a tool's display kind by its exact canonical or native name.
- *  Returns `undefined` for tools that use the generic display treatment.
- *  Guarded with `Object.hasOwn` so an arbitrary tool name (e.g. `toString`,
- *  `__proto__`) cannot resolve to an inherited `Object.prototype` member. */
+/** Look up a tool's display kind. The name is normalized first, so a
+ *  provider-namespaced name from a delegated sub-agent (`claude:Bash`) or an
+ *  MCP-wrapped one (`mcp:terminal/bash`) gets the same treatment as the
+ *  canonical name it wraps. Returns `undefined` for tools that use the
+ *  generic display treatment. Guarded with `Object.hasOwn` so an arbitrary
+ *  tool name (e.g. `toString`, `__proto__`) cannot resolve to an inherited
+ *  `Object.prototype` member. */
 export function toolDisplayKind(toolName: string): ToolDisplayKind | undefined {
-  const key = toolName as keyof typeof TOOL_DISPLAY_KIND;
+  const key = normalizeToolName(toolName) as keyof typeof TOOL_DISPLAY_KIND;
   return Object.hasOwn(TOOL_DISPLAY_KIND, key)
     ? TOOL_DISPLAY_KIND[key]
     : undefined;

@@ -418,9 +418,25 @@ export class SessionStores {
     return { active, failed };
   }
 
+  /**
+   * Delete persisted sidecars and execution directories no live transcript
+   * stream refers to.
+   *
+   * The live set is only authoritative when the transcript index itself is
+   * persistent. A host running on an ephemeral store after a failed transcript
+   * open sees an empty index, so sweeping would read that as "every persisted
+   * stream is orphaned" and erase state a later healthy launch would restore.
+   */
   async sweepOrphanedStreams(
     liveStreams: ReadonlySet<StreamTabId>,
   ): Promise<{ streams: StreamTabId[]; executionIds: ExecutionId[] }> {
+    if (this.streamLogs.mode.kind !== 'persistent') {
+      logger.warn(
+        CHANNEL,
+        `Skipped the orphaned-stream sweep: the transcript index is ${this.streamLogs.mode.kind} and cannot say which persisted streams are still live.`,
+      );
+      return { streams: [], executionIds: [] };
+    }
     await this.reconcileStagedDeletions(liveStreams);
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),

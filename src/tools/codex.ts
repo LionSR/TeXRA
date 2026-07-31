@@ -555,6 +555,7 @@ export class CodexTool extends defineTool({
     }
 
     return withAgentCliApproval(
+      'codex',
       `[codex ${input.sandbox_mode}] ${input.prompt}`,
       (runContext) => {
         return resumeOrLaunchAgentCliSession(CodexThreads, {

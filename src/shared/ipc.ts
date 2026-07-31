@@ -362,7 +362,6 @@ export const SETTINGS_VIEW_CMD = {
   SIGN_IN_CHATGPT: 'signInChatGpt',
   SIGN_OUT_CHATGPT: 'signOutChatGpt',
   SET_CHATGPT_PREFER_SUBSCRIPTION: 'setChatGptPreferSubscription',
-  SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY: 'setChatGptSubscriptionToolUseOnly',
   GET_DESKTOP_CRASH_REPORTING: 'getDesktopCrashReporting',
   UPDATE_DESKTOP_CRASH_REPORTING: 'updateDesktopCrashReporting',
   SET_DESKTOP_CRASH_REPORTING_ENABLED: 'setDesktopCrashReportingEnabled',

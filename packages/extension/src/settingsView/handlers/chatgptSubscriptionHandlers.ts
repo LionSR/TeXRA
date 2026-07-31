@@ -11,10 +11,7 @@ import * as vscode from 'vscode';
 import { codexCoordinator } from '@auth/codex';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
-import {
-  setCodexSubscriptionToolUseOnly,
-  setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
+import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 
 import {
@@ -59,42 +56,24 @@ export class ChatGptSubscriptionHandlers {
     );
   }
 
-  async handleSetPreferSubscription(enabled: boolean): Promise<void> {
-    await this.applySubscriptionSetting({
-      enabled,
-      apply: setPreferCodexSubscription,
-      warning: (effective) =>
-        `A more specific setting still keeps ChatGPT subscription ${effective ? 'enabled' : 'disabled'}.`,
-      errorMessage: 'Could not update the ChatGPT subscription preference',
-    });
-  }
-
-  async handleSetSubscriptionToolUseOnly(enabled: boolean): Promise<void> {
-    await this.applySubscriptionSetting({
-      enabled,
-      apply: setCodexSubscriptionToolUseOnly,
-      warning: (effective) =>
-        `The effective "subscription for tool-use only" setting remains ${effective ? 'enabled' : 'disabled'}.`,
-      errorMessage: 'Could not update the ChatGPT subscription scope',
-    });
-  }
-
   /**
-   * Apply a subscription toggle, warn when a more specific setting overrides the
-   * requested value, log failures, and always refresh the settings view.
+   * Apply the subscription preference, warn when a more specific setting
+   * overrides the requested value, log failures, and always refresh the
+   * settings view.
    */
-  private async applySubscriptionSetting(opts: {
-    enabled: boolean;
-    apply: (enabled: boolean) => Promise<{ effective: boolean }>;
-    warning: (effective: boolean) => string;
-    errorMessage: string;
-  }): Promise<void> {
-    await withHandlerErrorHandling(this.ctx, opts.errorMessage, async () => {
-      const update = await opts.apply(opts.enabled);
-      if (update.effective !== opts.enabled) {
-        void vscode.window.showWarningMessage(opts.warning(update.effective));
-      }
-    });
+  async handleSetPreferSubscription(enabled: boolean): Promise<void> {
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Could not update the ChatGPT subscription preference',
+      async () => {
+        const update = await setPreferCodexSubscription(enabled);
+        if (update.effective !== enabled) {
+          void vscode.window.showWarningMessage(
+            `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+          );
+        }
+      },
+    );
     await this.refreshChatGptState();
   }
 }

@@ -689,9 +689,10 @@ export function resolveDelegationScopeAgents(
  * candidate by name.
  *
  * This is the single identity-matching rule. Every resolver that picks an entry
- * out of a list by name-or-key — the category-scoped resolvers here, plus
- * out-of-registry callers like the CLI multi-agent preset planner — goes through
- * it so the rule lives in exactly one place.
+ * out of a list by name-or-key goes through it — including the exact-match and
+ * legacy-alias halves of {@link resolveWithinCategory}, which is the seam
+ * out-of-registry callers (delegation scopes, visibility checks) resolve
+ * through — so the rule lives in exactly one place.
  */
 export function findAgentByIdentifier(
   entries: readonly AgentEntry[],
@@ -702,11 +703,11 @@ export function findAgentByIdentifier(
 
 /**
  * Resolve an identifier within a category-scoped candidate set: exact identity
- * match first, then the alias-aware canonical resolver mapped back into the set
- * by name. Callers supply the scope (visible-only or the full category); the
- * matching rule is identical regardless of scope.
+ * match first, then the alias-aware canonical resolver mapped back into the
+ * set. Callers supply the scope (visible-only, the full category, or a run's
+ * delegation roster); the matching rule is identical regardless of scope.
  */
-function resolveWithinCategory(
+export function resolveWithinCategory(
   entries: readonly AgentEntry[],
   category: AgentCategory,
   identifier: string,
@@ -715,11 +716,16 @@ function resolveWithinCategory(
   if (exact) return exact;
 
   // Legacy-alias fallback (e.g. `chat` → `assistant`). getAgent is category-
-  // blind, so map its result back into the category scope by name; an entry
-  // from another category is correctly rejected here.
+  // blind, so map its result back into the category scope; an entry from
+  // another category is correctly rejected here. The mapping goes back through
+  // findAgentByIdentifier so a source-qualified identifier still matches only
+  // the alias target's exact key, never a different entry sharing its name.
   const entry = getAgent(identifier, category);
   if (!entry) return undefined;
-  return entries.find((candidate) => candidate.name === entry.name);
+  return findAgentByIdentifier(
+    entries,
+    identifier === agentName(identifier) ? entry.name : agentKeyOf(entry),
+  );
 }
 
 /**
