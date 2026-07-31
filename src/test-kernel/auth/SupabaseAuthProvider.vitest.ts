@@ -240,9 +240,9 @@ describe('SupabaseAuthProvider model availability', () => {
     // reaches it without a live OAuth round trip.
     await (
       provider as unknown as {
-        storeSession(session: SupabaseSession, notify: boolean): Promise<void>;
+        storeSession(session: SupabaseSession): Promise<void>;
       }
-    ).storeSession(session, true);
+    ).storeSession(session);
 
     expect(providerMocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
     expect(
