@@ -217,7 +217,6 @@ export class ModelHandlerValidation extends ModelHandler<
   protected appendUserText(
     messages: ChatCompletionMessageParam[],
     text: string,
-    _placement: 'last-user' | 'continuation',
   ): void {
     messages.push({ role: 'user', content: text });
   }

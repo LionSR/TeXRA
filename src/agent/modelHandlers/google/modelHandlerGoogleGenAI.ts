@@ -622,17 +622,7 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     );
   }
 
-  protected appendUserText(
-    messages: Content[],
-    text: string,
-    placement: 'last-user' | 'continuation',
-  ): void {
-    const lastMessage = messages.at(-1);
-    if (placement === 'last-user' && lastMessage?.role === 'user') {
-      (lastMessage.parts ??= []).push(createPartFromText(text));
-      return;
-    }
-
+  protected appendUserText(messages: Content[], text: string): void {
     messages.push(createUserContent(createPartFromText(text)));
   }
 
