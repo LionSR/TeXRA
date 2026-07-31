@@ -3,7 +3,7 @@
 // message it chooses the root model; once a tool-use chat is waiting, it can
 // switch the live conversation to a compatible model for future turns.
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 
 import {
   emptyModelListMessageForCliMode,
@@ -28,7 +28,6 @@ import {
   PickerKeyHints,
 } from './_shared/FormFrame';
 import { useAsyncPickerForm } from './_shared/ListForm';
-import { isPlainReturnInput } from '../input/inputKeys';
 
 const TUI_MODEL_EMPTY_RECOVERY = {
   includedModeAction: 'switch with /api included',
@@ -72,12 +71,7 @@ export function modelListDescription({
 function EmptyModelListState(props: {
   readonly models: readonly CliModelAccess[];
   readonly apiMode: ApiAccessMode;
-  readonly onClose: () => void;
 }): React.JSX.Element {
-  useInput((input, key) => {
-    if (isPlainReturnInput(input, key)) props.onClose();
-  });
-
   return (
     <Text>
       {emptyModelListMessageForCliMode(
@@ -99,6 +93,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
         agentCategory: props.agentCategory,
       }),
     isEmpty: (models) => !models.some((model) => model.available),
+    closeEmptyOnEnter: true,
     items: (models) =>
       modelSelectItemsForCliMode(
         models,
@@ -149,11 +144,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     >
       <Text dimColor>{description}</Text>
       {items.length === 0 ? (
-        <EmptyModelListState
-          models={models}
-          apiMode={props.apiMode}
-          onClose={props.onClose}
-        />
+        <EmptyModelListState models={models} apiMode={props.apiMode} />
       ) : (
         <Box flexDirection="column">
           <Select
