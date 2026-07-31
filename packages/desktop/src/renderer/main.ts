@@ -856,8 +856,16 @@ function environmentSyncTemplate(
   }
   return html`
     <span class="task-environment-trailing">
-      ${summary.ahead > 0 ? `↑${summary.ahead}` : nothing}
-      ${summary.behind > 0 ? `↓${summary.behind}` : nothing}
+      ${
+        summary.ahead > 0
+          ? html`${waIcon('arrow-up')}${summary.ahead}`
+          : nothing
+      }
+      ${
+        summary.behind > 0
+          ? html`${waIcon('arrow-down')}${summary.behind}`
+          : nothing
+      }
     </span>
   `;
 }
