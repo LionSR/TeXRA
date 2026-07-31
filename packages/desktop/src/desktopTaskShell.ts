@@ -483,5 +483,6 @@ export function workspaceInitials(workspacePath: string | undefined): string {
 
 export function workspaceName(workspacePath: string | undefined): string {
   if (!workspacePath) return 'No project open';
-  return getBasename(workspacePath);
+  // A slash-only root has no basename, so show the path rather than nothing.
+  return getBasename(workspacePath) || workspacePath;
 }
