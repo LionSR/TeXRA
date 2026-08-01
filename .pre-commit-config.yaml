@@ -3,10 +3,10 @@ repos:
     hooks:
       - id: npm-format
         name: prettier --write staged files
-        # Pre-commit supplies only staged paths and temporarily hides unstaged
-        # changes. Re-stage the formatter's output so this commit includes
-        # the corrected staged snapshot.
-        entry: bash -c 'corepack pnpm exec prettier --write --ignore-unknown --no-error-on-unmatched-pattern "$@" && git add -- "$@"' --
+        # During commits, pre-commit supplies staged paths and temporarily hides
+        # unstaged changes. It detects rewrites, aborts, and lets the contributor
+        # review and stage the formatter's output before retrying.
+        entry: corepack pnpm exec prettier --write --ignore-unknown --no-error-on-unmatched-pattern
         language: system
       # Forbid a stray internal doc at the docs root from being published to
       # texra.ai. The boundary lives in docs/.vitepress/publicDocs.js; this
