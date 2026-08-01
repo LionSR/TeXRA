@@ -29,7 +29,24 @@ export const RestoreRunConfigInputSchema = z.preprocess(
     typeof input === 'object' && input !== null && 'agentConfig' in input
       ? input.agentConfig
       : input,
-  AgentConfigSchema,
+  z
+    .unknown()
+    .refine((input) => {
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        return false;
+      }
+      const identities = [
+        'agent' in input ? input.agent : undefined,
+        'model' in input ? input.model : undefined,
+      ].filter((value) => value !== undefined);
+      return (
+        identities.length > 0 &&
+        identities.every(
+          (value) => typeof value === 'string' && value.trim().length > 0,
+        )
+      );
+    }, 'A restored run configuration must identify a non-empty agent or model.')
+    .pipe(AgentConfigSchema),
 );
 
 /** Convert a run config into a full main view state snapshot. */
