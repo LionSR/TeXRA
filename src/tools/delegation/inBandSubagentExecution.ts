@@ -30,6 +30,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
@@ -438,12 +439,10 @@ async function executeInBand(
   const workingDirectory = config.workingDirectory ?? undefined;
 
   try {
-    await registerExecution(
-      executionId,
-      config,
-      options.agentName,
-      options.parentExecutionId,
-    );
+    await registerExecution(executionId, config, options.agentName, {
+      streamId: getStreamTabId(config.agent, config.model, { executionId }),
+      parentExecutionId: options.parentExecutionId,
+    });
   } catch (cause) {
     if (mode === 'required-result') {
       throw new SubagentDurabilityError(

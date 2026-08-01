@@ -14,6 +14,7 @@ import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
+import { getStreamTabId } from './streamTab';
 import { defaultSession } from './SessionHandle';
 import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import { ResumeAdmissionCancelledError } from './resumeAdmission';
@@ -98,13 +99,10 @@ export async function runAgent(
     : request.config;
 
   if (shouldRegister) {
-    await registerExecution(
-      executionId,
-      config,
-      config.agent,
-      undefined,
-      config.agentCategory,
-    );
+    await registerExecution(executionId, config, config.agent, {
+      streamId: getStreamTabId(config.agent, config.model, { executionId }),
+      category: config.agentCategory,
+    });
   } else {
     const lease = await acquireResumedExecutionLease(
       executionId,

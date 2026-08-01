@@ -79,13 +79,21 @@ export interface ChildStream {
   finalize: (options?: FinalizeChildStreamOptions) => Promise<void>;
 }
 
+/** Derive the durable stream identity shared by registration and creation. */
+export function getChildStreamId(
+  executionId: ExecutionId,
+  streamPrefix: string,
+): StreamTabId {
+  return `${streamPrefix}#${executionId}` as StreamTabId;
+}
+
 /** Create a child stream tab and execution handle for a background child task. */
 export function createChildStream(
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
 ): ChildStream {
-  const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
+  const childStreamId = getChildStreamId(executionId, options.streamPrefix);
 
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
@@ -237,7 +245,7 @@ export async function createRehydratedChildStream(
   options: CreateChildStreamOptions,
 ): Promise<ChildStream> {
   const session = currentSession();
-  const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
+  const childStreamId = getChildStreamId(executionId, options.streamPrefix);
   const writer = await session.transcripts.loadAndAcquireWriter(
     childStreamId,
     executionId,

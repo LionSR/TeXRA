@@ -53,7 +53,7 @@ import { appendHead, appendTail } from '@utils/strings/appendTail';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { createChildStream } from './childStream';
+import { createChildStream, getChildStreamId } from './childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
@@ -68,6 +68,7 @@ const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
  * recover it from the follow-up.
  */
 const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
+const BASH_CHILD_STREAM_PREFIX = 'bash@tool';
 const FOREGROUND_OUTPUT_HEAD_CHARS = TOOL_RESULT_TRUNCATION_HEAD_CHARS;
 const FOREGROUND_OUTPUT_TAIL_CHARS = TOOL_RESULT_TRUNCATION_TAIL_CHARS;
 const SHELL_BACKGROUNDING_PATTERN =
@@ -410,20 +411,18 @@ export class BashTool extends defineTool({
       agentCategory: AgentCategory.ToolUse,
     });
 
-    await registerExecution(
-      executionId,
-      syntheticConfig,
-      'bash',
+    await registerExecution(executionId, syntheticConfig, 'bash', {
+      streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
       parentExecutionId,
-      'process',
-    );
+      category: 'process',
+    });
     const runWithOwnership = captureOwnedExecutionLease(executionId);
 
     let childStream!: ReturnType<typeof createChildStream>;
     try {
       runWithOwnership(() => {
         childStream = createChildStream(executionId, parentStreamId, {
-          streamPrefix: 'bash@tool',
+          streamPrefix: BASH_CHILD_STREAM_PREFIX,
           streamCategory: AgentCategory.ToolUse,
           runKind: 'process',
           agentName: 'bash',
