@@ -33,7 +33,7 @@ import {
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
+} from '@test/support/streamStatusTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupApprovalsForStream } from '@tools/approval';
 import { GoalStore } from '@tools/goal';

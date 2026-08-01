@@ -3,11 +3,8 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
-import {
-  LATEXINDENT_CONFIG_KEY,
-  runLatexIndent,
-} from './formatter/latexindentpt';
-import { TEXFMT_CONFIG_KEY, runTexFmt } from './formatter/texfmt';
+import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
+import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
 
 export interface LatexFormatter {
   /** Setting value that selects this formatter. */

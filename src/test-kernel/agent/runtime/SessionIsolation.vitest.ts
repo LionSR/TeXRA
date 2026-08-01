@@ -16,7 +16,7 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
-import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
