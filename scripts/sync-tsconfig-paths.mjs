@@ -1,3 +1,4 @@
+import console from 'node:console';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -8,6 +9,8 @@ import {
   deriveExtensionPaths,
   deriveDesktopPaths,
   deriveBuildPaths,
+  parseJsonc,
+  pathTargetExists,
 } from './aliasUtils.mjs';
 
 // Code-generate the `compilerOptions.paths` block of the extension and
@@ -25,6 +28,7 @@ const targets = [
   {
     tsconfigPath: path.join(rootDir, 'tsconfig.build.json'),
     derive: deriveBuildPaths,
+    validateTargets: true,
   },
   {
     tsconfigPath: path.join(rootDir, 'packages', 'extension', 'tsconfig.json'),
@@ -54,14 +58,30 @@ const check = process.argv.includes('--check');
 const rootPaths = loadRootPaths(rootDir);
 let outOfSync = false;
 
-for (const { tsconfigPath, derive } of targets) {
+for (const { tsconfigPath, derive, validateTargets = false } of targets) {
   const currentText = await readFile(tsconfigPath, 'utf8');
-  const currentJson = JSON.parse(currentText);
+  const currentJson = parseJsonc(currentText);
+  const derivedPaths = derive(rootPaths);
+  if (validateTargets) {
+    const unresolved = Object.entries(derivedPaths).filter(
+      ([, pathTargets]) =>
+        !pathTargets.some((target) => pathTargetExists(rootDir, target)),
+    );
+    if (unresolved.length > 0) {
+      const details = unresolved
+        .map(
+          ([key, pathTargets]) =>
+            `${path.relative(rootDir, tsconfigPath)} maps "${key}" only to targets with no matches: ${pathTargets.join(', ')}.`,
+        )
+        .join('\n');
+      throw new Error(details);
+    }
+  }
   const nextJson = {
     ...currentJson,
     compilerOptions: {
       ...currentJson.compilerOptions,
-      paths: derive(rootPaths),
+      paths: derivedPaths,
     },
   };
   const nextText = await formatJson(

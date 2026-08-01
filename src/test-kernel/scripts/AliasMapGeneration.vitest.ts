@@ -11,6 +11,8 @@ interface AliasUtilsModule {
   deriveExtensionPaths(rootPaths: TsconfigPaths): TsconfigPaths;
   EXTENSION_EXCLUDED_ALIASES: readonly string[];
   loadRootPaths(rootDir: string): TsconfigPaths;
+  parseJsonc(text: string): unknown;
+  pathTargetExists(rootDir: string, target: string): boolean;
 }
 
 const rootDir = fileURLToPath(new URL('../../../', import.meta.url));
@@ -19,6 +21,8 @@ const {
   deriveExtensionPaths,
   EXTENSION_EXCLUDED_ALIASES,
   loadRootPaths,
+  parseJsonc,
+  pathTargetExists,
 } = (await import(
   pathToFileURL(resolve(rootDir, 'scripts/aliasUtils.mjs')).href
 )) as AliasUtilsModule;
@@ -101,6 +105,36 @@ describe('generated tsconfig paths match the committed copies', () => {
 
     expect(committed.compilerOptions.paths).toEqual(
       deriveDesktopPaths(rootPaths),
+    );
+  });
+});
+
+describe('generated build-map validation helpers', () => {
+  it('parses comments and trailing commas without rewriting string contents', () => {
+    expect(
+      parseJsonc(`{
+        // whole-line comment
+        "compilerOptions": { /* inline block comment */
+          "paths": {
+            "@shared/*": ["src/shared/*.ts"], // inline comment
+          },
+        },
+        "literalCommaBrace": ",}",
+        "literalCommaBracket": ",]",
+        "escapedQuote": "before \\\" after",
+      }`),
+    ).toEqual({
+      compilerOptions: { paths: { '@shared/*': ['src/shared/*.ts'] } },
+      literalCommaBrace: ',}',
+      literalCommaBracket: ',]',
+      escapedQuote: 'before " after',
+    });
+  });
+
+  it('requires wildcard targets to match at least one file', () => {
+    expect(pathTargetExists(rootDir, 'src/shared/*.ts')).toBe(true);
+    expect(pathTargetExists(rootDir, 'src/definitely-missing/*.ts')).toBe(
+      false,
     );
   });
 });
