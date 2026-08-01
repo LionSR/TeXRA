@@ -14,6 +14,8 @@ import {
 } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
@@ -166,13 +168,16 @@ export class ToolsTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
   }
 
-  private postToggle(command: string, e: Event): void {
+  private postStateToggle(key: string, e: Event): void {
     const target = e.target as WaSwitch | null;
-    postMessage(command, { enabled: Boolean(target?.checked) });
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key,
+      value: Boolean(target?.checked),
+    });
   }
 
   private handleBashApprovalToggle = (e: Event): void => {
-    this.postToggle(SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED, e);
+    this.postStateToggle(BASH_APPROVAL_CONFIG_KEY, e);
   };
 
   private handleToolPathProtectionToggle = (e: Event): void => {
@@ -184,7 +189,7 @@ export class ToolsTab extends LitElement {
   };
 
   private handleAgentSkillsToggle = (e: Event): void => {
-    this.postToggle(SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED, e);
+    this.postStateToggle(AGENT_SKILLS_CONFIG_KEY, e);
   };
 
   /** Section holding a single labelled toggle. */

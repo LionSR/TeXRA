@@ -16,7 +16,7 @@ import * as vscode from 'vscode';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { WorkspaceStateKey, globalSM, workspaceSM } from '@common/state';
+import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
@@ -67,6 +67,8 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
+import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
   dispatchSettingsViewInbound,
@@ -76,16 +78,8 @@ import {
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas/settingsViewMessages';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
-import {
-  BASH_APPROVAL_CONFIG_TARGET,
-  buildApprovalSettingsMessage,
-  setBashApprovalEnabled as setBashApprovalEnabledShared,
-  setWorkspaceAgentSetting,
-} from '@shared/settingsView/handlers/approvalHandlers';
-import {
-  buildAgentSkillsSettingsMessage,
-  setAgentSkillsEnabled,
-} from '@shared/settingsView/handlers/agentSkillsHandlers';
+import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
+import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -99,7 +93,7 @@ import {
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { StorageFS, WorkspaceFS } from '@utils/files';
-import { debounce } from '@utils/core';
+import { assertNever, debounce } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
@@ -325,8 +319,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
-    const StateKeys = WorkspaceStateKey;
-
     const actions: SettingsViewCommandActions = {
       lifecycle: {
         webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
@@ -431,18 +423,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           }),
         requestAccess: (modelName) => this.handleRequestModelAccess(modelName),
       },
-      orchestration: {
-        setAllowOrchestratorKill: (enabled) =>
-          this.updateBooleanAndSendSuperYolo(
-            StateKeys.ALLOW_ORCHESTRATOR_KILL,
-            { enabled },
-          ),
-        setDetachSubagentsOnStop: (enabled) =>
-          this.updateBooleanAndSendSuperYolo(
-            StateKeys.DETACH_SUBAGENTS_ON_STOP,
-            { enabled },
-          ),
-      },
       agentSelection: {
         openYaml: ({ source, name }) =>
           this.agentHandlers.handleOpenAgentYaml({
@@ -517,13 +497,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setPreferSubscription: (enabled) =>
           this.chatgptHandlers.handleSetPreferSubscription(enabled),
       },
-      approval: {
-        setBashApprovalEnabled: (enabled) =>
-          this.handleSetApprovalEnabled(enabled),
-      },
-      agentSkills: {
-        setEnabled: (enabled) => this.handleSetAgentSkillsEnabled(enabled),
-      },
       stateSettings: {
         update: (key, value) => this.updateStateSetting(key, value),
       },
@@ -554,12 +527,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.latexHandlers.handleRunInstallCommand({
             command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
             installCommand,
-          }),
-        setConfigValue: ({ field, value }) =>
-          this.latexHandlers.handleSetLatexConfigValue({
-            command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
-            field,
-            value,
           }),
       },
       inlineCriticism: {
@@ -744,14 +711,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async updateBooleanAndSendSuperYolo(
-    key: WorkspaceStateKey,
-    data: { enabled: boolean },
-  ): Promise<void> {
-    await workspaceSM.update(key, data.enabled);
-    await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
-  }
-
   // ============================================================
   // Git author settings handler implementations
   // ============================================================
@@ -764,17 +723,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       buildGitAuthorSettingsMessage(
         settings ?? readGitAuthorSettingsFromState(workspaceSM),
       ),
-    );
-  }
-
-  private async updateGitAuthorSetting(
-    key: WorkspaceStateKey,
-    value: unknown,
-  ): Promise<void> {
-    await workspaceSM.update(key, value);
-    const settings = applyGitAuthorConfig();
-    await this.withActiveWebview((w) =>
-      this.sendGitAuthorSettings(w, settings),
     );
   }
 
@@ -792,35 +740,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleSetApprovalEnabled(enabled: boolean): Promise<void> {
-    // Bash approval is a per-workspace, security-adjacent setting (see
-    // BASH_APPROVAL_CONFIG_TARGET / issue #7085). VS Code throws when
-    // writing a Workspace-target setting with no folder open, so refuse the
-    // write up front rather than let that throw surface -- this is an
-    // expected, non-error condition (no folder open yet), so inform rather
-    // than alarm. Re-send the persisted settings afterwards so the webview's
-    // (optimistically-toggled) switch snaps back to the actual, unwritten
-    // value instead of drifting from it.
-    if (!WorkspaceFS.getPath()) {
-      void showLoggedInfoMessage(
-        this.channel,
-        'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
-      );
-      await this.withActiveWebview((w) => this.sendApprovalSettings(w));
-      return;
-    }
-    await setBashApprovalEnabledShared(
-      {
-        workspaceState: workspaceSM,
-        globalState: globalSM,
-        config: platform().config,
-      },
-      enabled,
-      BASH_APPROVAL_CONFIG_TARGET,
-    );
-    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
-  }
-
   private async sendAgentSkillsSettings(
     webview: vscode.Webview,
   ): Promise<void> {
@@ -829,56 +748,75 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
-  private async handleSetAgentSkillsEnabled(enabled: boolean): Promise<void> {
-    if (!WorkspaceFS.getPath()) {
-      void showLoggedInfoMessage(
-        this.channel,
-        'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',
-      );
-      await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
-      return;
-    }
-    await setAgentSkillsEnabled(platform().config, enabled);
-    await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
-  }
-
-  private async updateAgentSetting(
-    key: WorkspaceStateKey,
-    value: string,
-  ): Promise<void> {
-    await setWorkspaceAgentSetting(
-      { workspaceState: workspaceSM, globalState: globalSM },
-      key,
-      value,
-    );
-    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
-  }
-
-  private async updateToolSafetySetting(
-    key: WorkspaceStateKey,
-    value: boolean,
-  ): Promise<void> {
-    await workspaceSM.update(key, value);
-    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
-  }
-
   /**
-   * Generic write path for scalar `STATE_SETTINGS` rows (git author, external
-   * coding agents, and tool safety). The shared
-   * {@link resolveStateSettingWrite} owns value validation and family
-   * classification so it cannot drift from the desktop host. This host only
-   * dispatches the resolved family to its updater, which owns persistence,
-   * rebroadcasting, and the git-author side effect.
+   * Generic write path for catalog-backed settings-view rows.
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const write = resolveStateSettingWrite(key, value);
     if (!write) return;
-    if (write.family === 'git') {
-      await this.updateGitAuthorSetting(write.key, write.value);
-    } else if (write.family === 'agent') {
-      await this.updateAgentSetting(write.key, write.value);
-    } else {
-      await this.updateToolSafetySetting(write.key, write.value);
+    if (write.kind === 'rejected') {
+      await showLoggedErrorMessage(
+        this.channel,
+        `Invalid value for “${write.entry.title ?? write.entry.key}”`,
+        write.error,
+      );
+      await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+      return;
+    }
+    if (write.entry.store === 'config' && !WorkspaceFS.getPath()) {
+      void showLoggedInfoMessage(
+        this.channel,
+        `Open a workspace folder before changing the “${write.entry.title ?? write.entry.key}” setting.`,
+      );
+      await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+      return;
+    }
+    const stores = {
+      config: platform().config,
+      workspaceState: workspaceSM,
+      globalState: globalSM,
+    };
+    try {
+      await (write.kind === 'reset'
+        ? resetSetting(write.entry, stores)
+        : writeSetting(write.entry, write.value, stores));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        `Failed to update “${write.entry.title ?? write.entry.key}”`,
+        error,
+      );
+    }
+    await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+  }
+
+  private async postStateSettingSnapshot(
+    snapshot: SettingsViewSnapshot,
+  ): Promise<void> {
+    switch (snapshot) {
+      case 'agent-skills':
+        await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
+        break;
+      case 'approval':
+        await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+        break;
+      case 'git-author': {
+        const settings = applyGitAuthorConfig();
+        await this.withActiveWebview((w) =>
+          this.sendGitAuthorSettings(w, settings),
+        );
+        break;
+      }
+      case 'latex':
+        await this.withActiveWebview((w) =>
+          this.latexHandlers.sendLatexConfigValues(w),
+        );
+        break;
+      case 'multi-agent':
+        await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
+        break;
+      default:
+        assertNever(snapshot, 'Unhandled settings-view snapshot');
     }
   }
 

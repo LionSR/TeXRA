@@ -15,20 +15,7 @@ import {
   type UpdateLatexConfigValuesMessage,
 } from '@shared/schemas/settingsViewMessages';
 
-export type LatexConfigPersistenceUpdatePlan =
-  | {
-      ok: true;
-      update: {
-        key: WorkspaceStateKey;
-        value: unknown;
-      };
-    }
-  | {
-      ok: false;
-      error: unknown;
-    };
-
-/** Plans storage-backed LaTeX config reads and writes without host side effects. */
+/** Builds storage-backed LaTeX config snapshots without host side effects. */
 export class LatexConfigPersistenceController {
   buildConfigValues(
     readStoredValue: (key: WorkspaceStateKey) => unknown,
@@ -56,29 +43,6 @@ export class LatexConfigPersistenceController {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
       values: this.buildConfigValues(readStoredValue),
-    };
-  }
-
-  planUpdate(input: {
-    field: LatexConfigField;
-    value: unknown;
-  }): LatexConfigPersistenceUpdatePlan {
-    const fieldSchema = LatexConfigValuesSchema.shape[input.field];
-    const parsed = fieldSchema.safeParse(input.value ?? undefined);
-
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error,
-      };
-    }
-
-    return {
-      ok: true,
-      update: {
-        key: LATEX_FIELD_TO_KEY[input.field],
-        value: parsed.data,
-      },
     };
   }
 }

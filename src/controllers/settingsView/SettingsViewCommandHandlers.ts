@@ -86,10 +86,6 @@ export interface SettingsViewCommandActions {
     readonly setPreferShortModelNames: EnabledAction;
     readonly requestAccess: StringAction;
   };
-  readonly orchestration: {
-    readonly setAllowOrchestratorKill: EnabledAction;
-    readonly setDetachSubagentsOnStop: EnabledAction;
-  };
   readonly agentSelection: {
     readonly setEnabled: HandlerOrUnsupported<
       [
@@ -153,17 +149,11 @@ export interface SettingsViewCommandActions {
     readonly signOut: HandlerOrUnsupported;
     readonly setPreferSubscription: EnabledAction;
   };
-  readonly approval: {
-    readonly setBashApprovalEnabled: EnabledAction;
-  };
-  readonly agentSkills: {
-    readonly setEnabled: EnabledAction;
-  };
   /**
    * Generic catalog-driven scalar-setting write. One action replaces the former
    * per-setting `gitAuthor.*` and `approval.setCodex*`/`setClaude*` handlers: the
    * host looks the key up in `STATE_SETTINGS`, validates the value, persists it,
-   * and rebroadcasts the owning family (git-author vs approval) by category.
+   * and rebroadcasts the snapshot named by the catalog row.
    */
   readonly stateSettings: {
     readonly update: HandlerOrUnsupported<[string, unknown]>;
@@ -188,14 +178,6 @@ export interface SettingsViewCommandActions {
     readonly applySettings: DataAction<typeof CMD.APPLY_LATEX_SETTINGS>;
     readonly installLatexWorkshop: HandlerOrUnsupported;
     readonly runInstallCommand: StringAction;
-    readonly setConfigValue: HandlerOrUnsupported<
-      [
-        {
-          field: Message<typeof CMD.SET_LATEX_CONFIG_VALUE>['field'];
-          value: Message<typeof CMD.SET_LATEX_CONFIG_VALUE>['value'];
-        },
-      ]
-    >;
   };
   readonly inlineCriticism: {
     readonly getEnabled: HandlerOrUnsupported;
@@ -303,15 +285,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.modelName],
     ),
 
-    setAllowOrchestratorKill: mapAction(
-      actions.orchestration.setAllowOrchestratorKill,
-      (data) => [data.enabled],
-    ),
-    setDetachSubagentsOnStop: mapAction(
-      actions.orchestration.setDetachSubagentsOnStop,
-      (data) => [data.enabled],
-    ),
-
     setAgentEnabled: mapAction(actions.agentSelection.setEnabled, (data) => [
       {
         category: data.category,
@@ -369,13 +342,6 @@ export function createSettingsViewCommandHandlers(
       (data) => [data.enabled],
     ),
 
-    setBashApprovalEnabled: mapAction(
-      actions.approval.setBashApprovalEnabled,
-      (data) => [data.enabled],
-    ),
-    setAgentSkillsEnabled: mapAction(actions.agentSkills.setEnabled, (data) => [
-      data.enabled,
-    ]),
     updateStateSetting: mapAction(actions.stateSettings.update, (data) => [
       data.key,
       data.value,
@@ -401,10 +367,6 @@ export function createSettingsViewCommandHandlers(
     runInstallCommand: mapAction(actions.latex.runInstallCommand, (data) => [
       data.installCommand,
     ]),
-    setLatexConfigValue: mapAction(actions.latex.setConfigValue, (data) => [
-      { field: data.field, value: data.value },
-    ]),
-
     getInlineCriticismEnabled: actions.inlineCriticism.getEnabled,
     setInlineCriticismEnabled: mapAction(
       actions.inlineCriticism.setEnabled,

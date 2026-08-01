@@ -11,7 +11,6 @@ import { workspaceSM } from '@common/state';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   SETTINGS_VIEW_CMD,
@@ -142,40 +141,6 @@ export class LatexSettingsHandlers {
       this.configPersistenceController.buildConfigMessage((key) =>
         workspaceSM.get(key),
       ),
-    );
-  }
-
-  /**
-   * Persist a single LaTeX/compile/diff config value to workspace storage.
-   * `value === undefined` (or `null`) clears the key (returns to documented
-   * default). Per-field validation is intentionally done here rather than in
-   * the inbound message schema — the outer SettingsViewInboundMessageSchema
-   * is a discriminatedUnion('command', …) and a nested per-field
-   * discriminator on the same command literal would crash Zod with a
-   * duplicate-discriminator error at parse time.
-   */
-  async handleSetLatexConfigValue(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_LATEX_CONFIG_VALUE>,
-  ): Promise<void> {
-    const plan = this.configPersistenceController.planUpdate({
-      field: data.field,
-      value: data.value,
-    });
-    if (!plan.ok) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        `Invalid value for ${data.field}`,
-        plan.error,
-      );
-      return;
-    }
-    await withHandlerErrorHandling(
-      this.ctx,
-      `Failed to update ${data.field}`,
-      async () => {
-        await workspaceSM.update(plan.update.key, plan.update.value);
-        await this.ctx.withActiveWebview((w) => this.sendLatexConfigValues(w));
-      },
     );
   }
 

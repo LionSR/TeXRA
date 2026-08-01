@@ -96,14 +96,6 @@ export function buildApprovalSettingsMessage(
   };
 }
 
-export async function setBashApprovalEnabled(
-  ports: ApprovalHandlerPorts,
-  enabled: boolean,
-  target: ConfigTarget,
-): Promise<void> {
-  await ports.config.update(BASH_APPROVAL_CONFIG_KEY, enabled, target);
-}
-
 /**
  * One-shot per-workspace migration for the legacy global-scope bash-approval
  * override (issue #7169, follow-up to #7148 / #7085).
@@ -223,12 +215,4 @@ export async function migrateLegacyGlobalBashApprovalOverride(
       `Failed to set BASH_APPROVAL_GLOBAL_MIGRATED marker: ${toErrorMessage(err)}`,
     );
   }
-}
-
-export async function setWorkspaceAgentSetting(
-  ports: SettingsStatePorts,
-  key: WorkspaceStateKey,
-  value: string,
-): Promise<void> {
-  await ports.workspaceState.update(key, value);
 }

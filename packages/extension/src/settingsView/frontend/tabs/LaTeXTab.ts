@@ -38,6 +38,7 @@ import {
 // Local imports - LaTeX config constants (shared with backend + readers)
 import {
   LATEX_CONFIG_DEFAULTS,
+  LATEX_FIELD_TO_KEY,
   LATEX_CONFIG_RANGES,
   type LatexdiffMathMarkupValue,
   type LatexFormatterValue,
@@ -598,9 +599,9 @@ export class LaTeXTab extends LitElement {
     field: F,
     value: LatexConfigValueFor<F> | undefined,
   ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE, {
-      field,
-      value,
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key: LATEX_FIELD_TO_KEY[field],
+      value: value ?? null,
     });
   }
 
