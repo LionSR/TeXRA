@@ -32,6 +32,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
+import { assertNever } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -268,6 +269,8 @@ export function createDesktopSettingsIpc(
       case 'multi-agent':
         postSuperYoloEnabled();
         break;
+      default:
+        assertNever(snapshot, 'Unhandled settings-view snapshot');
     }
   }
 

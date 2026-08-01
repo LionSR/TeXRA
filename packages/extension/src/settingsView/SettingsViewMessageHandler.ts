@@ -93,7 +93,7 @@ import {
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { StorageFS, WorkspaceFS } from '@utils/files';
-import { debounce } from '@utils/core';
+import { assertNever, debounce } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
@@ -798,6 +798,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       case 'multi-agent':
         await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
         break;
+      default:
+        assertNever(snapshot, 'Unhandled settings-view snapshot');
     }
   }
 

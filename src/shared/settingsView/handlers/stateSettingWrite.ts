@@ -16,7 +16,7 @@ import type { SettingsViewStateSettingEntry } from '@shared/schemas/stateSetting
  * ignored (value-less, unknown key, schema-rejected value, or a catalog row
  * this settings view does not own).
  */
-export type StateSettingWrite =
+type StateSettingWrite =
   | {
       readonly kind: 'write';
       readonly entry: SettingsViewStateSettingEntry;
