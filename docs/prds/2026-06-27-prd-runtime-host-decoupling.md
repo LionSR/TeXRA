@@ -1,6 +1,6 @@
 ---
 created: 2026-06-27
-updated: 2026-07-18
+updated: 2026-08-01
 ---
 
 # PRD: Runtime/Host Decoupling by Deep Modules
@@ -16,7 +16,7 @@ updated: 2026-07-18
 > frozen `RunDescriptor` injection model, `ModelCell`, `PendingRequests`,
 > `RetryPolicy`, `RetryGate`, and `HostUiBus` are retired and must not be
 > implemented from this record. The later
-> [narrow ModelCell ownership ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition)
+> [ModelCell ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell)
 > governs only the current primitive on `main`; it does not revive this proposal
 > or make its other retired designs authoritative. The `RunDescriptor` name on
 > `main` denotes the

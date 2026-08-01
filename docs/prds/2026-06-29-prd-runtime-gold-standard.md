@@ -1,6 +1,6 @@
 ---
 created: 2026-06-29
-updated: 2026-07-18
+updated: 2026-08-01
 ---
 
 # PRD: Runtime Gold-Standard - The SDK Core (PocketFlow / Lifecycle / Injection / Retry)
@@ -15,7 +15,7 @@ updated: 2026-07-18
 > centralized baselines in [#7914] and [#8322]. The proposed frozen
 > `RunDescriptor` injection model, `ModelCell`, `PendingRequests`, `RetryPolicy`,
 > `RetryGate`, and `HostUiBus` are retired and must not be implemented from this
-> record. The later [narrow ModelCell ownership ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition)
+> record. The later [ModelCell ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell)
 > supersedes only this prohibition's claim that no `ModelCell` exists on `main`;
 > it does not revive this PRD. The `RunDescriptor` name on `main` denotes the
 > unrelated persisted stream schema introduced in [#7164].

@@ -92,7 +92,7 @@ it the assert is knowingly wrong for `LogList`.
 
 ---
 
-## ModelCell — current ownership ruling supersedes only the retired prohibition
+## ModelCell
 
 **Question.** Does the retired runtime gold-standard PRD's statement that
 `ModelCell` “must not be implemented from this record” still prohibit the

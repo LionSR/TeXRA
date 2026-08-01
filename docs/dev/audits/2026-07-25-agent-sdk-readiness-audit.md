@@ -26,7 +26,7 @@ historical context and this one as the post-retirement snapshot.
 > **not** reopen those proposals. `RunDescriptor` (frozen-injection), `ModelCell`,
 > `PendingRequests`, `RetryPolicy`/`RetryGate`, and `HostUiBus` remain retired and
 > must not be implemented from this record. The later
-> [narrow ModelCell ownership ruling](../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition)
+> [ModelCell ruling](../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell)
 > governs only the current primitive on `main`; it does not revive these proposals
 > or make their other retired designs authoritative. The findings below are the
 > residue that the lighter path leaves, nothing more.
@@ -261,7 +261,7 @@ Clean and well-factored; the only defect is finding #2 above.
 - Don't resurrect the retired package-fence / `RunDescriptor` / `ModelCell` /
   `RetryGate` proposals — `main` chose the lighter path on purpose. The current
   `ModelCell` primitive is governed only by the
-  [narrow ownership ruling](../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition),
+  [narrow ownership ruling](../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell),
   which does not revive those proposals.
 - Don't invent new abstractions or split the runtime directory — the flat
   `runtime/` layout is a documented, deliberate choice (~180 call sites import
