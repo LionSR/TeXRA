@@ -9,9 +9,11 @@ import { consumePendingState } from '@common/state';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
+  getActiveSidebarView,
   getCombinedLocalResourceRoots,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
+  type SidebarView,
 } from '@common/webview';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 import {
@@ -42,8 +44,6 @@ import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import type { ProgressViewProvider } from './progressView/ProgressViewProvider';
 
-export type SidebarMode = 'main' | 'progress';
-
 export class MainViewProvider
   extends BaseWebviewProvider
   implements vscode.WebviewViewProvider
@@ -56,7 +56,6 @@ export class MainViewProvider
 
   private static commandsRegistered = false;
 
-  private _activeMode: SidebarMode = 'main';
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
 
@@ -150,7 +149,9 @@ export class MainViewProvider
 
   /** Returns the sidebar webview, but only when in main mode. */
   private getMainModeView(): vscode.WebviewView | undefined {
-    return this._activeMode === 'main' ? this.getWebviewView() : undefined;
+    return getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
+      ? this.getWebviewView()
+      : undefined;
   }
 
   /**
@@ -329,11 +330,10 @@ export class MainViewProvider
   protected override cleanupView(): void {
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
-    if (this._activeMode === 'progress') {
+    if (getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS) {
       this._progressViewProvider?.resetSidebarReady();
-      void setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     }
-    this._activeMode = 'main';
+    setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     super.cleanupView();
   }
 
@@ -366,10 +366,6 @@ export class MainViewProvider
     this._progressViewProvider = pvp;
   }
 
-  public getActiveMode(): SidebarMode {
-    return this._activeMode;
-  }
-
   public getWebviewView(): vscode.WebviewView | undefined {
     return this._view as vscode.WebviewView | undefined;
   }
@@ -377,27 +373,20 @@ export class MainViewProvider
   /**
    * Switch the single sidebar view between 'main' (launcher) and 'progress' content.
    * Swaps HTML and message listener so both bundles share one VS Code view slot.
+   * Claiming the surface and swapping its content happen in one tick, so a
+   * concurrent switch cannot land between them.
    */
-  public async switchMode(mode: SidebarMode): Promise<void> {
+  public switchMode(mode: SidebarView): void {
     const webviewView = this.getWebviewView();
-    if (!webviewView || mode === this._activeMode) return;
+    if (!webviewView || mode === getActiveSidebarView()) return;
 
     // Guard provider availability before mutating any state.
-    if (mode === 'progress' && !this._progressViewProvider) return;
+    if (mode === SIDEBAR_VIEWS.PROGRESS && !this._progressViewProvider) return;
 
-    this._activeMode = mode;
-    await setActiveSidebarView(
-      mode === 'progress' ? SIDEBAR_VIEWS.PROGRESS : SIDEBAR_VIEWS.MAIN,
-    );
-
-    // A concurrent switchMode call may have changed _activeMode while we awaited.
-    // Bail out so the newer call's HTML/listener wins.
-    if (this._activeMode !== mode) return;
-
+    setActiveSidebarView(mode);
     this._messageDisposable?.dispose();
-    this._messageDisposable = undefined;
 
-    if (mode === 'progress') {
+    if (mode === SIDEBAR_VIEWS.PROGRESS) {
       const pvp = this._progressViewProvider!;
       webviewView.webview.html = pvp
         .getContentProvider()
@@ -417,7 +406,7 @@ export class MainViewProvider
   }
 
   public async showInSidebar(): Promise<void> {
-    await this.switchMode('main');
+    this.switchMode(SIDEBAR_VIEWS.MAIN);
     await vscode.commands.executeCommand('texra.mainView.focus');
   }
 }

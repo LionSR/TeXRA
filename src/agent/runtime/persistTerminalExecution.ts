@@ -37,9 +37,8 @@ export interface PersistTerminalExecutionResult {
  * owned lease undurable and warn on either a `'failed'` result or a rejected
  * promise, and hand back whether the terminal status reached disk. The
  * caller keeps everything this helper does not own: the registry keeps its
- * `synchronizeAgentResultOutcome` follow-up and root-lease release in its own
- * `finally`; this function never throws, so a caller-side `catch` is
- * unnecessary and would be dead code.
+ * root-lease release in its own `finally`; this function never throws, so a
+ * caller-side `catch` is unnecessary and would be dead code.
  */
 export async function persistTerminalExecution(
   params: PersistTerminalExecutionParams,

@@ -5,7 +5,6 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import { synchronizeAgentResultOutcome } from '@agent/storage';
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
   completeOwnedExecutionLease,
@@ -225,10 +224,10 @@ export class ExecutionRegistry {
     if (
       previous instanceof AgentExecutionHandle &&
       handle instanceof AgentExecutionHandle &&
-      previous.waitingTerminationStarted
+      previous.suspendedTerminationStarted
     ) {
       // A resumed lifecycle can replace its suspended predecessor while the
-      // predecessor's asynchronous waiting cleanup is still in progress. The
+      // predecessor's asynchronous teardown is still in progress. The
       // stop already claimed that execution, so carry it across the ownership
       // handoff instead of allowing the successor to revive the run.
       handle.interrupt();
@@ -770,7 +769,7 @@ export class ExecutionRegistry {
       // No live interrupt context: a native subagent suspended at WAITING has
       // already had its tool-use session disposed and interrupt handler detached
       // (runToolUseFlow's finally), while the handle stays tracked for resume
-      // (runFlowWithLifecycle). Run its registered waiting-cleanup instead of
+      // (runFlowWithLifecycle). Run the teardown it parked with instead of
       // silently no-oping the kill.
       return this.terminateWaitingHandle(handle);
     }
@@ -779,39 +778,22 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Tear down an `AgentExecutionHandle` suspended at WAITING (or transitioning
-   * out of it via a resume that hasn't yet installed its own live context)
-   * with no live interrupt context. Returns false (no-op) when the handle
-   * never registered a waiting-cleanup — i.e. it isn't actually suspended,
-   * just momentarily between its own interrupt-handler detach and untrack during
-   * normal teardown — or when `streamStatus` shows neither state (see below).
+   * Tear down an `AgentExecutionHandle` parked at WAITING with no live
+   * interrupt context, returning whether this stop claimed the run.
    *
-   * A registered waiting-cleanup alone does not prove the run is genuinely
-   * suspended: `runFlowWithLifecycle`'s own WAITING branch is the only
-   * registrant today (native subagent turns are loop-driven — see
-   * `childRunLoop.ts` — with delivery choreography owned entirely by the
-   * loop's single site, so there is no more per-strategy speculative
-   * registration on every delivered turn). `runFlowWithLifecycle` clears
-   * this registration (`handle.clearWaitingCleanup()`) on both of its
-   * non-WAITING terminal arms, so in practice a stale cleanup is gone well
-   * before this method could ever see it — but this method does not rely on
-   * every non-waiting exit remembering to call that: `streamStatus` only
-   * reaches `WAITING` on the genuine suspend path (`ToolUseWaitNode` only
-   * transitions to WAITING when it is actually suspending — unconditionally
-   * for a subagent cycle, or after the queue is confirmed empty for a root
-   * cycle), so checking it here is an independent, authoritative
-   * confirmation that this handle is really parked, not mid-flight — belt
-   * and suspenders against a future non-waiting exit that forgets the clear
-   * (see #7324 review discussion).
-   *
-   * `resumeQueuedToolUseFromResumeData` flips `streamStatus` to RUNNING with a
-   * RESUMING substate *before* the resumed run installs its own interrupt
-   * context, so a stop landing in that window would otherwise find this same
-   * still-WAITING-suspended handle but a non-WAITING phase, and get wrongly
-   * no-opped by the check above. `getToolUseFollowUpTarget` already treats
-   * RESUMING the same as WAITING for the analogous follow-up-admission
-   * decision — mirrored here so a stop during that window still tears the
-   * stalled resume down instead of silently ignoring it.
+   * The handle's own suspension is the single authority on both questions this
+   * path used to cross-check: `runFlowWithLifecycle`'s WAITING branch is what
+   * parks a handle, and `beginSuspendedTermination` claims the run's terminal
+   * outcome and starts the teardown in one synchronous step. So a handle that
+   * never parked (one merely between its own interrupt-handler detach and
+   * untrack during normal teardown) and a run whose terminal outcome
+   * `finalizeRunTerminal` already claimed both leave this a no-op, with no
+   * `streamStatus` re-read: a stop can neither abandon a live run nor publish
+   * a second outcome. That also covers the window
+   * `resumeQueuedToolUseFromResumeData` opens by flipping the stream to
+   * RUNNING/RESUMING before the resumed run installs its own context — the
+   * suspended handle it replaces is still parked, so a stop landing there
+   * still tears the stalled resume down.
    *
    * This path bypasses `runFlowWithLifecycle`'s own terminal handling (the
    * flow never resumes to produce one), so it publishes the terminal
@@ -832,14 +814,8 @@ export class ExecutionRegistry {
    * though the turn's own trace is already gone.
    */
   private terminateWaitingHandle(handle: AgentExecutionHandle): boolean {
-    const status = this.streamStatus.get(handle.childStreamId);
-    const resuming =
-      this.streamStatus.getSubstate(handle.childStreamId) ===
-      STREAM_SUBSTATE.RESUMING;
-    if (status !== STREAM_PHASE.WAITING && !resuming) {
-      return false;
-    }
-    if (!handle.runWaitingCleanup()) return false;
+    const teardown = handle.beginSuspendedTermination();
+    if (!teardown) return false;
     const cancelledResult: ResultEvent = {
       type: 'result',
       outcome: RUN_OUTCOME.CANCELLED,
@@ -849,7 +825,7 @@ export class ExecutionRegistry {
       category: handle.category,
       isSubagent: handle.isChildExecution,
     };
-    void this.finishWaitingTermination(handle, cancelledResult).catch(
+    void this.finishWaitingTermination(handle, teardown, cancelledResult).catch(
       async (error: unknown) => {
         const recoveryFailures = [error];
         if (!(error instanceof ExecutionLeaseLostError)) {
@@ -898,11 +874,12 @@ export class ExecutionRegistry {
 
   private async finishWaitingTermination(
     handle: AgentExecutionHandle,
+    teardown: Promise<void>,
     cancelledResult: ResultEvent,
   ): Promise<void> {
     return await handle.runWithExecutionLease(async () => {
       try {
-        await handle.waitForWaitingCleanup();
+        await teardown;
       } catch (error) {
         // Transcript closure and terminal execution metadata are independent
         // durable facts. Preserve the failed artifact fence, but still give the
@@ -943,13 +920,8 @@ export class ExecutionRegistry {
         untrackMode: 'unconditional',
       });
 
-      // No later result write is guaranteed here, including during RESUMING:
-      // the resume can fail before installing its own handle, while this method
-      // has already untracked the suspended one. Align the interim envelope only
-      // after durable terminal metadata exists. A turn that does continue will
-      // replace it with its own result.
       try {
-        const result = await persistTerminalExecution({
+        await persistTerminalExecution({
           executionId: handle.executionId,
           outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
@@ -957,12 +929,6 @@ export class ExecutionRegistry {
           failedMessage: 'Failed to finalize stopped waiting execution',
           rejectedMessage: 'Waiting-execution finalizer rejected unexpectedly',
         });
-        if (result.terminalStatusPersisted) {
-          await synchronizeAgentResultOutcome(
-            handle.executionId,
-            RUN_OUTCOME.CANCELLED,
-          );
-        }
       } finally {
         if (!handle.isChildExecution) {
           try {

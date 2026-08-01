@@ -46,7 +46,6 @@ import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 export interface DesktopWorkspaceIpcOptions {
   ptyHost: DesktopPtyHost;
   browserViews: DesktopBrowserViews;
-  onEditorDirtyChange?(dirty: boolean): void;
   /**
    * Translates renderer-reported CSS pixel bounds into window coordinates.
    * A WebContentsView is positioned in device-independent window space, which
@@ -302,9 +301,6 @@ export function createDesktopWorkspaceIpc(
       const data = parsed.data;
 
       switch (data.command) {
-        case DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE:
-          options.onEditorDirtyChange?.(data.dirty);
-          return true;
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
           void listFiles(data.directory);
           return true;

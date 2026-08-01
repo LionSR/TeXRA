@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   abandonOwnedExecutionLease: vi.fn(),
   buildAgentLaunchContext: vi.fn(),
+  clearTerminalExecutionState: vi.fn(),
   hasPersistedParent: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
 }));
 
 vi.mock('@agent/storage/executionLifecycle', () => ({
+  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 
@@ -134,10 +136,67 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
     mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
+  });
+
+  // The predecessor run's terminal outcome is projected onto every result
+  // envelope read back (`applyExecutionOutcome`), so it has to be gone before
+  // the resumed run can write a turn of its own.
+  it('clears the previous run terminal facts before the resumed run starts', async () => {
+    const executionId = 'e9503-boundary' as ExecutionId;
+    const streamId = 'stream-9503-boundary' as StreamTabId;
+    const order: string[] = [];
+    mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
+      order.push('clear');
+    });
+    mocks.buildAgentLaunchContext.mockImplementationOnce(async () => {
+      order.push('launch');
+      return buildResumeContext(executionId, streamId, {
+        setModelInfo: vi.fn(),
+      });
+    });
+    mocks.hasPersistedParent.mockResolvedValueOnce(true);
+    mocks.runFlowWithLifecycle.mockImplementationOnce(
+      async (
+        _context: unknown,
+        run: (liveHandle: unknown) => Promise<unknown>,
+      ) => run(noopFlowHandle()),
+    );
+    mocks.runToolUseFlow.mockImplementationOnce(async () => {
+      order.push('flow');
+      return { outcome: RUN_OUTCOME.COMPLETED };
+    });
+
+    await resumeToolUseFromResumeData(
+      createToolUseResumeData({ executionId, streamId }),
+    );
+
+    expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(executionId);
+    expect(order).toEqual(['clear', 'launch', 'flow']);
+  });
+
+  it('releases the resumed lease when the terminal-fact clear fails', async () => {
+    const storageError = new Error('meta write failed');
+    const snapshot = createToolUseResumeData({
+      executionId: 'e9503-boundary-failure' as ExecutionId,
+      streamId: 'stream-9503-boundary-failure' as StreamTabId,
+    });
+    mocks.clearTerminalExecutionState.mockRejectedValueOnce(storageError);
+
+    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
+      storageError,
+    );
+
+    expect(mocks.hasPersistedParent).not.toHaveBeenCalled();
+    expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+    expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledWith(
+      snapshot.executionId,
+      storageError,
+    );
   });
 
   it('resolves execution lineage before activating the resume stream', async () => {

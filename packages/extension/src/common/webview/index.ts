@@ -6,6 +6,7 @@ export {
   SIDEBAR_VIEWS,
   getActiveSidebarView,
   setActiveSidebarView,
+  type SidebarView,
 } from './viewState';
 export {
   getSharedLocalResourceRoots,

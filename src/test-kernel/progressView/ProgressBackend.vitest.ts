@@ -29,6 +29,7 @@ import {
   type DeleteExecutionResult,
 } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -3343,27 +3344,25 @@ describe('retained finished children', () => {
   });
 
   it('keeps the resolved terminal status on a later structural sync', async () => {
-    const { backend, messages } = createRecordingBackend();
+    const { backend, messages } = createIsolatedRecordingBackend();
+    track(backend.setupEventListeners());
     seedParent(backend);
     const childStreamId = 'doomed-stream' as StreamTabId;
     backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
-    // Roster drop first, so the retained row is stamped `running` forever.
+    // Roster drop first, so the retained row is stamped `running`.
     backend.factApplier.updateChildRoster(PARENT, [
       subagent('doomed', { childStreamId }),
     ]);
     backend.factApplier.updateChildRoster(PARENT, []);
-    // Transition only the authoritative status machine. Deliberately avoid
-    // `setStreamStatus`, which also caches the terminal status into the
-    // retained row and would let this test pass without the projection.
+    // Transition the status machine and nothing else: its fact is the single
+    // owner of a roster row's phase, so the retained row must be written by
+    // this call alone, with no read-time repair on the send paths.
     backend.state.streamStatus.transitionToTerminal(
       childStreamId,
       STREAM_PHASE.FAILED,
     );
     expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
-      STREAM_PHASE.RUNNING,
-    );
-    expect(backend.state.streamStatus.get(childStreamId)).toBe(
       STREAM_PHASE.FAILED,
     );
     messages.length = 0;
@@ -3400,6 +3399,158 @@ describe('retained finished children', () => {
         }),
       ]);
     }
+  });
+
+  it('keeps a recorded terminal phase when a stale roster still says running', async () => {
+    const { backend, messages } = createRecordingBackend();
+    seedParent(backend);
+    const childStreamId = 'stale-stream' as StreamTabId;
+    const live = subagent('stale', { childStreamId });
+
+    backend.factApplier.updateChildRoster(PARENT, [live]);
+    await backend.factApplier.setStreamStatus(
+      childStreamId,
+      STREAM_PHASE.FAILED,
+    );
+    messages.length = 0;
+
+    // A roster snapshot stamped before the transition, delivered after it: the
+    // child is still tracked, so it arrives as a live row carrying `running`.
+    backend.factApplier.updateChildRoster(PARENT, [live]);
+
+    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toEqual([
+      expect.objectContaining({
+        executionId: 'stale',
+        status: STREAM_PHASE.FAILED,
+      }),
+    ]);
+    expect(roster[0]?.finishedAt).toBeUndefined();
+    // No further status fact arrives for a terminal child, so the badge push
+    // driven by the stale roster is the last word on the wire.
+    expect(
+      messages.findLast(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      ),
+    ).toMatchObject({
+      stream: PARENT,
+      subagents: [
+        expect.objectContaining({
+          executionId: 'stale',
+          status: STREAM_PHASE.FAILED,
+        }),
+      ],
+    });
+  });
+
+  it('takes the emitted phase when a retained child goes live again', () => {
+    const { backend } = createRecordingBackend();
+    seedParent(backend);
+    const childStreamId = 'requeued-stream' as StreamTabId;
+
+    backend.factApplier.updateChildRoster(PARENT, [
+      subagent('requeued', { childStreamId, status: STREAM_PHASE.WAITING }),
+    ]);
+    backend.factApplier.updateChildRoster(PARENT, []);
+    backend.factApplier.updateChildRoster(PARENT, [
+      subagent('requeued', { childStreamId, status: STREAM_PHASE.RUNNING }),
+    ]);
+
+    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toEqual([
+      expect.objectContaining({
+        executionId: 'requeued',
+        status: STREAM_PHASE.RUNNING,
+      }),
+    ]);
+    expect(roster[0]?.finishedAt).toBeUndefined();
+  });
+
+  it('keeps a resolved live row when an older roster stamp arrives after it', async () => {
+    // The reverse of the roster-drop ordering: the child is still tracked when
+    // its terminal phase lands, and a roster stamped before that transition is
+    // applied afterwards. With the send-time projection gone, an older stamp
+    // that reached the row would freeze this badge at `running` forever.
+    const { backend, session } = createIsolatedRecordingBackend();
+    track(backend.setupEventListeners());
+    seedParent(backend);
+    const executionId = 'c0ffee01' as ExecutionId;
+    const childStreamId = 'restamped-stream' as StreamTabId;
+    const handle = new AgentExecutionHandle(
+      executionId,
+      PARENT,
+      childStreamId,
+      'agent-restamped',
+      AgentCategory.ToolUse,
+    );
+    session.executions.trackAgentExecution(handle, {
+      status: STREAM_PHASE.RUNNING,
+    });
+    const rosterStampedWhileRunning =
+      session.executions.getActiveChildren(PARENT);
+    backend.factApplier.updateChildRoster(PARENT, rosterStampedWhileRunning);
+    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+      STREAM_PHASE.RUNNING,
+    );
+
+    session.status.transitionToTerminal(childStreamId, STREAM_PHASE.FAILED);
+    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+      STREAM_PHASE.FAILED,
+    );
+
+    backend.factApplier.updateChildRoster(PARENT, rosterStampedWhileRunning);
+    expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([
+      expect.objectContaining({
+        executionId,
+        status: STREAM_PHASE.FAILED,
+      }),
+    ]);
+
+    // A roster the emitter stamps now carries the resolved phase too, so the
+    // row is written from the same owner on both paths.
+    backend.factApplier.updateChildRoster(
+      PARENT,
+      session.executions.getActiveChildren(PARENT),
+    );
+    expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([
+      expect.objectContaining({
+        executionId,
+        status: STREAM_PHASE.FAILED,
+      }),
+    ]);
+    session.executions.untrack(executionId);
+  });
+
+  it('writes the terminal status of a child detached from its parent', async () => {
+    const { backend } = createRecordingBackend();
+    seedParent(backend);
+    const childStreamId = 'detached-stream' as StreamTabId;
+
+    backend.factApplier.updateChildRoster(PARENT, [
+      subagent('detached', { childStreamId }),
+    ]);
+    // Detaching promotes a running subagent to top-level: the parent link goes
+    // away and the roster drops the row, but the child keeps running and
+    // finishes later. The row is found by its own childStreamId, so the phase
+    // still lands.
+    backend.factApplier.handleSetParentStream({
+      childStreamId,
+      parentStreamId: null,
+    });
+    backend.factApplier.updateChildRoster(PARENT, []);
+
+    await backend.factApplier.setStreamStatus(
+      childStreamId,
+      STREAM_PHASE.COMPLETED,
+    );
+
+    expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([
+      expect.objectContaining({
+        executionId: 'detached',
+        status: STREAM_PHASE.COMPLETED,
+      }),
+    ]);
   });
 
   it('caps retained rows, evicting the oldest and keeping every live one', () => {
