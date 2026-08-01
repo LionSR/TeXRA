@@ -204,7 +204,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     compactingActive: statusSlice?.compactingActive ?? false,
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     usage: statusSlice?.usage,
-    roundStage: statusSlice?.roundStage,
+    stage: statusSlice?.stage,
     subagents: subagentCount,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,

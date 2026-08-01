@@ -49,6 +49,7 @@ import {
   pendingApprovalRowSuffix,
 } from './SubagentListDisplay';
 import type { PendingApprovalKind } from '../state/approvalQueue';
+import type { StreamStage } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 function HiddenRowSummary({
@@ -116,6 +117,14 @@ function PhaseHeader({
   );
 }
 
+// A workflow-script run advances through phases, a tool-use run through
+// rounds; one slot carries whichever this stream has.
+function formatStageLabel(stage: StreamStage | undefined): string | undefined {
+  if (stage === undefined) return undefined;
+  if (stage.kind === 'round') return formatRoundStageLabel(stage);
+  return formatPhaseStageLabel(stage);
+}
+
 function SessionRow({
   active,
   focused,
@@ -153,11 +162,7 @@ function SessionRow({
   // this truncate-end text sheds inline elapsed (narrow mode only), the round,
   // and last the pending-approval kind. The metadata column never shrinks.
   const approvalSuffix = pendingApprovalRowSuffix(pendingKinds);
-  // A workflow-script run advances through phases, a tool-use run through
-  // rounds; one slot carries whichever this stream has.
-  const stageLabel =
-    formatPhaseStageLabel(session.slice?.phaseStage) ??
-    formatRoundStageLabel(session.slice?.roundStage);
+  const stageLabel = formatStageLabel(session.slice?.stage);
   // The resolved model is per-agent identity (a workflow run's grandchildren
   // can each resolve a different model); the list-root row is the conversation
   // itself, whose model already rides the status bar. A background bash stream

@@ -19,7 +19,6 @@ import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
-  type RoundStage,
   type SpendingStatus,
   type StreamPhase,
   type StreamSubstate,
@@ -27,7 +26,10 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import {
+  formatPhaseStageLabel,
+  formatRoundStageLabel,
+} from '@shared/streams/streamStatusDisplay';
 import {
   filterNotNullish,
   formatCompactDuration,
@@ -45,6 +47,7 @@ import { formatResumeCommand } from '../state/resumeHint';
 import {
   type BypassState,
   type StreamSlice,
+  type StreamStage,
   type TransientNotice,
 } from '../state/cliState';
 import {
@@ -91,7 +94,7 @@ export interface StatusBarDisplayInput {
   readonly compactingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
   readonly usage: TokenUsageStats | undefined;
-  readonly roundStage: RoundStage | undefined;
+  readonly stage: StreamStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
   readonly approvalDepth: number;
@@ -263,25 +266,42 @@ function formatUsage(
   };
 }
 
-function roundSegment(
-  roundStage: RoundStage | undefined,
+// A workflow-script run advances through phases, a tool-use run through
+// rounds; one status-bar slot carries whichever this stream has (mirrors the
+// SubagentList row's `stageLabel`).
+function stageSegment(
+  stage: StreamStage | undefined,
 ): StatusBarSegment | undefined {
-  return roundStage !== undefined
-    ? {
-        text: formatRoundStageLabel(roundStage),
-        // Keep round visibility on narrow terminals: degrade to the bare
-        // current-round label instead of dropping the planned total's context.
-        compactText: formatRoundStageLabel({ index: roundStage.index }),
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.round,
-      }
-    : undefined;
+  if (stage === undefined) return undefined;
+  if (stage.kind === 'round') {
+    return {
+      text: formatRoundStageLabel(stage),
+      // Keep round visibility on narrow terminals: degrade to the bare
+      // current-round label instead of dropping the planned total's context.
+      compactText: formatRoundStageLabel({ index: stage.index }),
+      color: 'dim',
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.stage,
+    };
+  }
+  const text = formatPhaseStageLabel(stage);
+  if (text === undefined) return undefined;
+  return {
+    text,
+    // Keep phase visibility on narrow terminals: degrade to the bare
+    // current-phase label instead of dropping the planned total's context.
+    compactText: formatPhaseStageLabel({
+      label: stage.label,
+      ...(stage.index !== undefined ? { index: stage.index } : {}),
+    }),
+    color: 'dim',
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.stage,
+  };
 }
 
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeSubagent: 20,
-  round: 30,
+  stage: 30,
   usage: 40,
   queuedFollowUp: 50,
   approvalPolicy: 55,
@@ -962,7 +982,7 @@ export function buildStatusBarDisplay(
       accessModeSegment(input.modelAccess),
       relayQuotaSegment(input.relayQuota, input.modelAccess),
       approvalPolicySegment(input.approvalPolicy),
-      roundSegment(input.roundStage),
+      stageSegment(input.stage),
       formatUsage(input.usage, input.model),
       queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
       subagentsSegment(input.subagents),
