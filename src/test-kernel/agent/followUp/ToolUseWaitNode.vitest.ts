@@ -923,14 +923,25 @@ describe('ToolUseWaitNode', () => {
 
   // Regression: #9443. The subagent after-error stop fired before the drained
   // batch was consumed, dropping user input the child-run loop had already
-  // taken off the queue — and skipping `post`'s error clear with it.
-  it('consumes a drained batch after an error instead of dropping it', async () => {
+  // taken off the queue — and skipping `post`'s error clear with it. Since
+  // consuming the batch continues immediately, an active goal must not be
+  // paused or lose its unattended bash approval first.
+  it('recovers an errored goal from a drained batch without pausing it', async () => {
+    const streamId = 'wait-node-error-drained-goal' as StreamTabId;
+    await installPlatform();
+    await GoalStore.start(streamId, 'finish the autonomous proof');
+
     const shared: ToolUseRunShared = toolUseRunShared();
     shared.lastError = {
       message: 'stale failure from the previous cycle',
       userRetryable: false,
     };
     const interactions = { emit: vi.fn() };
+    const setApprovalBypassState = vi.fn();
+    const ownerSession = sessionWithInteractions({
+      setApprovalBypassState,
+      cancel: vi.fn(),
+    });
     const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
     const services = createWaitNodeServices({
       isSubagent: true,
@@ -945,26 +956,34 @@ describe('ToolUseWaitNode', () => {
     });
     const node = new ToolUseWaitNode(batch).setServices(services);
 
-    const prep = await node.prep(shared);
-    expect(prep.afterError).toBe(true);
+    try {
+      const prep = await node.prep(shared);
+      expect(prep.afterError).toBe(true);
 
-    const { exec, transition } = await withTestRunContext(
-      interactions,
-      'test-stream',
-      async () => {
-        const exec = await node.exec(prep);
-        return { exec, transition: await node.post(shared, prep, exec) };
-      },
-    );
+      const { exec, transition } = await withTestRunContext(
+        interactions,
+        streamId,
+        async () => {
+          const exec = await node.exec(prep);
+          return { exec, transition: await node.post(shared, prep, exec) };
+        },
+        { session: ownerSession },
+      );
 
-    expect(exec).toEqual({
-      kind: 'continue',
-      followUps: batch,
-      synthetic: false,
-    });
-    expect(transition).toBe(FlowTransition.CONTINUE);
-    // Consuming the batch recovers the error rather than stranding it.
-    expect(shared.lastError).toBeUndefined();
+      expect(exec).toEqual({
+        kind: 'continue',
+        followUps: batch,
+        synthetic: false,
+      });
+      expect(transition).toBe(FlowTransition.CONTINUE);
+      // Consuming the batch recovers the error rather than stranding it.
+      expect(shared.lastError).toBeUndefined();
+      expect(GoalStore.getForStream(streamId)?.status).toBe('active');
+      expect(setApprovalBypassState).not.toHaveBeenCalled();
+    } finally {
+      await GoalStore.forget(streamId);
+      cleanupApprovalsForStream(streamId);
+    }
   });
 
   // Companion to the above: with no drained batch in hand, the after-error
