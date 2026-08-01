@@ -33,7 +33,7 @@ import type { ExecResult } from '@shared/schemas/opResults';
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { planSummaryLine } from '@shared/schemas/workPlan';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { formatDuration } from '@utils/core';
+import { formatDuration, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { splitContentLines } from '@utils/text/stringUtils';
 import {
@@ -95,9 +95,7 @@ function formatWorkflowOutputs(
 ): string[] {
   const format = (o: OutputFileSummary): string =>
     formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath));
-  const rounds = [...new Set(outputs.map((o) => o.round))].sort(
-    (a, b) => a - b,
-  );
+  const rounds = unique(outputs.map((o) => o.round)).sort((a, b) => a - b);
   if (rounds.length <= 1) {
     return ['<output-files>', ...outputs.map(format), '</output-files>'];
   }

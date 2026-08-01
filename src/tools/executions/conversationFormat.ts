@@ -10,6 +10,7 @@ import {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
+import { sliceLineRange } from '@tools/formatting';
 
 const CONVERSATION_FORMAT_OPTIONS: ConversationFormatOptions = {
   textLimit: 500,
@@ -32,9 +33,6 @@ export function formatConversation(conversation: readonly unknown[]): string {
 /** Slice multi-line output to a 1-based inclusive [start, end] range. */
 export function applyViewRange(output: string, viewRange?: number[]): string {
   if (!viewRange || viewRange.length < 2) return output;
-  const lines = output.split('\n');
   const [start, end] = viewRange;
-  return lines
-    .slice(Math.max(start - 1, 0), Math.min(end, lines.length))
-    .join('\n');
+  return sliceLineRange(output.split('\n'), start, end).join('\n');
 }

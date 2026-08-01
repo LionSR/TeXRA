@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
+import { confirmModal } from '@frontend/ui/dialogs';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
@@ -239,15 +240,7 @@ export async function handleAcceptEdited(
       return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
         ...COMMIT_PORTS,
         exists: (location) => AbsoluteFS.exists(location.absolutePath),
-        confirm: async (message) => {
-          const answer = await vscode.window.showWarningMessage(
-            message,
-            { modal: true },
-            'Yes',
-            'Cancel',
-          );
-          return answer === 'Yes';
-        },
+        confirm: (message) => confirmModal(message, 'Yes', 'Cancel'),
       });
     }
 

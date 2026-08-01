@@ -12,6 +12,7 @@ import {
   computeLineChangeSummary,
   computeUserPatch,
 } from '@tools/approval/toolEditApproval';
+import { createTexraTempDir } from '@utils/files/tempDir';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -22,7 +23,6 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
-import { createTexraTempDir } from './desktopTempDir.js';
 
 export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   /**

@@ -5,6 +5,7 @@ import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { relayTokenSignOutNotice } from '@auth/relayToken';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import { confirmModal } from '@frontend/ui/dialogs';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
@@ -153,12 +154,11 @@ export async function signOut(): Promise<void> {
       return;
     }
 
-    const confirm = await vscode.window.showWarningMessage(
+    const confirmed = await confirmModal(
       'Are you sure you want to sign out?',
-      { modal: true },
       'Sign Out',
     );
-    if (confirm !== 'Sign Out') return;
+    if (!confirmed) return;
 
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
