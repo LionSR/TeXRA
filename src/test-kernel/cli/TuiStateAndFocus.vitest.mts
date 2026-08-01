@@ -713,12 +713,26 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('allocates session rows from the session count alone', () => {
+  it('keeps the child list collapsed until it receives focus', () => {
     expect(
       allocateConversationBottomPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
+        todosPlanContentRows: 0,
+        transcriptRows: 6,
+      }),
+    ).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
+
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 2,
+        childListFocused: true,
         todosPlanContentRows: 0,
         transcriptRows: 6,
       }),
@@ -742,14 +756,14 @@ describe('CLI TUI row allocation', () => {
     ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
   });
 
-  it('borrows a child-list row so an active todo stays visible', () => {
+  it('borrows a focused child-list row so an active todo stays visible', () => {
     // Codex review case: many children + one todo under the 10-row cap. The
     // proportional split grants todos one row — too small for separator +
     // content — so one row shifts from the ample child list instead.
     const allocation = allocateConversationBottomPanelRows({
       maxRows: 10,
       sessionCount: 11,
-      childListFocused: false,
+      childListFocused: true,
       todosPlanContentRows: 1,
       transcriptRows: 30,
     });
@@ -776,12 +790,12 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('preserves todo content when the child list can yield one row', () => {
+  it('preserves todo content when the focused child list can yield one row', () => {
     expect(
       allocateConversationBottomPanelRows({
         maxRows: 10,
         sessionCount: 11,
-        childListFocused: false,
+        childListFocused: true,
         todosPlanContentRows: 1,
         transcriptRows: 20,
       }),
