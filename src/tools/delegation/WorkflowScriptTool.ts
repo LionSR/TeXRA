@@ -28,7 +28,10 @@ import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import { createRehydratedChildStream } from '@tools/childStream';
+import {
+  createRehydratedChildStream,
+  getChildStreamId,
+} from '@tools/childStream';
 import {
   assertWritable,
   resolveWorkspaceRelativePath,
@@ -355,12 +358,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     );
 
     try {
-      await registerExecution(
-        runExecutionId,
-        runConfig,
-        meta.name,
-        runScope.executionId,
-      );
+      await registerExecution(runExecutionId, runConfig, meta.name, {
+        streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
+        parentExecutionId: runScope.executionId,
+      });
     } catch (error) {
       // A relaunch whose prior run is still in flight shares this deterministic
       // id: the fresh-lease acquisition fails closed rather than starting a

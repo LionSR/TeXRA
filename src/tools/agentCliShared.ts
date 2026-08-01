@@ -27,7 +27,11 @@ import {
 import { generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-import { createChildStream, type ChildStream } from './childStream';
+import {
+  createChildStream,
+  getChildStreamId,
+  type ChildStream,
+} from './childStream';
 
 /**
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
@@ -173,14 +177,13 @@ export async function launchAgentCliSession(
   params: AgentCliLaunchParams,
 ): Promise<ToolResult> {
   const executionId = generateExecutionId();
+  const childStreamId = getChildStreamId(executionId, params.streamPrefix);
 
   try {
-    await registerExecution(
-      executionId,
-      params.config,
-      params.agentName,
-      params.parentExecutionId,
-    );
+    await registerExecution(executionId, params.config, params.agentName, {
+      streamId: childStreamId,
+      parentExecutionId: params.parentExecutionId,
+    });
   } catch {
     throw new ToolError(params.registerFailedMessage);
   }

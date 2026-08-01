@@ -1,7 +1,7 @@
 import pMap from 'p-map';
 
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
-import { writeExecutionStreamId } from '@agent/storage/executionLifecycle';
+import { writeLegacyExecutionStreamId } from '@agent/storage/executionLifecycle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { StreamSnapshotStore } from './StreamSnapshotStore';
@@ -13,6 +13,8 @@ type PersistedStreamIdResolutionSource =
 export interface PersistedStreamIdResolution {
   readonly streamId: StreamTabId;
   readonly source: PersistedStreamIdResolutionSource;
+  /** Other persisted candidates to try when a historical primary is empty. */
+  readonly fallbackStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -29,7 +31,7 @@ export interface PersistedStreamIdResolverOptions {
  */
 const META_SCAN_CONCURRENCY = 8;
 
-export interface ExecutionStreamScan {
+interface ExecutionStreamScan {
   /** Every stream with sidecars under `streamData/`, in enumeration order. */
   readonly persistedStreams: StreamTabId[];
   /** Persisted streams whose sidecar `meta.json` claims this execution. */
@@ -37,13 +39,11 @@ export interface ExecutionStreamScan {
 }
 
 /**
- * The one meta scan over persisted sidecars for an execution: list every
- * `streamData/` stream once, read each one's `meta.json` executionId, and
- * report which of them claim `executionId`. Shared by this resolver and the
- * completed-run conversation reader's sibling search so both enumerate in the
- * same order under the same bounded fan-out.
+ * Compatibility scan for executions registered before their stream identity
+ * was stored directly: list every `streamData/` stream once, read each one's
+ * `meta.json` executionId, and report which of them claim `executionId`.
  */
-export async function scanPersistedStreamsForExecution(
+async function scanPersistedStreamsForExecution(
   executionId: ExecutionId,
   snapshotStore: StreamSnapshotStore,
 ): Promise<ExecutionStreamScan> {
@@ -65,7 +65,7 @@ export async function scanPersistedStreamsForExecution(
 }
 
 /** Streams whose id carries the `#executionId` suffix, in the given order. */
-export function findExecutionSuffixMatches(
+function findExecutionSuffixMatches(
   streams: readonly StreamTabId[],
   executionId: ExecutionId,
 ): StreamTabId[] {
@@ -73,23 +73,11 @@ export function findExecutionSuffixMatches(
   return streams.filter((id) => id.endsWith(suffix));
 }
 
-/**
- * Disambiguate multiple persisted streams whose sidecar `meta.json` all
- * reference the same `executionId` (e.g. a parent orchestrator tab and a
- * `bash@tool#executionId` child stream). Ranks candidates by data kind: a
- * real `streamLogs` entry always outranks a `workPlan.json`-only match,
- * which in turn outranks a bare metadata match (scan order only breaks ties
- * within the same rank), so a log-backed candidate is never shadowed by an
- * earlier-ordered workPlan-only one.
- *
- * Data presence is checked cheaply: an already-loaded `StreamLogStore.has()`
- * lookup is O(1) in-memory, and `hasPersistedWorkPlan()` is a single stat, so
- * this never re-reads the full per-stream sidecar set.
- */
-async function pickBestMetaMatch(
+/** Choose the data-bearing primary for an ambiguous historical record. */
+async function pickBestLegacyMetaMatch(
   candidates: readonly StreamTabId[],
   snapshotStore: StreamSnapshotStore,
-  streamLogStore: Pick<StreamLogStore, 'keys' | 'has'> | undefined,
+  streamLogStore: Pick<StreamLogStore, 'has'> | undefined,
 ): Promise<StreamTabId> {
   if (candidates.length === 1) return candidates[0];
 
@@ -100,9 +88,6 @@ async function pickBestMetaMatch(
       return {
         streamId,
         hasLog,
-        // hasWorkPlan is irrelevant once hasLog is true (log rank always
-        // wins below) — skip the disk stat in that case, since this runs on
-        // the hot path #7299 already had to bound for fd pressure.
         hasWorkPlan:
           hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
       };
@@ -116,26 +101,46 @@ async function pickBestMetaMatch(
   );
 }
 
+function orderedFallbacks(
+  primary: StreamTabId,
+  candidates: readonly StreamTabId[],
+): StreamTabId[] {
+  const seen = new Set<StreamTabId>([primary]);
+  return candidates.filter((streamId) => {
+    if (seen.has(streamId)) return false;
+    seen.add(streamId);
+    return true;
+  });
+}
+
+/**
+ * Find alternative persisted streams for the rare case where a historical
+ * primary reconstructs no conversation. Current executions do not need this
+ * scan unless their registered stream is unexpectedly empty.
+ */
+export async function findPersistedStreamFallbacksForExecution(
+  executionId: ExecutionId,
+  primary: StreamTabId,
+  options: PersistedStreamIdResolverOptions = {},
+): Promise<StreamTabId[]> {
+  const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
+  const { persistedStreams, metaMatched } =
+    await scanPersistedStreamsForExecution(executionId, snapshotStore);
+  const suffixMatched = findExecutionSuffixMatches(
+    [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
+    executionId,
+  );
+  return orderedFallbacks(primary, [...metaMatched, ...suffixMatched]);
+}
+
 /**
  * Resolve an execution id to the stream id used by transcript sidecars.
  *
- * The sidecar metadata is canonical. The suffix checks preserve compatibility
- * with older records and child-stream prefixes that cannot be derived from the
- * top-level agent/model pair.
- *
- * Decide-once-carry-as-data (#7469): when a `streamDataMeta` resolution below
- * finds exactly one meta-matched candidate (no disambiguation needed), it's
- * cached onto the execution's own metadata (`writeExecutionStreamId`) before a
- * later call for the same executionId can skip straight to a single cheap
- * read instead of re-scanning every persisted stream. A multi-candidate
- * resolution is deliberately NOT cached: `pickBestMetaMatch`'s ranking
- * depends on which `streamLogStore`/workPlan data happens to be available to
- * *this* call, so an earlier call without a loaded `streamLogStore` could
- * settle on a worse (non-log-backed) candidate than a later call that does
- * have one — caching that would permanently shadow the better answer. The
- * suffix sources further below are heuristic guesses for when no stream's
- * meta.json actually claims this executionId at all, and caching a guess as
- * if it were a confirmed match could pin a wrong answer too.
+ * New executions carry this mapping in their own metadata from registration.
+ * The ranked sidecar scan and suffix checks are compatibility fallbacks for
+ * records created before that field existed; current records never enter that
+ * branch. A unique confirmed legacy match is written through once so later
+ * reads use the same constant-time metadata path as current executions.
  *
  * `null` means no persisted stream carries this execution. Callers that have
  * a derivable stream id own that substitution.
@@ -144,10 +149,10 @@ export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
   options: PersistedStreamIdResolverOptions = {},
 ): Promise<PersistedStreamIdResolution | null> {
-  const cachedStreamId = (await getExecutionStore(executionId).readMeta())
+  const registeredStreamId = (await getExecutionStore(executionId).readMeta())
     ?.streamId;
-  if (cachedStreamId) {
-    return { streamId: cachedStreamId, source: 'executionMeta' };
+  if (registeredStreamId) {
+    return { streamId: registeredStreamId, source: 'executionMeta' };
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
@@ -155,30 +160,54 @@ export async function resolvePersistedStreamIdForExecution(
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
-    const streamId = await pickBestMetaMatch(
+    const streamId = await pickBestLegacyMetaMatch(
       metaMatched,
       snapshotStore,
       options.streamLogStore,
     );
     if (metaMatched.length === 1) {
-      await writeExecutionStreamId(executionId, streamId);
+      await writeLegacyExecutionStreamId(executionId, streamId);
     }
-    return { streamId, source: 'streamDataMeta' };
+    const suffixMatched = findExecutionSuffixMatches(
+      [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
+      executionId,
+    );
+    const fallbackStreamIds = orderedFallbacks(streamId, [
+      ...metaMatched,
+      ...suffixMatched,
+    ]);
+    return {
+      streamId,
+      source: 'streamDataMeta',
+      ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
+    };
   }
 
-  const matchedSidecar = findExecutionSuffixMatches(
+  const matchedSidecars = findExecutionSuffixMatches(
     persistedStreams,
     executionId,
-  )[0];
+  );
+  const matchedSidecar = matchedSidecars[0];
   if (matchedSidecar) {
-    return { streamId: matchedSidecar, source: 'streamDataSuffix' };
+    const fallbackStreamIds = orderedFallbacks(matchedSidecar, matchedSidecars);
+    return {
+      streamId: matchedSidecar,
+      source: 'streamDataSuffix',
+      ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
+    };
   }
 
-  const matchedLog = options.streamLogStore
-    ? findExecutionSuffixMatches(options.streamLogStore.keys(), executionId)[0]
-    : undefined;
+  const matchedLogs = options.streamLogStore
+    ? findExecutionSuffixMatches(options.streamLogStore.keys(), executionId)
+    : [];
+  const matchedLog = matchedLogs[0];
   if (matchedLog) {
-    return { streamId: matchedLog, source: 'streamLogsSuffix' };
+    const fallbackStreamIds = orderedFallbacks(matchedLog, matchedLogs);
+    return {
+      streamId: matchedLog,
+      source: 'streamLogsSuffix',
+      ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
+    };
   }
 
   return null;

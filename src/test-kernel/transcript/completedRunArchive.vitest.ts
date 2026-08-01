@@ -361,13 +361,8 @@ describe('completedRunArchive facade', () => {
     expect(result.conversation!.length).toBeGreaterThan(0);
   });
 
-  it('falls through to the content-bearing sibling when the resolver picks an empty log (non-empty rule)', async () => {
+  it('falls through to a content-bearing historical sibling stream', async () => {
     const executionId = '0777aa0777aa' as ExecutionId;
-    // Both streams are meta-matched and log-backed; the alphabetically
-    // first-scanned one holds only non-conversation rows, so the resolver's
-    // log-rank pick (#7433 criteria) reconstructs empty. No legacy file
-    // exists — the facade must fall through to the sibling that actually
-    // holds the transcript.
     const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
     const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
 
@@ -394,12 +389,17 @@ describe('completedRunArchive facade', () => {
     await logs.flush();
 
     const result = await readCompletedRunConversation(executionId);
-    expect(result.source).toBe('streamLog');
-    expect(result.streamId).toBe(fullStream);
-    expect(result.conversation).toEqual([
-      { role: 'user', content: 'Real question' },
-      { role: 'assistant', content: [{ type: 'text', text: 'Real answer' }] },
-    ]);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId: fullStream,
+      conversation: [
+        { role: 'user', content: 'Real question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Real answer' }],
+        },
+      ],
+    });
   });
 
   it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {
