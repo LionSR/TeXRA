@@ -717,6 +717,9 @@ importers:
       semver:
         specifier: ^7.8.5
         version: 7.8.5
+      slice-ansi:
+        specifier: ^9.0.0
+        version: 9.0.0
       string-width:
         specifier: ^8.2.2
         version: 8.2.2

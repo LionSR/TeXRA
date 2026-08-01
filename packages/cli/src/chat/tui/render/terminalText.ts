@@ -1,4 +1,5 @@
 import cliTruncate from 'cli-truncate';
+import sliceAnsi from 'slice-ansi';
 import stringWidth from 'string-width';
 import stripAnsi from 'strip-ansi';
 
@@ -21,14 +22,21 @@ export function textDisplayWidth(text: string): number {
   return stringWidth(text);
 }
 
+function normalizeColumns(width: number): number {
+  if (!Number.isFinite(width)) {
+    throw new TypeError('Terminal width must be finite.');
+  }
+  return Math.max(0, Math.floor(width));
+}
+
 /** Hard-clip to `width` display columns with no ellipsis. */
 export function clipToWidth(text: string, width: number): string {
-  return cliTruncate(text, Math.max(0, width), { truncationCharacter: '' });
+  return sliceAnsi(text, 0, normalizeColumns(width));
 }
 
 /** Truncate to `maxColumns` display columns, ending with `…` when cut. */
 export function truncateToWidth(text: string, maxColumns: number): string {
-  return cliTruncate(text, Math.max(0, maxColumns));
+  return cliTruncate(text, normalizeColumns(maxColumns));
 }
 
 /** Collapse whitespace, then truncate — the one-line-summary form used by

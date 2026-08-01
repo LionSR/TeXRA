@@ -80,6 +80,7 @@
     "picocolors": "^1.1.1",
     "react": "^19.2.8",
     "semver": "^7.8.5",
+    "slice-ansi": "^9.0.0",
     "string-width": "^8.2.2",
     "strip-ansi": "^7.2.0",
     "typescript": "^6.0.3",
