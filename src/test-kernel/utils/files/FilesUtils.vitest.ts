@@ -158,7 +158,10 @@ describe('pathUtils Test Suite', () => {
       const relativePath = 'relative/path/file.txt';
       const resolved = WorkspaceFS.toAbsolute(relativePath);
       assert.strictEqual(path.isAbsolute(resolved), true);
-      assert.strictEqual(resolved.endsWith(relativePath), true);
+      assert.strictEqual(
+        resolved.endsWith(path.join('relative', 'path', 'file.txt')),
+        true,
+      );
     });
   });
 });

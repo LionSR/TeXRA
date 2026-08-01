@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Compiled PDF artifact paths are correct on Windows** — diff PDFs generated
+  from files in round subdirectories no longer repeat the round directory in
+  their saved path.
 - **Failed agent starts no longer look like successful runs** — when a new
   launch cannot start on a previously completed task, the status update is now
   identified as a rollback rather than a fresh completion.
