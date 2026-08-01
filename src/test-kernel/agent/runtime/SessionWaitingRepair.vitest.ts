@@ -153,4 +153,120 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     );
     expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
   });
+
+  it('shares rejection and releases the probe slot for retry', async () => {
+    seedCancelled();
+    const failure = new Error('resumability read failed');
+    resumabilityMocks.deriveResumability.mockRejectedValueOnce(failure);
+
+    const first = session.repairWaitingIfResumable(streamId);
+    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+    const second = session.repairWaitingIfResumable(streamId);
+
+    await expect(first).rejects.toBe(failure);
+    await expect(second).rejects.toBe(failure);
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+
+    session.status.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
+    resumabilityMocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
+    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
+      true,
+    );
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares a stale false verdict after resume starts during the probe', async () => {
+    seedCancelled();
+    let release: (() => void) | undefined;
+    resumabilityMocks.deriveResumability.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ resumable: true, cause: 'interrupted-with-flow' });
+        }),
+    );
+
+    const first = session.repairWaitingIfResumable(streamId);
+    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+    const second = session.repairWaitingIfResumable(streamId);
+    release?.();
+
+    await expect(Promise.all([first, second])).resolves.toEqual([false, false]);
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+  });
+
+  it('does not recreate a stream cleared during the probe', async () => {
+    seedCancelled();
+    let release: (() => void) | undefined;
+    resumabilityMocks.deriveResumability.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ resumable: true, cause: 'interrupted-with-flow' });
+        }),
+    );
+
+    const repair = session.repairWaitingIfResumable(streamId);
+    session.status.clearStream(streamId);
+    session.snapshots.evict(streamId);
+    release?.();
+
+    await expect(repair).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBeUndefined();
+  });
+
+  it('does not repair a replacement execution', async () => {
+    seedCancelled();
+    let release: (() => void) | undefined;
+    resumabilityMocks.deriveResumability.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ resumable: true, cause: 'interrupted-with-flow' });
+        }),
+    );
+
+    const repair = session.repairWaitingIfResumable(streamId);
+    const replacementExecutionId = `c${executionId.slice(1)}` as ExecutionId;
+    session.snapshots.setRunDescriptor(
+      buildRunDescriptor({
+        streamId,
+        executionId: replacementExecutionId,
+        agent: 'assistant',
+        category: AgentCategory.ToolUse,
+        kind: 'agent',
+      }),
+    );
+    release?.();
+
+    await expect(repair).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledWith(
+      executionId,
+    );
+  });
+
+  it('does not repair a recreated terminal generation', async () => {
+    seedCancelled();
+    let release: (() => void) | undefined;
+    resumabilityMocks.deriveResumability.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ resumable: true, cause: 'interrupted-with-flow' });
+        }),
+    );
+
+    const repair = session.repairWaitingIfResumable(streamId);
+    session.status.clearStream(streamId);
+    seedCancelled();
+    release?.();
+
+    await expect(repair).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+  });
 });

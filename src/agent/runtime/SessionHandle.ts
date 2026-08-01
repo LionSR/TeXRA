@@ -309,17 +309,22 @@ export class SessionHandle {
    * runtime that owns the stream phase.
    */
   async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
+    const inFlight = this.waitingRepairProbes.get(streamId);
+    if (inFlight) return inFlight;
+
+    const statusGeneration = this.status.getGeneration(streamId);
     const phase = this.status.get(streamId);
     if (phase === STREAM_PHASE.WAITING) return true;
     if (isInFlightPhase(phase)) return false;
 
-    const inFlight = this.waitingRepairProbes.get(streamId);
-    if (inFlight) return inFlight;
-
     const executionId = this.snapshots.getExecutionId(streamId);
-    if (!executionId) return false;
+    if (!executionId || !statusGeneration) return false;
 
-    const probe = this.probeWaitingRepair(streamId, executionId);
+    const probe = this.probeWaitingRepair(
+      streamId,
+      executionId,
+      statusGeneration,
+    );
     this.waitingRepairProbes.set(streamId, probe);
     try {
       return await probe;
@@ -333,9 +338,16 @@ export class SessionHandle {
   private async probeWaitingRepair(
     streamId: StreamTabId,
     executionId: string,
+    statusGeneration: object,
   ): Promise<boolean> {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
+    if (
+      this.snapshots.getExecutionId(streamId) !== executionId ||
+      !this.status.isCurrentGeneration(streamId, statusGeneration)
+    ) {
+      return false;
+    }
     const repaired = this.status.transitionToWaiting(
       streamId,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
