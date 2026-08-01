@@ -93,7 +93,7 @@ before committing, run the full command. Unlike the other targeted commands,
 
 ### Directory organization
 
-This repository is a pnpm workspace. Repo-root `src/` contains shared core logic and host-neutral tests,
+This repository is a pnpm workspace. Repo-root `src/` contains host-agnostic production code and centralized tests for both shared and host-specific behavior,
 `packages/extension/` contains the VS Code extension, `packages/desktop/` the Electron shell, `packages/cli/`
 the `texra` terminal client, and `packages/trace-viewer/` the standalone trace-viewer web app.
 `packages/agent/` is the embeddable SDK surface (`@texra-ai/agent`) — it builds and bundles locally but is
@@ -139,7 +139,7 @@ frozen deep-import lists, not another lint rule.
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
-- `src/test-kernel/` - Vitest suites for host-neutral and Electron-facing behavior.
+- `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
 
 ### Pragmatic implementations
 

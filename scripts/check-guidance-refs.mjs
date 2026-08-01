@@ -182,25 +182,104 @@ function escapeRegex(value) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Collect local Markdown link destinations, excluding URLs and page anchors. */
-function relativeMarkdownLinks(line) {
+function localMarkdownDestination(rawDestination) {
+  let destination = rawDestination.trim();
+  if (destination.startsWith('<')) {
+    const end = destination.indexOf('>');
+    if (end === -1) return null;
+    destination = destination.slice(1, end);
+  } else {
+    destination = destination.split(/\s+["'(]/u, 1)[0];
+  }
+  if (
+    !destination ||
+    destination.startsWith('#') ||
+    destination.startsWith('/') ||
+    /^[a-z][a-z0-9+.-]*:/iu.test(destination)
+  ) {
+    return null;
+  }
+  return destination;
+}
+
+function isEscaped(text, index) {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
+}
+
+function closingBracket(line, start) {
+  for (let i = start; i < line.length; i += 1) {
+    if (line[i] === ']' && !isEscaped(line, i)) return i;
+  }
+  return -1;
+}
+
+function closingParenthesis(line, start) {
+  let depth = 0;
+  for (let i = start; i < line.length; i += 1) {
+    if (isEscaped(line, i)) continue;
+    if (line[i] === '(') depth += 1;
+    else if (line[i] === ')' && depth > 0) depth -= 1;
+    else if (line[i] === ')') return i;
+  }
+  return -1;
+}
+
+function referenceLabel(value) {
+  return value.trim().replaceAll(/\s+/gu, ' ').toLowerCase();
+}
+
+function referenceDefinitions(lines) {
+  const definitions = new Map();
+  for (const line of lines) {
+    const match = /^\s{0,3}\[([^\]]+)\]:\s*(.+)$/u.exec(line);
+    if (!match) continue;
+    const destination = localMarkdownDestination(match[2]);
+    if (destination) definitions.set(referenceLabel(match[1]), destination);
+  }
+  return definitions;
+}
+
+/** Collect complete inline, full, collapsed, and shortcut links and images. */
+function relativeMarkdownLinks(line, definitions) {
+  if (/^\s{0,3}\[[^\]]+\]:/u.test(line)) return [];
+
   const links = [];
-  for (const [, rawDestination] of line.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)) {
-    let destination = rawDestination.trim();
-    if (destination.startsWith('<') && destination.endsWith('>')) {
-      destination = destination.slice(1, -1);
-    } else {
-      destination = destination.split(/\s+["']/u, 1)[0];
-    }
-    if (
-      !destination ||
-      destination.startsWith('#') ||
-      destination.startsWith('/') ||
-      /^[a-z][a-z0-9+.-]*:/iu.test(destination)
-    ) {
+  for (let open = line.indexOf('['); open !== -1;) {
+    if (isEscaped(line, open)) {
+      open = line.indexOf('[', open + 1);
       continue;
     }
-    links.push(destination);
+    const close = closingBracket(line, open + 1);
+    if (close === -1) break;
+
+    const textLabel = line.slice(open + 1, close);
+    let next = close + 1;
+    let destination;
+    if (line[next] === '(') {
+      const end = closingParenthesis(line, next + 1);
+      if (end !== -1) {
+        destination = localMarkdownDestination(line.slice(next + 1, end));
+        next = end + 1;
+      }
+    } else if (line[next] === '[') {
+      const referenceEnd = closingBracket(line, next + 1);
+      if (referenceEnd !== -1) {
+        const explicitLabel = line.slice(next + 1, referenceEnd);
+        destination = definitions.get(
+          referenceLabel(explicitLabel || textLabel),
+        );
+        next = referenceEnd + 1;
+      }
+    } else {
+      destination = definitions.get(referenceLabel(textLabel));
+    }
+
+    if (destination) links.push(destination);
+    open = line.indexOf('[', Math.max(next, close + 1));
   }
   return links;
 }
@@ -216,11 +295,12 @@ for (const file of targets) {
   const body = stripFencedBlocks(readFileSync(join(repoRoot, file), 'utf8'));
   const lines = body.split('\n');
   const ignored = ignoredLines(lines);
+  const definitions = referenceDefinitions(lines);
 
   for (const [index, line] of lines.entries()) {
     if (ignored[index]) continue;
 
-    for (const destination of relativeMarkdownLinks(line)) {
+    for (const destination of relativeMarkdownLinks(line, definitions)) {
       const localDestination = destination.split(/[?#]/u, 1)[0];
       let decodedDestination;
       try {

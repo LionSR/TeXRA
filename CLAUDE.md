@@ -27,8 +27,8 @@ type check first. This is the single most common way a change lands broken.
 
 ## Layout
 
-A pnpm workspace. Repo-root `src/` contains host-agnostic code plus host-neutral
-tests; `packages/extension`, `packages/desktop`, `packages/cli`, and
+A pnpm workspace. Repo-root `src/` contains host-agnostic production code plus
+centralized tests for shared and host-specific behavior; `packages/extension`, `packages/desktop`, `packages/cli`, and
 `packages/trace-viewer` are hosts and apps over it. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
 `tsconfig.json` — use them instead of long relative chains.
 

@@ -1,13 +1,15 @@
-# `src/` — host-agnostic code and tests
+# `src/` — host-agnostic production code and centralized tests
 
-This directory contains host-agnostic code consumed by one or more of the VS Code
-extension (`packages/extension`), Electron desktop app (`packages/desktop`), and
-terminal CLI (`packages/cli`), plus host-neutral tests under `src/test-kernel/`.
-A module does not need to be used by every host to belong here. Host-specific
-wiring lives in the package that owns that host.
+Production code in this directory is host-agnostic and consumed by one or more of
+the VS Code extension (`packages/extension`), Electron desktop app
+(`packages/desktop`), and terminal CLI (`packages/cli`). A module does not need
+to be used by every host to belong here. `src/test-kernel/` centralizes tests for
+both shared and host-specific behavior; suites may import or mock extension,
+desktop, and CLI surfaces. Host-specific production wiring lives in the package
+that owns that host.
 
 There is no `@texra/core` package. Hosts reach this code through the path
-aliases declared in `tsconfig.json` (`@agent/*`, `@platform/*`, `@shared/*`, …).
+aliases declared in [`tsconfig.json`](../tsconfig.json) (`@agent/*`, `@platform/*`, `@shared/*`, …).
 Use the alias, not a long relative chain.
 
 ## Subsystems
@@ -33,13 +35,13 @@ Use the alias, not a long relative chain.
 | `src/eventBus/`     | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                       |
 | `src/hosts/`        | UI host descriptors shared across the three hosts                                                                                                                                                        |
 | `src/types/`        | Ambient module declarations for untyped third-party packages                                                                                                                                             |
-| `src/test-kernel/`  | The test suite. 869 tracked files, ~57% of `src/` by line count — it dominates a directory listing but ships in nothing                                                                                  |
+| `src/test-kernel/`  | The test suite. 875 tracked files, ~57% of `src/` by line count — it dominates a directory listing but ships in nothing                                                                                  |
 
 ## Two axes that decide where code goes
 
 **Does it import `vscode`?** Some directories here are enforced VS Code-free:
 importing `vscode` inside one is a lint error, not a convention. The canonical
-list is `VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs:60` — read it there rather
+list is `VSCODE_FREE_ZONE_DIRS` in [`eslint.config.mjs`](../eslint.config.mjs) — read it there rather
 than trusting a copy, including this one. Code in those zones reaches host
 services through `platform()` from `@platform/platform`; when it needs a
 capability the port does not expose, add a typed port rather than an import.

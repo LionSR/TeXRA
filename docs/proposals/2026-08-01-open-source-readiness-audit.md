@@ -78,10 +78,11 @@ must also pass.
 | **Fix**         | Restore the upstream header + gemini's MIT text in both `.sty` files, add an `acknowledgments.md` entry, and fold into the same NOTICE file as B2. Do the same provenance check on `template_poster.tex` and `template_slide.tex` (unaudited).                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Effort**      | Hours.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-### B4 — workflow hardening landed; token scope remains externally unverified
+### B4 — workflow hardening narrowed exposure; writable-script execution and token scope remain
 
-PR #9535 (commit `f685f96863`) landed every in-repo mitigation identified in the original finding.
-Only administrator-side token-scope verification remains.
+PR #9535 (commit `f685f96863`) landed both checkout flags, the trusted-author gate, and a narrower
+Node command pattern. That is measurable hardening, not a complete arbitrary-execution boundary:
+the same preset can write repository files and execute `node scripts/*`.
 
 |                                 |                                                                                                                                                                                                                                                                                      |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -90,7 +91,8 @@ Only administrator-side token-scope verification remains.
 | **Landed: trusted-author gate** | Mention-driven runs remain available for maintainer replies, while the job condition requires trusted author association for the triggering author and the issue or PR author before issue title/body can reach the action.                                                          |
 | **Landed: narrowed Node tools** | The `claude-interactive` preset in `.github/automation/allowed-tools.json` no longer grants unrestricted `Bash(node *)`; it permits `Bash(node scripts/*)` plus named npm/pnpm commands.                                                                                             |
 | **External scope caveat**       | `BOT_PAT` scope is still inferred rather than verified. Confirm whether it is present, fine-grained, and repository-scoped. If the workflow falls back to `GITHUB_TOKEN`, document that narrower repository/job scope instead of attributing multi-repository reach to the fallback. |
-| **Remaining effort**            | Administrator-side token-scope verification only; no code action remains from this finding.                                                                                                                                                                                          |
+| **Remaining code action**       | Do not combine writable repository files with executable `scripts/*` under credentials. Execute only immutable trusted tooling (for example from `.trusted-actions`) or run mutable-script execution in a credential-free sandbox.                                                   |
+| **External verification**       | Verify `BOT_PAT` scope and document the narrower `GITHUB_TOKEN` fallback.                                                                                                                                                                                                            |
 
 ### B5 — An outside contributor holds copyright in a substantial merged commit, with no CLA or DCO
 
@@ -605,9 +607,10 @@ Effort is maintainer-hours unless noted. **‖** marks work that parallelizes.
    Awesome + patched-openai entries; provenance headers in `src/agent/node/index.ts` and both
    `.sty` files; add the file to `verify-extension-package-invariants.mjs:42` and
    `electron-builder.yml`. — 4h
-7. **Verify automation-token scope** (B4): PR #9535 landed both non-persisting checkout flags,
-   the trusted-author gate, and Node-tool narrowing. Verify `BOT_PAT` scope and document the
-   narrower `GITHUB_TOKEN` fallback. — administrator verification
+7. **Finish automation hardening** (B4): retain #9535's two non-persisting checkout flags and
+   trusted-author gate, but remove the writable-`scripts/*` execution path or isolate it from
+   credentials. Verify `BOT_PAT` scope and document the narrower `GITHUB_TOKEN` fallback. — 2h +
+   administrator verification
 
 ### Phase 2 — Pre-flip cleanup. All parallelizable.
 
