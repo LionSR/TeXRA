@@ -8,13 +8,14 @@ import {
 } from '@agent/core/flows/ResponseCycleFlow';
 import {
   buildFailedCycleOutcome,
+  type FailedCycleFields,
   withModelClient,
 } from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
-import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
+import type { AgentFileLocation } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -35,13 +36,7 @@ interface CyclePrepInput {
 type CycleOutcome =
   | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
-  | {
-      outcome: 'failed';
-      error: Error;
-      userRetryable: boolean;
-      lastError?: RetryErrorInfo;
-      failureLogEmitted: boolean;
-    };
+  | ({ outcome: 'failed'; error: Error } & FailedCycleFields);
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -122,7 +117,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
         return {
           outcome: 'failed',
           error: new Error(cycleShared.lastError.message),
-          userRetryable: cycleShared.lastError.userRetryable,
           lastError: cycleShared.lastError,
           failureLogEmitted: cycleShared.failureLogEmitted ?? false,
         };
@@ -177,10 +171,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       if (!execRes.failureLogEmitted) {
         logger.error(`Response cycle failed: ${execRes.error.message}`);
       }
-      shared.lastError = execRes.lastError ?? {
-        message: execRes.error.message,
-        userRetryable: execRes.userRetryable,
-      };
+      shared.lastError = execRes.lastError;
       shared.continueRounds = false;
       shared.endTurn = false;
       return FlowTransition.FINALIZE;

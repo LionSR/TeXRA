@@ -50,6 +50,7 @@ export class ToolUseWaitNode<C> extends Node<
     const { checkInterruption, session, isSubagent } = this.services;
     const { runScope, stopAfterCycle } = useLaunchRunContext();
     const { streamId, session: ownerSession } = runScope;
+    const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -59,23 +60,25 @@ export class ToolUseWaitNode<C> extends Node<
     // it must not see a failure as a successful completion.
     // In subagent mode, stop immediately: the orchestrator was never
     // notified, so waiting for a follow-up would hang forever.
-    if (prepRes.afterError && isSubagent) {
+    //
+    // A batch the child-run loop already drained is the exception: it is
+    // in hand, so there is nothing to wait for and no hang to avoid.
+    // Stopping here would drop that user input on the floor — and skip the
+    // `post` clear of `lastError`/`userCancelledRetry` that consuming it
+    // performs, which is what makes the error recovered rather than terminal.
+    if (prepRes.afterError && isSubagent && !hasDrainedFollowUps) {
       return { kind: 'stop' };
     }
 
-    // A failed/cancelled cycle ends the autonomous leg. Pause any active
-    // goal so it surfaces as resumable — the in-cycle retry layer already
-    // absorbed transient errors before we reach here — instead of leaving the
-    // record `active` while the loop is actually stalled on a blocking wait.
+    // A failed/cancelled cycle with no recovery input ends the autonomous
+    // leg. Pause any active goal so it surfaces as resumable — the in-cycle
+    // retry layer already absorbed transient errors before we reach here —
+    // instead of leaving the record `active` while the loop is actually
+    // stalled. A drained batch continues immediately and keeps the goal live.
     // The goalPaused event makes the pause user-visible: a silent stop
     // mid-objective reads as a hang.
-    if (prepRes.afterError) {
-      const goal = GoalStore.getForStream(streamId);
-      if (goal?.status === 'active') {
-        await GoalStore.setStatus(streamId, 'paused');
-        await setGoalSessionBashAutoApproval(streamId, false);
-        emitRunFact(this.services.logger, 'goalPaused', { streamId });
-      }
+    if (prepRes.afterError && !hasDrainedFollowUps) {
+      await this.pauseActiveGoal(streamId);
     } else if (!isSubagent) {
       // Root-only notification: fires every cycle (not just a genuine
       // block) so a host can project each round's response as it happens —
@@ -172,13 +175,6 @@ export class ToolUseWaitNode<C> extends Node<
       return FlowTransition.COMPLETE;
     }
 
-    // A user follow-up is ready for the next cycle. Clear any prior
-    // error/cancellation state so runToolUseFlow does not treat a recovered
-    // error as terminal. Root flows arrive here from their session queue;
-    // resumed subagents arrive here through the one-shot handoff above.
-    shared.lastError = undefined;
-    shared.userCancelledRetry = undefined;
-
     await session.transcripts.ensureLoaded(streamId);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
       trace: logger,
@@ -194,13 +190,38 @@ export class ToolUseWaitNode<C> extends Node<
       }
     }
 
-    await applyFollowUpBatch(
-      shared,
-      execRes.followUps,
-      execRes.synthetic,
-      this.services,
-    );
+    try {
+      await applyFollowUpBatch(
+        shared,
+        execRes.followUps,
+        execRes.synthetic,
+        this.services,
+      );
+    } catch (error) {
+      if (prepRes.afterError) {
+        await this.pauseActiveGoal(streamId);
+      }
+      throw error;
+    }
+
+    // A user follow-up reached the transcript and is ready for the next
+    // cycle. Clear any prior error/cancellation state so runToolUseFlow does
+    // not treat a recovered error as terminal. If applying the follow-up
+    // failed above, preserve that state for the resumable failure path.
+    shared.lastError = undefined;
+    shared.userCancelledRetry = undefined;
 
     return FlowTransition.CONTINUE;
+  }
+
+  private async pauseActiveGoal(streamId: string): Promise<void> {
+    const goal = GoalStore.getForStream(streamId);
+    if (goal?.status !== 'active') {
+      return;
+    }
+
+    await GoalStore.setStatus(streamId, 'paused');
+    await setGoalSessionBashAutoApproval(streamId, false);
+    emitRunFact(this.services.logger, 'goalPaused', { streamId });
   }
 }
