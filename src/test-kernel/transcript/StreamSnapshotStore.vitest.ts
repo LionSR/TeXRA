@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
@@ -95,14 +99,17 @@ function compileFailure(relativePath: string, round: number): CompileFailure {
   };
 }
 
-function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
-  return TaskStateSchema.parse({
-    agentConfig: {
-      agent,
-      model,
-      agentCategory: AgentCategory.ToolUse,
-    },
+function toolUseConfig(agent = 'search', model = 'deepseekproT'): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent,
+    model,
+    agentCategory: AgentCategory.ToolUse,
   });
+}
+
+/** Legacy `meta.taskState` payload, written only by the disk-read shim tests. */
+function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
+  return TaskStateSchema.parse({ agentConfig: toolUseConfig(agent, model) });
 }
 
 type StagedDeletion = Awaited<
@@ -251,7 +258,7 @@ describe('StreamSnapshotStore', () => {
     const output = outputFile('paper.tex', 1);
     const failure = compileFailure('paper.tex', 1);
     const executionId = 'a1b2c3d4' as ExecutionId;
-    const taskState = toolUseTaskState('session-search', 'kimi26T');
+    const runConfig = toolUseConfig('session-search', 'kimi26T');
     const extendedUsage = {
       ...usage(100, 20, 0.5),
       elapsedTime: 1.5,
@@ -260,7 +267,7 @@ describe('StreamSnapshotStore', () => {
       toolUseTokens: 4,
     };
 
-    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+    await getExecutionStore(executionId).writeConfig(runConfig);
 
     events.emit({
       scope: 'run',
@@ -283,7 +290,7 @@ describe('StreamSnapshotStore', () => {
         type: 'run.config',
         streamId: STREAM,
         executionId,
-        config: taskState.agentConfig,
+        config: runConfig,
       },
     });
     events.emit({
@@ -395,7 +402,7 @@ describe('StreamSnapshotStore', () => {
     expect(snap.executionId).toBe(executionId);
     expect(snap.description).toBe('session-search / kimi26T');
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
-    expect(reader.getTaskState(STREAM)).toEqual(taskState);
+    expect(reader.getRunConfig(STREAM)).toEqual(runConfig);
     expect(reader.getRunDescriptor(STREAM)).toMatchObject({
       streamId: STREAM,
       executionId,
@@ -415,7 +422,7 @@ describe('StreamSnapshotStore', () => {
     const writer = new StreamSnapshotStore();
     const detach = writer.attachSessionEvents(events);
     const executionId = 'a1b2c3d4' as ExecutionId;
-    const taskState = toolUseTaskState('worker-agent');
+    const runConfig = toolUseConfig('worker-agent');
     const workflowDescriptor = buildRunDescriptor({
       streamId: STREAM,
       executionId,
@@ -431,7 +438,7 @@ describe('StreamSnapshotStore', () => {
         type: 'run.config',
         streamId: STREAM,
         executionId,
-        config: taskState.agentConfig,
+        config: runConfig,
       },
     });
     expect(writer.getRunDescriptor(STREAM)).toMatchObject({
@@ -806,11 +813,11 @@ describe('StreamSnapshotStore', () => {
     });
 
     const store = new StreamSnapshotStore();
-    const taskState = toolUseTaskState();
+    const runConfig = toolUseConfig();
     const executionId = 'abc123' as ExecutionId;
 
-    store.setTaskState(STREAM, taskState, executionId);
-    expect(store.getTaskState(STREAM)).toEqual(taskState);
+    store.setRunConfig(STREAM, runConfig, executionId);
+    expect(store.getRunConfig(STREAM)).toEqual(runConfig);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
     await expect(
       Promise.resolve(store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25))),
@@ -821,7 +828,7 @@ describe('StreamSnapshotStore', () => {
     });
     await store.flush();
 
-    expect(store.getTaskState(STREAM)).toEqual(taskState);
+    expect(store.getRunConfig(STREAM)).toEqual(runConfig);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
     const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
@@ -896,7 +903,7 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await expect(store.load([STREAM])).resolves.toBeUndefined();
 
-    expect(store.getTaskState(STREAM)).toEqual(taskState);
+    expect(store.getRunConfig(STREAM)).toEqual(taskState.agentConfig);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
@@ -906,9 +913,9 @@ describe('StreamSnapshotStore', () => {
     // across tests, and a reused id would inherit a handle whose directory
     // this test's temp platform no longer has.
     const executionId = 'aa11bb22' as ExecutionId;
-    const taskState = toolUseTaskState('legacy-search');
+    const runConfig = toolUseConfig('legacy-search');
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
-    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+    await getExecutionStore(executionId).writeConfig(runConfig);
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       // A legacy sidecar whose top-level mirror never held a real execution id.
@@ -933,29 +940,66 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
+  it('completes the run kind of a descriptor written before that field existed', async () => {
+    await installPlatform();
+    const store = new StreamSnapshotStore();
+    const legacy = async (
+      stream: StreamTabId,
+      executionId: ExecutionId,
+      agent: string,
+    ): Promise<void> => {
+      await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+      await getExecutionStore(executionId).writeConfig(toolUseConfig(agent));
+      await writeStreamFile(stream, 'meta.json', {
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        executionId,
+        // A descriptor persisted before #9119 added `kind`.
+        runDescriptor: {
+          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+          streamId: stream,
+          executionId,
+          agent,
+          category: AgentCategory.ToolUse,
+          configRef: {
+            kind: 'executionConfig',
+            executionId,
+            path: `executions/${executionId}/config.json`,
+          },
+        },
+      });
+    };
+    await legacy(STREAM, 'cc33dd44' as ExecutionId, 'bash');
+    await legacy(OTHER_STREAM, 'dd44ee55' as ExecutionId, 'legacy-search');
+
+    await store.load([STREAM, OTHER_STREAM]);
+
+    // Completed at the read boundary, so no consumer re-derives the kind from
+    // the agent name for itself.
+    expect(store.getRunDescriptor(STREAM)?.kind).toBe('process');
+    expect(store.getRunDescriptor(OTHER_STREAM)?.kind).toBe('agent');
+  });
+
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
     await installPlatform();
     const oldExecutionId = 'abc123' as ExecutionId;
     const newExecutionId = 'def456' as ExecutionId;
-    const oldTaskState = toolUseTaskState('old-search');
-    const newTaskState = toolUseTaskState('new-search');
+    const oldConfig = toolUseConfig('old-search');
+    const newConfig = toolUseConfig('new-search');
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       executionId: oldExecutionId,
     });
-    await getExecutionStore(oldExecutionId).writeConfig(
-      oldTaskState.agentConfig,
-    );
+    await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
 
     const store = new StreamSnapshotStore();
     const wasRuntimeUpdateInjected = injectDuringExecutionConfigHydration(
       oldExecutionId,
-      () => store.setTaskState(STREAM, newTaskState, newExecutionId),
+      () => store.setRunConfig(STREAM, newConfig, newExecutionId),
     );
 
     await store.load([STREAM]);
     expect(wasRuntimeUpdateInjected).toHaveBeenCalledOnce();
-    expect(store.getTaskState(STREAM)).toEqual(newTaskState);
+    expect(store.getRunConfig(STREAM)).toEqual(newConfig);
     expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
 
     await store.flush();
@@ -973,14 +1017,14 @@ describe('StreamSnapshotStore', () => {
   it('keeps a same-execution model switch that arrives during async hydration', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    const persisted = toolUseTaskState('search', 'deepseekproT');
-    const switched = toolUseTaskState('search', 'kimi26T');
+    const persisted = toolUseConfig('search', 'deepseekproT');
+    const switched = toolUseConfig('search', 'kimi26T');
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       executionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
-    await getExecutionStore(executionId).writeConfig(persisted.agentConfig);
+    await getExecutionStore(executionId).writeConfig(persisted);
 
     const store = new StreamSnapshotStore();
     // A model switch rewrites the execution config and re-emits `run.config`
@@ -988,7 +1032,7 @@ describe('StreamSnapshotStore', () => {
     // the live event wins because the seed only fills what it did not receive.
     const wasModelSwitchInjected = injectDuringExecutionConfigHydration(
       executionId,
-      () => store.setTaskState(STREAM, switched, executionId),
+      () => store.setRunConfig(STREAM, switched, executionId),
     );
 
     await store.load([STREAM]);
@@ -1001,7 +1045,7 @@ describe('StreamSnapshotStore', () => {
   it('does not re-derive the run.start descriptor when a seed re-reads disk meta', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    const taskState = toolUseTaskState('worker-agent');
+    const runConfig = toolUseConfig('worker-agent');
     const workflowDescriptor = buildRunDescriptor({
       streamId: STREAM,
       executionId,
@@ -1010,11 +1054,11 @@ describe('StreamSnapshotStore', () => {
       kind: 'workflowScript',
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
-    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+    await getExecutionStore(executionId).writeConfig(runConfig);
 
     const store = new StreamSnapshotStore();
     store.setRunDescriptor(workflowDescriptor);
-    store.setTaskState(STREAM, taskState, executionId);
+    store.setRunConfig(STREAM, runConfig, executionId);
     await store.flush();
 
     // Disk meta drops back to the pre-descriptor shape for the same execution.
@@ -1034,20 +1078,14 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const liveExecutionId = 'abc123' as ExecutionId;
     const foreignExecutionId = 'def456' as ExecutionId;
-    const foreignTaskState = toolUseTaskState('foreign-search');
+    const foreignConfig = toolUseConfig('foreign-search');
 
     const store = new StreamSnapshotStore();
-    store.setTaskState(
-      STREAM,
-      toolUseTaskState('live-search'),
-      liveExecutionId,
-    );
+    store.setRunConfig(STREAM, toolUseConfig('live-search'), liveExecutionId);
     await store.flush();
 
     await StorageFS.ensureDir(resolveRunStoragePath(foreignExecutionId));
-    await getExecutionStore(foreignExecutionId).writeConfig(
-      foreignTaskState.agentConfig,
-    );
+    await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       executionId: foreignExecutionId,
@@ -1055,7 +1093,7 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
 
     expect(store.getExecutionId(STREAM)).toBe(foreignExecutionId);
-    expect(store.getTaskState(STREAM)).toEqual(foreignTaskState);
+    expect(store.getRunConfig(STREAM)).toEqual(foreignConfig);
     expect(store.getRunDescriptor(STREAM)).toMatchObject({
       executionId: foreignExecutionId,
       agent: 'foreign-search',
@@ -1071,7 +1109,7 @@ describe('StreamSnapshotStore', () => {
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(
-      toolUseTaskState('search', 'deepseekproT').agentConfig,
+      toolUseConfig('search', 'deepseekproT'),
     );
 
     const store = new StreamSnapshotStore();
@@ -1081,7 +1119,7 @@ describe('StreamSnapshotStore', () => {
     // The model switch runs in another host: it rewrites the execution config
     // for the SAME execution and this store never sees the `run.config` event.
     await getExecutionStore(executionId).writeConfig(
-      toolUseTaskState('search', 'kimi26T').agentConfig,
+      toolUseConfig('search', 'kimi26T'),
     );
     await store.load([STREAM]);
 
@@ -1099,24 +1137,22 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getTaskState(STREAM)).toEqual(legacyTaskState);
+    expect(store.getRunConfig(STREAM)).toEqual(legacyTaskState.agentConfig);
     expect(store.getRunDescriptor(STREAM)).toBeUndefined();
 
     // A legacy config carries no descriptor, so the handoff cannot be detected
     // from the descriptor half alone: the pair still has to move together.
     const executionId = 'def456' as ExecutionId;
-    const handoffTaskState = toolUseTaskState('handoff-search');
+    const handoffConfig = toolUseConfig('handoff-search');
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
-    await getExecutionStore(executionId).writeConfig(
-      handoffTaskState.agentConfig,
-    );
+    await getExecutionStore(executionId).writeConfig(handoffConfig);
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       executionId,
     });
     await store.load([STREAM]);
 
-    expect(store.getTaskState(STREAM)).toEqual(handoffTaskState);
+    expect(store.getRunConfig(STREAM)).toEqual(handoffConfig);
     expect(store.getRunDescriptor(STREAM)).toMatchObject({
       executionId,
       agent: 'handoff-search',
@@ -1131,9 +1167,7 @@ describe('StreamSnapshotStore', () => {
       executionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
-    await getExecutionStore(executionId).writeConfig(
-      toolUseTaskState().agentConfig,
-    );
+    await getExecutionStore(executionId).writeConfig(toolUseConfig());
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
@@ -1155,19 +1189,17 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const oldExecutionId = 'abc123' as ExecutionId;
     const newExecutionId = 'def456' as ExecutionId;
-    const oldTaskState = toolUseTaskState('old-search');
+    const oldConfig = toolUseConfig('old-search');
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       executionId: oldExecutionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(oldExecutionId));
-    await getExecutionStore(oldExecutionId).writeConfig(
-      oldTaskState.agentConfig,
-    );
+    await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getTaskState(STREAM)).toEqual(oldTaskState);
+    expect(store.getRunConfig(STREAM)).toEqual(oldConfig);
 
     const newDescriptor = buildRunDescriptor({
       streamId: STREAM,
@@ -1188,7 +1220,7 @@ describe('StreamSnapshotStore', () => {
     expect(wasRunStartInjected).toHaveBeenCalledOnce();
     expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
     expect(store.getRunConfig(STREAM)).toBeUndefined();
-    expect(store.getTaskState(STREAM)).toBeUndefined();
+    expect(store.getRunConfig(STREAM)).toBeUndefined();
   });
 
   it('persists a late reset and round patch that arrive during async hydration', async () => {
@@ -1202,9 +1234,7 @@ describe('StreamSnapshotStore', () => {
         executionId,
       }),
       writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
-      getExecutionStore(executionId).writeConfig(
-        toolUseTaskState().agentConfig,
-      ),
+      getExecutionStore(executionId).writeConfig(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -1245,9 +1275,7 @@ describe('StreamSnapshotStore', () => {
       writeStreamFile(STREAM, 'missingOutputs.json', {
         [RUN]: { '0': ['legacy.tex'] },
       }),
-      getExecutionStore(executionId).writeConfig(
-        toolUseTaskState().agentConfig,
-      ),
+      getExecutionStore(executionId).writeConfig(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -2031,12 +2059,10 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'feedface' as ExecutionId;
     const writer = new StreamSnapshotStore();
     await writer.load([]);
-    writer.setTaskState(STREAM, toolUseTaskState(), executionId);
+    writer.setRunConfig(STREAM, toolUseConfig(), executionId);
     writer.setPlan(STREAM, PLAN);
     await writer.flush();
-    await getExecutionStore(executionId).writeConfig(
-      toolUseTaskState().agentConfig,
-    );
+    await getExecutionStore(executionId).writeConfig(toolUseConfig());
 
     const store = new StreamSnapshotStore();
     const deletionError = new Error('stream data directory is locked');
@@ -2084,9 +2110,7 @@ describe('StreamSnapshotStore', () => {
       writeStreamFile(STREAM, 'missingOutputs.json', {
         'run-1': { '0': ['stale.tex'] },
       }),
-      getExecutionStore(executionId).writeConfig(
-        toolUseTaskState().agentConfig,
-      ),
+      getExecutionStore(executionId).writeConfig(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();

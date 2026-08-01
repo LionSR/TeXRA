@@ -26,10 +26,6 @@ vi.mock('@agent/core/flows/ToolUseRoundFlow', () => ({
   }),
 }));
 
-vi.mock('@agent/core/flows/CycleServices', () => ({
-  withModelClient: async (services: unknown) => services,
-}));
-
 // Local imports
 import { TraceEmitter } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
@@ -62,6 +58,7 @@ import {
   testRunScope,
   withTestRunContext,
 } from '../progressTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 const todo: TodoItem = {
   content: 'Wire progress events through runtime host',
@@ -108,7 +105,7 @@ function createCycleNode(
     streamId,
     runScope: testRunScope(streamId, { interactions: host }),
     logger,
-    modelHandler: { getClient: vi.fn() },
+    modelCell: testModelCell({ getClient: vi.fn() }),
     onRoundFinalized: vi.fn(),
     config: { model: 'test-model', agent: 'test-agent' },
     setting: { tools: [] },
@@ -118,7 +115,10 @@ function createCycleNode(
 
 describe('tool-use progress events', () => {
   const forcedToolOverrides = (tools: { name: string }[]) => ({
-    modelHandler: { getClient: vi.fn(), supportsForcedToolChoice: true },
+    modelCell: testModelCell({
+      getClient: vi.fn(),
+      supportsForcedToolChoice: true,
+    }),
     finalTool: { name: 'submit_output' },
     setting: { tools },
   });

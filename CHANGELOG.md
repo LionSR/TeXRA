@@ -32,9 +32,20 @@ All notable changes to this project will be documented in this file.
 - **Tool-use flow results use `response` and `files` consistently** — consumers
   of `@texra-ai/agent` and CLI JSON output should replace `lastResponse` with
   `response` and `touchedFiles` with `files`.
+- **A run that ends over the model context window now reports its own error
+  kind** — consumers of `@texra-ai/agent` that switch exhaustively over a
+  result event's `error.kind` must handle the new `context-window` value, which
+  previously arrived as `unexpected`.
 
 #### Bug Fixes
 
+- **Runs that overflow the model context window say so** — instead of a generic
+  failure message, the run now reports that the conversation exceeds the
+  model's context window and suggests starting a new session or reducing
+  attached files and tool output.
+- **A missing OpenRouter API key offers the same setup prompt as every other
+  provider** — it was reported as an unexpected failure rather than an
+  actionable "set your API key" notice.
 - **Compiled PDF artifact paths are correct on Windows** — diff PDFs generated
   from files in round subdirectories no longer repeat the round directory in
   their saved path.

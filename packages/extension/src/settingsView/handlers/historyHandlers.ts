@@ -17,7 +17,6 @@ import {
   deleteAllExecutions,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   ChatExportController,
@@ -96,8 +95,7 @@ export class HistoryHandlers {
       data.historyId,
       'Failed to restore configuration',
       async (config) => {
-        const taskState = agentConfigToTaskState(config);
-        await vscode.commands.executeCommand('texra.restoreState', taskState);
+        await vscode.commands.executeCommand('texra.restoreState', config);
       },
     );
   }

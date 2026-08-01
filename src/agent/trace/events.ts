@@ -14,6 +14,7 @@ import type { AgentErrorKind } from '@common/errors';
 import type {
   ActiveChildInfo,
   AddOutputFilesPayload,
+  AgentCategory,
   ConversationProgress,
   GoalPausedPayload,
   ExecutionId,
@@ -284,11 +285,14 @@ type ResultEventLocalError = Readonly<{
 }>;
 
 /**
- * Fields available for `missing-api-key` / `unexpected`, which fall through
- * `formatProviderHttpError` to the general SDK/provider-error classification
- * path and so may populate the full `RetryErrorInfo` shape (minus `message`,
- * carried separately, and `rawErrorBody`, stripped as bulky by
- * `toRetryErrorInfo` at the emission boundary).
+ * Fields available for `context-window` / `missing-api-key` / `unexpected`,
+ * which may reach `formatProviderHttpError`'s general SDK/provider-error
+ * classification path and so may populate the full `RetryErrorInfo` shape
+ * (minus `message`, carried separately, and `rawErrorBody`, stripped as bulky
+ * by `toRetryErrorInfo` at the emission boundary). `context-window` usually
+ * takes the same `terminalError()` branch as the local kinds, but a provider
+ * that reports the overflow on a retryable status falls through to the general
+ * path with the provider fields populated — hence the wider shape.
  */
 type ResultEventProviderError = ResultEventLocalError &
   Readonly<
@@ -311,11 +315,12 @@ type ResultEventProviderError = ResultEventLocalError &
  * the classified terminal-error discriminant, and it also selects which
  * `RetryErrorInfo` fields are ever populated: `abort`/`disk-full` are always
  * local, non-provider failures (`ResultEventLocalError`), while
- * `missing-api-key`/`unexpected` go through the general provider/SDK
- * classification and may carry the fuller shape (`ResultEventProviderError`) —
- * see `formatProviderHttpError` in `src/common/errors/sdkError/
- * providerErrorFormat.ts`. `usage` is the run totals (present once at least
- * one round recorded usage, including on failures).
+ * `context-window`/`missing-api-key`/`unexpected` may go through the general
+ * provider/SDK classification and carry the fuller shape
+ * (`ResultEventProviderError`) — see `formatProviderHttpError` in
+ * `src/common/errors/sdkError/providerErrorFormat.ts`. `usage` is the run
+ * totals (present once at least one round recorded usage, including on
+ * failures).
  */
 export interface ResultEvent extends StageStamp {
   readonly type: 'result';
@@ -323,7 +328,7 @@ export interface ResultEvent extends StageStamp {
   readonly executionId: string;
   readonly streamId: string;
   readonly agentName: string;
-  readonly category: 'toolUse' | 'workflow';
+  readonly category: AgentCategory;
   readonly isSubagent: boolean;
   readonly error?:
     | (ResultEventLocalError & {
@@ -332,7 +337,7 @@ export interface ResultEvent extends StageStamp {
     | (ResultEventProviderError & {
         readonly kind: Extract<
           AgentErrorKind,
-          'missing-api-key' | 'unexpected'
+          'context-window' | 'missing-api-key' | 'unexpected'
         >;
       });
   readonly usage?: RunUsageTotals;

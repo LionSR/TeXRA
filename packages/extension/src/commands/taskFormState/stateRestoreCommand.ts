@@ -3,10 +3,12 @@ import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports
-import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
-import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
+import {
+  buildMainViewState,
+  RestoreRunConfigInputSchema,
+} from '@controllers/mainView/MainViewStateRestoreController';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
@@ -33,7 +35,7 @@ async function restoreState(
     data: { executeImmediately },
   });
 
-  const parsed = TaskStateSchema.safeParse(state);
+  const parsed = RestoreRunConfigInputSchema.safeParse(state);
   if (!parsed.success) {
     logger.info(CHANNEL, RESTORE_MALFORMED_MESSAGE, {
       data: { validationError: z.prettifyError(parsed.error) },

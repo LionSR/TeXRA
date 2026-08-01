@@ -13,15 +13,15 @@ vi.mock('@platform/platform', () => ({
 }));
 
 // Local imports
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { TaskState } from '@agent/core/state/TaskState';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local file imports
 import {
   createAgentConfig,
-  createWorkflowTaskState,
+  createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
 
 interface HostHarness {
@@ -32,7 +32,7 @@ interface HostHarness {
   readonly settledProposals: unknown[];
 }
 
-function createHostHarness(taskState: TaskState): HostHarness {
+function createHostHarness(runConfig: AgentConfig): HostHarness {
   const executed: unknown[] = [];
   const openedLabels: string[] = [];
   const infoMessages: string[] = [];
@@ -41,7 +41,7 @@ function createHostHarness(taskState: TaskState): HostHarness {
   const host = new ProgressViewHost({
     run: {
       state: {
-        getTaskState: () => taskState,
+        getRunConfig: () => runConfig,
         getExecutionId: () => 'exec-1',
       },
       executeAgent: async (request) => {
@@ -75,7 +75,7 @@ function createHostHarness(taskState: TaskState): HostHarness {
     },
     agentProposal: {
       getPendingProposal: () => undefined,
-      restoreTaskState: async () => false,
+      restoreRunConfig: async () => false,
       settleProposal: (proposalId, result) => {
         settledProposals.push({ proposalId, result });
       },
@@ -114,8 +114,8 @@ function createHostHarness(taskState: TaskState): HostHarness {
 
 describe('ProgressViewHost', () => {
   it('constructs shared controllers and command handlers from host adapters', async () => {
-    const taskState: TaskState = createWorkflowTaskState();
-    const harness = createHostHarness(taskState);
+    const runConfig = createWorkflowConfig();
+    const harness = createHostHarness(runConfig);
     const { host } = harness;
 
     await host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
@@ -137,8 +137,8 @@ describe('ProgressViewHost', () => {
     });
 
     assert.deepEqual(harness.executed, [
-      { config: taskState.agentConfig },
-      { config: taskState.agentConfig, executionId: 'exec-1' },
+      { config: runConfig },
+      { config: runConfig, executionId: 'exec-1' },
     ]);
     assert.equal(tryResumeStreamMock.mock.calls.length, 0);
     assert.deepEqual(harness.openedLabels, ['main-thm']);
@@ -153,10 +153,10 @@ describe('ProgressViewHost', () => {
 
   it('resumes a tool-use stream through the host resume port', async () => {
     tryResumeStreamMock.mockClear();
-    const taskState = {
-      agentConfig: createAgentConfig({ agentCategory: AgentCategory.ToolUse }),
-    } as TaskState;
-    const harness = createHostHarness(taskState);
+    const runConfig = createAgentConfig({
+      agentCategory: AgentCategory.ToolUse,
+    });
+    const harness = createHostHarness(runConfig);
 
     await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
       command: PROGRESS_VIEW_COMMANDS.RESUME,
@@ -169,17 +169,17 @@ describe('ProgressViewHost', () => {
 
   it('starts a fresh run for a tool-use stream on Run New', async () => {
     tryResumeStreamMock.mockClear();
-    const taskState = {
-      agentConfig: createAgentConfig({ agentCategory: AgentCategory.ToolUse }),
-    } as TaskState;
-    const harness = createHostHarness(taskState);
+    const runConfig = createAgentConfig({
+      agentCategory: AgentCategory.ToolUse,
+    });
+    const harness = createHostHarness(runConfig);
 
     await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
       command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
       stream: 'stream-a',
     });
 
-    assert.deepEqual(harness.executed, [{ config: taskState.agentConfig }]);
+    assert.deepEqual(harness.executed, [{ config: runConfig }]);
     assert.equal(tryResumeStreamMock.mock.calls.length, 0);
   });
 });

@@ -1,5 +1,5 @@
 // Local imports
-import type { TaskState } from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   polishTextWithAI,
   type FileContext,
@@ -16,7 +16,7 @@ type UpdateFollowUpTextMessage = Extract<
 export interface ProgressFollowUpPolishInput {
   readonly stream: StreamTabId;
   readonly text: string;
-  readonly taskState: TaskState | undefined;
+  readonly runConfig: AgentConfig | undefined;
 }
 
 interface ProgressFollowUpPolishTextResult {
@@ -63,12 +63,12 @@ export class ProgressFollowUpPolishController {
   async polishFollowUp(
     input: ProgressFollowUpPolishInput,
   ): Promise<ProgressFollowUpPolishResult> {
-    if (!input.taskState) {
+    if (!input.runConfig) {
       return { kind: 'skipped' };
     }
 
     try {
-      const fileContext = this.buildFileContext(input.taskState);
+      const fileContext = this.buildFileContext(input.runConfig);
       const result = await this.deps.polishText(input.text, fileContext);
       if (result.success) {
         return {
@@ -101,8 +101,7 @@ export class ProgressFollowUpPolishController {
     }
   }
 
-  private buildFileContext(taskState: TaskState): FileContext {
-    const { agentConfig } = taskState;
+  private buildFileContext(agentConfig: AgentConfig): FileContext {
     const context: FileContext = {};
 
     if (agentConfig.agent) {

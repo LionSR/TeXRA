@@ -137,7 +137,7 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { ExecutionInteractionOwnership } from '@agent/runtime/executionInteractionOwnership';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
@@ -172,6 +172,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -309,6 +310,13 @@ function makeAutoResumeData() {
  * untyped here exactly as the returned session is.
  */
 function installSession(overrides: Record<string, unknown> = {}): void {
+  const executions = {
+    stopAgentStream: mocks.stopAgentStream,
+    getActiveIds: mocks.getActiveExecutionIds,
+    getHandle: mocks.getExecutionHandle,
+    addRegistrationListener: mocks.addExecutionRegistrationListener,
+    addChildActivationListener: mocks.addChildActivationListener,
+  };
   mocks.defaultSession.mockReturnValue({
     useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
     interactions: { cancel: mocks.cancelInteractions },
@@ -317,11 +325,12 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     approvals: { registerStreamParent: vi.fn() },
     status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
     executions: {
-      stopAgentStream: mocks.stopAgentStream,
-      getActiveIds: mocks.getActiveExecutionIds,
-      getHandle: mocks.getExecutionHandle,
-      addRegistrationListener: mocks.addExecutionRegistrationListener,
-      addChildActivationListener: mocks.addChildActivationListener,
+      ...executions,
+      // The stubbed registry still answers the three surfaces the real
+      // ownership index reads, so the controller runs against real ownership.
+      interactionOwnership: new ExecutionInteractionOwnership(
+        executions as unknown as ExecutionRegistry,
+      ),
     },
     transcripts: { ensureLoaded: vi.fn(async () => undefined) },
     ...overrides,
@@ -361,13 +370,12 @@ function trackRunningExecution(
   agent: string,
 ): void {
   executions.trackAgentExecution(
-    new AgentExecutionHandle(
+    testExecutionHandle({
       executionId,
       parentStreamId,
-      streamId,
+      childStreamId: streamId,
       agent,
-      'toolUse',
-    ),
+    }),
     { status: STREAM_PHASE.RUNNING },
   );
 }
@@ -777,20 +785,17 @@ describe('createChatSessionController', () => {
         executionId: ExecutionId,
         options: { readonly onStreamResolved?: (id: StreamTabId) => void },
       ) => {
-        const rootHandle = new AgentExecutionHandle(
+        const rootHandle = testExecutionHandle({
           executionId,
-          rootStream,
-          rootStream,
-          'root',
-          'toolUse',
-        );
-        const childHandle = new AgentExecutionHandle(
-          'child-exec',
-          rootStream,
-          childStream,
-          'child',
-          'toolUse',
-        );
+          parentStreamId: rootStream,
+          agent: 'root',
+        });
+        const childHandle = testExecutionHandle({
+          executionId: 'child-exec',
+          parentStreamId: rootStream,
+          childStreamId: childStream,
+          agent: 'child',
+        });
         rootHandle.attachInterruptHandler({
           interrupt: () => {
             executions.untrack(rootHandle.executionId);

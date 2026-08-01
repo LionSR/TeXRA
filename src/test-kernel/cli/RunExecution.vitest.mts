@@ -534,7 +534,7 @@ describe('executeCliRequest', () => {
     expect(snapshot.executionId).toBe(executionId);
     expect(snapshot.description).toBe('chat / gpt54');
     expect(snapshot.parentStreamId).toBe(parentStreamId);
-    expect(reader.getTaskState(streamId)?.agentConfig).toMatchObject({
+    expect(reader.getRunConfig(streamId)).toMatchObject({
       agent: 'chat',
       model: 'gpt54',
       agentCategory: 'toolUse',

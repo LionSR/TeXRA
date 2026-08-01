@@ -29,7 +29,6 @@
 import type { ResultMeta } from '@agent/storage';
 import { getExecutionStore } from '@agent/storage';
 import {
-  getAgentFlowErrorResult,
   isWaitingFlowResult,
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
@@ -126,7 +125,7 @@ export function createNativeSubagentStrategy(
 ): ChildRunStrategy<AgentRuntimeFlowResult> & {
   /** Underlying application error captured for the most recent turn. */
   readonly getTurnError: () => unknown;
-  /** Terminal-shaped result captured from a return or thrown AgentFlowError. */
+  /** Terminal-shaped result captured from the most recent turn's return. */
   readonly getTurnResult: () => AgentFlowResult | undefined;
 } {
   let runHandle: AgentRunHandle | undefined;
@@ -168,14 +167,11 @@ export function createNativeSubagentStrategy(
       lastResult = toDeliveryResult(result, params.executionId);
       // Every turn's totalCostUsd is the run's cumulative cost to date, not a
       // per-turn delta. The loop retains the best value and commits it to the
-      // parent exactly once, when the child's run ends.
+      // parent exactly once, when the child's run ends. A failed turn resolves
+      // with its terminal result too, so its cost is recorded here as well; a
+      // rejection means the turn never produced one.
       ports.recordCost(result.totalCostUsd);
       return result;
-    } catch (error) {
-      const result = getAgentFlowErrorResult(error);
-      lastResult = result;
-      if (result) ports.recordCost(result.totalCostUsd);
-      throw error;
     } finally {
       detachAbort();
     }

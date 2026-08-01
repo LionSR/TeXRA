@@ -22,8 +22,8 @@ import {
 } from '@agent/node/persistedFlow';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
-  RUN_OUTCOME,
   type AgentFileLocation,
+  type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
   type StorageKey,
@@ -49,7 +49,6 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
-import { throwFlowLastError } from '../flowLastError';
 import type {
   ReflectionServices,
   WorkflowOutputPolicy,
@@ -84,13 +83,19 @@ export interface RunReflectionFlowResult {
   roundOutputs: RoundOutput[];
   outcome: RunOutcome;
   totalCostUsd?: number;
+  /**
+   * The structured provider error behind a FAILED outcome. The run reports its
+   * failure here rather than by throwing, so the rounds it did produce travel
+   * with it.
+   */
+  error?: RetryErrorInfo;
 }
 
 export async function runReflectionFlow<C = unknown>(
   input: RunReflectionFlowInput<C>,
 ): Promise<RunReflectionFlowResult> {
   const {
-    modelHandler,
+    modelCell,
     config,
     setting,
     prompt,
@@ -105,12 +110,12 @@ export async function runReflectionFlow<C = unknown>(
   const { streamId, executionId, session: runSession } = runScope;
   const interactions = runSession.interactions;
 
-  let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
   let shared: ReflectionFlowShared | undefined;
-  let services: ReflectionServices<C> | undefined;
 
   const fileService = new TaskRunFileService(executionId);
-  const compatibilityKey = activeModelHandlerCompatibilityKey(modelHandler);
+  const compatibilityKey = activeModelHandlerCompatibilityKey(
+    modelCell.handler,
+  );
 
   const baseFiles: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
@@ -182,163 +187,148 @@ export async function runReflectionFlow<C = unknown>(
 
   const kv = getExecutionStore(executionId);
 
-  try {
-    const flowRecord = await readPersistedFlowRecord(kv, executionId);
-    // Boundary hydration: the one place a freshly-read persisted record
-    // (possibly written by an older build, hence the legacy todos/plan
-    // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
-    // `RoundPersistedFlow`'s own per-step revalidation uses
-    // ReflectionFlowStateCanonicalSchema instead — see its constructor call
-    // below — since by then `shared` is always this run's own canonical
-    // toSnapshot() output, never a legacy shape.
-    const isResume = flowRecord !== null;
+  const flowRecord = await readPersistedFlowRecord(kv, executionId);
+  // Boundary hydration: the one place a freshly-read persisted record
+  // (possibly written by an older build, hence the legacy todos/plan
+  // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
+  // `RoundPersistedFlow`'s own per-step revalidation uses
+  // ReflectionFlowStateCanonicalSchema instead — see its constructor call
+  // below — since by then `shared` is always this run's own canonical
+  // toSnapshot() output, never a legacy shape.
+  const isResume = flowRecord !== null;
 
-    if (flowRecord) {
-      const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
-      if (!validated.success) {
-        throw new PersistedFlowStateError(executionId, 'invalid-shared', {
-          cause: validated.error,
-        });
-      }
-
-      shared = validated.data;
-      shared.modelHandlerCompatibilityKey ??=
-        inferAndLogPersistedModelHandlerCompatibilityKey(
-          config.model,
-          shared.conversation,
-          logger,
-        ) ?? compatibilityKey;
-      // Always sync totalRounds from the current agent config so that changes
-      // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
-      shared.totalRounds = totalRounds;
-      logger.debug(
-        `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
-      );
-    } else {
-      shared = {
-        currentRound: 0,
-        totalRounds,
-        workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-        context: null,
-        outputLocation: null,
-        conversation: [],
-        modelHandlerCompatibilityKey: compatibilityKey,
-        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-        roundStateSnapshots: [],
-        roundOutputs: [],
-        continueRounds: true,
-        endTurn: false,
-      };
+  if (flowRecord) {
+    const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
+    if (!validated.success) {
+      throw new PersistedFlowStateError(executionId, 'invalid-shared', {
+        cause: validated.error,
+      });
     }
 
-    // Hydrate the canonical live collection from the persisted round snapshot.
-    outputState.rounds = roundsFromPersisted(shared.roundOutputs);
-
-    const prepContextNode = new PrepareContextNode<C>();
-    const texCountNode = new TeXCountNode<C>();
-    const mediaNode = new MediaExtractionNode<C>();
-    const responseCycleNode = new ResponseCycleNode<C>();
-    const outputNode = new OutputNode<C>();
-
-    prepContextNode.next(texCountNode);
-    texCountNode.next(mediaNode);
-    mediaNode.next(responseCycleNode);
-    responseCycleNode.next(outputNode);
-
-    const workflowOutputPolicy: WorkflowOutputPolicy =
-      input.workflowOutputPolicy ?? {
-        shouldAutoOpenPdfOrLog: () =>
-          readPlatformSetting<boolean>(
-            WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-          ),
-        shouldRejectOnCompileFailure: () =>
-          readPlatformSetting<boolean>(
-            WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-          ),
-      };
-
-    const pf = new RoundPersistedFlow<
-      ReflectionFlowShared,
-      ReflectionServices<C>
-    >(prepContextNode, kv, {
-      parentStage,
-      sharedSchema: ReflectionFlowStateCanonicalSchema,
-      callbacks: {
-        createRoundStage: (roundIndex, parent, shared) =>
-          logger.openStage(`r${roundIndex}`, {
-            parent: parent ?? undefined,
-            kind: 'round',
-            index: roundIndex,
-            total: computeRoundStageTotal(shared.totalRounds, roundIndex),
-          }),
-        resetForNextRound: (s) => {
-          s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
-        },
-        checkInterruption,
-        // Bounded compile-repair round (#7077): a compile failure on what
-        // would otherwise be the final round gets exactly one extra round
-        // so the model sees the failure context via PrepareContextNode
-        // instead of the run silently ending on a broken output. Gated on
-        // the same setting that produced compileFailureContext in the
-        // first place, and on the one-shot `compileRepairRoundGranted`
-        // flag so a repair round that itself fails to compile doesn't
-        // chain a second one — even across resume.
-        grantExtraRound: (s) => {
-          if (
-            !s.compileFailureContext ||
-            s.compileRepairRoundGranted ||
-            !workflowOutputPolicy.shouldRejectOnCompileFailure()
-          ) {
-            return false;
-          }
-          s.compileRepairRoundGranted = true;
-          return true;
-        },
-      },
-    });
-
-    services = {
-      ...input,
-      onRoundFinalized,
-      outputState,
-      xmlManager,
-      diffManager,
-      latexMediaManager,
-      promptBuilder,
-      fileService,
-      getOutputFileLocation,
-      workflowOutputPolicy,
-      baseFiles,
-    };
-    pf.setServices(services);
-
-    if (isResume) {
-      logger.debug('Resuming reflection flow from persistence');
-      await seedResumedConversationSidecar(
-        runSession.transcripts,
-        streamId,
-        executionId,
+    shared = validated.data;
+    shared.modelHandlerCompatibilityKey ??=
+      inferAndLogPersistedModelHandlerCompatibilityKey(
+        config.model,
         shared.conversation,
-      );
-      // Persist the synced totalRounds into the flow record so that
-      // stepWithResult() picks up the current config, not the stale one.
-      await pf.setShared(shared);
-    }
-
-    const flowOutcome = await pf.run(shared);
-    shared = await pf.getShared();
-
-    if (shared?.lastError) {
-      // Re-throw so runFlowWithLifecycle logs the error and shows
-      // the user notification. State was already projected per-step.
-      throwFlowLastError(new Error(shared.lastError.message), shared.lastError);
-    }
-    outcome = flowOutcome;
-  } finally {
-    // AgentRunLifecycle owns terminal metadata and flow-record disposition as
-    // one storage finalization. This flow only determines its outcome.
-    runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
+        logger,
+      ) ?? compatibilityKey;
+    // Always sync totalRounds from the current agent config so that changes
+    // to the YAML (e.g. rounds: 2 → 1) take effect on resume.
+    shared.totalRounds = totalRounds;
+    logger.debug(
+      `Resuming reflection flow from round ${shared.currentRound}/${shared.totalRounds}`,
+    );
+  } else {
+    shared = {
+      currentRound: 0,
+      totalRounds,
+      workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
+      context: null,
+      outputLocation: null,
+      conversation: [],
+      modelHandlerCompatibilityKey: compatibilityKey,
+      runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+      roundStateSnapshots: [],
+      roundOutputs: [],
+      continueRounds: true,
+      endTurn: false,
+    };
   }
+
+  // Hydrate the canonical live collection from the persisted round snapshot.
+  outputState.rounds = roundsFromPersisted(shared.roundOutputs);
+
+  const prepContextNode = new PrepareContextNode<C>();
+  const texCountNode = new TeXCountNode<C>();
+  const mediaNode = new MediaExtractionNode<C>();
+  const responseCycleNode = new ResponseCycleNode<C>();
+  const outputNode = new OutputNode<C>();
+
+  prepContextNode.next(texCountNode);
+  texCountNode.next(mediaNode);
+  mediaNode.next(responseCycleNode);
+  responseCycleNode.next(outputNode);
+
+  const workflowOutputPolicy: WorkflowOutputPolicy =
+    input.workflowOutputPolicy ?? {
+      shouldAutoOpenPdfOrLog: () =>
+        readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
+      shouldRejectOnCompileFailure: () =>
+        readPlatformSetting<boolean>(
+          WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+        ),
+    };
+
+  const pf = new RoundPersistedFlow<
+    ReflectionFlowShared,
+    ReflectionServices<C>
+  >(prepContextNode, kv, {
+    parentStage,
+    sharedSchema: ReflectionFlowStateCanonicalSchema,
+    callbacks: {
+      createRoundStage: (roundIndex, parent, shared) =>
+        logger.openStage(`r${roundIndex}`, {
+          parent: parent ?? undefined,
+          kind: 'round',
+          index: roundIndex,
+          total: computeRoundStageTotal(shared.totalRounds, roundIndex),
+        }),
+      resetForNextRound: (s) => {
+        s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
+      },
+      checkInterruption,
+      // Bounded compile-repair round (#7077): a compile failure on what
+      // would otherwise be the final round gets exactly one extra round
+      // so the model sees the failure context via PrepareContextNode
+      // instead of the run silently ending on a broken output. Gated on
+      // the same setting that produced compileFailureContext in the
+      // first place, and on the one-shot `compileRepairRoundGranted`
+      // flag so a repair round that itself fails to compile doesn't
+      // chain a second one — even across resume.
+      grantExtraRound: (s) => {
+        if (
+          !s.compileFailureContext ||
+          s.compileRepairRoundGranted ||
+          !workflowOutputPolicy.shouldRejectOnCompileFailure()
+        ) {
+          return false;
+        }
+        s.compileRepairRoundGranted = true;
+        return true;
+      },
+    },
+  });
+
+  const services: ReflectionServices<C> = {
+    ...input,
+    onRoundFinalized,
+    outputState,
+    xmlManager,
+    diffManager,
+    latexMediaManager,
+    promptBuilder,
+    fileService,
+    getOutputFileLocation,
+    workflowOutputPolicy,
+    baseFiles,
+  };
+  pf.setServices(services);
+
+  if (isResume) {
+    logger.debug('Resuming reflection flow from persistence');
+    await seedResumedConversationSidecar(
+      runSession.transcripts,
+      streamId,
+      executionId,
+      shared.conversation,
+    );
+    // Persist the synced totalRounds into the flow record so that
+    // stepWithResult() picks up the current config, not the stale one.
+    await pf.setShared(shared);
+  }
+
+  const outcome = await pf.run(shared);
+  shared = await pf.getShared();
 
   const totalCostUsd =
     shared?.runStateSnapshot.usageAccumulator.totals.totalCost ?? 0;
@@ -347,5 +337,6 @@ export async function runReflectionFlow<C = unknown>(
     roundOutputs: shared?.roundOutputs ?? [],
     outcome,
     ...(totalCostUsd > 0 ? { totalCostUsd } : {}),
+    ...(shared?.lastError ? { error: shared.lastError } : {}),
   };
 }

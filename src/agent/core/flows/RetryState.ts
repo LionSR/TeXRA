@@ -3,14 +3,14 @@
 import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RefreshModelClient } from '@agent/core/flows/CycleServices';
+import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { RunScope } from '@agent/runtime/RunScope';
-import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { normalizeProviderError } from '@common/errors';
 import {
   isProviderErrorAutoRetryable,
   isUnauthorizedProviderError,
   isUserAbort,
+  hasMissingApiKeyErrorMarker,
 } from '@common/errors/sdkErrorUtils';
 import { includedModelAccess } from '@model/includedModelAccess';
 import {
@@ -68,32 +68,27 @@ interface RetryableNodeServices {
   readonly runScope: RunScope;
   /** The run's cancellation signal; see `BaseFlowContextInit.abortSignal`. */
   readonly abortSignal: AbortSignal;
-  refreshClient?: RefreshModelClient;
-  readonly clientCredentialRoute?: ModelCredentialRoute;
+  /**
+   * The run's live client seam. The cell owns the provider client, so a rebind
+   * here is the same rebind every other reader of the run observes.
+   */
+  readonly modelCell: Pick<ModelCell, 'getClient' | 'rebind' | 'route'>;
 }
 
-/**
- * Attempts to refresh the model client using the provided refreshClient function.
- * Logs success or failure; returns true if refresh was attempted and succeeded.
- */
-async function tryRefreshClient(
-  refreshClient: RefreshModelClient | undefined,
+/** Rebuilds the run's client for the configured credential, logging failure. */
+async function rebindClient(
+  modelCell: Pick<ModelCell, 'rebind'>,
   logger: AgentTrace,
   context: string,
   signal?: AbortSignal,
-): Promise<boolean> {
-  if (!refreshClient) {
-    return false;
-  }
+): Promise<void> {
   try {
-    await refreshClient(undefined, signal);
+    await modelCell.rebind(undefined, signal);
     logger.debug(`Refreshed model client ${context}`);
-    return true;
-  } catch (refreshError) {
+  } catch (rebindError) {
     logger.warn(`Failed to refresh model client ${context}`, {
-      data: refreshError,
+      data: rebindError,
     });
-    return false;
   }
 }
 
@@ -143,8 +138,8 @@ export abstract class RetryableInvocationNode<
       throw originalError;
     }
 
-    await tryRefreshClient(
-      services.refreshClient,
+    await rebindClient(
+      services.modelCell,
       services.logger,
       'after token refresh',
       signal,
@@ -183,13 +178,18 @@ export abstract class RetryableInvocationNode<
     const services = this.services;
     const signal = services.abortSignal;
 
+    // Build (or reuse) the client this attempt will run on before reading the
+    // credential route it captured: a run that has just switched models holds
+    // no client yet, and an absent route would skip the relay refresh below.
+    await services.modelCell.getClient();
+
     // Proactive relay token refresh before the request. Only relay-route
     // clients present a relay session token, so only they consult the expiry
     // clock — personal-key / openrouter / subscription clients must never
     // rebuild for a credential the call doesn't use.
     const includedAccess = includedModelAccess();
     if (
-      services.clientCredentialRoute === 'relay' &&
+      services.modelCell.route === 'relay' &&
       includedAccess.isAccessTokenExpiringSoon()
     ) {
       // Threshold-gated and mutex-deduped: refreshes the session (updating
@@ -199,8 +199,8 @@ export abstract class RetryableInvocationNode<
       // Rebuild only when the token actually rotated — rebuilding with the
       // same JWT changes nothing, and is exactly the loop this branch caused.
       if (!includedAccess.isAccessTokenExpiringSoon()) {
-        await tryRefreshClient(
-          services.refreshClient,
+        await rebindClient(
+          services.modelCell,
           services.logger,
           'proactive pre-invocation',
           signal,
@@ -217,8 +217,7 @@ export abstract class RetryableInvocationNode<
       // retry prompt on every token rotation.
       const formatted = normalizeProviderError(err);
       if (
-        (formatted.isRelayError ||
-          services.clientCredentialRoute === 'relay') &&
+        (formatted.isRelayError || services.modelCell.route === 'relay') &&
         isUnauthorizedProviderError(formatted) &&
         !this._hasAttemptedTokenRefresh
       ) {
@@ -269,6 +268,9 @@ export abstract class RetryableInvocationNode<
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
     if (isUserAbort(error)) return false;
+    // A missing credential cannot be fixed by retrying; fail immediately as
+    // the pre-cell eager client build did.
+    if (hasMissingApiKeyErrorMarker(error)) return false;
 
     const result = await this.handleManualRetryPrompt(error);
 
@@ -286,8 +288,8 @@ export abstract class RetryableInvocationNode<
       // a token after a relay 401, etc. Refreshing is cheap and keeps
       // the cached client in sync with current secrets/config.
       if (result.clientPrepared !== true) {
-        await tryRefreshClient(
-          this.services.refreshClient,
+        await rebindClient(
+          this.services.modelCell,
           this.services.logger,
           'before manual retry',
         );
@@ -320,7 +322,7 @@ export abstract class RetryableInvocationNode<
     });
     // No timeout: the retry panel waits indefinitely for the user's decision.
     let clientPrepared = false;
-    const refreshClient = this.services.refreshClient;
+    const { modelCell } = this.services;
     const interaction = session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
@@ -330,16 +332,12 @@ export abstract class RetryableInvocationNode<
         errorMessage: formatted.message,
         errorDetails: formatted,
       },
-      refreshClient
-        ? {
-            prepareRetry: async (selection, signal) => {
-              signal?.throwIfAborted();
-              await refreshClient(selection, signal);
-              signal?.throwIfAborted();
-              clientPrepared = true;
-            },
-          }
-        : undefined,
+      {
+        prepareRetry: async (selection, signal) => {
+          await modelCell.rebind(selection, signal);
+          clientPrepared = true;
+        },
+      },
     );
     if (!interaction) {
       throw new Error('HostInteractions.requestRetry is required');
@@ -401,6 +399,10 @@ export abstract class RetryableInvocationNode<
     return {
       kind: 'failed',
       ...toRetryErrorInfo(formatted),
+      // The marker rides the Error, not the formatted record; stamp it here
+      // so the flow-exit classifier can still see it (fix for the carried
+      // error exit, where toFlowFailureError rebuilds a bare Error).
+      ...(hasMissingApiKeyErrorMarker(error) ? { missingApiKey: true } : {}),
     };
   }
 }

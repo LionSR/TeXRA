@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
@@ -22,6 +21,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -188,13 +188,12 @@ describe('ExecutionsTool', () => {
     const parentStreamId = 'stream:parent-report-suppression' as StreamTabId;
     const childStreamId = 'stream:child-report-suppression' as StreamTabId;
     const otherStreamId = 'stream:other-report-reader' as StreamTabId;
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
       parentStreamId,
       childStreamId,
-      'review',
-      'toolUse',
-    );
+      agent: 'review',
+    });
 
     try {
       session.executions.track(handle);
@@ -258,13 +257,12 @@ describe('ExecutionsTool', () => {
     const executionId = 'abc124';
     const parentStreamId = 'stream:parent-live-todos' as StreamTabId;
     const childStreamId = 'stream:child-live-todos' as StreamTabId;
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
       parentStreamId,
       childStreamId,
-      'review',
-      'toolUse',
-    );
+      agent: 'review',
+    });
 
     try {
       session.executions.track(handle);

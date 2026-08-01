@@ -14,11 +14,17 @@ export function currentModelFromUserChannels(
   return isNonEmptyString(value) ? value.trim() : undefined;
 }
 
+/**
+ * Record a model switch in persisted shared state: `modelId` is the resume
+ * SSOT, and the `MODEL` user variable is re-projected from it so prompts keep
+ * seeing the model the run is actually on.
+ */
 export function setToolUseSharedModel(
   shared: ToolUseRunShared,
   model: string,
 ): boolean {
   if (!shared.stateSlices) return false;
+  shared.modelId = model;
   shared.stateSlices = {
     ...shared.stateSlices,
     userChannels: {

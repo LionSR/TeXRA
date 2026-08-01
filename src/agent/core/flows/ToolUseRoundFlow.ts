@@ -58,7 +58,7 @@ export function createToolUseRoundFlow<C>(): Flow<
     // (OpenAI, OpenRouter) already have it in history — resupplying it here
     // too would duplicate it alongside the persisted message.
     getSystemPrompt: (shared, services) =>
-      services.modelHandler.requiresPerCallSystemPrompt
+      services.modelCell.handler.requiresPerCallSystemPrompt
         ? shared.systemPrompt
         : undefined,
     getFinalTool: (shared) => shared.finalTool,

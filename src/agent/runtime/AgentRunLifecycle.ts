@@ -10,13 +10,16 @@ import {
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLeaseIfPresent,
 } from '@agent/storage/executionLease';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
   classifyAgentError,
   normalizeProviderError,
 } from '@common/errors';
+import {
+  attachMissingApiKeyError,
+  attachProviderError,
+} from '@common/errors/sdkErrorUtils';
 import { platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
@@ -24,6 +27,7 @@ import {
   STREAM_PHASE,
   buildRunDescriptor,
   toRetryErrorInfo,
+  type RetryErrorInfo,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
@@ -41,7 +45,6 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import { persistTerminalExecution } from './persistTerminalExecution';
 import {
-  getAgentFlowErrorResult,
   buildTerminalFlowResult,
   isWaitingFlowResult,
   type AgentRuntimeFlowResult,
@@ -276,6 +279,25 @@ export async function finalizeRunTerminal(
   return { event, terminalStatusPersisted };
 }
 
+/**
+ * Recover a run's carried failure as an `Error`, so the one failure path below
+ * classifies and logs a reported failure exactly as it does an exception that
+ * escaped the flow.
+ *
+ * `RetryErrorInfo` is a `ProviderError` minus the bulky `rawErrorBody`, so it
+ * attaches as-is: the missing field stays absent and `isRelayError` stays
+ * `undefined` when it was, keeping `normalizeProviderError` from reading a
+ * wrong relay verdict off the retry-state shape.
+ */
+function toFlowFailureError(error: RetryErrorInfo): Error {
+  const failure = new Error(error.message);
+  attachProviderError(failure, error);
+  // The classifier is marker-only for this kind; the flatten carried the
+  // verdict as a field, so restore the marker on the rebuilt Error.
+  if (error.missingApiKey) attachMissingApiKeyError(failure);
+  return failure;
+}
+
 function transitionRunStart(ctx: AgentLaunchContext): void {
   const { streamId, session } = ctx.runScope;
   const streamStatus = session.status;
@@ -365,26 +387,6 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
   });
 }
 
-function emitRunStart(ctx: AgentLaunchContext): void {
-  const { streamId, executionId } = ctx.runScope;
-  // Launch construction receives already-normalized AgentConfig; descriptor
-  // parse failures here indicate an internal run-contract violation.
-  const descriptor = buildRunDescriptor({
-    streamId,
-    executionId,
-    agent: ctx.config.agent,
-    category: ctx.setting.agentCategory,
-    kind: 'agent',
-  });
-  ctx.logger.emit({ type: 'run.start', descriptor });
-  ctx.logger.emit({
-    type: 'run.config',
-    streamId,
-    executionId,
-    config: ctx.config,
-  });
-}
-
 /**
  * Wraps a flow runner with full agent run lifecycle management: execution
  * registry tracking, stream-status transitions, error classification, user
@@ -404,17 +406,19 @@ export async function runFlowWithLifecycle(
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId, executionId, session } = ctx.runScope;
   const agentIdentifier = ctx.config.agent;
-  const category =
-    ctx.setting.agentCategory === AgentCategory.ToolUse
-      ? 'toolUse'
-      : 'workflow';
+  // Launch construction receives an already-normalized AgentConfig; a
+  // descriptor parse failure here is an internal run-contract violation.
+  const descriptor = buildRunDescriptor({
+    streamId,
+    executionId,
+    agent: agentIdentifier,
+    category: ctx.setting.agentCategory,
+    kind: 'agent',
+  });
   const parentStreamId = options?.parentStreamId ?? streamId;
   const handle = new AgentExecutionHandle(
-    executionId,
+    descriptor,
     parentStreamId,
-    streamId,
-    agentIdentifier,
-    category,
     ctx.logger,
   );
   const executionLeaseScope = captureOwnedExecutionLeaseIfPresent(executionId);
@@ -490,11 +494,120 @@ export async function runFlowWithLifecycle(
           },
       ...arm,
     });
+  /**
+   * The single owner of a failed run's exit, entered from both arms below: a
+   * flow that reported FAILED on its result (`carried`, whose structured error
+   * arrives recovered onto `err`) and an exception that escaped the runner
+   * without one. Classification, the run log, the terminal `result` event's
+   * error facts, subagent delivery, and the `AgentError` a root caller sees all
+   * happen here, so a carried failure is exactly as loud as a thrown one.
+   */
+  const finalizeFailedRun = async (
+    err: unknown,
+    carried: AgentFlowResult | undefined,
+  ): Promise<AgentFlowResult> => {
+    const kind = classifyAgentError(err);
+    const outcome = AGENT_ERROR_OUTCOME[kind];
+    // normalizeProviderError recovers the structured shape the flow attached
+    // (T2-2) when there was one, or formats a fresh one otherwise.
+    // toRetryErrorInfo strips rawErrorBody — the ResultEvent.error type omits
+    // it (bulky, not worth persisting) and a bare object spread would silently
+    // smuggle it through past the type check.
+    const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
+      normalizeProviderError(err),
+    );
+    const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
+
+    // Root-agent failures are surfaced in the stream log. Subagent failures
+    // are delivered to the orchestrator below, so avoid adding a second
+    // wrapper error that makes a child failure look like the parent failed.
+    if (kind !== 'abort' && !options?.isSubagent) {
+      logSdkError(ctx.logger, errorMsg, err, {
+        operation: `execute ${agentIdentifier}`,
+      });
+    }
+
+    const message = kind === 'unexpected' ? errorMsg : sdkMsg;
+    // `abort`/`disk-full` route through `formatProviderHttpError`'s
+    // `terminalError()` branch, which never populates the provider/relay/
+    // credential fields — narrow to the fields it actually sets so
+    // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
+    // Abort still carries the SDK message for event consumers; the toast
+    // mapper intentionally suppresses user-facing notifications for aborts.
+    const error: NonNullable<ResultEvent['error']> =
+      kind === 'abort' || kind === 'disk-full'
+        ? {
+            kind,
+            message,
+            userRetryable: providerErrorInfo.userRetryable,
+            isRelayError: providerErrorInfo.isRelayError,
+            streamDiagnostics: providerErrorInfo.streamDiagnostics,
+            partialText: providerErrorInfo.partialText,
+          }
+        : {
+            kind,
+            message,
+            ...providerErrorInfo,
+          };
+    const subagentResult = options?.isSubagent
+      ? (carried ??
+        buildTerminalFlowResult(
+          descriptor.category,
+          outcome,
+          executionId,
+          streamId,
+          ctx.attachedMemoryMisses,
+        ))
+      : undefined;
+    // One finalize covers all three exits below (subagent / abort / throw).
+    // No-ops entirely when the success arm already finalized, so a
+    // post-completion throw cannot double-publish a contradictory result.
+    // Terminal-error toasts are not emitted here: hosts present them from the
+    // `result` event via `session.onResult` + `terminalResultToast` (the
+    // single decision point), keeping the run-lifecycle out of host UI.
+    const finalized = await finalizeTerminal({
+      outcome,
+      error,
+      deliver:
+        subagentResult && options?.onError
+          ? (resolved) =>
+              options.onError?.(
+                err,
+                withResolvedOutcome(subagentResult, resolved),
+              )
+          : undefined,
+    });
+    // The finalizer resolved this run's terminal fact; the exits below report
+    // the same one it published. It returns nothing only when the success arm
+    // already finalized, and then this arm's report is all this exit knows.
+    const resolvedOutcome = finalized?.event.outcome ?? outcome;
+
+    if (subagentResult) {
+      return withResolvedOutcome(subagentResult, resolvedOutcome);
+    }
+    if (kind === 'abort') {
+      return buildTerminalFlowResult(
+        descriptor.category,
+        resolvedOutcome,
+        executionId,
+        streamId,
+        ctx.attachedMemoryMisses,
+      );
+    }
+
+    throw new AgentError(errorMsg, { cause: err });
+  };
   try {
     // Publish run identity/config before the RUNNING transition so progress
     // backends can create the initial StreamExecutionState with the real
     // category when the transition-owned run-start side effects fire.
-    emitRunStart(ctx);
+    ctx.logger.emit({ type: 'run.start', descriptor: handle.descriptor });
+    ctx.logger.emit({
+      type: 'run.config',
+      streamId,
+      executionId,
+      config: ctx.config,
+    });
     // The lifecycle owns every stream-status transition: the start claim here,
     // terminal states in the success/error arms below. Runners must not
     // set stream status themselves. Either branch leaves the stream carrying
@@ -563,6 +676,13 @@ export async function runFlowWithLifecycle(
       });
       return result;
     }
+    // A flow that failed reports it on the result it returns, together with the
+    // response, files, and cost it did produce. That is a failed run, not a
+    // successful one with an error field, so it exits through the same owner an
+    // escaped exception does.
+    if (result.error) {
+      return await finalizeFailedRun(toFlowFailureError(result.error), result);
+    }
     // Persist the terminal fact before any supplementary UX state. In
     // particular, a completed tool-use flow must not remain resumable while an
     // onboarding write is pending.
@@ -592,101 +712,29 @@ export async function runFlowWithLifecycle(
     logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
     return withResolvedOutcome(result, resolvedOutcome);
   } catch (err) {
-    const kind = classifyAgentError(err);
-    const outcome = AGENT_ERROR_OUTCOME[kind];
-    // normalizeProviderError recovers the structured shape attached at the
-    // flow-exit rethrows (T2-2) when one was attached, or formats a fresh one
-    // otherwise. toRetryErrorInfo strips rawErrorBody — the ResultEvent.error
-    // type omits it (bulky, not worth persisting) and a bare object spread
-    // would silently smuggle it through past the type check.
-    const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
-      normalizeProviderError(err),
-    );
-    const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
-
-    // Root-agent failures are surfaced in the stream log. Subagent failures
-    // are delivered to the orchestrator below, so avoid adding a second
-    // wrapper error that makes a child failure look like the parent failed.
-    if (kind !== 'abort' && !options?.isSubagent) {
-      logSdkError(ctx.logger, errorMsg, err, {
-        operation: `execute ${agentIdentifier}`,
-      });
-    }
-
-    const message = kind === 'unexpected' ? errorMsg : sdkMsg;
-    // `abort`/`disk-full` route through `formatProviderHttpError`'s
-    // `terminalError()` branch, which never populates the provider/relay/
-    // credential fields — narrow to the fields it actually sets so
-    // `ResultEvent.error`'s per-kind union stays honest (see events.ts).
-    // Abort still carries the SDK message for event consumers; the toast
-    // mapper intentionally suppresses user-facing notifications for aborts.
-    const error: NonNullable<ResultEvent['error']> =
-      kind === 'abort' || kind === 'disk-full'
-        ? {
-            kind,
-            message,
-            userRetryable: providerErrorInfo.userRetryable,
-            isRelayError: providerErrorInfo.isRelayError,
-            streamDiagnostics: providerErrorInfo.streamDiagnostics,
-            partialText: providerErrorInfo.partialText,
-          }
-        : {
-            kind,
-            message,
-            ...providerErrorInfo,
-          };
-    const subagentResult = options?.isSubagent
-      ? (getAgentFlowErrorResult(err) ??
-        buildTerminalFlowResult(
-          category,
-          outcome,
-          executionId,
-          streamId,
-          ctx.attachedMemoryMisses,
-        ))
-      : undefined;
-    // One finalize covers all three exits below (subagent / abort / throw).
-    // No-ops entirely when the success arm already finalized, so a
-    // post-completion throw cannot double-publish a contradictory result.
-    // Terminal-error toasts are not emitted here: hosts present them from the
-    // `result` event via `session.onResult` + `terminalResultToast` (the
-    // single decision point), keeping the run-lifecycle out of host UI.
-    const finalized = await finalizeTerminal({
-      outcome,
-      error,
-      deliver:
-        subagentResult && options?.onError
-          ? (resolved) =>
-              options.onError?.(
-                err,
-                withResolvedOutcome(subagentResult, resolved),
-              )
-          : undefined,
-    });
-    // The finalizer resolved this run's terminal fact; the exits below report
-    // the same one it published. It returns nothing only when the success arm
-    // already finalized, and then this arm's report is all this exit knows.
-    const resolvedOutcome = finalized?.event.outcome ?? outcome;
-
-    if (subagentResult) {
-      return withResolvedOutcome(subagentResult, resolvedOutcome);
-    }
-    if (kind === 'abort') {
-      return buildTerminalFlowResult(
-        category,
-        resolvedOutcome,
-        executionId,
-        streamId,
-        ctx.attachedMemoryMisses,
-      );
-    }
-
-    throw new AgentError(errorMsg, { cause: err });
+    return await finalizeFailedRun(err, undefined);
   } finally {
     if (!keepLeaseWatcher) stopWatchingLease();
-    // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
-    // to prevent leaks when handler instances are discarded after execution.
-    ctx.modelHandler.dispose();
+    // Settle every host interaction this run left pending. The lifecycle owns
+    // it for both flows: a run that ends with an approval still on screen must
+    // release the host whether it completed, failed, was stopped, or parked at
+    // WAITING. The interrupt-time cancel a stop performs stays with the
+    // interrupt handler, which has to settle the prompt before the flow can
+    // unwind; a second cancel here matches nothing and is a no-op. Guarded so a
+    // throwing host adapter cannot replace the result this run already
+    // published.
+    try {
+      session.interactions.cancel({ streamId, cause: 'Run ended.' });
+    } catch (cancelError) {
+      logger.warn('Failed to cancel host interactions after the run ended', {
+        data: { agentIdentifier, streamId, error: cancelError },
+      });
+    }
+    // Release long-lived resources (e.g., WebSocket connections, keepalive
+    // intervals) to prevent leaks when handler instances are discarded after
+    // execution. The cell disposed each handler a mid-run switch retired, so
+    // this closes the one still live.
+    ctx.modelCell.dispose();
     // Drop the run-trace subscribers (channel sink + transcript recorder) so
     // they don't pile up across many agent runs.
     ctx.disposeTrace();

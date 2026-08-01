@@ -3,9 +3,6 @@ import {
   STREAM_STATUS,
   STREAM_SUBSTATE,
   StreamPhaseSchema,
-  StreamStatusSchema,
-  streamStatusToPhase,
-  streamStatusToSubstate,
   type PhaseStage,
   type RoundStage,
   type StreamPhase,
@@ -14,41 +11,21 @@ import {
 
 export type StreamStatusDisplayKey = StreamPhase | StreamSubstate | 'ready';
 
-interface StreamStatusDisplayState {
-  readonly key?: StreamStatusDisplayKey;
-  readonly legacyStatus?: string;
-}
-
-function streamStatusDisplayState(
-  status: string | undefined,
-  substate?: StreamSubstate,
-): StreamStatusDisplayState {
-  if (status == null) return {};
-  if (status === STREAM_STATUS.READY) {
-    return { key: 'ready' };
-  }
-
-  const phase = StreamPhaseSchema.safeParse(status);
-  if (phase.success) {
-    return { key: substate ?? phase.data };
-  }
-
-  const legacyStatus = StreamStatusSchema.safeParse(status);
-  if (!legacyStatus.success) return {};
-
-  const legacyPhase = streamStatusToPhase(legacyStatus.data);
-  const legacySubstate = streamStatusToSubstate(legacyStatus.data);
-  return {
-    legacyStatus: legacyStatus.data,
-    key: legacySubstate ?? legacyPhase,
-  };
-}
-
+/**
+ * Display key for a `StreamLifecycleStatus` (a `StreamPhase`, or the `ready`
+ * idle sentinel every host defaults an unstarted stream to). Anything else —
+ * including the retired 7-value `StreamStatus` vocabulary, which no live
+ * producer emits and which every read boundary normalizes before it reaches a
+ * renderer — has no key, and callers fall back to showing the raw string.
+ */
 export function streamStatusDisplayKey(
   status: string | undefined,
   substate?: StreamSubstate,
 ): StreamStatusDisplayKey | undefined {
-  return streamStatusDisplayState(status, substate).key;
+  if (status === STREAM_STATUS.READY) return 'ready';
+  const phase = StreamPhaseSchema.safeParse(status);
+  if (!phase.success) return undefined;
+  return substate ?? phase.data;
 }
 
 export function streamStatusIndicatorClass(
@@ -130,14 +107,8 @@ export function formatStreamStatusLabel(
   options: FormatStreamStatusLabelOptions = {},
 ): string | undefined {
   if (status == null) return options.missingLabel;
-  const state = streamStatusDisplayState(status, options.substate);
   const style = options.style ?? 'progressHeader';
-  // Legacy `stopped` phases to COMPLETED but must keep reading as "stopped",
-  // which is exactly the CANCELLED wording every style already declares.
-  if (state.legacyStatus === STREAM_STATUS.STOPPED) {
-    return STREAM_STATUS_LABELS[style][STREAM_PHASE.CANCELLED];
-  }
-  const key = state.key;
+  const key = streamStatusDisplayKey(status, options.substate);
   if (!key) return status;
   if (
     options.isChildStream &&

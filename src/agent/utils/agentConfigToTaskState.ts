@@ -3,7 +3,10 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { type TaskState } from '@agent/core/state/TaskState';
 
 /**
- * Converts an AgentConfig object to a TaskState object.
+ * Project a run config into the frozen CLI NDJSON `setTaskState` payload. This
+ * is the projection's only remaining purpose: every other surface reads
+ * `AgentConfig` directly, so the wire shape stays byte-identical without a
+ * `TaskState` vocabulary living beside it.
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
   const { agentCategory } = config;

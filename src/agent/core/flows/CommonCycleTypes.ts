@@ -148,10 +148,11 @@ export function extractModelResponse(
   response: unknown,
   responseTimeMs: number | undefined,
   endTag: string,
-  services: Pick<WorkspaceScopedCore, 'modelHandler' | 'workspace' | 'logger'>,
+  services: Pick<WorkspaceScopedCore, 'modelCell' | 'workspace' | 'logger'>,
   options: ExtractModelResponseOptions = {},
 ): ExtractedModelResponse {
-  const { modelHandler, workspace, logger } = services;
+  const { workspace, logger } = services;
+  const modelHandler = services.modelCell.handler;
   const thinking = modelHandler.processThinkingBlock(response, workspace);
   const useStreaming = modelHandler.getStreamingConfig();
   const { text, usage, stopReason } = modelHandler.extractResponse(

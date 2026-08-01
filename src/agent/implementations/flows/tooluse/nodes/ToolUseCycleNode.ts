@@ -6,7 +6,6 @@ import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
-import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { buildFailedRetryInfo } from '@common/errors';
 import {
@@ -54,7 +53,8 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const { modelHandler, runScope } = this.services;
+    const { runScope } = this.services;
+    const modelHandler = this.services.modelCell.handler;
     const { streamId } = runScope;
 
     if (prepRes.shouldSkipCycle) {
@@ -91,16 +91,14 @@ export class ToolUseCycleNode<C> extends Node<
     };
 
     const flow = createToolUseRoundFlow<C>();
-    flow.setServices(
-      await withModelClient(
-        {
-          ...this.services,
-          run: prepRes.runState,
-          workspace: prepRes.workspaceState,
-        },
-        modelHandler,
-      ),
-    );
+    // The spread copies the model cell by reference, so the round's nodes read
+    // the handler and provider client the run is live on rather than a copy
+    // taken when the round started.
+    flow.setServices({
+      ...this.services,
+      run: prepRes.runState,
+      workspace: prepRes.workspaceState,
+    });
 
     const { onProgress } = this.services;
     prepRes.workspaceState.workPlan.setOnUpdate({

@@ -7,13 +7,9 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
  * production code decides anything from it any more (#7993 steps 2-3 moved
  * every live producer and host reader to `StreamPhase` + `StreamSubstate`).
- * It survives for exactly three reasons, all of them parse-side:
+ * It survives for exactly two reasons:
  *
- * 1. `StreamLogStore.parsePersistedEntries` normalizes pre-cutover on-disk
- *    `GROUP_START`/`GROUP_END` `data.status` rows (§8.3's first permanent
- *    boundary — released transcripts are never rewritten, so this parse
- *    never ages out).
- * 2. The standalone trace-viewer's file import (`replayTrace.ts`) parses
+ * 1. The standalone trace-viewer's file import (`replayTrace.ts`) parses
  *    externally-authored `trace.json` exports through
  *    `StreamLifecycleStatusSchema` and `StreamSnapshot.status` (§8.3's
  *    second permanent boundary — a static exported file stays legacy-shaped

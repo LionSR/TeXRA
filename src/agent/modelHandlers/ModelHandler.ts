@@ -63,6 +63,7 @@ import {
   getSdkErrorMessage,
   isContextWindowError,
   attachContextWindowError,
+  attachMissingApiKeyError,
 } from '@common/errors/sdkErrorUtils';
 import {
   allowsModelRelay,
@@ -473,7 +474,14 @@ export abstract class ModelHandler<
     return usesServerSideKeysRoute(this.config);
   }
 
-  /** Fetch an API key for the given provider, throwing `errorMessage` on failure. */
+  /**
+   * Fetch an API key for the given provider, throwing `errorMessage` on
+   * failure. This is the one producer of the missing-credential fact the run
+   * lifecycle sees, so the throw carries a typed marker: `classifyAgentError`
+   * reads it instead of matching `errorMessage`, whose per-provider wording
+   * this method owns and reworded freely before (the OpenRouter variant never
+   * matched the substrings the classifier used to look for).
+   */
   private async fetchApiKeyOrThrow(
     provider: ApiProvider,
     errorMessage: string,
@@ -481,7 +489,9 @@ export abstract class ModelHandler<
     try {
       return await getApiKey(platform().secrets, provider);
     } catch (cause) {
-      throw new Error(errorMessage, { cause });
+      const error = new Error(errorMessage, { cause });
+      attachMissingApiKeyError(error);
+      throw error;
     }
   }
 

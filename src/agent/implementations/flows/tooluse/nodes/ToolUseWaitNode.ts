@@ -31,7 +31,8 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
-    const { modelHandler, onIdle } = this.services;
+    const { onIdle } = this.services;
+    const modelHandler = this.services.modelCell.handler;
 
     // Only a wired `onIdle` reads the response text (a host projecting the
     // transcript before the flow blocks). A suspended subagent turn's facts

@@ -121,8 +121,10 @@ export class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    const toolCalls = services.modelHandler.extractToolUse(prepRes.response);
-    const serverToolData = services.modelHandler.extractServerToolData(
+    const toolCalls = services.modelCell.handler.extractToolUse(
+      prepRes.response,
+    );
+    const serverToolData = services.modelCell.handler.extractServerToolData(
       prepRes.response,
     );
 
@@ -135,9 +137,8 @@ export class ToolUseProcessNode<C> extends BaseNode<
       }
     }
 
-    const lastAssistantContent = services.modelHandler.extractAssistantContent(
-      prepRes.response,
-    );
+    const lastAssistantContent =
+      services.modelCell.handler.extractAssistantContent(prepRes.response);
 
     if (text) {
       services.logger.debug(`Model response: ${text.slice(0, 100)}`);
@@ -150,7 +151,8 @@ export class ToolUseProcessNode<C> extends BaseNode<
     }
 
     const endTurn =
-      services.modelHandler.isEndTurnStop(stopReason) || !toolCalls?.length;
+      services.modelCell.handler.isEndTurnStop(stopReason) ||
+      !toolCalls?.length;
 
     return {
       kind: 'success',
@@ -170,14 +172,9 @@ export class ToolUseProcessNode<C> extends BaseNode<
     prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const {
-      run,
-      workspace,
-      onRoundFinalized,
-      modelHandler,
-      logger,
-      finalTool,
-    } = this.services;
+    const { run, workspace, onRoundFinalized, logger, finalTool } =
+      this.services;
+    const modelHandler = this.services.modelCell.handler;
 
     if (execRes.kind === 'skipped') {
       return FlowTransition.COMPLETE;

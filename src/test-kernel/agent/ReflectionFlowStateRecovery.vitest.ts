@@ -32,6 +32,7 @@ import {
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({
@@ -45,7 +46,7 @@ const SETTING = AgentWorkflowSettingSchema.parse({ rounds: 1 });
 const PROMPT = AgentPromptSchema.parse({ userRequest: 'Start the workflow.' });
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
 
-function createModelHandler(): RunReflectionFlowInput['modelHandler'] {
+function createModelCell(): RunReflectionFlowInput['modelCell'] {
   const handler = {
     initializeMessages: async (_prefix: string, request: string) => [
       { role: 'user' as const, content: request },
@@ -54,7 +55,7 @@ function createModelHandler(): RunReflectionFlowInput['modelHandler'] {
   Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
     value: ACTIVE_COMPATIBILITY_KEY,
   });
-  return handler as unknown as RunReflectionFlowInput['modelHandler'];
+  return testModelCell(handler, CONFIG.model);
 }
 
 async function runPersistedReflectionFlow(
@@ -68,11 +69,8 @@ async function runPersistedReflectionFlow(
     agentName: CONFIG.agent,
     session,
   });
-  const context = createRunContext({
-    modelSource: 'live',
-    getModel: () => CONFIG.model,
-    runScope,
-  });
+  const modelCell = createModelCell();
+  const context = createRunContext({ runScope, modelCell });
 
   try {
     return await withRunContext(context, () =>
@@ -88,7 +86,7 @@ async function runPersistedReflectionFlow(
           input: Object.freeze({ MODEL: CONFIG.model }),
           transient: {},
         },
-        modelHandler: createModelHandler(),
+        modelCell,
         checkInterruption: () => true,
         abortSignal: new AbortController().signal,
         onRoundFinalized: () => {},

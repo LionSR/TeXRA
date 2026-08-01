@@ -24,6 +24,8 @@ import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerC
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { RetryErrorInfoSchema } from '@shared/schemas';
 
+import { currentModelFromUserChannels } from '../modelSwitchState';
+
 const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
@@ -39,6 +41,12 @@ export type StateSlicesSnapshot = z.output<typeof StateSlicesSchema>;
 /** Full persisted and live shared state for one tool-use flow. */
 const ToolUseRunSharedSchema = z.looseObject({
   messages: ProviderMessageArraySchema,
+  /**
+   * The model the run is on, mirroring the live `ModelCell`. This is the
+   * resume SSOT for model identity; the `MODEL` user variable is a prompt-side
+   * projection of it.
+   */
+  modelId: z.string().optional(),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()
     .transform((key) => key ?? undefined)
     .optional(),
@@ -139,7 +147,8 @@ export function assertPreparedShared(
 
 /**
  * Parse persisted shared state once, normalizing the legacy conversation key,
- * outer state wrapper, and workspace snapshot before live flow code sees it.
+ * outer state wrapper, workspace snapshot, and pre-`modelId` model identity
+ * before live flow code sees it.
  */
 export function migrateSharedState(
   shared: unknown,
@@ -171,9 +180,23 @@ export function migrateSharedState(
   const parsed = ToolUseRunSharedSchema.safeParse(candidate);
   if (!parsed.success) return parsed;
 
+  // Records written before `modelId` existed carry the run's model only in the
+  // `MODEL` user variable. Lift it here, at the one deserialization boundary,
+  // so no downstream reader has to know the field can be absent. A record with
+  // neither leaves `modelId` unset and the caller falls back to its config.
+  const derivedModelId =
+    parsed.data.modelId ??
+    (parsed.data.stateSlices
+      ? currentModelFromUserChannels(parsed.data.stateSlices.userChannels)
+      : undefined);
+  const data =
+    derivedModelId === undefined
+      ? parsed.data
+      : { ...parsed.data, modelId: derivedModelId };
+
   return {
     success: true,
-    data: parsed.data,
-    migrated: migrated || !isDeepStrictEqual(candidate, parsed.data),
+    data,
+    migrated: migrated || !isDeepStrictEqual(candidate, data),
   };
 }

@@ -59,6 +59,8 @@ So in the common case, **stopping a run persists `terminalStatus: 'error'`, ends
 
 Secondary evidence that the split decision already taxes design work: 7d PR 6 needed a verifier correction ("interrupt-aware success-arm mapping", risk #7) purely to _reconstruct_ at the boundary the fact Decision 2 destroyed.
 
+**Ruled (2026-08-01) — the read-time projection is the final design; persisted `result.outcome` stays.** `applyExecutionOutcome` (`src/agent/storage/resultMeta.ts`) narrows the result envelope from `meta.outcome` at read time and deliberately never projects a durable `completed`, because `result.outcome` carries a producer-side subagent-failure downgrade (`buildSubagentFailureResultMeta`) that `meta.outcome` does not. Dropping the persisted field would silently flip failed child runs to `completed`. Full ruling: [`2026-08-01-architecture-rulings-ledger.md`](./2026-08-01-architecture-rulings-ledger.md) § D1/T9 — do not re-open.
+
 ### D2 — one outcome, three carriers
 
 The same terminal fact travels as:

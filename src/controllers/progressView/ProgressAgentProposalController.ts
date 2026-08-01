@@ -1,8 +1,9 @@
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import type { ProposalResult } from '@agent/runtime/HostInteractions';
-import type { TaskState } from '@agent/core/state/TaskState';
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';
 import type { ProgressAgentProposalActionMessage } from '@shared/schemas/progressView';
 
@@ -14,7 +15,7 @@ type AgentProposalActionInput =
 
 export interface ProgressAgentProposalControllerDeps {
   getPendingProposal(proposalId: string): AgentProposalPermission | undefined;
-  restoreTaskState(taskState: TaskState): Promise<boolean>;
+  restoreRunConfig(config: AgentConfig): Promise<boolean>;
   settleProposal(proposalId: string, result: ProposalResult): void;
   onMissingProposal?(proposalId: string): void;
   onInvalidProposal?(issues: unknown): void;
@@ -45,9 +46,12 @@ export class ProgressAgentProposalController {
   }
 
   async restoreProposalConfig(proposal: AgentProposal): Promise<boolean> {
-    const taskState = this.buildTaskState(proposal);
-    if (!taskState) return false;
-    return this.deps.restoreTaskState(taskState);
+    const result = AgentConfigSchema.safeParse(proposal);
+    if (!result.success) {
+      this.deps.onInvalidProposal?.(result.error.issues);
+      return false;
+    }
+    return this.deps.restoreRunConfig(result.data);
   }
 
   private async setupProposal(proposalId: string): Promise<boolean> {
@@ -69,27 +73,5 @@ export class ProgressAgentProposalController {
     this.deps.settleProposal(proposalId, { action: 'setup' });
     this.deps.onSetupComplete?.(proposal);
     return true;
-  }
-
-  private buildTaskState(proposal: AgentProposal): TaskState | null {
-    const result = AgentConfigSchema.safeParse(proposal);
-
-    if (!result.success) {
-      this.deps.onInvalidProposal?.(result.error.issues);
-      return null;
-    }
-
-    if (result.data.agentCategory === AgentCategory.Workflow) {
-      return {
-        agentConfig: result.data,
-        activeFiles: {
-          input: result.data.inputFiles.length > 0,
-          context: result.data.contextFiles.length > 0,
-          media: result.data.mediaFiles.length > 0,
-          output: result.data.outputFiles.length > 0,
-        },
-      };
-    }
-    return { agentConfig: result.data };
   }
 }

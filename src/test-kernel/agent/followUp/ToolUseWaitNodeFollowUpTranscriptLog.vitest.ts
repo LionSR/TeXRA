@@ -14,6 +14,7 @@ import {
   toolUseRunShared,
   withTestRunContext,
 } from '../progressTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
@@ -26,11 +27,11 @@ function buildServices(
       warn: vi.fn(),
       error: vi.fn(),
     }),
-    modelHandler: {
+    modelCell: testModelCell({
       createUserFollowUpMessages: vi.fn(async (messages) => messages),
       addMediaToUserMessage: vi.fn(async () => []),
       capabilities: {},
-    } as never,
+    }) as never,
     fileService: { createLocation: vi.fn() } as never,
     onRoundFinalized: () => {},
     ...overrides,
@@ -53,7 +54,9 @@ function userFollowUp(): WaitExecResult {
 
 function failAppend(services: ToolUseServices<unknown>, message: string): void {
   (
-    services.modelHandler.createUserFollowUpMessages as ReturnType<typeof vi.fn>
+    services.modelCell.handler.createUserFollowUpMessages as ReturnType<
+      typeof vi.fn
+    >
   ).mockRejectedValue(new Error(message));
 }
 

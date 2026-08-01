@@ -1,18 +1,41 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports
 import { resolveAgentKey } from '@agent/index';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { TaskState } from '@agent/core/state/TaskState';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
 } from '@shared/schemas';
 
-/** Convert a TaskState payload into a full main view state snapshot. */
+/**
+ * Entry-point schema for a restore-into-the-main-view payload. Unwraps the
+ * legacy `{ agentConfig }` wrapper (the retired TaskState shape) once, so
+ * nothing downstream branches on which form arrived.
+ *
+ * Unwrapping happens in `z.preprocess` rather than as a `z.union` legacy
+ * member because `AgentConfigSchema` prefaults every field: a union would let
+ * a wrapper whose `agentConfig` is malformed fall through to the plain member
+ * and validate as an empty default workflow config, silently restoring a blank
+ * form instead of reporting malformed input.
+ */
+export const RestoreRunConfigInputSchema = z.preprocess(
+  (input) =>
+    typeof input === 'object' && input !== null && 'agentConfig' in input
+      ? input.agentConfig
+      : input,
+  AgentConfigSchema,
+);
+
+/** Convert a run config into a full main view state snapshot. */
 export function buildMainViewState(
-  state: TaskState | AgentConfig,
+  agentConfig: AgentConfig,
 ): MainViewPersistedState {
-  const agentConfig = 'agentConfig' in state ? state.agentConfig : state;
   const isToolUse = agentConfig.agentCategory === AgentCategory.ToolUse;
   const toolConfig = agentConfig.toolConfig ?? {};
 

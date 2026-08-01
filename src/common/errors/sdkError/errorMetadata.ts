@@ -65,10 +65,24 @@ export function attachPartialText(err: unknown, text: string): void {
 
 export const detectPartialText = partialTextMetadata.detect;
 
-const contextWindowErrorMetadata = createErrorMetadata<boolean>(
-  'contextWindowError',
-  (v): v is boolean => v === true,
-);
+/** Presence-only marker: attached at a throw site, detected anywhere in the
+ *  rethrow chain so a wrapper that preserves `{ cause }` stays classifiable. */
+function createErrorMarker(name: string): {
+  attach: (err: unknown) => void;
+  has: (err: unknown) => boolean;
+} {
+  const metadata = createErrorMetadata<boolean>(
+    name,
+    (v): v is boolean => v === true,
+  );
+  return {
+    attach: (err) => metadata.attach(err, true),
+    has: (err) =>
+      causeChain(err).some((current) => metadata.detect(current) === true),
+  };
+}
+
+const contextWindowErrorMarker = createErrorMarker('contextWindowError');
 
 /**
  * Marks an error as a TeXRA-internal context-window violation at the throw
@@ -77,15 +91,17 @@ const contextWindowErrorMetadata = createErrorMetadata<boolean>(
  * wording the thrower owns — third-party provider error text is still
  * matched via `CONTEXT_WINDOW_PATTERNS`.
  */
-export function attachContextWindowError(err: unknown): void {
-  contextWindowErrorMetadata.attach(err, true);
-}
+export const attachContextWindowError = contextWindowErrorMarker.attach;
+export const hasContextWindowErrorMarker = contextWindowErrorMarker.has;
 
-export function hasContextWindowErrorMarker(err: unknown): boolean {
-  return causeChain(err).some(
-    (current) => contextWindowErrorMetadata.detect(current) === true,
-  );
-}
+const missingApiKeyErrorMarker = createErrorMarker('missingApiKeyError');
+
+/** Marks "no usable credential for this provider" at its one throw site,
+ *  `ModelHandler.fetchApiKeyOrThrow`. `classifyAgentError` reads this instead
+ *  of matching the per-provider wording that method owns; the cause-chain
+ *  lookup keeps it reachable through any later rethrow. */
+export const attachMissingApiKeyError = missingApiKeyErrorMarker.attach;
+export const hasMissingApiKeyErrorMarker = missingApiKeyErrorMarker.has;
 
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');

@@ -10,33 +10,24 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 import type { FileContext } from '@agent/runtime/textEnhancement';
 import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
-function createWorkflowTaskState(): WorkflowTaskState {
-  return {
-    agentConfig: AgentConfigSchema.parse({
-      agent: 'writer',
-      model: 'gemini31p',
-      inputFiles: ['main.tex'],
-      contextFiles: [],
-      mediaFiles: [],
-      outputFiles: ['answer.tex'],
-      agentCategory: AgentCategory.Workflow,
-    }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
-    activeFiles: {
-      input: true,
-      context: false,
-      media: false,
-      output: true,
-    },
-  };
+function createWorkflowConfig(): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent: 'writer',
+    model: 'gemini31p',
+    inputFiles: ['main.tex'],
+    contextFiles: [],
+    mediaFiles: [],
+    outputFiles: ['answer.tex'],
+    agentCategory: AgentCategory.Workflow,
+  });
 }
 
 describe('ProgressFollowUpPolishController', () => {
-  it('returns a polished text update and builds file context from task state', async () => {
+  it('returns a polished text update and builds file context from the run config', async () => {
     const calls: Array<{ text: string; fileContext?: FileContext }> = [];
     const controller = new ProgressFollowUpPolishController({
       polishText: async (text, fileContext) => {
@@ -51,7 +42,7 @@ describe('ProgressFollowUpPolishController', () => {
     const result = await controller.polishFollowUp({
       stream: 'stream-a',
       text: 'plz check proof',
-      taskState: createWorkflowTaskState(),
+      runConfig: createWorkflowConfig(),
     });
 
     assert.deepEqual(result, {
@@ -87,7 +78,7 @@ describe('ProgressFollowUpPolishController', () => {
     const result = await controller.polishFollowUp({
       stream: 'stream-a',
       text: 'draft text',
-      taskState: createWorkflowTaskState(),
+      runConfig: createWorkflowConfig(),
     });
 
     assert.deepEqual(result, {
@@ -114,7 +105,7 @@ describe('ProgressFollowUpPolishController', () => {
     const result = await controller.polishFollowUp({
       stream: 'stream-a',
       text: 'draft text',
-      taskState: createWorkflowTaskState(),
+      runConfig: createWorkflowConfig(),
     });
 
     assert.deepEqual(result, { kind: 'skipped' });
@@ -131,7 +122,7 @@ describe('ProgressFollowUpPolishController', () => {
     const result = await controller.polishFollowUp({
       stream: 'stream-a',
       text: 'draft text',
-      taskState: createWorkflowTaskState(),
+      runConfig: createWorkflowConfig(),
     });
 
     assert.deepEqual(result, {
@@ -161,7 +152,7 @@ describe('ProgressFollowUpPolishController', () => {
     const result = await controller.polishFollowUp({
       stream: 'stream-a',
       text: 'draft text',
-      taskState: undefined,
+      runConfig: undefined,
     });
 
     assert.deepEqual(result, { kind: 'skipped' });
