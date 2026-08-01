@@ -813,12 +813,9 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
   **Limitation:** This is a lower-bound estimate (messages + systemPrompt only). Tool definitions are not included because each provider uses a different format (`anthropicTools`, etc.). Full accuracy requires the compaction check to happen inside `createResponse()` where provider-specific tools are already built — see Phase 0 refactoring.
 
-- **Diagnostic logging for token count investigation** (2026-02-03): Added `[TOKEN_DIAG]` logs in `modelHandlerOpenAIResponse.ts` to compare pre-flight token estimate with actual usage:
-  - Pre-flight log: Shows `estimateTokenCount()` result, previous cumulative tokens, message counts, tool count, `previous_response_id` status
-  - Post-response log: Compares actual `response.usage.input_tokens` with pre-flight estimate, shows difference, reasoning tokens, output tokens
-  - Warning log: When `response.usage.input_tokens` is missing (streaming instability)
+- **Retired diagnostic logging for token count investigation** (added 2026-02-03; retired 2026-08-01): Temporary `[TOKEN_DIAG]` logs compared the pre-flight estimate with response usage. They were removed after the investigation scaffolding had no active consumer or regression test and required hidden cross-method state with five cleanup paths.
 
-  Look for `[TOKEN_DIAG]` in debug logs to investigate token counting mismatch.
+  Current debug observability retains the pre-flight count and an explicit record when response usage omits `input_tokens`, alongside the existing max-token-reduction and unsafe-chaining records. It does not retain the former paired difference, percentage, message/tool-count, reasoning-token, output-token, or context-utilization fields. If this investigation resumes with a current reproduction, add structured, test-backed observability rather than searching for `[TOKEN_DIAG]`.
 
 - **~~Fix: estimateContextTokens() for correct delta handling~~** (2026-02-03): REMOVED. This method was added to fix delta handling in `ToolUseCycleFlow`, but the entire token counting block in `ToolUseCycleFlow` was subsequently removed (see below), making this method dead code.
 
@@ -849,24 +846,9 @@ This makes compaction a clean plug-in phase rather than deeply embedded logic.
 
 - ~~**BUG: Token count mismatch between ToolUseCycleFlow and createResponse**~~ **RESOLVED** (2026-02-03): Removed the redundant token counting from ToolUseCycleFlow entirely. The authoritative token counting happens inside `createResponse()`, which has access to all parameters (tools, systemPrompt, previous_response_id).
 
-- **INVESTIGATION: OpenAI Responses API token counting mismatch** (pre-existing issue): When using `previous_response_id`, there's a case where UI shows "32% context left" but API returns "context_length_exceeded".
+- **ARCHIVED INVESTIGATION: OpenAI Responses API token counting mismatch** (recorded 2026-02-03; diagnostic retired 2026-08-01): A historical report using `previous_response_id` showed the UI at "32% context left" before the API returned `context_length_exceeded`. No current reproduction or automated regression remains attached to this PRD, so the temporary paired `[TOKEN_DIAG]` instrumentation was retired rather than kept as permanent logging.
 
-  **OpenAI documentation confirms** (`/responses/input_tokens` endpoint):
-
-  > Items from this conversation are prepended to input_items for this response request.
-
-  So `previous_response_id` IS properly handled by the token counting endpoint. The returned `input_tokens` should include the full conversation (user messages + assistant responses) from the previous response ID.
-
-  **Possible causes to investigate**:
-  1. **Timing issue**: Token count logged, then new messages added before `createResponse()` call
-  2. **Tool definitions not counted**: Tools are added in `createResponse()` with provider-specific format, but our pre-flight check in `ToolUseCycleFlow` doesn't include them
-  3. **Reasoning tokens**: While `input_tokens` includes the conversation history, reasoning tokens from o-series models may be counted separately. OpenAI's context window is: `input_tokens + output_tokens` (where `output_tokens` includes `reasoning_tokens`). If reasoning is extensive, this could cause overflow.
-  4. **Token count interpretation**: Need to verify whether the count includes ALL server-side state or just messages
-
-  **Verification needed**:
-  - Log the exact token count returned by `estimateTokenCount()` right before the failing `createResponse()` call
-  - Compare with `response.usage.input_tokens` from previous responses
-  - Check if the error includes expected vs actual token counts
+  OpenAI's `/responses/input_tokens` documentation says that conversation items are prepended for a response request, and the current pre-flight call includes provider-formatted tools and instructions. If the mismatch recurs, open a current issue with a minimal reproduction and add structured observability that compares the immediate pre-flight estimate, response usage (including reasoning/output tokens), and error token details. Do not rely on the removed `[TOKEN_DIAG]` text logs.
 
 ### Future Optimizations
 
