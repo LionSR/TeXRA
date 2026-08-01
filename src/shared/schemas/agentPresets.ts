@@ -59,15 +59,25 @@ export const AgentModePresetSchema = z.object({
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
 
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
-  return z
-    .array(z.unknown())
-    .catch([])
-    .parse(raw)
-    .flatMap((rawPreset) => {
-      const result = AgentModePresetSchema.safeParse(rawPreset);
-      if (!result.success) return [];
-      return [result.data];
-    });
+  const parsedRecords = z.array(z.unknown()).prefault([]).safeParse(raw);
+  if (!parsedRecords.success) {
+    console.warn(
+      `[agentPresets] Custom agent teams are not an array; ignoring them for ` +
+        `this read: ${parsedRecords.error.message}`,
+    );
+    return [];
+  }
+
+  return parsedRecords.data.flatMap((rawPreset, index) => {
+    const result = AgentModePresetSchema.safeParse(rawPreset);
+    if (result.success) return [result.data];
+
+    console.warn(
+      `[agentPresets] Ignoring malformed custom agent team at index ${index}: ` +
+        result.error.message,
+    );
+    return [];
+  });
 }
 
 /**
