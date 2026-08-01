@@ -23,8 +23,8 @@ When updating CHANGELOG.md:
 1. **Install dependencies**: run `corepack pnpm install` if needed.
 2. **Install the local hooks (recommended)**: install `pre-commit` with
    `python -m pip install pre-commit`, then run `pre-commit install`. The
-   formatting hook rewrites and re-stages supported staged files; if it changes
-   a file, inspect the staged diff before pushing.
+   formatting hook rewrites supported staged files; if it changes a file,
+   review and stage the formatter's output before retrying the commit.
 3. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
