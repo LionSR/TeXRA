@@ -47,7 +47,7 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
 - **Width changes and scoped returns invalidate wrapped lines.** Soft-wrap is
   width-dependent: recompute live-region layout from `useWindowSize()` columns
   on every render; never cache wrapped output across a width change. On a width
-  change the vendored `ink` patch (`patches/ink@7.1.0.patch`) deliberately does
+  change the vendored `ink` patch (`patches/ink@7.1.1.patch`) deliberately does
   a **full repaint** — `ansiEscapes.clearTerminal` then reprint live chrome
   (including the session header) plus `fullStaticOutput` (finalized history,
   reflowed), with the live region drawn below — debounced so a drag-storm
