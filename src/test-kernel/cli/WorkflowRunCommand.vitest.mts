@@ -434,9 +434,6 @@ describe('CLI workflow run command', () => {
       const emission = mocks.emitCliResult.mock.calls[0]?.[1];
       expect(emission?.json).toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
-        status: EXECUTION_STATUS.COMPLETED,
-        endGroupStatus: 'stopped',
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
         workingDirectory: root,
         runDirectory: '/tmp/runs/exec-output',
         copiedOutput: path.join(root, 'polished.tex'),
@@ -448,9 +445,6 @@ describe('CLI workflow run command', () => {
         'outcome',
         'outputs',
         'compileFailures',
-        'status',
-        'endGroupStatus',
-        'terminalStatus',
         'workingDirectory',
         'runDirectory',
         'copiedOutput',

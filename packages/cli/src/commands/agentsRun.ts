@@ -25,10 +25,7 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
 import { executeCliToolUseConfig } from '../runtime/runExecution';
-import {
-  serializeCliRunResult,
-  toolUseResultText,
-} from '../runtime/terminalStatus';
+import { toolUseResultText } from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
@@ -89,10 +86,9 @@ export async function runToolUseAgent(
       });
       if (!execution.ok) return execution.exitCode;
 
-      const displayResult = serializeCliRunResult(execution.result);
       emitCliResult(runContext, {
-        json: displayResult,
-        ndjson: { kind: 'agent-result', result: displayResult },
+        json: execution.result,
+        ndjson: { kind: 'agent-result', result: execution.result },
         text: toolUseResultText(execution.result),
       });
 

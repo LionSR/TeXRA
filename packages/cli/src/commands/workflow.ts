@@ -32,10 +32,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliConfig } from '../runtime/runExecution';
-import {
-  serializeCliRunResult,
-  runOutcomeExitCode,
-} from '../runtime/terminalStatus';
+import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
   withExpandedRunInputs,
@@ -179,10 +176,9 @@ export async function runWorkflowAgent(
         );
       }
 
-      const displayResult = serializeCliRunResult(workflowResult);
       emitCliResult(runContext, {
-        json: displayResult,
-        ndjson: { kind: 'result', result: displayResult },
+        json: workflowResult,
+        ndjson: { kind: 'result', result: workflowResult },
         text: formatWorkflowTextResult(workflowResult),
       });
 
