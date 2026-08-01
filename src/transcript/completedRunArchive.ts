@@ -9,7 +9,10 @@
  */
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
-import { stringifyConversationValue } from '@agent/storage/conversationFormat';
+import {
+  formatConversationMessage,
+  stringifyConversationValue,
+} from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -23,7 +26,7 @@ import {
   type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
-import { assertNever } from '@utils/core';
+import { assertNever, generateShortId, isObject } from '@utils/core';
 
 import {
   findPersistedStreamFallbacksForExecution,
@@ -71,15 +74,16 @@ export async function readCompletedRunTodos(
     snapshotStore,
   });
 
-  if (resolved) {
+  if (
+    resolved &&
+    (await snapshotStore.hasPersistedWorkPlan(resolved.streamId))
+  ) {
     const snapshot = await snapshotStore.read(resolved.streamId);
-    if (snapshot.todos.length > 0) {
-      return {
-        todos: snapshot.todos.map(todoItemToEntry),
-        source: 'streamData',
-        streamId: resolved.streamId,
-      };
-    }
+    return {
+      todos: snapshot.todos.map(todoItemToEntry),
+      source: 'streamData',
+      streamId: resolved.streamId,
+    };
   }
   return readLegacyTodos(executionId);
 }
@@ -131,12 +135,13 @@ function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text) return [];
   const parsed = UserMessagePayloadSchema.safeParse(entry.data);
   const attachments = parsed.success ? (parsed.data.attachments ?? []) : [];
+  const role = archivedConversationRole(entry, 'user');
   if (attachments.length === 0) {
-    return [{ role: 'user', content: entry.text }];
+    return [{ role, content: entry.text }];
   }
   return [
     {
-      role: 'user',
+      role,
       content: [
         { type: 'text', text: entry.text },
         ...attachments.map(mediaAttachmentKindToContentBlock),
@@ -147,7 +152,20 @@ function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
 
 function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text?.trim()) return [];
-  return [{ role: 'assistant', content: [{ type: 'text', text: entry.text }] }];
+  return [
+    {
+      role: archivedConversationRole(entry, 'assistant'),
+      content: [{ type: 'text', text: entry.text }],
+    },
+  ];
+}
+
+function archivedConversationRole(
+  entry: StreamLogEntry,
+  fallback: string,
+): string {
+  const data = isObject(entry.data) ? entry.data : {};
+  return typeof data.archivedRole === 'string' ? data.archivedRole : fallback;
 }
 
 function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
@@ -300,6 +318,56 @@ function streamLogEntriesToConversation(
       ? conversationMessagesForEntry(entry)
       : [],
   );
+}
+
+/**
+ * Import a pre-sidecar persisted conversation into an otherwise
+ * conversation-empty stream before a resumed reflection run appends new
+ * turns. This is the one legacy-to-canonical migration boundary: subsequent
+ * completed reads remain sidecar-first and never have to splice two histories.
+ */
+export async function seedResumedConversationSidecar(
+  streamLogStore: StreamLogStore,
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  messages: readonly unknown[],
+): Promise<boolean> {
+  if (messages.length === 0) return false;
+  await streamLogStore.ensureLoaded(streamId);
+  const existing = streamLogStore.get(streamId);
+  if (
+    existing &&
+    streamLogEntriesToConversation(existing.toJSON()).length > 0
+  ) {
+    return false;
+  }
+
+  const normalized = messages
+    .map((message) => formatConversationMessage(message))
+    .filter(({ content }) => content.length > 0);
+  if (normalized.length === 0) return false;
+
+  const writer = streamLogStore.acquireWriter(streamId, executionId);
+  try {
+    for (const { role, content } of normalized) {
+      writer.appendSettled({
+        id: generateShortId(),
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: 'info',
+        timestamp: Date.now(),
+        messageType:
+          role === 'assistant' || role === 'model'
+            ? MESSAGE_TYPES.MODEL_RESPONSE
+            : MESSAGE_TYPES.USER_MESSAGE,
+        text: content,
+        data: { archivedRole: role },
+        verbose: false,
+      });
+    }
+  } finally {
+    writer.close();
+  }
+  return true;
 }
 
 /** Reconstruct one stream's conversation; `[]` when the log is absent/empty. */

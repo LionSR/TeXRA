@@ -34,6 +34,7 @@ import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@shared/constants/workflowOutput';
+import { seedResumedConversationSidecar } from '@transcript/completedRunArchive';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
@@ -313,6 +314,12 @@ export async function runReflectionFlow<C = unknown>(
 
     if (isResume) {
       logger.debug('Resuming reflection flow from persistence');
+      await seedResumedConversationSidecar(
+        runSession.transcripts,
+        streamId,
+        executionId,
+        shared.conversation,
+      );
       // Persist the synced totalRounds into the flow record so that
       // stepWithResult() picks up the current config, not the stale one.
       await pf.setShared(shared);

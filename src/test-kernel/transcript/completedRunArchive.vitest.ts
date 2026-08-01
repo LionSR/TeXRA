@@ -32,6 +32,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import {
   readCompletedRunConversation,
   readCompletedRunTodos,
+  seedResumedConversationSidecar,
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
@@ -273,6 +274,22 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
+  it('treats a present empty work plan as authoritative over stale legacy todos', async () => {
+    const executionId = '0aa2220aa222' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    snapshots.setTodos(streamId, []);
+    await snapshots.flush();
+    await getExecutionStore(executionId).write('todos', [
+      { content: 'Stale legacy todo', status: 'pending' },
+    ]);
+
+    const result = await readCompletedRunTodos(executionId);
+
+    expect(result).toEqual({ todos: [], source: 'streamData', streamId });
+  });
+
   it('reports none when neither the sidecar nor the legacy projection has data', async () => {
     const executionId = 'ccc333ccc333' as ExecutionId;
 
@@ -297,6 +314,50 @@ describe('completedRunArchive facade', () => {
     expect(result.conversation).not.toContainEqual({
       role: 'assistant',
       content: 'Legacy projection',
+    });
+  });
+
+  it('seeds a resumed legacy conversation into an empty transcript once', async () => {
+    const executionId = '0dd4440dd444' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0dd4440dd444' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(streamId);
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Resuming...' }),
+    );
+    const messages = [
+      { role: 'system', content: 'Follow the proof protocol.' },
+      { role: 'user', content: 'Prove the legacy lemma.' },
+      { role: 'assistant', content: 'Here is the legacy proof.' },
+    ];
+
+    await expect(
+      seedResumedConversationSidecar(logs, streamId, executionId, messages),
+    ).resolves.toBe(true);
+    await expect(
+      seedResumedConversationSidecar(logs, streamId, executionId, [
+        { role: 'assistant', content: 'Duplicate seed' },
+      ]),
+    ).resolves.toBe(false);
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId,
+      conversation: [
+        { role: 'system', content: 'Follow the proof protocol.' },
+        { role: 'user', content: 'Prove the legacy lemma.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Here is the legacy proof.' }],
+        },
+      ],
     });
   });
 
