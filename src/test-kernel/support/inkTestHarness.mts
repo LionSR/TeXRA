@@ -53,7 +53,7 @@ export class FakeStdout extends EventEmitter {
 /** Ink's render instance, narrowed to what the test kernel drives. `ink` is a
  *  `packages/cli` dependency that repo-root type resolution does not see, so
  *  the module handle itself stays untyped. `repaint` comes from the workspace
- *  Ink patch (`patches/ink@7.1.0.patch`), not upstream Ink. */
+ *  Ink patch (`patches/ink@7.1.1.patch`), not upstream Ink. */
 interface InkInstance {
   unmount(): void;
   rerender(node: any): void;
@@ -126,7 +126,7 @@ export function renderWithTerminalSize(
  *  Tests that drive keystrokes or their own clock keep the handles from
  *  `renderWithTerminalSize` instead.
  *
- *  This uses Ink's debug mode, where Ink 7.1.0 writes each render as a complete
+ *  This uses Ink's debug mode, where Ink 7.1.1 writes each render as a complete
  *  frame instead of terminal cursor/erase updates. `until` receives the latest
  *  painted frame, which is also returned; it defaults to "Ink has painted
  *  something". */
