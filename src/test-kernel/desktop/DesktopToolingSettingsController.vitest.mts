@@ -7,10 +7,9 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { DefaultDesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
-import { isStored } from '@test/support/settingsStoresFake';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
@@ -293,45 +292,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
     expect(reportedErrors.map((error) => (error as Error).message)).toEqual([
       'No auth command for tool "codex" (missingCommand)',
     ]);
-  });
-
-  it('validates LaTeX writes before persistence and reposts after the write', async () => {
-    const events: string[] = [];
-    const workspaceState = spyOnUpdate(new FakeStateStore(), () =>
-      events.push('state:update'),
-    );
-    const { controller, posted } = createFixture({
-      workspaceState,
-      renderer: {
-        postToRenderer: (message) => {
-          posted.push(message);
-          events.push('renderer:post');
-        },
-      },
-    });
-
-    await assertSupported(controller.latexActions.setConfigValue)({
-      field: 'latexFormatter',
-      value: 'none',
-    });
-
-    expect(workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe('none');
-    expect(events).toEqual(['state:update', 'renderer:post']);
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: { latexFormatter: 'none' },
-    });
-
-    await expect(
-      assertSupported(controller.latexActions.setConfigValue)({
-        field: 'latexdiffTimeoutMs',
-        value: 100,
-      }),
-    ).rejects.toThrow('Invalid LaTeX config value for latexdiffTimeoutMs');
-    expect(
-      isStored(workspaceState, WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS),
-    ).toBe(false);
-    expect(events).toEqual(['state:update', 'renderer:post']);
   });
 
   it('runs only allowlisted LaTeX installation commands', async () => {

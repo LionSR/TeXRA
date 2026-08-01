@@ -6,14 +6,12 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_CMD } from '@shared/ipc';
-import { LATEX_CONFIG_FIELDS } from '@shared/constants/latex';
 import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
 import { AgentCategorySchema, AgentSourceSchema } from '../agent';
-import { AgentSkillsEnabledSchema } from '../agentSkills';
 import { StreamTabIdSchema } from '../identifiers';
 import { commandOnly } from '../messageFactories';
 import { WebviewReadyMessageSchema } from '../commonViewMessages';
@@ -188,15 +186,6 @@ const ResetCustomAgentDirMessageSchema = commandOnly(
   CMD.RESET_CUSTOM_AGENT_DIR,
 );
 
-// Allow orchestrator kill inbound message
-const SetAllowOrchestratorKillMessageSchema = enabledFlag(
-  CMD.SET_ALLOW_ORCHESTRATOR_KILL,
-);
-
-const SetDetachSubagentsOnStopMessageSchema = enabledFlag(
-  CMD.SET_DETACH_SUBAGENTS_ON_STOP,
-);
-
 // Agent team inbound messages
 const ApplyAgentModePresetMessageSchema = z.object({
   command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
@@ -283,32 +272,6 @@ const RunInstallCommandMessageSchema = z.object({
   installCommand: z.string().min(1),
 });
 
-// LaTeX/compile/diff config (storage-backed)
-/**
- * Single-property write — frontend sends one value at a time. Surface a flat
- * shape (single outer branch keyed on `command`) so it composes into the
- * outer `SettingsViewInboundMessageSchema` discriminatedUnion('command', ...)
- * without producing duplicate command discriminators (which would crash the
- * whole inbound dispatcher at parse time, taking down every Settings view
- * interaction). Per-field value validation happens in the backend handler
- * using `LatexConfigValuesSchema.shape[field]`.
- */
-// Use the canonical field list from latex.ts as the schema source so it can
-// never drift from `LATEX_FIELD_TO_KEY`. z.enum accepts the readonly array
-// directly and preserves the literal types so `LatexConfigField` (re-exported
-// from the entry barrel) stays the same union of string literals consumers
-// already rely on.
-const LatexConfigFieldSchema = z.enum(LATEX_CONFIG_FIELDS);
-
-const SetLatexConfigValueMessageSchema = z.object({
-  command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
-  field: LatexConfigFieldSchema,
-  // Loose at the schema level — the handler validates per-field via
-  // LatexConfigValuesSchema.shape[field] before writing to workspace state.
-  // `undefined` clears the key (returns to documented default).
-  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
-});
-
 // Experimental settings inbound messages
 const GetInlineCriticismEnabledMessageSchema = commandOnly(
   CMD.GET_INLINE_CRITICISM_ENABLED,
@@ -317,22 +280,12 @@ const SetInlineCriticismEnabledMessageSchema = enabledFlag(
   CMD.SET_INLINE_CRITICISM_ENABLED,
 );
 
-// Approval settings inbound messages
-const SetBashApprovalEnabledMessageSchema = enabledFlag(
-  CMD.SET_BASH_APPROVAL_ENABLED,
-);
-
-const SetAgentSkillsEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_AGENT_SKILLS_ENABLED),
-  enabled: AgentSkillsEnabledSchema,
-});
-
-// Generic catalog-driven state-setting write. One flat branch (single outer
-// discriminator on `command`, per the SET_LATEX_CONFIG_VALUE precedent above)
-// carrying the canonical `STATE_SETTINGS` key and a loose value. Per-value
-// validation happens in the backend handler via the entry's own schema
-// (`stateSettingByKey(key).schema`), so the union stays a plain flat branch and
-// never grows a nested per-key discriminator (which would crash the dispatcher).
+// Generic catalog-driven scalar-setting write. One flat branch (single outer
+// discriminator on `command`) carries a canonical settings key and a loose
+// value. Per-value validation happens in the backend handler via the entry's
+// own schema (`settingsViewSettingByKey(key).schema`), so the union stays a
+// plain flat branch and never grows a nested per-key discriminator (which would
+// crash the dispatcher).
 const UpdateStateSettingMessageSchema = z.object({
   command: z.literal(CMD.UPDATE_STATE_SETTING),
   key: z.string().min(1),
@@ -371,7 +324,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
-    SetLatexConfigValueMessageSchema,
     GetInlineCriticismEnabledMessageSchema,
     SetInlineCriticismEnabledMessageSchema,
     // Memory messages
@@ -422,9 +374,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Custom agent directory messages
     SetCustomAgentDirMessageSchema,
     ResetCustomAgentDirMessageSchema,
-    // Multi-Agent orchestration messages
-    SetAllowOrchestratorKillMessageSchema,
-    SetDetachSubagentsOnStopMessageSchema,
     // GitHub token messages
     GetGitHubTokenStatusMessageSchema,
     SetGitHubTokenMessageSchema,
@@ -437,11 +386,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
-    // Approval settings messages
-    SetBashApprovalEnabledMessageSchema,
-    // Agent prompt context
-    SetAgentSkillsEnabledMessageSchema,
-    // Generic catalog-driven state-setting write (git-author + agent controls)
+    // Generic catalog-driven scalar-setting write
     UpdateStateSettingMessageSchema,
     // Agent team messages
     ApplyAgentModePresetMessageSchema,

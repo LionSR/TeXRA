@@ -15,23 +15,16 @@ import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { resetSetting, writeSetting } from '@shared/config/settingsAccess';
+import type { SettingsViewSnapshot } from '@shared/schemas/stateSettings';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
-import {
-  BASH_APPROVAL_CONFIG_TARGET,
-  buildApprovalSettingsMessage,
-  setBashApprovalEnabled,
-  setWorkspaceAgentSetting,
-} from '@shared/settingsView/handlers/approvalHandlers';
-import {
-  buildAgentSkillsSettingsMessage,
-  setAgentSkillsEnabled,
-} from '@shared/settingsView/handlers/agentSkillsHandlers';
+import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
+import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
@@ -39,6 +32,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
+import { assertNever } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -223,14 +217,6 @@ export function createDesktopSettingsIpc(
     ]);
   }
 
-  async function updateGitAuthorSetting(
-    key: WorkspaceStateKey,
-    value: unknown,
-  ): Promise<void> {
-    await workspaceState.update(key, value);
-    postGitAuthorSettings(applyCurrentGitAuthorSettings());
-  }
-
   async function updateModelEnabled(input: {
     modelName: string;
     enabled: boolean;
@@ -250,28 +236,8 @@ export function createDesktopSettingsIpc(
     await options.agentSettingsController.refreshCatalogData();
   }
 
-  async function updateAgentSetting(
-    key: WorkspaceStateKey,
-    value: string,
-  ): Promise<void> {
-    await setWorkspaceAgentSetting({ workspaceState, globalState }, key, value);
-    postApprovalSettings();
-  }
-
-  async function updateToolSafetySetting(
-    key: WorkspaceStateKey,
-    value: boolean,
-  ): Promise<void> {
-    await workspaceState.update(key, value);
-    postApprovalSettings();
-  }
-
   /**
-   * Generic write path for scalar `STATE_SETTINGS` rows (git author, external
-   * coding agents, and tool safety). The shared
-   * {@link resolveStateSettingWrite} owns value validation and family
-   * classification across graphical hosts; this host only dispatches the
-   * resolved family to its updater.
+   * Generic write path for catalog-backed settings-view rows.
    */
   async function updateStateSetting(
     key: string,
@@ -279,35 +245,55 @@ export function createDesktopSettingsIpc(
   ): Promise<void> {
     const write = resolveStateSettingWrite(key, value);
     if (!write) return;
-    if (write.family === 'git') {
-      await updateGitAuthorSetting(write.key, write.value);
-    } else if (write.family === 'agent') {
-      await updateAgentSetting(write.key, write.value);
-    } else {
-      await updateToolSafetySetting(write.key, write.value);
+    if (write.kind === 'rejected') {
+      options.ui.onError(write.error);
+      await options.ui.showErrorMessage(
+        formatError(
+          `Invalid value for "${write.entry.title ?? write.entry.key}"`,
+          write.error,
+        ),
+      );
+      postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+      return;
+    }
+    const stores = { config: options.config, workspaceState, globalState };
+    try {
+      await (write.kind === 'reset'
+        ? resetSetting(write.entry, stores)
+        : writeSetting(write.entry, write.value, stores));
+    } catch (error) {
+      options.ui.onError(error);
+      await options.ui.showErrorMessage(
+        formatError(
+          `Failed to update "${write.entry.title ?? write.entry.key}"`,
+          error,
+        ),
+      );
+    } finally {
+      postStateSettingSnapshot(write.entry.settingsViewSnapshot);
     }
   }
 
-  async function updateBashApprovalEnabled(enabled: boolean): Promise<void> {
-    await setBashApprovalEnabled(
-      { workspaceState, globalState, config: options.config },
-      enabled,
-      BASH_APPROVAL_CONFIG_TARGET,
-    );
-    postApprovalSettings();
-  }
-
-  async function updateAgentSkillsEnabled(enabled: boolean): Promise<void> {
-    await setAgentSkillsEnabled(options.config, enabled);
-    postAgentSkillsSettings();
-  }
-
-  async function updateBooleanWorkspaceSetting(
-    key: WorkspaceStateKey,
-    enabled: boolean,
-  ): Promise<void> {
-    await workspaceState.update(key, enabled);
-    postSuperYoloEnabled();
+  function postStateSettingSnapshot(snapshot: SettingsViewSnapshot): void {
+    switch (snapshot) {
+      case 'agent-skills':
+        postAgentSkillsSettings();
+        break;
+      case 'approval':
+        postApprovalSettings();
+        break;
+      case 'git-author':
+        postGitAuthorSettings(applyCurrentGitAuthorSettings());
+        break;
+      case 'latex':
+        options.toolingSettingsController.postLatexConfigValues();
+        break;
+      case 'multi-agent':
+        postSuperYoloEnabled();
+        break;
+      default:
+        assertNever(snapshot, 'Unhandled settings-view snapshot');
+    }
   }
 
   function runAsync(work: Promise<void>): void {
@@ -421,18 +407,6 @@ export function createDesktopSettingsIpc(
         settingsHost.setPreferShortModelNames(enabled),
       requestAccess: unsupported('Copilot models require VS Code.'),
     },
-    orchestration: {
-      setAllowOrchestratorKill: (enabled) =>
-        updateBooleanWorkspaceSetting(
-          WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-          enabled,
-        ),
-      setDetachSubagentsOnStop: (enabled) =>
-        updateBooleanWorkspaceSetting(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          enabled,
-        ),
-    },
     agentSelection: options.agentSettingsController.actions,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
@@ -447,12 +421,6 @@ export function createDesktopSettingsIpc(
       openSubscriptionStream: (data) => revealStream(data.streamId),
     },
     chatGpt: options.credentialSettingsController.chatGptActions,
-    approval: {
-      setBashApprovalEnabled: (enabled) => updateBashApprovalEnabled(enabled),
-    },
-    agentSkills: {
-      setEnabled: (enabled) => updateAgentSkillsEnabled(enabled),
-    },
     stateSettings: {
       update: (key, value) => updateStateSetting(key, value),
     },
