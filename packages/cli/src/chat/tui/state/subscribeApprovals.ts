@@ -408,6 +408,9 @@ async function requestRetryInteraction(
   const decision = await reservation.decided;
   try {
     if (!decision.accepted) {
+      if (immediate) {
+        return { action: 'deny', reason: decision.userMessage };
+      }
       // A cleared or replaced entry was never denied by a user, so it must not
       // mark the run as approval-denied.
       if (!reservation.signal.aborted) markApprovalDenied(context);
