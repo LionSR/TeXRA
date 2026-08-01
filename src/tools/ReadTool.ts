@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
-import { formatFileView, READ_FILE_MAX_LINES } from '@tools/formatting';
+import { formatFileView } from '@tools/formatting';
 import {
   resolveAndFormat,
   currentToolRoot,
@@ -123,11 +123,9 @@ export class ReadFileTool extends defineTool({
     const range = input.range;
     const totalLines = lines.length;
     const startLine = range?.start ?? 1;
-    // An omitted `end` reads a READ_FILE_MAX_LINES window from `start`. A
-    // supplied one is passed through unclamped: formatFileView already clamps
-    // both ends to the file bounds, so pre-clamping here only duplicated it.
-    const endLine =
-      range?.end ?? Math.min(startLine + READ_FILE_MAX_LINES - 1, totalLines);
+    // Pass an omitted `end` through as EOF. formatFileView owns the visible
+    // line limit and needs the full requested range to report truncation.
+    const endLine = range?.end ?? totalLines;
 
     // Append a range-exceeded warning when the caller asked beyond EOF
     const suffix =
