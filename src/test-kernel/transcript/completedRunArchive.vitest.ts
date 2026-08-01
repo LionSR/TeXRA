@@ -361,6 +361,47 @@ describe('completedRunArchive facade', () => {
     expect(result.conversation!.length).toBeGreaterThan(0);
   });
 
+  it('falls through to a content-bearing historical sibling stream', async () => {
+    const executionId = '0777aa0777aa' as ExecutionId;
+    const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
+    const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(emptyStream, taskState('bash'), executionId);
+    snapshots.setTaskState(fullStream, taskState('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(emptyStream);
+    logs.append(
+      emptyStream,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Working...' }),
+    );
+    logs.ensureStream(fullStream);
+    logs.append(
+      fullStream,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Real question' }),
+    );
+    logs.append(
+      fullStream,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Real answer' }),
+    );
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId: fullStream,
+      conversation: [
+        { role: 'user', content: 'Real question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Real answer' }],
+        },
+      ],
+    });
+  });
+
   it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {
     const executionId = 'eee555eee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#eee555eee555' as StreamTabId;

@@ -335,3 +335,15 @@ export async function writeSessionDescription(
     'session description',
   );
 }
+
+/** Persist a confirmed stream identity for a pre-streamId execution record. */
+export async function writeLegacyExecutionStreamId(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): Promise<void> {
+  await persistSupplementaryMetaFieldsBestEffort(
+    executionId,
+    { streamId },
+    'legacy execution stream id',
+  );
+}

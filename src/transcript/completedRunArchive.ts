@@ -27,7 +27,11 @@ import {
 } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 
-import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
+import {
+  findPersistedStreamFallbacksForExecution,
+  resolvePersistedStreamIdForExecution,
+  type PersistedStreamIdResolution,
+} from './executionStreamResolver';
 import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
 import { StreamLogStore, STREAM_LOGS_DIR } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
@@ -342,23 +346,40 @@ async function conversationFromStream(
 }
 
 /**
- * Sidecar arm of the non-empty rule. Returns `null` when the registered
- * stream has no conversation content.
+ * Sidecar arm of the non-empty rule. Current executions normally need only
+ * their registered primary. If it reconstructs empty, historical candidates
+ * are tried in deterministic order before the legacy projection.
  */
 async function readSidecarConversation(
-  primary: StreamTabId,
+  executionId: ExecutionId,
+  resolved: PersistedStreamIdResolution,
+  snapshotStore: StreamSnapshotStore,
   streamLogStore: StreamLogStore,
 ): Promise<CompletedRunConversationReadResult | null> {
   const primaryConversation = await conversationFromStream(
     streamLogStore,
-    primary,
+    resolved.streamId,
   );
   if (primaryConversation.length > 0) {
     return {
       conversation: primaryConversation,
       source: 'streamLog',
-      streamId: primary,
+      streamId: resolved.streamId,
     };
+  }
+
+  const fallbackStreamIds =
+    resolved.fallbackStreamIds ??
+    (await findPersistedStreamFallbacksForExecution(
+      executionId,
+      resolved.streamId,
+      { snapshotStore, streamLogStore },
+    ));
+  for (const streamId of fallbackStreamIds) {
+    const conversation = await conversationFromStream(streamLogStore, streamId);
+    if (conversation.length > 0) {
+      return { conversation, source: 'streamLog', streamId };
+    }
   }
   return null;
 }
@@ -400,7 +421,12 @@ export async function readCompletedRunConversation(
   const trySidecar =
     async (): Promise<CompletedRunConversationReadResult | null> =>
       resolved
-        ? readSidecarConversation(resolved.streamId, streamLogStore)
+        ? readSidecarConversation(
+            executionId,
+            resolved,
+            snapshotStore,
+            streamLogStore,
+          )
         : null;
 
   // Freshness decides order only. The resolver pick's streamLogs mtime
