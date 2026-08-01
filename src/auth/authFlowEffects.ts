@@ -14,8 +14,10 @@
  * model options. Persistent CLI callers own their subsequent transition before
  * reading credential-dependent state: onboarding applies its selected access
  * mode, the orchestration launcher invalidates its model list, and the chat TUI
- * updates its session API mode and views. Collapsing these effects would either
- * omit host refresh work or repeat it.
+ * updates its session API mode and views. Within that persistent CLI session,
+ * setup-agent team sign-in immediately refreshes and rereads the remote agent
+ * catalog before applying the selected team. Collapsing these effects would
+ * either omit host refresh work or repeat it.
  */
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
