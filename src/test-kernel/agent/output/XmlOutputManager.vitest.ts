@@ -48,12 +48,23 @@ function createXmlManager(
   inputFiles: string[] = ['paper.tex'],
   options: XmlManagerOptions = {},
 ): XmlOutputManager {
+  const logger =
+    options.logger ??
+    spiedTrace(
+      {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        domain: vi.fn(),
+      },
+      { strict: true },
+    );
   return new XmlOutputManager(
     {
       inputFiles,
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
-    options.logger ?? spiedTrace(),
+    logger,
     new TaskRunFileService('xml-output-manager-test'),
   );
 }
