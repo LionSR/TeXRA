@@ -172,7 +172,10 @@ const AVAILABILITY_STATUS_FIELDS = {
     available: false,
     requiresKey: false,
   },
-} satisfies Record<ModelAvailabilityKind, Omit<ModelAvailabilityStatus, 'kind'>>;
+} satisfies Record<
+  ModelAvailabilityKind,
+  Omit<ModelAvailabilityStatus, 'kind'>
+>;
 
 /** Resolve a full availability status from its kind. */
 function availabilityStatus(
@@ -187,7 +190,9 @@ function availabilityStatus(
  * one table (or have its `available` flip) without the other noticing.
  */
 type UnavailableAvailabilityKind = {
-  [K in ModelAvailabilityKind]: (typeof AVAILABILITY_STATUS_FIELDS)[K]['available'] extends true
+  [
+    K in ModelAvailabilityKind
+  ]: (typeof AVAILABILITY_STATUS_FIELDS)[K]['available'] extends true
     ? never
     : K;
 }[ModelAvailabilityKind];
