@@ -8,14 +8,7 @@ import {
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
-import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
-  type StreamTabId,
-  type TodoItem,
-} from '@shared/schemas';
+import { type ExecutionId, type StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import {
   cleanupTempDirs,
@@ -24,7 +17,6 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   resolvePersistedStreamIdForExecution,
-  StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
 
@@ -37,33 +29,11 @@ const MINIMAL_CONFIG: AgentConfig = AgentConfigSchema.parse({
 
 const tempDirs: string[] = [];
 
-/** Appends a single stream-log entry so a candidate stream is log-backed. */
-async function appendLogEntry(
-  logStore: StreamLogStore,
-  streamId: StreamTabId,
-): Promise<void> {
-  logStore.append(streamId, {
-    id: 'entry-1',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp: 100,
-    messageType: MESSAGE_TYPES.DEFAULT,
-    text: 'child stream output',
-  });
-  await logStore.flush();
-}
-
 function taskState(agent: string, model = 'deepseekproT'): TaskState {
   return TaskStateSchema.parse({
     agentConfig: { agent, model, agentCategory: AgentCategory.ToolUse },
   });
 }
-
-const TODO: TodoItem = {
-  content: 'Fix the bug',
-  status: 'pending',
-  activeForm: 'Fixing the bug',
-};
 
 describe('resolvePersistedStreamIdForExecution', () => {
   setupPlatform(() => createTempDirPlatform('texra-resolver-', tempDirs));
@@ -87,117 +57,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
 
     expect(resolved).toEqual({ streamId, source: 'streamDataMeta' });
   });
-
-  it(
-    'prefers the meta-matched candidate with a real workPlan.json over a bare ' +
-      'meta-only match sharing the same executionId (#7298)',
-    async () => {
-      const executionId = 'abc222' as ExecutionId;
-      // A parent orchestrator tab and a child bash-tool stream both record the
-      // same executionId in their sidecar meta.json, but only the child ever
-      // durably persisted todos — mirrors the resolver picking the parent (no
-      // streamLogs/workPlan) and callers like the completed-run todo reader
-      // silently reading nothing.
-      // Named so the no-data candidate sorts alphabetically FIRST in the
-      // persisted-stream directory listing — this is what makes the test
-      // actually exercise the "first meta match wins" bug rather than
-      // accidentally passing because the real-data stream happened to be
-      // read first.
-      const parentStream = 'aOrchestrator@deepseekproT#abc222' as StreamTabId;
-      const childStream = 'zBashTool@tool#abc222' as StreamTabId;
-
-      const store = new StreamSnapshotStore();
-      store.setTaskState(parentStream, taskState('orchestrator'), executionId);
-      store.setTaskState(childStream, taskState('bash'), executionId);
-      store.setTodos(childStream, [TODO]);
-      await store.flush();
-
-      const resolved = await resolvePersistedStreamIdForExecution(executionId, {
-        snapshotStore: new StreamSnapshotStore(),
-      });
-
-      expect(resolved).toEqual({
-        streamId: childStream,
-        source: 'streamDataMeta',
-      });
-    },
-  );
-
-  it(
-    'prefers the meta-matched candidate with real streamLogs over a bare ' +
-      'meta-only match, using an already-loaded StreamLogStore (#7298)',
-    async () => {
-      const executionId = 'abc333' as ExecutionId;
-      // Same alphabetical-ordering reasoning as the workPlan test above.
-      const parentStream = 'aOrchestrator@deepseekproT#abc333' as StreamTabId;
-      const childStream = 'zBashTool@tool#abc333' as StreamTabId;
-
-      const snapshotWriter = new StreamSnapshotStore();
-      snapshotWriter.setTaskState(
-        parentStream,
-        taskState('orchestrator'),
-        executionId,
-      );
-      snapshotWriter.setTaskState(childStream, taskState('bash'), executionId);
-      await snapshotWriter.flush();
-
-      const logStore = await StreamLogStore.open();
-      await appendLogEntry(logStore, childStream);
-
-      const resolved = await resolvePersistedStreamIdForExecution(executionId, {
-        snapshotStore: new StreamSnapshotStore(),
-        streamLogStore: logStore,
-      });
-
-      expect(resolved).toEqual({
-        streamId: childStream,
-        source: 'streamDataMeta',
-      });
-    },
-  );
-
-  it(
-    'prefers a log-backed meta match over an earlier-ordered workPlan-only ' +
-      'match sharing the same executionId (#7403)',
-    async () => {
-      const executionId = 'abc444' as ExecutionId;
-      // Named so the workPlan-only candidate sorts alphabetically FIRST in
-      // the persisted-stream directory listing, mirroring the reported bug:
-      // an earlier-ordered candidate has only workPlan.json (no stream log)
-      // while a later-ordered candidate has the real streamLogs entry. The
-      // resolver must still pick the log-backed one regardless of order.
-      const workPlanOnlyStream =
-        'aOrchestrator@deepseekproT#abc444' as StreamTabId;
-      const logBackedStream = 'zBashTool@tool#abc444' as StreamTabId;
-
-      const snapshotWriter = new StreamSnapshotStore();
-      snapshotWriter.setTaskState(
-        workPlanOnlyStream,
-        taskState('orchestrator'),
-        executionId,
-      );
-      snapshotWriter.setTaskState(
-        logBackedStream,
-        taskState('bash'),
-        executionId,
-      );
-      snapshotWriter.setTodos(workPlanOnlyStream, [TODO]);
-      await snapshotWriter.flush();
-
-      const logStore = await StreamLogStore.open();
-      await appendLogEntry(logStore, logBackedStream);
-
-      const resolved = await resolvePersistedStreamIdForExecution(executionId, {
-        snapshotStore: new StreamSnapshotStore(),
-        streamLogStore: logStore,
-      });
-
-      expect(resolved).toEqual({
-        streamId: logBackedStream,
-        source: 'streamDataMeta',
-      });
-    },
-  );
 
   it(
     'bounds the concurrent meta-file reads instead of fanning out over every ' +
@@ -240,99 +99,63 @@ describe('resolvePersistedStreamIdForExecution', () => {
     },
   );
 
-  it('returns a cached executionMeta streamId without scanning any persisted stream (#7469)', async () => {
+  it('returns the birth-written execution stream without scanning sidecars', async () => {
     const executionId = 'abc555' as ExecutionId;
-    const cachedStreamId = 'orchestrator@deepseekproT#abc555' as StreamTabId;
-    await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
-    await releaseOwnedExecutionLease(executionId);
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: new Date().toISOString(),
-      streamId: cachedStreamId,
+    const streamId = 'orchestrator@deepseekproT#abc555' as StreamTabId;
+    await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator', {
+      streamId,
     });
+    await releaseOwnedExecutionLease(executionId);
 
-    // No persisted stream exists at all — if the cache weren't consulted
-    // first, the scan would find nothing and this would resolve to null.
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
     });
 
     expect(resolved).toEqual({
-      streamId: cachedStreamId,
+      streamId,
       source: 'executionMeta',
     });
+    await expect(
+      getExecutionStore(executionId).readMeta(),
+    ).resolves.toMatchObject({ streamId });
   });
 
-  it('caches a streamDataMeta resolution onto the execution meta for a later cheap lookup (#7469)', async () => {
+  it('retains a sidecar scan fallback for execution records predating streamId', async () => {
     const executionId = 'abc666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc666' as StreamTabId;
-    await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
-    await releaseOwnedExecutionLease(executionId);
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date().toISOString(),
+    });
 
     const store = new StreamSnapshotStore();
     store.setTaskState(streamId, taskState('orchestrator'), executionId);
     await store.flush();
 
-    const first = await resolvePersistedStreamIdForExecution(executionId, {
+    const resolved = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
     });
-    expect(first).toEqual({ streamId, source: 'streamDataMeta' });
-
-    // Wait for the resolver's write-through to land on the execution meta.
-    await vi.waitFor(async () => {
-      const meta = await getExecutionStore(executionId).readMeta();
-      expect(meta?.streamId).toBe(streamId);
-    });
-
-    const second = await resolvePersistedStreamIdForExecution(executionId, {
-      snapshotStore: new StreamSnapshotStore(),
-    });
-    expect(second).toEqual({ streamId, source: 'executionMeta' });
+    expect(resolved).toEqual({ streamId, source: 'streamDataMeta' });
   });
 
-  it(
-    'does not cache a multi-candidate resolution, so a later call with a ' +
-      'loaded streamLogStore can still pick the log-backed candidate (#7469)',
-    async () => {
-      const executionId = 'abc777' as ExecutionId;
-      const parentStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
-      const childStream = 'zBashTool@tool#abc777' as StreamTabId;
-      await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator');
-      await releaseOwnedExecutionLease(executionId);
+  it('uses enumeration order for ambiguous pre-streamId sidecars', async () => {
+    const executionId = 'abc777' as ExecutionId;
+    const firstStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
+    const secondStream = 'zBashTool@tool#abc777' as StreamTabId;
+    const snapshotWriter = new StreamSnapshotStore();
+    snapshotWriter.setTaskState(
+      firstStream,
+      taskState('orchestrator'),
+      executionId,
+    );
+    snapshotWriter.setTaskState(secondStream, taskState('bash'), executionId);
+    await snapshotWriter.flush();
 
-      const snapshotWriter = new StreamSnapshotStore();
-      snapshotWriter.setTaskState(
-        parentStream,
-        taskState('orchestrator'),
-        executionId,
-      );
-      snapshotWriter.setTaskState(childStream, taskState('bash'), executionId);
-      await snapshotWriter.flush();
-
-      const logStore = await StreamLogStore.open();
-      await appendLogEntry(logStore, childStream);
-
-      // First call has no streamLogStore, so pickBestMetaMatch can't see the
-      // child's log and falls back to the first candidate (the parent).
-      const uninformed = await resolvePersistedStreamIdForExecution(
-        executionId,
-        { snapshotStore: new StreamSnapshotStore() },
-      );
-      expect(uninformed).toEqual({
-        streamId: parentStream,
-        source: 'streamDataMeta',
-      });
-
-      // If that resolution had been cached, this second call -- which DOES
-      // have the log store -- would incorrectly return the cached parent
-      // instead of correctly picking the log-backed child.
-      const informed = await resolvePersistedStreamIdForExecution(executionId, {
-        snapshotStore: new StreamSnapshotStore(),
-        streamLogStore: logStore,
-      });
-      expect(informed).toEqual({
-        streamId: childStream,
-        source: 'streamDataMeta',
-      });
-    },
-  );
+    const resolved = await resolvePersistedStreamIdForExecution(executionId, {
+      snapshotStore: new StreamSnapshotStore(),
+    });
+    expect(resolved).toEqual({
+      streamId: firstStream,
+      source: 'streamDataMeta',
+    });
+  });
 });

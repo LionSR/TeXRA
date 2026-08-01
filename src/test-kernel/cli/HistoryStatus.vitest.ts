@@ -20,7 +20,11 @@ import {
   resolveCliHistoryStatus,
   userStartedCliHistoryEntries,
 } from '@cli/runtime/history';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
@@ -136,7 +140,9 @@ describe('CLI history status formatting', () => {
 
   it('does not mark invalid flow records as resumable', async () => {
     const id = 'abc123' as ExecutionId;
-    await registerExecution(id, TOOL_USE_CONFIG, 'orchestrator', undefined);
+    await registerExecution(id, TOOL_USE_CONFIG, 'orchestrator', {
+      streamId: `orchestrator@deepseekT#${id}` as StreamTabId,
+    });
     await releaseOwnedExecutionLease(id);
     await getExecutionStore(id).write(flowKey(id), {
       flowName: 'test',
@@ -159,7 +165,9 @@ describe('CLI history status formatting', () => {
 
   it('does not mark non-tool-use flow records as CLI-resumable', async () => {
     const id = 'workflow-with-flow' as ExecutionId;
-    await registerExecution(id, WORKFLOW_CONFIG, 'correct', undefined);
+    await registerExecution(id, WORKFLOW_CONFIG, 'correct', {
+      streamId: `correct@deepseekT#${id}` as StreamTabId,
+    });
     await releaseOwnedExecutionLease(id);
     await getExecutionStore(id).write(flowKey(id), {
       flowName: 'test',

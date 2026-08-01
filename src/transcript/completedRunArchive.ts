@@ -27,11 +27,7 @@ import {
 } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 
-import {
-  findExecutionSuffixMatches,
-  resolvePersistedStreamIdForExecution,
-  scanPersistedStreamsForExecution,
-} from './executionStreamResolver';
+import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
 import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
 import { StreamLogStore, STREAM_LOGS_DIR } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
@@ -346,47 +342,11 @@ async function conversationFromStream(
 }
 
 /**
- * Sibling sidecar streams for the same execution, tried only when the
- * resolver's pick reconstructs empty (cold path). #7433's resolver ranking
- * (log-backed > workPlan-only > bare, scan order within a rank) stays the
- * primary criteria — this layers the has-content preference on top without
- * teaching the generic resolver (also used by the todos reader and the
- * trace assembler) what "conversation content" means. Only log-backed
- * siblings can yield content, so the rest are skipped.
- */
-async function siblingConversationStreams(
-  executionId: ExecutionId,
-  primary: StreamTabId,
-  snapshotStore: StreamSnapshotStore,
-  streamLogStore: StreamLogStore,
-): Promise<StreamTabId[]> {
-  const { persistedStreams, metaMatched } =
-    await scanPersistedStreamsForExecution(executionId, snapshotStore);
-  const suffixMatched = findExecutionSuffixMatches(
-    [...persistedStreams, ...streamLogStore.keys()],
-    executionId,
-  );
-
-  const seen = new Set<StreamTabId>([primary]);
-  const siblings: StreamTabId[] = [];
-  for (const streamId of [...metaMatched, ...suffixMatched]) {
-    if (seen.has(streamId) || !streamLogStore.has(streamId)) continue;
-    seen.add(streamId);
-    siblings.push(streamId);
-  }
-  return siblings;
-}
-
-/**
- * Sidecar arm of the non-empty rule: the resolver's pick first, then —
- * only if it reconstructs empty — every other log-backed sibling stream
- * sharing this executionId, in the same deterministic enumeration order the
- * resolver scans. Returns `null` when no candidate yields content.
+ * Sidecar arm of the non-empty rule. Returns `null` when the registered
+ * stream has no conversation content.
  */
 async function readSidecarConversation(
-  executionId: ExecutionId,
   primary: StreamTabId,
-  snapshotStore: StreamSnapshotStore,
   streamLogStore: StreamLogStore,
 ): Promise<CompletedRunConversationReadResult | null> {
   const primaryConversation = await conversationFromStream(
@@ -399,17 +359,6 @@ async function readSidecarConversation(
       source: 'streamLog',
       streamId: primary,
     };
-  }
-  for (const streamId of await siblingConversationStreams(
-    executionId,
-    primary,
-    snapshotStore,
-    streamLogStore,
-  )) {
-    const conversation = await conversationFromStream(streamLogStore, streamId);
-    if (conversation.length > 0) {
-      return { conversation, source: 'streamLog', streamId };
-    }
   }
   return null;
 }
@@ -451,12 +400,7 @@ export async function readCompletedRunConversation(
   const trySidecar =
     async (): Promise<CompletedRunConversationReadResult | null> =>
       resolved
-        ? readSidecarConversation(
-            executionId,
-            resolved.streamId,
-            snapshotStore,
-            streamLogStore,
-          )
+        ? readSidecarConversation(resolved.streamId, streamLogStore)
         : null;
 
   // Freshness decides order only. The resolver pick's streamLogs mtime

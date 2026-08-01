@@ -61,6 +61,8 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 
 vi.mock('@tools/childStream', () => ({
   createRehydratedChildStream: mocks.createChildStream,
+  getChildStreamId: (executionId: string, prefix: string) =>
+    `${prefix}#${executionId}`,
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -326,7 +328,10 @@ describe('WorkflowScriptTool', () => {
         agentSource: 'builtInWorkflow',
       }),
       'tool-test',
-      executionId,
+      {
+        streamId: `workflow-script#${runExecutionId}`,
+        parentExecutionId: executionId,
+      },
     );
     expect(mocks.createChildStream).toHaveBeenCalledWith(
       runExecutionId,
@@ -421,7 +426,10 @@ describe('WorkflowScriptTool', () => {
       runExecutionIdFor('edited-tool-test'),
       expect.anything(),
       'edited-tool-test',
-      executionId,
+      {
+        streamId: `workflow-script#${runExecutionIdFor('edited-tool-test')}`,
+        parentExecutionId: executionId,
+      },
     );
   });
 
@@ -602,7 +610,10 @@ describe('WorkflowScriptTool', () => {
       runExecutionIdFor('tool-test'),
       expect.objectContaining({ model: 'served-model' }),
       'tool-test',
-      executionId,
+      {
+        streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
+        parentExecutionId: executionId,
+      },
     );
   });
 
@@ -642,7 +653,10 @@ describe('WorkflowScriptTool', () => {
         mediaFiles: ['figure.pdf'],
       }),
       'tool-test',
-      executionId,
+      {
+        streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
+        parentExecutionId: executionId,
+      },
     );
   });
 
@@ -700,7 +714,10 @@ describe('WorkflowScriptTool', () => {
         mediaFiles: ['figure.pdf'],
       }),
       'resume',
-      executionId,
+      {
+        streamId: `workflow-script#${runExecutionIdFor('resume')}`,
+        parentExecutionId: executionId,
+      },
     );
   });
 

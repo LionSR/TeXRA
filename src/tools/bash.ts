@@ -53,7 +53,7 @@ import { appendHead, appendTail } from '@utils/strings/appendTail';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { createChildStream } from './childStream';
+import { createChildStream, getChildStreamId } from './childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
@@ -410,13 +410,11 @@ export class BashTool extends defineTool({
       agentCategory: AgentCategory.ToolUse,
     });
 
-    await registerExecution(
-      executionId,
-      syntheticConfig,
-      'bash',
+    await registerExecution(executionId, syntheticConfig, 'bash', {
+      streamId: getChildStreamId(executionId, 'bash@tool'),
       parentExecutionId,
-      'process',
-    );
+      category: 'process',
+    });
     const runWithOwnership = captureOwnedExecutionLease(executionId);
 
     let childStream!: ReturnType<typeof createChildStream>;

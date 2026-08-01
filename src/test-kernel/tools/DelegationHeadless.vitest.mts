@@ -448,7 +448,10 @@ describe('headless delegation', () => {
       result.executionId,
       expect.objectContaining({ agent: 'review' }),
       'review',
-      STABLE_PARENT_EXECUTION_ID,
+      expect.objectContaining({
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        streamId: expect.stringContaining(`#${result.executionId}`),
+      }),
     );
     expect(mocks.writeResultMeta).toHaveBeenCalledWith({
       producer: 'subagent',
@@ -748,7 +751,10 @@ describe('headless delegation', () => {
       completed.executionId,
       expect.anything(),
       'review',
-      STABLE_PARENT_EXECUTION_ID,
+      expect.objectContaining({
+        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
+        streamId: expect.stringContaining(`#${completed.executionId}`),
+      }),
     );
   });
 
