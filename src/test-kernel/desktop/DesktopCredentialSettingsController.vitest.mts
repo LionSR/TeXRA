@@ -205,8 +205,11 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       },
     });
 
-    await assertSupported(fixture.controller.profileActions.removeProviderKey)(
-      'openai',
+    await assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
+      {
+        command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+        provider: 'openai',
+      },
     );
 
     expect(confirms).toEqual([
@@ -220,10 +223,11 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   it('stores submitted keys before refreshing profile and model data', async () => {
     const fixture = await createFixture();
 
-    await assertSupported(fixture.controller.profileActions.setProviderKey)(
-      'google',
-      '  sk-test  ',
-    );
+    await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
+      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+      provider: 'google',
+      apiKey: '  sk-test  ',
+    });
 
     expect(await fixture.secrets.get('apiKey.google')).toBe('sk-test');
     expect(fixture.infos).toEqual(['Google API key has been set']);
@@ -261,14 +265,18 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       },
     });
 
-    await assertSupported(fixture.controller.profileActions.setProviderKey)(
-      'openai',
-      undefined,
-    );
+    await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
+      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+      provider: 'openai',
+      apiKey: undefined,
+    });
     expect(await secrets.get(secretName)).toBe('replacement');
 
-    await assertSupported(fixture.controller.profileActions.removeProviderKey)(
-      'openai',
+    await assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
+      {
+        command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+        provider: 'openai',
+      },
     );
     expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
     expect(await secrets.get(secretName)).toBeUndefined();
@@ -283,9 +291,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     });
     const fixture = await createFixture({ globalState });
 
-    await assertSupported(fixture.controller.profileActions.setApiAccessMode)(
-      'included',
-    );
+    await assertSupported(fixture.controller.profileHandlers.setApiAccessMode)({
+      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      mode: 'included',
+    });
 
     expect(fixture.setUseIncludedModelAccess).toHaveBeenCalledWith(true);
     expect(globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(false);
@@ -296,9 +305,10 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       'credential',
     ]);
 
-    await assertSupported(fixture.controller.profileActions.setApiAccessMode)(
-      'personal',
-    );
+    await assertSupported(fixture.controller.profileHandlers.setApiAccessMode)({
+      command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
+      mode: 'personal',
+    });
     expect(fixture.setUseIncludedModelAccess).toHaveBeenLastCalledWith(false);
     expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(2);
   });
@@ -307,25 +317,32 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     {
       name: 'provider streaming',
       run: (fixture: Fixture) =>
-        assertSupported(fixture.controller.profileActions.setProviderStreaming)(
-          'openai',
-          false,
-        ),
+        assertSupported(
+          fixture.controller.profileHandlers.setProviderStreaming,
+        )({
+          command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING,
+          provider: 'openai',
+          enabled: false,
+        }),
     },
     {
       name: 'provider endpoint',
       run: (fixture: Fixture) =>
-        assertSupported(fixture.controller.profileActions.setProviderEndpoint)(
-          'openai',
-          'https://example.com/v1',
+        assertSupported(fixture.controller.profileHandlers.setProviderEndpoint)(
+          {
+            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT,
+            provider: 'openai',
+            endpoint: 'https://example.com/v1',
+          },
         ),
     },
     {
       name: 'global streaming',
       run: (fixture: Fixture) =>
-        assertSupported(fixture.controller.profileActions.setGlobalStreaming)(
-          false,
-        ),
+        assertSupported(fixture.controller.profileHandlers.setGlobalStreaming)({
+          command: SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING,
+          enabled: false,
+        }),
     },
   ])('persists $name before refreshing profile data', async ({ run }) => {
     const fixture = await createFixture();
@@ -351,8 +368,12 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   it('delegates Researcher Access sign-in and sign-out without stale posts', async () => {
     const fixture = await createFixture();
 
-    await assertSupported(fixture.controller.profileActions.signIn)();
-    await assertSupported(fixture.controller.profileActions.signOut)();
+    await assertSupported(fixture.controller.profileHandlers.signIn)({
+      command: SETTINGS_VIEW_COMMANDS.SIGN_IN,
+    });
+    await assertSupported(fixture.controller.profileHandlers.signOut)({
+      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT,
+    });
 
     expect(fixture.signIn).toHaveBeenCalledOnce();
     expect(fixture.signOut).toHaveBeenCalledOnce();
@@ -392,8 +413,11 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     });
 
     await assertSupported(
-      fixture.controller.chatGptActions.setPreferSubscription,
-    )(true);
+      fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
+    )({
+      command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+      enabled: true,
+    });
     expect(fixture.warnings).toEqual([
       'A more specific setting still keeps ChatGPT subscription disabled.',
     ]);
@@ -404,8 +428,11 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     const fixture = await createFixture();
 
     await assertSupported(
-      fixture.controller.chatGptActions.setPreferSubscription,
-    )(true);
+      fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
+    )({
+      command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+      enabled: true,
+    });
     expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
     expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
     expect(fixture.events.at(-1)).toBe('credential');
@@ -424,7 +451,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       'Signed in with ChatGPT as user@example.com.',
     );
 
-    await assertSupported(fixture.controller.chatGptActions.signOut)();
+    await assertSupported(fixture.controller.chatGptHandlers.signOutChatGpt)({
+      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
+    });
     expect(codexMocks.signOut).toHaveBeenCalledOnce();
     expect(fixture.infos).toContain('Signed out of ChatGPT.');
 
@@ -440,7 +469,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   it('routes Codex through the subscription for a Settings-panel sign-in', async () => {
     const fixture = await createFixture();
 
-    await assertSupported(fixture.controller.chatGptActions.signIn)();
+    await assertSupported(fixture.controller.chatGptHandlers.signInChatGpt)({
+      command: SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
+    });
 
     expect(codexMocks.login).toHaveBeenCalledOnce();
     expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
@@ -450,7 +481,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}ci-token`);
     const fixture = await createFixture();
 
-    await assertSupported(fixture.controller.profileActions.signOut)();
+    await assertSupported(fixture.controller.profileHandlers.signOut)({
+      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT,
+    });
 
     expect(fixture.signOut).toHaveBeenCalledOnce();
     expect(fixture.infos).toEqual([
@@ -462,7 +495,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
     const fixture = await createFixture();
 
-    await assertSupported(fixture.controller.profileActions.signOut)();
+    await assertSupported(fixture.controller.profileHandlers.signOut)({
+      command: SETTINGS_VIEW_COMMANDS.SIGN_OUT,
+    });
 
     expect(fixture.signOut).toHaveBeenCalledOnce();
     expect(fixture.infos).toEqual([]);
