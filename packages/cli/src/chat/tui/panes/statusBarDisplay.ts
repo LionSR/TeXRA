@@ -619,6 +619,7 @@ function statusBarBindingsText(
     childNavigationAvailable &&
       statusBarBindingRow([childList, fullOutput, ctrlC]),
     transcriptAvailable && statusBarBindingRow([childList, fullOutput, ctrlC]),
+    childNavigationAvailable && childList,
     transcriptAvailable && statusBarBindingRow([fullOutput, ctrlC]),
   ];
 
