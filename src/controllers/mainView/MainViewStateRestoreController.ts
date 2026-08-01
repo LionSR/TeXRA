@@ -29,7 +29,18 @@ export const RestoreRunConfigInputSchema = z.preprocess(
     typeof input === 'object' && input !== null && 'agentConfig' in input
       ? input.agentConfig
       : input,
-  AgentConfigSchema,
+  z
+    .unknown()
+    .refine(
+      (input) =>
+        typeof input === 'object' &&
+        input !== null &&
+        !Array.isArray(input) &&
+        (('agent' in input && input.agent !== undefined) ||
+          ('model' in input && input.model !== undefined)),
+      'A restored run configuration must identify an agent or model.',
+    )
+    .pipe(AgentConfigSchema),
 );
 
 /** Convert a run config into a full main view state snapshot. */
