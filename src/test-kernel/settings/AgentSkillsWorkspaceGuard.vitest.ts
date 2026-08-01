@@ -56,7 +56,7 @@ describe('agent skills workspace guard', () => {
     expect(mocks.writeSetting).not.toHaveBeenCalled();
     expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
       'SettingsViewMessageHandler',
-      'This is a per-workspace setting. Open a workspace folder before changing it.',
+      'Open a workspace folder before changing the “Agent skills” setting.',
     );
     expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
       'agent-skills',

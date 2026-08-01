@@ -39,7 +39,7 @@ export function resolveStateSettingWrite(
 ): StateSettingWrite {
   if (value === undefined) return null;
   const entry = settingsViewSettingByKey(key);
-  if (!entry?.settingsViewSnapshot) return null;
+  if (!entry) return null;
   if (value === null) return { kind: 'reset', entry };
   const parsed = entry.schema.safeParse(value);
   if (!parsed.success) return null;
