@@ -92,6 +92,8 @@ it the assert is knowingly wrong for `LogList`.
 
 ---
 
+<a id="modelcell"></a>
+
 ## ModelCell — current ownership ruling supersedes only the retired prohibition
 
 **Question.** Does the retired runtime gold-standard PRD's statement that

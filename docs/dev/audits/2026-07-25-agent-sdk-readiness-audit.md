@@ -31,7 +31,7 @@ historical context and this one as the post-retirement snapshot.
 > or make their other retired designs authoritative. The findings below are the
 > residue that the lighter path leaves, nothing more.
 
-[modelcell-ownership-ruling]: ../../proposals/2026-08-01-architecture-rulings-ledger.md
+[modelcell-ownership-ruling]: ../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell
 
 ## Headline
 

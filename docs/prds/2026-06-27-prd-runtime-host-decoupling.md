@@ -32,7 +32,7 @@ updated: 2026-08-01
 [#7624]: https://github.com/LionSR/TeXRA/pull/7624
 [#7914]: https://github.com/LionSR/TeXRA/pull/7914
 [#8322]: https://github.com/LionSR/TeXRA/pull/8322
-[modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md
+[modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell
 
 ## Overview
 
