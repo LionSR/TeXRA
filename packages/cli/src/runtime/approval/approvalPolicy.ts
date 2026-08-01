@@ -184,13 +184,26 @@ export function immediateDecision(
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }
 
+/** Retry requests caused by exhausted credentials or auth failures retain
+ *  their approval-denied classification even when yolo denies another batch. */
+function isCredentialRetryRequest(
+  event: CliDecisionApprovalEvent,
+  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
+): boolean {
+  if (event !== 'showRetryRequest') return false;
+  const details = (payload as RetryPermission).errorDetails;
+  if (!details) return false;
+  if (isCredentialExhausted(details)) return true;
+  return details.statusCode === 401 || details.statusCode === 403;
+}
+
 export function immediateDecisionForApproval(
   event: CliDecisionApprovalEvent,
-  _payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
+  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
-    markApprovalDenied(context);
+    if (isCredentialRetryRequest(event, payload)) markApprovalDenied(context);
     return {
       accepted: false,
       userMessage:
