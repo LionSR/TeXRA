@@ -26,6 +26,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { getRunDir } from '@utils/files/runStorageFs';
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import {
   publishCompiledPdfArtifact,
@@ -258,7 +259,10 @@ async function compileOne(
   // "a_b.tex") both collapse to the same string, so a second file's log
   // write/delete would clobber the first's. Suffix with a short hash of the
   // untruncated path so every output gets its own collision-free log slot.
-  const legacySafeName = pathForSafeName.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
+  const legacySafeName = sanitizePathSegment(pathForSafeName, {
+    invalidCharPattern: /[^a-zA-Z0-9._-]/g,
+    replacement: '_',
+  });
   const pathHash = createHash('sha1')
     .update(pathForSafeName)
     .digest('hex')
