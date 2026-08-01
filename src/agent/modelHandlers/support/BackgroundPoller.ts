@@ -56,6 +56,12 @@ interface BackgroundPollOptions<TResponse> {
   /** Optional abort signal propagated to `delay` and `retrieve`. */
   readonly signal?: AbortSignal;
   /**
+   * Absolute wall-clock deadline for a polling lifetime that began before
+   * this invocation. When absent, this invocation receives the configured
+   * maximum duration.
+   */
+  readonly deadlineAtMs?: number;
+  /**
    * Optional callback invoked on abort (best-effort). Handlers use this to
    * cancel the in-flight job server-side or clear local tracking state.
    */
@@ -67,10 +73,10 @@ interface BackgroundPollOptions<TResponse> {
    * `'Google Interactions'`). Defaults to `'Background'`.
    */
   readonly providerLabel?: string;
-  /** Provider-specific timeout error text with cancellation guidance. */
+  /** Provider-specific timeout error or text with cancellation guidance. */
   readonly formatTimeoutError?: (
     context: BackgroundPollTimeoutContext<TResponse>,
-  ) => string;
+  ) => Error | string;
   /** Provider-specific fields to append to the final polling-finished log. */
   readonly extraFinishData?: (
     response: TResponse,
@@ -155,6 +161,7 @@ export class BackgroundPoller<TResponse> {
       extractId,
       extractStatus,
       signal,
+      deadlineAtMs,
       onAbort,
       resourceLabel = 'response',
       providerLabel = 'Background',
@@ -167,7 +174,9 @@ export class BackgroundPoller<TResponse> {
 
     const { pollIntervalMs, maxDurationMs, isPending } = this.config;
     const logger = () => resolveLogger(this.config.logger);
-    const startTime = Date.now();
+    const startTime =
+      deadlineAtMs === undefined ? Date.now() : deadlineAtMs - maxDurationMs;
+    const deadline = deadlineAtMs ?? startTime + maxDurationMs;
     let current = initialResponse;
     let pollCount = 0;
 
@@ -220,7 +229,7 @@ export class BackgroundPoller<TResponse> {
 
         const elapsedMs = Date.now() - startTime;
         const status = extractStatus(current);
-        if (elapsedMs > maxDurationMs) {
+        if (Date.now() >= deadline) {
           const stats = { responseId, status, pollCount, elapsedMs };
           logger().error(
             `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration while pending`,
@@ -231,14 +240,14 @@ export class BackgroundPoller<TResponse> {
               },
             },
           );
-          throw new Error(
+          const timeout =
             options.formatTimeoutError?.({
               ...stats,
               maxDurationMs,
               response: current,
             }) ??
-              `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`,
-          );
+            `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`;
+          throw timeout instanceof Error ? timeout : new Error(timeout);
         }
 
         current = await retrieve(responseId, signal);
