@@ -27,9 +27,9 @@ type check first. This is the single most common way a change lands broken.
 
 ## Layout
 
-A pnpm workspace. Repo-root `src/` is host-agnostic core; `packages/extension`,
-`packages/desktop`, `packages/cli`, and `packages/trace-viewer` are hosts and
-apps over it. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
+A pnpm workspace. Repo-root `src/` contains host-agnostic production code plus
+centralized tests for shared and host-specific behavior; `packages/extension`, `packages/desktop`, `packages/cli`, and
+`packages/trace-viewer` are hosts and apps over it. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
 `tsconfig.json` — use them instead of long relative chains.
 
 Things the tree won't tell you:
@@ -46,8 +46,12 @@ Things the tree won't tell you:
   open work is the Tier-1 public manifest and shrinking the frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
   consumer exists.
-- **`src/utils/` is for code shared by extension host _and_ webviews.** Helpers
-  specific to one side belong in `frontend/` or `common/` instead.
+- **`src/utils/` is host-agnostic, not universally browser-safe.** Exactly five
+  modules are browser-reachable today: `@utils/core`,
+  `@utils/core/boundedIdSet`, `@utils/errors/errorMessage`,
+  `@utils/files/pastedImageName`, and `@utils/text/stringUtils`. The other 51
+  TypeScript modules are not browser-reachable and must not be assumed
+  browser-safe. Side-specific helpers still belong in `frontend/` or `common/`.
 - **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
   (auth, subscriptions, tool availability, workspace-file writes). It is _not_
   run or session progress; those live in `@agent/trace` and `SessionEventHub`
@@ -79,9 +83,9 @@ top-level extension-host frontend below and is VS Code-allowed.
 **VS Code-allowed zones** — platform wiring belongs here:
 `packages/extension/src/extension.ts` (calls `initPlatform()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
-`packages/extension/src/common/`, `src/platform/` interface definitions,
-`src/utils/config/`, `src/utils/files/workspaceFS.ts` and `storageFS.ts`,
-`src/auth/`.
+`packages/extension/src/common/`, `src/platform/` interface definitions, and
+`src/auth/`. Code under `src/utils/` remains host-agnostic; do not add `vscode`
+imports there merely because a utility is not browser-reachable.
 
 Reach host services through `platform()` from `@platform/platform` (config,
 state, log, fs, workspace, storage, secrets). When agnostic code needs a
