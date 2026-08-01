@@ -312,4 +312,67 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     await expect(repair).resolves.toBe(false);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
+
+  it('does not let a stale rejected probe poison the WAITING fast path', async () => {
+    seedCancelled();
+    const failure = new Error('resumability read failed');
+    let reject: ((error: Error) => void) | undefined;
+    resumabilityMocks.deriveResumability.mockImplementation(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+
+    const first = session.repairWaitingIfResumable(streamId);
+    const firstRejection = expect(first).rejects.toBe(failure);
+    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
+    session.status.transition(streamId, STREAM_PHASE.WAITING, 'wait');
+
+    await expect(session.repairWaitingIfResumable(streamId)).resolves.toBe(
+      true,
+    );
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
+
+    reject?.(failure);
+    await firstRejection;
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
+  it('starts a distinct probe for a new terminal generation', async () => {
+    seedCancelled();
+    let releaseFirst: (() => void) | undefined;
+    let releaseSecond: (() => void) | undefined;
+    resumabilityMocks.deriveResumability
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseFirst = () =>
+              resolve({ resumable: true, cause: 'interrupted-with-flow' });
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseSecond = () =>
+              resolve({ resumable: true, cause: 'interrupted-with-flow' });
+          }),
+      );
+
+    const first = session.repairWaitingIfResumable(streamId);
+    session.status.clearStream(streamId);
+    seedCancelled();
+    const second = session.repairWaitingIfResumable(streamId);
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+
+    releaseFirst?.();
+    await expect(first).resolves.toBe(false);
+
+    const third = session.repairWaitingIfResumable(streamId);
+    expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
+    releaseSecond?.();
+
+    await expect(Promise.all([second, third])).resolves.toEqual([true, true]);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+  });
 });
