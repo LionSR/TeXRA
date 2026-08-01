@@ -49,15 +49,16 @@ import {
   type ProposalFileGroup,
 } from '@shared/schemas/proposalFields';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
-import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
+// Type-only: this is a browser frontend (see eslint `no-restricted-imports`
+// for packages/extension/src/{webview,progressView,settingsView}/frontend),
+// so runtime values (including each tool's Zod input schema) cannot be
+// imported from `@tools/**` here — only their inferred types, which are
+// erased at build time. Each builder below therefore validates the input
+// shape itself with `isObject`/`typeof` guards rather than a schema parse;
+// `ReadInput`/`WriteInput` are used purely for their (erased) type shape,
+// the rest are documented in each builder's own comment.
 import type { ReadInput } from '@tools/ReadTool';
 import type { WriteInput } from '@tools/WriteTool';
-import type {
-  DelegateAgentInput,
-  WorkflowAgentInput,
-} from '@tools/DelegationTools';
-import type { AcceptRunFilesInput } from '@tools/AcceptRunFilesTool';
-import type { MemoryToolInput } from '@tools/memory/MemoryTool';
 import { isObject } from '@utils/core';
 
 import { codexToolRenderers } from '../codexToolTemplates';
@@ -90,7 +91,20 @@ function buildFileGroupsSection(
   );
 }
 
-/** Common shape of the edit_file and str_replace_editor tool inputs, for display purposes only. */
+/**
+ * Common shape of the edit_file and str_replace_editor tool inputs, for
+ * display purposes only.
+ *
+ * No single canonical schema validates this shape: this dispatch entry
+ * ('edit' display kind) covers three different tool names — edit_file
+ * (`EditInputSchema`), str_replace_editor (`TextEditorInputSchema`, a
+ * discriminated union where only the `str_replace` branch has
+ * old_str/new_str), and str_replace_based_edit_tool, which is Anthropic's
+ * native tool-use alias and is not a registered TeXRA tool with its own
+ * schema at all. Rather than fabricate a schema spanning all three, this
+ * keeps the type-only cast but narrows with explicit runtime `typeof` checks
+ * below before any field is used.
+ */
 type EditDiffLikeInput = { old_str?: unknown; new_str?: unknown };
 
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
@@ -124,16 +138,24 @@ function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
+/** Narrows `input.range` to `ReadInput['range']`'s display-relevant fields. */
+function readRangeOf(input: unknown): ReadInput['range'] {
+  if (!isObject(input) || !isObject(input.range)) return undefined;
+  const { start, end } = input.range;
+  if (typeof start !== 'number') return undefined;
+  return { start, end: typeof end === 'number' ? end : undefined };
+}
+
 function buildFileLinkSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath } = ctx;
   if (!filePath) return [];
-  const readInput = isObject(input) ? (input as ReadInput) : undefined;
+  const range = readRangeOf(input);
   return [
     buildToolUseSection(
       'File:',
       buildFileLinkWithLines(filePath, {
-        startLine: readInput?.range?.start,
-        endLine: readInput?.range?.end ?? undefined,
+        startLine: range?.start,
+        endLine: range?.end ?? undefined,
       }),
     ),
   ];
@@ -142,14 +164,20 @@ function buildFileLinkSections(ctx: ToolSectionContext): TemplateResult[] {
 function buildFileContentSections(ctx: ToolSectionContext): TemplateResult[] {
   const { toolName, input, filePath } = ctx;
   if (!filePath) return [];
-  const writeInput = isObject(input) ? (input as WriteInput) : undefined;
+  // WriteInput's only display-relevant field; validated directly rather than
+  // via `WriteInputSchema` (a runtime import from `@tools/WriteTool`, which a
+  // browser frontend may not use — see the import-block comment above).
+  const content: WriteInput['content'] | undefined =
+    isObject(input) && typeof input.content === 'string'
+      ? input.content
+      : undefined;
   const contentLanguage = getLanguageFromPath(filePath);
   const sections = [
     buildToolUseSection('File:', buildFileLinkWithLines(filePath)),
   ];
-  if (typeof writeInput?.content === 'string') {
+  if (content !== undefined) {
     sections.push(
-      buildToolSection('', writeInput.content, {
+      buildToolSection('', content, {
         toolName,
         language: contentLanguage,
       }),
@@ -158,11 +186,20 @@ function buildFileContentSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
+/**
+ * `MemoryToolInput` is a `z.discriminatedUnion` on the host-only
+ * `MemoryToolInputSchema` (`@tools/memory/MemoryTool`), which this browser
+ * frontend cannot import as a runtime value (see the import-block comment
+ * above). Rather than re-implement the full 8-branch union as a parallel
+ * schema, each field this section actually displays is read directly with
+ * its own `typeof` guard.
+ */
 function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
-  if (!isObject(input)) return [];
-  const memInput = input as MemoryToolInput;
-  const memPath = memInput.command === 'rename' ? '' : (memInput.path ?? '');
+  if (!isObject(input) || typeof input.command !== 'string') return [];
+  const command = input.command;
+  const path = typeof input.path === 'string' ? input.path : undefined;
+  const memPath = command === 'rename' ? '' : (path ?? '');
   const sections: TemplateResult[] = [];
 
   if (memPath) {
@@ -171,45 +208,47 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
     );
   }
 
-  if (
-    memInput.command === 'str_replace' &&
-    memInput.old_str != null &&
-    memInput.new_str != null
-  ) {
+  const oldStr = typeof input.old_str === 'string' ? input.old_str : undefined;
+  const newStr = typeof input.new_str === 'string' ? input.new_str : undefined;
+  const fileText =
+    typeof input.file_text === 'string' ? input.file_text : undefined;
+  const insertText =
+    typeof input.insert_text === 'string' ? input.insert_text : undefined;
+  const insertLine =
+    typeof input.insert_line === 'number' ? input.insert_line : undefined;
+  const oldPath =
+    typeof input.old_path === 'string' ? input.old_path : undefined;
+  const newPath =
+    typeof input.new_path === 'string' ? input.new_path : undefined;
+
+  if (command === 'str_replace' && oldStr != null && newStr != null) {
     sections.push(
-      buildToolUseSection(
-        '',
-        buildEditDiffSection(memInput.old_str, memInput.new_str),
-      ),
+      buildToolUseSection('', buildEditDiffSection(oldStr, newStr)),
     );
-  } else if (memInput.command === 'create' && memInput.file_text != null) {
+  } else if (command === 'create' && fileText != null) {
     const contentLanguage = memPath
       ? getLanguageFromPath(memPath)
       : 'plaintext';
     sections.push(
-      buildToolSection('', memInput.file_text, {
+      buildToolSection('', fileText, {
         language: contentLanguage,
       }),
     );
-  } else if (memInput.command === 'insert') {
-    const insertText = memInput.insert_text ?? memInput.new_str;
-    if (insertText != null) {
+  } else if (command === 'insert') {
+    const text = insertText ?? newStr;
+    if (text != null) {
       const lineLabel =
-        memInput.insert_line != null
-          ? `Insert at line ${memInput.insert_line}:`
-          : 'Insert:';
+        insertLine != null ? `Insert at line ${insertLine}:` : 'Insert:';
       const contentLanguage = memPath
         ? getLanguageFromPath(memPath)
         : 'plaintext';
       sections.push(
-        buildToolSection(lineLabel, insertText, {
+        buildToolSection(lineLabel, text, {
           language: contentLanguage,
         }),
       );
     }
-  } else if (memInput.command === 'rename') {
-    const oldPath = memInput.old_path;
-    const newPath = memInput.new_path;
+  } else if (command === 'rename') {
     if (oldPath != null && newPath != null) {
       sections.push(
         buildToolUseSection('Rename:', wrapInPre(`${oldPath} → ${newPath}`)),
@@ -219,12 +258,18 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
+/**
+ * `ExecutionsToolInput` derives from the host-only `ExecutionsToolInputSchema`
+ * (`@tools/ExecutionsTool`), unavailable as a runtime import here (see the
+ * import-block comment above); fields are read with individual guards
+ * instead.
+ */
 function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
-  const execInput = input as ExecutionsToolInput;
-  const execPath = execInput.path ?? '';
-  const action = execInput.action ?? EXECUTIONS_DEFAULT_ACTION;
+  const execPath = typeof input.path === 'string' ? input.path : '';
+  const action: string =
+    typeof input.action === 'string' ? input.action : EXECUTIONS_DEFAULT_ACTION;
   const sections: TemplateResult[] = [];
 
   if (execPath) {
@@ -234,7 +279,7 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   }
 
   if (action === 'wait') {
-    const timeout = getExecutionsWaitTimeoutSeconds(execInput.timeout);
+    const timeout = getExecutionsWaitTimeoutSeconds(input.timeout);
     sections.push(
       buildToolUseSection('Action:', wrapInPre(`wait (timeout: ${timeout}s)`)),
     );
@@ -242,8 +287,13 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
     sections.push(buildToolUseSection('Action:', wrapInPre('kill')));
   }
 
-  if (execInput.view_range) {
-    const [start, end] = execInput.view_range;
+  const viewRange = input.view_range;
+  if (
+    Array.isArray(viewRange) &&
+    typeof viewRange[0] === 'number' &&
+    typeof viewRange[1] === 'number'
+  ) {
+    const [start, end] = viewRange;
     sections.push(
       buildToolUseSection('Range:', wrapInPre(`lines ${start}–${end}`)),
     );
@@ -251,21 +301,40 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   return sections;
 }
 
+/** One `AcceptRunFilesInput.files` entry, narrowed for display purposes only. */
+function acceptRunFileEntryOf(raw: unknown): {
+  path: string;
+  original?: string;
+} {
+  if (!isObject(raw)) return { path: '' };
+  return {
+    path: typeof raw.path === 'string' ? raw.path : '',
+    original: typeof raw.original === 'string' ? raw.original : undefined,
+  };
+}
+
+/**
+ * `AcceptRunFilesInput` derives from the host-only
+ * `AcceptRunFilesInputSchema` (`@tools/AcceptRunFilesTool`), unavailable as a
+ * runtime import here (see the import-block comment above); fields are read
+ * with individual guards instead.
+ */
 function buildAcceptRunFilesSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
   const { input, parsedOutput } = ctx;
   if (!isObject(input)) return [];
-  const acceptInput = input as AcceptRunFilesInput;
   const sections: TemplateResult[] = [];
 
-  if (acceptInput.execution_id) {
+  const executionId =
+    typeof input.execution_id === 'string' ? input.execution_id : undefined;
+  if (executionId) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${acceptInput.execution_id}</code>`));
+    sections.push(buildToolUseSection('Execution:', html`<code class="execution-id">${executionId}</code>`));
   }
 
-  const files = acceptInput.files;
-  if (Array.isArray(files) && files.length > 0) {
+  const files = Array.isArray(input.files) ? input.files : undefined;
+  if (files && files.length > 0) {
     const edits = getOutputEdits<{
       path?: string;
       lineChanges?: { added: number; removed: number };
@@ -275,7 +344,8 @@ function buildAcceptRunFilesSections(
     );
 
     // prettier-ignore
-    const fileItems = html`${files.map((f) => {
+    const fileItems = html`${files.map((raw) => {
+      const f = acceptRunFileEntryOf(raw);
       const dest = f.original ?? f.path ?? '';
       const source = f.path ?? '';
       const isMapped = dest && source && dest !== source;
@@ -292,23 +362,35 @@ function buildAcceptRunFilesSections(
   return sections;
 }
 
+/** Filters an unknown value down to a `string[]`, dropping non-string entries. */
+function toStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((v): v is string => typeof v === 'string');
+}
+
+/**
+ * `DelegateAgentInput`/`WorkflowAgentInput` derive from host-only schemas
+ * (`@tools/DelegationTools`, `@tools/delegation/inputFields`), unavailable as
+ * runtime imports here (see the import-block comment above) — and even a
+ * type-shape union of the two wouldn't cover every legacy alias in
+ * `DELEGATION_TOOLS` (`resume_agent`, `propose_agent`, `propose_workflow`
+ * predate these schemas). Each displayed field is read with its own guard
+ * instead, tolerating both current and legacy delegation payloads alike.
+ */
 function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
-  const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
   const sections: TemplateResult[] = [];
 
   const execId =
-    'execution_id' in delegateInput
-      ? (delegateInput as DelegateAgentInput).execution_id
-      : undefined;
+    typeof input.execution_id === 'string' ? input.execution_id : undefined;
   if (execId) {
     // prettier-ignore
     sections.push(buildToolUseSection('Resume:', html`<code class="execution-id">${execId}</code>`));
   }
 
-  const agent = delegateInput.agent;
-  const model = delegateInput.model;
+  const agent = typeof input.agent === 'string' ? input.agent : undefined;
+  const model = typeof input.model === 'string' ? input.model : undefined;
   if (agent || model) {
     const agentPart = agent ?? 'unknown';
     const modelPart = model
@@ -318,22 +400,27 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     sections.push(buildToolUseSection('Agent:', html`<code class="execution-id">${agentPart}</code>${modelPart}`));
   }
 
-  const instruction = delegateInput.instruction;
+  const instruction =
+    typeof input.instruction === 'string' ? input.instruction : undefined;
   if (instruction) {
     sections.push(buildToolUseSection('Instruction:', wrapInPre(instruction)));
   }
 
   const extractFlags: string[] = [];
-  if ('extractFigures' in delegateInput && delegateInput.extractFigures)
-    extractFlags.push('Extract Figures');
-  if ('extractTikz' in delegateInput && delegateInput.extractTikz)
-    extractFlags.push('Extract TikZ');
+  if (input.extractFigures) extractFlags.push('Extract Figures');
+  if (input.extractTikz) extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
     sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => buildStatusBadge('image', f))}`));
   }
 
-  const fileGroups = getProposalFileGroups(delegateInput);
+  const fileGroups = getProposalFileGroups({
+    inputFiles: toStringArray(input.inputFiles),
+    contextFiles: toStringArray(input.contextFiles),
+    mediaFiles: toStringArray(input.mediaFiles),
+    outputFiles: toStringArray(input.outputFiles),
+    memories: toStringArray(input.memories),
+  });
   const filesSection = buildFileGroupsSection(fileGroups);
   if (filesSection !== undefined) sections.push(filesSection);
   return sections;

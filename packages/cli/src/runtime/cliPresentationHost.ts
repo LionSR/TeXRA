@@ -1,7 +1,9 @@
 // Local imports - runtime
-import type {
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
+import {
+  dispatchPresentationEvent,
+  type PresentationEventHandlers,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import type {
   ApprovalBypassKind,
@@ -10,7 +12,6 @@ import type {
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 
 // Local imports - CLI runtime
 import {
@@ -59,35 +60,45 @@ const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
   [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
 } satisfies Record<InstructionAction, string>;
 
-function writeRuntimePresentationNdjson(
+/**
+ * Builds the NDJSON-mode handler map. None of these events have an NDJSON
+ * wire representation of their own today, so `requestOpenFile`,
+ * `showAgentConfigBanner`, and `requestEnsureProgressView` are deliberate
+ * no-ops here (unlike the text-mode handlers below, which still surface a
+ * debug log for the events they don't render). Building this per `logger`
+ * keeps the handlers closed over the specific `Logger` instance in play at
+ * call time (an ndjson sink is created lazily via `ensureLogger()`).
+ */
+function createRuntimePresentationNdjsonHandlers(
   logger: Logger,
-  event: RuntimePresentationEvent,
-  payload: RuntimePresentationEventPayloads[RuntimePresentationEvent],
-): void {
-  switch (event) {
-    case 'requestShowError': {
-      const errorPayload =
-        payload as RuntimePresentationEventPayloads['requestShowError'];
-      logger.error(errorPayload.message);
-      return;
-    }
-    case 'requestShowInstruction': {
-      const instructionPayload =
-        payload as RuntimePresentationEventPayloads['requestShowInstruction'];
-      logger.info(instructionPayload.message, {
-        key: instructionPayload.key,
-        actions: instructionPayload.actions,
-        showSuppress: instructionPayload.showSuppress,
+): PresentationEventHandlers<RuntimePresentationEventPayloads> {
+  return {
+    requestShowError: (payload) => {
+      logger.error(payload.message);
+    },
+    requestShowInstruction: (payload) => {
+      logger.info(payload.message, {
+        key: payload.key,
+        actions: payload.actions,
+        showSuppress: payload.showSuppress,
       });
-      return;
-    }
-    case 'requestOpenFile':
-    case 'showAgentConfigBanner':
-    case 'requestEnsureProgressView':
-      return;
-    default:
-      assertNever(event, 'Unhandled CLI NDJSON presentation event');
-  }
+    },
+    requestOpenFile: () => undefined,
+    showAgentConfigBanner: () => undefined,
+    requestEnsureProgressView: () => undefined,
+  };
+}
+
+function writeRuntimePresentationNdjson<K extends RuntimePresentationEvent>(
+  logger: Logger,
+  event: K,
+  payload: RuntimePresentationEventPayloads[K],
+): void {
+  dispatchPresentationEvent(
+    createRuntimePresentationNdjsonHandlers(logger),
+    event,
+    payload,
+  );
 }
 
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
@@ -101,6 +112,44 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     logger = createCliLogger(sink);
     return logger;
   }
+
+  const logDebugEvent = (event: RuntimePresentationEvent): void => {
+    if (context.quietLogs) return;
+    ensureLogger().debug(`Runtime event: ${String(event)}`);
+  };
+
+  /**
+   * Text-mode (non-NDJSON) handler map. `requestOpenFile`,
+   * `showAgentConfigBanner`, and `requestEnsureProgressView` have no
+   * dedicated text-mode presentation today, so each falls back to the same
+   * quiet debug log the pre-refactor `else` branch produced for "everything
+   * else" — reproduced per-key here rather than as a catch-all, so a future
+   * `RuntimePresentationEventPayloads` addition is a compile error to decide
+   * on rather than a silent fall-through.
+   */
+  const textModeHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
+    {
+      requestShowError: (payload) => {
+        runProgress?.preserve();
+        ensureLogger().error(payload.message);
+      },
+      requestShowInstruction: (payload) => {
+        // Not gated by quietLogs (below): unlike the debug fallback, this is
+        // an actionable instruction (e.g. missing API key), not routine
+        // progress noise.
+        runProgress?.preserve();
+        const hint = payload.actions?.length
+          ? ` (${payload.actions
+              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
+              .join(', ')})`
+          : '';
+        ensureLogger().info(`${payload.message}${hint}`);
+      },
+      requestOpenFile: () => logDebugEvent('requestOpenFile'),
+      showAgentConfigBanner: () => logDebugEvent('showAgentConfigBanner'),
+      requestEnsureProgressView: () =>
+        logDebugEvent('requestEnsureProgressView'),
+    };
 
   return {
     attachRunProgressRenderer: (events) =>
@@ -123,42 +172,11 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (closed) return;
 
       if (context.outputFormat === 'ndjson') {
-        writeRuntimePresentationNdjson(
-          ensureLogger(),
-          event,
-          payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
-        );
+        writeRuntimePresentationNdjson(ensureLogger(), event, payload);
         return;
       }
 
-      if (event === 'requestShowError') {
-        runProgress?.preserve();
-        ensureLogger().error(
-          (payload as RuntimePresentationEventPayloads['requestShowError'])
-            .message,
-        );
-        return;
-      }
-
-      if (event === 'requestShowInstruction') {
-        // Not gated by quietLogs (below): unlike the debug fallback, this is
-        // an actionable instruction (e.g. missing API key), not routine
-        // progress noise.
-        runProgress?.preserve();
-        const instructionPayload =
-          payload as RuntimePresentationEventPayloads['requestShowInstruction'];
-        const hint = instructionPayload.actions?.length
-          ? ` (${instructionPayload.actions
-              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
-              .join(', ')})`
-          : '';
-        ensureLogger().info(`${instructionPayload.message}${hint}`);
-        return;
-      }
-
-      if (context.quietLogs) return;
-
-      ensureLogger().debug(`Runtime event: ${String(event)}`);
+      dispatchPresentationEvent(textModeHandlers, event, payload);
     },
     async close() {
       closed = true;

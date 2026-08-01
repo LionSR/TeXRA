@@ -328,12 +328,12 @@ describe('cliState Phase 4 fields', () => {
         },
       });
 
-      expect(streams.get().get(child1)?.phaseStage).toEqual({
+      expect(streams.get().get(child1)?.stage).toEqual({
+        kind: 'phase',
         label: 'Reduce',
         index: 1,
         total: 3,
       });
-      expect(streams.get().get(child1)?.roundStage).toBeUndefined();
 
       hub.emit({
         scope: 'run',
@@ -348,11 +348,11 @@ describe('cliState Phase 4 fields', () => {
         },
       });
 
-      expect(streams.get().get(root)?.roundStage).toEqual({
+      expect(streams.get().get(root)?.stage).toEqual({
+        kind: 'round',
         index: 1,
         total: 4,
       });
-      expect(streams.get().get(root)?.phaseStage).toBeUndefined();
     });
   });
 
@@ -369,7 +369,8 @@ describe('cliState Phase 4 fields', () => {
         },
       });
 
-      expect(streams.get().get(child1)?.phaseStage).toEqual({
+      expect(streams.get().get(child1)?.stage).toEqual({
+        kind: 'phase',
         label: 'Cleanup',
       });
     });
@@ -2763,14 +2764,15 @@ describe('subscribeRuntimeHost run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.roundStage).toEqual({
+      expect(streams.get().get(root)?.stage).toEqual({
+        kind: 'round',
         index: 1,
         total: 3,
       });
     });
   });
 
-  it('ignores direct non-round stage.start events without host emission', () => {
+  it('applies direct non-round stage.start events to the phase slot, not the round slot', () => {
     withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
@@ -2784,7 +2786,11 @@ describe('subscribeRuntimeHost run facts', () => {
         },
       });
 
-      expect(streams.get().get(root)?.roundStage).toBeUndefined();
+      expect(streams.get().get(root)?.stage).toEqual({
+        kind: 'phase',
+        label: 'Compile phase',
+        index: 0,
+      });
     });
   });
 

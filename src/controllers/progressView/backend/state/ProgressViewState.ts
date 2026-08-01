@@ -281,10 +281,38 @@ export class ProgressViewState {
     return state;
   }
 
-  private applySnapshotMetadata(
+  /**
+   * The single writer for {@link ProgressStreamMetadata}: every mutation site
+   * below builds a `Partial<ProgressStreamMetadata>` patch and routes it
+   * through here rather than assigning fields by hand. A field the patch
+   * doesn't mention is preserved verbatim from `current` — callers that want
+   * to clear a field (e.g. detaching a parent) do so by including that key
+   * in the patch with an explicit `undefined`, same as before this was
+   * centralized.
+   */
+  private applyMetadataPatch(
+    current: ProgressStreamMetadata,
+    patch: Partial<ProgressStreamMetadata>,
+  ): ProgressStreamMetadata {
+    return { ...current, ...patch };
+  }
+
+  /**
+   * Build the snapshot-owned slice of a metadata patch: `agentCategory` and
+   * `run` are only ever set together, atomically, from one `RunConfig` (see
+   * the {@link ProgressStreamRunDetails} doc) and are therefore omitted from
+   * the patch entirely when no config has resolved yet, rather than being
+   * patched to `undefined` — that is what lets `run`'s three-owner union
+   * stay all-or-nothing instead of drifting field-by-field. `executionId`,
+   * `parentStreamId`, and `description` fall back to the current value when
+   * the snapshot store doesn't have one yet, so a patch built before that
+   * data loads can never clear a field the snapshot hasn't caught up to.
+   */
+  private buildSnapshotMetadataPatch(
     stream: StreamTabId,
-    metadata: ProgressStreamMetadata,
-  ): void {
+    current: ProgressStreamMetadata,
+  ): Partial<ProgressStreamMetadata> {
+    const patch: Partial<ProgressStreamMetadata> = {};
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
       const descriptor = this.snapshots.getRunDescriptor(stream);
@@ -292,24 +320,24 @@ export class ProgressViewState {
       const runKind =
         descriptor?.kind ??
         (isProcessAgent(config.agent) ? 'process' : 'agent');
-      metadata.agentCategory = descriptor?.category ?? config.agentCategory;
+      patch.agentCategory = descriptor?.category ?? config.agentCategory;
       const workingDirectory = config.workingDirectory ?? undefined;
       if (runKind === 'workflowScript') {
-        metadata.run = {
+        patch.run = {
           kind: 'workflowScript',
           workflowName: identityName,
           instruction: config.instruction,
           workingDirectory,
         };
       } else if (runKind === 'process') {
-        metadata.run = {
+        patch.run = {
           kind: 'process',
           agent: identityName,
           instruction: config.instruction,
           workingDirectory,
         };
       } else {
-        metadata.run = {
+        patch.run = {
           kind: 'agent',
           agent: identityName,
           inputFile: config.inputFiles?.at(0),
@@ -320,12 +348,24 @@ export class ProgressViewState {
       }
     }
 
-    metadata.executionId =
-      this.snapshots.getExecutionId(stream) ?? metadata.executionId;
-    metadata.parentStreamId =
-      this.snapshots.getParentStreamId(stream) ?? metadata.parentStreamId;
-    metadata.description =
-      this.snapshots.getDescription(stream) ?? metadata.description;
+    patch.executionId =
+      this.snapshots.getExecutionId(stream) ?? current.executionId;
+    patch.parentStreamId =
+      this.snapshots.getParentStreamId(stream) ?? current.parentStreamId;
+    patch.description =
+      this.snapshots.getDescription(stream) ?? current.description;
+
+    return patch;
+  }
+
+  private applySnapshotMetadata(
+    stream: StreamTabId,
+    current: ProgressStreamMetadata,
+  ): ProgressStreamMetadata {
+    return this.applyMetadataPatch(
+      current,
+      this.buildSnapshotMetadataPatch(stream, current),
+    );
   }
 
   /**
@@ -339,14 +379,17 @@ export class ProgressViewState {
   ): void {
     const state = this.getOrCreateSession(stream, patch.creationTimestamp);
     const creationTimestamp = state.metadata.creationTimestamp;
-    state.metadata = { ...state.metadata, ...patch, creationTimestamp };
-    this.applySnapshotMetadata(stream, state.metadata);
+    const merged = this.applyMetadataPatch(state.metadata, {
+      ...patch,
+      creationTimestamp,
+    });
+    state.metadata = this.applySnapshotMetadata(stream, merged);
   }
 
   /** Re-apply newly loaded snapshot authority without changing live-only data. */
   refreshStreamMetadataFromSnapshot(stream: StreamTabId): void {
-    const metadata = this.getOrCreateSession(stream).metadata;
-    this.applySnapshotMetadata(stream, metadata);
+    const state = this.getOrCreateSession(stream);
+    state.metadata = this.applySnapshotMetadata(stream, state.metadata);
   }
 
   /**
@@ -355,10 +398,10 @@ export class ProgressViewState {
    */
   resetStreamMetadataForRun(stream: StreamTabId): void {
     const state = this.getOrCreateSession(stream);
-    state.metadata = {
+    const reset: ProgressStreamMetadata = {
       creationTimestamp: state.metadata.creationTimestamp,
     };
-    this.applySnapshotMetadata(stream, state.metadata);
+    state.metadata = this.applySnapshotMetadata(stream, reset);
   }
 
   /**
@@ -379,12 +422,15 @@ export class ProgressViewState {
     stream: StreamTabId,
     parent: StreamTabId | null | undefined,
   ): void {
-    const metadata = this.getOrCreateSession(stream).metadata;
-    metadata.parentStreamId = parent ?? undefined;
+    const state = this.getOrCreateSession(stream);
+    state.metadata = this.applyMetadataPatch(state.metadata, {
+      parentStreamId: parent ?? undefined,
+    });
   }
 
   setStreamDescription(stream: StreamTabId, description: string): void {
-    this.getOrCreateSession(stream).metadata.description = description;
+    const state = this.getOrCreateSession(stream);
+    state.metadata = this.applyMetadataPatch(state.metadata, { description });
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).

@@ -70,7 +70,7 @@ function statusInput(
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
     usage: undefined,
-    roundStage: undefined,
+    stage: undefined,
     subagents: 0,
     approvalDepth: 0,
     model: 'deepseekT',
@@ -465,7 +465,7 @@ describe('CLI StatusBar display model', () => {
           'Also mention the finite monoid argument.',
         ],
         usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
-        roundStage: { index: 1 },
+        stage: { kind: 'round', index: 1 },
         subagents: 2,
         approvalDepth: 3,
         childNavigationAvailable: true,
@@ -496,7 +496,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
-        roundStage: { index: 1, total: 3 },
+        stage: { kind: 'round', index: 1, total: 3 },
       }),
     );
 

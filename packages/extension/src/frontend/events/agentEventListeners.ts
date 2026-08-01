@@ -10,9 +10,11 @@
 import * as vscode from 'vscode';
 
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import type {
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
+import {
+  dispatchPresentationEvent,
+  type PresentationEventHandlers,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
@@ -138,56 +140,43 @@ async function handleRequestEnsureProgressView(
 }
 
 /**
- * Build the presentation host the extension's `HostInteractions` adapter
- * forwards `emit` calls to (`createExtensionHostInteractions`'s `interactions`
- * option, wired in `ProgressViewProvider`'s constructor).
- *
- * The five presentation events below are the extension's own dispatch,
- * replacing a previous per-host presentation-event bus and its static router
- * (a duplicate replay mechanism — see #9251).
+ * Builds the extension's presentation-event handler map. Every
+ * `RuntimePresentationEvent` key is required by
+ * `PresentationEventHandlers<RuntimePresentationEventPayloads>` — omitting
+ * one here is a compile error rather than a silently dropped event (CLAUDE.md,
+ * silent degradation), replacing the previous `switch`'s `never`-typed
+ * `default` guard. The five presentation events handled here are the
+ * extension's own dispatch, replacing a previous per-host presentation-event
+ * bus and its static router (a duplicate replay mechanism — see #9251).
  * `SessionHostInteractions` (the runtime) owns replaying an event emitted
  * before this host attaches, via `AgentRuntimeEmitOptions.replayWhenAttached`.
  */
+function createPresentationEventHandlers(
+  progressViewProvider: ProgressViewProvider,
+): PresentationEventHandlers<RuntimePresentationEventPayloads> {
+  return {
+    requestOpenFile: handleRequestOpenFile,
+    requestShowInstruction: handleRequestShowInstruction,
+    showAgentConfigBanner: (payload) => {
+      void handleShowAgentConfigBanner(payload);
+    },
+    requestShowError: handleRequestShowError,
+    requestEnsureProgressView: (payload) => {
+      void handleRequestEnsureProgressView(payload, progressViewProvider);
+    },
+  };
+}
+
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
 ): Pick<SessionHostInteractions, 'emit'> {
+  const handlers = createPresentationEventHandlers(progressViewProvider);
   return {
     emit<K extends RuntimePresentationEvent>(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
     ): void {
-      switch (event) {
-        case 'requestOpenFile':
-          handleRequestOpenFile(payload as RequestOpenFilePayload);
-          return;
-        case 'requestShowInstruction':
-          handleRequestShowInstruction(
-            payload as RequestShowInstructionPayload,
-          );
-          return;
-        case 'showAgentConfigBanner':
-          void handleShowAgentConfigBanner(
-            payload as ShowAgentConfigBannerPayload,
-          );
-          return;
-        case 'requestShowError':
-          handleRequestShowError(payload as RequestShowErrorPayload);
-          return;
-        case 'requestEnsureProgressView':
-          void handleRequestEnsureProgressView(
-            payload as RequestEnsureProgressViewPayload,
-            progressViewProvider,
-          );
-          return;
-        default: {
-          // Exhaustiveness guard: a new RuntimePresentationEvent must take an
-          // explicit stance here rather than being silently dropped by this
-          // host (CLAUDE.md, silent degradation).
-          const _exhaustive: never = event;
-          void _exhaustive;
-          return;
-        }
-      }
+      dispatchPresentationEvent(handlers, event, payload);
     },
   };
 }
