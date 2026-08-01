@@ -596,6 +596,8 @@ export async function runToolUseFlow<C = unknown>(
     if (finalAction === FlowTransition.WAITING) {
       outcome = STREAM_PHASE.WAITING;
     } else {
+      const cancelled =
+        input.checkInterruption() || Boolean(shared.userCancelledRetry);
       outcome = deriveRunOutcome({
         failed: Boolean(shared.lastError),
         // A retry the user declined ends the run without leaving a
@@ -604,12 +606,11 @@ export async function runToolUseFlow<C = unknown>(
         // preserved its record as resumable — a success that is also
         // resumable. `userCancelledRetry` survives only when it is why the
         // run ended: the wait node clears it when a follow-up recovers.
-        cancelled:
-          input.checkInterruption() || Boolean(shared.userCancelledRetry),
+        cancelled,
       });
-    }
-    if (outcome === RUN_OUTCOME.CANCELLED && input.checkInterruption()) {
-      await activePersistedFlow?.prepareForFollowUp(shared);
+      if (outcome === RUN_OUTCOME.CANCELLED && cancelled) {
+        await activePersistedFlow?.prepareForFollowUp(shared);
+      }
     }
     if (shared.lastError) {
       // Re-throw so runFlowWithLifecycle logs the error and shows
