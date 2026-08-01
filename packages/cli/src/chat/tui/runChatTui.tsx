@@ -884,10 +884,10 @@ export async function runChat(
   // signals "your turn." Combined with the StatusBar pill, this replaces
   // the legacy reader.prompt() ergonomics.
   disposers.push(
-    defaultSession().status.onDidChange((change) => {
+    defaultSession().events.subscribeStatus((change) => {
       if (
         change.streamId === session.streamId &&
-        change.status === STREAM_PHASE.WAITING &&
+        change.phase === STREAM_PHASE.WAITING &&
         !session.stopRequested
       ) {
         notify({ kind: 'agentFinished' });

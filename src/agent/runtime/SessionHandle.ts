@@ -101,7 +101,7 @@ function isReplayableTerminalResult(event: ResultEvent): boolean {
 /**
  * A valid transcript store is required; other owners may be injected.
  *
- * `status` is deliberately absent: the machine publishes `updateStreamStatus`
+ * `status` is deliberately absent: the machine publishes canonical `status`
  * on the hub it is handed at construction, so a separately-injected machine
  * could be bound to a different hub than `events` and silently drop every
  * status fact. The session always co-constructs the pair instead.

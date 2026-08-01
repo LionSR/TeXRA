@@ -456,7 +456,7 @@ export function attachTranscriptRecorder(
             return;
           }
           // Status is emitted through AgentTrace before StreamStatusMachine
-          // notifies host listeners. Settle recorder-owned source rows here,
+          // publishes to synchronous session subscribers. Settle recorder-owned source rows here,
           // so every row the CLI may promote at the boundary already has one
           // durable settlement coordinate. Workflow calls are deliberately
           // absent: their typed bridge cleanup owns planned/running terminal

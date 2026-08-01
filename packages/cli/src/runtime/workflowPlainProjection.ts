@@ -188,20 +188,20 @@ export function attachWorkflowPlainProjection(
         projections.delete(event.payload.streamId);
         return;
       }
-      if (event.type !== 'updateStreamStatus') return;
-      const projection = projections.get(event.payload.streamId);
+      if (event.type !== 'status') return;
+      const projection = projections.get(event.streamId);
       if (!projection) return;
-      switch (event.payload.status) {
+      switch (event.phase) {
         case STREAM_PHASE.COMPLETED:
         case STREAM_PHASE.CANCELLED:
         case STREAM_PHASE.FAILED:
-          projection.complete(event.payload.status);
+          projection.complete(event.phase);
           break;
         case STREAM_PHASE.RUNNING:
         case STREAM_PHASE.WAITING:
           break;
         default:
-          assertNever(event.payload.status, 'Unhandled workflow stream status');
+          assertNever(event.phase, 'Unhandled workflow stream status');
       }
     },
     { scope: 'session' },

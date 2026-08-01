@@ -50,8 +50,17 @@ function projectCliSessionFact(
       return { event: 'setActiveStream', payload: fact.payload };
     case 'updateStreamDescription':
       return { event: 'updateStreamDescription', payload: fact.payload };
-    case 'updateStreamStatus':
-      return { event: 'updateStreamStatus', payload: fact.payload };
+    case 'status':
+      return {
+        event: 'updateStreamStatus',
+        payload: {
+          streamId: fact.streamId,
+          status: fact.phase,
+          cause: fact.cause,
+          ...(fact.previousPhase ? { previousStatus: fact.previousPhase } : {}),
+          ...(fact.substate ? { substate: fact.substate } : {}),
+        },
+      };
     case 'setParentStream':
       return { event: 'setParentStream', payload: fact.payload };
     case 'removeStream':

@@ -234,12 +234,12 @@ export class ProgressFactApplier {
           return this.handleSetActiveStream(fact.payload);
         case 'updateStreamDescription':
           return this.handleUpdateStreamDescription(fact.payload);
-        case 'updateStreamStatus':
+        case 'status':
           return this.setStreamStatus(
-            fact.payload.streamId,
-            fact.payload.status,
-            fact.payload.previousStatus,
-            fact.payload.substate,
+            fact.streamId,
+            fact.phase,
+            fact.previousPhase,
+            fact.substate,
           );
         case 'setParentStream':
           return this.handleSetParentStream(fact.payload);
@@ -713,9 +713,7 @@ export class ProgressFactApplier {
   async setStreamStatus(
     streamId: StreamTabId,
     status: StreamPhase,
-    // Kept until Stage 5 removes the legacy bus projection; the status machine
-    // now owns repair writes, so this projection no longer consumes it.
-    _previousStatus?: StreamPhase,
+    previousPhase?: StreamPhase,
     substate?: StreamSubstate,
   ): Promise<void> {
     // Land the status-machine phase in the parent rosters before this handler
@@ -738,7 +736,7 @@ export class ProgressFactApplier {
     }
 
     const isNewRunningTransition =
-      status === STREAM_PHASE.RUNNING && _previousStatus !== status;
+      status === STREAM_PHASE.RUNNING && previousPhase !== status;
     const runningCategory = isNewRunningTransition
       ? this.handleRunningTransition(streamId)
       : undefined;

@@ -1,6 +1,6 @@
 import process from 'node:process';
 
-import type { AgentEvent } from '@agent/trace';
+import type { AgentEvent, StatusEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type {
   ClearMissingOutputsPayload,
@@ -13,16 +13,15 @@ import type {
   StreamTabId,
   UpdateQueuedFollowUpsPayload,
   UpdateStreamDescriptionPayload,
-  UpdateStreamStatusPayload,
 } from '@shared/schemas';
 
 const logger = createChannelTrace('SessionEventHub');
 
 /**
- * Session-scoped fact vocabulary. Each arm's payload is a fact-native named
- * type from `@shared/schemas`; retained runtime-host progress projections
- * derive their payloads from those names, never the reverse. Run-scoped facts
- * live on `AgentEvent` (trace), not here.
+ * Session-scoped fact vocabulary. Payload-bearing arms use fact-native named
+ * types from `@shared/schemas`; status reuses the canonical trace event shape
+ * directly. Retained runtime-host projections derive their payloads here,
+ * never the reverse. Run-scoped facts live on `AgentEvent` (trace), not here.
  */
 export type SessionFact =
   | {
@@ -53,10 +52,7 @@ export type SessionFact =
       readonly type: 'updateStreamDescription';
       readonly payload: UpdateStreamDescriptionPayload;
     }
-  | {
-      readonly type: 'updateStreamStatus';
-      readonly payload: UpdateStreamStatusPayload;
-    }
+  | StatusEvent
   | {
       readonly type: 'setParentStream';
       readonly payload: SetParentStreamPayload;
@@ -165,6 +161,18 @@ export class SessionEventHub {
         this.runScopeSubscriberCountsByStream.delete(streamId);
       }
     };
+  }
+
+  /** Subscribe to canonical status facts on the synchronous session rail. */
+  subscribeStatus(subscriber: (event: StatusEvent) => void): () => void {
+    return this.subscribe(
+      (event) => {
+        if (event.scope === 'session' && event.event.type === 'status') {
+          subscriber(event.event);
+        }
+      },
+      { scope: 'session' },
+    );
   }
 
   /**

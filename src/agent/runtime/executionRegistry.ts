@@ -110,7 +110,7 @@ export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
   private disposed = false;
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
-  private readonly disposeStatusListener: () => void;
+  private disposeStatusSubscription = (): void => undefined;
   private readonly streamStatus: StreamStatusMachine;
   private events: SessionEventHub | undefined;
   private approvals: SessionApprovals | undefined;
@@ -142,47 +142,51 @@ export class ExecutionRegistry {
     (activation: ChildExecutionActivation, active: boolean) => void
   >();
 
-  constructor({
-    events = new SessionEventHub(),
-    streamStatus = new StreamStatusMachine(events),
-    publishResult,
-  }: {
-    readonly streamStatus?: StreamStatusMachine;
-    readonly events?: SessionEventHub;
-    readonly publishResult?: (
-      event: ResultEvent,
-      streamId: StreamTabId,
-    ) => void;
-  } = {}) {
+  constructor(
+    options: {
+      readonly streamStatus?: StreamStatusMachine;
+      readonly events?: SessionEventHub;
+      readonly publishResult?: (
+        event: ResultEvent,
+        streamId: StreamTabId,
+      ) => void;
+    } = {},
+  ) {
+    const events =
+      options.events ??
+      options.streamStatus?.sessionEvents ??
+      new SessionEventHub();
+    const streamStatus =
+      options.streamStatus ?? new StreamStatusMachine(events);
     this.streamStatus = streamStatus;
-    this.attachSessionEvents(events, publishResult);
-    // Notify waiters and refresh UI badges when stream status changes
-    // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
-    // on progress/kill/untrack, and the background-tasks panel shows stale badges.
-    this.disposeStatusListener = this.streamStatus.onDidChange(
-      ({ streamId }) => {
-        for (const [executionId, handle] of this.handles) {
-          if (
-            handle instanceof AgentExecutionHandle &&
-            handle.childStreamId === streamId
-          ) {
-            this.notifyWaiters(executionId);
-            if (handle.isChildExecution) {
-              this.emitChildActivity(handle.parentStreamId);
-            }
-            break;
-          }
-        }
-      },
-    );
+    this.attachSessionEvents(events, options.publishResult);
   }
 
   attachSessionEvents(
     events: SessionEventHub,
     publishResult?: (event: ResultEvent, streamId: StreamTabId) => void,
   ): void {
+    this.disposeStatusSubscription();
     this.events = events;
+    this.streamStatus.attachSessionEvents(events);
     if (publishResult) this.publishResult = publishResult;
+    // Notify waiters and refresh UI badges when stream status changes
+    // (e.g. RUNNING → WAITING). SessionEventHub dispatch is synchronous, so
+    // bookkeeping retains the status machine subscription's original ordering.
+    this.disposeStatusSubscription = events.subscribeStatus(({ streamId }) => {
+      for (const [executionId, handle] of this.handles) {
+        if (
+          handle instanceof AgentExecutionHandle &&
+          handle.childStreamId === streamId
+        ) {
+          this.notifyWaiters(executionId);
+          if (handle.isChildExecution) {
+            this.emitChildActivity(handle.parentStreamId);
+          }
+          break;
+        }
+      }
+    });
   }
 
   /** Bind the session-owned approval state used when a child is detached. */
@@ -200,7 +204,7 @@ export class ExecutionRegistry {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.disposeStatusListener();
+    this.disposeStatusSubscription();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
     for (const executionId of executionIds) {
