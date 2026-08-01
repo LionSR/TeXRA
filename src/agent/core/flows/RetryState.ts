@@ -19,9 +19,12 @@ import {
   toRetryErrorInfo,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import {
+  DEFAULT_CORE_SETTINGS,
+  ModelRetryMaxAttemptsSchema,
+} from '@shared/schemas/coreSettings';
 import { generateShortId } from '@utils/core';
-import { getConfig } from '@utils/config/configUtils';
+import { getValidatedConfig } from '@utils/config/configUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const BACKGROUND_MODE_MIN_RETRIES = 3;
@@ -35,13 +38,14 @@ const RETRY_BACKOFF_MS = 1000;
 
 /** Returns one initial attempt plus configured retries and their base backoff. */
 function getNodeRetryConfig(): { maxRetries: number; backoffMs: number } {
-  const maxAutoAttempts = getConfig<number>(
+  const maxAutoAttempts = getValidatedConfig(
     'texra.model.retry.maxAttempts',
+    ModelRetryMaxAttemptsSchema,
     DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
   );
 
   return {
-    maxRetries: 1 + Math.max(0, maxAutoAttempts),
+    maxRetries: 1 + maxAutoAttempts,
     backoffMs: RETRY_BACKOFF_MS,
   };
 }
