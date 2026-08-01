@@ -5,7 +5,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
 
 export interface StatusBarSessionEventOptions {
-  session: Pick<SessionHandle, 'events' | 'status'>;
+  session: Pick<SessionHandle, 'events'>;
   tracker: StatusBarUsageTracker;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
@@ -21,10 +21,12 @@ export function subscribeStatusBarSessionEvents({
   onStatusChanged,
   onUsageChanged,
 }: StatusBarSessionEventOptions): () => void {
-  const disposeStatus = session.status.onDidChange(({ streamId, status }) => {
-    tracker.updateStreamStatus(streamId, status);
-    onStatusChanged();
-  });
+  const disposeStatus = session.events.subscribeStatus(
+    ({ streamId, phase }) => {
+      tracker.updateStreamStatus(streamId, phase);
+      onStatusChanged();
+    },
+  );
 
   const disposeUsage = session.events.subscribe(
     (sessionEvent) => {

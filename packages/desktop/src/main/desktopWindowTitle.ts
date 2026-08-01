@@ -16,7 +16,7 @@ type DesktopSessionActivity = SessionTitleState;
 
 type DesktopTitleSession = Pick<
   SessionHandle,
-  'executions' | 'interactions' | 'status'
+  'events' | 'executions' | 'interactions' | 'status'
 >;
 
 type DesktopTitleWindow = Pick<
@@ -73,7 +73,7 @@ export function installDesktopWindowTitle(
   window.webContents.on('page-title-updated', preventRendererTitle);
   const disposeRegistrations =
     session.executions.addRegistrationListener(update);
-  const disposeStatus = session.status.onDidChange(update);
+  const disposeStatus = session.events.subscribeStatus(update);
   const disposePending = session.interactions.onPendingCountChange(update);
   update();
 

@@ -224,19 +224,16 @@ function handleStreamStatus(
   streamId: string,
   status: StreamPhase,
 ): void {
-  // Status reaches the renderer on the session-fact rail only: `StreamStatusMachine`
-  // publishes every transition as `updateStreamStatus`, and the renderer no longer
-  // reads run-scope `status` trace events.
+  // Status reaches the renderer on the session-fact rail only; the renderer
+  // no longer reads run-scope `status` trace events.
   renderer?.handleSessionEvent({
     scope: 'session',
     event: {
-      type: 'updateStreamStatus',
-      payload: {
-        streamId: streamId as StreamTabId,
-        status,
-        previousStatus: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      },
+      type: 'status',
+      streamId: streamId as StreamTabId,
+      phase: status,
+      previousPhase: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
     },
   });
 }
@@ -764,11 +761,11 @@ describe('CLI run progress renderer', () => {
       events.emit({
         scope: 'session',
         event: {
-          type: 'updateStreamStatus',
-          payload: {
-            streamId: 'stream-1' as StreamTabId,
-            status: STREAM_PHASE.COMPLETED,
-          },
+          type: 'status',
+          streamId: 'stream-1' as StreamTabId,
+          phase: STREAM_PHASE.COMPLETED,
+          previousPhase: STREAM_PHASE.RUNNING,
+          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
         },
       });
 

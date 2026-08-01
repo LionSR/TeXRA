@@ -367,7 +367,7 @@ export type AgentEvent =
  * `RunFactEvent`: it also includes transient runtime events that hosts project.
  *
  * `status` is deliberately absent. `StreamStatusMachine` publishes every
- * transition as an `updateStreamStatus` session fact, so projectors read
+ * transition as a canonical `status` session fact, so projectors read
  * status from that one rail; the `status` trace event survives only for
  * `TexraTranscriptRecorder`, which subscribes to the run trace directly.
  */

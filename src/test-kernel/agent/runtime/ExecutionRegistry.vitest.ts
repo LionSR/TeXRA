@@ -40,6 +40,7 @@ import {
   recordSessionEvents,
   runEventsOfType,
   sessionFactPayloads,
+  sessionFactsOfType,
 } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -159,7 +160,8 @@ describe('executionRegistry', () => {
   });
 
   it('settles without persisting a stopped waiting handle after lease loss', async () => {
-    const streamStatus = new StreamStatusMachine();
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-waiting-lease-lost' as ExecutionId;
     const streamId = 'stream-waiting-lease-lost' as StreamTabId;
@@ -406,11 +408,12 @@ describe('executionRegistry', () => {
     // callback SessionHandle injects (see SessionHandle.publishRunEvent) so
     // this path can reach those subscribers directly, since the turn's own
     // trace subscriptions are already torn down by the time a kill runs.
-    const streamStatus = new StreamStatusMachine();
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const publishResult = vi.fn();
     const registry = new ExecutionRegistry({
       streamStatus,
-      events: new SessionEventHub(),
+      events,
       publishResult,
     });
     const executionId = 'exec-waiting-kill-publish-result-test';
@@ -1014,12 +1017,10 @@ describe('executionRegistry', () => {
       expect(childInterrupt).toHaveBeenCalledOnce();
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
-      expect(
-        sessionFactPayloads(recorded.events, 'updateStreamStatus'),
-      ).toEqual(
+      expect(sessionFactsOfType(recorded.events, 'status')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            status: STREAM_PHASE.CANCELLED,
+            phase: STREAM_PHASE.CANCELLED,
           }),
         ]),
       );
@@ -1282,9 +1283,9 @@ describe('executionRegistry', () => {
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(
-        sessionFactPayloads(recorded.events, 'updateStreamStatus').at(-1),
+        sessionFactsOfType(recorded.events, 'status').at(-1),
       ).toMatchObject({
-        status: STREAM_PHASE.CANCELLED,
+        phase: STREAM_PHASE.CANCELLED,
       });
     } finally {
       registry.dispose();
@@ -1821,7 +1822,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('detaches its stream-status listener when disposed', () => {
+  it('detaches its stream-status subscription when disposed', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });

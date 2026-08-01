@@ -629,10 +629,12 @@ async function settleProgressEvents(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-function emitSessionFact<K extends SessionFact['type']>(
+type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
+
+function emitSessionFact<K extends PayloadSessionFact['type']>(
   bridge: TestableBridge,
   type: K,
-  payload: Extract<SessionFact, { type: K }>['payload'],
+  payload: Extract<PayloadSessionFact, { type: K }>['payload'],
 ): void {
   bridgeSession(bridge).events.emit({
     scope: 'session',
@@ -676,16 +678,19 @@ function emitStatusFact(
     previousStatus?: StreamPhase;
   },
 ): void {
-  // Status reaches the bridge on the session-fact rail only: `StreamStatusMachine`
-  // publishes every transition as `updateStreamStatus`, and no projector reads
-  // run-scope `status` trace events any more.
-  emitSessionFact(bridge, 'updateStreamStatus', {
-    streamId: payload.streamId,
-    status: payload.status,
-    ...(payload.previousStatus
-      ? { previousStatus: payload.previousStatus }
-      : {}),
-    cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+  // Status reaches the bridge on the canonical session-fact rail only; no
+  // projector reads run-scope `status` trace events any more.
+  bridgeSession(bridge).events.emit({
+    scope: 'session',
+    event: {
+      type: 'status',
+      streamId: payload.streamId,
+      phase: payload.status,
+      ...(payload.previousStatus
+        ? { previousPhase: payload.previousStatus }
+        : {}),
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    },
   });
 }
 
@@ -3719,7 +3724,7 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('publishes canonical status changes as updateStreamStatus session facts (#8256)', async () => {
+    it('publishes canonical status session facts (#8256)', async () => {
       const streamId = 'rebound-stream-7' as StreamTabId;
       const executionId = 'ec00f7' as ExecutionId;
       const owner = await createProcessOwner({ streamId, executionId });
@@ -3741,11 +3746,9 @@ describe('DesktopProgressBridge', () => {
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
         expect(facts).toContainEqual(
           expect.objectContaining({
-            type: 'updateStreamStatus',
-            payload: expect.objectContaining({
-              streamId,
-              status: STREAM_PHASE.WAITING,
-            }),
+            type: 'status',
+            streamId,
+            phase: STREAM_PHASE.WAITING,
           }),
         );
       } finally {
@@ -3801,11 +3804,9 @@ describe('DesktopProgressBridge', () => {
         );
         expect(facts).toContainEqual(
           expect.objectContaining({
-            type: 'updateStreamStatus',
-            payload: expect.objectContaining({
-              streamId: childStreamId,
-              status: STREAM_PHASE.COMPLETED,
-            }),
+            type: 'status',
+            streamId: childStreamId,
+            phase: STREAM_PHASE.COMPLETED,
           }),
         );
       } finally {
