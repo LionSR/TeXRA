@@ -659,6 +659,43 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Option-s subagents');
   });
 
+  it('keeps child navigation discoverable below the combined footer width', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        elapsedMs: 88_000,
+        subagents: 3,
+        ctrlCAction: 'stop',
+        width: 27,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).not.toContain('3 sub');
+    expect(display.bindings).toBe('Tab children');
+  });
+
+  it('uses the Ctrl-C-only fallback when even compact child navigation cannot fit', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        subagents: 3,
+        ctrlCAction: 'stop',
+        width: 13,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
+      }),
+    );
+
+    expect(display.bindings).toBe('Ctrl-C stop');
+  });
+
   it('drops low-priority status details before narrow footers lose separators', () => {
     const display = buildStatusBarDisplay(
       statusInput({
