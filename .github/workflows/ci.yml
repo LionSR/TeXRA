@@ -104,9 +104,8 @@ jobs:
         run: pnpm --filter @texra-ai/cli smoke:react-compiler
 
       # Formatting remains a CI gate instead of an auto-committing workflow:
-      # the pre-commit prettier hook checks staged files, and a bot `style:
-      # format` push would cancel and re-trigger every PR workflow (including
-      # both AI reviews).
+      # the pre-commit hook formats staged files locally, avoiding a bot push and
+      # its token, retrigger, cancellation, and branch-race complexity.
       - name: Check formatting
         run: pnpm run format:check
 
