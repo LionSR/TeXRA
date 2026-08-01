@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
   been removed with explicit maintainer approval. Streamed NDJSON
   progress records are unchanged.
 
+#### Bug Fixes
+
+- **Automatic CLI runs stop after their model retry limit** — automatic
+  approval mode no longer restarts another full retry sequence when every
+  configured attempt has failed.
+
 ### Desktop
 
 #### Breaking Changes
