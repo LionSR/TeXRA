@@ -15,6 +15,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
@@ -57,6 +58,7 @@ export class AgentHandlers {
       fetchPromptConfig: fetchRemoteAgentConfigYaml,
     });
   private readonly visibilityController: SettingsAgentVisibilityController;
+  private readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
 
   constructor(
@@ -75,6 +77,37 @@ export class AgentHandlers {
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
+    this.agentActions = createSettingsAgentActions({
+      directoryController: this.directoryController,
+      findAgent: (source, name) => getAgent(agentKey(source, name)),
+      getCustomAgentDirectory: () => agentDirectories.custom(),
+      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      openDocument: async (filePath) => {
+        const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      },
+      revealFile: async (filePath) => {
+        await vscode.commands.executeCommand(
+          'revealFileInOS',
+          vscode.Uri.file(filePath),
+        );
+      },
+      confirmAction: (message, confirmLabel) =>
+        confirmModal(message, confirmLabel),
+      showInfoMessage: async (message) => {
+        void vscode.window.showInformationMessage(message);
+      },
+      showErrorMessage: async (message) => {
+        await showLoggedMessage(this.ctx.channel, message);
+      },
+      formatOpenAgentYamlError: (reason, name) =>
+        reason === 'missingAgent'
+          ? `Agent "${name}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`
+          : `No configuration file found for agent "${name}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
+      refreshAfterMutation: () => this.refreshAfterAgentMutation(),
+      run: (_command, failureMessage, action) =>
+        withHandlerErrorHandling(this.ctx, failureMessage, action),
+    });
   }
 
   // ── Agent selection data ──
@@ -93,34 +126,7 @@ export class AgentHandlers {
   async handleOpenAgentYaml(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_YAML>,
   ): Promise<void> {
-    await withHandlerErrorHandling(
-      this.ctx,
-      'Failed to open agent YAML file',
-      async () => {
-        const result = this.directoryController.planOpenAgentYaml({
-          source: data.agentSource,
-          name: data.agentName,
-        });
-        if (!result.ok && result.reason === 'missingAgent') {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Agent "${data.agentName}" could not be found. It may have been removed or renamed. Check the Agents tab in Settings to see available agents.`,
-          );
-          return;
-        }
-
-        if (!result.ok) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `No configuration file found for agent "${data.agentName}". The agent definition may be incomplete — try re-creating it from the Agents tab.`,
-          );
-          return;
-        }
-
-        const doc = await vscode.workspace.openTextDocument(result.path);
-        await vscode.window.showTextDocument(doc, { preview: false });
-      },
-    );
+    await this.agentActions.openAgentYaml(data);
   }
 
   async handleSetAgentEnabled(
@@ -186,27 +192,7 @@ export class AgentHandlers {
   async handleRevealAgentFile(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.REVEAL_AGENT_FILE>,
   ): Promise<void> {
-    await withHandlerErrorHandling(
-      this.ctx,
-      'Failed to reveal agent file',
-      async () => {
-        const result = this.directoryController.planRevealAgentFile({
-          source: data.agentSource,
-          name: data.agentName,
-        });
-        if (!result.ok) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Agent not found or has no file: ${data.agentName}`,
-          );
-          return;
-        }
-        await vscode.commands.executeCommand(
-          'revealFileInOS',
-          vscode.Uri.file(result.path),
-        );
-      },
-    );
+    await this.agentActions.revealAgentFile(data);
   }
 
   async handleViewRemoteAgentPrompt(
@@ -251,63 +237,7 @@ export class AgentHandlers {
   async handleCustomizeAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CUSTOMIZE_AGENT>,
   ): Promise<void> {
-    await withHandlerErrorHandling(
-      this.ctx,
-      'Failed to create custom agent copy',
-      async () => {
-        const key = agentKey(data.agentSource, data.agentName);
-        const entry = getAgent(key);
-        if (!entry?.path) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Agent not found or has no file: ${data.agentName}`,
-          );
-          return;
-        }
-
-        const customDir = await agentDirectories.custom();
-        const sourceDir = await agentDirectories.getDirectory(data.agentSource);
-
-        const result = this.fileController.planCustomizeAgent({
-          entry,
-          customDir,
-          sourceDir,
-        });
-        if (!result.ok) {
-          await showLoggedMessage(
-            this.ctx.channel,
-            `Refusing to copy: target path escapes the custom agents directory.`,
-          );
-          return;
-        }
-
-        const { targetPath } = result.plan;
-
-        await AbsoluteFS.ensureDir(path.dirname(targetPath));
-
-        // Avoid overwriting an existing custom copy with user edits
-        if (await AbsoluteFS.exists(targetPath)) {
-          const confirmed = await confirmModal(
-            `A custom copy already exists: ${path.basename(targetPath)}`,
-            'Overwrite',
-          );
-          if (!confirmed) return;
-        }
-
-        await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
-
-        const doc = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(targetPath),
-        );
-        await vscode.window.showTextDocument(doc, { preview: false });
-
-        void vscode.window.showInformationMessage(
-          `Created custom copy: ${path.basename(targetPath)}`,
-        );
-
-        await this.refreshAfterAgentMutation();
-      },
-    );
+    await this.agentActions.customizeAgent(data);
   }
 
   async handleDeleteCustomAgent(
@@ -317,48 +247,7 @@ export class AgentHandlers {
     this.activeCustomAgentDeletions.add(data.agentName);
 
     try {
-      await withHandlerErrorHandling(
-        this.ctx,
-        'Failed to delete custom agent',
-        async () => {
-          const key = agentKey('custom', data.agentName);
-          const entry = getAgent(key);
-          if (!entry?.path) {
-            await showLoggedMessage(
-              this.ctx.channel,
-              `Custom agent not found: ${data.agentName}`,
-            );
-            return;
-          }
-
-          const customDir = await agentDirectories.custom();
-          const result = this.fileController.planDeleteCustomAgent({
-            entry,
-            customDir,
-          });
-          if (!result.ok) {
-            await showLoggedMessage(
-              this.ctx.channel,
-              `Refusing to delete: file is not inside the custom agents directory.`,
-            );
-            return;
-          }
-
-          const confirmed = await confirmModal(
-            `Delete "${data.agentName}"? This cannot be undone.`,
-            'Delete',
-          );
-          if (!confirmed) return;
-
-          await AbsoluteFS.delete(result.plan.path, { recursive: false });
-
-          void vscode.window.showInformationMessage(
-            `Deleted custom agent: ${data.agentName}`,
-          );
-
-          await this.refreshAfterAgentMutation();
-        },
-      );
+      await this.agentActions.deleteCustomAgent(data);
     } finally {
       this.activeCustomAgentDeletions.delete(data.agentName);
     }
