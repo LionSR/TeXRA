@@ -29,10 +29,13 @@ import {
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPolicy';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
+  RUN_OUTCOME,
   type AgentProposalPermission,
   type RetryPermission,
   type StreamTabId,
@@ -94,7 +97,7 @@ afterEach(() => {
 });
 
 describe('immediateDecisionForApproval', () => {
-  it('shows the interactive retry panel for exhausted credentials', () => {
+  it('shows the retry panel in interactive ask mode', () => {
     expect(
       immediateDecisionForApproval(
         'showRetryRequest',
@@ -121,7 +124,9 @@ describe('immediateDecisionForApproval', () => {
     },
   );
 
-  it('denies an ordinary transient retry in yolo mode', () => {
+  it('denies an ordinary transient retry in yolo mode without marking approval denied', () => {
+    const ctx = context({ approvalPolicy: 'yolo' });
+
     expect(
       immediateDecisionForApproval(
         'showRetryRequest',
@@ -131,9 +136,13 @@ describe('immediateDecisionForApproval', () => {
           operation: 'Model request',
           errorMessage: 'stream dropped before first token',
         },
-        context({ approvalPolicy: 'yolo' }),
+        ctx,
       ),
     ).toMatchObject({ accepted: false });
+    expect(hasCliApprovalDenied(ctx)).toBe(false);
+    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
+      CliExitCode.AgentError,
+    );
   });
 });
 
@@ -291,9 +300,9 @@ describe('requestRetry classification (#7331)', () => {
   };
 
   it('denies (not cancels) a retry when no human input is available', async () => {
-    const result = await createHeadlessCliHostInteractions(
-      context({ approvalPolicy: 'never', mode: 'headless' }),
-    ).requestRetry?.(retryRequest);
+    const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
+    const result =
+      await createHeadlessCliHostInteractions(ctx).requestRetry?.(retryRequest);
 
     // A policy/headless auto-denial is a distinct failure, not a user cancel,
     // so a zero-output run reports FAILED rather than COMPLETED.
@@ -301,19 +310,47 @@ describe('requestRetry classification (#7331)', () => {
       action: 'deny',
       reason: 'Denied by CLI approval policy.',
     });
+    expect(hasCliApprovalDenied(ctx)).toBe(true);
+    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
+      CliExitCode.ApprovalDenied,
+    );
   });
 
-  it('denies (not approves) a transient retry under yolo policy', async () => {
-    const result = await createHeadlessCliHostInteractions(
-      context({ approvalPolicy: 'yolo' }),
-    ).requestRetry?.(retryRequest);
+  it('denies a yolo retry without changing provider-failure exit classification', async () => {
+    const ctx = context({ approvalPolicy: 'yolo' });
+    const result =
+      await createHeadlessCliHostInteractions(ctx).requestRetry?.(retryRequest);
 
     expect(result).toEqual({
       action: 'deny',
       reason:
         'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     });
+    expect(hasCliApprovalDenied(ctx)).toBe(false);
+    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
+      CliExitCode.AgentError,
+    );
   });
+
+  it.each([
+    credentialExhaustedRetry.errorDetails,
+    { message: 'Unauthorized', statusCode: 401 },
+    { message: 'Forbidden', statusCode: 403 },
+  ])(
+    'preserves ApprovalDenied for yolo credential/auth failure %#',
+    async (errorDetails) => {
+      const ctx = context({ approvalPolicy: 'yolo' });
+      const result = await createHeadlessCliHostInteractions(
+        ctx,
+      ).requestRetry?.({ ...retryRequest, errorDetails });
+
+      expect(result?.action).toBe('deny');
+      expect(hasCliApprovalDenied(ctx)).toBe(true);
+      expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
+        CliExitCode.ApprovalDenied,
+      );
+    },
+  );
 
   it('cancels a retry the interactive user explicitly rejects', async () => {
     const result = await createHeadlessCliHostInteractions(
@@ -324,8 +361,9 @@ describe('requestRetry classification (#7331)', () => {
   });
 });
 
-class PermanentlyFailingProviderNode extends Node {
+class RepresentativeFailingProviderNode extends Node {
   providerCalls = 0;
+  readonly providerError = new Error('permanent provider failure');
 
   constructor(
     private readonly interactions: HostInteractions,
@@ -336,7 +374,7 @@ class PermanentlyFailingProviderNode extends Node {
 
   override async exec(): Promise<never> {
     this.providerCalls += 1;
-    throw new Error('permanent provider failure');
+    throw this.providerError;
   }
 
   override async retryPrompt(): Promise<boolean> {
@@ -351,30 +389,26 @@ class PermanentlyFailingProviderNode extends Node {
 }
 
 describe('bounded yolo retry batches (#9532)', () => {
-  it('stops root and delegated failures after one automatic batch', async () => {
-    // The CLI installs one policy adapter on the session; root and delegated
-    // streams therefore make retry decisions through this same interaction.
+  it('stops two representative streams after one automatic batch', async () => {
+    // Representative streams share the session's CLI policy adapter. This
+    // proves stream-agnostic bounding, not delegation inheritance.
     const interactions = createHeadlessCliHostInteractions(
       context({ approvalPolicy: 'yolo' }),
     );
-    const root = new PermanentlyFailingProviderNode(
+    const first = new RepresentativeFailingProviderNode(
       interactions,
-      'root@deepseekT#retry' as StreamTabId,
+      'representative-a' as StreamTabId,
     );
-    const delegated = new PermanentlyFailingProviderNode(
+    const second = new RepresentativeFailingProviderNode(
       interactions,
-      'review@deepseekT#retry' as StreamTabId,
+      'representative-b' as StreamTabId,
     );
 
-    await expect(root._exec(undefined)).rejects.toThrow(
-      'permanent provider failure',
-    );
-    await expect(delegated._exec(undefined)).rejects.toThrow(
-      'permanent provider failure',
-    );
+    await expect(first._exec(undefined)).rejects.toBe(first.providerError);
+    await expect(second._exec(undefined)).rejects.toBe(second.providerError);
 
-    expect(root.providerCalls).toBe(3);
-    expect(delegated.providerCalls).toBe(3);
+    expect(first.providerCalls).toBe(3);
+    expect(second.providerCalls).toBe(3);
   });
 });
 
