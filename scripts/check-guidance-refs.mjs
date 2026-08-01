@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Files whose prose is read as instructions by an agent or contributor.
-const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md'];
+const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md', 'src/README.md'];
 const GUIDANCE_DIRS = ['.claude/skills', 'docs/dev'];
 
 // Dated point-in-time records, not standing instructions. They describe the
@@ -71,6 +71,12 @@ const PATH_PREFIXES = [
   'supabase/',
   '.github/',
   '.claude/',
+  // Both are cited from CLAUDE.md/AGENTS.md and both are shipped surfaces:
+  // skills/ is packaged into the client, prompts/agents/remote/ is the declared
+  // public home for the hosted agent YAMLs. Without these prefixes a stale
+  // citation to either tree rots silently.
+  'skills/',
+  'prompts/',
 ];
 
 // Generated or installed at build time, so absent in a clean checkout.

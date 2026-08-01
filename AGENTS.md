@@ -111,7 +111,9 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
 - `packages/extension/src/common/` holds extension-only helpers (state managers, webview base classes):
   - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
   - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` is reserved for utilities used by both the extension host and webviews. If a helper is specific to one side, place it under `frontend/` or `common/` instead of `utils/`.
+- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly five modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/boundedIdSet`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those five, and anything they import, must not reach for Node built-ins. The remaining ~50 files are host-side only.
+
+  Do not read this as "everything in `utils/` is shared with the webviews" — it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the five browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
@@ -122,6 +124,7 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
   - `utils/prompt/` - Prompt builder utilities
+
 - `packages/extension/src/commands/` - VS Code commands grouped by domain
 - `packages/extension/src/settingsView/` - Unified settings webview combining Memory, History, Models, Agents, Multi-Agent, Tools, AI Agents, Git, LaTeX, and Goal tabs
 - `packages/extension/src/progressView/` - Task tracking board webview
@@ -136,7 +139,12 @@ aliases until a future SDK surface is enforced with a build and import-boundary 
 - **Start simple**: Choose the most direct solution that solves the problem. A new abstraction earns its place only when it clearly reduces complexity.
 - **Use native constructs**: Rely on JavaScript/TypeScript built-ins (objects, Maps, Sets, arrays), VS Code APIs, and JSON for state. These are well-understood and require no extra code.
 - **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
-- **One error path**: Surface errors once through the shared error utilities in `@common/errors`. Let exceptions propagate naturally to that single handler.
+- **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
+  - `@common/errors` — classification and surfacing: `classifyAgentError`, the SDK-error inspection under `sdkError/`, `errorPredicates`, `errorFormatUtils`. Reach for this when the _kind_ of failure changes what happens next.
+  - `@utils/errors/errorMessage` — the three `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`. This is the most-imported leaf module in the repo (~199 sites) and is browser-safe, which `@common/errors` is not required to be.
+
+  An earlier version of this line named `@common/errors` as the only error path, which is why the distinction is spelled out here.
+
 - **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
 
 ### Zod v4 Schema Patterns
