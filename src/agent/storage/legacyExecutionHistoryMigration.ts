@@ -138,7 +138,15 @@ async function migrateWorkspaceState(): Promise<boolean> {
   let migratedAll = true;
   for (const storageKey of storageKeys) {
     const legacy = workspaceState.get<unknown[]>(storageKey, []);
-    if (!Array.isArray(legacy) || legacy.length === 0) continue;
+    if (!Array.isArray(legacy)) {
+      migratedAll = false;
+      logger.warn(
+        CHANNEL,
+        `Legacy workspace state key ${storageKey} is not an array; leaving it untouched and retrying later.`,
+      );
+      continue;
+    }
+    if (legacy.length === 0) continue;
 
     if (!(await backfillEntries(legacy))) {
       migratedAll = false;
