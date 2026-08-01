@@ -767,9 +767,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       workspaceState: workspaceSM,
       globalState: globalSM,
     };
-    await (write.kind === 'reset'
-      ? resetSetting(write.entry, stores)
-      : writeSetting(write.entry, write.value, stores));
+    try {
+      await (write.kind === 'reset'
+        ? resetSetting(write.entry, stores)
+        : writeSetting(write.entry, write.value, stores));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.channel,
+        `Failed to update “${write.entry.title ?? write.entry.key}”`,
+        error,
+      );
+    }
     await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
   }
 

@@ -5,6 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  showLoggedErrorMessage: vi.fn(),
   showLoggedInfoMessage: vi.fn(),
   writeSetting: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
     await original<typeof import('@frontend/ui/errorHandlingUtils')>();
   return {
     ...actual,
+    showLoggedErrorMessage: mocks.showLoggedErrorMessage,
     showLoggedInfoMessage: mocks.showLoggedInfoMessage,
   };
 });
@@ -27,6 +29,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: undefined });
@@ -60,6 +63,27 @@ describe('agent skills workspace guard', () => {
     );
     expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
       'agent-skills',
+    );
+  });
+
+  it('surfaces write failures and restores the owning snapshot', async () => {
+    const handler = createHarness();
+    const error = new Error('write failed');
+    mocks.writeSetting.mockRejectedValueOnce(error);
+
+    await handler.updateStateSetting(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      true,
+    );
+
+    expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
+    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
+      'SettingsViewMessageHandler',
+      'Failed to update “Keep subagents running”',
+      error,
+    );
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
+      'multi-agent',
     );
   });
 });
