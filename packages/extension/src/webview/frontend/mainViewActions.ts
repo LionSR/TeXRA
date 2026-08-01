@@ -22,7 +22,7 @@ import type {
   PackLatexdiffvcMessage,
   PackMultipleMessage,
 } from '@shared/schemas';
-import { buildMainViewExecuteMessage } from '@shared/mainView/executeMessage';
+import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 
 // Local imports - utilities

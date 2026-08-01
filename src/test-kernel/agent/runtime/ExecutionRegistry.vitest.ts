@@ -32,7 +32,7 @@ import {
 import { projectRunOutcome } from '@shared/streams/streamStatus';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 // Local file imports
 import {
