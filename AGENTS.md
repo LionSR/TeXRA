@@ -43,6 +43,14 @@ The extension host is bundled with esbuild and the webviews with Vite (`compile:
 | `npm run package:safe` | typecheck + package:fast |
 | `npm run build:safe`   | typecheck + build:fast   |
 
+The full `npm run typecheck` command composes independently runnable checks:
+`typecheck:workspace`, `typecheck:test-kernel`, `typecheck:agent`,
+`typecheck:extension`, `typecheck:cli`, `typecheck:trace-viewer`, and
+`typecheck:desktop`. During development, run the checks for the affected parts;
+before committing, run the full command. Unlike the other targeted commands,
+`typecheck:agent` performs the complete agent-package build and regenerates
+`packages/agent/dist/`.
+
 **Recommended workflow**:
 
 - Use `compile:fast` during development for speed
