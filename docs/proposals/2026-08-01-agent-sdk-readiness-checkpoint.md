@@ -175,7 +175,7 @@ here.
 - **[TRACKED] `createChannelTrace` fabricates an inert `AgentTrace` as a module
   logger.** A defined census finds **24** non-test module-scope
   `const … = createChannelTrace(...)` declarations. A broader file-level search
-  finds **36** non-test files invoking the factory; tests contain three local trace
+  finds **35** non-test files invoking the factory; tests contain three local trace
   constructions rather than one module singleton. The narrower 24-declaration
   population is the relevant module-logger cleanup scope.
   Standing `-07-08`/`-07-18`/`-07-30` + `logger-surface-cleanup` PRD item; `-07-30`'s
@@ -399,7 +399,7 @@ and expose the helper-model one-shots without touching the tested invariants abo
 - The headline claims were independently re-verified this pass by direct grep/read at
   HEAD: the 43-member `Pick`, 0 vscode/packages imports, 0 cycle-schema parses,
   `MapToolRegistry` shape, the ceiling leaks, §New-8/§New-9 presence, the
-  defined `createChannelTrace` census (24 non-test module-scope declarations; 36
+  defined `createChannelTrace` census (24 non-test module-scope declarations; 35
   non-test invoking files), the §New-14 `default: return` fall-through (read directly),
   the §New-17 mutable-field claim and cohesive-helper assessment, the §New-12
   build-ready-but-unpublished/R-b-and-R-a-landed status, and the shared snapshot
