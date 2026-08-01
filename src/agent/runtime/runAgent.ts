@@ -1,4 +1,5 @@
 import { finalizeExecution, registerExecution } from '@agent/storage';
+import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import {
   abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
@@ -124,6 +125,12 @@ export async function runAgent(
     const callerOnRun = executeAgentOptions.onRun;
     try {
       try {
+        // A resumed execution is no longer described by the terminal facts its
+        // previous run persisted; drop them before this run writes anything a
+        // reader would project them onto.
+        if (!shouldRegister) {
+          await clearTerminalExecutionState(executionId);
+        }
         const result = await executeAgent(config, executionId, {
           ...executeAgentOptions,
           onRun: async (handle) => {

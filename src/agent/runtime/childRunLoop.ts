@@ -9,7 +9,7 @@
 //
 // Host-agnostic, VS Code-free.
 
-import { synchronizeAgentResultOutcome, type ResultMeta } from '@agent/storage';
+import type { ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -741,11 +741,16 @@ export function startChildRunLoop<TTurn>(
         if (childStream) {
           // Agent-CLI: ChildStream.finalize owns this handle for the loop's
           // whole lifetime (one handle, tracked once by createChildStream).
+          // A failed turn is reported with its cause even when a stop
+          // followed it: the stream phase arbitrates, so a stop that landed
+          // CANCELLED still outranks this report, while a failure that
+          // already terminalized the phase keeps its diagnosis instead of
+          // publishing FAILED with no error facts at all.
           let loopOutcome: ChildStreamOutcome;
-          if (loop.isInterrupted()) {
+          if (sawTurnFailure) {
+            loopOutcome = { kind: 'failed', error: lastTurnErr };
+          } else if (loop.isInterrupted()) {
             loopOutcome = { kind: 'cancelled' };
-          } else if (sawTurnFailure) {
-            loopOutcome = { kind: 'failed' };
           } else {
             loopOutcome = { kind: 'completed' };
           }
@@ -778,7 +783,7 @@ export function startChildRunLoop<TTurn>(
               failed: sawTurnFailure && !loop.isInterrupted(),
               cancelled: loop.isInterrupted(),
             });
-            const finalized = await finalizeRunTerminal({
+            await finalizeRunTerminal({
               handle,
               executions: runSession.executions,
               streamStatus: runSession.status,
@@ -793,16 +798,13 @@ export function startChildRunLoop<TTurn>(
               isSubagent: true,
               persistence: {
                 kind: 'finalize',
-                flowRecord:
-                  outcome === RUN_OUTCOME.CANCELLED ? 'preserve' : 'delete',
+                // Keyed on the outcome the finalizer resolves, not this loop's
+                // report: only a genuinely interrupted run leaves state worth
+                // resuming, and the phase is what decides which run that is.
+                flowRecord: (resolved) =>
+                  resolved === RUN_OUTCOME.CANCELLED ? 'preserve' : 'delete',
               },
             });
-            // No turn result follows an interruption between turns. Only this
-            // path may relabel the latest interim envelope; ordinary terminal
-            // turns persist their own result after runFlowWithLifecycle returns.
-            if (finalized?.terminalStatusPersisted && loop.isInterrupted()) {
-              await synchronizeAgentResultOutcome(executionId, outcome);
-            }
           }
         }
         // Wake the parent only now — after this child's own finalize above —

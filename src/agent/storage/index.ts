@@ -30,7 +30,6 @@ export {
 export {
   finalizeExecution,
   registerExecution,
-  synchronizeAgentResultOutcome,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
   writeSessionDescription,

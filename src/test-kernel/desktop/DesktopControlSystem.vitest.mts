@@ -249,11 +249,7 @@ describe('desktop control system', () => {
     expect(commandSurface).toContain("accelerator: 'CommandOrControl+S'");
     expect(renderer).toContain('void editorPane.save()');
     expect(renderer).toContain('editorPane.hasUnsavedChanges()');
-    expect(renderer).toContain('DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE');
     expect(editorPane).toContain('model.getVersionId() !== savedVersion');
-    expect(electronMain).toContain("on('will-prevent-unload'");
-    expect(electronMain).toContain('confirmDiscardUnsavedEditorChanges(true)');
-    expect(electronMain).toContain('allowNextPreventedUnload');
     expect(electronMain).toMatch(
       /webContents\.on\('did-navigate',[\s\S]*?initialRendererNavigationComplete[\s\S]*?workspaceIpc\.disposeRendererResources\(\)/u,
     );
@@ -265,6 +261,47 @@ describe('desktop control system', () => {
     );
     expect(preload).toContain("'unload',");
     expect(preload).not.toContain("'beforeunload'");
+  });
+
+  it('asks about unsaved editor changes from the renderer veto alone', () => {
+    // The main process used to mirror the renderer's dirty flag over IPC and
+    // pre-arm the next prevented unload from that copy. A stale mirror either
+    // prompted about changes that were already saved or left the pre-arm set,
+    // so the next genuinely dirty close discarded the buffers without asking.
+    const electronMain = read('packages/desktop/src/main/index.ts');
+    const renderer = read('packages/desktop/src/renderer/main.ts');
+    const workspaceIpc = read(
+      'packages/desktop/src/main/desktopWorkspaceIpc.ts',
+    );
+    const messages = read('packages/desktop/src/desktopWorkspaceMessages.ts');
+
+    // The renderer's veto is the only gate on dirtiness.
+    expect(renderer).toMatch(
+      /addEventListener\('beforeunload',[\s\S]*?editorPane\.hasUnsavedChanges\(\)[\s\S]*?event\.preventDefault\(\)/u,
+    );
+    // One reader, one prompt: the discard dialog exists only inside the
+    // will-prevent-unload handler that veto raises.
+    expect(electronMain).toMatch(
+      /webContents\.on\('will-prevent-unload',[\s\S]*?showMessageBoxSync[\s\S]*?'Discard Changes'[\s\S]*?event\.preventDefault\(\)/u,
+    );
+    expect(
+      electronMain.match(/Discard the changes and continue\?/gu),
+    ).toHaveLength(1);
+    // Keeping the changes cancels whichever close raised the prompt.
+    expect(electronMain).toMatch(
+      /will-prevent-unload'[\s\S]*?pendingWorkspaceRelaunch = undefined;[\s\S]*?workspaceRelaunchInProgress = false;[\s\S]*?continueQuitAfterWindowClose = undefined;/u,
+    );
+    // The folder switch closes unconditionally instead of reading a copy.
+    expect(electronMain).toMatch(
+      /const openWorkspaceFolder[\s\S]*?pendingWorkspaceRelaunch = \{[\s\S]*?window\.close\(\);/u,
+    );
+    expect(electronMain).not.toContain('editorHasUnsavedChanges');
+    expect(electronMain).not.toContain('allowNextPreventedUnload');
+    // No mirror on the wire, in the router, or in the renderer.
+    for (const source of [messages, workspaceIpc, renderer, electronMain]) {
+      expect(source).not.toContain('EDITOR_DIRTY_STATE');
+    }
+    expect(workspaceIpc).not.toContain('onEditorDirtyChange');
   });
 
   it('executes immediate follow-up plans after restoring their launcher state', () => {

@@ -42,6 +42,7 @@ import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagem
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
   EXECUTION_STATUS,
+  STREAM_PHASE,
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
@@ -814,6 +815,56 @@ describe('BashTool', () => {
       );
     });
     recorded.detach();
+    defaultSession().followUps.terminalize(parentStreamId);
+  });
+
+  it('persists a killed background command as interrupted, not failed', async () => {
+    let resolveCommand: ((result: ExecResult) => void) | undefined;
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCommand = resolve;
+        }),
+    );
+    await installPlatform({
+      workspacePath: '/workspace',
+      config: { 'texra.toolUse.requireBashApproval': false },
+    });
+    const parentStreamId = 'bash-killed-background' as StreamTabId;
+    const recorded = recordSessionEvents(defaultSession().events);
+
+    const launchResult = await launchBackgroundBash(parentStreamId);
+    const launchOutput = String(launchResult.output ?? '');
+    const executionId = /Execution ID: (\S+)/.exec(launchOutput)?.[1];
+    const childStreamId = /Stream tab: (\S+)/.exec(launchOutput)?.[1] as
+      StreamTabId | undefined;
+    assert.ok(executionId, launchOutput);
+    assert.ok(childStreamId, launchOutput);
+
+    // The user stop lands CANCELLED on the stream phase; only afterwards does
+    // the killed process report its non-zero exit.
+    assert.equal(defaultSession().executions.kill(executionId), true);
+    assert.equal(
+      defaultSession().status.get(childStreamId),
+      STREAM_PHASE.CANCELLED,
+    );
+    resolveCommand?.({
+      success: false,
+      stdout: '',
+      stderr: 'Terminated\n',
+      timedOut: false,
+      exitCode: 143,
+    });
+
+    const store = getExecutionStore(executionId);
+    await vi.waitFor(async () => {
+      assert.equal(
+        (await store.readMeta())?.terminalStatus,
+        EXECUTION_STATUS.INTERRUPTED,
+      );
+    });
+    recorded.detach();
+    clearStreamStatusForTest(defaultSession().status, childStreamId);
     defaultSession().followUps.terminalize(parentStreamId);
   });
 

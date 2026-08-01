@@ -180,7 +180,7 @@ export async function activate(context: vscode.ExtensionContext) {
   dotenv.config({
     path: path.join(workspaceRoot, '.env'),
   });
-  await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
+  setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
   agentDirectories.initialize(context);
@@ -520,6 +520,12 @@ export async function activate(context: vscode.ExtensionContext) {
   // fully wrapped in try/catch.)
   setTimeout(() => void configureLatexSettings(), 0);
   const mainViewProvider = registerCommands(context);
+  // Wire the two sidebar surfaces to each other before anything can invoke a
+  // placement command: `texra.showProgressView` is registered above and is
+  // also the status bar item's command, and a progress view without its main
+  // view provider would claim the sidebar placement without swapping content.
+  progressViewProvider.setMainViewProvider(mainViewProvider);
+  mainViewProvider.setProgressViewProvider(progressViewProvider);
   registerFileDecorations(context);
 
   setLeanLanguageServices(leanVscodeIntegration);
@@ -735,12 +741,6 @@ export async function activate(context: vscode.ExtensionContext) {
       });
     }),
   );
-
-  progressViewProvider.setSidebarWebviewGetter(
-    () => mainViewProvider.getWebviewView()?.webview,
-  );
-  progressViewProvider.setMainViewProvider(mainViewProvider);
-  mainViewProvider.setProgressViewProvider(progressViewProvider);
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`
   // keeps them hidden until every command handler is registered. This must run

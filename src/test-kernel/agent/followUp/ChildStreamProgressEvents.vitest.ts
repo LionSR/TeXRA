@@ -569,7 +569,11 @@ describe('child stream progress events', () => {
     });
   });
 
-  it('preserves explicit user stops during child loop status changes', async () => {
+  // The child reports its own exit and nothing else: every mid-loop report
+  // below is refused by the status machine because a stop already cancelled
+  // the stream, and `finalizeRunTerminal` resolves the run's terminal outcome
+  // from that phase rather than from the failure the child reports.
+  it('settles a stopped child loop as cancelled from the stream phase', async () => {
     const recorded = recordSessionEvents(defaultSession().events);
 
     const childStream = startCodexChild(

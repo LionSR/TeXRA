@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
+  clearTerminalExecutionState: vi.fn(),
   completeOwnedExecutionLease: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock('@transcript', async (importActual) => ({
 }));
 vi.mock('@agent/utils/userVars', () => ({ buildUserVars: mocks.buildVars }));
 vi.mock('@agent/storage/executionLifecycle', () => ({
+  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 vi.mock('@agent/storage/executionLease', () => ({
@@ -130,6 +132,7 @@ describe('native agent launch activation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );

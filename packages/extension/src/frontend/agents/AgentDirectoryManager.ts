@@ -5,7 +5,7 @@ import * as path from 'node:path';
 // Third-party imports
 import * as vscode from 'vscode';
 import { minimatch } from 'minimatch';
-import pDefer from 'p-defer';
+import PQueue from 'p-queue';
 
 // Local imports
 import type {
@@ -49,8 +49,7 @@ class AgentDirectoryManager {
   private watcherSubscriptions = new Set<AgentDirectoryWatcherSubscription>();
   private externalWatcherDirectoryPaths = new Set<string>();
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
-  private watcherSetupPromise: Promise<void> | null = null;
-  private watcherRebuildRequested = false;
+  private readonly watcherRebuilds = new PQueue({ concurrency: 1 });
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
@@ -168,37 +167,35 @@ class AgentDirectoryManager {
     );
   }
 
+  /**
+   * The rebuild queue is the only writer of the watcher set and of the cached
+   * directory list. One rebuild runs at a time and at most one waits behind
+   * it: a request arriving while a rebuild runs is answered by the waiting
+   * one, which reads the directory list after the running rebuild has settled.
+   * Disposal never discards queued rebuilds, so every caller awaiting one
+   * settles; a rebuild that starts with no subscriptions left has nothing to
+   * watch and returns.
+   */
   private async ensureAgentWatchers(): Promise<void> {
-    if (this.watcherSetupPromise) {
-      await this.watcherSetupPromise;
-      if (this.watcherRebuildRequested) {
-        await this.ensureAgentWatchers();
-      }
+    if (this.watcherRebuilds.size > 0) {
+      await this.watcherRebuilds.onIdle();
       return;
     }
 
-    const setupDeferred = pDefer<void>();
-    this.watcherSetupPromise = setupDeferred.promise;
-    this.watcherRebuildRequested = false;
+    await this.watcherRebuilds.add(async () => {
+      if (this.watcherSubscriptions.size === 0) {
+        return;
+      }
 
-    try {
       const directories = await this.getAllLocal();
-      if (
-        this.watcherDirectories &&
-        this.sameDirectories(this.watcherDirectories, directories)
-      ) {
+      const cached = this.watcherDirectories;
+      this.watcherDirectories = directories;
+      if (cached && this.sameDirectories(cached, directories)) {
         return;
       }
 
       await this.buildAgentWatchers(directories);
-    } finally {
-      setupDeferred.resolve();
-      this.watcherSetupPromise = null;
-    }
-
-    if (this.watcherRebuildRequested) {
-      await this.ensureAgentWatchers();
-    }
+    });
   }
 
   private async buildAgentWatchers(
@@ -211,7 +208,6 @@ class AgentDirectoryManager {
     this.watcherDisposables.forEach((watcher) => watcher.dispose());
     this.watcherDisposables = [];
     this.externalWatcherDirectoryPaths.clear();
-    this.watcherDirectories = directories;
 
     const watchedDirectories: string[] = [];
     const skippedDirectories: string[] = [];
@@ -359,9 +355,14 @@ class AgentDirectoryManager {
     }
   }
 
+  /**
+   * Clearing the cached list is what forces the next queued rebuild to do real
+   * work. The only write that can overwrite the cleared list is the running
+   * rebuild's own commit, which happens before that rebuild scans directory
+   * trees, so a request lost that way is one whose change the scan still sees.
+   */
   private requestAgentWatcherRebuild(): void {
     this.watcherDirectories = null;
-    this.watcherRebuildRequested = true;
     this.scheduleAgentWatcherSetup();
   }
 
@@ -456,8 +457,6 @@ class AgentDirectoryManager {
     this.watcherDisposables = [];
     this.externalWatcherDirectoryPaths.clear();
     this.watcherDirectories = null;
-    this.watcherSetupPromise = null;
-    this.watcherRebuildRequested = false;
   }
 }
 
