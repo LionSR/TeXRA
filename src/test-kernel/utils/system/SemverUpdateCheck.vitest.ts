@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { isNewerSemverVersion } from '@utils/system/semverUpdateCheck';
+import { runDailyUpdateCheck } from '@utils/system/updateCheck';
 
 describe('isNewerSemverVersion', () => {
   it('compares numerically across all components', () => {
@@ -22,5 +24,88 @@ describe('isNewerSemverVersion', () => {
     expect(isNewerSemverVersion('latest', '1.0.0')).toBe(false);
     expect(isNewerSemverVersion('not-a-version', '0.39.3')).toBe(false);
     expect(isNewerSemverVersion('0.40.0', 'not-a-version')).toBe(false);
+  });
+});
+
+describe('runDailyUpdateCheck', () => {
+  const nowMs = Date.UTC(2026, 0, 1);
+  const lastCheckedAtKey = 'update.lastCheckedAt';
+  const lastNotifiedVersionKey = 'update.lastNotifiedVersion';
+
+  it('notifies before stamping a successful live check', async () => {
+    const state = new FakeStateStore();
+    let stampDuringNotify: number | undefined;
+
+    const latest = await runDailyUpdateCheck({
+      currentVersion: '1.0.0',
+      state,
+      lastCheckedAtKey,
+      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+      notify: () => {
+        stampDuringNotify = state.get(lastCheckedAtKey);
+      },
+      now: () => nowMs,
+    });
+
+    expect(latest).toBe('1.1.0');
+    expect(stampDuringNotify).toBeUndefined();
+    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
+  });
+
+  it('does not repeat a release notification but still stamps a live refresh', async () => {
+    const state = new FakeStateStore({
+      [lastNotifiedVersionKey]: '1.1.0',
+    });
+    const notify = vi.fn();
+
+    await runDailyUpdateCheck({
+      currentVersion: '1.0.0',
+      state,
+      lastCheckedAtKey,
+      lastNotifiedVersionKey,
+      fetchLatest: async () => ({ version: '1.1.0', refreshed: true }),
+      notify,
+      now: () => nowMs,
+    });
+
+    expect(notify).not.toHaveBeenCalled();
+    expect(state.get(lastCheckedAtKey)).toBe(nowMs);
+  });
+
+  it('can offer stale source metadata without stamping the check', async () => {
+    const state = new FakeStateStore();
+    const notify = vi.fn();
+
+    await runDailyUpdateCheck({
+      currentVersion: '1.0.0',
+      state,
+      lastCheckedAtKey,
+      fetchLatest: async () => ({ version: '1.1.0', refreshed: false }),
+      notify,
+      now: () => nowMs,
+    });
+
+    expect(notify).toHaveBeenCalledWith('1.1.0');
+    expect(state.get(lastCheckedAtKey)).toBeUndefined();
+  });
+
+  it('applies the host policy when the throttle stamp cannot be persisted', async () => {
+    const state = new FakeStateStore();
+    vi.spyOn(state, 'update').mockRejectedValue(new Error('read-only state'));
+    const options = {
+      currentVersion: '1.0.0',
+      state,
+      lastCheckedAtKey,
+      fetchLatest: async () => ({ version: '1.0.0', refreshed: true }),
+      notify: () => {},
+      now: () => nowMs,
+    };
+
+    await expect(
+      runDailyUpdateCheck({ ...options, stampFailure: 'ignore' }),
+    ).resolves.toBeUndefined();
+    await expect(runDailyUpdateCheck(options)).rejects.toThrow(
+      'read-only state',
+    );
   });
 });

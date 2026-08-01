@@ -51,7 +51,7 @@ async function fetchLatestDesktopRelease(options?: {
     },
     fetchImpl: options?.fetchImpl,
   });
-  return tag === undefined ? undefined : { version: tag.replace(/^v/, '') };
+  return tag ? { version: tag.replace(/^v/, '') } : undefined;
 }
 
 export interface CheckForDesktopUpdateOptions {

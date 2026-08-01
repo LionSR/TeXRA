@@ -13,7 +13,7 @@ export interface UpdateCheckFetchResult {
   refreshed: boolean;
 }
 
-export interface DailyUpdateCheckOptions {
+interface DailyUpdateCheckOptions {
   currentVersion: string;
   state: StateStore;
   lastCheckedAtKey: string;
@@ -79,7 +79,7 @@ export async function runDailyUpdateCheck({
   return latest;
 }
 
-export interface FetchJsonStringFieldOptions {
+interface FetchJsonStringFieldOptions {
   url: string;
   field: string;
   timeoutMs: number;
