@@ -14,6 +14,9 @@ const EXECUTION_ID = 'read-range-exec';
 
 /** 10 lines: "line 1" … "line 10". */
 const SMALL = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join('\n');
+const LARGE = Array.from({ length: 2500 }, (_, i) => `line ${i + 1}`).join(
+  '\n',
+);
 
 async function callRead(input: unknown) {
   const tool = new ReadFileTool();
@@ -30,7 +33,10 @@ describe('read_file line ranges', () => {
   beforeEach(async () => {
     await installFakePlatform({
       workspacePath: '/workspace',
-      files: { '/workspace/small.txt': SMALL },
+      files: {
+        '/workspace/large.txt': LARGE,
+        '/workspace/small.txt': SMALL,
+      },
     });
   });
 
@@ -97,6 +103,16 @@ describe('read_file line ranges', () => {
     expect(result.output).toContain('line 7');
     expect(result.output).toContain('line 10');
     expect(result.output).not.toContain('line 6');
+  });
+
+  it('reports remaining lines when a start-only range is truncated', async () => {
+    const result = await callRead({
+      path: 'large.txt',
+      range: { start: 2 },
+    });
+
+    expect(result.summary).toBe('Read lines 2-2001 of large.txt');
+    expect(result.output).toContain('...(truncated, 499 more lines)');
   });
 
   it('accepts the array range form some models emit', async () => {
