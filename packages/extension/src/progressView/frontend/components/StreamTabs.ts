@@ -317,8 +317,6 @@ export class StreamTabs extends LitElement {
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
   @property({ type: Boolean, reflect: true }) compact = false;
-  @property({ type: String }) presentation: 'progress' | 'orchestration' =
-    'progress';
   /** Optional rail-header title. Empty (default) renders no header band. */
   @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
