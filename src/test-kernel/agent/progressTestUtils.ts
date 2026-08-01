@@ -83,7 +83,7 @@ export function sessionFactsOfType<T extends SessionFact['type']>(
   return facts;
 }
 
-type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
+export type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
 
 export function sessionFactPayloads<T extends PayloadSessionFact['type']>(
   events: readonly SessionEvent[],

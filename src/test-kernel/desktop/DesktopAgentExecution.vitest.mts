@@ -53,6 +53,7 @@ import { createDeferred } from '@test/support/asyncTestUtils';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
@@ -628,8 +629,6 @@ async function settleProgressEvents(): Promise<void> {
   await Promise.resolve();
   await new Promise((resolve) => setImmediate(resolve));
 }
-
-type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
 
 function emitSessionFact<K extends PayloadSessionFact['type']>(
   bridge: TestableBridge,

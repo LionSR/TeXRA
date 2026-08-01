@@ -33,6 +33,7 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
+import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
 const executionId = 'execution:cli-session-projection' as ExecutionId;
@@ -64,8 +65,6 @@ function workflowConfig(
     ...overrides,
   };
 }
-
-type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
 
 function sessionFact<K extends PayloadSessionFact['type']>(
   type: K,
