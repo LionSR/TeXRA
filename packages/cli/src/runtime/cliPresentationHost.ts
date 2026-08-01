@@ -89,21 +89,11 @@ function createRuntimePresentationNdjsonHandlers(
   };
 }
 
-function writeRuntimePresentationNdjson<K extends RuntimePresentationEvent>(
-  logger: Logger,
-  event: K,
-  payload: RuntimePresentationEventPayloads[K],
-): void {
-  dispatchPresentationEvent(
-    createRuntimePresentationNdjsonHandlers(logger),
-    event,
-    payload,
-  );
-}
-
 export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let sink: LogSink | undefined;
   let logger: Logger | undefined;
+  let ndjsonHandlers:
+    PresentationEventHandlers<RuntimePresentationEventPayloads> | undefined;
   let closed = false;
   const runProgress = createRunProgressRenderer(context);
   function ensureLogger(): Logger {
@@ -172,7 +162,9 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       if (closed) return;
 
       if (context.outputFormat === 'ndjson') {
-        writeRuntimePresentationNdjson(ensureLogger(), event, payload);
+        ndjsonHandlers ??=
+          createRuntimePresentationNdjsonHandlers(ensureLogger());
+        dispatchPresentationEvent(ndjsonHandlers, event, payload);
         return;
       }
 

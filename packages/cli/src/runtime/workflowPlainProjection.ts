@@ -28,16 +28,6 @@ export interface WorkflowPlainProjectionOptions {
   readonly beforeWrite?: () => void;
 }
 
-/** Read `key`'s value from `map`, creating and storing it via `create` on a
- *  miss. Kept local: the only insert-or-create nested map in this file. */
-function getOrCreate<K, V>(map: Map<K, V>, key: K, create: () => V): V {
-  const existing = map.get(key);
-  if (existing !== undefined) return existing;
-  const created = create();
-  map.set(key, created);
-  return created;
-}
-
 function completionLine(outcome: RunOutcome, agentName: string): string {
   const label = (() => {
     switch (outcome) {
@@ -122,12 +112,11 @@ function createWorkflowStreamProjection(
             event.stageId !== undefined &&
             !openedPhases.has(event.stageId)
           ) {
-            const pending = getOrCreate(
-              pendingCalls,
-              event.stageId,
-              () => new Map<string, WorkflowCallProgress>(),
-            );
+            const pending =
+              pendingCalls.get(event.stageId) ??
+              new Map<string, WorkflowCallProgress>();
             pending.set(event.logId, event.task);
+            pendingCalls.set(event.stageId, pending);
           } else {
             writeCall(event.logId, event.task);
           }
