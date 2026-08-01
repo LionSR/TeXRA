@@ -2,6 +2,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Local imports
+import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import {
   activeModelHandlerCompatibilityKey,
@@ -400,6 +401,20 @@ export async function runToolUseFlow<C = unknown>(
   let preserveResumeRecord = false;
   let persistenceRecoveryPending = false;
   let flowRunStarted = false;
+  let primaryFailure: { readonly error: unknown } | undefined;
+  let earlyResult: RunToolUseFlowResult | undefined;
+  const startupInterruption = Symbol('startup interruption');
+  const teardownFailures: Array<{
+    readonly operation: string;
+    readonly error: unknown;
+  }> = [];
+  const attemptTeardown = (operation: string, action: () => void): void => {
+    try {
+      action();
+    } catch (error) {
+      teardownFailures.push({ operation, error });
+    }
+  };
   const compatibilityKey = activeModelHandlerCompatibilityKey(
     services.modelHandler,
   );
@@ -418,7 +433,8 @@ export async function runToolUseFlow<C = unknown>(
     // it before touching the persisted resume record.
     if (input.checkInterruption()) {
       preserveResumeRecord = input.resume !== undefined;
-      return { outcome };
+      earlyResult = { outcome };
+      throw startupInterruption;
     }
 
     persistenceRecoveryPending = true;
@@ -428,7 +444,8 @@ export async function runToolUseFlow<C = unknown>(
     if (input.checkInterruption()) {
       persistenceRecoveryPending = false;
       preserveResumeRecord = input.resume !== undefined;
-      return { outcome };
+      earlyResult = { outcome };
+      throw startupInterruption;
     }
     // Past both startup cancellation guards: any later interrupt() is a
     // genuine mid-run cancellation, so go back to the normal destructive
@@ -623,9 +640,11 @@ export async function runToolUseFlow<C = unknown>(
       });
       throwFlowLastError(err, shared.lastError);
     }
+  } catch (error) {
+    if (error !== startupInterruption) primaryFailure = { error };
   } finally {
     activePersistedFlow = undefined;
-    teardownSetup?.();
+    attemptTeardown('detaching the live flow', () => teardownSetup?.());
     teardownSetup = undefined;
     let preservationReason: string | undefined;
     if (preserveResumeRecord) {
@@ -647,7 +666,11 @@ export async function runToolUseFlow<C = unknown>(
       preserveFlowRecord && !persistenceRecoveryPending;
 
     if (preservationReason) logger.debug(preservationReason);
-    input.onFlowRecordDisposition?.(preserveFlowRecord ? 'preserve' : 'delete');
+    attemptTeardown('reporting flow-record disposition', () =>
+      input.onFlowRecordDisposition?.(
+        preserveFlowRecord ? 'preserve' : 'delete',
+      ),
+    );
     // AgentRunLifecycle applies this policy with terminal metadata through one
     // storage finalization after the flow reports its outcome.
 
@@ -655,16 +678,48 @@ export async function runToolUseFlow<C = unknown>(
     // explicitly recoverable. Every other exit is terminal. The lifecycle's
     // generation-scoped release is a no-op for an inner native-child turn,
     // whose child loop retains the sole consumer lease across turns.
-    sessionLifecycle.release(
-      preserveFollowUpQueue || runSession.executions.hasActiveChildren(streamId)
-        ? 'recoverable'
-        : 'terminal',
+    attemptTeardown('releasing the follow-up queue', () =>
+      sessionLifecycle.release(
+        preserveFollowUpQueue ||
+          runSession.executions.hasActiveChildren(streamId)
+          ? 'recoverable'
+          : 'terminal',
+      ),
     );
-    runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
+    attemptTeardown('cancelling host interactions', () =>
+      runSession.interactions.cancel({ streamId, cause: 'Run ended.' }),
+    );
     for (const handler of switchedHandlers) {
-      handler.dispose();
+      attemptTeardown('disposing a switched model handler', () =>
+        handler.dispose(),
+      );
     }
   }
+
+  if (primaryFailure) {
+    for (const failure of teardownFailures) {
+      logSdkError(
+        logger,
+        `Tool-use teardown failed while ${failure.operation}`,
+        failure.error,
+      );
+    }
+    throw primaryFailure.error;
+  }
+
+  const [firstTeardownFailure, ...additionalTeardownFailures] =
+    teardownFailures;
+  for (const failure of additionalTeardownFailures) {
+    logSdkError(
+      logger,
+      `Tool-use teardown failed while ${failure.operation}`,
+      failure.error,
+    );
+  }
+  if (firstTeardownFailure) {
+    throw firstTeardownFailure.error;
+  }
+  if (earlyResult) return earlyResult;
 
   if (
     outputSchema !== undefined &&
