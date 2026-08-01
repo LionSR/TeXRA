@@ -89,3 +89,46 @@ helper.
 **What this forbids.** Do not file the registry again. Do not land a
 construction-time duplicate-key assert without the disposal path above; without
 it the assert is knowingly wrong for `LogList`.
+
+---
+
+## ModelCell — current ownership ruling supersedes only the retired prohibition
+
+**Question.** Does the retired runtime gold-standard PRD's statement that
+`ModelCell` “must not be implemented from this record” still prohibit the
+`ModelCell` ownership primitive now present on `main`?
+
+**Ruling.** No. The implementation merged in
+[#9547](https://github.com/LionSR/TeXRA/pull/9547) is authoritative for the
+narrow ownership and lifecycle guarantees below. It supersedes the retired
+PRD's [top-level prohibition](../prds/2026-06-29-prd-runtime-gold-standard.md#L8-L19)
+and [§2 ModelCell text](../prds/2026-06-29-prd-runtime-gold-standard.md#2-modelcell-the-one-mutable-seam)
+only where those passages deny that this primitive exists on `main`.
+
+**Current guarantees.** The code, rather than the retired design, defines the
+accepted shape:
+
+- `AgentLaunchContext` constructs one `ModelCell` for the run from its launch
+  handler and model id. Flow services and the tool-facing run context share that
+  cell instead of copying a live handler/client pair.
+- `ModelCell.swap` synchronously adopts the replacement handler and model id,
+  clears the cached client, and disposes the distinct handler it retires. A
+  lazily built client is reused until `rebind` or `swap`; build and rebind
+  completion guards prevent a client produced for a retired handler from being
+  published as current.
+- A tool-use model switch persists `shared.modelId` and the run config before
+  the live swap, then updates the launch-context mirrors through
+  `onModelChanged`. Resume reconstructs the handler from that persisted model
+  identity.
+- The run lifecycle calls `ModelCell.dispose()` in its `finally` path. Thus the
+  cell disposes handlers retired by successful swaps and the handler still live
+  when the run ends; failed replacement handlers are disposed before ownership
+  can transfer to the cell.
+
+**Scope of supersession.** This ruling does **not** revive the retired PRD as a
+plan, make its unmerged `RunDescriptor` injection program authoritative, or
+approve its `PendingRequests`, `RetryPolicy`, `RetryGate`, `HostUiBus`, stage
+sequence, or concept-count claims. Those passages remain historical. Future
+changes to model ownership must be justified against the current implementation
+and tests in `src/agent/runtime/ModelCell.ts`, not by treating the retired
+gold-standard program as normative.
