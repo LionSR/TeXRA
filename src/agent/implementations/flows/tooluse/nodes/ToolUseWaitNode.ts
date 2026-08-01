@@ -78,12 +78,7 @@ export class ToolUseWaitNode<C> extends Node<
     // The goalPaused event makes the pause user-visible: a silent stop
     // mid-objective reads as a hang.
     if (prepRes.afterError && !hasDrainedFollowUps) {
-      const goal = GoalStore.getForStream(streamId);
-      if (goal?.status === 'active') {
-        await GoalStore.setStatus(streamId, 'paused');
-        await setGoalSessionBashAutoApproval(streamId, false);
-        emitRunFact(this.services.logger, 'goalPaused', { streamId });
-      }
+      await this.pauseActiveGoal(streamId);
     } else if (!isSubagent) {
       // Root-only notification: fires every cycle (not just a genuine
       // block) so a host can project each round's response as it happens —
@@ -180,13 +175,6 @@ export class ToolUseWaitNode<C> extends Node<
       return FlowTransition.COMPLETE;
     }
 
-    // A user follow-up is ready for the next cycle. Clear any prior
-    // error/cancellation state so runToolUseFlow does not treat a recovered
-    // error as terminal. Root flows arrive here from their session queue;
-    // resumed subagents arrive here through the one-shot handoff above.
-    shared.lastError = undefined;
-    shared.userCancelledRetry = undefined;
-
     await session.transcripts.ensureLoaded(streamId);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
       trace: logger,
@@ -202,13 +190,38 @@ export class ToolUseWaitNode<C> extends Node<
       }
     }
 
-    await applyFollowUpBatch(
-      shared,
-      execRes.followUps,
-      execRes.synthetic,
-      this.services,
-    );
+    try {
+      await applyFollowUpBatch(
+        shared,
+        execRes.followUps,
+        execRes.synthetic,
+        this.services,
+      );
+    } catch (error) {
+      if (prepRes.afterError) {
+        await this.pauseActiveGoal(streamId);
+      }
+      throw error;
+    }
+
+    // A user follow-up reached the transcript and is ready for the next
+    // cycle. Clear any prior error/cancellation state so runToolUseFlow does
+    // not treat a recovered error as terminal. If applying the follow-up
+    // failed above, preserve that state for the resumable failure path.
+    shared.lastError = undefined;
+    shared.userCancelledRetry = undefined;
 
     return FlowTransition.CONTINUE;
+  }
+
+  private async pauseActiveGoal(streamId: string): Promise<void> {
+    const goal = GoalStore.getForStream(streamId);
+    if (goal?.status !== 'active') {
+      return;
+    }
+
+    await GoalStore.setStatus(streamId, 'paused');
+    await setGoalSessionBashAutoApproval(streamId, false);
+    emitRunFact(this.services.logger, 'goalPaused', { streamId });
   }
 }

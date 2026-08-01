@@ -986,6 +986,69 @@ describe('ToolUseWaitNode', () => {
     }
   });
 
+  it('pauses an errored goal when a drained recovery batch cannot be applied', async () => {
+    const streamId = 'wait-node-error-recovery-failed' as StreamTabId;
+    await installPlatform();
+    await GoalStore.start(streamId, 'finish the autonomous proof');
+
+    const shared: ToolUseRunShared = toolUseRunShared();
+    shared.lastError = {
+      message: 'stale failure from the previous cycle',
+      userRetryable: false,
+    };
+    const interactions = { emit: vi.fn() };
+    const setApprovalBypassState = vi.fn();
+    const ownerSession = sessionWithInteractions({
+      setApprovalBypassState,
+      cancel: vi.fn(),
+    });
+    const applicationError = new Error('follow-up media is unreadable');
+    const batch = [{ text: 'use this diagram', origin: 'user' as const }];
+    const services = createWaitNodeServices({
+      isSubagent: true,
+      runScope: testRunScope(streamId),
+      modelHandler: {
+        createUserFollowUpMessages: vi.fn(async () => {
+          throw applicationError;
+        }),
+      },
+    });
+    const node = new ToolUseWaitNode(batch).setServices(services);
+
+    try {
+      const prep = await node.prep(shared);
+      const exec = await withTestRunContext(
+        interactions,
+        streamId,
+        () => node.exec(prep),
+        { session: ownerSession },
+      );
+
+      await expect(
+        withTestRunContext(
+          interactions,
+          streamId,
+          () => node.post(shared, prep, exec),
+          { session: ownerSession },
+        ),
+      ).rejects.toBe(applicationError);
+
+      expect(shared.lastError).toEqual({
+        message: 'stale failure from the previous cycle',
+        userRetryable: false,
+      });
+      expect(GoalStore.getForStream(streamId)?.status).toBe('paused');
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
+        streamId,
+        kind: 'bash',
+        bypassActive: false,
+      });
+    } finally {
+      await GoalStore.forget(streamId);
+      cleanupApprovalsForStream(streamId);
+    }
+  });
+
   // Companion to the above: with no drained batch in hand, the after-error
   // stop must still fire, or a subagent would wait for a follow-up its
   // orchestrator was never told to send.
