@@ -608,7 +608,7 @@ export async function runToolUseFlow<C = unknown>(
         // run ended: the wait node clears it when a follow-up recovers.
         cancelled,
       });
-      if (outcome === RUN_OUTCOME.CANCELLED && cancelled) {
+      if (outcome === RUN_OUTCOME.CANCELLED) {
         await activePersistedFlow?.prepareForFollowUp(shared);
       }
     }
