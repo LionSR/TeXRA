@@ -426,9 +426,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Internal compaction recovery already attempted during this public call. */
   private compactionRetrySource: 'threshold' | 'overflow' | null = null;
 
-  /** DIAGNOSTIC: Pre-flight token estimate for comparison with actual usage */
-  private _diagPreFlightTokens: number | null = null;
-
   // =========================================================================
   // WebSocket transport
   // =========================================================================
@@ -495,23 +492,25 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Finalize response state after a successful API call.
-   * Updates the chain anchor, conversation state, and token counts.
+   * Finalize response state after a successful API call, and build the result
+   * every transport path returns. Updates the chain anchor, conversation state,
+   * and token counts, then surfaces {@link ResponseFinalizeContext.compactedMessages}
+   * so a finalized-but-not-returned (or returned-but-not-finalized) response is
+   * unrepresentable.
    */
   private finalizeResponse(
     response: Response,
-    effectiveMessagesCount: number,
-    compactedThisCall: boolean,
-  ): void {
+    ctx: ResponseFinalizeContext,
+  ): CreateResponseResult<Response, ResponseInputItem> {
     // Apply compaction state if compaction happened this call
-    if (compactedThisCall) {
+    if (ctx.compactedThisCall) {
       this.applyCompactionState();
     }
 
     // Only chain from completed responses with usage data. Missing usage
-    // signals streaming instability (see the [TOKEN_DIAG] branch below);
-    // chaining from such responses has produced stale-id and token-count
-    // drift in practice, so treat it the same as a non-completed status.
+    // signals streaming instability; chaining from such responses has produced
+    // stale-id and token-count drift in practice, so treat it the same as a
+    // non-completed status.
     // Use a typeof check rather than truthiness so a legitimate 0 wouldn't
     // be misclassified.
     const hasInputTokens = typeof response.usage?.input_tokens === 'number';
@@ -520,7 +519,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       response.status === 'completed' &&
       hasInputTokens;
     if (safeToChain) {
-      this.chainState.recordChained(response.id, effectiveMessagesCount);
+      this.chainState.recordChained(response.id, ctx.effectiveMessagesLength);
     } else {
       const errorDetail =
         response.error?.message ?? response.incomplete_details?.reason;
@@ -563,57 +562,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // actual context usage (e.g., timing between count and API call, tool definitions,
     // or reasoning token accounting). See PRD Known Issues for investigation details.
     if (response.usage?.input_tokens) {
-      const actualTokens = response.usage.input_tokens;
-      this.chainState.setCumulativeInputTokens(actualTokens);
-
-      // DIAGNOSTIC: Compare pre-flight estimate with actual usage
-      if (this._diagPreFlightTokens !== null) {
-        const diff = actualTokens - this._diagPreFlightTokens;
-        const diffPercent =
-          this._diagPreFlightTokens > 0
-            ? ((diff / this._diagPreFlightTokens) * 100).toFixed(1)
-            : 'N/A';
-        const reasoningTokens =
-          response.usage.output_tokens_details?.reasoning_tokens ?? 0;
-        const outputTokens = response.usage.output_tokens ?? 0;
-
-        this.logger.debug('[TOKEN_DIAG] Actual vs pre-flight', {
-          data: {
-            actualInputTokens: actualTokens,
-            preFlightTokens: this._diagPreFlightTokens,
-            difference: diff,
-            differencePercent: diffPercent,
-            outputTokens,
-            reasoningTokens,
-            totalTokens: response.usage.total_tokens,
-            contextWindow: this.getEffectiveContextWindow(),
-            utilizationActual:
-              (actualTokens / this.getEffectiveContextWindow()) * 100,
-          },
-        });
-        this._diagPreFlightTokens = null; // Clear for next request
-      }
+      this.chainState.setCumulativeInputTokens(response.usage.input_tokens);
     } else {
-      // DIAGNOSTIC: Log when usage data is missing (streaming instability?)
+      // Not silent degradation: the chain anchor was already refused above
+      // (hasInputTokens gates safeToChain), this records that the context
+      // baseline could not be advanced for this turn.
       this.logger.debug(
-        `[TOKEN_DIAG] response.usage.input_tokens MISSING - cannot track context usage`,
+        'Response usage missing input_tokens; context usage not tracked',
         {
           data: {
             responseId: response.id,
             responseStatus: response.status,
             hasUsage: !!response.usage,
-            inputTokens: response.usage?.input_tokens,
-            outputTokens: response.usage?.output_tokens,
-            totalTokens: response.usage?.total_tokens,
-            preFlightTokens: this._diagPreFlightTokens,
           },
         },
       );
-      this._diagPreFlightTokens = null; // Clear anyway
     }
 
     // Reset compacted flag after successful request (ready for next compaction if needed)
     this.chainState.clearCompactedFlag();
+
+    return { response, updatedMessages: ctx.compactedMessages };
   }
 
   /**
@@ -721,19 +690,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     sourceMessages: ResponseInputItem[];
     sourceFingerprint: string;
   };
-
-  /**
-   * Best available estimate of current input tokens.
-   * Returns compactionResult.tokensAfter if compaction just happened,
-   * otherwise falls back to cumulativeInputTokens from previous response.
-   * Returns 0 if no token data available (first turn).
-   */
-  private getBestInputTokenEstimate(): number {
-    return (
-      this.compactionResult?.tokensAfter ??
-      this.chainState.getCumulativeInputTokens()
-    );
-  }
 
   /**
    * Get the appropriate safety buffer for token validation.
@@ -1058,8 +1014,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // payload next turn (system items + the summary message with its
       // "[Previous conversation summary]" prefix), not the OUTPUT cost of
       // generating the summary — mirroring the stateful path, which counts the
-      // compacted items' input tokens. `getBestInputTokenEstimate()` prefers
-      // this value, and on the Codex profile it is load-bearing: token counting
+      // compacted items' input tokens. `applyTokenCountFailureFallback()`
+      // prefers this value over the chain's cumulative count, and on the Codex
+      // profile it is load-bearing: token counting
       // is unavailable and `failWhenFallbackOutputBudgetIsReduced` fails the
       // request locally when the estimate + budget overflow the context window,
       // so an output-token underestimate could let through a request the backend
@@ -1395,7 +1352,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   private applyTokenCountFailureFallback(maxOutputTokens: number): number {
-    const inputEstimate = this.getBestInputTokenEstimate();
+    // Best available estimate of current input tokens: the post-compaction
+    // figure when compaction just happened, else the previous response's
+    // cumulative count, else 0 on the first turn.
+    const inputEstimate =
+      this.compactionResult?.tokensAfter ??
+      this.chainState.getCumulativeInputTokens();
     if (inputEstimate <= 0) return maxOutputTokens;
 
     const buffer = this.getTokenSafetyBuffer();
@@ -1738,27 +1700,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
         onCounted: (inputTokens) => {
           preFlightTokens = inputTokens;
-          // DIAGNOSTIC: Log token count details for investigation.
-          // Compare pre-flight estimate with cumulative tokens from prev response.
-          const prevCumulative = this.chainState.getCumulativeInputTokens();
-          const utilizationEstimate =
-            (inputTokens / this.getEffectiveContextWindow()) * 100;
-          this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
-          this.logger.debug('[TOKEN_DIAG] Pre-flight count', {
-            data: {
-              preFlightTokens: inputTokens,
-              utilizationEstimate,
-              prevCumulativeTokens: prevCumulative,
-              delta: inputTokens - prevCumulative,
-              newMessagesCount: newMessages.length,
-              totalMessagesCount: effectiveMessages.length,
-              hasPreviousResponseId: !!this.chainState.getPreviousResponseId(),
-              hasTools: !!convertedTools?.length,
-              toolCount: convertedTools?.length ?? 0,
-              contextWindow: this.getEffectiveContextWindow(),
-              maxOutputTokens,
-            },
-          });
         },
         onCountFailure: (err) => {
           this.logger.debug('Token counting failed; applying fallback cap', {
@@ -1794,7 +1735,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       );
       this.compactionRetrySource = 'threshold';
       this.requestCompaction();
-      this._diagPreFlightTokens = null;
       return this.createResponseImpl(options);
     }
 
@@ -1929,15 +1869,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       signal,
     );
     if (!resumedResponse) return null;
-    this.finalizeResponse(
-      resumedResponse,
-      ctx.effectiveMessagesLength,
-      ctx.compactedThisCall,
-    );
-    return {
-      response: resumedResponse,
-      updatedMessages: ctx.compactedMessages,
-    };
+    return this.finalizeResponse(resumedResponse, ctx);
   }
 
   /**
@@ -2054,12 +1986,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // reflects the completed response, not the pre-poll snapshot.
     processor.finalize(response);
 
-    this.finalizeResponse(
-      response,
-      ctx.effectiveMessagesLength,
-      ctx.compactedThisCall,
-    );
-    return { response, updatedMessages: ctx.compactedMessages };
+    return this.finalizeResponse(response, ctx);
   }
 
   /**
@@ -2180,12 +2107,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       processor.finalize(response);
 
-      this.finalizeResponse(
-        response,
-        ctx.effectiveMessagesLength,
-        ctx.compactedThisCall,
-      );
-      return { response, updatedMessages: ctx.compactedMessages };
+      return this.finalizeResponse(response, ctx);
     } catch (error) {
       return handleStreamingFailure(error, {
         // Finalize the progress streams on error so the view does not hang
@@ -2260,12 +2182,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       },
     );
 
-    this.finalizeResponse(
-      response,
-      ctx.effectiveMessagesLength,
-      ctx.compactedThisCall,
-    );
-    return { response, updatedMessages: ctx.compactedMessages };
+    return this.finalizeResponse(response, ctx);
   }
 
   /**
@@ -2330,7 +2247,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.backgroundLifecycle.clearPending();
       this.compactionRetrySource = 'overflow';
       this.requestCompaction();
-      this._diagPreFlightTokens = null;
       // Retry internally: the recursive call will compact (shouldCompact()=true)
       // and send all messages without server-side state.
       // Call the impl directly — we're still inside the outer createResponse's
@@ -2355,9 +2271,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           'next attempt will try to resume polling instead of creating new request',
       );
     }
-
-    // Clear diagnostic state to avoid stale comparison on retry
-    this._diagPreFlightTokens = null;
 
     throw error;
   }

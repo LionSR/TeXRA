@@ -122,30 +122,18 @@ export class ReadFileTool extends defineTool({
 
     const range = input.range;
     const totalLines = lines.length;
-    const requestedStartLine = range?.start ?? 1;
-    let requestedEndLine = totalLines;
-    if (range?.end != null) {
-      requestedEndLine = range.end;
-    } else if (range) {
-      requestedEndLine = Math.min(
-        requestedStartLine + READ_FILE_MAX_LINES - 1,
-        totalLines,
-      );
-    }
-
-    // Clamp the 1-based range to the file bounds so callers can safely
-    // request windows beyond the file length.
-    const startLine = Math.min(requestedStartLine, totalLines + 1);
-    const endLine = Math.min(
-      Math.max(requestedEndLine, requestedStartLine),
-      totalLines,
-    );
+    const startLine = range?.start ?? 1;
+    // An omitted `end` reads a READ_FILE_MAX_LINES window from `start`. A
+    // supplied one is passed through unclamped: formatFileView already clamps
+    // both ends to the file bounds, so pre-clamping here only duplicated it.
+    const endLine =
+      range?.end ?? Math.min(startLine + READ_FILE_MAX_LINES - 1, totalLines);
 
     // Append a range-exceeded warning when the caller asked beyond EOF
-    const rangeEndExceeded = range?.end != null && range.end > totalLines;
-    const suffix = rangeEndExceeded
-      ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
-      : '';
+    const suffix =
+      range?.end != null && range.end > totalLines
+        ? ` (requested end ${range.end} exceeds file length ${totalLines})`
+        : '';
 
     const result = formatFileView({
       path: displayPath,
