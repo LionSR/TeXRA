@@ -197,6 +197,31 @@ describe('compiled PDF artifacts', () => {
     );
   });
 
+  it('strips a Windows-style round prefix without duplicating it', async () => {
+    const runDirectory = await makeTempDir();
+    const compiledPdfPath = path.join(runDirectory, 'build', 'main.pdf');
+    await writePdf(compiledPdfPath, 'diff pdf');
+
+    const artifact = await publishCompiledPdfArtifact({
+      runDirectory,
+      executionId: 'windows123',
+      round: 4,
+      displayName: 'main.tex',
+      source: createRunStorageLocation(
+        path.join(runDirectory, 'r4', 'sections', 'main.tex'),
+        'r4\\sections\\main.tex',
+        'windows123',
+      ),
+      compiledPdfPath,
+      pdfStemSuffix: '-diff',
+    });
+
+    expect(artifact?.pdf.relativePath).toBe('output/r4/sections/main-diff.pdf');
+    expect(artifact?.latestPdf.relativePath).toBe(
+      'output/latest/sections/main-diff.pdf',
+    );
+  });
+
   it('keeps distinct diff kinds for the same revised source', async () => {
     const runDirectory = await makeTempDir();
     const buildDir = path.join(runDirectory, 'diff', 'r5', 'build');

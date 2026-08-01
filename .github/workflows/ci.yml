@@ -165,21 +165,9 @@ jobs:
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
 
-  # TODO(windows-ci): add windows-latest to this matrix. TeXRA ships on Windows
-  # and a good deal of the code is platform-specific -- tool discovery under
-  # Program Files, the Perl lookups, path normalization, the CLI's win32
-  # branches -- none of which any runner exercises today. That gap is how a
-  # Ghostscript path list frozen at 9.x and a missing TeX Live Perl directory
-  # both survived.
-  #
-  # Adding it was tried in #9397 and reverted: the suite has ~10 pre-existing
-  # Windows failures across CompiledPdfArtifacts, RunStorageEntryInspection,
-  # ExecutionLease, and FilesUtils. Most are `\` vs `/` in expectations, two are
-  # capability gaps in the fake filesystem (chmod-based permission simulation
-  # and symlink creation), and at least one is a real product bug -- artifact
-  # paths came back with a duplicated run segment (`output\r4\r4\sections\...`).
-  # Those need fixing first, in their own change; a job that cannot pass is
-  # worse than no job.
+  # TODO(windows-ci): add windows-latest after #9409 is complete. The latest
+  # full-matrix run in #9503 found 70 failures across CLI, desktop, storage,
+  # tools, and path handling, so Windows cannot yet be a gating runner.
   test:
     name: kernel tests (linux, shard ${{ matrix.shard }}/2)
     needs: changes
