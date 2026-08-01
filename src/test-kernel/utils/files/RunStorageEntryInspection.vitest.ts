@@ -1,5 +1,10 @@
+// Node imports
+import * as path from 'node:path';
+
+// Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+// Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -11,10 +16,24 @@ import {
 } from '@utils/files/taskRunStorage';
 
 const executionId = 'abcdef123456' as ExecutionId;
+const storageRoot = path.resolve(path.sep, 'storage');
+const workspaceRoot = path.resolve(path.sep, 'workspace');
 const originalStat = StorageFS.stat;
 const originalFullPath = StorageFS.fullPath;
 
-setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
+setupPlatform({ storagePath: storageRoot, workspacePath: workspaceRoot });
+
+function primaryEntry(...segments: string[]): string {
+  return path.join('executions', executionId, ...segments);
+}
+
+function legacyEntry(...segments: string[]): string {
+  return path.join('taskRuns', executionId, ...segments);
+}
+
+function storagePath(...segments: string[]): string {
+  return path.join(storageRoot, ...segments);
+}
 
 function fileStat(type: number): FileStat {
   return { type, ctime: 0, mtime: 0, size: 1 };
@@ -26,7 +45,7 @@ function missing(target: string): Error {
 
 describe('inspectRunStorageEntry', () => {
   beforeEach(() => {
-    StorageFS.fullPath = (target) => `/storage/${target}`;
+    StorageFS.fullPath = (target) => path.join(storageRoot, target);
   });
 
   afterEach(() => {
@@ -36,13 +55,10 @@ describe('inspectRunStorageEntry', () => {
 
   it('returns a canonical location for a regular primary-layout file', async () => {
     StorageFS.stat = async (target) => {
-      if (target === `executions/${executionId}/r1/draft.tex`) {
+      if (target === primaryEntry('r1', 'draft.tex')) {
         return fileStat(FileType.File);
       }
-      if (
-        target === `executions/${executionId}` ||
-        target === `executions/${executionId}/r1`
-      ) {
+      if (target === primaryEntry() || target === primaryEntry('r1')) {
         return fileStat(FileType.Directory);
       }
       throw missing(target);
@@ -54,7 +70,7 @@ describe('inspectRunStorageEntry', () => {
       kind: 'file',
       location: {
         kind: 'runStorage',
-        absolutePath: `/storage/executions/${executionId}/r1/draft.tex`,
+        absolutePath: storagePath('executions', executionId, 'r1', 'draft.tex'),
         relativePath: 'r1/draft.tex',
         executionId,
       },
@@ -63,10 +79,10 @@ describe('inspectRunStorageEntry', () => {
 
   it('falls back to the legacy layout only when the primary entry is absent', async () => {
     StorageFS.stat = async (target) => {
-      if (target === `taskRuns/${executionId}/result.tex`) {
+      if (target === legacyEntry('result.tex')) {
         return fileStat(FileType.File);
       }
-      if (target === `taskRuns/${executionId}`) {
+      if (target === legacyEntry()) {
         return fileStat(FileType.Directory);
       }
       throw missing(target);
@@ -77,7 +93,7 @@ describe('inspectRunStorageEntry', () => {
     expect(result).toMatchObject({
       kind: 'file',
       location: {
-        absolutePath: `/storage/taskRuns/${executionId}/result.tex`,
+        absolutePath: storagePath('taskRuns', executionId, 'result.tex'),
       },
     });
   });
@@ -115,16 +131,16 @@ describe('inspectRunStorageEntry', () => {
 
   it('rejects a regular file reached through an ancestor symlink', async () => {
     StorageFS.stat = async (target) => {
-      if (target.endsWith('/link/result.tex')) {
+      if (target.endsWith(path.join('link', 'result.tex'))) {
         return fileStat(FileType.File);
       }
-      if (target === `executions/${executionId}`) {
+      if (target === primaryEntry()) {
         return fileStat(FileType.Directory);
       }
-      if (target === `executions/${executionId}/r1`) {
+      if (target === primaryEntry('r1')) {
         return fileStat(FileType.Directory);
       }
-      if (target === `executions/${executionId}/r1/link`) {
+      if (target === primaryEntry('r1', 'link')) {
         return fileStat(FileType.SymbolicLink | FileType.Directory);
       }
       throw missing(target);
@@ -134,7 +150,7 @@ describe('inspectRunStorageEntry', () => {
       inspectRunStorageEntry(executionId, 'r1/link/result.tex'),
     ).resolves.toMatchObject({
       kind: 'symlink',
-      absolutePath: `/storage/executions/${executionId}/r1/link`,
+      absolutePath: storagePath('executions', executionId, 'r1', 'link'),
     });
   });
 
@@ -142,10 +158,10 @@ describe('inspectRunStorageEntry', () => {
     const inspected: string[] = [];
     StorageFS.stat = async (target) => {
       inspected.push(target);
-      if (target === `executions/${executionId}`) {
+      if (target === primaryEntry()) {
         return fileStat(FileType.Directory);
       }
-      if (target === `executions/${executionId}/dangling`) {
+      if (target === primaryEntry('dangling')) {
         return fileStat(FileType.SymbolicLink | FileType.Unknown);
       }
       throw missing(target);
@@ -155,11 +171,9 @@ describe('inspectRunStorageEntry', () => {
       inspectRunStorageEntry(executionId, 'dangling/result.tex'),
     ).resolves.toMatchObject({
       kind: 'symlink',
-      absolutePath: `/storage/executions/${executionId}/dangling`,
+      absolutePath: storagePath('executions', executionId, 'dangling'),
     });
-    expect(inspected).not.toContain(
-      `executions/${executionId}/dangling/result.tex`,
-    );
+    expect(inspected).not.toContain(primaryEntry('dangling', 'result.tex'));
   });
 
   it('does not turn storage permission failures into a missing entry', async () => {
@@ -175,7 +189,7 @@ describe('inspectRunStorageEntry', () => {
   it('recovers execution identity from current and legacy absolute paths', () => {
     expect(
       runStorageLocationFromAnyAbsolutePath(
-        `/storage/executions/${executionId}/r2/result.tex`,
+        storagePath('executions', executionId, 'r2', 'result.tex'),
       ),
     ).toMatchObject({
       kind: 'runStorage',
@@ -184,7 +198,7 @@ describe('inspectRunStorageEntry', () => {
     });
     expect(
       runStorageLocationFromAnyAbsolutePath(
-        `/storage/taskRuns/${executionId}/result.tex`,
+        storagePath('taskRuns', executionId, 'result.tex'),
       ),
     ).toMatchObject({
       kind: 'runStorage',
@@ -192,7 +206,9 @@ describe('inspectRunStorageEntry', () => {
       relativePath: 'result.tex',
     });
     expect(
-      runStorageLocationFromAnyAbsolutePath('/workspace/result.tex'),
+      runStorageLocationFromAnyAbsolutePath(
+        path.join(workspaceRoot, 'result.tex'),
+      ),
     ).toBeUndefined();
   });
 
@@ -201,12 +217,12 @@ describe('inspectRunStorageEntry', () => {
 
     expect(fileService.locateSource('draft.tex')).toEqual({
       kind: 'workspace',
-      absolutePath: '/workspace/draft.tex',
+      absolutePath: path.join(workspaceRoot, 'draft.tex'),
       relativePath: 'draft.tex',
     });
     expect(
       fileService.locateSource(
-        `/storage/executions/${executionId}/r1/draft.tex`,
+        storagePath('executions', executionId, 'r1', 'draft.tex'),
       ),
     ).toMatchObject({
       kind: 'runStorage',
@@ -214,7 +230,9 @@ describe('inspectRunStorageEntry', () => {
       relativePath: 'r1/draft.tex',
     });
     expect(
-      fileService.locateSource(`/storage/taskRuns/${executionId}/legacy.tex`),
+      fileService.locateSource(
+        storagePath('taskRuns', executionId, 'legacy.tex'),
+      ),
     ).toMatchObject({
       kind: 'runStorage',
       executionId,
