@@ -3,61 +3,50 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
-  setAgentSkillsEnabled: vi.fn(),
+  showLoggedErrorMessage: vi.fn(),
   showLoggedInfoMessage: vi.fn(),
+  writeSetting: vi.fn(),
 }));
 
-vi.mock(
-  '@shared/settingsView/handlers/agentSkillsHandlers',
-  async (original) => {
-    const actual =
-      await original<
-        typeof import('@shared/settingsView/handlers/agentSkillsHandlers')
-      >();
-    return {
-      ...actual,
-      setAgentSkillsEnabled: mocks.setAgentSkillsEnabled,
-    };
-  },
-);
+vi.mock('@shared/config/settingsAccess', async (original) => {
+  const actual =
+    await original<typeof import('@shared/config/settingsAccess')>();
+  return { ...actual, writeSetting: mocks.writeSetting };
+});
 
 vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
   const actual =
     await original<typeof import('@frontend/ui/errorHandlingUtils')>();
   return {
     ...actual,
+    showLoggedErrorMessage: mocks.showLoggedErrorMessage,
     showLoggedInfoMessage: mocks.showLoggedInfoMessage,
   };
 });
 
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: undefined });
 
 type AgentSkillsHarness = {
-  handleSetAgentSkillsEnabled(enabled: boolean): Promise<void>;
-  sendAgentSkillsSettings: ReturnType<typeof vi.fn>;
-  withActiveWebview: (
-    fn: (webview: vscode.Webview) => Promise<void> | void,
-  ) => Promise<void>;
+  updateStateSetting(key: string, value: unknown): Promise<void>;
+  postStateSettingSnapshot: ReturnType<typeof vi.fn>;
+};
+
+type SnapshotHarness = {
+  postStateSettingSnapshot(snapshot: 'multi-agent'): Promise<void>;
 };
 
 function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
-  Reflect.set(handler, 'sendAgentSkillsSettings', vi.fn());
-  Reflect.set(
-    handler,
-    'withActiveWebview',
-    async (fn: (webview: vscode.Webview) => Promise<void> | void) => {
-      await fn({} as vscode.Webview);
-    },
-  );
+  Reflect.set(handler, 'postStateSettingSnapshot', vi.fn());
   return handler as AgentSkillsHarness;
 }
 
@@ -69,13 +58,73 @@ describe('agent skills workspace guard', () => {
   it('restores the switch without writing in an empty VS Code window', async () => {
     const handler = createHarness();
 
-    await handler.handleSetAgentSkillsEnabled(false);
+    await handler.updateStateSetting(AGENT_SKILLS_CONFIG_KEY, false);
 
-    expect(mocks.setAgentSkillsEnabled).not.toHaveBeenCalled();
+    expect(mocks.writeSetting).not.toHaveBeenCalled();
     expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
       'SettingsViewMessageHandler',
-      'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',
+      'Open a workspace folder before changing the “Agent skills” setting.',
     );
-    expect(handler.sendAgentSkillsSettings).toHaveBeenCalledOnce();
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
+      'agent-skills',
+    );
+  });
+
+  it('surfaces write failures and restores the owning snapshot', async () => {
+    const handler = createHarness();
+    const error = new Error('write failed');
+    mocks.writeSetting.mockRejectedValueOnce(error);
+
+    await handler.updateStateSetting(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      true,
+    );
+
+    expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
+    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
+      'SettingsViewMessageHandler',
+      'Failed to update “Keep subagents running”',
+      error,
+    );
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
+      'multi-agent',
+    );
+  });
+
+  it('surfaces rejected values and restores the owning snapshot', async () => {
+    const handler = createHarness();
+
+    await handler.updateStateSetting(
+      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+      1000.5,
+    );
+
+    expect(mocks.writeSetting).not.toHaveBeenCalled();
+    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
+      'SettingsViewMessageHandler',
+      `Invalid value for “${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}”`,
+      expect.any(Error),
+    );
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');
+  });
+
+  it('routes the multi-agent snapshot to its status sender', async () => {
+    const handler = Object.create(
+      SettingsViewMessageHandler.prototype,
+    ) as SnapshotHarness;
+    const webview = {};
+    const sendSuperYoloEnabled = vi.fn(async () => undefined);
+    Reflect.set(handler, 'sendSuperYoloEnabled', sendSuperYoloEnabled);
+    Reflect.set(
+      handler,
+      'withActiveWebview',
+      vi.fn(async (fn: (activeWebview: object) => Promise<void>) =>
+        fn(webview),
+      ),
+    );
+
+    await handler.postStateSettingSnapshot('multi-agent');
+
+    expect(sendSuperYoloEnabled).toHaveBeenCalledWith(webview);
   });
 });

@@ -19,6 +19,7 @@ import {
   USE_OPENROUTER_PROVIDER_SETTING,
 } from '@shared/constants/providers';
 import {
+  BASH_APPROVAL_CONFIG_KEY,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
@@ -33,6 +34,8 @@ import {
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
 } from '@shared/schemas/agentCliSettings';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { CoreSettingsShape } from '@shared/schemas/coreSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ============================================================================
@@ -91,6 +94,8 @@ type SettingHost = 'vscode' | 'cli' | 'desktop';
 
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
+export type SettingsViewSnapshot =
+  'agent-skills' | 'approval' | 'git-author' | 'latex' | 'multi-agent';
 
 interface CliRuntimeReachability {
   /**
@@ -163,7 +168,13 @@ export interface StateSettingEntry {
    * the scalar read/write accessor.
    */
   readonly openForm?: string;
+  /** Settings-view snapshot to rebroadcast after this row is written. */
+  readonly settingsViewSnapshot?: SettingsViewSnapshot;
 }
+
+export type SettingsViewStateSettingEntry = StateSettingEntry & {
+  readonly settingsViewSnapshot: SettingsViewSnapshot;
+};
 
 const GIT_AUTHOR_CONSUMER = 'packages/cli/src/runtime/gitAuthor.ts';
 const CODEX_CONFIG_CONSUMER = 'src/tools/codexConfig.ts';
@@ -323,6 +334,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'git-author',
   },
   {
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
@@ -336,6 +348,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'git-author',
   },
   {
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
@@ -349,6 +362,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'git-author',
   },
   {
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
@@ -362,6 +376,31 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'cli', 'desktop'],
     cliConsumer: GIT_AUTHOR_CONSUMER,
     cliRuntimeReachability: GIT_WORKTREE_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'git-author',
+  },
+
+  // --- Multi-agent coordination --------------------------------------------
+  {
+    key: WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+    schema: z.boolean().prefault(true),
+    title: 'Allow orchestrator cancellation',
+    description:
+      'Allow the orchestrator to stop subagents that are no longer needed.',
+    category: 'multi-agent',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'multi-agent',
+  },
+  {
+    key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+    schema: z.boolean().prefault(false),
+    title: 'Keep subagents running',
+    description:
+      'Let active subagents continue when the orchestrator is stopped.',
+    category: 'multi-agent',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'multi-agent',
   },
 
   // --- External coding agent controls ---------------------------------------
@@ -379,6 +418,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: CODEX_CONFIG_CONSUMER,
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
+    settingsViewSnapshot: 'approval',
   },
   {
     key: WorkspaceStateKey.CODEX_REASONING_EFFORT,
@@ -391,6 +431,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: CODEX_CONFIG_CONSUMER,
     cliRuntimeReachability: CODEX_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
+    settingsViewSnapshot: 'approval',
   },
   {
     key: WorkspaceStateKey.CODEX_APPROVAL_POLICY,
@@ -408,6 +449,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Ask for untrusted',
       'Ask on failure',
     ],
+    settingsViewSnapshot: 'approval',
   },
   {
     key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
@@ -421,6 +463,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 5', 'Haiku 4.5'],
+    settingsViewSnapshot: 'approval',
   },
   {
     key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
@@ -440,6 +483,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Bypass all (dangerous)',
       'Plan only (read-only)',
     ],
+    settingsViewSnapshot: 'approval',
   },
   {
     key: WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
@@ -452,6 +496,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
+    settingsViewSnapshot: 'approval',
   },
 
   // --- Workflow auto-compile -------------------------------------------------
@@ -470,11 +515,12 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'src/agent/output/compileCheck.ts',
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'latex',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     schema: z
-      .number()
+      .int()
       .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
       .prefault(LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs),
     title: 'Auto-compile timeout',
@@ -485,6 +531,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'src/agent/output/compileCheck.ts',
     cliRuntimeReachability: WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'latex',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
@@ -496,6 +543,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // Read by OutputNode but the emitted `requestOpenFile` has no CLI handler
     // (headless), so toggling it would be a no-op there — vscode/desktop only.
     hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
   },
   {
     key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
@@ -511,6 +559,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer:
       'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
     cliRuntimeReachability: WORKFLOW_REJECT_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'latex',
   },
 
   // --- LaTeXdiff -------------------------------------------------------------
@@ -524,11 +573,12 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'latexdiff',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
   },
   {
     key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
     schema: z
-      .number()
+      .int()
       .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
       .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max)
       .prefault(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
@@ -537,6 +587,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'latexdiff',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
   },
   {
     key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
@@ -553,6 +604,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'within equations',
       'small changes inside equations',
     ],
+    settingsViewSnapshot: 'latex',
   },
   {
     key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
@@ -562,6 +614,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'latexdiff',
     store: 'workspaceState',
     hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
   },
 
   // --- LaTeX formatter -------------------------------------------------------
@@ -582,6 +635,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Format with tex-fmt.',
       'Do not run any formatter.',
     ],
+    settingsViewSnapshot: 'latex',
   },
 
   // --- OpenAI WebSocket transport (experimental) -----------------------------
@@ -677,6 +731,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'src/tools/pathResolution.ts',
     cliRuntimeReachability: TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY,
+    settingsViewSnapshot: 'approval',
   },
 ] as const;
 
@@ -689,9 +744,56 @@ const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
   STATE_SETTINGS.map((entry) => [entry.key, entry]),
 );
 
+// These two rows already belong to CoreSettingsShape, so they must not enter
+// the state-backed catalog above. They carry only the storage and rebroadcast
+// metadata needed by the settings view's unified scalar-write boundary.
+const SETTINGS_VIEW_CORE_SETTINGS = [
+  {
+    key: BASH_APPROVAL_CONFIG_KEY,
+    schema: CoreSettingsShape.toolUse.unwrap().shape.requireBashApproval,
+    title: 'Require bash approval',
+    description:
+      'Ask for approval before an agent runs a shell command in this workspace.',
+    category: 'tools',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'approval',
+  },
+  {
+    key: AGENT_SKILLS_CONFIG_KEY,
+    schema: CoreSettingsShape.skills.unwrap().shape.enabled,
+    title: 'Agent skills',
+    description:
+      'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
+    category: 'tools',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'agent-skills',
+  },
+] as const satisfies readonly StateSettingEntry[];
+
+const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
+  string,
+  SettingsViewStateSettingEntry
+> = new Map(
+  [...STATE_SETTINGS, ...SETTINGS_VIEW_CORE_SETTINGS]
+    .filter(
+      (entry): entry is SettingsViewStateSettingEntry =>
+        entry.settingsViewSnapshot !== undefined,
+    )
+    .map((entry) => [entry.key, entry]),
+);
+
 /** Look up a catalog entry by its canonical `texra.*` key. */
 export function stateSettingByKey(key: string): StateSettingEntry | undefined {
   return STATE_SETTINGS_BY_KEY.get(key);
+}
+
+/** Look up a scalar setting owned by the settings view's unified write path. */
+export function settingsViewSettingByKey(
+  key: string,
+): SettingsViewStateSettingEntry | undefined {
+  return SETTINGS_VIEW_SETTINGS_BY_KEY.get(key);
 }
 
 /**
