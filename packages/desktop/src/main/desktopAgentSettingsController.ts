@@ -19,6 +19,7 @@ import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPrefl
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
+import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
@@ -135,6 +136,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly remoteCatalog: DefaultDesktopAgentSettingsControllerOptions['remoteCatalog'];
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
   private readonly resourcesPath: string;
+  private readonly agentActions;
   /** Path planners for custom-agent copy/delete/template writes. */
   private readonly fileController = new SettingsAgentFileController();
   private readonly remotePromptController =
@@ -174,15 +176,54 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
+    this.agentActions = createSettingsAgentActions({
+      directoryController: this.directoryController,
+      findAgent: (source, name) => getAgent(agentKey(source, name)),
+      getCustomAgentDirectory: directory.getCustomAgentDirectory,
+      getSourceDirectory: directory.getSourceDirectory,
+      openDocument: directory.openPath,
+      revealFile: directory.revealPath,
+      confirmAction: (message, confirmLabel) =>
+        prompts.confirm({
+          title:
+            confirmLabel === 'Delete'
+              ? 'Delete custom agent?'
+              : 'Overwrite custom copy?',
+          message,
+        }),
+      showInfoMessage: notifications.showInfoMessage,
+      showErrorMessage: notifications.showErrorMessage,
+      formatOpenAgentYamlError: (reason, name) =>
+        reason === 'missingAgent'
+          ? `Agent not found: ${name}`
+          : `No configuration file found for agent: ${name}`,
+      refreshAfterMutation: () => this.refreshAfterAgentMutation(),
+      run: async (command, failureMessage, action) => {
+        if (
+          command === SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML ||
+          command === SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE
+        ) {
+          await action();
+          return;
+        }
+        try {
+          await action();
+        } catch (error) {
+          await notifications.showErrorMessage(
+            `${failureMessage}: ${toErrorMessage(error)}`,
+          );
+        }
+      },
+    });
     this.handlers = {
       setAgentEnabled: (message) => this.updateAgentEnabled(message),
       setAllAgentsEnabled: (message) => this.updateAllAgentsEnabled(message),
-      openAgentYaml: (message) => this.openAgentYaml(message),
+      openAgentYaml: this.agentActions.openAgentYaml,
       openAgentFolder: () => this.openAgentFolder(),
       createAgent: (message) => this.createAgent(message),
-      customizeAgent: (message) => this.customizeAgent(message),
-      deleteCustomAgent: (message) => this.deleteCustomAgent(message),
-      revealAgentFile: (message) => this.revealAgentFile(message),
+      customizeAgent: this.agentActions.customizeAgent,
+      deleteCustomAgent: this.agentActions.deleteCustomAgent,
+      revealAgentFile: this.agentActions.revealAgentFile,
       viewRemoteAgentPrompt: (message) => this.viewRemoteAgentPrompt(message),
       setCustomAgentDir: () => this.setCustomAgentDir(),
       resetCustomAgentDir: () => this.resetCustomAgentDir(),
@@ -321,24 +362,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     ]);
   }
 
-  private async openAgentYaml(
-    message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML>,
-  ): Promise<void> {
-    const result = this.directoryController.planOpenAgentYaml({
-      source: message.agentSource,
-      name: message.agentName,
-    });
-    if (!result.ok) {
-      await this.notifications.showErrorMessage(
-        result.reason === 'missingAgent'
-          ? `Agent not found: ${message.agentName}`
-          : `No configuration file found for agent: ${message.agentName}`,
-      );
-      return;
-    }
-    await this.directory.openPath(result.path);
-  }
-
   private async openAgentFolder(): Promise<void> {
     const result = await this.directoryController.planOpenAgentFolder('custom');
     if (!result.ok) {
@@ -424,103 +447,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     }
   }
 
-  /** Copy a bundled agent into the custom directory so it can be edited. */
-  private async customizeAgent(
-    data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT>,
-  ): Promise<void> {
-    const entry = getAgent(agentKey(data.agentSource, data.agentName));
-    if (!entry?.path) {
-      await this.notifications.showErrorMessage(
-        `Agent not found or has no file: ${data.agentName}`,
-      );
-      return;
-    }
-
-    try {
-      const [customDir, sourceDir] = await Promise.all([
-        this.directory.getCustomAgentDirectory(),
-        this.directory.getSourceDirectory(data.agentSource),
-      ]);
-
-      const result = this.fileController.planCustomizeAgent({
-        entry: { path: entry.path },
-        customDir,
-        ...(sourceDir && { sourceDir }),
-      });
-      if (!result.ok) {
-        await this.notifications.showErrorMessage(
-          'Refusing to copy: target path escapes the custom agents directory.',
-        );
-        return;
-      }
-
-      const { targetPath } = result.plan;
-      await AbsoluteFS.ensureDir(path.dirname(targetPath));
-
-      // Never clobber an existing custom copy, which may hold user edits.
-      if (await AbsoluteFS.exists(targetPath)) {
-        const confirmed = await this.prompts.confirm({
-          title: 'Overwrite custom copy?',
-          message: `A custom copy already exists: ${path.basename(targetPath)}`,
-        });
-        if (!confirmed) return;
-      }
-
-      await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
-      await this.directory.openPath(targetPath);
-      await this.notifications.showInfoMessage(
-        `Created custom copy: ${path.basename(targetPath)}`,
-      );
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await this.notifications.showErrorMessage(
-        `Failed to create custom agent copy: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-
-  private async deleteCustomAgent(
-    data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT>,
-  ): Promise<void> {
-    const entry = getAgent(agentKey('custom', data.agentName));
-    if (!entry?.path) {
-      await this.notifications.showErrorMessage(
-        `Custom agent not found: ${data.agentName}`,
-      );
-      return;
-    }
-
-    try {
-      const customDir = await this.directory.getCustomAgentDirectory();
-      const result = this.fileController.planDeleteCustomAgent({
-        entry: { path: entry.path },
-        customDir,
-      });
-      if (!result.ok) {
-        await this.notifications.showErrorMessage(
-          'Refusing to delete: file is not inside the custom agents directory.',
-        );
-        return;
-      }
-
-      const confirmed = await this.prompts.confirm({
-        title: 'Delete custom agent?',
-        message: `Delete "${data.agentName}"? This cannot be undone.`,
-      });
-      if (!confirmed) return;
-
-      await AbsoluteFS.delete(result.plan.path, { recursive: false });
-      await this.notifications.showInfoMessage(
-        `Deleted custom agent: ${data.agentName}`,
-      );
-      await this.refreshAfterAgentMutation();
-    } catch (error) {
-      await this.notifications.showErrorMessage(
-        `Failed to delete custom agent: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-
   /**
    * Show a hosted agent's prompt YAML. The extension opens an untitled editor;
    * the desktop has no editor surface, so the config is written to a temporary
@@ -549,22 +475,6 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         `Failed to view remote agent prompt: ${toErrorMessage(error)}`,
       );
     }
-  }
-
-  private async revealAgentFile(
-    message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE>,
-  ): Promise<void> {
-    const result = this.directoryController.planRevealAgentFile({
-      source: message.agentSource,
-      name: message.agentName,
-    });
-    if (!result.ok) {
-      await this.notifications.showErrorMessage(
-        `Agent not found or has no file: ${message.agentName}`,
-      );
-      return;
-    }
-    await this.directory.revealPath(result.path);
   }
 
   private async applyAgentModePreset(

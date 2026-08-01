@@ -1,13 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   deleteFile: vi.fn(async () => undefined),
+  copyFile: vi.fn(async () => undefined),
+  ensureDir: vi.fn(async () => undefined),
+  fileExists: vi.fn(async () => false),
   getAgent: vi.fn(() => ({ path: '/custom/my-agent.yaml' })),
-  planDeleteCustomAgent: vi.fn(() => ({
-    ok: true as const,
-    plan: { path: '/custom/my-agent.yaml' },
-  })),
+  getSourceDirectory: vi.fn(async () => undefined as string | undefined),
   refreshAfterAgentMutation: vi.fn(async () => undefined),
+  showLoggedMessage: vi.fn(async () => ''),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
 }));
@@ -16,6 +17,7 @@ vi.mock('vscode', () => ({
   commands: { executeCommand: vi.fn() },
   window: {
     showInformationMessage: mocks.showInformationMessage,
+    showTextDocument: vi.fn(),
     showWarningMessage: mocks.showWarningMessage,
   },
   workspace: { openTextDocument: vi.fn() },
@@ -45,9 +47,7 @@ vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
   }),
 }));
 vi.mock('@controllers/settingsView/SettingsAgentFileController', () => ({
-  SettingsAgentFileController: class {
-    planDeleteCustomAgent = mocks.planDeleteCustomAgent;
-  },
+  SettingsAgentFileController: class {},
 }));
 vi.mock(
   '@controllers/settingsView/SettingsRemoteAgentPromptController',
@@ -64,7 +64,7 @@ vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
 vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
   agentDirectories: {
     custom: vi.fn(async () => '/custom'),
-    getDirectory: vi.fn(),
+    getDirectory: mocks.getSourceDirectory,
   },
 }));
 vi.mock('@frontend/ui/dialogs', () => ({
@@ -79,7 +79,7 @@ vi.mock('@frontend/ui/dialogs', () => ({
 }));
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: vi.fn(),
-  showLoggedMessage: vi.fn(),
+  showLoggedMessage: mocks.showLoggedMessage,
 }));
 vi.mock('@shared/settingsView/handlers/agentSelectionHandlers', () => ({
   buildAgentModePresetsMessage: vi.fn(),
@@ -87,7 +87,12 @@ vi.mock('@shared/settingsView/handlers/agentSelectionHandlers', () => ({
   buildCustomAgentDirMessage: vi.fn(),
 }));
 vi.mock('@utils/files', () => ({
-  AbsoluteFS: { delete: mocks.deleteFile },
+  AbsoluteFS: {
+    copy: mocks.copyFile,
+    delete: mocks.deleteFile,
+    ensureDir: mocks.ensureDir,
+    exists: mocks.fileExists,
+  },
 }));
 
 import { AgentHandlers } from '@settingsView/handlers/agentHandlers';
@@ -104,7 +109,14 @@ function createHandlers(): AgentHandlers {
   );
 }
 
-describe('AgentHandlers custom-agent deletion', () => {
+describe('AgentHandlers custom-agent file actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getAgent.mockReturnValue({ path: '/custom/my-agent.yaml' });
+    mocks.getSourceDirectory.mockResolvedValue(undefined);
+    mocks.fileExists.mockResolvedValue(false);
+  });
+
   it('coalesces repeated requests while the host confirmation is pending', async () => {
     let resolveConfirmation!: (choice: string | undefined) => void;
     const pendingConfirmation = new Promise<string | undefined>((resolve) => {
@@ -131,5 +143,58 @@ describe('AgentHandlers custom-agent deletion', () => {
     mocks.showWarningMessage.mockResolvedValueOnce(undefined);
     await handlers.handleDeleteCustomAgent(request);
     expect(mocks.showWarningMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects deletion outside the configured custom directory', async () => {
+    mocks.getAgent.mockReturnValueOnce({ path: '/bundled/my-agent.yaml' });
+
+    await createHandlers().handleDeleteCustomAgent({
+      command: 'deleteCustomAgent',
+      agentName: 'my-agent',
+    });
+
+    expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
+      'test',
+      'Refusing to delete: file is not inside the custom agents directory.',
+    );
+    expect(mocks.showWarningMessage).not.toHaveBeenCalled();
+    expect(mocks.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('preserves the source-relative path when creating a custom copy', async () => {
+    mocks.getAgent.mockReturnValueOnce({
+      path: '/bundled/writing/my-agent.yaml',
+    });
+    mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
+
+    await createHandlers().handleCustomizeAgent({
+      command: 'customizeAgent',
+      agentSource: 'builtInWorkflow',
+      agentName: 'my-agent',
+    });
+
+    expect(mocks.copyFile).toHaveBeenCalledWith(
+      '/bundled/writing/my-agent.yaml',
+      '/custom/writing/my-agent.yaml',
+      { overwrite: true },
+    );
+    expect(mocks.refreshAfterAgentMutation).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a custom-copy target outside the configured directory', async () => {
+    mocks.getAgent.mockReturnValueOnce({ path: '/outside/my-agent.yaml' });
+    mocks.getSourceDirectory.mockResolvedValueOnce('/bundled');
+
+    await createHandlers().handleCustomizeAgent({
+      command: 'customizeAgent',
+      agentSource: 'builtInWorkflow',
+      agentName: 'my-agent',
+    });
+
+    expect(mocks.showLoggedMessage).toHaveBeenCalledWith(
+      'test',
+      'Refusing to copy: target path escapes the custom agents directory.',
+    );
+    expect(mocks.copyFile).not.toHaveBeenCalled();
   });
 });
