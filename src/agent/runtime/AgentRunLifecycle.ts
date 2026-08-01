@@ -130,6 +130,13 @@ export interface FinalizeRunTerminalParams {
   /** Durable execution-state action owned by the storage finalizer. */
   readonly persistence: RunTerminalPersistence;
   /**
+   * Drain display sidecars before publishing the terminal result. This keeps
+   * a waiter that immediately opens the completed-run archive from racing the
+   * final transcript or work-plan write. Failures are logged here and retried
+   * by the execution-ownership release boundary.
+   */
+  readonly flushArtifacts?: () => Promise<void>;
+  /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
    * delivery routes. Receives the resolved outcome so the payload the parent
@@ -197,6 +204,15 @@ export async function finalizeRunTerminal(
     } catch (stageErr) {
       logger.warn('Failed to end parent stage', {
         data: { agentIdentifier: handle.agentName, error: stageErr },
+      });
+    }
+  }
+  if (params.flushArtifacts) {
+    try {
+      await params.flushArtifacts();
+    } catch (artifactError) {
+      logger.warn('Failed to persist pre-terminal display artifacts', {
+        data: { executionId: handle.executionId, error: artifactError },
       });
     }
   }
@@ -458,6 +474,7 @@ export async function runFlowWithLifecycle(
       isSubagent: options?.isSubagent ?? false,
       stage: ctx.parentStage,
       trace: ctx.logger,
+      flushArtifacts: () => session.flushArtifacts(handle.executionId),
       persistence: leaseLost
         ? { kind: 'skip' }
         : {
