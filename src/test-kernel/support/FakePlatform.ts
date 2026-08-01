@@ -225,11 +225,7 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     return defaultValue as T;
   }
 
-  async update<T>(
-    key: string,
-    value: T,
-    target?: ConfigTarget,
-  ): Promise<void> {
+  async update<T>(key: string, value: T, target?: ConfigTarget): Promise<void> {
     if (target !== undefined && target === this.failUpdatesForTarget) {
       throw new Error(`simulated ${target}-scope update failure for ${key}`);
     }
