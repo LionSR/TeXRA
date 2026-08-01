@@ -834,7 +834,7 @@ describe('CLI root argument routing', () => {
       category: AgentCategory.ToolUse,
       executionId: 'completed-without-output',
       streamId: 'stream-without-output',
-      lastResponse: 'done',
+      response: 'done',
       workingDirectory: '/tmp/project',
     } as Parameters<typeof serializeCliRunResult>[0]);
 
@@ -850,7 +850,7 @@ describe('CLI root argument routing', () => {
       'category',
       'executionId',
       'streamId',
-      'lastResponse',
+      'response',
       'status',
       'endGroupStatus',
       'terminalStatus',
@@ -864,7 +864,7 @@ describe('CLI root argument routing', () => {
       category: AgentCategory.ToolUse,
       executionId: 'completed-after-shutdown',
       streamId: 'stream-after-shutdown',
-      lastResponse: 'done',
+      response: 'done',
       workingDirectory: '/tmp/project',
     } as Parameters<typeof serializeCliRunResult>[0]);
 

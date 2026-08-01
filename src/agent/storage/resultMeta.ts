@@ -5,7 +5,6 @@ import {
   ResultDiffSummarySchema,
   WorkflowAgentFinalResultSchema,
   buildAgentFinalResult,
-  projectToolUseFinalTextFields,
   type AgentFinalResult,
 } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
@@ -113,7 +112,7 @@ export function buildCliWorkflowResultMeta(
   };
 }
 
-const LegacyAgentResultFieldsSchema = z.strictObject({
+const LegacyAgentResultFieldsRawSchema = z.strictObject({
   category: z.enum(['workflow', 'toolUse']).optional(),
   outcome: RunOutcomeSchema.optional(),
   outputs: z.array(OutputFileSummarySchema).optional(),
@@ -128,7 +127,26 @@ const LegacyAgentResultFieldsSchema = z.strictObject({
   totalCostUsd: z.number().nonnegative().optional(),
 });
 
-type LegacyAgentResultFields = z.infer<typeof LegacyAgentResultFieldsSchema>;
+type LegacyAgentResultFieldsRaw = z.infer<
+  typeof LegacyAgentResultFieldsRawSchema
+>;
+
+type LegacyAgentResultFields = Omit<
+  LegacyAgentResultFieldsRaw,
+  'lastResponse' | 'touchedFiles'
+>;
+
+/** Normalize historical text-field aliases at the persisted read boundary. */
+function normalizeLegacyAgentResultFields<T extends LegacyAgentResultFieldsRaw>(
+  fields: T,
+): Omit<T, 'lastResponse' | 'touchedFiles'> {
+  const { lastResponse, touchedFiles, ...canonical } = fields;
+  return {
+    ...canonical,
+    response: canonical.response ?? lastResponse,
+    files: canonical.files ?? touchedFiles,
+  } as Omit<T, 'lastResponse' | 'touchedFiles'>;
+}
 
 const LegacyBackgroundBashResultMetaSchema = z.strictObject({
   producer: z.literal('backgroundBash').optional(),
@@ -139,37 +157,53 @@ const LegacyBackgroundBashResultMetaSchema = z.strictObject({
   command: z.string(),
 });
 
-const LegacySubagentResultMetaSchema = LegacyAgentResultFieldsSchema.extend({
+const LegacySubagentResultMetaSchema = LegacyAgentResultFieldsRawSchema.extend({
   producer: z.literal('subagent').optional(),
   agentName: z.string(),
   wallTimeMs: z.number().nonnegative(),
   success: z.boolean().optional(),
-  result: LegacyAgentResultFieldsSchema.optional(),
-});
+  result: LegacyAgentResultFieldsRawSchema.optional(),
+}).transform(({ result, ...meta }) => ({
+  ...normalizeLegacyAgentResultFields(meta),
+  result: result ? normalizeLegacyAgentResultFields(result) : undefined,
+}));
 
-const LegacyCliWorkflowResultMetaSchema = LegacyAgentResultFieldsSchema.extend({
-  producer: z.literal('cliWorkflow').optional(),
-  success: z.boolean().optional(),
-  copiedOutput: z.string().optional(),
-  copiedOutputs: z.array(z.string()).optional(),
-  result: LegacyAgentResultFieldsSchema.extend({
+const LegacyCliWorkflowResultMetaRawSchema =
+  LegacyAgentResultFieldsRawSchema.extend({
+    producer: z.literal('cliWorkflow').optional(),
+    success: z.boolean().optional(),
     copiedOutput: z.string().optional(),
     copiedOutputs: z.array(z.string()).optional(),
-  }).optional(),
-}).refine(
-  (meta) =>
-    meta.category !== 'toolUse' &&
-    meta.result?.category !== 'toolUse' &&
-    (meta.producer === 'cliWorkflow' ||
-      meta.outputs !== undefined ||
-      meta.compileFailures !== undefined ||
-      meta.diffs !== undefined ||
-      meta.diffsUnavailable !== undefined ||
-      meta.copiedOutput !== undefined ||
-      meta.copiedOutputs !== undefined ||
-      meta.result !== undefined),
-  { message: 'legacy CLI result metadata is not a workflow result' },
-);
+    result: LegacyAgentResultFieldsRawSchema.extend({
+      copiedOutput: z.string().optional(),
+      copiedOutputs: z.array(z.string()).optional(),
+    }).optional(),
+  }).refine(
+    (meta) =>
+      meta.category !== 'toolUse' &&
+      meta.result?.category !== 'toolUse' &&
+      (meta.producer === 'cliWorkflow' ||
+        meta.outputs !== undefined ||
+        meta.compileFailures !== undefined ||
+        meta.diffs !== undefined ||
+        meta.diffsUnavailable !== undefined ||
+        meta.copiedOutput !== undefined ||
+        meta.copiedOutputs !== undefined ||
+        meta.result !== undefined),
+    { message: 'legacy CLI result metadata is not a workflow result' },
+  );
+
+const LegacyCliWorkflowResultMetaSchema =
+  LegacyCliWorkflowResultMetaRawSchema.transform(({ result, ...meta }) => ({
+    ...normalizeLegacyAgentResultFields(meta),
+    result: result
+      ? {
+          ...normalizeLegacyAgentResultFields(result),
+          copiedOutput: result.copiedOutput,
+          copiedOutputs: result.copiedOutputs,
+        }
+      : undefined,
+  }));
 
 const LegacyPersistedResultMetaSchema = z.union([
   LegacyBackgroundBashResultMetaSchema.transform((meta) => ({
@@ -225,11 +259,7 @@ function inferCategory(
       record.diffsUnavailable !== undefined,
   );
   const hasToolUseFields = records.some(
-    (record) =>
-      record.response !== undefined ||
-      record.lastResponse !== undefined ||
-      record.files !== undefined ||
-      record.touchedFiles !== undefined,
+    (record) => record.response !== undefined || record.files !== undefined,
   );
   if (hasWorkflowFields && hasToolUseFields) {
     throw new Error(
@@ -282,7 +312,8 @@ function buildLegacyAgentFinalResult(
   return AgentFinalResultSchema.parse({
     category,
     outcome,
-    ...projectToolUseFinalTextFields(nested, outer),
+    response: nested?.response ?? outer.response,
+    files: nested?.files ?? outer.files,
     cost,
   });
 }

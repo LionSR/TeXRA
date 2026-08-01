@@ -80,8 +80,8 @@ function buildToolUseFlowResult(
   return {
     category: 'toolUse',
     outcome: result.outcome,
-    lastResponse: result.lastResponse,
-    touchedFiles: result.touchedFiles,
+    response: result.response,
+    files: result.files,
     executionId,
     streamId,
     ...(result.structured !== undefined

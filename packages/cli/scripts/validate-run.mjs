@@ -947,7 +947,7 @@ function validateToolUseAgentRunCommand() {
       'JSON agent run output should serialize the tool-use result',
     );
     assert(
-      String(jsonResult.lastResponse ?? '').includes('Validated CLI Runtime'),
+      String(jsonResult.response ?? '').includes('Validated CLI Runtime'),
       'tool-use agent run should return the validation model response',
     );
   } finally {
@@ -1105,7 +1105,7 @@ function validateMultiAgentRunCommand() {
       'multi-agent JSON output should serialize the tool-use result',
     );
     assert(
-      String(jsonResult.result?.lastResponse ?? '').includes(
+      String(jsonResult.result?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
       'multi-agent run should return the validation model response',
@@ -1141,7 +1141,7 @@ function validateMultiAgentRunCommand() {
       'instruction-only multi-agent JSON output should serialize the tool-use result',
     );
     assert(
-      String(inlineJsonResult.result?.lastResponse ?? '').includes(
+      String(inlineJsonResult.result?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
       'instruction-only multi-agent run should return the validation model response',

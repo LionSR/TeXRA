@@ -18,6 +18,12 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Breaking Changes
+
+- **Tool-use flow results use `response` and `files` consistently** — consumers
+  of `@texra-ai/agent` and CLI JSON output should replace `lastResponse` with
+  `response` and `touchedFiles` with `files`.
+
 #### Bug Fixes
 
 - **Compiled PDF artifact paths are correct on Windows** — diff PDFs generated
