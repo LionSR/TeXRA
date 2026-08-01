@@ -180,8 +180,11 @@ export class ToolUseCycleNode<C> extends Node<
       workspaceSnapshot,
       userChannels: prepRes.userChannels,
     };
-    shared.lastResponse =
-      prepRes.workspaceState.assembly.lastResponse || shared.lastResponse;
+    const cycleResponse = prepRes.workspaceState.assembly.lastResponse;
+    shared.lastResponse = cycleResponse || shared.lastResponse;
+    if (!prepRes.shouldSkipCycle && cycleResponse) {
+      this.services.onCycleResponse?.(cycleResponse);
+    }
 
     if (execRes.outcome === 'completed') {
       const { interactions } = prepRes.workspaceState;

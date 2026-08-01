@@ -54,6 +54,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { testModelCell } from './modelCellTestUtils';
+import { roundModelHandler } from './toolUseRoundTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
@@ -147,21 +148,68 @@ function defaultStateSlices(
 function createTaggedModelCell(
   compatibilityKey: ModelHandlerCompatibilityKey,
   modelId: string,
+  handler: Record<string, unknown> = {
+    extractAssistantText: () => undefined,
+  },
 ): RunToolUseFlowInput['modelCell'] {
-  const handler = {
-    extractAssistantText: (message: unknown) => {
-      if (!message || typeof message !== 'object') return undefined;
-      const { role, content } = message as Record<string, unknown>;
-      return role === 'assistant' && typeof content === 'string'
-        ? content
-        : undefined;
-    },
-  };
   // ModelFactory installs this non-enumerable tag on every active handler.
   Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
     value: compatibilityKey,
   });
   return testModelCell(handler, modelId);
+}
+
+interface TestModelTurn {
+  readonly text: string;
+  readonly updatedMessages?: Array<Record<string, unknown>>;
+}
+
+function responseModelHandler(
+  turns: readonly TestModelTurn[],
+  overrides: Record<string, unknown> = {},
+) {
+  const pendingTurns = [...turns];
+  return roundModelHandler({
+    requiresPerCallSystemPrompt: false,
+    initializeMessages: async () => [{ role: 'user', content: 'Start.' }],
+    consumeInsertedAttachmentKinds: () => [],
+    createUserFollowUpMessages: async (
+      messages: Array<Record<string, unknown>>,
+      text: string,
+    ) => [...messages, { role: 'user', content: text }],
+    createResponse: vi.fn(async () => {
+      const turn = pendingTurns.shift();
+      if (!turn) throw new Error('Unexpected model invocation');
+      return {
+        response: { text: turn.text },
+        updatedMessages: turn.updatedMessages,
+      };
+    }),
+    extractResponse: (response: unknown) => ({
+      text: (response as { text: string }).text,
+      usage: null,
+      stopReason: 'stop',
+    }),
+    ...overrides,
+  });
+}
+
+function partialFailureModelHandler(text: string) {
+  let workspace: AgentWorkspaceState | undefined;
+  return responseModelHandler([{ text }], {
+    processThinkingBlock: (
+      _response: unknown,
+      currentWorkspace: AgentWorkspaceState,
+    ) => {
+      workspace = currentWorkspace;
+      return null;
+    },
+    createAssistantMessageFromResponse: () => {
+      if (!workspace) throw new Error('Expected the round workspace');
+      workspace.assembly.lastResponse = text;
+      throw new Error('Provider stream failed after partial output');
+    },
+  });
 }
 
 function buildToolUseResumeData(
@@ -184,6 +232,27 @@ function buildToolUseResumeData(
   };
 }
 
+function buildResponseResumeData(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  response: string,
+): ToolUseResumeData {
+  const shared = {
+    messages: [{ role: 'assistant', content: response }],
+    lastResponse: response,
+    shouldSkipCycle: false,
+    stateSlices: defaultStateSlices(),
+  };
+  return {
+    type: 'toolUse',
+    executionId,
+    streamId,
+    agentConfig: CONFIG,
+    shared,
+    sourceShared: structuredClone(shared),
+  };
+}
+
 async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
@@ -192,6 +261,9 @@ async function runPersistedFlow(
   session: SessionHandle = createTestSession(),
   options: {
     readonly isSubagent?: boolean;
+    readonly stopAfterCycle?: boolean;
+    readonly modelHandler?: Record<string, unknown>;
+    readonly drainedFollowUps?: RunToolUseFlowInput['drainedFollowUps'];
     readonly onIdle?: () => void;
     readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
     readonly onFlowRecordDisposition?: (
@@ -213,8 +285,13 @@ async function runPersistedFlow(
   const modelCell = createTaggedModelCell(
     ACTIVE_COMPATIBILITY_KEY,
     config.model,
+    options.modelHandler,
   );
-  const context = createRunContext({ runScope, modelCell });
+  const context = createRunContext({
+    runScope,
+    modelCell,
+    stopAfterCycle: options.stopAfterCycle,
+  });
   let interrupted = false;
   const hostAttachment = attachment && {
     attach: (flowContext: ToolUseSetupContext): void =>
@@ -242,6 +319,7 @@ async function runPersistedFlow(
           abortSignal: new AbortController().signal,
           onRoundFinalized: () => {},
           ...(resume !== undefined && { resume }),
+          drainedFollowUps: options.drainedFollowUps,
           isSubagent: options.isSubagent ?? true,
           onIdle: options.onIdle,
           takePendingFollowUps: options.takePendingFollowUps,
@@ -591,102 +669,179 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
   });
 
-  it('does not return a prior assistant response when a resumed child produces no new answer', async () => {
-    const executionId = 'abc-flow-stale-response' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-flow-stale-response' as StreamTabId;
-    const shared = {
-      messages: [{ role: 'assistant', content: 'A' }],
-      lastResponse: 'A',
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    };
-    await writeFlowRecord(executionId, shared, WAITING_AT_START);
-    const resume = await retrieveToolUseResume(streamId, executionId);
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockResolvedValueOnce(FlowTransition.WAITING);
-    const sharedSpy = vi
-      .spyOn(PersistedFlow.prototype, 'getShared')
-      .mockResolvedValue(shared);
+  it.each([
+    { name: 'persisted record', persistRecord: true },
+    { name: 'absent record with resume handoff', persistRecord: false },
+  ])(
+    'does not return a prior assistant response when a resumed child produces no new answer: $name',
+    async ({ persistRecord }) => {
+      const suffix = persistRecord ? 'record' : 'handoff';
+      const executionId = `abc-flow-stale-response-${suffix}` as ExecutionId;
+      const streamId =
+        `chat@gpt54#abc-flow-stale-response-${suffix}` as StreamTabId;
+      const resume = buildResponseResumeData(executionId, streamId, 'A');
+      if (persistRecord) {
+        await writeFlowRecord(
+          executionId,
+          resume.sourceShared,
+          WAITING_AT_START,
+        );
+      }
 
-    try {
       const result = await runPersistedFlow(executionId, streamId, resume);
 
       expect(result).toMatchObject({ outcome: STREAM_PHASE.WAITING });
       expect(result.response).toBeUndefined();
-    } finally {
-      runSpy.mockRestore();
-      sharedSpy.mockRestore();
-    }
-  });
+    },
+  );
 
-  it('returns only the latest assistant response produced by a resumed invocation', async () => {
-    const executionId = 'abc-flow-fresh-resumed-response' as ExecutionId;
+  it.each([
+    { name: 'different text', prior: 'A', fresh: 'B' },
+    { name: 'identical text', prior: 'A', fresh: 'A' },
+  ])(
+    'returns a response produced by a real resumed model cycle: $name',
+    async ({ prior, fresh }) => {
+      const suffix = prior === fresh ? 'identical' : 'different';
+      const executionId =
+        `abc-flow-fresh-resumed-response-${suffix}` as ExecutionId;
+      const streamId =
+        `chat@gpt54#abc-flow-fresh-resumed-response-${suffix}` as StreamTabId;
+      const resume = buildResponseResumeData(executionId, streamId, prior);
+      await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+
+      const result = await runPersistedFlow(
+        executionId,
+        streamId,
+        resume,
+        undefined,
+        undefined,
+        {
+          modelHandler: responseModelHandler([{ text: fresh }]),
+          drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+        },
+      );
+
+      expect(result.response).toBe(fresh);
+    },
+  );
+
+  it('retains identical partial text produced before a resumed cycle fails', async () => {
+    const executionId = 'abc-flow-identical-partial-response' as ExecutionId;
     const streamId =
-      'chat@gpt54#abc-flow-fresh-resumed-response' as StreamTabId;
-    const startingShared = {
-      messages: [{ role: 'assistant', content: 'A' }],
-      lastResponse: 'A',
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    };
-    const finalShared = {
-      ...startingShared,
-      messages: [
-        ...startingShared.messages,
-        { role: 'user', content: 'Continue.' },
-        { role: 'assistant', content: 'intermediate' },
-        { role: 'assistant', content: 'B' },
-      ],
-      lastResponse: 'B',
-    };
-    await writeFlowRecord(executionId, startingShared, WAITING_AT_START);
-    const resume = await retrieveToolUseResume(streamId, executionId);
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockResolvedValueOnce(FlowTransition.WAITING);
-    const sharedSpy = vi
-      .spyOn(PersistedFlow.prototype, 'getShared')
-      .mockResolvedValue(finalShared);
+      'chat@gpt54#abc-flow-identical-partial-response' as StreamTabId;
+    const resume = buildResponseResumeData(executionId, streamId, 'A');
+    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
 
-    try {
-      const result = await runPersistedFlow(executionId, streamId, resume);
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      resume,
+      undefined,
+      undefined,
+      {
+        modelHandler: partialFailureModelHandler('A'),
+        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+      },
+    );
 
-      expect(result.response).toBe('B');
-    } finally {
-      runSpy.mockRestore();
-      sharedSpy.mockRestore();
-    }
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.FAILED,
+      response: 'A',
+      error: {
+        message: expect.stringContaining(
+          'Provider stream failed after partial output',
+        ),
+      },
+    });
   });
 
-  it('keeps returning the latest assistant response from a fresh invocation', async () => {
-    const executionId = 'abc-flow-fresh-response' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-flow-fresh-response' as StreamTabId;
-    const finalShared = {
-      messages: [
-        { role: 'user', content: 'Start.' },
-        { role: 'assistant', content: 'first' },
-        { role: 'assistant', content: 'fresh answer' },
-      ],
-      lastResponse: 'fresh answer',
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    };
-    const runSpy = vi
-      .spyOn(PersistedFlow.prototype, 'run')
-      .mockResolvedValueOnce(FlowTransition.WAITING);
-    const sharedSpy = vi
-      .spyOn(PersistedFlow.prototype, 'getShared')
-      .mockResolvedValue(finalShared);
+  it('retains a fresh response when compaction replaces the whole message array', async () => {
+    const executionId = 'abc-flow-compacted-response' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-compacted-response' as StreamTabId;
+    const resume = buildResponseResumeData(executionId, streamId, 'A');
+    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
 
-    try {
-      const result = await runPersistedFlow(executionId, streamId, undefined);
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      resume,
+      undefined,
+      undefined,
+      {
+        modelHandler: responseModelHandler([
+          {
+            text: 'B',
+            updatedMessages: [{ role: 'user', content: 'Compacted context.' }],
+          },
+        ]),
+        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+      },
+    );
 
-      expect(result.response).toBe('fresh answer');
-    } finally {
-      runSpy.mockRestore();
-      sharedSpy.mockRestore();
-    }
+    expect(result.response).toBe('B');
+    expect(await readFlowRecord(executionId)).toMatchObject({
+      shared: {
+        messages: [
+          { role: 'user', content: 'Compacted context.' },
+          { role: 'assistant', content: 'B' },
+        ],
+      },
+    });
+  });
+
+  it('keeps returning a response from a fresh root model cycle', async () => {
+    const executionId = 'abc-flow-fresh-root-response' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-fresh-root-response' as StreamTabId;
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      undefined,
+      undefined,
+      undefined,
+      {
+        isSubagent: false,
+        stopAfterCycle: true,
+        modelHandler: responseModelHandler([{ text: 'fresh answer' }]),
+      },
+    );
+
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.COMPLETED,
+      response: 'fresh answer',
+    });
+  });
+
+  it('returns the latest response across real same-invocation follow-up cycles', async () => {
+    const executionId = 'abc-flow-multiple-cycle-response' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-multiple-cycle-response' as StreamTabId;
+    const takePendingFollowUps = vi
+      .fn<NonNullable<RunToolUseFlowInput['takePendingFollowUps']>>()
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([{ text: 'Continue.', origin: 'user' }])
+      .mockReturnValue([]);
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      undefined,
+      undefined,
+      undefined,
+      {
+        modelHandler: responseModelHandler([
+          { text: 'first answer' },
+          { text: 'latest answer' },
+        ]),
+        takePendingFollowUps,
+      },
+    );
+
+    expect(result).toMatchObject({
+      outcome: STREAM_PHASE.WAITING,
+      response: 'latest answer',
+    });
+    expect(takePendingFollowUps).toHaveBeenCalledTimes(3);
   });
 
   it('offers queue ownership again after a resumed subagent parks', async () => {
@@ -834,7 +989,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
       expect(result).toMatchObject({
         outcome: RUN_OUTCOME.FAILED,
-        response: 'partial assistant response',
         error: failedShared.lastError,
       });
       expect(releaseSpy).toHaveBeenCalled();

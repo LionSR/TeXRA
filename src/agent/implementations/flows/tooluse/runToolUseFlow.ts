@@ -52,7 +52,6 @@ import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
-  findLastAssistantText,
   extractTouchedFiles,
   migrateSharedState,
   ToolUseRunSharedCanonicalSchema,
@@ -228,6 +227,7 @@ export async function runToolUseFlow<C = unknown>(
       ? input.config.outputSchema
       : undefined;
   let pendingStructuredOutput: ToolUseRunShared['structured'];
+  let response: string | undefined;
   let finalTool: ToolUseServices<C>['finalTool'];
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
@@ -250,6 +250,9 @@ export async function runToolUseFlow<C = unknown>(
     finalTool,
     resumeShared: input.resume?.shared ?? null,
     getPendingStructuredOutput: () => pendingStructuredOutput,
+    onCycleResponse: (cycleResponse) => {
+      response = cycleResponse;
+    },
     fileService: new TaskRunFileService(executionId),
   };
   let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
@@ -379,7 +382,6 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
-  let response: string | undefined;
   let files: string[] | undefined;
   let totalCostUsd: number | undefined;
   let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
@@ -456,7 +458,6 @@ export async function runToolUseFlow<C = unknown>(
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
 
-    let recoveredShared: ToolUseRunShared | undefined;
     if (flowRecord && input.resume) {
       logger.debug('Resuming tool-use flow from persistence');
       // Retrieval owns the single migration/validation boundary. The second
@@ -480,7 +481,6 @@ export async function runToolUseFlow<C = unknown>(
           stampFlowRecordSchemaVersion(flowRecord),
         );
       }
-      recoveredShared = resumedShared;
     } else if (flowRecord) {
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
@@ -528,23 +528,7 @@ export async function runToolUseFlow<C = unknown>(
           stampFlowRecordSchemaVersion(flowRecord),
         );
       }
-      recoveredShared = migratedData;
     }
-    // An absent record can still arrive with an already-retrieved resume
-    // handoff. Treat those restored messages as historical too: PrepareNode
-    // copies them into the new record before the first cycle.
-    recoveredShared ??= input.resume?.shared;
-    const invocationMessageStart = recoveredShared?.messages.length ?? 0;
-    const persistedLastResponses = new Set<string>();
-    if (recoveredShared?.lastResponse) {
-      persistedLastResponses.add(recoveredShared.lastResponse);
-    }
-    const persistedAssemblyResponse =
-      recoveredShared?.stateSlices?.workspaceSnapshot.assembly.lastResponse;
-    if (persistedAssemblyResponse) {
-      persistedLastResponses.add(persistedAssemblyResponse);
-    }
-
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.
     persistenceRecoveryPending = false;
@@ -607,14 +591,6 @@ export async function runToolUseFlow<C = unknown>(
       if (resumedFollowUps.length > 0) liveAttachment.attach();
     } while (resumedFollowUps.length > 0);
 
-    response =
-      findLastAssistantText(
-        shared.messages.slice(invocationMessageStart),
-        (message) => services.modelCell.handler.extractAssistantText(message),
-      ) ||
-      (shared.lastResponse && !persistedLastResponses.has(shared.lastResponse)
-        ? shared.lastResponse
-        : undefined);
     totalCostUsd =
       shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost;
     const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
