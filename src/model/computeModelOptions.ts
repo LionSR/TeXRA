@@ -98,11 +98,14 @@ interface ModelAvailabilityStatus {
 /**
  * Per-kind status fields. `kind` is intentionally omitted here: the record key
  * is the single source of truth and `availabilityStatus()` reattaches it.
+ *
+ * Declared with `satisfies` rather than a `Record<...>` type annotation so
+ * each entry's `available` literal (`true`/`false`) survives into
+ * {@link UnavailableAvailabilityKind} below — an annotation would widen it to
+ * `boolean` and break that derivation — while `satisfies` still rejects a
+ * missing or misshapen kind exactly like the annotation did.
  */
-const AVAILABILITY_STATUS_FIELDS: Record<
-  ModelAvailabilityKind,
-  Omit<ModelAvailabilityStatus, 'kind'>
-> = {
+const AVAILABILITY_STATUS_FIELDS = {
   'openrouter-key': {
     label: 'OpenRouter key',
     available: true,
@@ -169,7 +172,10 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     available: false,
     requiresKey: false,
   },
-};
+} satisfies Record<
+  ModelAvailabilityKind,
+  Omit<ModelAvailabilityStatus, 'kind'>
+>;
 
 /** Resolve a full availability status from its kind. */
 function availabilityStatus(
@@ -177,6 +183,74 @@ function availabilityStatus(
 ): ModelAvailabilityStatus {
   return { kind, ...AVAILABILITY_STATUS_FIELDS[kind] };
 }
+
+/**
+ * Every kind whose {@link AVAILABILITY_STATUS_FIELDS} entry is
+ * `available: false` — derived, not hand-listed, so a kind can't be added to
+ * one table (or have its `available` flip) without the other noticing.
+ */
+type UnavailableAvailabilityKind = {
+  [
+    K in ModelAvailabilityKind
+  ]: (typeof AVAILABILITY_STATUS_FIELDS)[K]['available'] extends true
+    ? never
+    : K;
+}[ModelAvailabilityKind];
+
+/** Everything an unavailable-reason builder needs to reconstruct the exact
+ *  wording `getModelUnavailableReason` used to hand-roll per branch. */
+interface UnavailableReasonContext {
+  readonly model: string;
+  readonly config: ModelConfig;
+  readonly ctx: ModelAvailabilityContext;
+}
+
+/**
+ * Per-kind unavailable-reason prose, compiler-checked the same way
+ * {@link AVAILABILITY_STATUS_FIELDS} is: omitting a kind here — including a
+ * newly added `ModelAvailabilityKind` whose status is `available: false` —
+ * is a type error instead of a silent fall-through to a generic message.
+ */
+const UNAVAILABLE_REASON_BUILDERS: Record<
+  UnavailableAvailabilityKind,
+  (reasonCtx: UnavailableReasonContext) => string
+> = {
+  retired: ({ model }) =>
+    `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
+  'provider-unavailable': ({ model }) =>
+    `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
+  'missing-key': ({ model, config, ctx }) => {
+    if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
+      return `Model "${model}" requires an OpenRouter API key.`;
+    }
+    const directProvider = resolveDirectModelApiKeyProvider(config);
+    const modelSource = resolveModelSource(config) ?? config.provider;
+    const providerName = PROVIDER_DISPLAY_NAMES[modelSource] ?? modelSource;
+    if (!directProvider) {
+      return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
+    }
+    const nextStep = allowsModelRelay(config)
+      ? 'Provide it, or enable included access.'
+      : 'Provide it to continue.';
+    return `Model "${model}" requires your ${providerName} API key. ${nextStep}`;
+  },
+  'not-included': ({ model }) =>
+    `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`,
+  'included-login-required': ({ model }) =>
+    `Model "${model}" is served by included TeXRA model access, which needs an account. Sign in, or provide a provider API key and switch to personal API keys.`,
+  'relay-quota-exhausted': ({ model }) =>
+    `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`,
+  'copilot-consent-required': ({ model }) =>
+    `Model "${model}" needs your consent before TeXRA can use it through Copilot in VS Code.`,
+  'copilot-unavailable': ({ model }) =>
+    `Model "${model}" is currently unavailable through Copilot in VS Code.`,
+  // Unreachable from `getModelUnavailableReason` today (it returns its own
+  // "not recognized" message before a config resolves far enough to compute
+  // availability at all), but the table must still cover it: `unknown-model`
+  // is `available: false`, so leaving it out would defeat the whole point of
+  // this table being compiler-checked.
+  'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
+};
 
 /**
  * Ship the resolved verdict on the option row. Every option leaves this
@@ -475,50 +549,12 @@ export async function getModelUnavailableReason(
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
 
-  if (availability.kind === 'retired') {
-    return `Model "${model}" is retired and no longer available from its provider. Choose an active model.`;
-  }
-
-  if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
-    return `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`;
-  }
-
-  if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-    return `Model "${model}" requires an OpenRouter API key.`;
-  }
-
-  if (availability.kind === 'not-included') {
-    // User has server access but model isn't available on their tier
-    return `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`;
-  }
-
-  if (availability.kind === 'included-login-required') {
-    return `Model "${model}" is served by included TeXRA model access, which needs an account. Sign in, or provide a provider API key and switch to personal API keys.`;
-  }
-
-  if (availability.kind === 'relay-quota-exhausted') {
-    return `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`;
-  }
-
-  if (availability.kind === 'copilot-consent-required') {
-    return `Model "${model}" needs your consent before TeXRA can use it through Copilot in VS Code.`;
-  }
-
-  if (availability.kind === 'copilot-unavailable') {
-    return `Model "${model}" is currently unavailable through Copilot in VS Code.`;
-  }
-
-  // Personal key mode or unauthenticated — missing key or keyless provider.
-  const directProvider = resolveDirectModelApiKeyProvider(config);
-  const modelSource = resolveModelSource(config) ?? config.provider;
-  const providerName = PROVIDER_DISPLAY_NAMES[modelSource] ?? modelSource;
-  if (!directProvider) {
-    return `Model "${model}" is provided by ${providerName}, which does not use provider API keys. Use a host that supports ${providerName} models or choose another model.`;
-  }
-  const nextStep = allowsModelRelay(config)
-    ? 'Provide it, or enable included access.'
-    : 'Provide it to continue.';
-  return `Model "${model}" requires your ${providerName} API key. ${nextStep}`;
+  // `availability.kind` is guaranteed `available: false` here, so it's a
+  // valid `UnavailableAvailabilityKind` and every case is covered by
+  // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
+  // enforces that a newly added unavailable kind gets a reason.
+  const kind = availability.kind as UnavailableAvailabilityKind;
+  return UNAVAILABLE_REASON_BUILDERS[kind]({ model, config, ctx });
 }
 
 /** Build typed model option data for a single model. */

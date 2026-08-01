@@ -20,9 +20,11 @@ import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import type {
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
+import {
+  dispatchPresentationEvent,
+  type PresentationEventHandlers,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
@@ -199,6 +201,13 @@ export class DesktopProgressBridge {
   private toolEditApprovals: ToolEditApprovalController | undefined;
   private hostInteractions!: ProgressHostInteractions;
   private fileActions!: DesktopProgressFileActions;
+  /**
+   * One handler per `RuntimePresentationEvent`, dispatched via
+   * `dispatchPresentationEvent` from `handlePresentationEvent` below. Built
+   * once in the constructor (rather than per-call) since every handler body
+   * only closes over `this`, which is stable for the bridge's lifetime.
+   */
+  private readonly presentationEventHandlers: PresentationEventHandlers<RuntimePresentationEventPayloads>;
   private readonly initialization: Promise<void>;
   private disposed = false;
   private presentationReady = false;
@@ -218,6 +227,46 @@ export class DesktopProgressBridge {
       polishText: (text, fileContext) =>
         polishTextWithAI(text, fileContext, options.session),
     });
+    this.presentationEventHandlers = {
+      // The desktop task shell keeps the conversation canvas permanently on
+      // screen, so there is no separate progress surface to reveal.
+      requestEnsureProgressView: () => undefined,
+      requestShowError: ({ message }) => {
+        void this.options.host.showErrorMessage(message);
+      },
+      requestShowInstruction: (instruction) => {
+        // An instruction is actionable guidance, not a failure, so it uses
+        // the info dialog. The desktop dialog carries no buttons, so the
+        // action tokens the extension renders as buttons become trailing
+        // hint text and `showSuppress` has no affordance to attach to.
+        const hint = instruction.actions?.length
+          ? ` (${instruction.actions
+              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
+              .join(', ')})`
+          : '';
+        void this.options.host.showInfoMessage(`${instruction.message}${hint}`);
+      },
+      showAgentConfigBanner: ({ agentName }) => {
+        this.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          agentName,
+          customDirSet: true,
+        });
+      },
+      requestOpenFile: (data: RequestOpenFilePayload) => {
+        // The extension previews via its LaTeX-Workshop build+view flow
+        // (openBuildDisplayIfTex); desktop has no such editor integration, so
+        // open the resolved path through the same preview-with-fallback host
+        // `openWorkflowOutput` already uses (see runExecution above).
+        this.options.host
+          .openPath(data.location.absolutePath)
+          .catch((error) => {
+            this.logger.warn('Failed to open requested file on desktop', {
+              data: toLogData(error),
+            });
+          });
+      },
+    };
     const presentationHost: Pick<SessionHostInteractions, 'emit'> = {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };
@@ -1075,63 +1124,7 @@ export class DesktopProgressBridge {
   ): void {
     if (this.disposed) return;
 
-    switch (event) {
-      // The desktop task shell keeps the conversation canvas permanently on
-      // screen, so there is no separate progress surface to reveal.
-      case 'requestEnsureProgressView':
-        return;
-      case 'requestShowError': {
-        const { message } =
-          payload as RuntimePresentationEventPayloads['requestShowError'];
-        void this.options.host.showErrorMessage(message);
-        return;
-      }
-      case 'requestShowInstruction': {
-        const instruction =
-          payload as RuntimePresentationEventPayloads['requestShowInstruction'];
-        // An instruction is actionable guidance, not a failure, so it uses the
-        // info dialog. The desktop dialog carries no buttons, so the action
-        // tokens the extension renders as buttons become trailing hint text
-        // and `showSuppress` has no affordance to attach to.
-        const hint = instruction.actions?.length
-          ? ` (${instruction.actions
-              .map((action) => INSTRUCTION_ACTION_HINT[action] ?? action)
-              .join(', ')})`
-          : '';
-        void this.options.host.showInfoMessage(`${instruction.message}${hint}`);
-        return;
-      }
-      case 'showAgentConfigBanner': {
-        const { agentName } =
-          payload as RuntimePresentationEventPayloads['showAgentConfigBanner'];
-        this.postToRenderer({
-          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-          agentName,
-          customDirSet: true,
-        });
-        return;
-      }
-      case 'requestOpenFile': {
-        // The extension previews via its LaTeX-Workshop build+view flow
-        // (openBuildDisplayIfTex); desktop has no such editor integration,
-        // so open the resolved path through the same preview-with-fallback
-        // host `openWorkflowOutput` already uses (see runExecution above).
-        const data = payload as RequestOpenFilePayload;
-        this.options.host
-          .openPath(data.location.absolutePath)
-          .catch((error) => {
-            this.logger.warn('Failed to open requested file on desktop', {
-              data: toLogData(error),
-            });
-          });
-        return;
-      }
-      default: {
-        const _exhaustive: never = event;
-        void _exhaustive;
-        return;
-      }
-    }
+    dispatchPresentationEvent(this.presentationEventHandlers, event, payload);
   }
 
   private updateStreamMetadata(): StreamTabId | '' {

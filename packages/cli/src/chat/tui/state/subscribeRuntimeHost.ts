@@ -10,9 +10,7 @@ import {
   type ClearMissingOutputsPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
-  type UpdatePhaseStagePayload,
   type UpdateQueuedFollowUpsPayload,
-  type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
 import type { StreamSnapshotStore } from '@transcript';
@@ -25,6 +23,7 @@ import {
   recordMissingOutputsReset,
   removeStream,
   registerCliStateResetHook,
+  type StreamStage,
 } from './cliState';
 import {
   applySubagentRoster,
@@ -108,35 +107,10 @@ function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
   });
 }
 
-function applyRoundStage(payload: UpdateRoundStagePayload): void {
-  patchStream(payload.streamId, (s) => {
-    if (
-      s.roundStage?.index === payload.roundStage.index &&
-      s.roundStage?.total === payload.roundStage.total
-    ) {
-      return s;
-    }
-    return {
-      ...s,
-      roundStage: payload.roundStage,
-    };
-  });
-}
-
-function applyPhaseStage(payload: UpdatePhaseStagePayload): void {
-  patchStream(payload.streamId, (s) => {
-    if (
-      s.phaseStage?.label === payload.phaseStage.label &&
-      s.phaseStage?.index === payload.phaseStage.index &&
-      s.phaseStage?.total === payload.phaseStage.total
-    ) {
-      return s;
-    }
-    return {
-      ...s,
-      phaseStage: payload.phaseStage,
-    };
-  });
+function applyStage(streamId: StreamTabId, stage: StreamStage): void {
+  patchStream(streamId, (s) =>
+    isDeepStrictEqual(s.stage, stage) ? s : { ...s, stage },
+  );
 }
 
 type MissingOutputTargetResolver = Pick<
@@ -230,27 +204,23 @@ function applyDirectTuiRunEvent(
       return;
     case 'stage.start':
       if (event.kind === 'phase') {
-        applyPhaseStage({
-          streamId: fallbackStreamId,
-          phaseStage: {
-            label: event.label,
-            ...(event.index !== undefined ? { index: event.index } : {}),
-            ...(event.total !== undefined && event.total > 0
-              ? { total: event.total }
-              : {}),
-          },
+        applyStage(fallbackStreamId, {
+          kind: 'phase',
+          label: event.label,
+          ...(event.index !== undefined ? { index: event.index } : {}),
+          ...(event.total !== undefined && event.total > 0
+            ? { total: event.total }
+            : {}),
         });
         return;
       }
       if (event.kind !== 'round') return;
-      applyRoundStage({
-        streamId: fallbackStreamId,
-        roundStage: {
-          index: event.index ?? 0,
-          ...(event.total !== undefined && event.total > 0
-            ? { total: event.total }
-            : {}),
-        },
+      applyStage(fallbackStreamId, {
+        kind: 'round',
+        index: event.index ?? 0,
+        ...(event.total !== undefined && event.total > 0
+          ? { total: event.total }
+          : {}),
       });
       return;
     case 'child.activity':

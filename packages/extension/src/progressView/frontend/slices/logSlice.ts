@@ -13,7 +13,7 @@ import {
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 
 import { appState } from '../progressState';
-import type { StreamLogs, StreamState } from '../store';
+import { ensureStreamState, type StreamLogs, type StreamState } from '../store';
 
 /** Built once: `applyEntry` runs per delta entry in the streaming path. */
 const OptionalContextStateData =
@@ -113,15 +113,11 @@ export const logHandlers = {
         const streamState = draft.streamStates.get(streamId);
         if (!streamState) return;
 
-        const existingStreamLogs = draft.streamLogs.get(streamId);
-        const streamLogs: StreamLogs = existingStreamLogs ?? {
-          logs: [],
-          logIndex: new Map<string, number>(),
-          taskGroupIndex: new Map<string, number>(),
-          updatedMessageIndices: [],
-          updatedMessageBaseGeneration: 0,
-          generation: 0,
-        };
+        // Backfills streamLogs (and followupOptionsByStream) if this is the
+        // first handler to observe the stream — see `ensureStreamState`.
+        ensureStreamState(draft, streamId, streamState.kind);
+        // Non-null: ensureStreamState above guarantees this entry exists.
+        const streamLogs: StreamLogs = draft.streamLogs.get(streamId)!;
 
         let logChanged = false;
         let stateChanged = false;
