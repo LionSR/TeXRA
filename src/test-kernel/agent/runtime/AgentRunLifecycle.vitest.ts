@@ -825,8 +825,8 @@ describe('runFlowWithLifecycle', () => {
       // WAITING branch's own finally), so the fix writes the stage's
       // GROUP_END entry directly to the transcript store instead of calling
       // the now-inert `ctx.parentStage.end()`. The written status is the
-      // literal `RunOutcome.CANCELLED` (#7993 step 2) — no
-      // legacyEndGroupStatusForOutcome fold at this direct-write call site.
+      // literal `RunOutcome.CANCELLED` (#7993 step 2), not a legacy
+      // 2-value fold.
       expect(transcriptsUpdate).toHaveBeenCalledWith(
         streamId,
         expect.any(String),
@@ -939,8 +939,8 @@ describe('runFlowWithLifecycle', () => {
           flowRecord:
             expected.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
         });
-        // The stage closes with the literal outcome — no
-        // legacyEndGroupStatusForOutcome fold at this production call site.
+        // The stage closes with the literal outcome, not a legacy 2-value
+        // fold.
         expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
         expect(streamStatus.get(streamId)).toBe(expected.stream);
       } finally {

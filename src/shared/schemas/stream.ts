@@ -19,9 +19,7 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
  *    second permanent boundary — a static exported file stays legacy-shaped
  *    forever).
  * 3. Display tolerance for those two inputs
- *    (`@shared/streams/streamStatusDisplay`), plus the frozen CLI headless
- *    JSON `endGroupStatus` projection whose own removal is dated in the
- *    #6981 ledger (v0.41 / 2026-08-04, whichever is later).
+ *    (`@shared/streams/streamStatusDisplay`).
  *
  * The trait table that used to hang off this enum is gone: membership
  * questions are answered by the `StreamPhase` predicates in
@@ -53,10 +51,11 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
- * run end", decided exactly once at the run-lifecycle boundary. The legacy
- * vocabularies are pure projections of it (see `@shared/streams/streamStatus`):
- * `ExecutionStatus` for persisted history, `EndGroupStatus` for transcript
- * groups, `StreamStatus` for the live stream state machine.
+ * run end", decided exactly once at the run-lifecycle boundary. Current
+ * production writers use these values for terminal run, group-end, and stream
+ * state. `ExecutionStatus` remains an injective persisted-metadata projection.
+ * Retired `EndGroupStatus` and `StreamStatus` values are accepted only by
+ * parse-side compatibility readers and normalized to current values.
  *
  * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
  * not an error. Matches the planned `ResultEvent.outcome` triad (SDK 7d/T3-2).
