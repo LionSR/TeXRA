@@ -14,7 +14,7 @@ const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
 );
 
-// The CLI vendors a patch (patches/ink@7.1.0.patch) that rewrites Ink's resize
+// The CLI vendors a patch (patches/ink@7.1.1.patch) that rewrites Ink's resize
 // handling: instead of erasing the live region by logical line count — which is
 // wrong once the emulator reflows soft-wrapped lines at the new width (too few
 // rows leaves residue, too many eats the <Static> header) — it repaints from a
