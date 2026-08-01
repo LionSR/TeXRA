@@ -153,7 +153,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, '\r'],
     expect: [
-      'repositoryAudit completed',
+      'Repository audit Finished',
       'Generated files',
       'paper.tex',
       'Compile check failed',
@@ -2770,11 +2770,9 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
-    expect: [
-      'strategy is checking the harness-child-strategy details',
-      '✓ ● strategy running',
-    ],
+    expect: ['strategy is checking the harness-child-strategy details'],
     unexpect: [
+      '✓ ● strategy running',
       'agent: chat · model: harness-model',
       'entry-1 chat history line',
       'entry-4 chat history line',
