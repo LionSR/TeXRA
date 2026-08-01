@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
@@ -164,9 +164,6 @@ describe('CLI agents run command', () => {
       streamId: 'stream-1',
       outcome: RUN_OUTCOME.COMPLETED,
       response: 'Correct.',
-      status: EXECUTION_STATUS.COMPLETED,
-      endGroupStatus: 'stopped',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
       workingDirectory: '/tmp/project',
     });
     expect(Object.keys(emission?.json ?? {})).toEqual([
@@ -175,9 +172,6 @@ describe('CLI agents run command', () => {
       'streamId',
       'outcome',
       'response',
-      'status',
-      'endGroupStatus',
-      'terminalStatus',
       'workingDirectory',
     ]);
     expect(emission?.ndjson).toEqual({
@@ -187,7 +181,7 @@ describe('CLI agents run command', () => {
     expect(emission?.text).toBe('Correct.');
   });
 
-  it('publishes the frozen projection for a shutdown cancellation', async () => {
+  it('publishes the canonical outcome for a shutdown cancellation', async () => {
     mocks.executeCliToolUseConfig.mockResolvedValueOnce({
       ok: true,
       result: {
@@ -211,9 +205,6 @@ describe('CLI agents run command', () => {
     expect(exitCode).toBe(CliExitCode.Interrupted);
     expect(mocks.emitCliResult.mock.calls[0]?.[1].json).toMatchObject({
       outcome: RUN_OUTCOME.CANCELLED,
-      status: EXECUTION_STATUS.INTERRUPTED,
-      endGroupStatus: 'stopped',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
     });
   });
 

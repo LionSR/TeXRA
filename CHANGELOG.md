@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### CLI
+
+#### Breaking Changes
+
+- **Final JSON results now use `outcome` as their only terminal-state field** —
+  the deprecated `status`, `terminalStatus`, and `endGroupStatus` fields have
+  been removed with explicit maintainer approval. Streamed NDJSON
+  progress records are unchanged.
+
 ### Desktop
 
 #### Breaking Changes

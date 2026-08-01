@@ -31,7 +31,6 @@ import {
   optionalStringFlagValue,
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
-import { serializeCliRunResult } from '@cli/runtime/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
@@ -50,7 +49,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -826,71 +825,6 @@ describe('CLI root argument routing', () => {
     ).rejects.toThrow(
       'Workflow error without a generated output; corrected.tex was not written.',
     );
-  });
-
-  it('projects frozen CLI status fields before result metadata', () => {
-    const result = serializeCliRunResult({
-      outcome: RUN_OUTCOME.COMPLETED,
-      category: AgentCategory.ToolUse,
-      executionId: 'completed-without-output',
-      streamId: 'stream-without-output',
-      response: 'done',
-      workingDirectory: '/tmp/project',
-    } as Parameters<typeof serializeCliRunResult>[0]);
-
-    expect(result).toMatchObject({
-      executionId: 'completed-without-output',
-      workingDirectory: '/tmp/project',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
-      status: EXECUTION_STATUS.COMPLETED,
-      endGroupStatus: 'stopped',
-    });
-    expect(Object.keys(result)).toEqual([
-      'outcome',
-      'category',
-      'executionId',
-      'streamId',
-      'response',
-      'status',
-      'endGroupStatus',
-      'terminalStatus',
-      'workingDirectory',
-    ]);
-  });
-
-  it('projects a resolved cancellation with the frozen v0.40 values', () => {
-    const result = serializeCliRunResult({
-      outcome: RUN_OUTCOME.CANCELLED,
-      category: AgentCategory.ToolUse,
-      executionId: 'completed-after-shutdown',
-      streamId: 'stream-after-shutdown',
-      response: 'done',
-      workingDirectory: '/tmp/project',
-    } as Parameters<typeof serializeCliRunResult>[0]);
-
-    expect(result).toMatchObject({
-      executionId: 'completed-after-shutdown',
-      workingDirectory: '/tmp/project',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-      status: EXECUTION_STATUS.INTERRUPTED,
-      endGroupStatus: 'stopped',
-    });
-  });
-
-  it('projects a failed outcome with the frozen v0.40 values', () => {
-    const result = serializeCliRunResult({
-      outcome: RUN_OUTCOME.FAILED,
-      category: AgentCategory.ToolUse,
-      executionId: 'failed-run',
-      streamId: 'failed-stream',
-    } as Parameters<typeof serializeCliRunResult>[0]);
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.FAILED,
-      terminalStatus: EXECUTION_STATUS.ERROR,
-      status: EXECUTION_STATUS.ERROR,
-      endGroupStatus: 'error',
-    });
   });
 
   it('restores one requested workflow output path for resume', () => {

@@ -13,16 +13,14 @@ export type LogLevel = z.infer<typeof LogLevelSchema>;
 /**
  * Legacy 2-value terminal vocabulary a `GROUP_END` row's `data.status` used
  * to carry (retired as a *production* type by #8087/§8.2 — every live writer
- * now emits the literal `RunOutcome`). Kept as a read-side/derive type: the
- * frozen Tier-4 CLI JSON projection
- * (`packages/cli/src/runtime/terminalStatus.ts`) still derives it from
- * `RunOutcome` via `legacyEndGroupStatusForOutcome`, and `StreamLogStore`'s
- * `parsePersistedEntries` boundary (§8.3) still matches these two literals
- * to normalize on-disk rows written before the cutover — this stays as the
- * permanent legacy-transcript reader, not a temporary shim, since released
- * transcripts are never rewritten. No longer asserted as a subset of
- * `TaskGroupStatus`: that type is retyped to the native `StreamPhase`/
- * `RunOutcome` vocabulary (#7993 step 3) and shares no values with this one.
+ * now emits the literal `RunOutcome`). Kept solely as a read-side type:
+ * `StreamLogStore`'s `parsePersistedEntries` boundary (§8.3) still matches
+ * these two literals to normalize on-disk rows written before the cutover.
+ * This is the permanent legacy-transcript reader, not a temporary shim,
+ * since released transcripts are never rewritten. No longer asserted as a
+ * subset of `TaskGroupStatus`: that type is retyped to the native
+ * `StreamPhase`/`RunOutcome` vocabulary (#7993 step 3) and shares no values
+ * with this one.
  */
 export const END_GROUP_STATUS = {
   ERROR: 'error',

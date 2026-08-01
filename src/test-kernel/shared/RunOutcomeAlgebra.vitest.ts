@@ -17,7 +17,6 @@ import {
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
-  legacyEndGroupStatusForOutcome,
   projectRunOutcome,
   RUN_OUTCOME_PROJECTION,
   STREAM_TRANSITION_CAUSE,
@@ -54,28 +53,6 @@ describe('run outcome algebra', () => {
     expect(RUN_OUTCOME_PROJECTION[RUN_OUTCOME.FAILED]).toEqual({
       executionStatus: EXECUTION_STATUS.ERROR,
     });
-  });
-
-  // legacyEndGroupStatusForOutcome is no longer called from any production
-  // GROUP_END write site (#8087 retypes stage.end()/StreamLogStore's orphan
-  // sweep to write the literal RunOutcome), nor from logSlice.ts's read side
-  // (#7993 step 3 retypes TaskGroup.status to the native StreamPhase/
-  // RunOutcome vocabulary, so that reader no longer needs to fold a
-  // canonical value down to a legacy bucket). Its single remaining caller is
-  // the frozen CLI headless JSON's `endGroupStatus` projection
-  // (packages/cli/src/runtime/terminalStatus.ts), whose own removal is dated
-  // in the #6981 ledger — the fold itself is unchanged, so it still needs to
-  // stay correct until then. The intermediate `groupEndStatusForOutcome`
-  // ('ok' | 'error') hop was deleted with the rest of the legacy vocabulary
-  // production surface (#7993 step 4): it had no caller but this one.
-  it('folds each outcome into the frozen 2-value legacy projection', () => {
-    expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe(
-      'stopped',
-    );
-    expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe(
-      'stopped',
-    );
-    expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.FAILED)).toBe('error');
   });
 
   it('fails loudly on an out-of-vocabulary outcome', () => {
