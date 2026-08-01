@@ -180,6 +180,8 @@ export class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
+    if (execRes.text) shared.latestAssistantText = execRes.text;
+
     // `finalTool` selects only the request whose response is being processed.
     // Keep the separate attempted bit so a malformed/ignored forced response
     // cannot force every later round or schedule a second final attempt.

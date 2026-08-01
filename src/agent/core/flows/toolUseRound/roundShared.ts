@@ -79,6 +79,8 @@ type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
 export interface ToolUseRoundShared extends ToolUseRoundFields {
   /** Tool calls with proper typing (schema uses z.unknown()) */
   toolCalls?: SdkToolCall[];
+  /** Latest non-empty assistant text produced anywhere in this cycle. */
+  latestAssistantText?: string;
   /** Current user instruction, refreshed when the round consumes user input. */
   currentUserInstruction?: string;
   /** Named tool forced on this round's model request. */
