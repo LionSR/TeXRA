@@ -104,7 +104,7 @@ async function migrateIndexJson(): Promise<boolean> {
   if (!Array.isArray(raw)) {
     logger.warn(
       CHANNEL,
-      `Legacy ${INDEX_PATH} is not an array; leaving it untouched.`,
+      `Legacy ${INDEX_PATH} is not an array; leaving it untouched and retrying later.`,
     );
     return false;
   }
