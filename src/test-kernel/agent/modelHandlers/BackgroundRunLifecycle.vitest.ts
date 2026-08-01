@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import { BackgroundRunLifecycle } from '@agent/modelHandlers/openai/BackgroundRunLifecycle';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
+import { normalizeProviderError } from '@common/errors/sdkErrorUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 
 import type OpenAI from 'openai';
@@ -25,6 +26,10 @@ function completedResponse(id: string): Response {
     output_text: 'ok',
   } as unknown as Response;
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('BackgroundRunLifecycle.isPending / pending-id bookkeeping', () => {
   it('treats queued and in_progress as pending, everything else as terminal', () => {
@@ -117,6 +122,35 @@ describe('BackgroundRunLifecycle.tryResume', () => {
 
     expect(result).toBeNull();
     expect(lifecycle.hasPendingResume()).toBe(false);
+  });
+
+  it('does not restart the polling lifetime when the same response resumes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-01T00:00:00Z'));
+    const lifecycle = createLifecycle();
+    const retrieve = vi.fn(async () => ({
+      id: 'resp-pending',
+      status: 'in_progress',
+    }));
+    const client = { responses: { retrieve } } as unknown as OpenAI;
+
+    await lifecycle.retrieveAndRemember(
+      client,
+      'resp-pending',
+      undefined,
+      undefined,
+    );
+    retrieve.mockClear();
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+
+    const timeout = await lifecycle.tryResume(client).catch((error) => error);
+    expect(timeout).toBeInstanceOf(Error);
+    expect((timeout as Error).message).toContain(
+      'exceeded maximum polling duration',
+    );
+    expect(normalizeProviderError(timeout).userRetryable).toBe(false);
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(lifecycle.getPendingId()).toBe('resp-pending');
   });
 });
 

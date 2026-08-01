@@ -1,5 +1,6 @@
 // Local imports
 import {
+  attachProviderError,
   isRetryableStatusCode,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
@@ -83,6 +84,24 @@ export function createOpenAIBackgroundPollingError(
     pollingError.request_id = causeError.requestId;
   }
   return pollingError;
+}
+
+/** Create a terminal error for a background response whose polling lifetime ended. */
+export function createOpenAIBackgroundPollingTimeoutError(
+  responseId: string,
+  maxDurationMs: number,
+  provider: string,
+): Error {
+  const error = new Error(
+    `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
+      `Inspect or cancel the job with client.responses.cancel("${responseId}").`,
+  );
+  attachProviderError(error, {
+    message: error.message,
+    provider,
+    userRetryable: false,
+  });
+  return error;
 }
 
 export function createOpenAIBackgroundTerminalError(

@@ -49,6 +49,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **OpenAI background responses keep one polling deadline across retries** —
+  reconnecting to the same response no longer restarts its three-hour polling
+  window.
 - **Automatic model retry settings are bounded** — the retry setting now
   accepts zero to five additional attempts after the initial request. Invalid
   stored values fall back to the documented default instead of creating an
