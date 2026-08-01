@@ -148,7 +148,15 @@ function createTaggedModelCell(
   compatibilityKey: ModelHandlerCompatibilityKey,
   modelId: string,
 ): RunToolUseFlowInput['modelCell'] {
-  const handler = { extractAssistantText: () => undefined };
+  const handler = {
+    extractAssistantText: (message: unknown) => {
+      if (!message || typeof message !== 'object') return undefined;
+      const { role, content } = message as Record<string, unknown>;
+      return role === 'assistant' && typeof content === 'string'
+        ? content
+        : undefined;
+    },
+  };
   // ModelFactory installs this non-enumerable tag on every active handler.
   Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
     value: compatibilityKey,
@@ -581,6 +589,104 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         stateSlices: snapshot.shared.stateSlices,
       },
     );
+  });
+
+  it('does not return a prior assistant response when a resumed child produces no new answer', async () => {
+    const executionId = 'abc-flow-stale-response' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-stale-response' as StreamTabId;
+    const shared = {
+      messages: [{ role: 'assistant', content: 'A' }],
+      lastResponse: 'A',
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
+    };
+    await writeFlowRecord(executionId, shared, WAITING_AT_START);
+    const resume = await retrieveToolUseResume(streamId, executionId);
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.WAITING);
+    const sharedSpy = vi
+      .spyOn(PersistedFlow.prototype, 'getShared')
+      .mockResolvedValue(shared);
+
+    try {
+      const result = await runPersistedFlow(executionId, streamId, resume);
+
+      expect(result).toMatchObject({ outcome: STREAM_PHASE.WAITING });
+      expect(result.response).toBeUndefined();
+    } finally {
+      runSpy.mockRestore();
+      sharedSpy.mockRestore();
+    }
+  });
+
+  it('returns only the latest assistant response produced by a resumed invocation', async () => {
+    const executionId = 'abc-flow-fresh-resumed-response' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-fresh-resumed-response' as StreamTabId;
+    const startingShared = {
+      messages: [{ role: 'assistant', content: 'A' }],
+      lastResponse: 'A',
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
+    };
+    const finalShared = {
+      ...startingShared,
+      messages: [
+        ...startingShared.messages,
+        { role: 'user', content: 'Continue.' },
+        { role: 'assistant', content: 'intermediate' },
+        { role: 'assistant', content: 'B' },
+      ],
+      lastResponse: 'B',
+    };
+    await writeFlowRecord(executionId, startingShared, WAITING_AT_START);
+    const resume = await retrieveToolUseResume(streamId, executionId);
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.WAITING);
+    const sharedSpy = vi
+      .spyOn(PersistedFlow.prototype, 'getShared')
+      .mockResolvedValue(finalShared);
+
+    try {
+      const result = await runPersistedFlow(executionId, streamId, resume);
+
+      expect(result.response).toBe('B');
+    } finally {
+      runSpy.mockRestore();
+      sharedSpy.mockRestore();
+    }
+  });
+
+  it('keeps returning the latest assistant response from a fresh invocation', async () => {
+    const executionId = 'abc-flow-fresh-response' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-fresh-response' as StreamTabId;
+    const finalShared = {
+      messages: [
+        { role: 'user', content: 'Start.' },
+        { role: 'assistant', content: 'first' },
+        { role: 'assistant', content: 'fresh answer' },
+      ],
+      lastResponse: 'fresh answer',
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
+    };
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.WAITING);
+    const sharedSpy = vi
+      .spyOn(PersistedFlow.prototype, 'getShared')
+      .mockResolvedValue(finalShared);
+
+    try {
+      const result = await runPersistedFlow(executionId, streamId, undefined);
+
+      expect(result.response).toBe('fresh answer');
+    } finally {
+      runSpy.mockRestore();
+      sharedSpy.mockRestore();
+    }
   });
 
   it('offers queue ownership again after a resumed subagent parks', async () => {

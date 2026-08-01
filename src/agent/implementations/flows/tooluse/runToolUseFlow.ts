@@ -456,6 +456,7 @@ export async function runToolUseFlow<C = unknown>(
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
 
+    let recoveredShared: ToolUseRunShared | undefined;
     if (flowRecord && input.resume) {
       logger.debug('Resuming tool-use flow from persistence');
       // Retrieval owns the single migration/validation boundary. The second
@@ -479,6 +480,7 @@ export async function runToolUseFlow<C = unknown>(
           stampFlowRecordSchemaVersion(flowRecord),
         );
       }
+      recoveredShared = resumedShared;
     } else if (flowRecord) {
       logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
@@ -526,7 +528,23 @@ export async function runToolUseFlow<C = unknown>(
           stampFlowRecordSchemaVersion(flowRecord),
         );
       }
+      recoveredShared = migratedData;
     }
+    // An absent record can still arrive with an already-retrieved resume
+    // handoff. Treat those restored messages as historical too: PrepareNode
+    // copies them into the new record before the first cycle.
+    recoveredShared ??= input.resume?.shared;
+    const invocationMessageStart = recoveredShared?.messages.length ?? 0;
+    const persistedLastResponses = new Set<string>();
+    if (recoveredShared?.lastResponse) {
+      persistedLastResponses.add(recoveredShared.lastResponse);
+    }
+    const persistedAssemblyResponse =
+      recoveredShared?.stateSlices?.workspaceSnapshot.assembly.lastResponse;
+    if (persistedAssemblyResponse) {
+      persistedLastResponses.add(persistedAssemblyResponse);
+    }
+
     // Cleanup may delete a terminal flow record only after absence was
     // confirmed or a present record passed its migration boundary.
     persistenceRecoveryPending = false;
@@ -590,11 +608,13 @@ export async function runToolUseFlow<C = unknown>(
     } while (resumedFollowUps.length > 0);
 
     response =
-      findLastAssistantText(shared.messages, (m) =>
-        services.modelCell.handler.extractAssistantText(m),
+      findLastAssistantText(
+        shared.messages.slice(invocationMessageStart),
+        (message) => services.modelCell.handler.extractAssistantText(message),
       ) ||
-      shared.lastResponse ||
-      undefined;
+      (shared.lastResponse && !persistedLastResponses.has(shared.lastResponse)
+        ? shared.lastResponse
+        : undefined);
     totalCostUsd =
       shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost;
     const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
