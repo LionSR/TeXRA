@@ -1,7 +1,7 @@
 {
   "imports": {
-    "@hono/hono": "jsr:@hono/hono@4.12.27",
-    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2.108.2",
-    "llm-zoo": "npm:llm-zoo@1.23.0"
+    "@hono/hono": "jsr:@hono/hono@4.12.33",
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2.111.0",
+    "llm-zoo": "npm:llm-zoo@1.24.0"
   }
 }
