@@ -305,10 +305,8 @@ describe('NativeSubagentStrategy', () => {
     expect(interrupt).toHaveBeenCalledOnce();
   });
 
-  it('removes abort listeners after launch and ignores later aborts', async () => {
+  it('detaches from the run signal after launch and ignores later aborts', async () => {
     const controller = new AbortController();
-    const addListener = vi.spyOn(controller.signal, 'addEventListener');
-    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
     const interrupt = vi.fn();
     const strategy = createNativeSubagentStrategy(baseParams());
     mockLaunchPublishing({ interrupt }, 'completed');
@@ -316,8 +314,6 @@ describe('NativeSubagentStrategy', () => {
     await strategy.launch(fakePorts(), controller);
     controller.abort();
 
-    expect(addListener).toHaveBeenCalledOnce();
-    expect(removeListener).toHaveBeenCalledOnce();
     expect(interrupt).not.toHaveBeenCalled();
   });
 

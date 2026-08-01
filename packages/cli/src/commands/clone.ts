@@ -8,6 +8,7 @@ import { Writable } from 'node:stream';
 import { execa } from 'execa';
 
 // Internal imports
+import { isFileNotFoundError } from '@common/errors';
 import {
   cloneOverleafProject,
   type OverleafCloneWorkflowPorts,
@@ -96,7 +97,7 @@ function buildOverleafClonePorts(
       try {
         return await readdir(workspacePath);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        if (isFileNotFoundError(error)) return [];
         throw error;
       }
     },

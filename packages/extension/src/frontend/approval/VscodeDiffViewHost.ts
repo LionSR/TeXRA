@@ -10,6 +10,8 @@ import {
 } from '@hosts/uiHosts';
 import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
+import { raceWithTimeout } from '../vscode/raceWithTimeout';
+
 export class VscodeDiffViewHost implements DiffViewHost {
   async openDiff(
     original: DiffSource,
@@ -83,24 +85,14 @@ export class VscodeDiffViewHost implements DiffViewHost {
       return;
     }
 
-    await new Promise<void>((resolve) => {
-      const finish = () => {
-        clearTimeout(timer);
-        disposable.dispose();
-        resolve();
-      };
-
-      const disposable = vscode.window.onDidChangeVisibleTextEditors(() => {
-        if (tryReveal()) {
-          finish();
-        }
-      });
-
-      const timer = setTimeout(() => {
-        tryReveal();
-        finish();
-      }, REVEAL_TIMEOUT_MS);
-    });
+    const raced = await raceWithTimeout<void>(
+      (resolve) =>
+        vscode.window.onDidChangeVisibleTextEditors(() => {
+          if (tryReveal()) resolve();
+        }),
+      REVEAL_TIMEOUT_MS,
+    );
+    if (raced.timedOut) tryReveal();
   }
 
   async readProposedContent(session: DiffSession): Promise<string> {

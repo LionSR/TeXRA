@@ -38,6 +38,22 @@ vi.mock('@frontend/auth/SupabaseAuthProvider', () => ({
   },
 }));
 
+vi.mock('@frontend/ui/dialogs', () => ({
+  confirmModal: async (
+    message: string,
+    actionLabel: string,
+    ...otherLabels: string[]
+  ) => {
+    const choice = await authMocks.showWarningMessage(
+      message,
+      { modal: true },
+      actionLabel,
+      ...otherLabels,
+    );
+    return choice === actionLabel;
+  },
+}));
+
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: vi.fn(),
   showLoggedMessage: authMocks.showLoggedMessage,
