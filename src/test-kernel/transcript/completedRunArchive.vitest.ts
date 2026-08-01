@@ -10,7 +10,51 @@
  * proves conversation display, chat export, and todos all read through the
  * facade.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const launchMocks = vi.hoisted(() => ({
+  acquireResumedExecutionLease: vi.fn(),
+  buildVars: vi.fn(),
+  clearTerminalExecutionState: vi.fn(),
+  createHandler: vi.fn(),
+  hasPersistedParent: vi.fn(),
+  loadAgent: vi.fn(),
+  releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
+  resolveAgent: vi.fn(),
+}));
+
+vi.mock('@agent/index', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/index')>()),
+  isRemoteAgent: () => false,
+  resolveAgentForLaunch: launchMocks.resolveAgent,
+}));
+vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
+  loadAgentSettingAndPrompts: launchMocks.loadAgent,
+}));
+vi.mock('@agent/runtime/ModelFactory', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime/ModelFactory')>()),
+  createModelHandler: launchMocks.createHandler,
+  createModelHandlerForCompatibilityKey: launchMocks.createHandler,
+}));
+vi.mock('@agent/utils/userVars', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/utils/userVars')>()),
+  buildUserVars: launchMocks.buildVars,
+}));
+vi.mock('@agent/storage/executionLifecycle', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionLifecycle')>()),
+  clearTerminalExecutionState: launchMocks.clearTerminalExecutionState,
+  hasPersistedParent: launchMocks.hasPersistedParent,
+}));
+vi.mock('@agent/storage/executionLease', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionLease')>()),
+  acquireResumedExecutionLease: launchMocks.acquireResumedExecutionLease,
+  captureOwnedExecutionLease:
+    (_executionId: ExecutionId) => (operation: () => unknown) =>
+      operation(),
+  releaseOwnedExecutionLeaseAfterFailure:
+    launchMocks.releaseOwnedExecutionLeaseAfterFailure,
+}));
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import {
@@ -18,6 +62,10 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
+import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
+import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { getStreamTabId } from '@agent/runtime/streamTab';
+import { flowKey } from '@agent/node/persistedFlow';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -31,6 +79,9 @@ import {
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
+import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   readCompletedRunConversation,
   readCompletedRunTodos,
@@ -151,9 +202,11 @@ describe('completedRunArchive facade', () => {
 
   beforeEach(() => {
     clearStoreCache();
+    vi.resetAllMocks();
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
   });
 
@@ -255,6 +308,195 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
+  it('reconstructs both turns when the production resume launch reopens the canonical writer', async () => {
+    const executionId = '0aa1110aa111' as ExecutionId;
+    const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
+    const config = runConfig('orchestrator');
+    expect(
+      getStreamTabId(config.agent, config.model, { executionId }),
+    ).not.toBe(streamId);
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, config, executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(streamId);
+    const firstTurn = logs.acquireWriter(streamId, executionId);
+    firstTurn.appendSettled(
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prove the first lemma.' }),
+    );
+    firstTurn.appendSettled(
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First proof.' }),
+    );
+    firstTurn.close();
+    await logs.flush();
+    logs.requestEviction(streamId);
+    expect(logs.get(streamId)).toBeUndefined();
+
+    const launchFailure = new Error('stop after resumed writer acquisition');
+    launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+    launchMocks.hasPersistedParent.mockResolvedValue(false);
+    launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
+      async (_executionId: ExecutionId, error: unknown) => error,
+    );
+    launchMocks.resolveAgent.mockReturnValue({
+      definitionPath: '/agents/orchestrator.yaml',
+    });
+    launchMocks.loadAgent.mockResolvedValue([
+      { agentCategory: AgentCategory.ToolUse },
+      {},
+    ]);
+    launchMocks.createHandler.mockResolvedValue({
+      capabilities: { supportsVision: false, supportsNativeAudio: false },
+      config: { provider: 'openai' },
+      setAgentCategory: vi.fn(),
+      setLogger: vi.fn(),
+      dispose: vi.fn(),
+    });
+    launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
+
+    const persistedResumeState = createToolUseResumeData({
+      executionId,
+      streamId,
+      agentConfig: config,
+      shared: {
+        modelHandlerCompatibilityKey: 'ModelHandlerOpenAIResponse',
+      },
+    });
+    await getExecutionStore(executionId).write(flowKey(executionId), {
+      flowName: 'texra',
+      params: {},
+      shared: persistedResumeState.shared,
+      createdAt: new Date().toISOString(),
+      nodes: [],
+    });
+
+    const session = createTestSession({ transcripts: logs });
+    const loadAndAcquireWriter = logs.loadAndAcquireWriter.bind(logs);
+    const resumedWriter = vi
+      .spyOn(logs, 'loadAndAcquireWriter')
+      .mockImplementationOnce(async (requestedStreamId, ownerKey) => {
+        const writer = await loadAndAcquireWriter(requestedStreamId, ownerKey);
+        writer.appendSettled(
+          logRow(MESSAGE_TYPES.USER_MESSAGE, {
+            text: 'Now prove the second lemma.',
+          }),
+        );
+        writer.appendSettled(
+          logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second proof.' }),
+        );
+        return writer;
+      });
+
+    const resolveResumeState = vi.fn(async (requestedStreamId: StreamTabId) => {
+      const runState = snapshots.getRunConfig(requestedStreamId);
+      const resolvedExecutionId = snapshots.getExecutionId(requestedStreamId);
+      return runState && resolvedExecutionId
+        ? { runState, executionId: resolvedExecutionId }
+        : undefined;
+    });
+    const reportFailure = vi.fn();
+    try {
+      await expect(
+        resolveAndResumeStream(streamId, {
+          interactions: session.interactions,
+          streamStatus: session.status,
+          resolveResumeState,
+          resumeToolUse: async (resume) => {
+            await resumeToolUseFromResumeData(resume, { session });
+            return true;
+          },
+          executeWorkflow: vi.fn(async () => undefined),
+          reportFailure,
+        }),
+      ).resolves.toBe(false);
+    } finally {
+      session.dispose();
+    }
+    await logs.flush();
+
+    expect(resolveResumeState).toHaveBeenCalledWith(streamId);
+    expect(reportFailure).toHaveBeenCalledWith(streamId, launchFailure);
+    expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
+    expect(
+      launchMocks.releaseOwnedExecutionLeaseAfterFailure,
+    ).toHaveBeenCalledWith(executionId, launchFailure);
+    resumedWriter.mockRestore();
+
+    const archived = await readCompletedRunConversation(executionId);
+    expect(archived).toEqual({
+      source: 'streamLog',
+      streamId,
+      conversation: [
+        { role: 'user', content: 'Prove the first lemma.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First proof.' }],
+        },
+        { role: 'user', content: 'Now prove the second lemma.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Second proof.' }],
+        },
+      ],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain('Conversation (4 messages)');
+    expect(endpoint.output).toContain('Prove the first lemma.');
+    expect(endpoint.output).toContain('First proof.');
+    expect(endpoint.output).toContain('Now prove the second lemma.');
+    expect(endpoint.output).toContain('Second proof.');
+
+    const firstPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 0,
+      limit: 2,
+    });
+    const secondPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 2,
+      limit: 2,
+    });
+    expect(firstPage.output).toContain('Source: streamLog');
+    expect(firstPage.output).toContain(`Stream: ${streamId}`);
+    expect(firstPage.output).toContain('Returned message interval: [0, 2)');
+    expect(firstPage.output).toContain('Next offset: 2');
+    expect(firstPage.output).toContain('<message index="1"');
+    expect(firstPage.output).toContain('<message index="2"');
+    expect(firstPage.output).not.toContain('Now prove the second lemma.');
+    expect(secondPage.output).toContain('Returned message interval: [2, 4)');
+    expect(secondPage.output).toContain('Next offset: none');
+    expect(secondPage.output).toContain('<message index="3"');
+    expect(secondPage.output).toContain('<message index="4"');
+    expect(secondPage.output).not.toContain('Prove the first lemma.');
+
+    for (const text of [
+      'Prove the first lemma.',
+      'First proof.',
+      'Now prove the second lemma.',
+      'Second proof.',
+    ]) {
+      expect(
+        `${firstPage.output}\n${secondPage.output}`.split(text),
+      ).toHaveLength(2);
+    }
+
+    const lineRange = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      view_range: [1, 10],
+    });
+    expect(lineRange.status).toBe('error');
+    expect(lineRange.error).toContain(
+      'Conversation pagination is message-based. Use offset and limit',
+    );
+  });
+
   it('falls back to the legacy KV projections when no sidecar exists', async () => {
     const executionId = 'bbb222bbb222' as ExecutionId;
     const store = getExecutionStore(executionId);
@@ -302,6 +544,26 @@ describe('completedRunArchive facade', () => {
 
     const todosResult = await readCompletedRunTodos(executionId);
     expect(todosResult).toEqual({ todos: [], source: 'none' });
+
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-07T00:00:00.000Z',
+      terminalStatus: 'completed',
+    });
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint).toEqual({
+      status: 'executed',
+      output: [
+        'Conversation (0 messages):',
+        'Source: none',
+        'Stream: none',
+        'Returned message interval: [0, 0)',
+        'Next offset: none',
+        '',
+        '',
+      ].join('\n'),
+    });
   });
 
   it('prefers the sidecar when a legacy conversation projection also exists', async () => {
