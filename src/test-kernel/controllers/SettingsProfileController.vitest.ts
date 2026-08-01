@@ -214,9 +214,75 @@ describe('SettingsProfileController', () => {
     expect(controller.getReliabilitySettings()).toContainEqual(
       expect.objectContaining({
         key: 'texra.model.retry.maxAttempts',
+        label: 'Automatic retries',
+        min: 0,
+        max: 5,
+        step: 1,
         value: 3,
       }),
     );
+  });
+
+  it.each([2.5, 6])(
+    'rejects invalid automatic retry value %s at the settings boundary',
+    async (value) => {
+      const { controller, config } = createController();
+
+      const result = await controller.setProviderVscodeSetting({
+        key: 'texra.model.retry.maxAttempts',
+        value,
+      });
+
+      expect(result).toEqual({
+        kind: 'rejected',
+        key: 'texra.model.retry.maxAttempts',
+      });
+      expect(config).not.toHaveProperty('texra.model.retry.maxAttempts');
+    },
+  );
+
+  it.each([2.5, 6])(
+    'shows the default when persisted automatic retries are invalid (%s)',
+    (value) => {
+      const { controller } = createController({
+        config: { 'texra.model.retry.maxAttempts': value },
+      });
+
+      expect(controller.getReliabilitySettings()).toContainEqual(
+        expect.objectContaining({
+          key: 'texra.model.retry.maxAttempts',
+          value: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+        }),
+      );
+    },
+  );
+
+  it('does not mask a compaction value that runtime still reads directly', () => {
+    const { controller } = createController({
+      config: { 'texra.model.compactionThresholdPercent': 101 },
+    });
+
+    expect(controller.getReliabilitySettings()).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.compactionThresholdPercent',
+        value: 101,
+      }),
+    );
+  });
+
+  it('preserves raw compaction writes without a runtime schema', async () => {
+    const { controller, config } = createController();
+
+    const result = await controller.setProviderVscodeSetting({
+      key: 'texra.model.compactionThresholdPercent',
+      value: 101,
+    });
+
+    expect(result).toEqual({
+      kind: 'updated',
+      affectsModelAvailability: false,
+    });
+    expect(config['texra.model.compactionThresholdPercent']).toBe(101);
   });
 
   it('defaults reliability settings to DEFAULT_CORE_SETTINGS.model.retry (no drift from the catalog)', () => {
