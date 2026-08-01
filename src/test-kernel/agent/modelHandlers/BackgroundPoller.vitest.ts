@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -24,6 +24,10 @@ function trace() {
 
 const extractId = (response: TestResponse) => response.id;
 const extractStatus = (response: TestResponse) => response.status;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('BackgroundPoller', () => {
   it('resolves the logger supplier at poll time', async () => {
@@ -84,6 +88,33 @@ describe('BackgroundPoller', () => {
         }),
       }),
     );
+  });
+
+  it('honors a polling deadline established by an earlier invocation', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-01T03:00:00Z'));
+    const logger = trace();
+    const retrieve = vi.fn();
+    const poller = new BackgroundPoller<TestResponse>({
+      pollIntervalMs: 0,
+      maxDurationMs: 3 * 60 * 60 * 1000,
+      isPending: (response) => response.status === 'in_progress',
+      logger,
+    });
+    const timeout = new Error('terminal polling timeout');
+
+    const polling = poller.poll({
+      initialResponse: { id: 'resp-expired', status: 'in_progress' },
+      retrieve,
+      extractId,
+      extractStatus,
+      deadlineAtMs: new Date('2026-08-01T03:00:00Z').getTime(),
+      formatTimeoutError: () => timeout,
+    });
+    const rejection = expect(polling).rejects.toBe(timeout);
+    await vi.runAllTimersAsync();
+    await rejection;
+    expect(retrieve).not.toHaveBeenCalled();
   });
 
   it('logs aborts that happen while waiting for the next poll', async () => {
