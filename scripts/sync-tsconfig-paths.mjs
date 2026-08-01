@@ -7,10 +7,11 @@ import {
   loadRootPaths,
   deriveExtensionPaths,
   deriveDesktopPaths,
+  deriveBuildPaths,
 } from './aliasUtils.mjs';
 
 // Code-generate the `compilerOptions.paths` block of the extension and
-// desktop tsconfig copies from the root tsconfig.json — the single
+// desktop/build tsconfig copies from the root tsconfig.json — the single
 // hand-edited source of truth for path aliases. Mirrors
 // sync-package-contributes.mjs: in `--check` mode this is the CI diff gate,
 // failing when a copy has drifted out of sync with the root map.
@@ -21,6 +22,10 @@ const rootDir = path.resolve(
 );
 
 const targets = [
+  {
+    tsconfigPath: path.join(rootDir, 'tsconfig.build.json'),
+    derive: deriveBuildPaths,
+  },
   {
     tsconfigPath: path.join(rootDir, 'packages', 'extension', 'tsconfig.json'),
     derive: deriveExtensionPaths,
@@ -85,6 +90,6 @@ if (check) {
     );
   }
   console.log(
-    'packages/extension/tsconfig.json and packages/desktop/tsconfig.paths.json paths are in sync with the root.',
+    'tsconfig.build.json and the extension/desktop path maps are in sync with the root.',
   );
 }

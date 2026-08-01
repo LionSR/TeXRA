@@ -38,34 +38,48 @@ const BASELINE_PATH = resolve(
   'config/ratchets/architecture-edges-baseline.json',
 );
 
-const SUBSYSTEM_ALIASES = new Map<string, string>([
-  ['@agent', 'agent'],
-  ['@auth', 'auth'],
-  // tsconfig.json carves these two @common/* aliases out to
-  // packages/extension/src/common/* (VS Code-coupled Memento/webview-base
-  // modules), not src/common/*. Map them to distinct pseudo-subsystems so a
-  // future src/-side import of either produces a genuine new-edge ratchet
-  // failure instead of being silently absorbed into the `common` baseline.
-  ['@common/state', 'common-state-extension'],
-  ['@common/webview', 'common-webview-extension'],
-  ['@common', 'common'],
-  ['@controllers', 'controllers'],
-  ['@eventBus', 'eventBus'],
-  ['@hosts', 'hosts'],
-  ['@housekeeping', 'housekeeping'],
-  ['@latex', 'latex'],
-  ['@logger', 'logger'],
-  ['@model', 'model'],
-  ['@platform', 'platform'],
-  ['@replacement', 'replacement'],
-  ['@shared', 'shared'],
-  ['@skills', 'skills'],
-  ['@telemetry', 'telemetry'],
-  ['@tools', 'tools'],
-  ['@transcript', 'transcript'],
-  ['@types', 'types'],
-  ['@utils', 'utils'],
-]);
+const TSCONFIG_PATH = resolve(REPO_ROOT, 'tsconfig.json');
+
+function loadSubsystemAliases(): Map<string, string> {
+  const parsed = ts.parseConfigFileTextToJson(
+    TSCONFIG_PATH,
+    readFileSync(TSCONFIG_PATH, 'utf8'),
+  );
+  if (parsed.error != null) {
+    throw new Error(`Cannot parse tsconfig.json: ${parsed.error.messageText}`);
+  }
+
+  const paths = parsed.config?.compilerOptions?.paths as
+    Record<string, string[]> | undefined;
+  const aliases = new Map<string, string>();
+
+  for (const [key, values] of Object.entries(paths ?? {})) {
+    const alias = key.replace(/\/\*$/, '');
+    if (!alias.startsWith('@')) continue;
+
+    const target = values[0]?.replace(/\/\*$/, '');
+    if (target == null) continue;
+
+    const subsystem = subsystemFromRepoRelative(target);
+    if (subsystem != null) {
+      aliases.set(alias, subsystem);
+      continue;
+    }
+
+    // These extension-owned aliases deliberately overlap @common. Keep them
+    // in distinct pseudo-subsystems so they cannot hide in a common edge.
+    const extensionCommon = /^packages\/extension\/src\/common\/([^/]+)$/.exec(
+      target,
+    );
+    if (extensionCommon?.[1] != null) {
+      aliases.set(alias, `common-${extensionCommon[1]}-extension`);
+    }
+  }
+
+  return aliases;
+}
+
+const SUBSYSTEM_ALIASES = loadSubsystemAliases();
 
 function subsystemFromRepoRelative(path: string): string | null {
   const [root, subsystem] = path.split('/');
