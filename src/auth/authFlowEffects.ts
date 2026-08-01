@@ -3,9 +3,21 @@
  * (`packages/extension/src/frontend/auth/SupabaseAuthProvider.ts`,
  * `packages/desktop/src/main/desktopSupabaseAuth.ts`,
  * `packages/cli/src/runtime/supabaseAuth.ts`). Deliberately narrow: the
- * broader post-auth cache-invalidation sequence differs by host (desktop
- * routes it through its settings-IPC refresh chain, which does more than a
- * bare cache clear) and is not safe to collapse into one call.
+ * broader post-auth cache-invalidation sequence is a permanent host boundary,
+ * not a missing shared coordinator. The extension invalidates its long-lived
+ * model cache before publishing a session event. Desktop routes the same
+ * transition through its settings-IPC refresh chain because that chain also
+ * republishes model and profile state. Agent-catalog publication normally
+ * follows there, except that team sign-in deliberately defers it to the team
+ * resolver; onboarding is refreshed separately by the desktop session-change
+ * handler. Ordinary CLI login and logout commands exit without consuming
+ * model options. Persistent CLI callers own their subsequent transition before
+ * reading credential-dependent state: onboarding applies its selected access
+ * mode, the orchestration launcher invalidates its model list, and the chat TUI
+ * updates its session API mode and views. Within that persistent CLI session,
+ * setup-agent team sign-in immediately refreshes and rereads the remote agent
+ * catalog before applying the selected team. Collapsing these effects would
+ * either omit host refresh work or repeat it.
  */
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
