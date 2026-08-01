@@ -374,7 +374,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Custom agent directory messages
     SetCustomAgentDirMessageSchema,
     ResetCustomAgentDirMessageSchema,
-    // Multi-Agent orchestration messages
     // GitHub token messages
     GetGitHubTokenStatusMessageSchema,
     SetGitHubTokenMessageSchema,
@@ -387,9 +386,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
-    // Approval settings messages
-    // Agent prompt context
-    // Generic catalog-driven state-setting write (git-author + agent controls)
+    // Generic catalog-driven scalar-setting write
     UpdateStateSettingMessageSchema,
     // Agent team messages
     ApplyAgentModePresetMessageSchema,
