@@ -50,6 +50,7 @@ export class ToolUseWaitNode<C> extends Node<
     const { checkInterruption, session, isSubagent } = this.services;
     const { runScope, stopAfterCycle } = useLaunchRunContext();
     const { streamId, session: ownerSession } = runScope;
+    const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -65,17 +66,18 @@ export class ToolUseWaitNode<C> extends Node<
     // Stopping here would drop that user input on the floor — and skip the
     // `post` clear of `lastError`/`userCancelledRetry` that consuming it
     // performs, which is what makes the error recovered rather than terminal.
-    if (prepRes.afterError && isSubagent && !this.drainedFollowUps?.length) {
+    if (prepRes.afterError && isSubagent && !hasDrainedFollowUps) {
       return { kind: 'stop' };
     }
 
-    // A failed/cancelled cycle ends the autonomous leg. Pause any active
-    // goal so it surfaces as resumable — the in-cycle retry layer already
-    // absorbed transient errors before we reach here — instead of leaving the
-    // record `active` while the loop is actually stalled on a blocking wait.
+    // A failed/cancelled cycle with no recovery input ends the autonomous
+    // leg. Pause any active goal so it surfaces as resumable — the in-cycle
+    // retry layer already absorbed transient errors before we reach here —
+    // instead of leaving the record `active` while the loop is actually
+    // stalled. A drained batch continues immediately and keeps the goal live.
     // The goalPaused event makes the pause user-visible: a silent stop
     // mid-objective reads as a hang.
-    if (prepRes.afterError) {
+    if (prepRes.afterError && !hasDrainedFollowUps) {
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
