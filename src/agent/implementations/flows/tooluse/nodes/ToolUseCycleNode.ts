@@ -8,13 +8,15 @@ import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
-import {
-  buildFailedCycleOutcome,
-  type FailedCycleFields,
-  withModelClient,
-} from '@agent/core/flows/CycleServices';
+import { withModelClient } from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { MESSAGE_TYPES, RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
+import { buildFailedRetryInfo } from '@common/errors';
+import {
+  MESSAGE_TYPES,
+  RUN_OUTCOME,
+  type RetryErrorInfo,
+  type RunOutcome,
+} from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 import {
@@ -28,7 +30,7 @@ type ToolUseCycleOutcome =
   | { outcome: 'completed'; messages: ProviderMessage[] }
   | { outcome: 'skipped' }
   | { outcome: 'cancelled' }
-  | ({ outcome: 'failed' } & FailedCycleFields);
+  | { outcome: 'failed'; lastError: RetryErrorInfo };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -153,7 +155,6 @@ export class ToolUseCycleNode<C> extends Node<
         return {
           outcome: 'failed',
           lastError,
-          failureLogEmitted: roundShared.failureLogEmitted ?? false,
         };
       }
       if (roundOutcome === RUN_OUTCOME.CANCELLED) {
@@ -177,7 +178,11 @@ export class ToolUseCycleNode<C> extends Node<
     _prepRes: CyclePrepResult,
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
-    return { outcome: 'failed', ...buildFailedCycleOutcome(error) };
+    const { lastError } = buildFailedRetryInfo(error);
+    this.services.logger.error(lastError.message, {
+      messageType: MESSAGE_TYPES.ERROR,
+    });
+    return { outcome: 'failed', lastError };
   }
 
   async post(
@@ -224,15 +229,9 @@ export class ToolUseCycleNode<C> extends Node<
       case 'skipped':
         break;
       case 'failed':
+        // Inner invocation failures are logged by RetryState. This boundary
+        // logs only exceptions converted by execFallback above.
         shared.lastError = execRes.lastError;
-        if (!execRes.failureLogEmitted) {
-          // Outer cycle failures have not passed through RetryState's
-          // structured error logger. Surface them before WaitNode resets
-          // lastError on a follow-up.
-          this.services.logger.error(execRes.lastError.message, {
-            messageType: MESSAGE_TYPES.ERROR,
-          });
-        }
         break;
       case 'cancelled':
         shared.userCancelledRetry = true;
