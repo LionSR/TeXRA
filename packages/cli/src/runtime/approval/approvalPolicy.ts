@@ -202,14 +202,19 @@ export function immediateDecisionForApproval(
   payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
-  if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
-    const credentialRetry = isCredentialRetryRequest(event, payload);
-    if (credentialRetry) markApprovalDenied(context);
+  if (isCredentialRetryRequest(event, payload)) {
+    if (approvalPromptAllowed(context)) return undefined;
+    markApprovalDenied(context);
     return {
       accepted: false,
-      userMessage: credentialRetry
-        ? 'Retry skipped: credential exhausted or unauthorized.'
-        : 'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+      userMessage: 'Retry skipped: credential exhausted or unauthorized.',
+    };
+  }
+  if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
+    return {
+      accepted: false,
+      userMessage:
+        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     };
   }
   return immediateDecision(context);

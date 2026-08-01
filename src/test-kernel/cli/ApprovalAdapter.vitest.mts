@@ -316,6 +316,31 @@ describe('requestRetry classification (#7331)', () => {
     );
   });
 
+  it.each([
+    { approvalPolicy: 'never' as const, mode: 'interactive' as const },
+    { approvalPolicy: 'ask' as const, mode: 'headless' as const },
+  ])(
+    'preserves the credential denial reason in $approvalPolicy/$mode mode',
+    async ({ approvalPolicy, mode }) => {
+      const ctx = context({ approvalPolicy, mode });
+      const result = await createHeadlessCliHostInteractions(
+        ctx,
+      ).requestRetry?.({
+        ...retryRequest,
+        errorDetails: credentialExhaustedRetry.errorDetails,
+      });
+
+      expect(result).toEqual({
+        action: 'deny',
+        reason: 'Retry skipped: credential exhausted or unauthorized.',
+      });
+      expect(hasCliApprovalDenied(ctx)).toBe(true);
+      expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
+        CliExitCode.ApprovalDenied,
+      );
+    },
+  );
+
   it('denies a yolo retry without changing provider-failure exit classification', async () => {
     const ctx = context({ approvalPolicy: 'yolo' });
     const result =
