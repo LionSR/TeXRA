@@ -9,7 +9,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
-import { runLatexFormatter } from './texFormatter';
+import { runLatexFormatter } from './formatter/texFormatter';
 import {
   buildBetweenRoundDiffSuffix,
   generateDiffFileName,

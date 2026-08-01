@@ -1,10 +1,10 @@
 # Agent SDK Readiness — Verification Checkpoint (2026-07-22)
 
 **Status:** Verification checkpoint. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](./2026-05-30-agent-sdk-readiness.md), the plan of record
-[`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md), the detailed
-[`../dev/audits/2026-05-29-agent-sdk-readiness-audit.md`](../dev/audits/2026-05-29-agent-sdk-readiness-audit.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](./2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the plan of record
+[`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md), the detailed
+[`../dev/audits/2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../proposals/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the `-2026-06-25` → `-2026-07-21` checkpoints (most recently
 [`-2026-07-21`](./2026-07-21-agent-sdk-readiness-checkpoint.md)).
 
@@ -281,7 +281,7 @@ An earlier draft of this checkpoint proposed exposing TeXRA's tool registry
 as an in-process MCP server as a "genuinely-uncaptured observation,"
 supported by a grep scoped to `docs/proposals/` only. **That grep was
 incomplete and the premise was wrong (Codex, P2 ×3).** A detailed PRD already
-covers this exact ground: [`docs/prds/2026-05-04-prd-cli-app.md`](../prds/2026-05-04-prd-cli-app.md)
+covers this exact ground: [`docs/prds/2026-05-04-prd-cli-app.md`](../../prds/2026-05-04-prd-cli-app.md)
 §24, `texra mcp serve` — a stdio MCP server exposing three tools
 (`run_workflow`, `run_chat`, `list_agents`) to any MCP-speaking caller
 (Claude Code, Codex, opencode), with a `McpHostAdapter`, a per-`tools/call`
