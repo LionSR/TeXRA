@@ -264,6 +264,36 @@ describe('execution listing normalization', () => {
     expect(await StorageFS.exists(indexPath)).toBe(false);
   });
 
+  it('retries workspace-state migration after an invalid legacy shape', async () => {
+    const id = 'abc782' as ExecutionId;
+    const legacyKey = 'texra.agentHistory./workspace';
+    await installPlatform({
+      workspacePath: '/workspace',
+      workspaceState: { [legacyKey]: { entries: [] } },
+    });
+    clearStoreCache();
+
+    expect(await listExecutions()).toEqual([]);
+    expect(
+      await StorageFS.exists(
+        `${RUNS_STORAGE_DIR}/.legacy-history-migration-v1`,
+      ),
+    ).toBe(false);
+
+    await platform().workspaceState.update(legacyKey, [
+      {
+        id,
+        timestamp: '2026-07-15T13:05:00.000Z',
+        agentConfig: config('assistant'),
+      },
+    ]);
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+    expect(platform().workspaceState.get(legacyKey, [])).toEqual([]);
+  });
+
   it('uses the config as the canonical source for visible agent fields', async () => {
     const id = 'aaa111' as ExecutionId;
     const agentConfig = config('assistant');
