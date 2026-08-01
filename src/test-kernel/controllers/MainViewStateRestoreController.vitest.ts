@@ -56,4 +56,40 @@ describe('RestoreRunConfigInputSchema', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('rejects blank and unrelated objects before applying config defaults', () => {
+    expect(RestoreRunConfigInputSchema.safeParse({}).success).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ agentConfig: {} }).success,
+    ).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ unrelated: true }).success,
+    ).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ agent: undefined }).success,
+    ).toBe(false);
+  });
+
+  it.each([
+    ['direct blank identities', { agent: '', model: '' }],
+    ['direct whitespace identities', { agent: '  ', model: '\t' }],
+    ['direct blank identity', { agent: '', model: 'sonnet46T' }],
+    [
+      'legacy-wrapped blank identities',
+      { agentConfig: { agent: '', model: '' } },
+    ],
+    [
+      'legacy-wrapped whitespace identities',
+      { agentConfig: { agent: '  ', model: '\t' } },
+    ],
+  ])('rejects %s', (_name, input) => {
+    expect(RestoreRunConfigInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it.each([
+    ['agent', { agent: 'correct' }],
+    ['model', { model: 'sonnet46T' }],
+  ])('accepts a config identified only by %s', (_name, input) => {
+    expect(RestoreRunConfigInputSchema.safeParse(input).success).toBe(true);
+  });
 });
