@@ -945,6 +945,7 @@ describe('ToolUseWaitNode', () => {
     const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
     const services = createWaitNodeServices({
       isSubagent: true,
+      runScope: testRunScope(streamId),
       modelHandler: {
         createUserFollowUpMessages: vi.fn(
           async (
