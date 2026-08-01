@@ -292,7 +292,7 @@ const ExecutionsToolInputSchema = z.strictObject({
 
   /** Optional line range [start, end] for large outputs (action="view" only). */
   view_range: ViewRangeSchema.nullish().describe(
-    'Line range [start, end] for paginating large outputs (action="view" only).',
+    'Line range [start, end] for paginating file and background-command output (action="view" only). Conversation pagination uses offset and limit.',
   ),
 
   /** Execution IDs to wait on (action="wait" with /executions only). */
@@ -325,23 +325,23 @@ const ExecutionsToolInputSchema = z.strictObject({
       `Max seconds to wait for a status change (action="wait" only). Default: ${EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS}; finite values are clamped to the ${EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS}-${EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS} range.`,
     ),
 
-  /** Zero-based offset for paginating the /executions listing (action="view" only). */
+  /** Zero-based offset for list or conversation pagination (action="view" only). */
   offset: z
     .int()
     .min(0)
     .nullish()
     .describe(
-      'Zero-based offset into the executions list. Use with limit for pagination on /executions. Default: 0.',
+      'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation. Default: 0.',
     ),
 
-  /** Maximum number of entries to return from the /executions listing (action="view" only). */
+  /** Maximum list entries or conversation messages to return (action="view" only). */
   limit: z
     .int()
     .min(1)
     .max(200)
     .nullish()
     .describe(
-      'Max entries to return from /executions listing. Default: 100, max: 200.',
+      'Max entries or conversation messages to return. Use on /executions or /executions/{id}/conversation. Default: 100, max: 200.',
     ),
 });
 
@@ -356,8 +356,8 @@ Paths:
 ${EXECUTION_PATH_LIST}
 
 Use "current" as {id} to access the active execution.
-Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
-Use view_range: [start, end] to paginate conversation, file, and background-command output content.
+Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
+Use view_range: [start, end] to paginate file and background-command output content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
@@ -412,8 +412,18 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     switch (resource) {
       case 'config':
         return this.showConfig(executionId);
-      case 'conversation':
-        return this.showConversation(executionId, viewRange);
+      case 'conversation': {
+        if (viewRange) {
+          throw new ToolError(
+            'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
+          );
+        }
+        return this.showConversation(
+          executionId,
+          input.offset ?? 0,
+          input.limit ?? 100,
+        );
+      }
       case 'todos':
         return this.showTodos(executionId);
       case 'report':
@@ -845,10 +855,12 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
 
   private async showConversation(
     executionId: ExecutionId,
-    viewRange?: number[],
+    offset: number,
+    limit: number,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const { conversation } = await readCompletedRunConversation(executionId);
+    const { conversation, source, streamId } =
+      await readCompletedRunConversation(executionId);
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
@@ -865,7 +877,19 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       };
     }
 
-    const output = applyViewRange(formatConversation(conversation), viewRange);
+    const pageStart = Math.min(offset, conversation.length);
+    const page = conversation.slice(pageStart, pageStart + limit);
+    const pageEnd = pageStart + page.length;
+    const output = formatConversation(page, {
+      offset: pageStart,
+      totalMessages: conversation.length,
+      metadata: [
+        `Source: ${source}`,
+        `Stream: ${streamId ?? 'none'}`,
+        `Returned message interval: [${pageStart}, ${pageEnd})`,
+        `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
+      ],
+    });
 
     return { status: 'executed', output };
   }
