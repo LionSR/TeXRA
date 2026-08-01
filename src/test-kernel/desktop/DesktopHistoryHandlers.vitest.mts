@@ -104,8 +104,8 @@ function createHistoryController(
   });
 }
 
-function createHistoryActions(overrides: DesktopHistoryActionOverrides = {}) {
-  return createHistoryController(overrides).actions;
+function createHistoryHandlers(overrides: DesktopHistoryActionOverrides = {}) {
+  return createHistoryController(overrides).handlers;
 }
 
 async function writeHistoryConfig(): Promise<void> {
@@ -147,7 +147,7 @@ describe('DesktopHistoryHandlers', () => {
     await writeHistoryConfig();
     const runExecution = vi.fn(async () => undefined);
     const showInfoMessage = vi.fn(async () => undefined);
-    const actions = createHistoryActions({
+    const actions = createHistoryHandlers({
       history: { runExecution },
       showInfoMessage,
     });
@@ -171,12 +171,15 @@ describe('DesktopHistoryHandlers', () => {
     await writeForeignLease(HISTORY_ID);
     const postToRenderer = vi.fn();
     const showWarningMessage = vi.fn(async () => undefined);
-    const actions = createHistoryActions({
+    const actions = createHistoryHandlers({
       postToRenderer,
       showWarningMessage,
     });
 
-    await assertSupported(actions.deleteAgent)(HISTORY_ID);
+    await assertSupported(actions.deleteAgent)({
+      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+      historyId: HISTORY_ID,
+    });
 
     expect(await getExecutionStore(HISTORY_ID).readConfig()).toEqual(
       HISTORY_CONFIG,
@@ -189,9 +192,12 @@ describe('DesktopHistoryHandlers', () => {
 
   it('warns when the history item to delete no longer exists', async () => {
     const showWarningMessage = vi.fn(async () => undefined);
-    const actions = createHistoryActions({ showWarningMessage });
+    const actions = createHistoryHandlers({ showWarningMessage });
 
-    await assertSupported(actions.deleteAgent)('eeee5555');
+    await assertSupported(actions.deleteAgent)({
+      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+      historyId: 'eeee5555',
+    });
 
     expect(showWarningMessage).toHaveBeenCalledWith(
       'History item not found: eeee5555',
@@ -201,9 +207,12 @@ describe('DesktopHistoryHandlers', () => {
   it('deletes an inactive execution and refreshes history', async () => {
     await writeHistoryConfig();
     const postToRenderer = vi.fn();
-    const actions = createHistoryActions({ postToRenderer });
+    const actions = createHistoryHandlers({ postToRenderer });
 
-    await assertSupported(actions.deleteAgent)(HISTORY_ID);
+    await assertSupported(actions.deleteAgent)({
+      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+      historyId: HISTORY_ID,
+    });
 
     expect(await getExecutionStore(HISTORY_ID).readConfig()).toBeNull();
     expect(postToRenderer).toHaveBeenCalledWith({
@@ -218,9 +227,12 @@ describe('DesktopHistoryHandlers', () => {
     const survivor = 'chat@deepseek#ffff8888' as StreamTabId;
     await GoalStore.start(streamId, 'finish the cleanup');
     await GoalStore.start(survivor, 'keep me');
-    const actions = createHistoryActions();
+    const actions = createHistoryHandlers();
 
-    await assertSupported(actions.deleteAgent)(HISTORY_ID);
+    await assertSupported(actions.deleteAgent)({
+      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
+      historyId: HISTORY_ID,
+    });
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
     expect(GoalStore.getForStream(survivor)?.objective).toBe('keep me');
@@ -232,9 +244,11 @@ describe('DesktopHistoryHandlers', () => {
     await GoalStore.start(streamId, 'finish the cleanup');
     const postToRenderer = vi.fn();
     const showInfoMessage = vi.fn(async () => undefined);
-    const actions = createHistoryActions({ postToRenderer, showInfoMessage });
+    const actions = createHistoryHandlers({ postToRenderer, showInfoMessage });
 
-    await assertSupported(actions.clear)();
+    await assertSupported(actions.clearHistory)({
+      command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
+    });
 
     expect(GoalStore.getForStream(streamId)).toBeNull();
     expect(showInfoMessage).toHaveBeenCalledWith('Agent history cleared');
@@ -253,12 +267,14 @@ describe('DesktopHistoryHandlers', () => {
     await writeForeignLease(activeHistoryId);
     const postToRenderer = vi.fn();
     const showInfoMessage = vi.fn(async () => undefined);
-    const actions = createHistoryActions({
+    const actions = createHistoryHandlers({
       postToRenderer,
       showInfoMessage,
     });
 
-    await assertSupported(actions.clear)();
+    await assertSupported(actions.clearHistory)({
+      command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
+    });
 
     expect(await getExecutionStore(activeHistoryId).readConfig()).toEqual(
       HISTORY_CONFIG,
@@ -277,7 +293,7 @@ describe('DesktopHistoryHandlers', () => {
     await writeHistoryConfig();
     const showErrorMessage = vi.fn();
     const restoreTaskState = vi.fn(async () => true);
-    const actions = createHistoryActions({
+    const actions = createHistoryHandlers({
       showErrorMessage,
       history: { restoreTaskState },
     });
@@ -295,7 +311,7 @@ describe('DesktopHistoryHandlers', () => {
 
   it('reports missing history items for rerun and restore instead of dropping them', async () => {
     const showErrorMessage = vi.fn();
-    const actions = createHistoryActions({ showErrorMessage });
+    const actions = createHistoryHandlers({ showErrorMessage });
     const historyId = 'ffff9999';
 
     await assertSupported(actions.rerunAgent)({
@@ -322,7 +338,7 @@ describe('DesktopHistoryHandlers', () => {
     await writeHistoryConfig();
     const showErrorMessage = vi.fn();
     const restoreTaskState = vi.fn(async () => false);
-    const actions = createHistoryActions({
+    const actions = createHistoryHandlers({
       showErrorMessage,
       history: { restoreTaskState },
     });
@@ -351,7 +367,7 @@ describe('DesktopHistoryHandlers', () => {
     });
     const openPath = vi.fn();
     const showInfoMessage = vi.fn();
-    const actions = createHistoryActions({ openPath, showInfoMessage });
+    const actions = createHistoryHandlers({ openPath, showInfoMessage });
 
     await assertSupported(actions.exportChatMd)({
       command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
@@ -379,7 +395,7 @@ describe('DesktopHistoryHandlers', () => {
       storagePath: 'executions/abc/chat.md',
       absolutePath: '/tmp/executions/abc/chat.md',
     });
-    const actions = createHistoryActions();
+    const actions = createHistoryHandlers();
 
     await Promise.all([
       assertSupported(actions.exportChatMd)({
@@ -406,7 +422,7 @@ describe('DesktopHistoryHandlers', () => {
       absolutePath: '/tmp/executions/def/chat.md',
     });
     chatExportMocks.constructorError = new Error('controller setup failed');
-    const actions = createHistoryActions();
+    const actions = createHistoryHandlers();
     const exportChatMd = assertSupported(actions.exportChatMd);
 
     await expect(
@@ -440,7 +456,7 @@ describe('DesktopHistoryHandlers', () => {
     });
     const openPath = vi.fn();
     const showInfoMessage = vi.fn();
-    const actions = createHistoryActions({ openPath, showInfoMessage });
+    const actions = createHistoryHandlers({ openPath, showInfoMessage });
 
     await assertSupported(actions.exportChatTex)({
       command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
@@ -462,7 +478,7 @@ describe('DesktopHistoryHandlers', () => {
       },
     });
     const openPath = vi.fn();
-    const actions = createHistoryActions({ openPath });
+    const actions = createHistoryHandlers({ openPath });
 
     await assertSupported(actions.exportChatHtml)({
       command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
@@ -481,7 +497,7 @@ describe('DesktopHistoryHandlers', () => {
       status: 'config_missing',
     });
     const showInfoMessage = vi.fn();
-    const actions = createHistoryActions({ showInfoMessage });
+    const actions = createHistoryHandlers({ showInfoMessage });
 
     await assertSupported(actions.exportChatMd)({
       command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,

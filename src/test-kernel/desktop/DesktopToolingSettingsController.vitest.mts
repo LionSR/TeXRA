@@ -197,7 +197,11 @@ describe('DefaultDesktopToolingSettingsController', () => {
       },
     });
 
-    await assertSupported(controller.toolsActions.toggle)('zotero', false);
+    await assertSupported(controller.toolHandlers.toggleTool)({
+      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+      toolId: 'zotero',
+      enabled: false,
+    });
 
     expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
     expect(events).toEqual([
@@ -220,7 +224,11 @@ describe('DefaultDesktopToolingSettingsController', () => {
       },
     });
 
-    await assertSupported(controller.toolsActions.toggle)('zotero', false);
+    await assertSupported(controller.toolHandlers.toggleTool)({
+      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+      toolId: 'zotero',
+      enabled: false,
+    });
 
     expect(buildInputs).toEqual([undefined]);
   });
@@ -246,7 +254,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
       },
     });
 
-    await assertSupported(controller.toolsActions.recheckStatus)();
+    await assertSupported(controller.toolHandlers.recheckToolStatus)({
+      command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+    });
 
     expect(events).toEqual([
       'dashboard:refresh',
@@ -272,11 +282,13 @@ describe('DefaultDesktopToolingSettingsController', () => {
       },
     });
 
-    await assertSupported(controller.toolsActions.runCommand)({
+    await assertSupported(controller.toolHandlers.runToolCommand)({
+      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
       toolId: 'codex',
       kind: 'install',
     });
-    await assertSupported(controller.toolsActions.runCommand)({
+    await assertSupported(controller.toolHandlers.runToolCommand)({
+      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
       toolId: 'codex',
       kind: 'auth',
     });
@@ -292,13 +304,15 @@ describe('DefaultDesktopToolingSettingsController', () => {
   it('runs only allowlisted LaTeX installation commands', async () => {
     const { controller, commands } = createFixture();
 
-    await assertSupported(controller.latexActions.runInstallCommand)(
-      HOMEBREW_INSTALL_COMMAND,
-    );
+    await assertSupported(controller.latexHandlers.runInstallCommand)({
+      command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+      installCommand: HOMEBREW_INSTALL_COMMAND,
+    });
     await expect(
-      assertSupported(controller.latexActions.runInstallCommand)(
-        'echo not-allowlisted',
-      ),
+      assertSupported(controller.latexHandlers.runInstallCommand)({
+        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+        installCommand: 'echo not-allowlisted',
+      }),
     ).rejects.toThrow('Rejected unknown install command: echo not-allowlisted');
 
     expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
@@ -307,9 +321,10 @@ describe('DefaultDesktopToolingSettingsController', () => {
   it('routes install URLs through explicit navigation', async () => {
     const { controller, openedUrls } = createFixture();
 
-    await assertSupported(controller.toolsActions.openInstallUrl)(
-      'https://example.com/install',
-    );
+    await assertSupported(controller.toolHandlers.openToolInstallUrl)({
+      command: SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL,
+      url: 'https://example.com/install',
+    });
 
     expect(openedUrls).toEqual(['https://example.com/install']);
   });
@@ -323,12 +338,16 @@ describe('DefaultDesktopToolingSettingsController', () => {
       },
     });
 
-    expect(isUnsupported(controller.toolsActions.installExtension)).toBe(true);
-    expect(isUnsupported(controller.latexActions.installLatexWorkshop)).toBe(
+    expect(isUnsupported(controller.toolHandlers.installToolExtension)).toBe(
+      true,
+    );
+    expect(isUnsupported(controller.latexHandlers.installLatexWorkshop)).toBe(
       true,
     );
 
-    await assertSupported(controller.toolsActions.recheckStatus)();
+    await assertSupported(controller.toolHandlers.recheckToolStatus)({
+      command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+    });
 
     expect(posted.at(-1)).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

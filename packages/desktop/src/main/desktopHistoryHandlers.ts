@@ -28,12 +28,24 @@ import {
   HISTORY_CONFIG_UNREADABLE_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import type { ExecutionId } from '@shared/schemas';
+import type {
+  ExecutionId,
+  SettingsViewInboundHandlerRegistry,
+} from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GoalStore } from '@tools/goal';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
+type DesktopHistoryHandlerRegistry = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_COMMANDS.RERUN_AGENT
+  | typeof SETTINGS_VIEW_COMMANDS.RESTORE_AGENT
+  | typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT
+  | typeof SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY
+  | typeof SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD
+  | typeof SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX
+  | typeof SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML
+>;
 
 /** Dependencies required by the desktop history controller. */
 export interface DesktopHistoryOptions {
@@ -53,25 +65,25 @@ export interface DesktopHistoryOptions {
 }
 
 export interface DesktopHistorySettingsController {
-  readonly actions: SettingsViewCommandActions['history'];
+  readonly handlers: DesktopHistoryHandlerRegistry;
   postHistoryData(): Promise<void>;
 }
 
 /** Own desktop history settings actions behind the dispatcher contract. */
 export class DesktopHistoryHandlers implements DesktopHistorySettingsController {
-  readonly actions: SettingsViewCommandActions['history'];
+  readonly handlers: DesktopHistoryHandlerRegistry;
 
   private chatExportControllerLoad: Promise<ChatExportController> | undefined;
 
   constructor(private readonly dependencies: DesktopHistoryOptions) {
-    this.actions = {
-      deleteAgent: (historyId) => this.deleteItem(historyId),
-      clear: () => this.clear(),
-      rerunAgent: (data) => this.rerun(data.historyId),
-      restoreAgent: (data) => this.restore(data.historyId),
-      exportChatMd: (data) => this.exportChat(data.historyId, 'md'),
-      exportChatTex: (data) => this.exportChat(data.historyId, 'tex'),
-      exportChatHtml: (data) => this.exportChat(data.historyId, 'html'),
+    this.handlers = {
+      deleteAgent: (message) => this.deleteItem(message.historyId),
+      clearHistory: () => this.clear(),
+      rerunAgent: (message) => this.rerun(message.historyId),
+      restoreAgent: (message) => this.restore(message.historyId),
+      exportChatMd: (message) => this.exportChat(message.historyId, 'md'),
+      exportChatTex: (message) => this.exportChat(message.historyId, 'tex'),
+      exportChatHtml: (message) => this.exportChat(message.historyId, 'html'),
     };
   }
 
