@@ -15,7 +15,11 @@ updated: 2026-07-18
 > ratchet tests and centralized baselines in [#7914] and [#8322]. The proposed
 > frozen `RunDescriptor` injection model, `ModelCell`, `PendingRequests`,
 > `RetryPolicy`, `RetryGate`, and `HostUiBus` are retired and must not be
-> implemented from this record. The `RunDescriptor` name on `main` denotes the
+> implemented from this record. The later
+> [narrow ModelCell ownership ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition)
+> governs only the current primitive on `main`; it does not revive this proposal
+> or make its other retired designs authoritative. The `RunDescriptor` name on
+> `main` denotes the
 > unrelated persisted stream schema introduced in [#7164].
 
 [#7164]: https://github.com/LionSR/TeXRA/pull/7164

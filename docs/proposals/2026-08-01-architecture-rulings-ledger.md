@@ -101,8 +101,9 @@ it the assert is knowingly wrong for `LogList`.
 **Ruling.** No. The implementation merged in
 [#9547](https://github.com/LionSR/TeXRA/pull/9547) is authoritative for the
 narrow ownership and lifecycle guarantees below. It supersedes the retired
-PRD's [top-level prohibition](../prds/2026-06-29-prd-runtime-gold-standard.md#L8-L19)
-and [§2 ModelCell text](../prds/2026-06-29-prd-runtime-gold-standard.md#2-modelcell-the-one-mutable-seam)
+PRD's top-level [historical-status clause](../prds/2026-06-29-prd-runtime-gold-standard.md),
+which says the listed designs “must not be implemented from this record,” and
+its [§2 ModelCell text](../prds/2026-06-29-prd-runtime-gold-standard.md#2-modelcell-the-one-mutable-seam)
 only where those passages deny that this primitive exists on `main`.
 
 **Current guarantees.** The code, rather than the retired design, defines the
@@ -122,13 +123,31 @@ accepted shape:
   identity.
 - The run lifecycle calls `ModelCell.dispose()` in its `finally` path. Thus the
   cell disposes handlers retired by successful swaps and the handler still live
-  when the run ends; failed replacement handlers are disposed before ownership
-  can transfer to the cell.
+  when the run ends. In the tool-use switch path, the runtime explicitly
+  disposes a replacement candidate before ownership transfer only when the
+  conversation-format check rejects it or either persistence write fails. This
+  is not a blanket guarantee for exceptions from compatibility inspection,
+  `setAgentCategory`, or `setLogger`. On success, `ModelCell.swap` adopts the
+  replacement before disposing the distinct handler it retires.
 
 **Scope of supersession.** This ruling does **not** revive the retired PRD as a
 plan, make its unmerged `RunDescriptor` injection program authoritative, or
 approve its `PendingRequests`, `RetryPolicy`, `RetryGate`, `HostUiBus`, stage
-sequence, or concept-count claims. Those passages remain historical. Future
-changes to model ownership must be justified against the current implementation
-and tests in `src/agent/runtime/ModelCell.ts`, not by treating the retired
-gold-standard program as normative.
+sequence, or concept-count claims. Those passages remain historical.
+
+**Implementation evidence.** The accepted behavior is defined by
+`src/agent/runtime/ModelCell.ts`, `AgentLaunchContext.ts`,
+`AgentRunLifecycle.ts`, `SessionResumeRetrieval.ts`, `executeAgent.ts`, and the
+model-switch path in
+`src/agent/implementations/flows/tooluse/runToolUseFlow.ts`.
+
+**Test evidence.** The focused coverage is in
+`src/test-kernel/agent/runtime/ModelCell.vitest.ts`,
+`src/test-kernel/agent/runtime/AgentRunLifecycle.vitest.ts`,
+`src/test-kernel/agent/SessionResumeRetrieval.vitest.ts`,
+`src/test-kernel/agent/runtime/ResumeToolUseCancellation.vitest.ts`, and
+`src/test-kernel/agent/followUp/ModelSwitchState.vitest.ts`.
+
+Future changes to model ownership must be justified against that current
+implementation and test coverage, not by treating the retired gold-standard
+program as normative.

@@ -25,8 +25,11 @@ historical context and this one as the post-retirement snapshot.
 > boundaries enforced by ratchet tests rather than a package fence. This audit does
 > **not** reopen those proposals. `RunDescriptor` (frozen-injection), `ModelCell`,
 > `PendingRequests`, `RetryPolicy`/`RetryGate`, and `HostUiBus` remain retired and
-> must not be implemented from this record. The findings below are the residue that
-> the lighter path leaves, nothing more.
+> must not be implemented from this record. The later
+> [narrow ModelCell ownership ruling](../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition)
+> governs only the current primitive on `main`; it does not revive these proposals
+> or make their other retired designs authoritative. The findings below are the
+> residue that the lighter path leaves, nothing more.
 
 ## Headline
 
@@ -256,7 +259,10 @@ Clean and well-factored; the only defect is finding #2 above.
 ## What is explicitly _not_ worth doing
 
 - Don't resurrect the retired package-fence / `RunDescriptor` / `ModelCell` /
-  `RetryGate` proposals — `main` chose the lighter path on purpose.
+  `RetryGate` proposals — `main` chose the lighter path on purpose. The current
+  `ModelCell` primitive is governed only by the
+  [narrow ownership ruling](../../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell--current-ownership-ruling-supersedes-only-the-retired-prohibition),
+  which does not revive those proposals.
 - Don't invent new abstractions or split the runtime directory — the flat
   `runtime/` layout is a documented, deliberate choice (~180 call sites import
   specific files; a directory split is mechanical churn, not a refactor).
