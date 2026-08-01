@@ -68,18 +68,28 @@ describe('RestoreRunConfigInputSchema', () => {
     expect(
       RestoreRunConfigInputSchema.safeParse({ agent: undefined }).success,
     ).toBe(false);
-    expect(
-      RestoreRunConfigInputSchema.safeParse({ agent: '', model: '' }).success,
-    ).toBe(false);
-    expect(
-      RestoreRunConfigInputSchema.safeParse({ agent: '', model: 'sonnet46T' })
-        .success,
-    ).toBe(false);
   });
 
-  it('applies the documented default when one identity field is omitted', () => {
-    expect(RestoreRunConfigInputSchema.parse({ agent: 'correct' }).agent).toBe(
-      'correct',
-    );
+  it.each([
+    ['direct blank identities', { agent: '', model: '' }],
+    ['direct whitespace identities', { agent: '  ', model: '\t' }],
+    ['direct blank identity', { agent: '', model: 'sonnet46T' }],
+    [
+      'legacy-wrapped blank identities',
+      { agentConfig: { agent: '', model: '' } },
+    ],
+    [
+      'legacy-wrapped whitespace identities',
+      { agentConfig: { agent: '  ', model: '\t' } },
+    ],
+  ])('rejects %s', (_name, input) => {
+    expect(RestoreRunConfigInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it.each([
+    ['agent', { agent: 'correct' }],
+    ['model', { model: 'sonnet46T' }],
+  ])('accepts a config identified only by %s', (_name, input) => {
+    expect(RestoreRunConfigInputSchema.safeParse(input).success).toBe(true);
   });
 });
