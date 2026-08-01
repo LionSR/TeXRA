@@ -80,6 +80,20 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     session.status.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
   }
 
+  it('does not overwrite status created during an absent-generation probe', async () => {
+    const deferred = createDeferredResumability();
+    resumabilityMocks.deriveResumability.mockImplementation(
+      () => deferred.promise,
+    );
+
+    const repair = session.repairWaitingIfResumable(streamId);
+    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle');
+    deferred.resolve();
+
+    await expect(repair).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+  });
+
   it('restores a terminal stream to WAITING when its execution is resumable', async () => {
     seedCancelled();
     resumabilityMocks.deriveResumability.mockResolvedValue({
