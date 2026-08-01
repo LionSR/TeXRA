@@ -123,13 +123,14 @@ import {
   proposalApprovals,
 } from '@tools/approval';
 
-function context(): CliContext {
+function context(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
     cwd: '/work',
     mode: 'interactive',
     approvalPolicy: 'ask',
     version: 'test',
     resourcesPath: '/resources',
+    ...overrides,
   });
 }
 
@@ -141,14 +142,17 @@ function host(): CliRuntimeHost {
   } as unknown as CliRuntimeHost;
 }
 
-function tui(presentationHost = host()): {
+function tui(
+  presentationHost = host(),
+  contextOverrides: Partial<CliContext> = {},
+): {
   readonly presentationHost: CliRuntimeHost;
   readonly cliContext: CliContext;
   readonly interactions: HostInteractions;
   readonly prepareRetry: ReturnType<typeof vi.fn>;
   readonly dispose: () => void;
 } {
-  const cliContext = context();
+  const cliContext = context(contextOverrides);
   const hostInteractions = createTuiHostInteractions(
     presentationHost,
     cliContext,
@@ -302,6 +306,27 @@ afterEach(() => {
 });
 
 describe('TUI retry approvals', () => {
+  it('reports an automatic yolo retry rejection as a policy denial', async () => {
+    const { interactions, cliContext } = tui(host(), {
+      approvalPolicy: 'yolo',
+    });
+
+    const result = interactions.requestRetry?.({
+      requestId: 'yolo-transient-retry',
+      streamId: 'yolo-transient-stream',
+      operation: 'model request',
+      errorMessage: 'Temporary connection error.',
+    });
+
+    await expect(result).resolves.toEqual({
+      action: 'deny',
+      reason:
+        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+    });
+    expect(hasCliApprovalDenied(cliContext)).toBe(true);
+    expect(currentApproval.get()).toBeUndefined();
+  });
+
   it('does not mutate the runtime host emitter', () => {
     const presentationHost = host();
     const originalEmit = presentationHost.emit;
