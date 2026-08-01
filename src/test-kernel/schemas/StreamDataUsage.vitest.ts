@@ -120,6 +120,26 @@ describe('stream data usage parsing', () => {
     expect(usage.get('run')).not.toHaveProperty('viaChatGptSubscription');
   });
 
+  it.each([
+    ['subscription marker', { viaChatGptSubscription: 'yes' }],
+    ['usage route', { usageRoute: 'unknown-route' }],
+  ])('preserves a run with a malformed %s', (_field, malformedField) => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rawRun = {
+      inputTokens: 10,
+      outputTokens: 2,
+      cost: 0.1,
+      ...malformedField,
+    };
+
+    const { usage, unparsedRuns } = parseUsageData({ run: rawRun });
+
+    expect(usage.has('run')).toBe(false);
+    expect(unparsedRuns.get('run')).toEqual(rawRun);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('preserves an unparseable run entry instead of silently zeroing it', () => {
     // Regression test for #7464: a run entry that isn't an object at all
     // (e.g. corrupted to a bare string) must not be replaced by zeroed
