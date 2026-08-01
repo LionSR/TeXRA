@@ -49,7 +49,13 @@ export class ReliabilitySettingsSection extends LitElement {
       input.value = String(setting.value);
       return;
     }
-    const value = clampOptional(parsed, setting.min, setting.max);
+    const stepOrigin = setting.min ?? 0;
+    const stepped =
+      setting.step === undefined
+        ? parsed
+        : stepOrigin +
+          Math.round((parsed - stepOrigin) / setting.step) * setting.step;
+    const value = clampOptional(stepped, setting.min, setting.max);
     if (value !== parsed) input.value = String(value);
     postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
       key: setting.key,
@@ -72,6 +78,7 @@ export class ReliabilitySettingsSection extends LitElement {
             .value=${String(setting.value)}
             min=${setting.min ?? nothing}
             max=${setting.max ?? nothing}
+            step=${setting.step ?? nothing}
             @change=${(event: Event) =>
               this.handleSettingChange(setting, event.target as WaInput)}
           ></wa-input>

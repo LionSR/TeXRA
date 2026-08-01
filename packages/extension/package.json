@@ -799,11 +799,12 @@
         "title": "Model Retries",
         "properties": {
           "texra.model.retry.maxAttempts": {
-            "type": "number",
+            "type": "integer",
             "default": 2,
             "minimum": 0,
-            "description": "Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.",
-            "scope": "resource"
+            "description": "Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.",
+            "scope": "resource",
+            "maximum": 5
           }
         }
       }

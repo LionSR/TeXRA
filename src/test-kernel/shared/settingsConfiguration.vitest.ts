@@ -15,6 +15,7 @@ import {
 } from '@extensionSchemas/texraSettings';
 import { PROVIDER_VSCODE_SETTINGS } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas/coreSettings';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
   getGLMUseChina,
@@ -76,6 +77,29 @@ describe('TexraSettingsSchema', () => {
     // T10: Google Interactions server-side state defaults ON.
     assert.equal(parsed.model.useGoogleInteractionsServerState, true);
     assert.deepEqual(parsed, DEFAULT_TEXRA_SETTINGS);
+  });
+
+  it('bounds automatic model retries as additional whole attempts', () => {
+    const atMaximum = TexraSettingsSchema.parse({
+      model: { retry: { maxAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max } },
+    });
+
+    assert.equal(
+      atMaximum.model.retry.maxAttempts,
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+    );
+    assert.throws(() =>
+      TexraSettingsSchema.parse({
+        model: {
+          retry: { maxAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max + 1 },
+        },
+      }),
+    );
+    assert.throws(() =>
+      TexraSettingsSchema.parse({
+        model: { retry: { maxAttempts: 1.5 } },
+      }),
+    );
   });
 
   it('exposes every TEXRA_SETTING_PATH on the parsed tree', () => {

@@ -64,6 +64,18 @@ export type LatexdiffTempFileLocation =
   (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
 export type AgentReviewApproach = (typeof AGENT_REVIEW_APPROACHES)[number];
 
+/**
+ * Contract for the historical `model.retry.maxAttempts` setting. The value is
+ * the number of automatic retries after the initial model request.
+ */
+export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
+  defaultValue: 2,
+  min: 0,
+  max: 5,
+  description:
+    'Additional automatic retries after the initial model request (0–5). Long-running background requests retain at least two recovery retries.',
+} as const;
+
 export const DEFAULT_CORE_SETTINGS = {
   agentOutputs: {
     autoOpenFinal: true,
@@ -83,7 +95,7 @@ export const DEFAULT_CORE_SETTINGS = {
     compactionThresholdPercent: 75,
     gpt5ReasoningSummary: false,
     retry: {
-      maxAttempts: 2,
+      maxAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     },
   },
   chatgptCodex: {
@@ -284,6 +296,13 @@ const numberField = (
   return schema.describe(description).prefault(defaultValue);
 };
 
+export const ModelRetryMaxAttemptsSchema = z
+  .int()
+  .min(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min)
+  .max(MODEL_RETRY_MAX_ATTEMPTS_SETTING.max)
+  .describe(MODEL_RETRY_MAX_ATTEMPTS_SETTING.description)
+  .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
+
 /**
  * Field shape for {@link CoreSettingsSchema}.
  *
@@ -350,11 +369,7 @@ export const CoreSettingsShape = {
       ),
       retry: z
         .strictObject({
-          maxAttempts: numberField(
-            DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
-            'Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.',
-            { min: 0 },
-          ),
+          maxAttempts: ModelRetryMaxAttemptsSchema,
         })
         .prefault(DEFAULT_CORE_SETTINGS.model.retry),
     })

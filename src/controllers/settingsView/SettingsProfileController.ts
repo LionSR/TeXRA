@@ -8,11 +8,18 @@ import type {
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
 import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import {
+  DEFAULT_CORE_SETTINGS,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelRetryMaxAttemptsSchema,
+} from '@shared/schemas/coreSettings';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 
 type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
   defaultValue: number;
+  schema?: {
+    safeParse(value: unknown): { success: boolean };
+  };
 };
 
 const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
@@ -28,11 +35,13 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
   },
   {
     key: 'texra.model.retry.maxAttempts',
-    label: 'Retry attempts',
-    description:
-      'Automatic retry attempts for transient model failures. Parallel runs share one recovery probe per affected model route.',
-    min: 0,
+    label: 'Automatic retries',
+    description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
+    min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
+    max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+    step: 1,
     defaultValue: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+    schema: ModelRetryMaxAttemptsSchema,
   },
 ];
 
@@ -72,8 +81,8 @@ export interface SettingsProfileControllerDeps {
 
 export class SettingsProfileController {
   private readonly providerSettingsByKey: Map<string, ProviderVscodeSettingDef>;
-  private readonly reliabilitySettingKeys = new Set(
-    SETTINGS_RELIABILITY_SETTINGS.map((setting) => setting.key),
+  private readonly reliabilitySettingsByKey = new Map(
+    SETTINGS_RELIABILITY_SETTINGS.map((setting) => [setting.key, setting]),
   );
 
   constructor(private readonly deps: SettingsProfileControllerDeps) {
@@ -95,12 +104,21 @@ export class SettingsProfileController {
   }
 
   getReliabilitySettings(): NumberVscodeSetting[] {
-    return SETTINGS_RELIABILITY_SETTINGS.map(
-      ({ defaultValue, ...setting }) => ({
+    return SETTINGS_RELIABILITY_SETTINGS.map((definition) => {
+      const { defaultValue, schema: _schema, ...setting } = definition;
+      const configuredValue = this.deps.getConfig<number>(
+        setting.key,
+        defaultValue,
+      );
+      return {
         ...setting,
-        value: this.deps.getConfig<number>(setting.key, defaultValue),
-      }),
-    );
+        value:
+          definition.schema &&
+          !definition.schema.safeParse(configuredValue).success
+            ? defaultValue
+            : configuredValue,
+      };
+    });
   }
 
   getProviderDisplayName(provider: string): string {
@@ -139,8 +157,12 @@ export class SettingsProfileController {
     value: SettingsProfileConfigValue;
   }): Promise<ProviderVscodeSettingUpdateResult> {
     const providerSetting = this.providerSettingsByKey.get(input.key);
-    const isReliabilitySetting = this.reliabilitySettingKeys.has(input.key);
-    if (!providerSetting && !isReliabilitySetting) {
+    const reliabilitySetting = this.reliabilitySettingsByKey.get(input.key);
+    if (
+      (!providerSetting && !reliabilitySetting) ||
+      (reliabilitySetting?.schema &&
+        !reliabilitySetting.schema.safeParse(input.value).success)
+    ) {
       return { kind: 'rejected', key: input.key };
     }
 
