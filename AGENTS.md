@@ -24,7 +24,8 @@ When updating CHANGELOG.md:
 2. **Install the local hooks (recommended)**: install `pre-commit` with
    `python -m pip install pre-commit`, then run `pre-commit install`. The
    formatting hook rewrites supported staged files; if it changes a file,
-   review and stage the formatter's output before retrying the commit.
+   review the diff and stage only the intended hunks before retrying. For a
+   partially staged file, use `git add -p` so unrelated unstaged edits stay out.
 3. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
