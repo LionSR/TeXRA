@@ -2,11 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type {
-  ConfigInspection,
-  ConfigProvider,
-  ConfigTarget,
-} from '@platform/interfaces';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import {
@@ -14,110 +9,13 @@ import {
   migrateLegacyGlobalBashApprovalOverride,
 } from '@shared/settingsView/handlers/approvalHandlers';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-/**
- * Minimal in-memory `ConfigProvider` with real workspace -> global fallback
- * semantics, mirroring `VscodeConfigProvider`/`JsonConfigProvider`. Needed
- * here (rather than the no-op `RecordingConfigProvider` used by
- * `BashApprovalConfigTarget.vitest.ts`) because the migration reads
- * `inspect()` to distinguish "no override anywhere" from "explicit
- * workspace override" from "legacy global override only".
- */
-class FakeConfigProvider implements ConfigProvider {
-  private readonly workspaceValues = new Map<string, unknown>();
-  private readonly workspaceFolderValues = new Map<string, unknown>();
-  private readonly globalValues = new Map<string, unknown>();
-  readonly updateCalls: Array<{
-    key: string;
-    value: unknown;
-    target: ConfigTarget;
-  }> = [];
-
-  /**
-   * When set, `update()` calls targeting this scope throw instead of
-   * applying -- simulates a persistence failure (e.g. VS Code rejecting the
-   * write) so tests can assert on partial-migration recovery behavior.
-   */
-  failUpdatesForTarget?: ConfigTarget;
-
-  get<T>(key: string, defaultValue?: T): T {
-    // Mirrors VS Code's own resolution order: resource (folder) scope wins
-    // over workspace scope, which wins over global scope.
-    if (this.workspaceFolderValues.has(key))
-      return this.workspaceFolderValues.get(key) as T;
-    if (this.workspaceValues.has(key))
-      return this.workspaceValues.get(key) as T;
-    if (this.globalValues.has(key)) return this.globalValues.get(key) as T;
-    return defaultValue as T;
-  }
-
-  async update<T>(
-    key: string,
-    value: T,
-    target: ConfigTarget = 'workspace',
-  ): Promise<void> {
-    if (target === this.failUpdatesForTarget) {
-      throw new Error(`simulated ${target}-scope update failure for ${key}`);
-    }
-    this.updateCalls.push({ key, value, target });
-    const store =
-      target === 'global' ? this.globalValues : this.workspaceValues;
-    if (value === undefined) {
-      store.delete(key);
-    } else {
-      store.set(key, value);
-    }
-  }
-
-  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    return {
-      globalValue: this.globalValues.has(key)
-        ? (this.globalValues.get(key) as T)
-        : undefined,
-      workspaceValue: this.workspaceValues.has(key)
-        ? (this.workspaceValues.get(key) as T)
-        : undefined,
-      workspaceFolderValue: this.workspaceFolderValues.has(key)
-        ? (this.workspaceFolderValues.get(key) as T)
-        : undefined,
-      effectiveValue: this.get<T>(key),
-    };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    return (
-      this.workspaceValues.has(key) ||
-      this.workspaceFolderValues.has(key) ||
-      this.globalValues.has(key)
-    );
-  }
-
-  watch(): { dispose(): void } {
-    return { dispose: () => undefined };
-  }
-
-  /** Seeds a legacy global value directly, without going through `update()`. */
-  seedGlobal(key: string, value: unknown): void {
-    this.globalValues.set(key, value);
-  }
-
-  /**
-   * Seeds a resource-scoped `workspaceFolderValue` directly. Real writes
-   * to `'workspace'` target (`ConfigTarget` has no folder-scope option) land
-   * in `workspaceValue`, but `texra.toolUse.requireBashApproval` is declared
-   * `resource`-scoped, so post-#7148 UI writes commonly resolve as
-   * `workspaceFolderValue` instead -- this seeds that shape directly.
-   */
-  seedWorkspaceFolder(key: string, value: unknown): void {
-    this.workspaceFolderValues.set(key, value);
-  }
-}
+import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 
 describe('migrateLegacyGlobalBashApprovalOverride', () => {
   it('migrates a pre-existing legacy global override to workspace scope and clears it globally', async () => {
     // Simulates a user who disabled bash approval before #7148, when the
     // extension still wrote it to the global scope (issue #7085 / #7169).
-    const config = new FakeConfigProvider();
+    const config = new FakeScopedConfigProvider();
     config.seedGlobal(BASH_APPROVAL_CONFIG_KEY, false);
     const workspaceState = new MemoryStateStore();
 
@@ -148,7 +46,7 @@ describe('migrateLegacyGlobalBashApprovalOverride', () => {
   });
 
   it('is a no-op when no legacy global override exists', async () => {
-    const config = new FakeConfigProvider();
+    const config = new FakeScopedConfigProvider();
     const workspaceState = new MemoryStateStore();
 
     await migrateLegacyGlobalBashApprovalOverride({ workspaceState, config });
@@ -168,7 +66,7 @@ describe('migrateLegacyGlobalBashApprovalOverride', () => {
   });
 
   it('never re-runs once the per-workspace marker is already set', async () => {
-    const config = new FakeConfigProvider();
+    const config = new FakeScopedConfigProvider();
     config.seedGlobal(BASH_APPROVAL_CONFIG_KEY, false);
     const workspaceState = new MemoryStateStore();
     await workspaceState.update(
@@ -185,7 +83,7 @@ describe('migrateLegacyGlobalBashApprovalOverride', () => {
   });
 
   it("does not overwrite a workspace's own explicit override, but still clears the stale global value", async () => {
-    const config = new FakeConfigProvider();
+    const config = new FakeScopedConfigProvider();
     config.seedGlobal(BASH_APPROVAL_CONFIG_KEY, false);
     // This workspace already has its own explicit value -- e.g. set via the
     // post-#7148 settings UI in an earlier session.
@@ -205,7 +103,7 @@ describe('migrateLegacyGlobalBashApprovalOverride', () => {
     // than `workspaceValue` -- the migration must treat that the same as an
     // explicit workspace override, not just copy the stale global `false`
     // over the top of it (issue #7169 bugbot follow-up).
-    const config = new FakeConfigProvider();
+    const config = new FakeScopedConfigProvider();
     config.seedGlobal(BASH_APPROVAL_CONFIG_KEY, false);
     config.seedWorkspaceFolder(BASH_APPROVAL_CONFIG_KEY, true);
     const workspaceState = new MemoryStateStore();
@@ -240,7 +138,7 @@ describe('migrateLegacyGlobalBashApprovalOverride', () => {
     // global `false` is left to silently keep bypassing approval in every
     // other, not-yet-migrated workspace with no way to ever retry the clear
     // (issue #7169 bugbot + claude-review follow-up).
-    const config = new FakeConfigProvider();
+    const config = new FakeScopedConfigProvider();
     config.seedGlobal(BASH_APPROVAL_CONFIG_KEY, false);
     config.failUpdatesForTarget = 'global';
     const workspaceState = new MemoryStateStore();
