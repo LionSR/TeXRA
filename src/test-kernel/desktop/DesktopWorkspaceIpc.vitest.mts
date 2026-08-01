@@ -242,17 +242,19 @@ describe('desktop workspace IPC', () => {
     );
   });
 
-  it('reports renderer editor dirty state to the window lifecycle', () => {
-    const onEditorDirtyChange = vi.fn();
-    const ipc = createIpc(vi.fn(), { onEditorDirtyChange });
+  it('accepts no editor dirty-state mirror from the renderer', () => {
+    // Editor dirtiness lives in the renderer's Monaco buffers. The main
+    // process used to keep a mirrored copy here and decide the discard prompt
+    // from it, which went stale while the message was in flight; the prompt is
+    // now driven only by the renderer's beforeunload veto.
+    const ipc = createIpc(vi.fn());
 
     expect(
       ipc.handleMessage({
-        command: DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE,
+        command: 'desktop:workspace:editorDirtyState',
         dirty: true,
       }),
-    ).toBe(true);
-    expect(onEditorDirtyChange).toHaveBeenCalledWith(true);
+    ).toBe(false);
   });
 
   it('disposes terminal and browser resources at a renderer boundary', () => {

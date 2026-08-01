@@ -44,6 +44,7 @@ import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanIn
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   apiKeyExistsUncached,
   hasUsableApiKey,
@@ -58,7 +59,6 @@ import {
   type ExternalInquiryPermission,
   type PlanApprovalPermission,
 } from '@shared/schemas';
-import { APPROVAL_REPLACED_CAUSE } from '@shared/copy/interactionCancellation';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   setDelegatedWorkApprovalBypasses,
@@ -78,10 +78,11 @@ import {
   type ApprovalBypassKind,
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
+  clearApprovalsForOwner,
   clearApprovalsWhere,
   clearRetryApprovalsForStream,
   enqueueApproval,
-  onApprovalsCleared,
+  reserveApproval,
   type ApprovalDecision,
   type ApprovalPayload,
   type TuiRetryRequest,
@@ -128,14 +129,12 @@ export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
 ): HostInteractions {
-  const retryRoutes = new Map<string, ActiveRetryRoute>();
   // The two persisted access fields commit as one choice within this TUI
   // lifetime. Keeping the queue session-owned prevents stale work leaking
   // across disposed hosts or tests.
   const retryCredentialCommitQueue = new PQueue({ concurrency: 1 });
-  const disposeApprovalClearListener = onApprovalsCleared(() => {
-    invalidateRetryRoutes(retryRoutes, { cancel: true });
-  });
+  // Identity of this attachment in the shared approval queue.
+  const interactionOwner = {};
 
   return {
     emit: (event, payload) => host.emit(event, payload),
@@ -170,8 +169,7 @@ export function createTuiHostInteractions(
       return requestRetryInteraction(
         request,
         context,
-        retryRoutes,
-        retryCredentialCommitQueue,
+        { owner: interactionOwner, commitQueue: retryCredentialCommitQueue },
         options,
       );
     },
@@ -187,18 +185,6 @@ export function createTuiHostInteractions(
       host.emitApprovalBypassState(update);
     },
     cancel(selector: HostInteractionCancelSelector = {}) {
-      // Retry routes live outside the modal queue (the pre-queue auto-switch
-      // lookup), so a retry-kind or unfiltered cancel must settle them too —
-      // this is what the coordinator layer's clearAll did before the fold.
-      if (selector.kind === undefined || selector.kind === 'retry') {
-        if (typeof selector.streamId === 'string') {
-          cancelRetryRoute(retryRoutes, selector.streamId);
-        } else if (selector.streamId === undefined) {
-          invalidateRetryRoutes(retryRoutes, { cancel: true });
-        }
-        // streamId === null: retry requests always carry a concrete stream id,
-        // so the unscoped sweep has no retry routes to settle.
-      }
       clearApprovalsWhere((payload) =>
         matchesCancelSelector(
           { kind: payload.kind, streamId: approvalPayloadStreamId(payload) },
@@ -207,21 +193,13 @@ export function createTuiHostInteractions(
       );
     },
     dispose() {
-      invalidateRetryRoutes(retryRoutes, { cancel: true });
-      disposeApprovalClearListener();
+      // Retries are the only requests that carry work bound to this host (the
+      // key lookup and the credential commit queue above), so detaching must
+      // settle them. Other queued approvals stay decidable at the modal, and a
+      // newer host's retries belong to that host's reservations, not these.
+      clearApprovalsForOwner(interactionOwner);
     },
   };
-}
-
-/**
- * Retry auto-switches need an async key lookup before the modal appears.
- * Track the latest route per stream so a stale lookup cannot switch API mode
- * or trigger an older retry after a newer retry request replaced it.
- */
-interface ActiveRetryRoute {
-  readonly routeId: symbol;
-  readonly preparationController: AbortController;
-  readonly settle?: (result: RetryResult) => void;
 }
 
 function runRetryTask<T>(
@@ -264,54 +242,8 @@ function prepareRetryClient(
   return runRetryTask(() => prepare(selection, signal), signal);
 }
 
-function isActiveRetryRoute(
-  retryRoutes: Map<string, ActiveRetryRoute>,
-  streamId: string,
-  routeId: symbol,
-): boolean {
-  return retryRoutes.get(streamId)?.routeId === routeId;
-}
-
-function cancelRetryRoute(
-  retryRoutes: Map<string, ActiveRetryRoute>,
-  streamId: string,
-): void {
-  settleRetryRoute(retryRoutes, streamId, { action: 'cancel' });
-}
-
-function settleRetryRoute(
-  retryRoutes: Map<string, ActiveRetryRoute>,
-  streamId: string,
-  result: RetryResult,
-): void {
-  const route = retryRoutes.get(streamId);
-  if (!route) return;
-  retryRoutes.delete(streamId);
-  route.preparationController.abort(new Error('Retry request was replaced.'));
-  route.settle?.(result);
-}
-
-function invalidateRetryRoutes(
-  retryRoutes: Map<string, ActiveRetryRoute>,
-  options: { cancel: boolean },
-): void {
-  const streamIds = [...retryRoutes.keys()];
-  for (const streamId of streamIds) {
-    if (options.cancel) {
-      cancelRetryRoute(retryRoutes, streamId);
-    } else {
-      retryRoutes.delete(streamId);
-    }
-  }
-}
-
-interface RouteWithPolicyOptions<P> {
-  beforeQueue?: (payload: P) => Promise<ApprovalDecision | undefined>;
-  isCurrent?: () => boolean;
-}
-
-// Retry carries its own policy lookup (`showRetryRequest`) and route
-// bookkeeping, so it enters through `decideAfterImmediatePolicy` directly.
+// Retry carries its own policy lookup (`showRetryRequest`) and owns a queue
+// reservation, so it does not enter through this path.
 async function decideWithPolicy<
   K extends 'bash' | 'planApproval' | 'proposal',
   P,
@@ -319,40 +251,12 @@ async function decideWithPolicy<
   const policy = immediateDecision(context);
   if (policy) return policy;
 
-  return decideAfterImmediatePolicy(context, kind, payload);
-}
-
-async function decideAfterImmediatePolicy<
-  K extends 'bash' | 'planApproval' | 'proposal' | 'retry',
-  P,
->(
-  context: CliContext,
-  kind: K,
-  payload: P,
-  options: RouteWithPolicyOptions<P> = {},
-): Promise<ApprovalDecision> {
-  let autoDecision: ApprovalDecision | undefined;
-  if (options.beforeQueue) {
-    try {
-      autoDecision = await options.beforeQueue(payload);
-    } catch {
-      autoDecision = undefined;
-    }
-    if (options.isCurrent && !options.isCurrent()) {
-      return { accepted: false, userMessage: APPROVAL_REPLACED_CAUSE };
-    }
-    if (autoDecision) return autoDecision;
-  }
-
   try {
     const queuePayload = { kind, payload } as Extract<
       ApprovalPayload,
       { kind: K }
     >;
     const decision = await enqueueTuiApproval(queuePayload);
-    if (options.isCurrent && !options.isCurrent()) {
-      return { accepted: false, userMessage: APPROVAL_REPLACED_CAUSE };
-    }
     markIfRejected(context, decision);
     return decision;
   } catch {
@@ -406,110 +310,133 @@ async function requestProposalInteraction(
   return toApprovalSettlement(decision);
 }
 
+/**
+ * The queue entry is this retry's liveness: reserving it replaces whatever
+ * retry the stream had (its pre-modal lookup, its modal, or the credential
+ * switch it had already started), and holding it until `release` means a later
+ * cancel reaches the commit as well. Nothing here re-checks whether the
+ * request is still current — a settled entry ignores `present` and `settle`,
+ * and its abort signal stops the work in flight.
+ */
 async function requestRetryInteraction(
   request: HostRetryRequest,
   context: CliContext,
-  retryRoutes: Map<string, ActiveRetryRoute>,
-  retryCredentialCommitQueue: PQueue,
+  attachment: { readonly owner: object; readonly commitQueue: PQueue },
   options: HostRetryInteractionOptions | undefined,
 ): Promise<RetryResult> {
-  cancelRetryRoute(retryRoutes, request.streamId);
-  const routeId = Symbol(request.streamId);
-  const preparationController = new AbortController();
   clearRetryApprovalsForStream(request.streamId);
+  const reservation = reserveApproval(
+    { kind: 'retry', payload: request },
+    { onPresent: announceApproval, owner: attachment.owner },
+  );
+  // Written before any path that can produce a credential-changing decision:
+  // only the modal and the auto-switch produce one, and both run after this.
+  let promptRequest: TuiRetryRequest = request;
 
-  return await new Promise<RetryResult>((resolve) => {
-    retryRoutes.set(request.streamId, {
-      routeId,
-      preparationController,
-      settle: resolve,
-    });
-    const isCurrent = () =>
-      isActiveRetryRoute(retryRoutes, request.streamId, routeId);
-    const finish = () => {
-      if (isCurrent()) retryRoutes.delete(request.streamId);
-    };
-
+  const immediate = immediateDecisionForApproval(
+    'showRetryRequest',
+    request,
+    context,
+  );
+  if (immediate) {
+    reservation.settle(immediate);
+  } else {
     void (async () => {
-      const immediate: ApprovalDecision | undefined =
-        immediateDecisionForApproval('showRetryRequest', request, context);
-      let promptRequest: TuiRetryRequest = request;
-      if (!immediate && isCliApiSwitchableRetry(request)) {
-        const requestedProvider = request.errorDetails?.provider;
-        const provider =
-          requestedProvider && isApiProvider(requestedProvider)
-            ? requestedProvider
-            : undefined;
-        let personalApiKeyAvailable = false;
-        let missingPersonalApiKeyMessage = missingApiKeyRetryMessage(provider);
-        if (provider) {
-          try {
-            personalApiKeyAvailable = await hasUsableApiKey(
-              platform().secrets,
-              provider,
-            );
-          } catch {
-            // A keychain failure must not permit an automatic credential switch.
-            missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
-              provider,
-              'unavailable',
-            );
+      let autoSwitch: ApprovalDecision | undefined;
+      try {
+        if (isCliApiSwitchableRetry(request)) {
+          const requestedProvider = request.errorDetails?.provider;
+          const provider =
+            requestedProvider && isApiProvider(requestedProvider)
+              ? requestedProvider
+              : undefined;
+          let personalApiKeyAvailable = false;
+          let missingPersonalApiKeyMessage =
+            missingApiKeyRetryMessage(provider);
+          if (provider) {
+            try {
+              personalApiKeyAvailable = await hasUsableApiKey(
+                platform().secrets,
+                provider,
+              );
+            } catch {
+              // A keychain failure must not permit an automatic credential
+              // switch.
+              missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
+                provider,
+                'unavailable',
+              );
+            }
           }
+          promptRequest = {
+            ...request,
+            personalApiKeyAvailable,
+            missingPersonalApiKeyMessage,
+          };
         }
-        promptRequest = {
-          ...request,
-          personalApiKeyAvailable,
-          missingPersonalApiKeyMessage,
-        };
+        autoSwitch = await maybeAutoSwitchRetry(promptRequest);
+      } catch (error) {
+        // Preparation only decides whether the modal can be skipped, so a
+        // failed lookup falls through to the modal instead of denying a retry
+        // the user never saw.
+        logWarning(
+          'cli.tui',
+          `The retry request could not be prepared: ${toErrorMessage(error)}`,
+        );
       }
-      if (!isCurrent()) return;
-      const decision =
-        immediate ??
-        (await decideAfterImmediatePolicy(context, 'retry', promptRequest, {
-          beforeQueue: maybeAutoSwitchRetry,
-          isCurrent,
-        }));
-      if (!isCurrent()) return;
-      if (
-        decision.accepted &&
-        (decision.apiMode || decision.disableChatGptSubscription)
-      ) {
-        clearRetryApprovalsForStream(request.streamId);
-      }
-      if (!decision.accepted) {
-        resolve({ action: 'cancel' });
-        finish();
+      if (autoSwitch) {
+        reservation.settle(autoSwitch);
         return;
       }
       try {
-        const changesCredentialRoute =
-          decision.apiMode !== undefined ||
-          decision.disableChatGptSubscription === true;
-        if (changesCredentialRoute) {
-          await switchRetryToPersonalCredentials(decision, promptRequest, {
-            isCurrent,
-            prepareRetry: options?.prepareRetry,
-            preparationSignal: preparationController.signal,
-            commitQueue: retryCredentialCommitQueue,
-          });
-        } else if (options?.prepareRetry) {
-          await prepareRetryClient(
-            options.prepareRetry,
-            'configured',
-            preparationController.signal,
-          );
-        }
-        if (!isCurrent()) return;
-        resolve({ action: 'retry', feedback: decision.userMessage });
+        reservation.present({ kind: 'retry', payload: promptRequest });
       } catch (error) {
-        if (isCurrent()) {
-          resolve({ action: 'deny', reason: toErrorMessage(error) });
-        }
-      } finally {
-        finish();
+        logWarning(
+          'cli.tui',
+          `The retry request could not be shown: ${toErrorMessage(error)}`,
+        );
+        reservation.settle({
+          accepted: false,
+          userMessage: toErrorMessage(error),
+        });
       }
     })();
-  });
+  }
+
+  const decision = await reservation.decided;
+  try {
+    if (!decision.accepted) {
+      // A cleared or replaced entry was never denied by a user, so it must not
+      // mark the run as approval-denied.
+      if (!reservation.signal.aborted) markApprovalDenied(context);
+      return { action: 'cancel' };
+    }
+    if (
+      decision.apiMode !== undefined ||
+      decision.disableChatGptSubscription === true
+    ) {
+      await switchRetryToPersonalCredentials(decision, promptRequest, {
+        prepareRetry: options?.prepareRetry,
+        preparationSignal: reservation.signal,
+        commitQueue: attachment.commitQueue,
+      });
+    } else if (options?.prepareRetry) {
+      await prepareRetryClient(
+        options.prepareRetry,
+        'configured',
+        reservation.signal,
+      );
+    }
+    // A cancel landing while the last preparation step was already resolving
+    // has no await left to reject, so the entry's own state decides.
+    if (reservation.signal.aborted) return { action: 'cancel' };
+    return { action: 'retry', feedback: decision.userMessage };
+  } catch (error) {
+    if (reservation.signal.aborted) return { action: 'cancel' };
+    return { action: 'deny', reason: toErrorMessage(error) };
+  } finally {
+    reservation.release();
+  }
 }
 
 async function requestUserQuestionInteraction(
@@ -532,21 +459,22 @@ async function requestUserQuestionInteraction(
 export function enqueueTuiApproval(
   payload: ApprovalPayload,
 ): Promise<ApprovalDecision> {
-  return enqueueApproval(payload, {
-    onPresent: () => {
-      const streamId = approvalPayloadStreamId(payload);
-      if (streamId) {
-        defaultSession().events.emit({
-          scope: 'session',
-          event: {
-            type: 'setActiveStream',
-            payload: { streamId },
-          },
-        });
-      }
-      notify({ kind: 'approvalNeeded' });
-    },
-  });
+  return enqueueApproval(payload, { onPresent: announceApproval });
+}
+
+/** Focus the asking stream and ring the terminal when a modal appears. */
+function announceApproval(payload: ApprovalPayload): void {
+  const streamId = approvalPayloadStreamId(payload);
+  if (streamId) {
+    defaultSession().events.emit({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: { streamId },
+      },
+    });
+  }
+  notify({ kind: 'approvalNeeded' });
 }
 
 function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
@@ -579,14 +507,11 @@ async function switchRetryToPersonalCredentials(
   decision: ApprovalDecision,
   request: TuiRetryRequest,
   options: {
-    isCurrent: () => boolean;
     prepareRetry?: HostRetryInteractionOptions['prepareRetry'];
     preparationSignal: AbortSignal;
     commitQueue: PQueue;
   },
 ): Promise<void> {
-  const isCurrent = options.isCurrent;
-  if (!isCurrent()) return;
   const signal = options.preparationSignal;
 
   const requestedProvider = request.errorDetails?.provider;
@@ -595,146 +520,151 @@ async function switchRetryToPersonalCredentials(
       'The failed API provider could not be identified, so TeXRA did not change access settings.',
     );
   }
-  const missingKeyMessage =
-    request.missingPersonalApiKeyMessage ??
-    missingApiKeyRetryMessage(requestedProvider);
-  const validateCurrentKey = async (): Promise<void> => {
-    const keyExists = await runRetryTask(
-      () => apiKeyExistsUncached(platform().secrets, requestedProvider),
-      signal,
+  const keyExists = await runRetryTask(
+    () => apiKeyExistsUncached(platform().secrets, requestedProvider),
+    signal,
+  );
+  if (!keyExists) {
+    throw new Error(
+      request.missingPersonalApiKeyMessage ??
+        missingApiKeyRetryMessage(requestedProvider),
     );
-    if (!isCurrent()) throw new Error('Retry request was replaced.');
-    if (!keyExists) throw new Error(missingKeyMessage);
-    // The presentation check is deliberately cached. Drop that cache only
-    // after the uncached commit check so getClient() must read the current key.
-    invalidateApiKeyCache();
-  };
-
-  await validateCurrentKey();
+  }
+  // The presentation check is deliberately cached. Drop that cache only after
+  // the uncached commit check so getClient() must read the current key.
+  invalidateApiKeyCache();
 
   if (!options.prepareRetry) {
     throw new Error('The model client cannot be refreshed for this retry.');
   }
   await prepareRetryClient(options.prepareRetry, 'personal', signal);
-  if (!isCurrent()) throw new Error('Retry request was replaced.');
 
-  await options.commitQueue.add(async () => {
-    if (!isCurrent()) throw new Error('Retry request was replaced.');
-    const previousApiMode = getCliApiMode();
-    const previousOpenRouter = cliOpenRouterEnabled();
-    const previousSubscriptionPreference = isPreferCodexSubscription();
-    let apiModeWriteStarted = false;
-    let subscriptionWriteStarted = false;
-    try {
-      if (decision.apiMode) {
-        const apiMode = decision.apiMode;
-        apiModeWriteStarted = true;
-        await runRetryTask(() => setCliApiMode(apiMode), signal);
-        if (!isCurrent()) throw new Error('Retry request was replaced.');
-      }
-      if (decision.disableChatGptSubscription) {
-        subscriptionWriteStarted = true;
-        const update = await runRetryTask(
-          () => setCliCodexSubscription(false),
-          signal,
-        );
-        if (update.effective) {
-          throw new Error(
-            'ChatGPT subscription remains enabled by a more specific setting.',
-          );
-        }
-        if (!isCurrent()) throw new Error('Retry request was replaced.');
-      }
-      if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
-      return;
-    } catch (error) {
-      const rollbackFailures: Error[] = [];
-      if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
+  // Wrapped so a cancel settles this retry immediately instead of waiting for
+  // an unrelated stream's commit or rollback to drain first. The task still
+  // runs, and stops at the check below.
+  await runRetryTask(
+    () =>
+      options.commitQueue.add(async () => {
+        // The task can wait behind another stream's rollback, so the queue may
+        // have cancelled this retry since it was scheduled.
+        signal.throwIfAborted();
+        const previousApiMode = getCliApiMode();
+        const previousOpenRouter = cliOpenRouterEnabled();
+        const previousSubscriptionPreference = isPreferCodexSubscription();
+        let apiModeWriteStarted = false;
+        let subscriptionWriteStarted = false;
         try {
-          const update = await setCliCodexSubscription(
-            previousSubscriptionPreference,
-          );
-          if (update.effective !== previousSubscriptionPreference) {
-            throw new Error(
-              `ChatGPT subscription preference remained ${String(update.effective)}.`,
+          if (decision.apiMode) {
+            const apiMode = decision.apiMode;
+            apiModeWriteStarted = true;
+            await runRetryTask(() => setCliApiMode(apiMode), signal);
+            signal.throwIfAborted();
+          }
+          if (decision.disableChatGptSubscription) {
+            subscriptionWriteStarted = true;
+            const update = await runRetryTask(
+              () => setCliCodexSubscription(false),
+              signal,
+            );
+            if (update.effective) {
+              throw new Error(
+                'ChatGPT subscription remains enabled by a more specific setting.',
+              );
+            }
+            signal.throwIfAborted();
+          }
+          if (decision.apiMode) patchSessionMeta({ apiMode: decision.apiMode });
+          return;
+        } catch (error) {
+          const rollbackFailures: Error[] = [];
+          if (subscriptionWriteStarted && !isPreferCodexSubscription()) {
+            try {
+              const update = await setCliCodexSubscription(
+                previousSubscriptionPreference,
+              );
+              if (update.effective !== previousSubscriptionPreference) {
+                throw new Error(
+                  `ChatGPT subscription preference remained ${String(update.effective)}.`,
+                );
+              }
+            } catch (rollbackError) {
+              const persistenceContext =
+                isPreferCodexSubscription() === previousSubscriptionPreference
+                  ? 'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed'
+                  : 'Could not restore the ChatGPT subscription preference';
+              rollbackFailures.push(
+                new Error(
+                  `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+                  {
+                    cause: rollbackError,
+                  },
+                ),
+              );
+            }
+          }
+          if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
+            try {
+              await setCliApiMode(previousApiMode);
+              if (getCliApiMode() !== previousApiMode) {
+                throw new Error(`API mode remained ${getCliApiMode()}.`);
+              }
+            } catch (rollbackError) {
+              const persistenceContext =
+                getCliApiMode() === previousApiMode
+                  ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
+                  : 'Could not restore API mode';
+              rollbackFailures.push(
+                new Error(
+                  `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+                  {
+                    cause: rollbackError,
+                  },
+                ),
+              );
+            }
+          }
+          // After the mode, because restoring included access clears the OpenRouter
+          // toggle: a switch the user never got would otherwise leave their routing
+          // preference silently off.
+          if (
+            apiModeWriteStarted &&
+            previousOpenRouter &&
+            !cliOpenRouterEnabled()
+          ) {
+            try {
+              await platform().globalState.update(
+                GlobalStateKey.USE_OPENROUTER,
+                true,
+              );
+              if (!cliOpenRouterEnabled()) {
+                throw new Error('OpenRouter routing remained disabled.');
+              }
+            } catch (rollbackError) {
+              const persistenceContext = cliOpenRouterEnabled()
+                ? 'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed'
+                : 'Could not restore OpenRouter routing';
+              rollbackFailures.push(
+                new Error(
+                  `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+                  {
+                    cause: rollbackError,
+                  },
+                ),
+              );
+            }
+          }
+          if (rollbackFailures.length > 0) {
+            throw new AggregateError(
+              [error, ...rollbackFailures],
+              `${toErrorMessage(error)} Previous access settings could not be fully restored: ${rollbackFailures.map(toErrorMessage).join(' ')}`,
+              { cause: error },
             );
           }
-        } catch (rollbackError) {
-          const persistenceContext =
-            isPreferCodexSubscription() === previousSubscriptionPreference
-              ? 'The previous ChatGPT subscription preference appears restored in memory, but persistence could not be confirmed'
-              : 'Could not restore the ChatGPT subscription preference';
-          rollbackFailures.push(
-            new Error(
-              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-              {
-                cause: rollbackError,
-              },
-            ),
-          );
+          throw error;
         }
-      }
-      if (apiModeWriteStarted && getCliApiMode() === decision.apiMode) {
-        try {
-          await setCliApiMode(previousApiMode);
-          if (getCliApiMode() !== previousApiMode) {
-            throw new Error(`API mode remained ${getCliApiMode()}.`);
-          }
-        } catch (rollbackError) {
-          const persistenceContext =
-            getCliApiMode() === previousApiMode
-              ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
-              : 'Could not restore API mode';
-          rollbackFailures.push(
-            new Error(
-              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-              {
-                cause: rollbackError,
-              },
-            ),
-          );
-        }
-      }
-      // After the mode, because restoring included access clears the OpenRouter
-      // toggle: a switch the user never got would otherwise leave their routing
-      // preference silently off.
-      if (
-        apiModeWriteStarted &&
-        previousOpenRouter &&
-        !cliOpenRouterEnabled()
-      ) {
-        try {
-          await platform().globalState.update(
-            GlobalStateKey.USE_OPENROUTER,
-            true,
-          );
-          if (!cliOpenRouterEnabled()) {
-            throw new Error('OpenRouter routing remained disabled.');
-          }
-        } catch (rollbackError) {
-          const persistenceContext = cliOpenRouterEnabled()
-            ? 'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed'
-            : 'Could not restore OpenRouter routing';
-          rollbackFailures.push(
-            new Error(
-              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
-              {
-                cause: rollbackError,
-              },
-            ),
-          );
-        }
-      }
-      if (rollbackFailures.length > 0) {
-        throw new AggregateError(
-          [error, ...rollbackFailures],
-          `${toErrorMessage(error)} Previous access settings could not be fully restored: ${rollbackFailures.map(toErrorMessage).join(' ')}`,
-          { cause: error },
-        );
-      }
-      throw error;
-    }
-  });
+      }),
+    signal,
+  );
 }
 
 function handleExternalInquiry(

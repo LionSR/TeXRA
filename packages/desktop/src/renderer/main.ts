@@ -360,9 +360,6 @@ const editorPane = createEditorPane({
     updateShell(
       setWorkbenchTabDirty(shellState, `workbench:editor:${path}`, dirty),
     );
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE, {
-      dirty: editorPane.hasUnsavedChanges(),
-    });
   },
   onError: (error) => console.error('TeXRA editor pane', error),
 });
@@ -1655,6 +1652,8 @@ if (!bootstrapFailed) {
   document.body.dataset.desktopReady = 'true';
 }
 
+// Sole owner of "the workspace has unsaved editor changes": the main process
+// keeps no copy and learns of it only when this veto raises will-prevent-unload.
 window.addEventListener('beforeunload', (event) => {
   if (!editorPane.hasUnsavedChanges()) return;
   event.preventDefault();

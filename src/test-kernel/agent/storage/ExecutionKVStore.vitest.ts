@@ -13,7 +13,9 @@ import {
   EXECUTION_META_SCHEMA_VERSION,
   getExecutionStore,
   isReservedKvKeyName,
+  type ResultMeta,
 } from '@agent/storage';
+import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import * as logger from '@logger/logUtils';
 import {
   EXECUTION_STATUS,
@@ -228,10 +230,6 @@ describe('ExecutionKVStore meta read shims', () => {
         touchedFiles: ['notes.md'],
       },
     };
-    await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
-      outcome: RUN_OUTCOME.FAILED,
-    });
     await getExecutionStore(id).write('config', {
       agent: 'writer',
       model: 'gpt5',
@@ -315,6 +313,145 @@ describe('ExecutionKVStore meta read shims', () => {
         cost: 0,
       },
     });
+  });
+
+  // `meta.outcome` is the only writer of "how did this run end". These pin the
+  // case a repair pass used to fix up with a second write after the fact: a run
+  // that ends after its last turn wrote an interim envelope (interrupted
+  // between turns, stopped while suspended, failed by restart repair) now reads
+  // back through the owning fact instead.
+  it('supersedes an interim result outcome with the durable cancelled outcome', async () => {
+    const id = 'terminal-outcome-supersedes-interim' as ExecutionId;
+    const interim = {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 20,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'Interim result.',
+        files: [],
+        cost: 0.1,
+      },
+    };
+    await getExecutionStore(id).write('result-meta', interim);
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
+      ...interim,
+      result: { ...interim.result, outcome: RUN_OUTCOME.CANCELLED },
+    });
+    // Read-time projection only: the turn-owned record is never rewritten, so
+    // a later turn's own write still lands on an untouched envelope.
+    await expect(getExecutionStore(id).read('result-meta')).resolves.toEqual(
+      interim,
+    );
+  });
+
+  it('keeps a producer failure signal when the execution completed', async () => {
+    const id = 'terminal-outcome-keeps-failure' as ExecutionId;
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 20,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.FAILED,
+        response: 'The subagent reported an error.',
+        files: [],
+        cost: 0.1,
+      },
+    });
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
+      { result: { outcome: RUN_OUTCOME.FAILED } },
+    );
+  });
+
+  it('keeps the record outcome while the execution has no terminal outcome', async () => {
+    const id = 'terminal-outcome-absent' as ExecutionId;
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 20,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'Waiting for the next turn.',
+        files: [],
+        cost: 0.1,
+      },
+    });
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
+      { result: { outcome: RUN_OUTCOME.COMPLETED } },
+    );
+  });
+
+  // The resume boundary is what keeps the projection honest: a stopped run
+  // with a preserved flow record is resumable (`deriveResumability`), and the
+  // resumed turns write their own envelopes. Without the boundary clear, the
+  // interrupted predecessor's outcome would relabel every one of them.
+  it('serves the resumed turn outcome once the resume boundary clears the terminal facts', async () => {
+    const id = 'terminal-outcome-resume-boundary' as ExecutionId;
+    const interim = {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 20,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.COMPLETED,
+        response: 'Interim result before the stop.',
+        files: [],
+        cost: 0.1,
+      },
+    } satisfies ResultMeta;
+    await getExecutionStore(id).write('result-meta', interim);
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
+    });
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
+      { result: { outcome: RUN_OUTCOME.CANCELLED } },
+    );
+
+    await clearTerminalExecutionState(id);
+    await getExecutionStore(id).writeResultMeta({
+      ...interim,
+      result: {
+        ...interim.result,
+        response: 'Interim result from the resumed turn.',
+      },
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
+      { result: { outcome: RUN_OUTCOME.COMPLETED } },
+    );
+    await expect(getExecutionStore(id).readMeta()).resolves.toEqual({
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      timestamp: '2026-07-04T00:00:00.000Z',
+    });
+  });
+
+  it('leaves an execution with no persisted metadata untouched at the resume boundary', async () => {
+    const id = 'terminal-outcome-resume-no-meta' as ExecutionId;
+
+    await expect(clearTerminalExecutionState(id)).resolves.toBeUndefined();
+
+    await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
   });
 
   it('infers category for legacy subagent result metadata with no category tag (workflow fields)', async () => {

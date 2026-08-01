@@ -14,7 +14,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
-  synchronizeAgentResultOutcome: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
@@ -27,7 +26,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
   finalizeExecution: mocks.finalizeExecution,
-  synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
@@ -70,13 +68,17 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  EXECUTION_STATUS,
   STREAM_PHASE,
   type ExecutionId,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
+import { createChildStream } from '@tools/childStream';
 import {
   ClaudeAgentSessions,
   CodexThreads,
@@ -85,6 +87,12 @@ import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScri
 
 let session: SessionHandle;
 const trackedExecutionIds = new Set<string>();
+
+const childStreamConfig = {
+  agentCategory: AgentCategory.ToolUse,
+  model: 'test-model',
+  agent: 'fake-cli',
+} as unknown as AgentConfig;
 
 function uniqueStreamId(label: string): StreamTabId {
   return `${label}-${Math.random().toString(36).slice(2)}` as StreamTabId;
@@ -224,7 +232,6 @@ beforeEach(() => {
     terminalStatusPersisted: true,
     flowRecord: 'deleted',
   });
-  mocks.synchronizeAgentResultOutcome.mockResolvedValue(undefined);
   mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
     return { kind: 'persisted' as const, msg };
   });
@@ -651,7 +658,7 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
   });
 
-  it('stop between turns settles without result sync when terminal metadata fails', async () => {
+  it('stop between turns settles the ghost handle when terminal metadata fails', async () => {
     // Regression: for a native strategy (no ChildStream — each turn owns its
     // own AgentExecutionHandle via runFlowWithLifecycle, not the loop), a
     // stop landing BETWEEN turns interrupts the loop through the run handle
@@ -710,7 +717,14 @@ describe('childRunLoop E2E fixtures', () => {
     // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
     // would correctly report "not found" instead of finding a ghost handle.
     expect(session.executions.getHandle(executionId)).toBeUndefined();
-    expect(mocks.synchronizeAgentResultOutcome).not.toHaveBeenCalled();
+    // The loop routes the cancellation through the durable outcome's only
+    // writer; the interim result envelope is left exactly as its turn wrote
+    // it, and reads project the durable outcome onto it.
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
   });
 
   it('reattaches the loop interrupt handler immediately when a turn settles, before delivery (Copilot review: no interrupt gap during delivery)', async () => {
@@ -900,6 +914,56 @@ describe('childRunLoop E2E fixtures', () => {
       }),
     });
     expect(session.executions.getHandle(executionId)).toBeUndefined();
+  });
+
+  it('keeps the failing turn diagnosis when an interrupt lands after the failure', async () => {
+    const executionId = 'fa11ed01' as ExecutionId;
+    const parentStreamId = 'parent' as StreamTabId;
+    const childStream = createChildStream(executionId, parentStreamId, {
+      streamPrefix: 'codex',
+      streamCategory: AgentCategory.ToolUse,
+      runKind: 'agent',
+      agentName: 'fake-cli',
+      description: 'Fail a turn, then take an interrupt',
+      config: childStreamConfig,
+    });
+    trackedExecutionIds.add(executionId);
+    const childStreamId = childStream.childStreamId;
+    const handle = session.executions.getAgentHandleByStream(childStreamId);
+    const { strategy, rejectTurn } = createFakeStrategy();
+    // Fires between the turn failure landing FAILED on the stream phase and
+    // the loop's finalize, so the loop reports an interrupted run for a stream
+    // whose phase already carries the failure.
+    const interruptAfterFailure = vi.fn(() => {
+      mocks.leaseLossListener?.();
+    });
+
+    startChildRunLoop({
+      childStream,
+      childStreamId,
+      parentStreamId,
+      executionId,
+      agentName: 'fake-cli',
+      strategy,
+      recordCost: interruptAfterFailure,
+    });
+
+    await waitForLiveOwner(childStreamId);
+    await rejectTurn(1, new Error('turn blew up'));
+    await waitForLoopEnd(childStreamId);
+
+    expect(interruptAfterFailure).toHaveBeenCalledOnce();
+    expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.FAILED);
+    await expect(handle?.result).resolves.toMatchObject({
+      outcome: 'failed',
+      executionId,
+      error: expect.objectContaining({
+        message: expect.stringContaining('turn blew up'),
+      }),
+    });
+    expect(mocks.finalizeExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalStatus: EXECUTION_STATUS.ERROR }),
+    );
   });
 
   it('recordCost commits exactly once with the greatest observed value', async () => {

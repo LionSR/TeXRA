@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   resumeToolUseFromResumeData: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
-  synchronizeAgentResultOutcome: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/executeAgent', () => ({
@@ -39,7 +38,6 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 vi.mock('@agent/storage', () => ({
   finalizeExecution: mocks.finalizeExecution,
   getExecutionStore: vi.fn(() => ({ readConfig: mocks.readConfig })),
-  synchronizeAgentResultOutcome: mocks.synchronizeAgentResultOutcome,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
@@ -127,7 +125,6 @@ describe('NativeSubagentStrategy', () => {
       terminalStatusPersisted: true,
       flowRecord: 'deleted',
     });
-    mocks.synchronizeAgentResultOutcome.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

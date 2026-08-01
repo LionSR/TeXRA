@@ -507,12 +507,13 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
   );
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
-  let editorHasUnsavedChanges = false;
-  let allowNextPreventedUnload = false;
   let pendingWorkspaceRelaunch:
     { selectedPath: string; args: string[] } | undefined;
-  const confirmDiscardUnsavedEditorChanges = (force = false): boolean => {
-    if (!force && !editorHasUnsavedChanges) return true;
+  // The renderer owns editor dirtiness. This event is the main process's only
+  // reading of it: Chromium emits it after the renderer's beforeunload handler
+  // observes a dirty Monaco buffer and refuses the unload, so every close path
+  // (quit, workspace switch, window close) asks here and nowhere else.
+  window.webContents.on('will-prevent-unload', (event) => {
     const response = dialog.showMessageBoxSync(window, {
       type: 'warning',
       buttons: ['Keep Editing', 'Discard Changes'],
@@ -522,20 +523,7 @@ function createWindow(options: {
       message: 'This workspace has unsaved editor changes.',
       detail: 'Discard the changes and continue?',
     });
-    if (response !== 1) return false;
-    editorHasUnsavedChanges = false;
-    return true;
-  };
-  window.webContents.on('will-prevent-unload', (event) => {
-    if (allowNextPreventedUnload) {
-      allowNextPreventedUnload = false;
-      event.preventDefault();
-      return;
-    }
-    // The event itself is authoritative: it is emitted only after the
-    // renderer observes a dirty Monaco buffer and refuses the unload. The
-    // mirrored IPC flag may still be in flight.
-    if (confirmDiscardUnsavedEditorChanges(true)) {
+    if (response === 1) {
       event.preventDefault();
       return;
     }
@@ -553,17 +541,16 @@ function createWindow(options: {
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
-    const hadUnsavedChanges = editorHasUnsavedChanges;
-    if (!confirmDiscardUnsavedEditorChanges()) return;
-    allowNextPreventedUnload = hadUnsavedChanges;
     pendingWorkspaceRelaunch = {
       selectedPath,
       args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
     };
     workspaceRelaunchInProgress = true;
-    // Closing first lets the renderer's authoritative beforeunload check veto
-    // the switch. The replacement is scheduled only from the closed handler,
-    // after unsaved changes can no longer cancel it.
+    // Attempt the close unconditionally: the renderer decides whether there is
+    // anything to discard, and the will-prevent-unload handler above clears the
+    // pending relaunch when the user keeps editing. The replacement is
+    // scheduled only from the closed handler, after unsaved changes can no
+    // longer cancel it.
     window.close();
   };
   attachRendererConsoleLog(window.webContents);
@@ -1108,9 +1095,6 @@ function createWindow(options: {
         };
       },
       getEnvironmentSummary: () => gitHost.getEnvironmentSummary(),
-      onEditorDirtyChange: (dirty) => {
-        editorHasUnsavedChanges = dirty;
-      },
       onAsyncError: reportAsyncError,
     },
   );

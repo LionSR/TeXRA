@@ -281,9 +281,17 @@ interface StreamRecord {
   usageUnparsed: Map<string, unknown>;
   workPlan: WorkPlanSnapshot;
   meta: StreamTabMeta | undefined;
-  /** Immutable run descriptor parsed/emitted once per execution stream. */
+  /**
+   * Run identity: the descriptor and config of the ONE execution `meta` names,
+   * always for the same execution (a `run.start` for a new one drops the
+   * previous run's config with it). The descriptor is immutable per execution,
+   * so the live `run.start` owns it and a seed never re-derives a competing one
+   * for that execution. The config is mutable and persisted — a model switch
+   * rewrites `executions/{id}/config.json` and re-emits `run.config` — so
+   * `config.json` owns it and a seed re-reads it, yielding only to a live event
+   * that landed after the seed read disk.
+   */
   runDescriptor: RunDescriptor | undefined;
-  /** Current run config, hydrated from executions/{id}/config.json. */
   runConfig: AgentConfig | undefined;
 
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
@@ -1483,11 +1491,16 @@ export class StreamSnapshotStore {
     const config = taskState.agentConfig;
     const record = this.getOrCreateRecord(stream);
     record.runConfig = config;
-    const descriptor =
-      record.runDescriptor ??
-      (executionId
-        ? descriptorFromConfig(stream, executionId, config)
-        : undefined);
+    // Synthesize an identity only for a run that never emitted `run.start`
+    // (legacy meta, hosts driving the store by hand). A descriptor left over
+    // from a PREVIOUS execution is not this run's identity, so it is replaced
+    // rather than kept: the descriptor always describes the execution the
+    // stream's meta names, which is what lets the seed path tell a live pair
+    // apart from one disk has moved past.
+    let descriptor = record.runDescriptor;
+    if (executionId && descriptor?.executionId !== executionId) {
+      descriptor = descriptorFromConfig(stream, executionId, config);
+    }
     if (descriptor) record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
       ...(executionId ? { executionId } : {}),
@@ -1503,6 +1516,14 @@ export class StreamSnapshotStore {
   setRunDescriptor(descriptor: RunDescriptor): void {
     const stream = descriptor.streamId;
     const record = this.getOrCreateRecord(stream);
+    // The config of the run this stream just left is not this run's config;
+    // `run.config` follows `run.start` with the new one. A config carrying no
+    // identity yet is this run's until something says otherwise, so only a
+    // KNOWN previous execution drops it.
+    const previous = record.runDescriptor;
+    if (previous && previous.executionId !== descriptor.executionId) {
+      record.runConfig = undefined;
+    }
     record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
       executionId: descriptor.executionId,
@@ -1983,10 +2004,6 @@ export class StreamSnapshotStore {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
-    const runConfigOverlay =
-      metaOverlay !== undefined ? record.runConfig : undefined;
-    const runDescriptorOverlay =
-      metaOverlay !== undefined ? record.runDescriptor : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
     // Seeded with `data.legacyKeys` unconditionally (unlike the overlay
     // additions below, which are gated on that overlay actually being
@@ -2003,51 +2020,54 @@ export class StreamSnapshotStore {
     record.usage = new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v)));
     record.usageUnparsed = new Map(data.usageUnparsed);
     record.workPlan = data.workPlan;
-    record.runDescriptor = undefined;
-    record.runConfig = undefined;
 
-    let meta = metaOverlay
+    const meta = metaOverlay
       ? { ...(data.meta ?? {}), ...metaOverlay }
       : data.meta;
-    let hydrated: HydratedRunState = {};
-    if (meta) {
-      record.meta = meta;
-      hydrated = await this.hydrateRunStateFromMeta(stream, meta);
-      if (this.streamVersion(stream) !== version) return;
-    } else {
-      record.meta = undefined;
-    }
-
-    // `record` rides across the hydration await above: records are mutated
-    // in place, never replaced, so re-reading its overlay fields here picks
-    // up any concurrent eager mutation that landed while hydration was in
-    // flight (the exact race #8014 fixed). Never re-resolve the record via
-    // `getOrCreateRecord` here — if the stream was evicted during the await,
-    // that would resurrect a record for a deleted stream and defeat
-    // `writeMergedSidecars`' eviction check (#8226); an orphaned `record` is
-    // mutated harmlessly and never written.
-    const latestMetaOverlay = record.metaOverlay ? record.meta : undefined;
-    if (latestMetaOverlay) {
-      meta = { ...(data.meta ?? {}), ...latestMetaOverlay };
-      record.meta = meta;
-    }
-    const latestRunConfigOverlay =
-      latestMetaOverlay !== undefined ? record.runConfig : undefined;
-    const latestRunDescriptorOverlay =
-      latestMetaOverlay !== undefined ? record.runDescriptor : undefined;
-    const runConfig =
-      latestRunConfigOverlay ?? runConfigOverlay ?? hydrated.config;
-    const executionId = executionIdFromMeta(meta);
-    const runDescriptor =
-      latestRunDescriptorOverlay ??
-      runDescriptorOverlay ??
-      hydrated.descriptor ??
-      (runConfig && executionId
-        ? descriptorFromConfig(stream, executionId, runConfig)
-        : undefined);
-    if (runConfig) record.runConfig = runConfig;
-    if (runDescriptor) record.runDescriptor = runDescriptor;
+    record.meta = meta;
     record.metaOverlay = false;
+
+    // Disk meta names which execution the stream is on, so a memory pair for a
+    // DIFFERENT execution (or for any execution once meta names none) is a
+    // handoff another writer completed: both halves go, and hydration installs
+    // a coherent pair instead of one half of each run. For the execution meta
+    // does name, the two halves have different owners. The descriptor is
+    // immutable, so the live `run.start` outranks anything hydration can
+    // synthesize from config. The config is mutable and persisted, so this seed
+    // re-reads it — another host can switch the model without this store seeing
+    // `run.config`, and `load()` promises a refresh — and yields only to a live
+    // config newer than the snapshot: one still pending at seed start, or one
+    // that lands during the hydration below. A config an EARLIER seed left in
+    // memory is not newer, and is what goes stale.
+    //
+    // `record` rides across the hydration await: records are mutated in place,
+    // never replaced. Never re-resolve it via `getOrCreateRecord` here — if the
+    // stream was evicted during the await, that would resurrect a record for a
+    // deleted stream and defeat `writeMergedSidecars`' eviction check (#8226);
+    // an orphaned `record` is mutated harmlessly and never written.
+    const executionId = executionIdFromMeta(meta);
+    if (!meta || record.runDescriptor?.executionId !== executionId) {
+      record.runDescriptor = undefined;
+      record.runConfig = undefined;
+    }
+    if (meta) {
+      const pendingLiveWrite = metaOverlay !== undefined;
+      const configBeforeHydration = record.runConfig;
+      const hydrated = await this.hydrateRunStateFromMeta(stream, meta);
+      if (this.streamVersion(stream) !== version) return;
+      // Re-checked after the await: a `run.start` for another execution can
+      // land during it, and this seed's pair belongs to the run it read.
+      const liveDescriptor = record.runDescriptor;
+      if (!liveDescriptor || liveDescriptor.executionId === executionId) {
+        record.runDescriptor ??= hydrated.descriptor;
+        const liveRunConfig =
+          record.runConfig !== undefined &&
+          (pendingLiveWrite || record.runConfig !== configBeforeHydration);
+        if (!liveRunConfig) {
+          record.runConfig = hydrated.config ?? record.runConfig;
+        }
+      }
+    }
 
     const { overlays } = record;
     if (overlays.outputFiles) {

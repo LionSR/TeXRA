@@ -201,12 +201,12 @@ describe('createTuiHostInteractions', () => {
     }
   });
 
-  it('an unfiltered cancel settles active retry routes (pre-fold cleanupAllRequests parity)', async () => {
+  it('an unfiltered cancel settles a live retry (pre-fold cleanupAllRequests parity)', async () => {
     const interactions = createTuiHostInteractions(host(), context());
     try {
-      // requestRetry registers a route in the retry-route registry before the
-      // modal decision settles; cancel({}) must settle the route (resolving
-      // the pending retry with 'cancel'), not just clear the modal queue.
+      // requestRetry holds a queue reservation from before the modal appears
+      // until its decision has been acted on; cancel({}) must settle that
+      // entry, resolving the pending retry with 'cancel'.
       const retryResult = interactions.requestRetry?.({
         requestId: 'retry:first',
         streamId: 'stream-a',
@@ -220,8 +220,8 @@ describe('createTuiHostInteractions', () => {
       await expect(retryResult).resolves.toEqual({ action: 'cancel' });
       expect(currentApproval.get()).toBeUndefined();
 
-      // The route registry entry is gone: a stale decision on the old route
-      // cannot resurrect the retry (a fresh request gets a fresh route).
+      // The settled entry is gone from the queue: a stale decision cannot
+      // resurrect it, and a fresh request reserves a fresh entry.
       const second = interactions.requestRetry?.({
         requestId: 'retry:second',
         streamId: 'stream-a',

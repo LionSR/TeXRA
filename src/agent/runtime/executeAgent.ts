@@ -18,7 +18,10 @@ import {
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { hasPersistedParent } from '@agent/storage/executionLifecycle';
+import {
+  clearTerminalExecutionState,
+  hasPersistedParent,
+} from '@agent/storage/executionLifecycle';
 import {
   acquireResumedExecutionLease,
   captureOwnedExecutionLease,
@@ -570,6 +573,10 @@ export async function resumeToolUseFromResumeData(
     let isSubagent: boolean;
     let ctx: AgentLaunchContext;
     try {
+      // This execution is running again, so the terminal facts its previous
+      // run left behind stop describing it here, before any turn of the
+      // resumed run can write a result envelope for readers to project onto.
+      await clearTerminalExecutionState(resume.executionId);
       isSubagent = await hasPersistedParent(resume.executionId);
       ctx = await buildAgentLaunchContext({
         config: resume.agentConfig,

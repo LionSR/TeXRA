@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   abandonOwnedExecutionLease: vi.fn(),
   renewOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: vi.fn(),
+  clearTerminalExecutionState: vi.fn(),
   executeAgent: vi.fn(),
   finalizeExecution: vi.fn(),
   markOwnedExecutionLeaseUndurable: vi.fn(),
@@ -31,6 +32,10 @@ vi.mock('@agent/storage/executionLease', () => ({
   ) => operation(),
 }));
 
+vi.mock('@agent/storage/executionLifecycle', () => ({
+  clearTerminalExecutionState: mocks.clearTerminalExecutionState,
+}));
+
 vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
 }));
@@ -53,6 +58,7 @@ describe('runAgent execution ownership', () => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.acquireResumedExecutionLease.mockResolvedValue('acquired');
+    mocks.clearTerminalExecutionState.mockResolvedValue(undefined);
     mocks.completeOwnedExecutionLease.mockResolvedValue(undefined);
     mocks.renewOwnedExecutionLease.mockResolvedValue(undefined);
     flushArtifacts.mockResolvedValue(undefined);
@@ -96,6 +102,44 @@ describe('runAgent execution ownership', () => {
     expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );
+  });
+
+  // A workflow resume reuses the execution record, so the previous run's
+  // terminal outcome is still on disk and would be projected onto every result
+  // envelope this run writes (`applyExecutionOutcome`) until it finalizes.
+  it('clears the previous run terminal facts before a resumed run executes', async () => {
+    const order: string[] = [];
+    mocks.clearTerminalExecutionState.mockImplementationOnce(async () => {
+      order.push('clear');
+    });
+    mocks.executeAgent.mockImplementationOnce(async () => {
+      order.push('execute');
+      return {
+        category: 'toolUse',
+        executionId: EXECUTION_ID,
+        streamId: EXECUTION_ID,
+        outcome: 'COMPLETED',
+      };
+    });
+
+    await runAgent(
+      { config: CONFIG, executionId: EXECUTION_ID },
+      { session: SESSION },
+    );
+
+    expect(mocks.clearTerminalExecutionState).toHaveBeenCalledWith(
+      EXECUTION_ID,
+    );
+    expect(order).toEqual(['clear', 'execute']);
+  });
+
+  it('leaves a freshly registered run without a terminal-fact clear', async () => {
+    await runAgent(
+      { config: CONFIG, executionId: EXECUTION_ID },
+      { session: SESSION, registerExecution: true },
+    );
+
+    expect(mocks.clearTerminalExecutionState).not.toHaveBeenCalled();
   });
 
   it('abandons a resume whose canonical admission is withdrawn under the lease lock', async () => {

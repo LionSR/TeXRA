@@ -3,10 +3,7 @@ import { writeSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
-import {
-  approvalQueueStatus,
-  clearApprovals,
-} from '@cli/chat/tui/state/approvalQueue';
+import { approvalQueueStatus } from '@cli/chat/tui/state/approvalQueue';
 import {
   resetCliState,
   rootRunPending,
@@ -38,7 +35,9 @@ const NO_TERMINAL_CAPABILITIES = {
 };
 
 afterEach(() => {
-  clearApprovals();
+  // These cases drive the title from the projected approval status directly,
+  // without queueing an approval, so reset what they wrote.
+  approvalQueueStatus.set({ depth: 0, kind: 'approval' });
   resetCliState();
   vi.restoreAllMocks();
   // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not
