@@ -9,7 +9,6 @@ import {
   PersistedStreamLogEntrySchema,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  WorkflowCallProgressSchema,
   type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
@@ -22,7 +21,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
-  isNonterminalWorkflowCallEntry,
+  nonterminalWorkflowCall,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogPreservedRawEntry,
@@ -960,8 +959,8 @@ export class StreamLogStore {
           continue;
         }
 
-        if (isNonterminalWorkflowCallEntry(entry)) {
-          const call = WorkflowCallProgressSchema.parse(entry.data);
+        const call = nonterminalWorkflowCall(entry);
+        if (call) {
           const recoveredCall =
             call.status === 'planned'
               ? {
@@ -1273,7 +1272,7 @@ export class StreamLogStore {
       lastTimestamp: entries.at(-1)?.timestamp,
       hasRunningGroup: entries.some(isRunningGroupEntry),
       hasRunningStreamingText: entries.some(isRunningStreamingTextEntry),
-      ...(entries.some(isNonterminalWorkflowCallEntry)
+      ...(entries.some((entry) => nonterminalWorkflowCall(entry) !== undefined)
         ? { hasNonterminalWorkflowTask: true }
         : {}),
     };

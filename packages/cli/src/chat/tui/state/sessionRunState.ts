@@ -13,91 +13,122 @@ import {
   rootRunStreamId,
 } from './cliState';
 
-export interface ClearableTuiSessionState {
-  streamId: StreamTabId | undefined;
+/**
+ * Root-run state of one chat TUI session.
+ *
+ * The run-claim triple (`streamId`, `runPromise`, `runCompleted`) is mirrored
+ * into the `rootRun*` signals that renders read, and the mirror must never lag
+ * the fields: an unpublished mutation leaves the Ctrl-C hint and the
+ * start-availability gate stale (#8273). The triple is therefore owned here —
+ * private storage, published by construction — instead of being a plain record
+ * that every writer had to remember to publish afterwards. `streamId` accepts
+ * a direct write because it moves alone; the multi-field transitions are
+ * methods so each publishes once, at its end, rather than through a
+ * half-applied intermediate state.
+ *
+ * The remaining fields carry no signal mirror and stay plain.
+ */
+export class TuiSession {
+  private _streamId: StreamTabId | undefined;
+  private _runPromise: Promise<void> | undefined;
+  private _runCompleted = false;
+
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedStreamId: StreamTabId | undefined;
   executionId: string | undefined;
   presentationHost?: CliRuntimeHost;
-  runPromise: Promise<void> | undefined;
-  runExitCode: CliExitCode;
-  runCompleted: boolean;
-  stopRequested: boolean;
+  runExitCode: CliExitCode = CliExitCode.Success;
+  stopRequested = false;
+
+  get streamId(): StreamTabId | undefined {
+    return this._streamId;
+  }
+
+  set streamId(streamId: StreamTabId | undefined) {
+    this._streamId = streamId;
+    this.publish();
+  }
+
+  get runPromise(): Promise<void> | undefined {
+    return this._runPromise;
+  }
+
+  get runCompleted(): boolean {
+    return this._runCompleted;
+  }
+
+  clearRunState(): void {
+    this._streamId = undefined;
+    this._runPromise = undefined;
+    this._runCompleted = false;
+    this.interruptedStreamId = undefined;
+    this.executionId = undefined;
+    this.presentationHost = undefined;
+    this.runExitCode = CliExitCode.Success;
+    this.stopRequested = false;
+    this.publish();
+  }
+
+  markRunPending(
+    runPromise: Promise<void>,
+    presentationHost?: CliRuntimeHost,
+  ): void {
+    this._streamId = undefined;
+    this._runPromise = runPromise;
+    this._runCompleted = false;
+    this.presentationHost = presentationHost;
+    this.runExitCode = CliExitCode.Success;
+    this.stopRequested = false;
+    this.publish();
+  }
+
+  markRunCompleted(): void {
+    this._runCompleted = true;
+    this.publish();
+  }
+
+  /**
+   * Atomically check-and-claim the root-run slot: fuses
+   * {@link chatTuiCanStartRootRun} and {@link markRunPending} into one
+   * synchronous call so no caller can observe — or race on — a window between
+   * the check and the claim. Every root-run entry point that awaits *before*
+   * it would otherwise claim (resume, follow-up-wake resume) MUST call this as
+   * its first statement, before any `await`, so the claim happens before the
+   * caller can be suspended and a concurrent entry point can slip in and claim
+   * the same slot. `startRootRun` claims via `markRunPending` directly
+   * instead — it never suspends before claiming, so it has no check-then-await
+   * window for this primitive to close.
+   */
+  tryClaimRootRunSlot(
+    runPromise: Promise<void>,
+    presentationHost?: CliRuntimeHost,
+  ): boolean {
+    if (!chatTuiCanStartRootRun(this)) return false;
+    this.markRunPending(runPromise, presentationHost);
+    return true;
+  }
+
+  /**
+   * Mirror the run-claim triple into the cliState signals. Renders read only
+   * the published signals, so this is the sole bridge between the two.
+   */
+  private publish(): void {
+    const runPending = chatTuiRunPending(this);
+    rootRunStartAvailable.set(!runPending);
+    rootRunPending.set(runPending);
+    rootRunStreamId.set(this._streamId);
+  }
 }
 
-export type TuiSession = ClearableTuiSessionState;
-
 type InterruptibleTuiSessionState = Pick<
-  ClearableTuiSessionState,
+  TuiSession,
   'streamId' | 'runPromise' | 'runCompleted'
 >;
 
 type PendingTuiRunSessionState = Pick<
-  ClearableTuiSessionState,
+  TuiSession,
   'runPromise' | 'runCompleted'
 >;
-
-type PublishedTuiRunSessionState = Pick<
-  ClearableTuiSessionState,
-  'runPromise' | 'runCompleted' | 'streamId'
->;
-
-export function clearTuiSessionRunState(
-  session: ClearableTuiSessionState,
-): void {
-  session.streamId = undefined;
-  session.interruptedStreamId = undefined;
-  session.executionId = undefined;
-  session.presentationHost = undefined;
-  session.runPromise = undefined;
-  session.runExitCode = CliExitCode.Success;
-  session.runCompleted = false;
-  session.stopRequested = false;
-  publishChatTuiRunState(session);
-}
-
-export function markChatTuiRunPending(
-  session: ClearableTuiSessionState,
-  runPromise: Promise<void>,
-  presentationHost?: CliRuntimeHost,
-): void {
-  session.streamId = undefined;
-  session.presentationHost = presentationHost;
-  session.runPromise = runPromise;
-  session.runExitCode = CliExitCode.Success;
-  session.runCompleted = false;
-  session.stopRequested = false;
-  publishChatTuiRunState(session);
-}
-
-export function markChatTuiRunCompleted(
-  session: PublishedTuiRunSessionState,
-): void {
-  session.runCompleted = true;
-  publishChatTuiRunState(session);
-}
-
-/**
- * Atomically check-and-claim the root-run slot: fuses
- * {@link chatTuiCanStartRootRun} and {@link markChatTuiRunPending} into one
- * synchronous call so no caller can observe — or race on — a window between
- * the check and the claim. Every root-run entry point that awaits *before*
- * it would otherwise claim (resume, follow-up-wake resume) MUST call this as
- * its first statement, before any `await`, so the claim happens before the
- * caller can be suspended and a concurrent entry point can slip in and claim
- * the same slot. `startRootRun` claims via `markChatTuiRunPending` directly
- * instead — it never suspends before claiming, so it has no check-then-await
- * window for this primitive to close.
- */
-export function tryClaimRootRunSlot(
-  session: ClearableTuiSessionState,
-  runPromise: Promise<void>,
-  presentationHost?: CliRuntimeHost,
-): boolean {
-  if (!chatTuiCanStartRootRun(session)) return false;
-  markChatTuiRunPending(session, runPromise, presentationHost);
-  return true;
-}
 
 export function chatTuiCanInterruptActiveRun(
   session: InterruptibleTuiSessionState,
@@ -144,21 +175,6 @@ export function chatTuiCanStartRootRun(
   session: PendingTuiRunSessionState,
 ): boolean {
   return !chatTuiRunPending(session);
-}
-
-/**
- * Single publisher of the session run-state facts into cliState signals.
- * Every mutation of `runPromise`/`runCompleted`/`streamId` must flow through
- * a caller of this function — renders read only the published signals, so an
- * unpublished mutation would leave the Ctrl-C hint stale (#8273).
- */
-export function publishChatTuiRunState(
-  session: PublishedTuiRunSessionState,
-): void {
-  const runPending = chatTuiRunPending(session);
-  rootRunStartAvailable.set(!runPending);
-  rootRunPending.set(runPending);
-  rootRunStreamId.set(session.streamId);
 }
 
 export function chatTuiCanSelectModel(input: {

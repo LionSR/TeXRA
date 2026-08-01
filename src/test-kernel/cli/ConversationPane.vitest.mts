@@ -37,12 +37,13 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import {
-  NO_BYPASS,
+  emptySlice,
   resetCliState,
   patchStream,
   streams,
   type ConversationEntry,
   type StreamSlice,
+  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   createTranscriptPrintRequest,
@@ -218,11 +219,14 @@ describe('CLI conversation transcript splitting', () => {
   // syncStreamLog derives finalizeDeferred, otherwise the next run's
   // in-flight entries get finalized early and lose later chunks.
   it('clears a stale final status before the next run streams', () => {
+    // Twice: the first reset retires STREAM_ID from the previous test, and a
+    // retired identity cannot take a status.
     resetCliState();
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
+    resetCliState();
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
     const dispose = subscribeStreamStatus();
 
     try {
@@ -1345,30 +1349,7 @@ function sliceWithEntries(
   entries: readonly ConversationEntry[],
   init: Partial<StreamSlice> = {},
 ): StreamSlice {
-  return {
-    streamId,
-    model: undefined,
-    category: undefined,
-    status: undefined,
-    runStartedAt: undefined,
-    description: undefined,
-    latestLine: undefined,
-    thinkingActive: false,
-    compactingActive: false,
-    usage: undefined,
-    cumulativeUsage: undefined,
-    conversation: undefined,
-    entries,
-    queuedFollowUpMessages: [],
-    todos: [],
-    plan: null,
-    bypass: NO_BYPASS,
-    ...init,
-    outputFilesByRound: init.outputFilesByRound ?? {},
-    missingOutputsByRound: init.missingOutputsByRound ?? {},
-    compileFailuresByRound: init.compileFailuresByRound ?? {},
-    taskGroups: init.taskGroups ?? [],
-  };
+  return { ...emptySlice(streamId), entries, ...init };
 }
 
 function streamsFromEntries(

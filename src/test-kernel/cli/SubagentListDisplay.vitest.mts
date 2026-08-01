@@ -18,6 +18,7 @@ import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import { childStreamListValue } from '@cli/chat/tui/state/childListSelection';
 import {
   activeStreamId,
+  emptySlice,
   streams as streamsSignal,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
@@ -52,29 +53,9 @@ function workflowAgentSlice(
   overrides: Partial<StreamSlice>,
 ): StreamSlice {
   return {
-    streamId: id as StreamTabId,
-    model: undefined,
+    ...emptySlice(id as StreamTabId),
     category: AgentCategory.Workflow,
     status: STREAM_PHASE.COMPLETED,
-    substate: undefined,
-    runStartedAt: undefined,
-    description: undefined,
-    latestLine: undefined,
-    thinkingActive: false,
-    compactingActive: false,
-    usage: undefined,
-    cumulativeUsage: undefined,
-    conversation: undefined,
-    stage: undefined,
-    entries: [],
-    queuedFollowUpMessages: [],
-    todos: [],
-    plan: null,
-    bypass: { bash: false, toolEdit: false, superYolo: false },
-    outputFilesByRound: {},
-    missingOutputsByRound: {},
-    compileFailuresByRound: {},
-    taskGroups: [],
     ...overrides,
   };
 }

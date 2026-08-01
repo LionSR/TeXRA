@@ -94,7 +94,18 @@ export interface ToolEditApprovalControllerOptions {
   detachCause: string;
 }
 
+/** A request whose preview is still being staged, so it cannot be settled yet. */
+interface InitializingToolEditApproval {
+  readonly phase: 'initializing';
+  readonly request: ToolEditApprovalRequest;
+  readonly cancellationScope?: object;
+  /** The result an approve or cancel produced while staging was still running. */
+  resolution?: ToolEditApprovalResult;
+}
+
+/** A staged request awaiting the user. Membership in the map is what "unsettled" means. */
 interface PendingToolEditApproval extends LatexPreviewEntry {
+  readonly phase: 'pending';
   readonly requestId: string;
   readonly request: ToolEditApprovalRequest;
   readonly relativePath: string;
@@ -103,18 +114,15 @@ interface PendingToolEditApproval extends LatexPreviewEntry {
   settle: (result: ToolEditApprovalResult) => void;
 }
 
-interface InitializingToolEditApproval {
-  readonly request: ToolEditApprovalRequest;
-  readonly cancellationScope?: object;
-  earlyResolution?: ToolEditApprovalResult;
-}
+type ToolEditApprovalState =
+  InitializingToolEditApproval | PendingToolEditApproval;
 
 export class ToolEditApprovalController {
-  private readonly initializing = new Map<
-    string,
-    InitializingToolEditApproval
-  >();
-  private readonly pending = new Map<string, PendingToolEditApproval>();
+  /**
+   * Every request this controller owns, in either phase. Settling removes the
+   * entry, so no separate settled flag can disagree with the map.
+   */
+  private readonly requests = new Map<string, ToolEditApprovalState>();
   private disposed = false;
 
   constructor(private readonly options: ToolEditApprovalControllerOptions) {}
@@ -130,10 +138,11 @@ export class ToolEditApprovalController {
     const requestId = `approval-${nanoid()}`;
     const relativePath = this.options.host.relativeDisplayPath(request.path);
     const initialization: InitializingToolEditApproval = {
+      phase: 'initializing',
       request,
       cancellationScope: options?.cancellationScope,
     };
-    this.initializing.set(requestId, initialization);
+    this.requests.set(requestId, initialization);
 
     let preview: ToolEditPreview;
     try {
@@ -144,18 +153,18 @@ export class ToolEditApprovalController {
         discard: () => this.discard(requestId),
       });
     } catch (error) {
-      this.initializing.delete(requestId);
+      this.requests.delete(requestId);
       throw error;
     }
 
-    if (initialization.earlyResolution) {
-      this.initializing.delete(requestId);
+    if (initialization.resolution) {
+      this.requests.delete(requestId);
       await preview.dispose();
-      return initialization.earlyResolution;
+      return initialization.resolution;
     }
 
-    let settled = false;
     const entry: PendingToolEditApproval = {
+      phase: 'pending',
       requestId,
       request,
       relativePath,
@@ -165,25 +174,20 @@ export class ToolEditApprovalController {
       proposedUri: { fsPath: preview.proposedPath },
       originalContent: request.originalContent,
       proposedContent: request.proposedContent,
-      isSettled: () => settled,
+      isSettled: () => this.requests.get(requestId) !== entry,
       settle: () => {},
       workspaceTempCleanup: [],
       latexOperationInProgress: false,
       onError: (message) => this.options.host.reportError(message),
     };
     const settlement = new Promise<ToolEditApprovalResult>((resolve) => {
-      entry.settle = (result) => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
+      entry.settle = resolve;
     });
-    this.pending.set(requestId, entry);
-    this.initializing.delete(requestId);
+    this.requests.set(requestId, entry);
 
     try {
       await preview.present();
-      if (!settled) {
+      if (!entry.isSettled()) {
         void this.runAction(entry, () => this.publishPromptWhenVisible(entry));
       }
       const result = await settlement;
@@ -198,7 +202,7 @@ export class ToolEditApprovalController {
       }
       return result;
     } finally {
-      this.pending.delete(requestId);
+      this.requests.delete(requestId);
       await preview.dispose();
       await Promise.all(
         entry.workspaceTempCleanup.map((cleanup) =>
@@ -213,8 +217,8 @@ export class ToolEditApprovalController {
     action: ToolEditApprovalAction;
     feedback?: string;
   }): void {
-    const entry = this.pending.get(payload.requestId);
-    if (!entry || entry.isSettled()) return;
+    const entry = this.requests.get(payload.requestId);
+    if (entry?.phase !== 'pending') return;
 
     switch (payload.action) {
       case 'approve':
@@ -247,66 +251,47 @@ export class ToolEditApprovalController {
 
   /** Approve requests already awaiting the user on one stream. */
   async approvePendingForStream(streamId: StreamTabId): Promise<void> {
-    for (const initialization of this.initializing.values()) {
-      if (
-        initialization.earlyResolution ||
-        initialization.request.streamId !== streamId
-      ) {
+    const staged: PendingToolEditApproval[] = [];
+    for (const state of this.requests.values()) {
+      if (state.request.streamId !== streamId) continue;
+      if (state.phase === 'initializing') {
+        state.resolution ??= {
+          accepted: true,
+          appliedContent: state.request.proposedContent,
+        };
         continue;
       }
-      initialization.earlyResolution = {
-        accepted: true,
-        appliedContent: initialization.request.proposedContent,
-      };
+      staged.push(state);
     }
-
-    const entries = [...this.pending.values()].filter(
-      (entry) => entry.request.streamId === streamId && !entry.isSettled(),
-    );
     await Promise.all(
-      entries.map((entry) => this.runAction(entry, () => this.approve(entry))),
+      staged.map((entry) => this.runAction(entry, () => this.approve(entry))),
     );
   }
 
   /** Reject the requests this controller owns in the selected scope. */
   cancel(selector: HostInteractionCancelSelector = {}): void {
-    for (const initialization of this.initializing.values()) {
+    for (const state of [...this.requests.values()]) {
       if (
-        initialization.earlyResolution ||
         !matchesCancelSelector(
           {
             kind: 'toolEdit',
-            streamId: initialization.request.streamId ?? undefined,
-            cancellationScope: initialization.cancellationScope,
+            streamId: state.request.streamId ?? undefined,
+            cancellationScope: state.cancellationScope,
           },
           selector,
         )
       ) {
         continue;
       }
-      initialization.earlyResolution = {
+      const rejection: ToolEditApprovalResult = {
         accepted: false,
         userMessage: selector.cause,
       };
-    }
-
-    for (const entry of [...this.pending.values()]) {
-      if (
-        !matchesCancelSelector(
-          {
-            kind: 'toolEdit',
-            streamId: entry.request.streamId ?? undefined,
-            cancellationScope: entry.cancellationScope,
-          },
-          selector,
-        )
-      ) {
+      if (state.phase === 'initializing') {
+        state.resolution ??= rejection;
         continue;
       }
-      this.settle(entry.requestId, {
-        accepted: false,
-        userMessage: selector.cause,
-      });
+      this.settle(state.requestId, rejection);
     }
   }
 
@@ -317,27 +302,25 @@ export class ToolEditApprovalController {
   }
 
   private isSettled(requestId: string): boolean {
-    const initialization = this.initializing.get(requestId);
-    if (initialization) {
-      return initialization.earlyResolution !== undefined;
-    }
-    return this.pending.get(requestId)?.isSettled() ?? true;
+    const state = this.requests.get(requestId);
+    if (!state) return true;
+    return state.phase === 'initializing' && state.resolution !== undefined;
   }
 
   private discard(requestId: string): void {
-    const initialization = this.initializing.get(requestId);
-    if (initialization) {
-      initialization.earlyResolution ??= { accepted: false };
+    const state = this.requests.get(requestId);
+    if (state?.phase === 'initializing') {
+      state.resolution ??= { accepted: false };
       return;
     }
     this.settle(requestId, { accepted: false });
   }
 
   private settle(requestId: string, result: ToolEditApprovalResult): void {
-    const entry = this.pending.get(requestId);
-    if (!entry || entry.isSettled()) return;
+    const entry = this.requests.get(requestId);
+    if (entry?.phase !== 'pending') return;
 
-    this.pending.delete(requestId);
+    this.requests.delete(requestId);
     entry.settle(result);
     this.resolvePrompt(requestId);
   }
@@ -391,9 +374,7 @@ export class ToolEditApprovalController {
     entry: PendingToolEditApproval,
   ): Promise<void> {
     await this.options.host.revealApprovalSurface();
-    if (this.pending.get(entry.requestId) !== entry || entry.isSettled()) {
-      return;
-    }
+    if (entry.isSettled()) return;
     this.publishPrompt(entry);
   }
 

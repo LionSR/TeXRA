@@ -206,20 +206,18 @@ export async function requestToolEditApproval(
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  return session.approvals.toolEdit.enqueue(streamId ?? undefined, async () => {
-    if (streamId && session.approvals.toolEdit.bypass.isBypassed(streamId)) {
-      return finalizeApprovalResult({ accepted: true }, preparedRequest);
-    }
-
-    const hostInteraction =
-      session.interactions.requestToolEditApproval(preparedRequest);
-    if (hostInteraction) {
+  return session.approvals.toolEdit.enqueue(streamId ?? undefined, {
+    prompt: async () => {
+      const hostInteraction =
+        session.interactions.requestToolEditApproval(preparedRequest);
+      if (!hostInteraction) {
+        throw new Error(
+          'Tool edit approval requires session.interactions.requestToolEditApproval.',
+        );
+      }
       return finalizeApprovalResult(await hostInteraction, preparedRequest);
-    }
-
-    throw new Error(
-      'Tool edit approval requires session.interactions.requestToolEditApproval.',
-    );
+    },
+    bypassed: () => finalizeApprovalResult({ accepted: true }, preparedRequest),
   });
 }
 

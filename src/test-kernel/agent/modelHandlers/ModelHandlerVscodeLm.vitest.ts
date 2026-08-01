@@ -155,7 +155,6 @@ describe('ModelHandlerVscodeLm messages', () => {
       {
         file_name: 'figure.png',
         data: data.toString('base64'),
-        binary_data: data,
         media_type: 'image/png',
         media_category: 'image',
       },

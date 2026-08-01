@@ -184,7 +184,7 @@ export class SettingsViewHost {
     await this.postModelSelectionMutation(options);
   }
 
-  getVisibleModels(): string[] {
+  getVisibleModels(): readonly string[] {
     return this.modelSelectionController.getVisibleModels();
   }
 

@@ -90,7 +90,7 @@ async function runPersistedReflectionFlow(
         },
         modelHandler: createModelHandler(),
         checkInterruption: () => true,
-        setAbortController: () => {},
+        abortSignal: new AbortController().signal,
         onRoundFinalized: () => {},
       }),
     );

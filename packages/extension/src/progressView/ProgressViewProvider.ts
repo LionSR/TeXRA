@@ -15,7 +15,6 @@ import {
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { streamMatchesCategoryFilter } from '@controllers/progressView/backend/streamInfoUtils';
 import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
@@ -28,7 +27,6 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import type {
   AgentProposalPermission,
   ProgressViewOutboundMessage,
-  ProgressViewPlacement,
   StreamTabId,
 } from '@shared/schemas';
 import {
@@ -44,6 +42,25 @@ import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
 import type { MainViewProvider } from '../MainViewProvider';
 
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
+
+/**
+ * The one surface progress content is rendered into.
+ *
+ * `ready` is that surface's own webview-ready handshake, and the editor
+ * variant owns the panel plus the listeners that live and die with it — so
+ * "the panel exists" and "the editor is the target" are the same fact rather
+ * than two fields to keep in step, and a readiness flag can never outlive the
+ * surface it described. `undefined` is the honest gap after a panel teardown
+ * and before the next placement claim: no surface is showing progress.
+ */
+type ProgressTarget =
+  | { readonly placement: 'sidebar'; ready: boolean }
+  | {
+      readonly placement: 'editor';
+      readonly panel: vscode.WebviewPanel;
+      readonly disposables: vscode.Disposable[];
+      ready: boolean;
+    };
 
 /**
  * Orchestrates the progress view webview with exclusive rendering:
@@ -66,13 +83,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   protected readonly contentProvider: BundledViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
 
-  private _sidebarReady = false;
-  private _panelReady = false;
-  private _panelView?: vscode.WebviewPanel;
-  private _panelDisposables: vscode.Disposable[] = [];
-  private _activePlacement: ProgressViewPlacement = 'sidebar';
-  /** Set by disposePanelResources so showInSidebar knows replay is needed. */
-  private _panelJustDisposed = false;
+  /** Sole owner of "which surface currently shows progress content". */
+  private target: ProgressTarget | undefined = {
+    placement: 'sidebar',
+    ready: false,
+  };
   private readonly logger: AgentTrace;
 
   private _mainViewProvider?: MainViewProvider;
@@ -169,7 +184,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       new VscodePromptHost(),
       interactions,
     );
-    const progressBackendSubscription = this.backend.setupEventListeners();
+    this.backend.setupEventListeners();
     this.detachHostInteractions =
       runtimeSession.useHostInteractions(interactions);
     // Terminal-error toasts come from the run's `result` event (the lifecycle
@@ -182,7 +197,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       { replayWhenAttached: true },
     );
     this._disposables.push(
-      progressBackendSubscription,
       { dispose: this.detachHostInteractions },
       { dispose: () => this.toolEditApprovals.dispose() },
       { dispose: detachTerminalResultToast },
@@ -245,8 +259,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     void this.messageHandler.handleMessage(message, view);
   }
 
+  /** The sidebar stopped showing progress content; its handshake is void. */
   public resetSidebarReady(): void {
-    this._sidebarReady = false;
+    if (this.target?.placement === 'sidebar') this.target.ready = false;
   }
 
   public static getInstance(): ProgressViewProvider | undefined {
@@ -276,16 +291,17 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }: {
     syncActiveStream: boolean;
   }): void {
-    if (!this.getActiveWebview()) return;
+    const target = this.target;
+    if (!target?.ready) return;
 
-    if (!this.isActivePlacementReady()) return;
+    if (!this.getActiveWebview()) return;
 
     const theme =
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
         ? 'dark'
         : 'light';
 
-    this.webviewUpdater.setPlacement(this._activePlacement);
+    this.webviewUpdater.setPlacement(target.placement);
 
     const activeStream = this.webviewUpdater.sendStreamMetadata(
       this.state,
@@ -326,17 +342,13 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public async markWebviewReady(
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    if (this.isPanelView(view)) {
-      this._panelReady = true;
-    } else {
-      this._sidebarReady = true;
-    }
+    const target = this.target;
+    // A handshake from a surface that no longer holds the target describes
+    // content that has since been swapped away; it has nothing to sync.
+    if (!target) return;
+    if ((target.placement === 'editor') !== this.isPanelView(view)) return;
 
-    if (!this.isViewActiveTarget(view)) {
-      return;
-    }
-
-    this._panelJustDisposed = false;
+    target.ready = true;
     this.syncFullView();
     await this.replayPendingPrompts();
   }
@@ -355,13 +367,13 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   private canSendToWebview(): boolean {
-    return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
+    return this.target?.ready === true && this.webviewUpdater.isAvailable();
   }
 
   public isViewVisible(): boolean {
-    if (this._activePlacement === 'editor') {
-      return this._panelView?.visible === true;
-    }
+    const target = this.target;
+    if (!target) return false;
+    if (target.placement === 'editor') return target.panel.visible;
     // Sidebar mode: visible only while the sidebar shows progress content
     return (
       getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS &&
@@ -370,16 +382,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   }
 
   public async setActiveStream(streamId: StreamTabId): Promise<void> {
-    const previous = this.state.activeStream;
-    this.state.activeStream = streamId;
-
-    // Catches the "terminal-while-active" case: a stream that reached a
-    // non-in-flight status while it was the visible tab never triggered
-    // release (the setStreamStatus guard excludes the active stream). Now
-    // that the user has moved on, it's eligible.
-    if (previous && previous !== streamId) {
-      this.state.releasePreviousActive(previous);
-    }
+    // The switch also catches the "terminal-while-active" case: a stream that
+    // reached a non-in-flight status while it was the visible tab never
+    // triggered release (the setStreamStatus guard excludes the active
+    // stream). Now that the user has moved on, it's eligible.
+    this.state.switchActiveStream(streamId);
 
     if (!this.canSendToWebview()) return;
 
@@ -404,37 +411,19 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     if (!this.state.streamLogs.has(streamId)) return 'missing';
 
     await this.showProgressView();
-
-    // Clear filters owned by the progress view before selecting the stream;
-    // otherwise SET_ACTIVE_STREAM can target a stream hidden by the current
-    // category filter and appear to do nothing.
-    if (
-      !streamMatchesCategoryFilter(
-        this.state,
-        streamId,
-        this.state.agentCategoryFilter,
-      )
-    ) {
-      this.state.agentCategoryFilter = 'all';
-      this.syncFullView();
-    }
-
     await this.setActiveStream(streamId);
     return 'revealed';
   }
 
-  public isEditorMode(): boolean {
-    return this._activePlacement === 'editor' && this._panelView !== undefined;
-  }
-
   public async showInSidebar(options?: { inPlace?: boolean }): Promise<void> {
-    // disposePanelResources resets _activePlacement to 'sidebar' before we
-    // get here, so also check the _panelJustDisposed flag to detect a real
-    // editor → sidebar transition that needs permission replay.
-    const placementChanged =
-      this._activePlacement !== 'sidebar' || this._panelJustDisposed;
-    this._panelJustDisposed = false;
-    this._activePlacement = 'sidebar';
+    // Claiming the sidebar releases the editor panel: one surface owns
+    // progress content at a time, so the panel cannot outlive its target.
+    this.releaseEditorTarget({ disposePanel: true });
+    // Any target other than a sidebar already in place is a real transition
+    // that needs a permission replay — including the gap left by a panel the
+    // user just closed.
+    const placementChanged = this.target?.placement !== 'sidebar';
+    this.target ??= { placement: 'sidebar', ready: false };
 
     // Focus first to ensure VS Code resolves the webview before switching content.
     // Without this, switchMode no-ops on first use (view not yet created).
@@ -443,7 +432,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     }
     this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.PROGRESS);
 
-    if (this.isActivePlacementReady()) {
+    if (this.target?.ready === true) {
       this.syncFullView();
       // Only replay permissions when switching from editor → sidebar.
       // If already on sidebar, the webview already has the correct permissions;
@@ -455,34 +444,25 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public async showProgressView(options?: {
     inPlace?: boolean;
   }): Promise<void> {
-    if (this.isEditorMode()) {
-      this.revealEditorPanel();
-      if (this.isActivePlacementReady()) {
-        this.syncFullView();
-      }
+    const target = this.target;
+    if (target?.placement === 'editor') {
+      target.panel.reveal(vscode.ViewColumn.One);
+      if (target.ready) this.syncFullView();
       return;
     }
     await this.showInSidebar(options);
   }
 
-  public revealEditorPanel(): void {
-    if (this._panelView) {
-      this._panelView.reveal(vscode.ViewColumn.One);
-    }
-  }
-
   public async popOutToEditor(): Promise<void> {
-    if (this._panelView) {
-      const placementChanged = this._activePlacement !== 'editor';
-      this._activePlacement = 'editor';
+    const target = this.target;
+    if (target?.placement === 'editor') {
       this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.MAIN);
-      this.revealEditorPanel();
+      target.panel.reveal(vscode.ViewColumn.One);
       this.syncFullView();
-      if (placementChanged) await this.replayPendingPrompts();
       return;
     }
 
-    this._panelView = vscode.window.createWebviewPanel(
+    const panel = vscode.window.createWebviewPanel(
       ProgressViewProvider.viewType + '.panel',
       'TeXRA Progress',
       vscode.ViewColumn.One,
@@ -496,46 +476,55 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         ),
       },
     );
-    this._panelView.iconPath = new vscode.ThemeIcon('pulse');
-    this._panelReady = false;
+    panel.iconPath = new vscode.ThemeIcon('pulse');
+    const disposables: vscode.Disposable[] = [];
+    // Claim the target before wiring content: the webview's ready handshake
+    // can only arrive after this synchronous block, and it needs the panel to
+    // already be the target it reports readiness for.
+    this.target = { placement: 'editor', panel, disposables, ready: false };
 
-    this._panelDisposables.push(
-      this.setupWebviewContent(this._panelView),
-      this._panelView.onDidChangeViewState((e) => {
+    disposables.push(
+      this.setupWebviewContent(panel),
+      panel.onDidChangeViewState((e) => {
         if (e.webviewPanel.visible) {
           this.syncFullView();
         }
       }),
-      this._panelView.onDidDispose(() => {
-        this.disposePanelResources();
+      panel.onDidDispose(() => {
+        this.releaseEditorTarget();
       }),
     );
 
-    this._activePlacement = 'editor';
     this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.MAIN);
   }
 
   public async popBackToSidebar(): Promise<void> {
-    this.disposePanelResources(true);
     await this.showInSidebar();
   }
 
   public override dispose(): void {
-    this.disposePanelResources(true);
+    this.releaseEditorTarget({ disposePanel: true });
     this.backend.dispose();
     super.dispose();
   }
 
-  private isActivePlacementReady(): boolean {
-    return this._activePlacement === 'editor'
-      ? this._panelReady
-      : this._sidebarReady;
+  /**
+   * Give up the editor target, leaving no surface until the next claim.
+   * Re-entrant by construction: the target is dropped before the panel is
+   * disposed, so the `onDidDispose` callback finds nothing left to release.
+   */
+  private releaseEditorTarget(options: { disposePanel?: boolean } = {}): void {
+    const target = this.target;
+    if (target?.placement !== 'editor') return;
+    this.target = undefined;
+    for (const disposable of target.disposables) disposable.dispose();
+    if (options.disposePanel) target.panel.dispose();
   }
 
   private getActiveWebview(): vscode.Webview | undefined {
-    if (this._activePlacement === 'editor') {
-      return this._panelView?.webview;
-    }
+    const target = this.target;
+    if (!target) return undefined;
+    if (target.placement === 'editor') return target.panel.webview;
     // Only return the sidebar webview when it's actually showing progress content.
     // Otherwise progress messages would be routed to the launcher webview.
     if (getActiveSidebarView() !== SIDEBAR_VIEWS.PROGRESS) return undefined;
@@ -553,32 +542,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     return webview.postMessage(message);
   }
 
-  private isViewActiveTarget(
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): boolean {
-    return this.isPanelView(view)
-      ? this._activePlacement === 'editor'
-      : this._activePlacement === 'sidebar';
-  }
-
   private isPanelView(
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): view is vscode.WebviewPanel {
     return 'viewColumn' in view;
-  }
-
-  private disposePanelResources(disposeView = false): void {
-    const panelView = this._panelView;
-    this._panelView = undefined;
-    for (const d of this._panelDisposables) d.dispose();
-    this._panelDisposables = [];
-    this._panelReady = false;
-    if (this._activePlacement === 'editor') {
-      this._activePlacement = 'sidebar';
-      this._panelJustDisposed = true;
-    }
-    if (disposeView) {
-      panelView?.dispose();
-    }
   }
 }

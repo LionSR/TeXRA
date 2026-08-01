@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearStoreCache,
@@ -13,9 +13,11 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_LEASE_STALE_MS } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { StorageFS } from '@utils/files';
 
 function config(agent: string): AgentConfig {
   return AgentConfigSchema.parse({
@@ -144,6 +146,58 @@ describe('execution listing normalization', () => {
       expect.objectContaining({ id, kind: 'agent' }),
     ]);
     expect(platform().workspaceState.get(legacyKey, [])).toEqual([]);
+  });
+
+  it('migrates legacy history once for concurrent listings', async () => {
+    const id = 'abc779' as ExecutionId;
+    const legacyKey = 'texra.agentHistory./workspace';
+    const legacyEntry = {
+      id,
+      timestamp: '2026-07-15T13:02:00.000Z',
+      agentConfig: config('assistant'),
+    };
+    await installPlatform({
+      workspacePath: '/workspace',
+      workspaceState: { [legacyKey]: [legacyEntry] },
+    });
+    clearStoreCache();
+    const update = vi.spyOn(platform().workspaceState, 'update');
+
+    const [first, second] = await Promise.all([
+      listExecutions(),
+      listExecutions(),
+    ]);
+
+    const migratedRow = [expect.objectContaining({ id, kind: 'agent' })];
+    expect(first).toEqual(migratedRow);
+    expect(second).toEqual(migratedRow);
+    expect(update.mock.calls.filter(([key]) => key === legacyKey)).toHaveLength(
+      1,
+    );
+  });
+
+  it('retries the legacy index migration after an unreadable index.json', async () => {
+    const indexPath = `${RUNS_STORAGE_DIR}/index.json`;
+    await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+    await StorageFS.write(indexPath, '{ this is not json');
+    expect(await listExecutions()).toEqual([]);
+
+    const id = 'abc780' as ExecutionId;
+    await StorageFS.write(
+      indexPath,
+      JSON.stringify([
+        {
+          id,
+          timestamp: '2026-07-15T13:03:00.000Z',
+          agentConfig: config('assistant'),
+        },
+      ]),
+    );
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+    expect(await StorageFS.exists(indexPath)).toBe(false);
   });
 
   it('uses the config as the canonical source for visible agent fields', async () => {

@@ -64,6 +64,9 @@ export class HistoryList extends LitElement {
 
   private matchOffsets: Map<string, number> = new Map();
 
+  /** Zero-based position of the highlighted match, -1 when none is selected. */
+  private searchIndex = -1;
+
   @state() private searchVersion = 0;
 
   /** Current zero-based page index (used when not searching). */
@@ -83,6 +86,15 @@ export class HistoryList extends LitElement {
   /** Whether pagination is active (no active search). */
   private get paginated(): boolean {
     return !this.searchTerm;
+  }
+
+  /** Matches across every item, derived from the per-item counts. */
+  private get totalMatches(): number {
+    let total = 0;
+    for (const count of this.matchCounts.values()) {
+      total += count;
+    }
+    return total;
   }
 
   private getCachedSearchText(item: HistoryItemData): string {
@@ -152,8 +164,7 @@ export class HistoryList extends LitElement {
     this.matchCounts = new Map();
     this.matchOffsets = new Map();
     ++this.searchVersion;
-    this.state?.setSearchIndex(-1);
-    this.state?.setTotalMatches(0);
+    this.searchIndex = -1;
     for (const item of this.historyItemElements ?? []) {
       void item.applySearch?.('');
     }
@@ -161,27 +172,24 @@ export class HistoryList extends LitElement {
   }
 
   private performNavigate(direction: 'next' | 'prev'): void {
-    if (!this.state || this.state.totalMatches === 0) return;
+    const total = this.totalMatches;
+    if (total === 0) return;
     const delta = direction === 'next' ? 1 : -1;
-    const nextIndex =
-      (this.state.searchIndex + delta + this.state.totalMatches) %
-      this.state.totalMatches;
-    this.state.setSearchIndex(nextIndex);
+    this.searchIndex = (this.searchIndex + delta + total) % total;
     this.updateMatchCount();
     this.requestUpdate();
   }
 
   private updateMatchCount(): void {
-    if (!this.state) return;
-    const total = this.state.totalMatches;
-    const display = total === 0 ? '' : `${this.state.searchIndex + 1}/${total}`;
+    const total = this.totalMatches;
+    const display = total === 0 ? '' : `${this.searchIndex + 1}/${total}`;
     this.dispatchEvent(HistoryViewEvents.matchCount({ display }));
   }
 
   private getHighlightedMatchIndex(itemId: string): number | null {
-    if (!this.state || this.state.searchIndex < 0) return null;
+    if (this.searchIndex < 0) return null;
 
-    const globalIndex = this.state.searchIndex;
+    const globalIndex = this.searchIndex;
     const itemOffset = this.matchOffsets.get(itemId);
     if (itemOffset == null) return null;
 
@@ -223,8 +231,7 @@ export class HistoryList extends LitElement {
 
     this.matchOffsets = nextOffsets;
     this.matchCounts = nextCounts;
-    this.state?.setTotalMatches(total);
-    this.state?.setSearchIndex(total > 0 ? 0 : -1);
+    this.searchIndex = total > 0 ? 0 : -1;
     this.updateMatchCount();
     if (total > 0) {
       this.requestUpdate();
@@ -263,7 +270,7 @@ export class HistoryList extends LitElement {
       });
     }
 
-    const hasMatches = (this.state?.totalMatches ?? 0) > 0;
+    const hasMatches = this.totalMatches > 0;
     const forceOpen = Boolean(this.searchTerm && hasMatches);
 
     // When searching, render only plausible matches; otherwise paginate.

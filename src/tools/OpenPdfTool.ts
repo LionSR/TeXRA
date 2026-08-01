@@ -6,6 +6,7 @@ import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import type { FileLocation } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import {
@@ -21,20 +22,6 @@ import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
 import { defineTool } from './core/define';
-
-export interface OpenPdfRequest {
-  readonly location: FileLocation;
-  readonly preserveFocus: boolean;
-}
-
-export type OpenPdfOpener = (request: OpenPdfRequest) => Promise<void> | void;
-
-let openPdfOpener: OpenPdfOpener | undefined;
-
-/** Register the host-specific PDF opener. Leave unset in non-UI hosts. */
-export function setOpenPdfOpener(opener: OpenPdfOpener | undefined): void {
-  openPdfOpener = opener;
-}
 
 const OpenPdfInputSchema = z.strictObject({
   path: z.string().describe('Path to the PDF file to open.'),
@@ -53,7 +40,8 @@ export class OpenPdfTool extends defineTool({
   schema: OpenPdfInputSchema,
 }) {
   protected async execute(input: OpenPdfInput): Promise<ToolResult> {
-    if (!openPdfOpener) {
+    const openPdf = currentSession().interactions.openPdf;
+    if (!openPdf) {
       return {
         status: 'error',
         error:
@@ -71,7 +59,7 @@ export class OpenPdfTool extends defineTool({
       throw new ToolError(`PDF file not found: ${displayPath}`);
     }
 
-    await openPdfOpener({
+    await openPdf({
       location,
       preserveFocus: input.preserve_focus ?? false,
     });

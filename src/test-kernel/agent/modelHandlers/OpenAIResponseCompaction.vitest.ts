@@ -239,6 +239,52 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(result.updatedMessages).toEqual(compactedMessages);
   });
 
+  it('mints a fresh ownership token for its own pre-flight compaction retry', async () => {
+    // The flow clears its context-window recovery by token
+    // (ResponseCycleNode's finally -> clearCompactionRequest(id)). A
+    // compaction the handler requests for ITSELF must therefore carry a newer
+    // token than any request the flow still holds, or that clear cancels the
+    // handler's retry. Token ids are observable through requestCompaction()'s
+    // return value: an internal request that bypassed the token API would
+    // leave the counter untouched.
+    const handler = createHandler();
+    const compactedMessages = [userTextMessage('compacted state')];
+    const requests: any[] = [];
+    const client = withSdkOptions({
+      responses: {
+        inputTokens: {
+          count: async () => ({ input_tokens: 800 }),
+        },
+        compact: async () => ({
+          output: compactedMessages,
+          usage: { output_tokens: 100 },
+        }),
+        create: async (params: any) => {
+          requests.push(params);
+          return requests.length === 1
+            ? createResponse('resp-before-threshold', 800)
+            : createResponse('resp-after-compaction', 150);
+        },
+      },
+    });
+
+    await sendTurn(handler, client, createMessages(2));
+
+    // A flow request that has already been abandoned; its id is the newest
+    // token in existence at this point.
+    const abandonedFlowToken = handler.requestCompaction();
+    handler.clearCompactionRequest(abandonedFlowToken);
+
+    // The live pre-flight count crosses the threshold, so the handler requests
+    // compaction of itself and retries internally.
+    await sendTurn(handler, client, createMessages(3));
+
+    const nextFlowToken = handler.requestCompaction();
+    expect(nextFlowToken).toBeGreaterThan(abandonedFlowToken + 1);
+    expect(requests).toHaveLength(2);
+    expect(requests[1].input).toEqual(compactedMessages);
+  });
+
   it('stops the turn when Responses compaction is aborted', async () => {
     const handler = createHandler();
     const requests: any[] = [];

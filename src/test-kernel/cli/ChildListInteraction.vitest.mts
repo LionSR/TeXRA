@@ -12,10 +12,10 @@ import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { StreamTabId } from '@shared/schemas';
 import {
-  FakeStdin,
-  FakeStdout,
   loadInk,
+  renderInteractive,
   renderOutputAtTerminalSize,
+  type InkRenderHandles,
 } from '@test/support/inkTestHarness.mts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
@@ -26,25 +26,9 @@ function session(id: StreamTabId, active = false): StreamView {
   return { id, label: id, slice: undefined, active };
 }
 
-/** Mount an interactive Ink tree wired to fake TTYs the test can drive. */
-function renderInteractive(
-  ink: any,
-  node: any,
-): {
-  readonly instance: any;
-  readonly stdin: FakeStdin;
-  readonly stdout: FakeStdout;
-} {
-  const stdin = new FakeStdin();
-  const stdout = new FakeStdout(100);
-  const instance = ink.render(node, {
-    stdin,
-    stdout,
-    interactive: true,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
-  return { instance, stdin, stdout };
+/** Every mount in this suite renders the child list at 100 columns. */
+function renderChildList(ink: any, node: any): InkRenderHandles {
+  return renderInteractive(ink, node, { columns: 100 });
 }
 
 describe('CLI child list interaction', () => {
@@ -95,7 +79,7 @@ describe('CLI child list interaction', () => {
       });
     }
 
-    const { instance, stdin } = renderInteractive(
+    const { instance, stdin } = renderChildList(
       ink,
       React.createElement(Harness),
     );
@@ -127,7 +111,7 @@ describe('CLI child list interaction', () => {
     const onSkipExecution = vi.fn();
     const onRetryExecution = vi.fn();
 
-    const { instance, stdin } = renderInteractive(
+    const { instance, stdin } = renderChildList(
       ink,
       React.createElement(SubagentList, {
         activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
@@ -188,7 +172,7 @@ describe('CLI child list interaction', () => {
       });
     }
 
-    const { instance, stdin, stdout } = renderInteractive(
+    const { instance, stdin, stdout } = renderChildList(
       ink,
       React.createElement(Harness),
     );
@@ -220,7 +204,7 @@ describe('CLI child list interaction', () => {
       onRetryExecution: vi.fn(),
       onSkipExecution: vi.fn(),
     };
-    const { instance, stdin } = renderInteractive(
+    const { instance, stdin } = renderChildList(
       ink,
       React.createElement(SubagentList, {
         activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
@@ -255,7 +239,7 @@ describe('CLI child list interaction', () => {
     const onCancel = vi.fn();
     const onSelectionChange = vi.fn();
 
-    const { instance, stdin } = renderInteractive(
+    const { instance, stdin } = renderChildList(
       ink,
       React.createElement(SubagentList, {
         keyboardActive: true,
@@ -283,7 +267,7 @@ describe('CLI child list interaction', () => {
     const onCancel = vi.fn();
     const onSelectionChange = vi.fn();
 
-    const { instance, stdin } = renderInteractive(
+    const { instance, stdin } = renderChildList(
       ink,
       React.createElement(SubagentList, {
         keyboardActive: true,

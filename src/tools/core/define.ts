@@ -2,7 +2,7 @@
 import { toJSONSchema, type ZodType } from 'zod';
 
 // Type imports
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 
 // Local imports - shared
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';

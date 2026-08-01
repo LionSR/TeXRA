@@ -87,12 +87,24 @@ export interface ModelOptionsComputationOptions {
   readonly agentCategory?: AgentCategory;
 }
 
+/**
+ * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
+ * recorded by the branch that chose the kind so the reason builder never has
+ * to re-derive that branch's condition. Deliberately not part of the
+ * `ModelAvailabilityKind` wire enum: renderers and the CLI treat an OpenRouter
+ * key gap exactly like any other missing key, and widening the wire enum would
+ * force every host's mapping to grow a case for a distinction only the prose
+ * cares about.
+ */
+type UnavailableReason = 'openrouter-missing-key';
+
 interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
   label: string;
   available: boolean;
   requiresKey: boolean;
   providerCapabilities?: ProviderCapabilityProfile;
+  reason?: UnavailableReason;
 }
 
 /**
@@ -203,6 +215,7 @@ interface UnavailableReasonContext {
   readonly model: string;
   readonly config: ModelConfig;
   readonly ctx: ModelAvailabilityContext;
+  readonly reason: UnavailableReason | undefined;
 }
 
 /**
@@ -219,8 +232,8 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   'provider-unavailable': ({ model }) =>
     `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
-  'missing-key': ({ model, config, ctx }) => {
-    if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
+  'missing-key': ({ model, config, ctx, reason }) => {
+    if (reason === 'openrouter-missing-key') {
       return `Model "${model}" requires an OpenRouter API key.`;
     }
     const directProvider = resolveDirectModelApiKeyProvider(config);
@@ -408,9 +421,11 @@ async function resolveModelAvailability(
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-    return ctx.hasOpenRouter
-      ? availabilityStatus('openrouter-key')
-      : availabilityStatus('missing-key');
+    if (ctx.hasOpenRouter) return availabilityStatus('openrouter-key');
+    return {
+      ...availabilityStatus('missing-key'),
+      reason: 'openrouter-missing-key',
+    };
   }
 
   if (allowsModelRelay(config) && ctx.relayQuotaExhausted) {
@@ -488,8 +503,11 @@ async function buildAvailabilityContext(
 }
 
 /** Read the enabled model list from host state at the composition boundary. */
-function getVisibleModels(state: Pick<StateStore, 'get'>): string[] {
-  return state.get<string[]>(GlobalStateKey.ENABLED_MODELS, DEFAULT_MODELS);
+function getVisibleModels(state: Pick<StateStore, 'get'>): readonly string[] {
+  return state.get<readonly string[]>(
+    GlobalStateKey.ENABLED_MODELS,
+    DEFAULT_MODELS,
+  );
 }
 
 function buildDefaultModelOptionsAccess(
@@ -554,7 +572,12 @@ export async function getModelUnavailableReason(
   // `UNAVAILABLE_REASON_BUILDERS` — the compiler, not this call site, is what
   // enforces that a newly added unavailable kind gets a reason.
   const kind = availability.kind as UnavailableAvailabilityKind;
-  return UNAVAILABLE_REASON_BUILDERS[kind]({ model, config, ctx });
+  return UNAVAILABLE_REASON_BUILDERS[kind]({
+    model,
+    config,
+    ctx,
+    reason: availability.reason,
+  });
 }
 
 /** Build typed model option data for a single model. */

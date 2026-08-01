@@ -182,7 +182,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   USE_OWN_API_KEY: 'useOwnApiKey',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
-  FILTER_STREAMS: 'filterStreams',
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
   POLISH_FOLLOW_UP: 'polishFollowUp',

@@ -8,7 +8,11 @@ import {
 } from '@shared/streams/streamStatus';
 
 import { parentStream } from './childExecutions';
-import { activeStreamId, setStreamStatusInCliState } from './cliState';
+import {
+  activeStreamId,
+  focusStream,
+  setStreamStatusInCliState,
+} from './cliState';
 import { isFinalTranscriptStatus } from './transcript';
 import { projectStreamTranscript } from './transcriptProjection';
 
@@ -40,7 +44,7 @@ export function subscribeStreamStatus(): () => void {
       activeStreamId.get() === change.streamId
     ) {
       const ownerStreamId = parentStream.get().get(change.streamId);
-      if (ownerStreamId) activeStreamId.set(ownerStreamId);
+      if (ownerStreamId) focusStream(ownerStreamId);
     }
   });
 }

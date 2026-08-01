@@ -10,6 +10,16 @@
  * Both paths apply state through `applyState`, which owns output-file reset
  * and legacy-instruction precedence. Behavior is pinned by
  * `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
+ *
+ * ## Single writer
+ *
+ * The persisted blob is a pure projection of the module-scope signals
+ * (`persistedSnapshot$`), and this file is the only thing that writes it.
+ * Nothing outside calls a "save" function: one watcher observes the projection
+ * and writes when — and only when — it actually changes. That is why mutators
+ * and message slices carry no persistence code at all, and why no reentrancy
+ * guard is needed: a restore that sets a dozen signals produces one settled
+ * projection and therefore one write.
  */
 
 // Third-party imports
@@ -21,6 +31,7 @@ import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
 } from '@shared/schemas';
+import { Signal } from '@shared/signals';
 import {
   createWebviewStorage,
   PersistedState,
@@ -50,14 +61,12 @@ import {
 } from './mainViewState';
 
 /**
- * Shared webview storage singleton for the main view.
- *
- * All modules in the main view frontend MUST use this shared instance rather
- * than calling `createWebviewStorage(hostBridge)` independently. Multiple
- * independent instances each maintain their own cache, so writes from one
- * instance can silently overwrite changes made by another.
+ * Webview storage for the main view. Deliberately file-local: this module is
+ * the only writer of main-view persisted state, so a second instance (each
+ * carrying its own cache, able to overwrite the other's writes) has no reason
+ * to exist.
  */
-export const webviewStorage = createWebviewStorage(hostBridge);
+const webviewStorage = createWebviewStorage(hostBridge);
 
 const stateManager = new PersistedState(
   webviewStorage,
@@ -66,34 +75,16 @@ const stateManager = new PersistedState(
 );
 
 /**
- * Reentrancy guard around `saveState()`: while a backend-pushed restore is
- * applying a snapshot, intermediate mutations must not write partially
- * restored state back to storage. Do NOT "simplify away" without a regression
- * test proving it safe — the characterization suite asserts
- * exactly one storage write per backend restore.
+ * The persisted blob, derived from the signals that own each field. Output
+ * files are deliberately transient: they are recomputed per run, so the
+ * projection always writes them empty.
  */
-let saveBlockCount = 0;
-
-function blockSave(): void {
-  saveBlockCount += 1;
-}
-
-function unblockSave(): void {
-  if (saveBlockCount > 0) {
-    saveBlockCount -= 1;
-  }
-}
-
-export function saveState(): void {
-  if (saveBlockCount > 0) {
-    return;
-  }
-
+const persistedSnapshot$ = new Signal.Computed<MainViewPersistedState>(() => {
   const sf = singleFiles$.get();
   const mf = multiFiles$.get();
   const cv = checkboxValues$.get();
 
-  const persisted: MainViewPersistedState = {
+  return {
     sessionType: sessionType$.get(),
     launchTarget: launchTarget$.get(),
     selectedTeamId: selectedTeamId$.get(),
@@ -117,15 +108,97 @@ export function saveState(): void {
     autoCompileInputPdf: cv.autoCompileInputPdf,
     attachTeXCount: cv.attachTeXCount,
   };
+});
 
-  stateManager.setState(persisted);
+/**
+ * The last projection handed to storage. Comparing against it is what turns
+ * "a signal changed" into "the persisted blob changed": mutations that only
+ * touch non-persisted signals, and restores that reproduce what is already
+ * stored, write nothing.
+ */
+let lastWritten: MainViewPersistedState | undefined;
+
+/** Fields a keystroke moves. Their writes are rate-limited; nothing else is. */
+const DRAFT_FIELDS = new Set<keyof MainViewPersistedState>([
+  'instruction',
+  'workflowInstruction',
+  'toolUseInstruction',
+]);
+
+const DRAFT_SAVE_DEBOUNCE_MS = 300;
+
+/**
+ * Rate limiter for instruction typing: a keystroke changes only draft fields,
+ * so its write waits out the burst instead of hitting storage per character.
+ * Any other field change writes immediately and takes the pending drafts with
+ * it, because the projection is whole-state.
+ */
+const draftSaveDebounce = createFlushableDebounce(
+  () => writeIfChanged(),
+  DRAFT_SAVE_DEBOUNCE_MS,
+);
+
+function fieldChanged(
+  next: MainViewPersistedState,
+  previous: MainViewPersistedState,
+  field: keyof MainViewPersistedState,
+): boolean {
+  const a = next[field];
+  const b = previous[field];
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length !== b.length || a.some((item, index) => item !== b[index]);
+  }
+  return a !== b;
 }
+
+/** Which persisted fields the current projection moves since the last write. */
+function changedFields(
+  next: MainViewPersistedState,
+): Array<keyof MainViewPersistedState> {
+  const fields = Object.keys(next) as Array<keyof MainViewPersistedState>;
+  const previous = lastWritten;
+  if (!previous) return fields;
+  return fields.filter((field) => fieldChanged(next, previous, field));
+}
+
+function writeIfChanged(): void {
+  const next = persistedSnapshot$.get();
+  if (changedFields(next).length === 0) return;
+  draftSaveDebounce.cancel();
+  lastWritten = next;
+  stateManager.setState(next);
+}
+
+/**
+ * Watcher callback runs during signal invalidation, where reading a signal is
+ * not allowed — so the projection is inspected on a microtask, which also
+ * coalesces a burst of `.set()` calls from one handler into one write.
+ */
+const watcher = new Signal.subtle.Watcher(() => {
+  queueMicrotask(() => {
+    watcher.watch();
+    if (lastWritten === undefined) return;
+    const changed = changedFields(persistedSnapshot$.get());
+    if (changed.length === 0) return;
+    if (changed.every((field) => DRAFT_FIELDS.has(field))) {
+      draftSaveDebounce.schedule();
+      return;
+    }
+    writeIfChanged();
+  });
+});
 
 export function restorePersistedState(): void {
   // State is parsed through MainViewPersistedStateSchema which provides all defaults.
   // No manual fallbacks needed - schema handles missing/invalid values.
   const state = stateManager.getState();
   applyState(state);
+  // Arm the writer on what the mount produced, not on what storage held: the
+  // restore itself must not write back (a legacy blob is migrated in memory
+  // and persisted by the user's next real change), and every later change is
+  // measured against the state the user is actually looking at.
+  lastWritten = persistedSnapshot$.get();
+  watcher.watch(persistedSnapshot$);
 }
 
 /**
@@ -141,7 +214,6 @@ function restorePerModeInstructions(state: MainViewPersistedState): void {
     (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
   workflowInstruction$.set(wf);
   toolUseInstruction$.set(tu);
-  instruction$.set(state.sessionType === SESSION_TYPES.WORKFLOW ? wf : tu);
 }
 
 /**
@@ -150,6 +222,10 @@ function restorePerModeInstructions(state: MainViewPersistedState): void {
  * Returns true only when a state snapshot was successfully applied — the
  * caller uses this to honor `executeImmediately` (a reset or a failed parse
  * must never trigger an execute).
+ *
+ * A host push is never per-character, so it writes out on the spot instead of
+ * waiting out the draft rate limit — otherwise a reset that only clears the
+ * instruction drafts would sit unwritten for the debounce window.
  */
 export function handleRestoreState(
   message: StateRestoreMessage,
@@ -157,6 +233,7 @@ export function handleRestoreState(
 ): boolean {
   if (message.isResetOperation === true) {
     clearForNewSession();
+    flushPendingSave();
     return false;
   }
   if (!message.state) {
@@ -168,14 +245,8 @@ export function handleRestoreState(
     onSchemaError('[MainApp] State restore validation failed.', parsed.error);
     return false;
   }
-  const state = parsed.data;
-  blockSave();
-  try {
-    applyState(state);
-  } finally {
-    unblockSave();
-  }
-  saveState();
+  applyState(parsed.data);
+  flushPendingSave();
   return true;
 }
 
@@ -212,7 +283,6 @@ function applyState(state: MainViewPersistedState): void {
 }
 
 function clearForNewSession(): void {
-  instruction$.set('');
   workflowInstruction$.set('');
   toolUseInstruction$.set('');
   const defaults = SESSION_DEFAULTS[sessionType$.get()];
@@ -234,35 +304,28 @@ function clearForNewSession(): void {
       });
     }
   }
-  saveState();
-}
-
-const INSTRUCTION_SAVE_DEBOUNCE_MS = 300;
-
-/** Debounces `saveState()` calls triggered by instruction keystrokes. */
-const instructionSaveDebounce = createFlushableDebounce(
-  saveState,
-  INSTRUCTION_SAVE_DEBOUNCE_MS,
-);
-
-/** Debounce instruction keystrokes so each one doesn't hit storage. */
-export function scheduleInstructionSave(): void {
-  instructionSaveDebounce.schedule();
-}
-
-/** Flush a pending debounced instruction save (on disconnect). */
-export function flushPendingInstructionSave(): void {
-  instructionSaveDebounce.flush();
 }
 
 /**
- * Reset the transient runtime (save-block counter, pending debounce timer)
- * and reload the cached persisted state from storage. Called from `MainApp`'s
- * constructor on remount in the same JS context, matching the fresh-instance
- * slate the old per-instance fields provided.
+ * Write anything the watcher has not flushed yet, synchronously. Called on
+ * disconnect, where a queued microtask or a pending draft timer would
+ * otherwise lose the user's last edit.
+ */
+export function flushPendingSave(): void {
+  draftSaveDebounce.cancel();
+  if (lastWritten === undefined) return;
+  writeIfChanged();
+}
+
+/**
+ * Disarm the writer, drop its pending work, and reload the cached persisted
+ * state from storage. Called from `MainApp`'s constructor on remount in the
+ * same JS context, matching the fresh-instance slate the old per-instance
+ * fields provided; `restorePersistedState` re-arms on the next connect.
  */
 export function resetPersistenceRuntime(): void {
-  saveBlockCount = 0;
-  instructionSaveDebounce.cancel();
+  draftSaveDebounce.cancel();
+  watcher.unwatch(persistedSnapshot$);
+  lastWritten = undefined;
   stateManager.reload();
 }

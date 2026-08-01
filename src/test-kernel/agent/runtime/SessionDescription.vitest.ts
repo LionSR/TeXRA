@@ -5,7 +5,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   cleanSessionDescription,
   generateSessionDescription,
-  getSessionDescriptionInstruction,
+  getDisplayedInstruction,
 } from '@agent/runtime/sessionDescription';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import * as logger from '@logger/logUtils';
@@ -48,7 +48,7 @@ describe('session description helpers', () => {
 
   it('prefers displayInstruction over hidden prompt context', () => {
     expect(
-      getSessionDescriptionInstruction({
+      getDisplayedInstruction({
         displayInstruction: 'Assess the proof concisely.',
         instruction:
           'Primary user input files:\n- "problem.md"\n\nAdditional user instruction:\n\nAssess the proof concisely.',
@@ -58,7 +58,7 @@ describe('session description helpers', () => {
 
   it('falls back to instruction when displayInstruction is blank', () => {
     expect(
-      getSessionDescriptionInstruction({
+      getDisplayedInstruction({
         displayInstruction: '   ',
         instruction: 'Summarize the paper.',
       }),

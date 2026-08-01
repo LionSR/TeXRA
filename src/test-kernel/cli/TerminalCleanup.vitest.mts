@@ -3,7 +3,10 @@ import { writeSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
-import { approvalQueueStatus } from '@cli/chat/tui/state/approvalQueue';
+import {
+  clearApprovals,
+  enqueueApproval,
+} from '@cli/chat/tui/state/approvalQueue';
 import {
   resetCliState,
   rootRunPending,
@@ -35,9 +38,7 @@ const NO_TERMINAL_CAPABILITIES = {
 };
 
 afterEach(() => {
-  // These cases drive the title from the projected approval status directly,
-  // without queueing an approval, so reset what they wrote.
-  approvalQueueStatus.set({ depth: 0, kind: 'approval' });
+  clearApprovals();
   resetCliState();
   vi.restoreAllMocks();
   // `writeSync` is a vi.fn() created inside the vi.mock() factory above, not
@@ -48,6 +49,21 @@ afterEach(() => {
   vi.mocked(writeSync).mockClear();
   terminalCapabilities.set(NO_TERMINAL_CAPABILITIES);
 });
+
+/** Put one real approval in the queue: the title reads the queue's own
+ *  projection, so the test drives it through the queue rather than writing a
+ *  status value the queue no longer stores. */
+function queueTitleApproval(streamId: string): void {
+  void enqueueApproval({
+    kind: 'bash',
+    payload: {
+      requestId: `title-${streamId}`,
+      allowBypass: true,
+      streamId,
+      command: 'echo ok',
+    },
+  });
+}
 
 describe('terminalTitleText', () => {
   it('names the tab after the project folder', () => {
@@ -130,11 +146,11 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
     expectLastTitle('TeXRA — Running — coauthor');
 
-    approvalQueueStatus.set({ depth: 1, kind: 'approval' });
+    queueTitleApproval('title-transition');
     await flushTitleUpdate();
     expectLastTitle('TeXRA — Approval needed — coauthor');
 
-    approvalQueueStatus.set({ depth: 0, kind: 'approval' });
+    clearApprovals();
     await flushTitleUpdate();
     expectLastTitle('TeXRA — Running — coauthor');
 
@@ -203,7 +219,7 @@ describe('installTerminalTitleUpdates', () => {
 
     updates.suspend();
     expectLastTitle('TeXRA — coauthor');
-    approvalQueueStatus.set({ depth: 1, kind: 'approval' });
+    queueTitleApproval('title-suspend');
     await flushTitleUpdate();
     expect(writeSync).toHaveBeenCalledTimes(3);
 

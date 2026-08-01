@@ -4,7 +4,7 @@ import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -19,9 +19,13 @@ import type {
 import type { ToolEditPermission } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
-import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+import { createModuleMocks } from '@test/support/moduleMocks';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { delay } from '@utils/core';
-import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
+import {
+  createStubDesktopAgentExecutionHost,
+  disposeAfterTest,
+} from './desktopAgentExecutionTestHarness.mjs';
 import { loadSourceModule } from './loadSourceModule.mjs';
 
 const approvalTest = (name: string, fn: () => Promise<void>): void => {
@@ -47,18 +51,18 @@ interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
   resolvedToolEditPermissions: Array<{ requestId: string }>;
 }
 
-let activeToolEditApproval:
-  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
-  | undefined;
-const testSessions: SessionHandle[] = [];
-const testControllers: ApprovalController[] = [];
-const testTempRoots: string[] = [];
-
-function createTestSession(): SessionHandle {
-  const session = createIsolatedTestSession();
-  testSessions.push(session);
-  return session;
+/**
+ * The approval handler a loaded module registry routes `tryUseRunContext` to.
+ * One holder per `loadApprovalModules` call, so a test only ever reaches the
+ * controller its own fixture registered.
+ */
+interface ActiveApproval {
+  requestApproval?: (
+    request: ToolEditApprovalRequest,
+  ) => Promise<ToolEditApprovalResult>;
 }
+
+const mocks = createModuleMocks();
 
 /** Controllers are disposed after each test; `dispose` is idempotent. */
 function createApprovalController(
@@ -76,13 +80,12 @@ function createApprovalController(
     resolveToolEditPermission: options.resolveToolEditPermission,
     detachCause: SESSION_DISPOSED_CAUSE,
   });
-  testControllers.push(controller);
-  return controller;
+  return disposeAfterTest(controller);
 }
 
 async function createTempRoot(prefix = 'texra-approval-'): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), prefix));
-  testTempRoots.push(dir);
+  onTestFinished(() => rm(dir, { recursive: true, force: true }));
   return dir;
 }
 
@@ -134,6 +137,7 @@ async function waitForEmptyDir(dir: string): Promise<void> {
 
 async function loadApprovalModules(workspacePath = '/workspace') {
   vi.resetModules();
+  const activeApproval: ActiveApproval = {};
   type MockLocation =
     | { kind: 'workspace'; absolutePath: string; relativePath: string }
     | { kind: 'external'; absolutePath: string };
@@ -154,13 +158,13 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       relativePath: filePath,
     };
   };
-  vi.doMock('@utils/config/configUtils', () => ({
+  mocks.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn(() => 'sameDirectory'),
     getValidatedConfig: vi.fn(
       <T,>(_path: string, _schema: unknown, defaultValue: T) => defaultValue,
     ),
   }));
-  vi.doMock('@agent/runtime/RunContext', async () => {
+  mocks.doMock('@agent/runtime/RunContext', async () => {
     const actual = await vi.importActual<
       typeof import('@agent/runtime/RunContext')
     >('@agent/runtime/RunContext');
@@ -172,12 +176,12 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     return {
       ...actual,
       tryUseRunContext: vi.fn(() =>
-        activeToolEditApproval
+        activeApproval.requestApproval
           ? {
               session: {
                 approvals,
                 interactions: {
-                  requestToolEditApproval: activeToolEditApproval,
+                  requestToolEditApproval: activeApproval.requestApproval,
                 },
               },
             }
@@ -185,7 +189,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       ),
     };
   });
-  vi.doMock('@utils/files', async () => {
+  mocks.doMock('@utils/files', async () => {
     const actual =
       await vi.importActual<typeof import('@utils/files')>('@utils/files');
     return {
@@ -236,6 +240,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     loadSourceModule('@desktop/main/desktopToolEditApproval'),
   ]);
   return {
+    activeApproval,
     requestToolEditApproval,
     cleanupApprovalsForStream,
     controllerModule,
@@ -263,7 +268,7 @@ async function createApprovalFixture(
   const tempRoot = await createTempRoot();
   const modules = await loadApprovalModules(options.workspacePath);
   const interactions = createRecordingRuntimeHost();
-  const session = createTestSession();
+  const session = disposeAfterTest(createTestSession());
   const controller = createApprovalController(modules, {
     interactions,
     ...controllerHostCallbacks(interactions),
@@ -271,22 +276,13 @@ async function createApprovalFixture(
     ui: options.ui ?? createStubDesktopAgentExecutionHost(),
     tempRoot,
   });
-  activeToolEditApproval = (request) => controller.requestApproval(request);
+  modules.activeApproval.requestApproval = (request) =>
+    controller.requestApproval(request);
   return { ...modules, controller, interactions, session, tempRoot };
 }
 
 describe('desktop tool edit approval', () => {
-  afterEach(async () => {
-    activeToolEditApproval = undefined;
-    for (const controller of testControllers.splice(0)) controller.dispose();
-    for (const session of testSessions.splice(0)) session.dispose();
-    for (const dir of testTempRoots.splice(0)) {
-      await rm(dir, { recursive: true, force: true });
-    }
-    vi.doUnmock('@utils/config/configUtils');
-    vi.doUnmock('@agent/runtime/RunContext');
-    vi.doUnmock('@tools/approval/latexPreview');
-    vi.doUnmock('@utils/files');
+  afterEach(() => {
     vi.restoreAllMocks();
   });
 
@@ -296,7 +292,7 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await createTempRoot();
       const modules = await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
-      const session = createTestSession();
+      const session = disposeAfterTest(createTestSession());
       const controller = createApprovalController(modules, {
         interactions,
         ...controllerHostCallbacks(interactions),
@@ -352,7 +348,7 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await createTempRoot();
       const modules = await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
-      const session = createTestSession();
+      const session = disposeAfterTest(createTestSession());
       let shown: ToolEditPermission | undefined;
       const controller = createApprovalController(modules, {
         interactions,
@@ -605,7 +601,7 @@ describe('desktop tool edit approval', () => {
     'routes LaTeX diff inspection without settling the request',
     async () => {
       const runLatexdiff = vi.fn(async () => {});
-      vi.doMock('@tools/approval/latexPreview', async () => {
+      mocks.doMock('@tools/approval/latexPreview', async () => {
         const actual = await vi.importActual<
           typeof import('@tools/approval/latexPreview')
         >('@tools/approval/latexPreview');

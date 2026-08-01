@@ -80,7 +80,7 @@ export function resolveDefaultModels(preferred: readonly string[]): string[] {
  * deprecated is dropped rather than dangling in the default list with no way
  * back out.
  */
-export const DEFAULT_MODELS: string[] = resolveDefaultModels(
+export const DEFAULT_MODELS: readonly string[] = resolveDefaultModels(
   PREFERRED_DEFAULT_MODELS,
 );
 

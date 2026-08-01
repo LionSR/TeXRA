@@ -29,7 +29,6 @@
       "@latex/*": ["../../src/latex/*"],
       "@commands/*": ["src/commands/*"],
       "@resources/*": ["resources/*"],
-      "@model": ["../../src/model"],
       "@model/*": ["../../src/model/*"],
       "@skills/*": ["../../src/skills/*"],
       "@housekeeping": ["../../src/housekeeping"],

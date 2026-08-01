@@ -34,7 +34,6 @@ export interface DiffRunResult {
 
 export interface DiffRunOutcome {
   results: DiffRunResult[];
-  totalOperations: number;
 }
 
 interface DiffOperationBase {

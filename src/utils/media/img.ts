@@ -10,15 +10,13 @@ import { fromPath } from 'pdf2pic';
 import * as logger from '@logger/logUtils';
 import { generateShortId } from '@utils/core';
 import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
+import { createTexraTempDir } from '@utils/files/tempDir';
 import { getConfig } from '@utils/config/configUtils';
 import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
 const CHANNEL = 'ImgUtils';
-
-// Define the temporary directory path
-const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
 /** Default DPI/density used when rasterizing a PDF page to PNG. */
 const DEFAULT_PDF_QUALITY = 300;
@@ -27,13 +25,6 @@ const DEFAULT_PDF_QUALITY = 300;
 const DEFAULT_PDF_MAX_SIZE: [number, number] = [1024, 1024];
 
 // ImageMagick configuration is now in toolUtils.ts
-
-/** Ensure the pdf2pic temporary directory exists. */
-function ensureTempDir(): void {
-  if (!AbsoluteFS.existsSync(TEMP_DIR)) {
-    AbsoluteFS.mkdirSync(TEMP_DIR, { recursive: true });
-  }
-}
 
 /** Resolve a file path and return the absolute path, or null if not found. */
 async function resolveFile(filePath: string): Promise<string | null> {
@@ -52,29 +43,15 @@ async function loadPdfPageCount(absolutePath: string): Promise<number> {
   return pdfDoc.getPageCount();
 }
 
-/**
- * Clean up temporary files with a given base name pattern
- * @param basePath Base directory path
- * @param tempFilePattern Pattern to match temp files
- */
-async function cleanupTempFiles(
-  basePath: string,
-  tempFilePattern: string,
-): Promise<void> {
-  const files = AbsoluteFS.readDirSync(basePath);
-  const tempFiles = files.filter((file) => file.startsWith(tempFilePattern));
-
-  for (const file of tempFiles) {
-    const fullPath = path.join(basePath, file);
-    try {
-      AbsoluteFS.deleteSync(fullPath);
-      logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
-    } catch (err) {
-      logger.warn(
-        CHANNEL,
-        `Failed to delete temporary file ${file}: ${toErrorMessage(err)}`,
-      );
-    }
+/** Remove a conversion's private temp directory and every page it holds. */
+async function removeConversionTempDir(tempDir: string): Promise<void> {
+  try {
+    await AbsoluteFS.delete(tempDir, { recursive: true });
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to remove temporary directory ${tempDir}: ${toErrorMessage(err)}`,
+    );
   }
 }
 
@@ -207,51 +184,41 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 
 /**
  * Convert a single page of an already-resolved PDF to a base64 encoded PNG.
- * The caller owns resolving the path and verifying the image tool once per
- * conversion, so neither is re-probed per page.
+ * The caller owns resolving the path, verifying the image tool, and creating
+ * the temp directory once per conversion, so none is re-probed per page.
  */
 async function singlePagePdf2Png(
   absolutePath: string,
   pageNum: number,
   quality: number,
   maxSize: [number, number],
+  tempDir: string,
 ): Promise<string> {
-  try {
-    ensureTempDir();
+  const convert = fromPath(absolutePath, {
+    density: quality,
+    width: maxSize[0],
+    height: maxSize[1],
+    preserveAspectRatio: true,
+    format: 'png',
+    saveFilename: `page-${pageNum}`,
+    savePath: tempDir,
+  });
+  const result = await convert(pageNum);
 
-    const tempFilePattern = `temp_${Date.now()}`;
-    const options = {
-      density: quality,
-      width: maxSize[0],
-      height: maxSize[1],
-      preserveAspectRatio: true,
-      format: 'png',
-      saveFilename: path.parse(tempFilePattern).name,
-      savePath: TEMP_DIR,
-    };
-
-    const convert = fromPath(absolutePath, options);
-    const result = await convert(pageNum);
-
-    if (!result?.path) {
-      throw new Error('PDF conversion failed: No output path returned');
-    }
-
-    if (!AbsoluteFS.existsSync(result.path)) {
-      throw new Error(
-        'Failed to convert PDF page to PNG: Output file not found',
-      );
-    }
-
-    const imageBuffer = AbsoluteFS.readBytesSync(result.path);
-    logger.debug(
-      CHANNEL,
-      `Successfully converted page ${pageNum} of ${absolutePath} to PNG`,
-    );
-    return imageBuffer.toString('base64');
-  } finally {
-    await cleanupTempFiles(TEMP_DIR, 'temp_');
+  if (!result?.path) {
+    throw new Error('PDF conversion failed: No output path returned');
   }
+
+  if (!AbsoluteFS.existsSync(result.path)) {
+    throw new Error('Failed to convert PDF page to PNG: Output file not found');
+  }
+
+  const imageBuffer = AbsoluteFS.readBytesSync(result.path);
+  logger.debug(
+    CHANNEL,
+    `Successfully converted page ${pageNum} of ${absolutePath} to PNG`,
+  );
+  return imageBuffer.toString('base64');
 }
 
 /** Pages converted when the caller does not cap the count. */
@@ -280,27 +247,47 @@ export async function processPdf2Png(
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
-    if (pageCount === 1) {
-      return await singlePagePdf2Png(absolutePath, 1, quality, maxSize);
-    }
+    // Private per-conversion directory: concurrent conversions used to share
+    // one directory and each wiped every `temp_*` file on the way out, so one
+    // conversion could delete the pages another was still reading.
+    const tempDir = await createTexraTempDir('texra-pdf-conversion-');
+    try {
+      if (pageCount === 1) {
+        return await singlePagePdf2Png(
+          absolutePath,
+          1,
+          quality,
+          maxSize,
+          tempDir,
+        );
+      }
 
-    // `??` on purpose: a null maxPages (e.g. from a .nullish() tool field)
-    // means "no limit requested" and gets the default cap, same as undefined.
-    const pagesToConvert = Math.min(
-      pageCount,
-      maxPages ?? DEFAULT_PDF_MAX_PAGES,
-    );
-    const base64Images: string[] = [];
-    for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
-      base64Images.push(
-        await singlePagePdf2Png(absolutePath, pageNum, quality, maxSize),
+      // `??` on purpose: a null maxPages (e.g. from a .nullish() tool field)
+      // means "no limit requested" and gets the default cap, same as undefined.
+      const pagesToConvert = Math.min(
+        pageCount,
+        maxPages ?? DEFAULT_PDF_MAX_PAGES,
       );
+      const base64Images: string[] = [];
+      for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
+        base64Images.push(
+          await singlePagePdf2Png(
+            absolutePath,
+            pageNum,
+            quality,
+            maxSize,
+            tempDir,
+          ),
+        );
+      }
+      logger.debug(
+        CHANNEL,
+        `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
+      );
+      return base64Images;
+    } finally {
+      await removeConversionTempDir(tempDir);
     }
-    logger.debug(
-      CHANNEL,
-      `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
-    );
-    return base64Images;
   } catch (err) {
     logger.error(CHANNEL, `Error processing PDF input: ${toErrorMessage(err)}`);
     return null;

@@ -12,6 +12,7 @@ import {
   activeStreamId,
   closeInfoPane,
   type ConversationEntry,
+  focusStream,
   infoPane,
   openInfoPane,
   rootRunPending,
@@ -69,8 +70,7 @@ import {
   chatTuiCanStartRootRun,
   chatTuiCanSelectModel,
   chatTuiSigintAction,
-  clearTuiSessionRunState,
-  markChatTuiRunPending,
+  TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { chatTuiFocusedChildFollowUpRoute } from '@cli/chat/tui/runChatTui';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -172,6 +172,10 @@ function withStreamStatus(body: () => void): void {
 
 afterEach(() => {
   clearAllStreamStatusesForTest(defaultSession().status);
+  // A reset retires every stream id it clears, so an id reused by the next
+  // test would stay refused by the status/focus owners. The second reset has
+  // an empty map to retire and leaves no retired identity behind.
+  resetCliState();
   resetCliState();
 });
 
@@ -210,7 +214,10 @@ describe('cliState Phase 4 fields', () => {
   });
 
   it('initialises every new slice with empty subagent/todo/plan/bypass defaults', () => {
-    patchStream(root, (s) => ({ ...s, status: 'running' }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: 'running',
+    });
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
     expect(activeRows(root)).toEqual([]);
@@ -230,15 +237,71 @@ describe('cliState Phase 4 fields', () => {
     expect(parentStream.get().get(child2)).toBe(root);
 
     // Removing a child drops its own edge but leaves siblings intact.
-    patchStream(child1, (s) => ({ ...s, status: 'running' }));
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: 'running',
+    });
     removeStream(child1);
     expect(parentStream.get().has(child1)).toBe(false);
     expect(parentStream.get().get(child2)).toBe(root);
 
     // Removing the parent prunes every edge that pointed at it.
-    patchStream(root, (s) => ({ ...s, status: 'running' }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: 'running',
+    });
     removeStream(root);
     expect(parentStream.get().has(child2)).toBe(false);
+  });
+
+  it('refuses focus for a removed stream identity', () => {
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.RUNNING,
+    });
+    focusStream(child1);
+    expect(activeStreamId.get()).toBe(child1);
+
+    removeStream(child1);
+    expect(activeStreamId.get()).toBeUndefined();
+
+    // A fact that arrives after the row is gone must not pull the view back
+    // onto it, with or without an existing focus.
+    focusStream(child1);
+    expect(activeStreamId.get()).toBeUndefined();
+    focusStream(child1, { onlyIfUnset: true });
+    expect(activeStreamId.get()).toBeUndefined();
+  });
+
+  it('refuses focus for a stream retired by a session reset', () => {
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+    });
+    resetCliState();
+
+    focusStream(root, { onlyIfUnset: true });
+    expect(activeStreamId.get()).toBeUndefined();
+
+    // The next state lifetime owns the identity again once a patch
+    // re-registers the row.
+    patchStream(root, (s) => ({ ...s }));
+    focusStream(root);
+    expect(activeStreamId.get()).toBe(root);
+  });
+
+  it('keeps the current focus when a later stream only claims an unset slot', () => {
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+    });
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.RUNNING,
+    });
+    focusStream(root);
+    focusStream(child1, { onlyIfUnset: true });
+    expect(activeStreamId.get()).toBe(root);
   });
 
   it('removes stale child rows when a stream is removed', () => {
@@ -255,7 +318,10 @@ describe('cliState Phase 4 fields', () => {
       },
     ]);
     setParentStream(child1, root);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.WAITING,
+    });
 
     expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
@@ -379,10 +445,10 @@ describe('cliState Phase 4 fields', () => {
   it('registers subagent parent edges when active child rows arrive', () => {
     withRunFacts((hub) => {
       activeStreamId.set(root);
-      patchStream(child1, (s) => ({
-        ...s,
+      setStreamStatusInCliState({
+        streamId: child1,
         status: STREAM_PHASE.RUNNING,
-      }));
+      });
 
       hub.emit({
         scope: 'run',
@@ -870,17 +936,14 @@ describe('CLI TUI row allocation', () => {
 
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupPromise = new Promise<void>(() => {});
-    const session = {
-      streamId: root,
-      interruptedStreamId: undefined,
-      executionId: 'exec-old',
-      runPromise: undefined,
-      runExitCode: CliExitCode.AgentError,
-      runCompleted: true,
-      stopRequested: true,
-    };
+    const session = new TuiSession();
+    session.streamId = root;
+    session.executionId = 'exec-old';
+    session.runExitCode = CliExitCode.AgentError;
+    session.markRunCompleted();
+    session.stopRequested = true;
 
-    markChatTuiRunPending(session, startupPromise);
+    session.markRunPending(startupPromise);
 
     expect(session.streamId).toBeUndefined();
     expect(session.executionId).toBe('exec-old');
@@ -894,20 +957,36 @@ describe('CLI TUI row allocation', () => {
     expect(rootRunStreamId.get()).toBeUndefined();
   });
 
+  it('publishes the run-control stream id from the session itself', () => {
+    const session = new TuiSession();
+    session.markRunPending(new Promise<void>(() => {}));
+    expect(rootRunStreamId.get()).toBeUndefined();
+
+    // No publish call accompanies this write: the session owns the mirror,
+    // so a caller cannot leave the Ctrl-C hint reading a stale claim (#8273).
+    session.streamId = root;
+
+    expect(rootRunStreamId.get()).toBe(root);
+    expect(rootRunPending.get()).toBe(true);
+    expect(rootRunStartAvailable.get()).toBe(false);
+
+    session.markRunCompleted();
+
+    expect(rootRunStreamId.get()).toBe(root);
+    expect(rootRunPending.get()).toBe(false);
+    expect(rootRunStartAvailable.get()).toBe(true);
+  });
+
   it('restores root run availability when clearing session run state', () => {
     const startupPromise = new Promise<void>(() => {});
-    const session = {
-      streamId: root,
-      interruptedStreamId: undefined,
-      executionId: 'exec-old',
-      runPromise: startupPromise,
-      runExitCode: CliExitCode.AgentError,
-      runCompleted: false,
-      stopRequested: true,
-    };
-    markChatTuiRunPending(session, startupPromise);
+    const session = new TuiSession();
+    session.streamId = root;
+    session.executionId = 'exec-old';
+    session.runExitCode = CliExitCode.AgentError;
+    session.stopRequested = true;
+    session.markRunPending(startupPromise);
 
-    clearTuiSessionRunState(session);
+    session.clearRunState();
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
     expect(rootRunStartAvailable.get()).toBe(true);
@@ -1063,8 +1142,14 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('selects the focused child stream as a follow-up target', () => {
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+    });
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.WAITING,
+    });
     setParentStream(child1, root);
 
     activeStreamId.set(root);
@@ -1078,7 +1163,10 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('ignores stale child row status when routing focused child follow-ups', () => {
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+    });
     applySubagentRoster(root, [
       {
         kind: 'subagent',
@@ -1088,7 +1176,10 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.COMPLETED,
       },
     ]);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.RUNNING,
+    });
     setParentStream(child1, root);
 
     activeStreamId.set(child1);
@@ -1102,7 +1193,10 @@ describe('CLI TUI row allocation', () => {
   // child row's status from the stream status map, so a roster snapshot that
   // still says RUNNING cannot keep a stopped child accepting follow-ups.
   it('routes focused child follow-ups from the stream status, not the roster row', () => {
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+    });
     applySubagentRoster(root, [
       {
         kind: 'subagent',
@@ -1112,7 +1206,10 @@ describe('CLI TUI row allocation', () => {
         status: STREAM_PHASE.RUNNING,
       },
     ]);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.CANCELLED,
+    });
     setParentStream(child1, root);
 
     activeStreamId.set(child1);
@@ -1162,7 +1259,10 @@ describe('CLI TUI row allocation', () => {
 
   it('mirrors running child status events into focused child routing', () => {
     withStreamStatus(() => {
-      patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+      setStreamStatusInCliState({
+        streamId: root,
+        status: STREAM_PHASE.WAITING,
+      });
       applySubagentRoster(root, [
         {
           kind: 'subagent',
@@ -1172,7 +1272,10 @@ describe('CLI TUI row allocation', () => {
           status: STREAM_PHASE.COMPLETED,
         },
       ]);
-      patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
+      setStreamStatusInCliState({
+        streamId: child1,
+        status: STREAM_PHASE.CANCELLED,
+      });
       setParentStream(child1, root);
 
       defaultSession().status.transition(
@@ -1193,7 +1296,10 @@ describe('CLI TUI row allocation', () => {
 
   it('mirrors stopped child status events into focused child routing', () => {
     withStreamStatus(() => {
-      patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+      setStreamStatusInCliState({
+        streamId: root,
+        status: STREAM_PHASE.WAITING,
+      });
       applySubagentRoster(root, [
         {
           kind: 'subagent',
@@ -1203,7 +1309,10 @@ describe('CLI TUI row allocation', () => {
           status: STREAM_PHASE.RUNNING,
         },
       ]);
-      patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+      setStreamStatusInCliState({
+        streamId: child1,
+        status: STREAM_PHASE.RUNNING,
+      });
       setParentStream(child1, root);
 
       defaultSession().status.transition(
@@ -1224,6 +1333,12 @@ describe('CLI TUI row allocation', () => {
 
   it('returns a focused attached child to its immediate owner on lifecycle completion', () => {
     withStreamStatus(() => {
+      // The owner must be a row of the current state lifetime: focus never
+      // lands on a stream identity retired by an earlier `resetCliState`.
+      setStreamStatusInCliState({
+        streamId: root,
+        status: STREAM_PHASE.RUNNING,
+      });
       setParentStream(child1, root);
       activeStreamId.set(child1);
 
@@ -1247,6 +1362,10 @@ describe('CLI TUI row allocation', () => {
 
   it('returns a user-stopped focused child to its immediate owner', () => {
     withStreamStatus(() => {
+      setStreamStatusInCliState({
+        streamId: root,
+        status: STREAM_PHASE.RUNNING,
+      });
       setParentStream(child1, root);
       activeStreamId.set(child1);
 
@@ -1317,27 +1436,24 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
-    const session = {
-      streamId: root,
-      interruptedStreamId: root,
-      executionId: 'old-execution',
-      runPromise: Promise.resolve(),
-      runExitCode: CliExitCode.Interrupted,
-      runCompleted: true,
-      stopRequested: true,
-    };
+    const session = new TuiSession();
+    session.markRunPending(Promise.resolve());
+    session.markRunCompleted();
+    session.streamId = root;
+    session.interruptedStreamId = root;
+    session.executionId = 'old-execution';
+    session.runExitCode = CliExitCode.Interrupted;
+    session.stopRequested = true;
 
-    clearTuiSessionRunState(session);
+    session.clearRunState();
 
-    expect(session).toMatchObject({
-      streamId: undefined,
-      interruptedStreamId: undefined,
-      executionId: undefined,
-      runPromise: undefined,
-      runExitCode: 0,
-      runCompleted: false,
-      stopRequested: false,
-    });
+    expect(session.streamId).toBeUndefined();
+    expect(session.interruptedStreamId).toBeUndefined();
+    expect(session.executionId).toBeUndefined();
+    expect(session.runPromise).toBeUndefined();
+    expect(session.runExitCode).toBe(CliExitCode.Success);
+    expect(session.runCompleted).toBe(false);
+    expect(session.stopRequested).toBe(false);
   });
 });
 
@@ -2239,10 +2355,10 @@ describe('CLI transcript state', () => {
     logger.info('The second lemma is valid.', {
       messageType: MESSAGE_TYPES.MODEL_RESPONSE,
     });
-    patchStream(child1, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: child1,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
 
     syncStreamLog(child1);
 
@@ -2262,10 +2378,10 @@ describe('CLI transcript state', () => {
     logger.info('The second lemma is valid.', {
       messageType: MESSAGE_TYPES.MODEL_RESPONSE,
     });
-    patchStream(child1, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: child1,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
     syncStreamLog(child1);
 
     syncStreamLog(child1, { forceFull: true });
@@ -2442,10 +2558,10 @@ describe('CLI transcript state', () => {
     logger.info('A delayed final answer.', {
       messageType: MESSAGE_TYPES.MODEL_RESPONSE,
     });
-    patchStream(root, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: root,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
 
     syncStreamLog(root);
 
@@ -2809,7 +2925,10 @@ describe('subscribeRuntimeHost run facts', () => {
 
       // The child's own status is the single owner the roster selectors read
       // from (rule 8: the roster's copied status is discarded).
-      patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+      setStreamStatusInCliState({
+        streamId: child1,
+        status: STREAM_PHASE.RUNNING,
+      });
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3250,7 +3369,10 @@ describe('subscribeRuntimeHost run facts', () => {
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.RUNNING,
+    });
     const lease = defaultSession().followUps.claimLive(root, 'flow')!;
     const queue = defaultSession().followUps.queue(lease);
 
@@ -3373,15 +3495,27 @@ describe('session tree order', () => {
     ]);
     setParentStream(child1, root);
     setParentStream(child2, root);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
-    patchStream(child2, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.RUNNING,
+    });
+    setStreamStatusInCliState({
+      streamId: child2,
+      status: STREAM_PHASE.RUNNING,
+    });
     expect(orderedSessionDescendants(root)).toEqual([child1, child2]);
   });
 
   it('retains an inactive child session with history', () => {
     setParentStream(child1, root);
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+    setStreamStatusInCliState({
+      streamId: root,
+      status: STREAM_PHASE.WAITING,
+    });
+    setStreamStatusInCliState({
+      streamId: child1,
+      status: STREAM_PHASE.WAITING,
+    });
 
     expect(orderedSessionDescendants(root)).toEqual([child1]);
   });
@@ -3414,8 +3548,12 @@ describe('child-stream ordered transition matrix', () => {
   }
 
   it('1. canonical order: A, S(running), R_P+, E_P+', () => {
-    patchStream(kid, (s) => ({ ...s, status: undefined }));
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    // A: the child's slice exists with no status of its own yet.
+    patchStream(kid, (s) => ({ ...s }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
@@ -3430,8 +3568,12 @@ describe('child-stream ordered transition matrix', () => {
 
   it('2. roster first: R_P+, A, S(running), E_P+', () => {
     applySubagentRoster(parentP, [rosterRow()]);
-    patchStream(kid, (s) => ({ ...s, status: undefined }));
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    // A: the child's slice exists with no status of its own yet.
+    patchStream(kid, (s) => ({ ...s }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     setParentStream(kid, parentP);
 
     expect(parentStream.get().get(kid)).toBe(parentP);
@@ -3444,10 +3586,14 @@ describe('child-stream ordered transition matrix', () => {
     // The roster hasn't arrived yet, but the edge alone already makes the
     // child reachable from the focus cycle once its slice exists (invariant
     // 6: an edge-only child is focusable once its StreamSlice exists).
-    patchStream(kid, (s) => ({ ...s, status: undefined }));
+    // A: the child's slice exists with no status of its own yet.
+    patchStream(kid, (s) => ({ ...s }));
     expect(parentStream.get().get(kid)).toBe(parentP);
 
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow()]);
 
     expect(activeRows(parentP)).toHaveLength(1);
@@ -3455,7 +3601,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('4. status first: S(running), A, E_P+, R_P+', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     setParentStream(kid, parentP);
     applySubagentRoster(parentP, [rosterRow()]);
 
@@ -3466,7 +3615,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('5. completion: A, S(running), R_P+, E_P+, R_P-, S(terminal)', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
@@ -3475,7 +3627,10 @@ describe('child-stream ordered transition matrix', () => {
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toHaveLength(1);
 
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.COMPLETED,
+    });
 
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toMatchObject([
@@ -3494,7 +3649,10 @@ describe('child-stream ordered transition matrix', () => {
     // (typically the very first one) instead of the last live value before
     // removal - the value the retained row and `formatPostCompactionContext`
     // read verbatim once the child is gone from the roster.
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
     setParentStream(kid, parentP);
 
@@ -3504,13 +3662,19 @@ describe('child-stream ordered transition matrix', () => {
     // The child is untracked (dropped from the roster) with its last-known
     // elapsed already captured; the terminal status lands separately.
     applySubagentRoster(parentP, []);
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.COMPLETED,
+    });
 
     expect(retainedRows(parentP)).toMatchObject([{ elapsed: '41s' }]);
   });
 
   it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
 
@@ -3528,7 +3692,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('7. explicit reattachment: (6) then E_Q+, R_Q+, R_P+', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
     setParentStream(kid, null);
@@ -3548,7 +3715,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('8. child removal with late facts: (5) then X(child), R_P+, E_P+, A, S(terminal)', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     applySubagentRoster(parentP, []);
@@ -3576,13 +3746,19 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('9. fresh activation after removal uses a distinct id, not the removed one', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     removeStream(kid);
 
     const freshKid = 'kid-2' as StreamTabId;
-    patchStream(freshKid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: freshKid,
+      status: STREAM_PHASE.RUNNING,
+    });
     setParentStream(freshKid, parentP);
     applySubagentRoster(parentP, [
       {
@@ -3616,8 +3792,14 @@ describe('child-stream ordered transition matrix', () => {
       childStreamId: kidB,
       status,
     });
-    patchStream(kidA, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
-    patchStream(kidB, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kidA,
+      status: STREAM_PHASE.RUNNING,
+    });
+    setStreamStatusInCliState({
+      streamId: kidB,
+      status: STREAM_PHASE.RUNNING,
+    });
 
     // First-seen order: A then B.
     applySubagentRoster(parentP, [rowA(), rowB()]);
@@ -3635,7 +3817,10 @@ describe('child-stream ordered transition matrix', () => {
 
     // Shrink to just B; A completes.
     applySubagentRoster(parentP, [rowB()]);
-    patchStream(kidA, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+    setStreamStatusInCliState({
+      streamId: kidA,
+      status: STREAM_PHASE.COMPLETED,
+    });
 
     expect(activeRows(parentP).map((r) => r.childStreamId)).toEqual([kidB]);
     // Retained order is still stable and A's historical row survives.
@@ -3650,10 +3835,16 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('11. parent removal with late facts: P -> child, X(P), R_P+, E_P+', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
-    patchStream(parentP, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: parentP,
+      status: STREAM_PHASE.RUNNING,
+    });
 
     removeStream(parentP);
     expect(isChildStreamRemoved(parentP)).toBe(true);
@@ -3669,7 +3860,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('12. identical roster snapshot applied twice is a no-op (no store write)', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     const entriesAfterFirst = childStreamEntries.get();
 
@@ -3682,7 +3876,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('13. first roster parent rejects a conflicting roster until an explicit edge arrives', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     applySubagentRoster(parentQ, [
@@ -3695,7 +3892,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('14. tombstones stay bounded: oldest removals are evicted, live entries kept', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     for (let index = 0; index < 250; index += 1) {
@@ -3716,7 +3916,10 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('15. a removed parent survives eviction while an orphaned child is still live', () => {
-    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    setStreamStatusInCliState({
+      streamId: kid,
+      status: STREAM_PHASE.RUNNING,
+    });
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
 

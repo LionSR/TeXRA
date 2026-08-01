@@ -17,12 +17,10 @@ import {
 } from '@agent/runtime/SessionHandle';
 import type { StateStore } from '@platform/interfaces';
 import {
-  AgentCategoryFilterSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ActiveChildInfo,
-  type AgentCategoryFilter,
   type ConversationProgress,
   type ExecutionId,
   type PhaseStage,
@@ -36,6 +34,7 @@ import {
   createBackendStorage,
 } from '@shared/state/PersistedState';
 import { isProcessAgent } from '@shared/streams/agentKind';
+import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
@@ -90,9 +89,23 @@ export interface ProgressStreamMetadata {
   run?: ProgressStreamRunDetails;
 }
 
+/**
+ * The stored slice of {@link ProgressStreamMetadata}. `creationTimestamp` is
+ * not in it: the transcript dates a tab, so it is computed on read rather than
+ * carried through every patch that has nothing to say about it.
+ */
+type StoredStreamMetadata = Omit<ProgressStreamMetadata, 'creationTimestamp'>;
+
 /** Ephemeral session state per stream (not persisted). */
 interface StreamSessionState {
-  metadata: ProgressStreamMetadata;
+  metadata: StoredStreamMetadata;
+  /**
+   * Creation time to report until the transcript has a first entry to date the
+   * tab by. Latched to that entry's timestamp once one exists, so a later
+   * eviction cannot move an established tab back to when this session first
+   * saw it.
+   */
+  provisionalCreationTimestamp: number;
 }
 
 /** Active stream identifier, or empty string when no stream is selected. */
@@ -101,7 +114,6 @@ export type ActiveStreamId = StreamTabId | '';
 /** Schema for consolidated progress view preferences. */
 const ProgressViewPrefsSchema = z.object({
   activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
-  agentCategoryFilter: AgentCategoryFilterSchema.prefault('all'),
 });
 
 type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
@@ -195,10 +207,6 @@ export class ProgressViewState {
     return this._prefs.get('activeStream');
   }
 
-  set activeStream(stream: ActiveStreamId) {
-    this._prefs.update({ activeStream: stream });
-  }
-
   /**
    * Compute which stream should be active given available streams (pure query).
    */
@@ -213,25 +221,42 @@ export class ProgressViewState {
   /**
    * Release a previously-active stream's entries if its status is not
    * in-flight. `ProgressFactApplier.setStreamStatus` intentionally skips
-   * eviction for the active tab, so every active-stream switch path must
-   * call this on the stream being moved away from to close the loop.
+   * eviction for the active tab, so the switch below closes the loop on the
+   * stream being moved away from.
    */
-  releasePreviousActive(streamId: StreamTabId): void {
+  private releasePreviousActive(streamId: StreamTabId): void {
     if (!isActivePhase(this.streamStatus.get(streamId))) {
       this.streamLogs.requestEviction(streamId);
     }
   }
 
   /**
-   * Move the selection to `next`, releasing the tab left behind. Switching
-   * paths use this rather than assigning `activeStream` so none of them can
-   * forget the release above.
+   * The single writer of the active tab: moves the selection to `next` and
+   * releases the tab left behind. There is no `activeStream` setter, so no
+   * switching path can forget the release above.
    */
   switchActiveStream(next: ActiveStreamId): void {
     const previous = this._prefs.get('activeStream');
     if (previous === next) return;
-    this.activeStream = next;
+    this._prefs.update({ activeStream: next });
     if (previous) this.releasePreviousActive(previous);
+  }
+
+  /**
+   * Stream tabs offered for selection, newest first — the order
+   * `buildStreamInfos` renders. Membership and rotation only depend on
+   * creation time, so this answers them without building tab infos or
+   * touching the worktree resolver.
+   */
+  selectableStreamNames(): StreamTabId[] {
+    return this.streamLogs
+      .keys()
+      .map((name) => ({
+        name,
+        creationTimestamp: this.getStreamMetadata(name).creationTimestamp,
+      }))
+      .sort(compareByNewestCreationTime)
+      .map((entry) => entry.name);
   }
 
   /**
@@ -249,33 +274,15 @@ export class ProgressViewState {
     return next;
   }
 
-  get agentCategoryFilter(): AgentCategoryFilter {
-    return this._prefs.get('agentCategoryFilter');
-  }
-
-  set agentCategoryFilter(filter: AgentCategoryFilter) {
-    if (!AgentCategoryFilterSchema.safeParse(filter).success) {
-      this.logger.warn(`Invalid agent filter: ${filter}, defaulting to 'all'`);
-      filter = 'all';
-    }
-    this._prefs.update({ agentCategoryFilter: filter });
-  }
-
   // -- Ephemeral session state ------------------------------------------------
 
-  private getOrCreateSession(
-    stream: StreamTabId,
-    creationTimestamp?: number,
-  ): StreamSessionState {
+  private getOrCreateSession(stream: StreamTabId): StreamSessionState {
     let state = this._sessionState.get(stream);
     if (!state) {
       state = {
-        metadata: {
-          creationTimestamp:
-            this.streamLogs.getFirstTimestamp(stream) ??
-            creationTimestamp ??
-            Date.now(),
-        },
+        metadata: {},
+        provisionalCreationTimestamp:
+          this.streamLogs.getFirstTimestamp(stream) ?? Date.now(),
       };
       this._sessionState.set(stream, state);
     }
@@ -283,8 +290,8 @@ export class ProgressViewState {
   }
 
   /**
-   * The single writer for {@link ProgressStreamMetadata}: every mutation site
-   * below builds a `Partial<ProgressStreamMetadata>` patch and routes it
+   * The single writer for {@link StoredStreamMetadata}: every mutation site
+   * below builds a `Partial<StoredStreamMetadata>` patch and routes it
    * through here rather than assigning fields by hand. A field the patch
    * doesn't mention is preserved verbatim from `current` — callers that want
    * to clear a field (e.g. detaching a parent) do so by including that key
@@ -292,9 +299,9 @@ export class ProgressViewState {
    * centralized.
    */
   private applyMetadataPatch(
-    current: ProgressStreamMetadata,
-    patch: Partial<ProgressStreamMetadata>,
-  ): ProgressStreamMetadata {
+    current: StoredStreamMetadata,
+    patch: Partial<StoredStreamMetadata>,
+  ): StoredStreamMetadata {
     return { ...current, ...patch };
   }
 
@@ -311,9 +318,9 @@ export class ProgressViewState {
    */
   private buildSnapshotMetadataPatch(
     stream: StreamTabId,
-    current: ProgressStreamMetadata,
-  ): Partial<ProgressStreamMetadata> {
-    const patch: Partial<ProgressStreamMetadata> = {};
+    current: StoredStreamMetadata,
+  ): Partial<StoredStreamMetadata> {
+    const patch: Partial<StoredStreamMetadata> = {};
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
       const descriptor = this.snapshots.getRunDescriptor(stream);
@@ -361,8 +368,8 @@ export class ProgressViewState {
 
   private applySnapshotMetadata(
     stream: StreamTabId,
-    current: ProgressStreamMetadata,
-  ): ProgressStreamMetadata {
+    current: StoredStreamMetadata,
+  ): StoredStreamMetadata {
     return this.applyMetadataPatch(
       current,
       this.buildSnapshotMetadataPatch(stream, current),
@@ -376,14 +383,10 @@ export class ProgressViewState {
    */
   updateStreamMetadata(
     stream: StreamTabId,
-    patch: Partial<ProgressStreamMetadata>,
+    patch: Partial<StoredStreamMetadata>,
   ): void {
-    const state = this.getOrCreateSession(stream, patch.creationTimestamp);
-    const creationTimestamp = state.metadata.creationTimestamp;
-    const merged = this.applyMetadataPatch(state.metadata, {
-      ...patch,
-      creationTimestamp,
-    });
+    const state = this.getOrCreateSession(stream);
+    const merged = this.applyMetadataPatch(state.metadata, patch);
     state.metadata = this.applySnapshotMetadata(stream, merged);
   }
 
@@ -393,30 +396,27 @@ export class ProgressViewState {
     state.metadata = this.applySnapshotMetadata(stream, state.metadata);
   }
 
-  /**
-   * Start a run from durable metadata, retaining only the tab's original
-   * creation time from its previous provisional/live record.
-   */
+  /** Start a run from durable metadata, dropping this session's live-only data. */
   resetStreamMetadataForRun(stream: StreamTabId): void {
     const state = this.getOrCreateSession(stream);
-    const reset: ProgressStreamMetadata = {
-      creationTimestamp: state.metadata.creationTimestamp,
-    };
-    state.metadata = this.applySnapshotMetadata(stream, reset);
+    state.metadata = this.applySnapshotMetadata(stream, {});
   }
 
   /**
-   * Read effective metadata, creating the ephemeral record when needed. Once
-   * the transcript has entries, its actual first timestamp replaces any
-   * provisional or restored timestamp used before the log became available.
+   * Read effective metadata, creating the ephemeral record when needed. The
+   * transcript's first entry dates the tab as soon as one exists; until then
+   * the record's provisional timestamp stands in.
    */
   getStreamMetadata(stream: StreamTabId): Readonly<ProgressStreamMetadata> {
-    const metadata = this.getOrCreateSession(stream).metadata;
+    const session = this.getOrCreateSession(stream);
     const firstTimestamp = this.streamLogs.getFirstTimestamp(stream);
     if (firstTimestamp !== undefined) {
-      metadata.creationTimestamp = firstTimestamp;
+      session.provisionalCreationTimestamp = firstTimestamp;
     }
-    return metadata;
+    return {
+      ...session.metadata,
+      creationTimestamp: session.provisionalCreationTimestamp,
+    };
   }
 
   setStreamParent(

@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
 import { loadSourceModule } from './loadSourceModule.mjs';
+
+const mocks = createModuleMocks();
 
 type DiffOutcome = {
   results: Array<{
@@ -40,7 +43,7 @@ function outputInfo(filePath: string): OutputFileInfo {
   };
 }
 
-async function loadFileActions(mocks: {
+async function loadFileActions(options: {
   outcome?: DiffOutcome;
   throws?: boolean;
   fallbackResult?: {
@@ -63,29 +66,29 @@ async function loadFileActions(mocks: {
   // tests cover the desktop param-building + outcome-handling, not the core
   // (which `RunLatexdiff.vitest.mts` exercises in isolation).
   const runLatexdiffForExecution = vi.fn(async () => {
-    if (mocks.throws) throw new Error('No workspace path found');
+    if (options.throws) throw new Error('No workspace path found');
     return {
-      outcome: mocks.outcome ?? { results: [], totalOperations: 0 },
+      outcome: options.outcome ?? { results: [], totalOperations: 0 },
       source: 'metadata' as const,
     };
   });
   const runDiff = vi.fn(
     async () =>
-      mocks.fallbackResult ?? {
+      options.fallbackResult ?? {
         success: true,
         diffFileName: 'main_diff.tex',
       },
   );
 
-  vi.doMock('@latex/latexdiff/runLatexdiff', () => ({
+  mocks.doMock('@latex/latexdiff/runLatexdiff', () => ({
     runLatexdiffForExecution,
   }));
-  vi.doMock('@latex/latexdiff', () => ({
+  mocks.doMock('@latex/latexdiff', () => ({
     LaTeXdiffService: class {
       runDiff = runDiff;
     },
   }));
-  vi.doMock('@utils/files', async () => {
+  mocks.doMock('@utils/files', async () => {
     const actual =
       await vi.importActual<typeof import('@utils/files')>('@utils/files');
     return {
@@ -124,9 +127,6 @@ async function loadFileActions(mocks: {
 
 describe('DesktopProgressFileActions latexdiff', () => {
   afterEach(() => {
-    vi.doUnmock('@latex/latexdiff');
-    vi.doUnmock('@latex/latexdiff/runLatexdiff');
-    vi.doUnmock('@utils/files');
     vi.restoreAllMocks();
   });
 

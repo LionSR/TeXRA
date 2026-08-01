@@ -26,8 +26,8 @@ import {
  *   1. mount-time webview-storage restore (`restorePersistedState`), and
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`),
  * including legacy single-`instruction` migration, transient output-file
- * reset, and the save-reentrancy guard (exactly one storage write per backend
- * restore).
+ * reset, and the single-writer rules in `persistence.ts` (exactly one storage
+ * write per backend restore, no write when nothing persisted changed).
  *
  * They observe only refactor-stable surfaces — the `@provide`/`@state` context
  * values, host-bridge storage writes, and posted messages — so they must pass
@@ -223,12 +223,13 @@ describe('MainApp persistence and restore characterization', () => {
     // Mount-time restore alone must not write back to storage.
     expect(storageWrites).toHaveLength(0);
 
-    // A subsequent save persists the migrated per-mode instructions and the
+    // A subsequent change persists the migrated per-mode instructions and the
     // forced-empty output state (never the stale seed values).
     dispatchHostMessage({
       command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
       filePath: 'other_polish.tex',
     });
+    await element.updateComplete;
     const blob = lastPersistedBlob();
     expect(blob.instruction).toBe('legacy single-field instruction');
     expect(blob.workflowInstruction).toBe('legacy single-field instruction');
@@ -298,8 +299,9 @@ describe('MainApp persistence and restore characterization', () => {
     });
     await element.updateComplete;
 
-    // Reentrancy guard characterization: the whole restore produces exactly
-    // one storage write (the trailing save), never intermediate saves.
+    // Single-writer characterization: the whole restore settles into one
+    // projection, so it produces exactly one storage write — never one per
+    // signal the applicator touches.
     expect(storageWrites).toHaveLength(1);
 
     const blob = lastPersistedBlob();
@@ -504,7 +506,39 @@ describe('MainApp persistence and restore characterization', () => {
     expect(fileState.multiFiles.mediaFiles).toEqual(['kept-figure.png']);
   });
 
-  describe('instruction-save debounce (createFlushableDebounce migration)', () => {
+  describe('single-writer rules', () => {
+    it('writes nothing when a host push moves only non-persisted state', async () => {
+      const element = await mountMainApp();
+      storageWrites.length = 0;
+
+      // The edited-file option list is presentation state; the selected file
+      // (which IS persisted) still resolves, so the projection is unchanged.
+      dispatchHostMessage({
+        command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
+        files: ['main_polish.tex', 'other_polish.tex'],
+      });
+      await element.updateComplete;
+
+      expect(storageWrites).toHaveLength(0);
+      element.remove();
+    });
+
+    it('writes nothing when a restore reproduces the state already applied', async () => {
+      const element = await mountMainApp();
+
+      const state = restoreState({ toolUseInstruction: 'same' });
+      dispatchHostMessage({ command: COMMON_COMMANDS.STATE_RESTORE, state });
+      await element.updateComplete;
+      expect(storageWrites).toHaveLength(1);
+
+      storageWrites.length = 0;
+      dispatchHostMessage({ command: COMMON_COMMANDS.STATE_RESTORE, state });
+      await element.updateComplete;
+
+      expect(storageWrites).toHaveLength(0);
+      element.remove();
+    });
+
     it('coalesces rapid instruction keystrokes into a single storage write after 300ms', async () => {
       const element = await mountMainApp();
       storageWrites.length = 0;
@@ -512,14 +546,14 @@ describe('MainApp persistence and restore characterization', () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         setInstruction('h');
-        persistence.scheduleInstructionSave();
+        await Promise.resolve();
         vi.advanceTimersByTime(200);
         // A second keystroke inside the window restarts the 300ms wait — a
         // naive one-shot timer (or a non-restarting batcher) would let the
         // first write land at the 300ms mark below instead of waiting for
         // this call's own full window.
         setInstruction('hello');
-        persistence.scheduleInstructionSave();
+        await Promise.resolve();
         vi.advanceTimersByTime(299);
         expect(storageWrites).toHaveLength(0);
 
@@ -533,25 +567,54 @@ describe('MainApp persistence and restore characterization', () => {
       element.remove();
     });
 
-    it('flushPendingInstructionSave (called on disconnect) synchronously persists a pending debounced save', async () => {
+    it('writes a non-draft change immediately, carrying the pending draft with it', async () => {
+      const element = await mountMainApp();
+      storageWrites.length = 0;
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        setInstruction('typed but not yet due');
+        await Promise.resolve();
+        expect(storageWrites).toHaveLength(0);
+
+        dispatchHostMessage({
+          command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
+          filePath: 'other_polish.tex',
+        });
+        await Promise.resolve();
+
+        expect(storageWrites).toHaveLength(1);
+        expect(lastPersistedBlob().instruction).toBe('typed but not yet due');
+
+        // The draft timer was cancelled by that write, not left to fire again.
+        vi.advanceTimersByTime(1000);
+        expect(storageWrites).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      element.remove();
+    });
+
+    it('flushPendingSave (called on disconnect) synchronously persists a pending draft', async () => {
       const element = await mountMainApp();
       storageWrites.length = 0;
 
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         setInstruction('unsaved when disconnected');
-        persistence.scheduleInstructionSave();
+        await Promise.resolve();
         expect(storageWrites).toHaveLength(0);
 
-        // disconnectedCallback -> flushPendingInstructionSave(): the pending
-        // debounced save must run synchronously, not be dropped on teardown.
+        // disconnectedCallback -> flushPendingSave(): the pending draft must
+        // be written synchronously, not dropped on teardown.
         element.remove();
         expect(storageWrites).toHaveLength(1);
         expect(lastPersistedBlob().instruction).toBe(
           'unsaved when disconnected',
         );
 
-        // flush() must clear the timer — letting it "expire" afterward must
+        // The flush must clear the timer — letting it "expire" afterward must
         // not produce a second write.
         vi.advanceTimersByTime(1000);
         expect(storageWrites).toHaveLength(1);
@@ -560,14 +623,14 @@ describe('MainApp persistence and restore characterization', () => {
       }
     });
 
-    it('resetPersistenceRuntime cancels a pending debounced save instead of flushing it', async () => {
+    it('resetPersistenceRuntime cancels a pending draft instead of flushing it', async () => {
       const element = await mountMainApp();
       storageWrites.length = 0;
 
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
         setInstruction('discarded by reset, not persisted');
-        persistence.scheduleInstructionSave();
+        await Promise.resolve();
 
         persistence.resetPersistenceRuntime();
 

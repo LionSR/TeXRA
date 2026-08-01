@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   commands: {
     executeCommand: mocks.executeCommand,
-    getCommands: async () => ['texra.getWebviewView'],
   },
   window: { showInformationMessage: vi.fn() },
   workspace: {

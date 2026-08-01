@@ -8,9 +8,12 @@ import {
 } from '@shared/state/PersistedState';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
+/**
+ * Only the expand/collapse state survives a reload. Search position is not
+ * persisted: the search term itself never was, so a restored "3/7" described
+ * a search the user could no longer see.
+ */
 const HistoryViewStateSchema = z.object({
-  searchIndex: z.number().catch(0),
-  totalMatches: z.number().catch(0),
   toggleStates: z.array(z.tuple([z.string(), z.boolean()])).catch([]),
 });
 
@@ -23,31 +26,12 @@ export class HistoryViewState {
     HistoryViewStateSchema,
   );
   public readonly toggleStates = new ToggleStateStore(() => this.save());
-  public searchIndex = 0;
-  public totalMatches = 0;
 
   initialize(): void {
-    const saved = this.state.getState();
-    this.searchIndex = saved.searchIndex;
-    this.totalMatches = saved.totalMatches;
-    this.toggleStates.load(saved.toggleStates);
-  }
-
-  setSearchIndex(index: number): void {
-    this.searchIndex = index;
-    this.save();
-  }
-
-  setTotalMatches(count: number): void {
-    this.totalMatches = count;
-    this.save();
+    this.toggleStates.load(this.state.getState().toggleStates);
   }
 
   save(): void {
-    this.state.update({
-      searchIndex: this.searchIndex,
-      totalMatches: this.totalMatches,
-      toggleStates: this.toggleStates.entries(),
-    });
+    this.state.update({ toggleStates: this.toggleStates.entries() });
   }
 }

@@ -9,6 +9,7 @@ import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 import {
   activeStreamId,
+  focusStream,
   rootStreamId,
   registerCliStateResetHook,
   removeStream,
@@ -59,7 +60,7 @@ function appendLocalTranscriptEntry(
   if (!normalized) return;
 
   const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();
-  if (!activeStreamId.get()) activeStreamId.set(streamId);
+  focusStream(streamId, { onlyIfUnset: true });
   const log = defaultSession().transcripts.get(streamId);
   const syntheticAfterSeq = log?.head ?? 0;
   const syntheticAfterSettlementSeqNo = log?.settlementHead ?? 0;
@@ -121,7 +122,7 @@ export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
     entries: [...localSlice.entries, ...slice.entries],
   }));
   if (activeStreamId.get() === CLI_LOCAL_STREAM_ID) {
-    activeStreamId.set(streamId);
+    focusStream(streamId);
   }
   removeStream(CLI_LOCAL_STREAM_ID);
 }

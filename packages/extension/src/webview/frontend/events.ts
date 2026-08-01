@@ -154,6 +154,4 @@ export const MainViewEvents = {
   manageTeams: () => createEvent('manage-teams', undefined),
 
   modelSettings: () => createEvent('model-settings', undefined),
-
-  instructionPaste: () => createEvent('instruction-paste', undefined),
 } as const;

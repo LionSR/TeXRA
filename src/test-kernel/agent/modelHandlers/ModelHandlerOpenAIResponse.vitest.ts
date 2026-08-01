@@ -30,7 +30,7 @@ import {
   isContextWindowError,
   isUserAbort,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';

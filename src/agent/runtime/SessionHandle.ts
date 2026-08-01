@@ -374,9 +374,12 @@ export class SessionHandle {
             state.phase === STREAM_PHASE.FAILED ||
             state.phase === STREAM_PHASE.CANCELLED
           ) {
-            this.status.transitionToTerminal(streamId, state.phase, {
-              substate: state.substate,
-            });
+            this.status.transitionToTerminal(
+              streamId,
+              state.phase,
+              STREAM_TRANSITION_CAUSE.LIFECYCLE,
+              { substate: state.substate },
+            );
           } else {
             this.status.transition(
               streamId,

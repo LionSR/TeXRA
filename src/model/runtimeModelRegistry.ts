@@ -32,10 +32,33 @@ export interface RuntimeModelDirectFallback {
   readonly chatGptSubscriptionEligible: boolean;
 }
 
-const runtimeModels = new Map<string, RuntimeModelEntry>();
-let discoveryEpoch = 0;
-let discoveryComplete = false;
-let pendingDiscovery: Promise<void> | undefined;
+/**
+ * The registry's entire state as one value, replaced atomically on every
+ * transition. Keeping the generation, the entries, their freshness, and the
+ * in-flight discovery in one record is what makes a torn state unreachable:
+ * a discovery can only commit into the generation it started from, so an
+ * invalidation that lands mid-flight cannot leave the entries of one
+ * generation flagged fresh under another.
+ */
+interface RuntimeModelCatalogue {
+  /** Bumped by every invalidation; a discovery commits only into its own. */
+  readonly generation: number;
+  /**
+   * Last-known discovered entries. Retained across invalidation so synchronous
+   * readers keep answering while the next discovery runs.
+   */
+  readonly entries: ReadonlyMap<string, RuntimeModelEntry>;
+  /** Whether {@link entries} reflect a discovery that is still current. */
+  readonly discovered: boolean;
+  /** The in-flight discovery, if one is running. */
+  readonly pending?: Promise<void>;
+}
+
+let catalogue: RuntimeModelCatalogue = {
+  generation: 0,
+  entries: new Map(),
+  discovered: false,
+};
 
 function modelRouteNames(config: ModelConfig): readonly string[] {
   return [config.copilotFullName, config.vscodeLMFullName].filter(
@@ -133,38 +156,41 @@ async function discoverCopilotModels(): Promise<
 
 /** Refresh editor-supplied models after the native model/access cache changes. */
 export async function refreshRuntimeModelRegistry(): Promise<void> {
-  if (discoveryComplete) return;
-  if (pendingDiscovery) return pendingDiscovery;
+  if (catalogue.discovered) return;
+  if (catalogue.pending) return catalogue.pending;
 
-  const epoch = discoveryEpoch;
+  // Both outcomes below replace the catalogue wholesale, which is also what
+  // clears `pending`; a result whose generation has moved on was superseded by
+  // an invalidation and is dropped instead of committed.
+  const { generation } = catalogue;
   const request = (async () => {
-    const discovered = await discoverCopilotModels();
-    if (epoch !== discoveryEpoch) return;
-    runtimeModels.clear();
-    for (const [id, entry] of discovered) runtimeModels.set(id, entry);
-    discoveryComplete = true;
+    const entries = await discoverCopilotModels();
+    if (catalogue.generation !== generation) return;
+    catalogue = { generation, entries, discovered: true };
   })();
-  pendingDiscovery = request;
+  catalogue = { ...catalogue, pending: request };
   try {
     await request;
   } catch (error) {
-    if (epoch === discoveryEpoch) runtimeModels.clear();
+    if (catalogue.generation === generation) {
+      catalogue = { generation, entries: new Map(), discovered: false };
+    }
     throw error;
-  } finally {
-    if (pendingDiscovery === request) pendingDiscovery = undefined;
   }
 }
 
 /** Mark discovery stale while retaining last-known configs for sync readers. */
 export function invalidateRuntimeModelRegistry(): void {
-  discoveryEpoch += 1;
-  discoveryComplete = false;
-  pendingDiscovery = undefined;
+  catalogue = {
+    generation: catalogue.generation + 1,
+    entries: catalogue.entries,
+    discovered: false,
+  };
 }
 
 /** Resolve a static or editor-discovered model config by its persisted id. */
 export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
-  return runtimeModels.get(model)?.config ?? MODEL_CONFIGS[model];
+  return catalogue.entries.get(model)?.config ?? MODEL_CONFIGS[model];
 }
 
 /** All static model entries owned by TeXRA and llm-zoo. */
@@ -179,7 +205,9 @@ function discoveredModelConfigEntries(): readonly (readonly [
   string,
   ModelConfig,
 ])[] {
-  return [...runtimeModels].map(([id, entry]) => [id, entry.config] as const);
+  return [...catalogue.entries].map(
+    ([id, entry]) => [id, entry.config] as const,
+  );
 }
 
 /** Resolve a model after ensuring native discovery has run in this host. */
@@ -190,12 +218,12 @@ export async function resolveRuntimeModelConfig(
   if (staticConfig) return staticConfig;
 
   await refreshRuntimeModelRegistry();
-  return runtimeModels.get(model)?.config;
+  return catalogue.entries.get(model)?.config;
 }
 
 /** Available editor-supplied model ids appended to ordinary visible models. */
 export function availableRuntimeModelIds(): readonly string[] {
-  return [...runtimeModels]
+  return [...catalogue.entries]
     .filter(([, entry]) => entry.access === 'allowed')
     .map(([id]) => id);
 }
@@ -204,7 +232,7 @@ export function availableRuntimeModelIds(): readonly string[] {
 export function runtimeModelAccess(
   model: string,
 ): LanguageModelAccessState | undefined {
-  return runtimeModels.get(model)?.access;
+  return catalogue.entries.get(model)?.access;
 }
 
 /** Direct-key model represented by an editor-supplied subscription model. */
@@ -212,7 +240,7 @@ export function getRuntimeModelDirectFallback(
   model: string,
   useOpenRouter: boolean,
 ): RuntimeModelDirectFallback | undefined {
-  const directModel = runtimeModels.get(model)?.directModel;
+  const directModel = catalogue.entries.get(model)?.directModel;
   if (!directModel) return undefined;
   const config = MODEL_CONFIGS[directModel];
   if (!config) return undefined;
@@ -237,7 +265,7 @@ export async function requestRuntimeModelAccess(
   model: string,
 ): Promise<RuntimeModelAccessRequestResult> {
   await refreshRuntimeModelRegistry();
-  const entry = runtimeModels.get(model);
+  const entry = catalogue.entries.get(model);
   if (!entry) return 'unavailable';
   if (entry.access === 'allowed') return 'already-allowed';
   if (entry.access === 'unavailable') return 'unavailable';
@@ -267,7 +295,7 @@ export async function requestRuntimeModelAccess(
 
 /** Whether an id belongs to the currently discovered editor model catalog. */
 export function isRuntimeModel(model: string): boolean {
-  return runtimeModels.has(model);
+  return catalogue.entries.has(model);
 }
 
 /** Static and discovered entries for consumers that enumerate the registry. */

@@ -9,7 +9,8 @@
  *
  * Used by:
  *   - Tool dashboard — runs fresh checks via `runExternalToolChecks()`
- *   - Agent tool resolver — reads cache via `getUnavailableToolNamesCached()`
+ *   - Agent tool resolver — reads the last results via
+ *     `getUnavailableToolNamesCached()`
  */
 
 // Local imports
@@ -43,10 +44,7 @@ export interface ExternalToolCheckResult {
 // Check execution + cache
 // ============================================================
 
-/** Cached set of unavailable tool names. */
-let cached: ReadonlySet<string> | null = null;
-
-/** Last check results — kept for rebuilding the cache without re-probing. */
+/** Last check results — the only source for availability answers. */
 let lastResults: ExternalToolCheckResult[] | null = null;
 
 /** Read the current set of disabled tool names from persisted Settings state. */
@@ -125,7 +123,6 @@ export function runExternalToolChecks(): Promise<ExternalToolCheckResult[]> {
       do {
         pendingRerun = false;
         results = await runProbes();
-        cached = buildUnavailableSet(results);
         lastResults = results;
       } while (pendingRerun);
     } finally {
@@ -230,21 +227,8 @@ export async function refreshToolAvailability(): Promise<void> {
 }
 
 /**
- * Rebuild the availability cache from the last check results without
- * re-probing external tools. Called after toggling a tool on/off.
- */
-export function refreshDisabledToolCache(): void {
-  if (!lastResults) {
-    cached = null;
-    return;
-  }
-  cached = buildUnavailableSet(lastResults);
-}
-
-/**
- * Non-blocking cache read — returns cached unavailable tool names if
- * checks have already completed, or an empty set if the cache isn't
- * populated yet. Never triggers I/O.
+ * Non-blocking read — derives the unavailable tool names from the last check
+ * results, or an empty set if no probe has completed yet. Never triggers I/O.
  *
  * Only includes tools whose external dependency is missing (not-found).
  * Disabled tools are NOT included — the caller handles those separately
@@ -255,5 +239,5 @@ export function refreshDisabledToolCache(): void {
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
 export function getUnavailableToolNamesCached(): ReadonlySet<string> {
-  return cached ?? new Set();
+  return lastResults ? buildUnavailableSet(lastResults) : new Set();
 }

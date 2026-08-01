@@ -40,6 +40,28 @@ beforeAll(async () => {
   ({ render } = await import('lit'));
 });
 
+/** What a log formatter hands to lit: a template, or its decline sentinel. */
+type FormatterTemplate =
+  ReturnType<typeof formatToolUseTemplate> | ReturnType<typeof formatLogEntry>;
+
+/** Renders a formatter's template into a detached container to query. */
+function renderTemplate(template: FormatterTemplate): HTMLElement {
+  const container = document.createElement('div');
+  render(template, container);
+  return container;
+}
+
+/**
+ * Renders into a container attached to the document, for the cases that need
+ * a real ancestor chain (event bubbling) and connected custom elements.
+ */
+function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  render(template, container);
+  return container;
+}
+
 /** The shared shell of an INFO-level tool-use log entry. */
 function toolUseMessage(id: string, data: unknown): LogMessageData {
   return {
@@ -88,8 +110,9 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message, { defaultOpen: true }), container);
+    const container = renderTemplate(
+      formatToolUseTemplate(message, { defaultOpen: true }),
+    );
 
     const details = container.querySelector('wa-details.tool-use-details') as
       (HTMLElement & { open: boolean }) | null;
@@ -133,8 +156,7 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     expect(
       container.querySelector('.code-block[data-language="json"] code')
@@ -161,8 +183,7 @@ return { papers, question: args.question };`;
       },
     };
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     const title = container.querySelector('.tool-use-title');
     const body = container.querySelector('.banner-content');
@@ -190,8 +211,7 @@ return { papers, question: args.question };`;
       output: 'Wrote src/main.ts',
     });
 
-    const container = document.createElement('div');
-    render(formatLogEntry(message), container);
+    const container = renderTemplate(formatLogEntry(message));
 
     expect(container.textContent).toContain('write_file');
     expect(container.textContent).toContain('src/main.ts');
@@ -213,8 +233,7 @@ return { papers, question: args.question };`;
       status: 'completed',
     });
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     const title = container.querySelector('.tool-use-title')?.textContent;
     expect(title).toBe('Edit — paper.tex');
@@ -228,8 +247,7 @@ return { papers, question: args.question };`;
       status: 'completed',
     });
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     expect(container.querySelector('.tool-use-title')?.textContent).toBe(
       'Bash — npm test',
@@ -246,8 +264,7 @@ return { papers, question: args.question };`;
       output: { status: 'completed' },
     });
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     expect(container.querySelector('.tool-use-title')?.textContent).toContain(
       'MCP github/search',
@@ -270,8 +287,7 @@ return { papers, question: args.question };`;
       60_000,
     );
 
-    const container = document.createElement('div');
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplate(formatToolUseTemplate(message));
 
     expect(container.textContent).toContain('wait (timeout: 1800s)');
     expect(container.textContent).not.toContain('3600s');
@@ -287,15 +303,13 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = document.createElement('div');
-    render(
+    const container = renderTemplate(
       formatToolUseTemplate(message, {
         executionLabels: new Map([
           ['sub-1', 'reviewer'],
           ['sub-2', 'leanSolver'],
         ]),
       }),
-      container,
     );
 
     expect(container.querySelector('.tool-use-title')?.textContent).toBe(
@@ -311,12 +325,10 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = document.createElement('div');
-    render(
+    const container = renderTemplate(
       formatToolUseTemplate(message, {
         executionLabels: new Map([['sub-1', 'reviewer']]),
       }),
-      container,
     );
 
     expect(container.querySelector('.tool-use-title')?.textContent).toBe(
@@ -333,12 +345,10 @@ return { papers, question: args.question };`;
       },
     });
 
-    const container = document.createElement('div');
-    render(
+    const container = renderTemplate(
       formatToolUseTemplate(message, {
         executionLabels: new Map([['sub-1', 'reviewer']]),
       }),
-      container,
     );
 
     expect(container.querySelector('.tool-use-title')?.textContent).toBe(
@@ -422,9 +432,7 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
       output: 'proposed',
     });
 
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    render(formatToolUseTemplate(message), container);
+    const container = renderTemplateInDocument(formatToolUseTemplate(message));
 
     const waDetails = container.querySelector(
       'wa-details.tool-use-details',
@@ -457,9 +465,7 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
   )(
     'keydown $key on the $control does not toggle the panel',
     async ({ detailsSelector, controlSelector, buildTemplate, key }) => {
-      const container = document.createElement('div');
-      document.body.appendChild(container);
-      render(buildTemplate(), container);
+      const container = renderTemplateInDocument(buildTemplate());
 
       const waDetails = container.querySelector(
         detailsSelector,

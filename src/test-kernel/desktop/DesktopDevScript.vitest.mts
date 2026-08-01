@@ -4,8 +4,13 @@ import { EventEmitter } from 'node:events';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports
+import { createModuleMocks } from '@test/support/moduleMocks';
+
 // Local imports - desktop test paths
 import { moduleFileUrl, repoPath } from './desktopTestPaths.mjs';
+
+const mocks = createModuleMocks();
 
 interface SpawnCall {
   readonly command: string;
@@ -55,9 +60,6 @@ afterEach(() => {
       process.removeListener('SIGTERM', listener);
     }
   }
-  vi.doUnmock('node:child_process');
-  vi.doUnmock('node:net');
-  vi.doUnmock('node:timers/promises');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.resetModules();
@@ -117,11 +119,11 @@ describe('desktop development launcher', () => {
       return { ok: true };
     });
 
-    vi.doMock('node:child_process', () => ({ spawn }));
-    vi.doMock('node:net', () => ({
+    mocks.doMock('node:child_process', () => ({ spawn }));
+    mocks.doMock('node:net', () => ({
       createServer: vi.fn(() => server),
     }));
-    vi.doMock('node:timers/promises', () => ({
+    mocks.doMock('node:timers/promises', () => ({
       setTimeout: vi.fn(async () => {}),
     }));
     vi.stubGlobal('fetch', fetch);

@@ -107,7 +107,7 @@ export abstract class BaseViewMessageHandler<
 
   /** Post a message to the tracked active view, if one is available. */
   protected postToActiveView(message: unknown): void {
-    this._activeView?.webview.postMessage(message);
+    this.getActiveView()?.webview.postMessage(message);
   }
 
   /** Run a callback with the active view's webview, if available. */

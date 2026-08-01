@@ -10,7 +10,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 
 function createModelSelectionController() {
   const state = {
-    enabledModels: ['gpt55', 'sonnet46T'],
+    enabledModels: ['gpt55', 'sonnet46T'] as readonly string[],
     helperModel: 'gpt55',
     reasoningLevelOverrides: {},
     preferShortModelNames: false,

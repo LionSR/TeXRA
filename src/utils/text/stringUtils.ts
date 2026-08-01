@@ -246,13 +246,10 @@ export function formatTimestamp(isoTimestamp: string): string {
 
 /**
  * Extract the subtype from a MIME type string (e.g. `'wav'` from `'audio/wav'`).
- * Returns `fallback` (defaults to the original string) when no `/` is found.
+ * A string with no `/` is returned unchanged, since it is already the subtype.
  */
-export function extractMimeSubtype(
-  mimeType: string,
-  fallback?: string,
-): string {
-  return mimeType.split('/').pop() ?? fallback ?? mimeType;
+export function extractMimeSubtype(mimeType: string): string {
+  return mimeType.split('/').pop() ?? mimeType;
 }
 
 /**

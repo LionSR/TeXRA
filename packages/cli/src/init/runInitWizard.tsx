@@ -167,15 +167,19 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       setIndex(index + 1);
       return;
     }
-    // Last step — every field is set by construction of `steps`.
+    // Last step — every field is set by construction of `STEPS`. A gap means
+    // the step list and the answer shape drifted apart, which is a bug in this
+    // file: report it instead of resolving as "the user backed out", which
+    // would drop the answers they just gave with no explanation.
     if (
       merged.agent === undefined ||
       merged.model === undefined ||
       merged.approvalPolicy === undefined ||
       merged.outputFormat === undefined
     ) {
-      cancel();
-      return;
+      throw new Error(
+        'texra init wizard reached its last step with an unanswered question: STEPS and InitAnswers are out of sync.',
+      );
     }
     props.onResolve({
       answers: {

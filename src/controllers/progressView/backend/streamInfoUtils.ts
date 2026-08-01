@@ -1,41 +1,21 @@
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import type { StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
-import { filterNotNull } from '@utils/core';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
 import type { ProgressViewState } from './state/ProgressViewState';
 
-/**
- * Whether a stream is visible under a category filter.
- *
- * Pure metadata comparison: unlike {@link buildStreamInfo} it does no worktree
- * resolution, so membership checks don't spawn git processes for an answer
- * that only depends on the stream's category.
- */
-export function streamMatchesCategoryFilter(
-  state: Pick<ProgressViewState, 'getStreamMetadata'>,
-  id: string,
-  filter: AgentCategoryFilter,
-): boolean {
-  if (filter === 'all') return true;
-  // A stream is Workflow until its run config resolves its real category.
-  const category =
-    state.getStreamMetadata(id).agentCategory ?? AgentCategory.Workflow;
-  return category === filter;
-}
+/** The state a single tab info is built from. */
+export type StreamInfoSource = Pick<ProgressViewState, 'getStreamMetadata'>;
 
-/**
- * Build a StreamTabInfo object for a single stream ID.
- * Returns null if the stream doesn't match the filter.
- */
+/** The state the full tab list is built from. */
+export type StreamInfoListSource = StreamInfoSource &
+  Pick<ProgressViewState, 'streamLogs'>;
+
+/** Build a StreamTabInfo object for a single stream ID. */
 export function buildStreamInfo(
-  state: ProgressViewState,
+  state: StreamInfoSource,
   id: string,
-  filter: AgentCategoryFilter,
-): StreamTabInfo | null {
-  if (!streamMatchesCategoryFilter(state, id, filter)) return null;
-
+): StreamTabInfo {
   const metadata = state.getStreamMetadata(id);
   const workingDirectory = metadata.run?.workingDirectory;
   let worktreeInfo;
@@ -55,17 +35,10 @@ export function buildStreamInfo(
   });
 }
 
-/**
- * Build metadata objects for all streams in the given state.
- */
-export function buildStreamInfos(
-  state: ProgressViewState,
-  filter: AgentCategoryFilter = 'all',
-): StreamTabInfo[] {
-  const infos = state.streamLogs
+/** Build metadata objects for all streams in the given state, newest first. */
+export function buildStreamInfos(state: StreamInfoListSource): StreamTabInfo[] {
+  return state.streamLogs
     .keys()
-    .map((id) => buildStreamInfo(state, id, filter))
-    .filter(filterNotNull);
-
-  return infos.sort(compareByNewestCreationTime);
+    .map((id) => buildStreamInfo(state, id))
+    .sort(compareByNewestCreationTime);
 }

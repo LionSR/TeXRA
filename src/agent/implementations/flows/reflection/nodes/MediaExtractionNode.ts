@@ -78,7 +78,9 @@ export class MediaExtractionNode<C = unknown> extends Node<
       );
     }
 
-    return prepRes.workspaceState.media.files;
+    // The workspace owns its media list (read-only, deduplicated on write),
+    // so the round hands the model handler its own snapshot of it.
+    return [...prepRes.workspaceState.media.files];
   }
 
   async execFallback(

@@ -49,18 +49,18 @@ export type ExternalRootKind =
 
 export interface ExternalRoot {
   /** Stable key, independent of UI text. */
-  kind: ExternalRootKind;
+  readonly kind: ExternalRootKind;
   /** Absolute, canonical filesystem path. */
-  absolutePath: string;
+  readonly absolutePath: string;
   /** Whether writes are permitted. */
-  writable: boolean;
+  readonly writable: boolean;
   /** Human-readable label shown in workspace_info. */
-  label: string;
+  readonly label: string;
 }
 
 export interface MatchedExternalRoot extends ExternalRoot {
   /** Path component relative to `absolutePath` (POSIX separators, '' for the root itself). */
-  relative: string;
+  readonly relative: string;
 }
 
 const roots = new Map<ExternalRootKind, ExternalRoot>();
@@ -115,12 +115,18 @@ export function registerExternalRoot(
   } catch {
     canonicalPath = path.resolve(absolutePath);
   }
-  roots.set(options.kind, {
-    kind: options.kind,
-    absolutePath: canonicalPath,
-    writable: options.writable,
-    label: options.label,
-  });
+  // Frozen: the registry hands these entries to tool code and to
+  // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
+  // silently widen the allowlist for every later lookup.
+  roots.set(
+    options.kind,
+    Object.freeze({
+      kind: options.kind,
+      absolutePath: canonicalPath,
+      writable: options.writable,
+      label: options.label,
+    }),
+  );
 }
 
 /**

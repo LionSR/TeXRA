@@ -26,6 +26,7 @@ import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
+import { warn as logWarning } from '@logger/logUtils';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -95,6 +96,18 @@ export interface OnboardingGateContext {
   readonly apiMode?: ApiAccessMode;
 }
 
+const LOG_CHANNEL = 'CLI Onboarding';
+
+/**
+ * The gate degrades to "not configured yet" when a state read or write fails,
+ * which at worst re-prompts. Say why in the log so a read-only home directory
+ * or an unreadable history store is diagnosable rather than looking like the
+ * gate's normal behavior.
+ */
+function warnOnboardingFailure(action: string, error: unknown): void {
+  logWarning(LOG_CHANNEL, `${action} failed: ${toErrorMessage(error)}`);
+}
+
 const SKIP_SUMMARY =
   "Setup skipped — run `texra login` or `texra setup` when you're ready.";
 
@@ -130,9 +143,7 @@ export async function maybeRunCliOnboarding(
     return NO_ONBOARDING_RESULT;
   }
   const globalState = platform().globalState;
-  const hasCredential = await hasCliCredentialForApiMode(context.apiMode).catch(
-    () => false,
-  );
+  const hasCredential = await hasCliCredentialForApiMode(context.apiMode);
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
   // with execution history never enters State 0/1. Credential presence alone
   // does not prove this is an upgrader: fresh installs can inherit env keys.
@@ -145,7 +156,10 @@ export async function maybeRunCliOnboarding(
   const hasRunHistory = needsFirstRunBackfill
     ? await listExecutions().then(
         (entries) => entries.length > 0,
-        () => false,
+        (error: unknown) => {
+          warnOnboardingFailure('Run-history check', error);
+          return false;
+        },
       )
     : false;
   // LAST_KNOWN_VERSION is stamped by desktop/extension startup. The CLI's
@@ -159,7 +173,9 @@ export async function maybeRunCliOnboarding(
     hasCredential,
     hasPriorInstall,
     hasRunHistory,
-  }).catch(() => {});
+  }).catch((error: unknown) =>
+    warnOnboardingFailure('First-run backfill write', error),
+  );
   // Route through the same funnel-transition planner the extension/desktop
   // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
   // is discarded: the CLI has no launcher agent list to steer. Clearing a
@@ -172,7 +188,9 @@ export async function maybeRunCliOnboarding(
     ...readOnboardingFlags(globalState),
   });
   if (transition.clearDeclined) {
-    await setOnboardingDeclined(globalState, false).catch(() => {});
+    await setOnboardingDeclined(globalState, false).catch((error: unknown) =>
+      warnOnboardingFailure('Clearing the stale skip flag', error),
+    );
   }
   // `configured` stays false for both 'done' and 'setup': an
   // already-credentialed or already-completed launch is not a post-picker
@@ -246,7 +264,10 @@ async function runOnboardingFlow(options: {
     // skipped, then configured via `texra setup` (which bypasses the gate), then
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
-    await setOnboardingDeclined(platform().globalState, false).catch(() => {});
+    await setOnboardingDeclined(platform().globalState, false).catch(
+      (error: unknown) =>
+        warnOnboardingFailure('Clearing the stale skip flag', error),
+    );
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
   // No "what next" hint after configuring: every caller continues in the same

@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Local imports
 import { currentSession } from '@agent/runtime/SessionHandle';
 import * as logger from '@logger/logUtils';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import {
   currentToolRoot,

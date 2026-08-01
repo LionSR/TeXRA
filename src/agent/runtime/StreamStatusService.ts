@@ -34,9 +34,33 @@ type WaitingTransitionCause = Extract<
   'wait' | 'restart-repair'
 >;
 
+type TerminalTransitionCause = Extract<
+  StreamTransitionCause,
+  'lifecycle' | 'restart-repair'
+>;
+
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
   readonly substate?: StreamSubstate;
+}
+
+/**
+ * One entry per stream, in either of its two forms. A reservation is not a
+ * second structure overlaying the phase: it is the entry itself, carrying the
+ * state a rollback must restore, so every reader sees the same state without
+ * merging two collections.
+ */
+type StreamEntry =
+  | { readonly kind: 'phase'; readonly state: StreamPhaseState }
+  | { readonly kind: 'reserved'; readonly rollbackTo?: StreamPhaseState };
+
+const RESERVED_STATE: StreamPhaseState = Object.freeze({
+  phase: STREAM_PHASE.RUNNING,
+  substate: STREAM_SUBSTATE.STARTING,
+});
+
+function effectiveState(entry: StreamEntry): StreamPhaseState {
+  return entry.kind === 'reserved' ? RESERVED_STATE : entry.state;
 }
 
 function projectStatusEvent(event: StatusEvent): StreamStatusChange {
@@ -50,8 +74,7 @@ function projectStatusEvent(event: StatusEvent): StreamStatusChange {
 }
 
 export class StreamStatusMachine {
-  private readonly phases = new Map<StreamTabId, StreamPhaseState>();
-  private readonly reservations = new Set<StreamTabId>();
+  private readonly streams = new Map<StreamTabId, StreamEntry>();
   private readonly statusListeners = new Set<
     (change: StreamStatusChange) => void
   >();
@@ -76,12 +99,16 @@ export class StreamStatusMachine {
     stream: StreamTabId,
     options: StreamStatusEmitOptions = {},
   ): boolean {
-    if (this.reservations.has(stream)) return false;
-    const previousPhase = this.phases.get(stream)?.phase;
+    const entry = this.streams.get(stream);
+    if (entry?.kind === 'reserved') return false;
+    const previousPhase = entry?.state.phase;
     if (!canAcquireStreamReservation(previousPhase)) {
       return false;
     }
-    this.reservations.add(stream);
+    this.streams.set(stream, {
+      kind: 'reserved',
+      ...(entry ? { rollbackTo: entry.state } : {}),
+    });
     this.publishStatus(stream, STREAM_PHASE.RUNNING, {
       ...options,
       cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
@@ -95,9 +122,9 @@ export class StreamStatusMachine {
     stream: StreamTabId,
     options: StreamStatusEmitOptions = {},
   ): void {
-    if (!this.reservations.has(stream)) return;
-    const rollbackPhase =
-      this.phases.get(stream)?.phase ?? STREAM_PHASE.CANCELLED;
+    const entry = this.streams.get(stream);
+    if (entry?.kind !== 'reserved') return;
+    const rollbackPhase = entry.rollbackTo?.phase ?? STREAM_PHASE.CANCELLED;
     if (
       this.transition(
         stream,
@@ -108,7 +135,13 @@ export class StreamStatusMachine {
     ) {
       return;
     }
-    this.reservations.delete(stream);
+    // The rollback the table refused still has to drop the reservation, so the
+    // stream returns to exactly the state the reservation overlaid.
+    if (entry.rollbackTo) {
+      this.streams.set(stream, { kind: 'phase', state: entry.rollbackTo });
+      return;
+    }
+    this.streams.delete(stream);
   }
 
   transition(
@@ -117,9 +150,10 @@ export class StreamStatusMachine {
     cause: StreamTransitionCause,
     options: StreamStatusEmitOptions = {},
   ): boolean {
-    const previousState = this.phases.get(stream);
+    const entry = this.streams.get(stream);
+    const fromReservation = entry?.kind === 'reserved';
+    const previousState = fromReservation ? entry.rollbackTo : entry?.state;
     const from = previousState?.phase;
-    const fromReservation = this.reservations.has(stream);
     let tableFrom: StreamPhase | undefined;
     if (!fromReservation) {
       tableFrom = from;
@@ -130,7 +164,6 @@ export class StreamStatusMachine {
     }
     if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
 
-    this.reservations.delete(stream);
     // The table decides whether a transition is permitted, but not whether a
     // permitted transition changes state. A steady RUNNING resume with no
     // substate to clear must stay silent, while a real substate clear still
@@ -142,9 +175,12 @@ export class StreamStatusMachine {
     ) {
       return true;
     }
-    this.phases.set(stream, {
-      phase: to,
-      ...(options.substate ? { substate: options.substate } : {}),
+    this.streams.set(stream, {
+      kind: 'phase',
+      state: {
+        phase: to,
+        ...(options.substate ? { substate: options.substate } : {}),
+      },
     });
     const previousPhase = fromReservation ? STREAM_PHASE.RUNNING : from;
     this.publishStatus(stream, to, {
@@ -176,18 +212,23 @@ export class StreamStatusMachine {
     return this.transition(stream, STREAM_PHASE.WAITING, cause, options);
   }
 
+  /**
+   * Drive a stream to a terminal phase, escalating through the RUNNING
+   * choreography the table requires. `cause` is the caller's own reason —
+   * restart repair and the run lifecycle share this single ladder rather than
+   * each carrying a copy of it.
+   */
   transitionToTerminal(
     stream: StreamTabId,
     to: StreamPhase,
+    cause: TerminalTransitionCause,
     options: StreamStatusEmitOptions = {},
   ): boolean {
     const current = this.get(stream);
     if (current === to) {
       return true;
     }
-    if (
-      this.transition(stream, to, STREAM_TRANSITION_CAUSE.LIFECYCLE, options)
-    ) {
+    if (this.transition(stream, to, cause, options)) {
       return true;
     }
     if (current === undefined) {
@@ -197,8 +238,7 @@ export class StreamStatusMachine {
           STREAM_PHASE.RUNNING,
           STREAM_TRANSITION_CAUSE.LIFECYCLE,
           options,
-        ) &&
-        this.transition(stream, to, STREAM_TRANSITION_CAUSE.LIFECYCLE, options)
+        ) && this.transition(stream, to, cause, options)
       );
     }
     if (current !== STREAM_PHASE.WAITING) {
@@ -210,19 +250,16 @@ export class StreamStatusMachine {
         STREAM_PHASE.RUNNING,
         STREAM_TRANSITION_CAUSE.RESUME,
         options,
-      ) &&
-      this.transition(stream, to, STREAM_TRANSITION_CAUSE.LIFECYCLE, options)
+      ) && this.transition(stream, to, cause, options)
     );
   }
 
   clearStream(stream: StreamTabId): void {
-    this.reservations.delete(stream);
-    this.phases.delete(stream);
+    this.streams.delete(stream);
   }
 
   clearAll(): void {
-    this.reservations.clear();
-    this.phases.clear();
+    this.streams.clear();
   }
 
   entries(): IterableIterator<[StreamTabId, StreamPhase]> {
@@ -234,26 +271,20 @@ export class StreamStatusMachine {
   }
 
   /**
-   * Combined per-stream phase + substate, merging in in-flight reservations
-   * exactly once. `entries()` is a thin phase-only projection of this, so the
-   * two views can never diverge on which streams they cover.
+   * Combined per-stream phase + substate, including in-flight reservations.
+   * `entries()` is a thin phase-only projection of this, so the two views can
+   * never diverge on which streams they cover.
    */
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
     const values = new Map<StreamTabId, StreamPhaseState>();
-    for (const [stream, state] of this.phases) {
-      values.set(stream, state);
-    }
-    for (const stream of this.reservations) {
-      values.set(stream, {
-        phase: STREAM_PHASE.RUNNING,
-        substate: STREAM_SUBSTATE.STARTING,
-      });
+    for (const [stream, entry] of this.streams) {
+      values.set(stream, effectiveState(entry));
     }
     return values;
   }
 
   has(stream: StreamTabId): boolean {
-    return this.phases.has(stream) || this.reservations.has(stream);
+    return this.streams.has(stream);
   }
 
   isActiveOrResuming(stream: StreamTabId): boolean {
@@ -272,13 +303,8 @@ export class StreamStatusMachine {
   }
 
   private stateFor(stream: StreamTabId): StreamPhaseState | undefined {
-    if (this.reservations.has(stream)) {
-      return {
-        phase: STREAM_PHASE.RUNNING,
-        substate: STREAM_SUBSTATE.STARTING,
-      };
-    }
-    return this.phases.get(stream);
+    const entry = this.streams.get(stream);
+    return entry ? effectiveState(entry) : undefined;
   }
 
   private publishStatus(

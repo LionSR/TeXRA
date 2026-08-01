@@ -40,6 +40,7 @@ function createTokenProvider(
     getSessionTokens: async () => null,
     getStoredSessionState: async () => 'none',
     getStoredAccountLabel: async () => null,
+    isTokenExpiringSoon: () => false,
     getLastRefreshFailure: () => null,
     ...overrides,
   };
@@ -263,18 +264,31 @@ describe('SupabaseClient', () => {
     );
   });
 
-  it('reports no expiry pressure when no token expiry is tracked', () => {
+  it('warns and reports no label when the stored label read throws', async () => {
+    SupabaseClient.setAuthProvider(
+      createTokenProvider({
+        getStoredAccountLabel: async () => {
+          throw new Error('secret storage unavailable');
+        },
+      }),
+    );
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await expect(SupabaseClient.getStoredAccountLabel()).resolves.toBe(null);
+    expect(warn).toHaveBeenCalledWith(
+      'SupabaseClient',
+      expect.stringContaining('secret storage unavailable'),
+    );
+  });
+
+  it('reports no expiry pressure when no token provider is registered', () => {
     assert.equal(SupabaseClient.isTokenExpiringSoon(), false);
   });
 
-  it('does not treat a token an hour out as expiring soon', () => {
-    SupabaseClient.setTokenExpiry(Date.now() + 3_600_000);
-
-    assert.equal(SupabaseClient.isTokenExpiringSoon(), false);
-  });
-
-  it('treats a token expiring within a minute as expiring soon', () => {
-    SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+  it('reports the token provider expiry verdict', () => {
+    SupabaseClient.setAuthProvider(
+      createTokenProvider({ isTokenExpiringSoon: () => true }),
+    );
 
     assert.equal(SupabaseClient.isTokenExpiringSoon(), true);
   });

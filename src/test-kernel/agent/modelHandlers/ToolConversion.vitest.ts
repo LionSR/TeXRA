@@ -9,7 +9,7 @@ import {
   toOpenAITools,
   toOpenAIResponseTools,
 } from '@agent/modelHandlers/toolConversion';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';

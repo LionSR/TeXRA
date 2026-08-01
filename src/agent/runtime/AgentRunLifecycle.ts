@@ -27,7 +27,10 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import {
+  isTerminalOutcomePhase,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
 import {
   getFirstRunDone,
   setFirstRunDone,
@@ -234,9 +237,12 @@ export async function finalizeRunTerminal(
     // keeps its own value; the divergence from the published result is real
     // and must stay loud.
     if (
-      !params.streamStatus.transitionToTerminal(handle.childStreamId, outcome, {
-        trace: handle.trace,
-      })
+      !params.streamStatus.transitionToTerminal(
+        handle.childStreamId,
+        outcome,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        { trace: handle.trace },
+      )
     ) {
       logger.warn('Failed to set terminal stream status', {
         data: {

@@ -64,7 +64,6 @@ function createFixture(overrides: FixtureOverrides = {}) {
     buildItems: async () => [DASHBOARD_ITEM],
     getCachedCheckResults: async () => [],
     refreshAvailability: async () => undefined,
-    refreshDisabledCache: async () => undefined,
     planTerminalAction: async (toolId, kind) => ({
       kind: 'terminal',
       name: toolId,
@@ -195,9 +194,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
           events.push('dashboard:cached');
           return cachedResults;
         },
-        refreshDisabledCache: async () => {
-          events.push('dashboard:disabled');
-        },
       },
     });
 
@@ -206,7 +202,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
     expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
     expect(events).toEqual([
       'state:update',
-      'dashboard:disabled',
       'dashboard:cached',
       'dashboard:build',
       'renderer:post',

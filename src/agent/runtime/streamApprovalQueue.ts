@@ -121,11 +121,29 @@ function createStreamApprovalBypass(
   };
 }
 
+/**
+ * One queued approval. `bypassed` exists because the queue can hold a request
+ * behind another stream prompt for arbitrarily long: if the user turns the
+ * stream's bypass on while this one waits (typically by answering the prompt
+ * ahead of it with "approve and stop asking"), prompting anyway would ignore
+ * the decision they just made.
+ */
+interface QueuedApproval<T> {
+  /** Present the prompt and settle it. */
+  readonly prompt: () => Promise<T>;
+  /** Result used instead when the stream is bypassed by dispatch time. */
+  readonly bypassed: () => T | Promise<T>;
+}
+
 interface StreamApprovalController {
   bypass: StreamApprovalBypass;
+  /**
+   * Serialize one prompt at a time per stream, re-checking the stream's bypass
+   * at dispatch rather than at enqueue.
+   */
   enqueue<T>(
     streamId: StreamTabId | undefined,
-    run: () => Promise<T>,
+    approval: QueuedApproval<T>,
   ): Promise<T>;
 }
 
@@ -140,17 +158,18 @@ function createStreamApprovalController(
   options: StreamApprovalControllerOptions,
 ): StreamApprovalController {
   const queues = new Map<StreamTabId | undefined, PQueue>();
+  const bypass = createStreamApprovalBypass(
+    options.kind,
+    options.interactions,
+    options.resolveParent,
+    options.resolveDescendants,
+  );
 
   return {
-    bypass: createStreamApprovalBypass(
-      options.kind,
-      options.interactions,
-      options.resolveParent,
-      options.resolveDescendants,
-    ),
+    bypass,
     enqueue<T>(
       streamId: StreamTabId | undefined,
-      run: () => Promise<T>,
+      approval: QueuedApproval<T>,
     ): Promise<T> {
       let queue = queues.get(streamId);
       if (!queue) {
@@ -160,7 +179,11 @@ function createStreamApprovalController(
 
       // `add` widens to `T | void` to cover abort via signal/timeout; we pass
       // neither, so the task always runs and resolves with `T`.
-      const task = queue.add(run) as Promise<T>;
+      const task = queue.add(async () =>
+        streamId && bypass.isBypassed(streamId)
+          ? approval.bypassed()
+          : approval.prompt(),
+      ) as Promise<T>;
       return task.finally(() => {
         if (
           queue.pending === 0 &&

@@ -48,6 +48,22 @@ function messageTime(message: LogMessageData): number {
   return message.timestamp ?? 0;
 }
 
+/** One reactive update of `groups` / `messages` / `terminal`. */
+export interface MessageIndexUpdate {
+  /** Terminal render mode is active for this update. */
+  terminal: boolean;
+  /** Terminal render mode was active for the previous update. */
+  wasTerminal: boolean;
+  groups: readonly TaskGroup[];
+  previousGroups: readonly TaskGroup[] | undefined;
+  groupsChanged: boolean;
+  messages: readonly LogMessageData[];
+  previousMessages: readonly LogMessageData[] | undefined;
+  messagesChanged: boolean;
+  /** Indices the delta touched, or null when the range must be scanned. */
+  deltaIndices: readonly number[] | null;
+}
+
 /**
  * Owns the derived data structures for the non-terminal render path:
  * the hierarchical group tree, the ungrouped message list, the interleaved
@@ -64,6 +80,87 @@ export class MessageIndex {
 
   /** O(1) lookup from groupId → tree node. */
   private groupNodeIndex = new Map<string, GroupTree>();
+
+  /**
+   * Bring every derived structure up to date for one render update, choosing
+   * the incremental path where the change allows it and a rebuild where it
+   * does not. Ordering between the tree and the timeline lives here so no
+   * caller has to reproduce it.
+   *
+   * Returns true when the caller must reset its render windows, i.e. when the
+   * timeline no longer lines up with the windows the previous render used.
+   */
+  apply(update: MessageIndexUpdate): boolean {
+    const {
+      groups,
+      previousGroups,
+      groupsChanged,
+      messages,
+      previousMessages,
+      messagesChanged,
+      deltaIndices,
+    } = update;
+
+    // Terminal mode renders raw text, so the derived structures are neither
+    // read nor maintained while it is on.
+    if (update.terminal) return false;
+
+    // Terminal mode just switched off: the caches went stale while it was on.
+    if (update.wasTerminal) {
+      this.rebuildTree(groups, messages);
+      this.rebuildTimeline();
+      return true;
+    }
+
+    const previousCount = previousMessages?.length ?? 0;
+    const patchedGroupMetadata =
+      groupsChanged && previousGroups
+        ? this.patchGroupMetadataIfShapeStable(previousGroups, groups)
+        : false;
+    let renderWindowsStale = false;
+
+    if (groupsChanged && !patchedGroupMetadata) {
+      this.rebuildTree(groups, messages);
+    } else if (messagesChanged) {
+      if (messages.length === previousCount && previousMessages) {
+        this.updateCachedMessageRefs(messages, previousMessages, deltaIndices);
+      } else if (messages.length > previousCount) {
+        this.appendNewMessages(messages, previousCount);
+        // A LOG_DELTA batch may also contain updates to existing entries
+        // (e.g. tool status → completed) alongside the appended entries.
+        if (previousMessages) {
+          this.updateCachedMessageRefs(
+            messages,
+            previousMessages,
+            deltaIndices,
+            previousCount,
+          );
+        }
+      } else {
+        this.rebuildTree(groups, messages);
+        renderWindowsStale = true;
+      }
+    }
+
+    // Recompute the interleaved timeline incrementally when possible so the
+    // earliest ungrouped message (the user's original instruction) stays at
+    // the top for both tool-use and workflow streams.
+    if (groupsChanged || messagesChanged) {
+      if (
+        (groupsChanged && !patchedGroupMetadata) ||
+        messages.length < previousCount
+      ) {
+        this.rebuildTimeline();
+      } else if (messagesChanged && messages.length > previousCount) {
+        this.appendToTimeline(messages, previousCount);
+        this.updateTimelineMessageRefs(messages, deltaIndices);
+      } else if (messagesChanged) {
+        this.updateTimelineMessageRefs(messages, deltaIndices);
+      }
+    }
+
+    return renderWindowsStale;
+  }
 
   /**
    * Patch status/name/end-time changes into the existing group tree.

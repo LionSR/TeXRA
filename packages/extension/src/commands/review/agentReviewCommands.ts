@@ -31,7 +31,6 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { setReportReviewIssueSink } from '@tools/ReportReviewIssueTool';
 import { WorkspaceFS } from '@utils/files';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -84,11 +83,6 @@ export function registerAgentReviewCommands(
   context: vscode.ExtensionContext,
 ): void {
   AgentReviewService.initialize(context);
-  // Findings from the changeReviewer tool-use session flow in through the
-  // report_review_issue tool and land in the panel + diagnostics live.
-  setReportReviewIssueSink((report) =>
-    AgentReviewService.addIssueReport(report),
-  );
 
   // The Agent Review tree lives in VS Code's Source Control (git) panel,
   // GitKraken/Cursor-style.

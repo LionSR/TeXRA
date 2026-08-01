@@ -57,18 +57,17 @@ export async function uploadToolAttachments(
   client: Anthropic,
   attachments: ToolFileAttachment[],
   logger: AgentTrace,
-  uploadedPdfPageCounts: Map<string, number>,
+  trackedPdfPageCount: number,
+  onPageCount: (fileId: string, pageCount: number) => void,
   maxPdfPages: number,
 ): Promise<UploadToolAttachmentsResult> {
   const uploaded: UploadedAnthropicAttachment[] = [];
   const unsupported: ToolFileAttachment[] = [];
   const pageLimitExceeded: ToolFileAttachment[] = [];
 
-  const trackedPdfPageCount = (): number => {
-    let total = 0;
-    for (const count of uploadedPdfPageCounts.values()) total += count;
-    return total;
-  };
+  // Running total: the caller's tracked pages plus the ones this batch adds,
+  // so the page budget covers attachments uploaded earlier in this same loop.
+  let trackedPages = trackedPdfPageCount;
 
   for (const attachment of attachments) {
     const mimeType = attachment.mimeType ?? 'application/octet-stream';
@@ -99,7 +98,7 @@ export async function uploadToolAttachments(
     let pdfPageCount = 0;
     if (isPdf) {
       pdfPageCount = await countPdfPagesFromBuffer(buffer);
-      if (trackedPdfPageCount() + pdfPageCount > maxPdfPages) {
+      if (trackedPages + pdfPageCount > maxPdfPages) {
         pageLimitExceeded.push(attachment);
         buffer = wipeBuffer(buffer);
         continue;
@@ -109,9 +108,7 @@ export async function uploadToolAttachments(
     try {
       const filename = sanitizeAnthropicFilename(
         attachment.path ??
-          (isPdf
-            ? 'document.pdf'
-            : `image.${extractMimeSubtype(normalized, 'png')}`),
+          (isPdf ? 'document.pdf' : `image.${extractMimeSubtype(normalized)}`),
       );
 
       const base64Data = buffer.toString('base64');
@@ -121,7 +118,8 @@ export async function uploadToolAttachments(
       });
 
       if (isPdf && pdfPageCount > 0) {
-        uploadedPdfPageCounts.set(uploadedFile.id, pdfPageCount);
+        onPageCount(uploadedFile.id, pdfPageCount);
+        trackedPages += pdfPageCount;
       }
 
       uploaded.push({

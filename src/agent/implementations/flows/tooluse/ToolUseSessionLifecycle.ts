@@ -60,13 +60,20 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     return batch;
   }
 
-  interrupt(): void {
+  /**
+   * Cancel the in-flight follow-up wait. `queue: 'clear'` also drops queued
+   * input, and is honored only while this flow holds the consumer lease: a
+   * borrowed queue belongs to the outer child-loop or recovery consumer, which
+   * owns the recoverable/terminal decision it applies at release. Callers pass
+   * `'preserve'` for the one window they alone can see — a resume handoff that
+   * is not yet interruptible.
+   */
+  interrupt(queue: 'clear' | 'preserve'): void {
     this.syntheticFollowUpPending = false;
-    this.followUps.dispose();
-  }
-
-  interruptPreservingQueue(): void {
-    this.syntheticFollowUpPending = false;
+    if (queue === 'clear' && this.lease) {
+      this.followUps.dispose();
+      return;
+    }
     this.followUps.cancelWait();
   }
 

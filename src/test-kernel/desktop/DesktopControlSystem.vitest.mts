@@ -254,7 +254,7 @@ describe('desktop control system', () => {
       /webContents\.on\('did-navigate',[\s\S]*?initialRendererNavigationComplete[\s\S]*?workspaceIpc\.disposeRendererResources\(\)/u,
     );
     expect(electronMain).toMatch(
-      /workspaceRelaunchInProgress = true;[\s\S]*?window\.close\(\);[\s\S]*?window\.once\('closed',[\s\S]*?app\.relaunch/u,
+      /pendingWorkspaceRelaunch = \{[\s\S]*?window\.close\(\);[\s\S]*?window\.once\('closed',[\s\S]*?app\.relaunch/u,
     );
     expect(electronMain).toMatch(
       /app\.on\('before-quit',[\s\S]*?mainWindow\.close\(\);[\s\S]*?lifecycle\.runShutdown\(\)/u,
@@ -289,8 +289,10 @@ describe('desktop control system', () => {
     ).toHaveLength(1);
     // Keeping the changes cancels whichever close raised the prompt.
     expect(electronMain).toMatch(
-      /will-prevent-unload'[\s\S]*?pendingWorkspaceRelaunch = undefined;[\s\S]*?workspaceRelaunchInProgress = false;[\s\S]*?continueQuitAfterWindowClose = undefined;/u,
+      /will-prevent-unload'[\s\S]*?pendingWorkspaceRelaunch = undefined;[\s\S]*?continueQuitAfterWindowClose = undefined;/u,
     );
+    // The relaunch has one flag: the pending state itself, no shadow boolean.
+    expect(electronMain).not.toContain('workspaceRelaunchInProgress');
     // The folder switch closes unconditionally instead of reading a copy.
     expect(electronMain).toMatch(
       /const openWorkspaceFolder[\s\S]*?pendingWorkspaceRelaunch = \{[\s\S]*?window\.close\(\);/u,

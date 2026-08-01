@@ -7,6 +7,8 @@ import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/dif
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
 import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@shared/constants/latex';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import { STATUS_DISPLAY, STATUS_ICONS } from '@shared/schemas/todoDisplay';
+import { TODO_STATUS } from '@shared/schemas/todo';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import { ARXIV_CONSTANTS, CROSSREF_CONSTANTS } from '@tools/citation/constants';
 import { DEFAULT_POLLING_BACKOFF_CONFIG } from '@tools/github/PollingSourceBase';
@@ -47,6 +49,9 @@ const SHARED_LITERALS = [
   ['MATH_MARKUP_OPTIONS', MATH_MARKUP_OPTIONS],
   ['API_KEY_PROVIDER_IDS', API_KEY_PROVIDER_IDS],
   ['TOOL_JSON_SCHEMA_OPTIONS', TOOL_JSON_SCHEMA_OPTIONS],
+  ['STATUS_ICONS', STATUS_ICONS],
+  ['STATUS_DISPLAY', STATUS_DISPLAY],
+  ['STATUS_DISPLAY entry', STATUS_DISPLAY[TODO_STATUS.IN_PROGRESS]],
 ] as const;
 
 describe('shared literal exports', () => {

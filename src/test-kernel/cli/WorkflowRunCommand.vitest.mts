@@ -11,7 +11,11 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/runExecution';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
+  type ExecutionId,
+} from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => {
@@ -29,13 +33,16 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@agent/storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage')>()),
-  getExecutionStore: vi.fn(() => ({
-    writeResultMeta: mocks.writeResultMeta,
-  })),
-  finalizeExecution: mocks.finalizeExecution,
-}));
+vi.mock('@agent/storage', async (importOriginal) => {
+  const { createFakeKv } = await import('@test/support/FakeExecutionKVStore');
+  return {
+    ...(await importOriginal<typeof import('@agent/storage')>()),
+    getExecutionStore: vi.fn((executionId: ExecutionId) =>
+      createFakeKv(executionId, { writeResultMeta: mocks.writeResultMeta }),
+    ),
+    finalizeExecution: mocks.finalizeExecution,
+  };
+});
 
 vi.mock('@agent/index', () => ({
   getAgent: vi.fn(),

@@ -358,7 +358,6 @@ export class MediaAttachmentProcessor {
       data,
       media_type: mediaType,
       media_category: mediaCategory,
-      binary_data: Buffer.from(data, 'base64'),
       bytes_match_source: matchesSource,
     };
 

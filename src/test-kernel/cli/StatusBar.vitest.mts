@@ -22,47 +22,23 @@ const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 const statusBarSegmentText = (segment: { readonly text: string }): string =>
   segment.text;
 
-// Flat legacy field names, redistributed by `statusInput` below into
-// `StatusBarDisplayInput`'s `foreground`/`childList`/`shortcuts` groups — kept
-// flat here so individual tests can override one field at a time.
-type StatusInputOverrides = Partial<
-  Omit<StatusBarDisplayInput, 'foreground' | 'childList' | 'shortcuts'>
+// `StatusBarDisplayInput` with every field optional and its three grouped
+// members individually overridable, so a test still names one field at a time
+// without a flat mirror of the group members drifting alongside them.
+type StatusInputOverrides = Omit<
+  Partial<StatusBarDisplayInput>,
+  'foreground' | 'childList' | 'shortcuts'
 > & {
-  agentSelectionAvailable?: boolean;
-  childNavigationAvailable?: boolean;
-  streamFocusAvailable?: boolean;
-  shortcutModifierLabel?: string;
-  shiftEnterNewline?: boolean;
-  transcriptAvailable?: boolean;
-  foregroundInputActive?: boolean;
-  foregroundEscapeAction?: string;
-  shortcutsActive?: boolean;
-  childListFocused?: boolean;
-  childListSelectionKind?: 'stream';
-  childListSelectionKillable?: boolean;
-  childListSelectionWorkflowControllable?: boolean;
+  readonly foreground?: Partial<StatusBarDisplayInput['foreground']>;
+  readonly childList?: Partial<StatusBarDisplayInput['childList']>;
+  readonly shortcuts?: Partial<StatusBarDisplayInput['shortcuts']>;
 };
 
 // Idle single-stream baseline; each test overrides only the fields it exercises.
 function statusInput(
   overrides: StatusInputOverrides = {},
 ): StatusBarDisplayInput {
-  const {
-    agentSelectionAvailable,
-    childNavigationAvailable = false,
-    streamFocusAvailable = false,
-    shortcutModifierLabel = 'Alt',
-    shiftEnterNewline,
-    transcriptAvailable,
-    foregroundInputActive,
-    foregroundEscapeAction,
-    shortcutsActive,
-    childListFocused,
-    childListSelectionKind,
-    childListSelectionKillable,
-    childListSelectionWorkflowControllable,
-    ...rest
-  } = overrides;
+  const { foreground, childList, shortcuts, ...rest } = overrides;
 
   return {
     status: STREAM_PHASE.WAITING,
@@ -75,26 +51,15 @@ function statusInput(
     approvalDepth: 0,
     model: 'deepseekT',
     modelAccess: 'personal',
-    foreground: {
-      inputActive: foregroundInputActive,
-      escapeAction: foregroundEscapeAction,
-      shortcutsActive,
-    },
-    childList: {
-      focused: childListFocused,
-      selectionKind: childListSelectionKind,
-      selectionKillable: childListSelectionKillable,
-      selectionWorkflowControllable: childListSelectionWorkflowControllable,
-    },
-    shortcuts: {
-      agentSelectionAvailable,
-      childNavigationAvailable,
-      streamFocusAvailable,
-      modifierLabel: shortcutModifierLabel,
-      shiftEnterNewline,
-      transcriptAvailable,
-    },
     ...rest,
+    foreground: { ...foreground },
+    childList: { ...childList },
+    shortcuts: {
+      childNavigationAvailable: false,
+      streamFocusAvailable: false,
+      modifierLabel: 'Alt',
+      ...shortcuts,
+    },
   };
 }
 
@@ -216,9 +181,11 @@ describe('CLI StatusBar display model', () => {
   it('renders bindings in the shared KeyHints hint format', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        transcriptAvailable: true,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -231,10 +198,12 @@ describe('CLI StatusBar display model', () => {
   it('advertises full output when the focused stream has history', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        transcriptAvailable: true,
         width: 80,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -246,13 +215,17 @@ describe('CLI StatusBar display model', () => {
   it('advertises list-owned keys while the child list has focus', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        childListFocused: true,
-        childListSelectionKind: 'stream',
-        childListSelectionKillable: true,
-        shortcutsActive: false,
         width: 140,
+        foreground: { shortcutsActive: false },
+        childList: {
+          focused: true,
+          selectionKind: 'stream',
+          selectionKillable: true,
+        },
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
 
@@ -269,13 +242,17 @@ describe('CLI StatusBar display model', () => {
   it('shows foreground actions while a list-owned surface is open', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childListFocused: true,
-        childListSelectionKind: 'stream',
-        childListSelectionKillable: true,
-        foregroundEscapeAction: 'close',
-        foregroundInputActive: true,
-        shortcutsActive: false,
         width: 120,
+        foreground: {
+          escapeAction: 'close',
+          inputActive: true,
+          shortcutsActive: false,
+        },
+        childList: {
+          focused: true,
+          selectionKind: 'stream',
+          selectionKillable: true,
+        },
       }),
     );
 
@@ -287,10 +264,12 @@ describe('CLI StatusBar display model', () => {
   it('keeps the full-output shortcut in narrow stream views', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        transcriptAvailable: true,
         width: 60,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -301,10 +280,12 @@ describe('CLI StatusBar display model', () => {
   it('prefers full output over stream cycling when the bar is very narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        transcriptAvailable: true,
         width: 42,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -314,9 +295,9 @@ describe('CLI StatusBar display model', () => {
   it('advertises root agent selection while setup can still change it', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        agentSelectionAvailable: true,
         model: 'gpt54',
         width: 80,
+        shortcuts: { agentSelectionAvailable: true },
       }),
     );
 
@@ -328,10 +309,9 @@ describe('CLI StatusBar display model', () => {
   it('does not let setup bindings hide full output when it fits', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        agentSelectionAvailable: true,
         model: 'gpt54',
-        transcriptAvailable: true,
         width: 100,
+        shortcuts: { agentSelectionAvailable: true, transcriptAvailable: true },
       }),
     );
 
@@ -342,9 +322,8 @@ describe('CLI StatusBar display model', () => {
   it('keeps model and API controls visible after local-command output rows', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        agentSelectionAvailable: true,
-        transcriptAvailable: true,
         width: 80,
+        shortcuts: { agentSelectionAvailable: true, transcriptAvailable: true },
       }),
     );
 
@@ -356,11 +335,13 @@ describe('CLI StatusBar display model', () => {
   it('keeps child navigation ahead of setup bindings after a root run completes', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        agentSelectionAvailable: true,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        transcriptAvailable: true,
         width: 80,
+        shortcuts: {
+          agentSelectionAvailable: true,
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -373,9 +354,9 @@ describe('CLI StatusBar display model', () => {
   it('keeps root agent selection visible when setup bindings get narrow', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        agentSelectionAvailable: true,
         model: 'gpt54',
         width: 50,
+        shortcuts: { agentSelectionAvailable: true },
       }),
     );
 
@@ -391,8 +372,8 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         modelAccess: 'included',
-        shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
+        shortcuts: { modifierLabel: 'Option' },
       }),
     );
 
@@ -408,11 +389,13 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 12_000,
         subagents: 1,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         modelAccess: 'included',
-        shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          modifierLabel: 'Option',
+        },
       }),
     );
 
@@ -431,12 +414,14 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 1,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         modelAccess: 'included',
-        shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop root',
         width: 100,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          modifierLabel: 'Option',
+        },
       }),
     );
 
@@ -449,7 +434,7 @@ describe('CLI StatusBar display model', () => {
 
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
     const display = buildStatusBarDisplay(
-      statusInput({ shiftEnterNewline: true }),
+      statusInput({ shortcuts: { shiftEnterNewline: true } }),
     );
 
     expect(display.bindings).toContain('Shift-Enter newline');
@@ -468,10 +453,12 @@ describe('CLI StatusBar display model', () => {
         stage: { kind: 'round', index: 1 },
         subagents: 2,
         approvalDepth: 3,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         modelAccess: 'included',
         ctrlCAction: 'stop',
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
 
@@ -635,11 +622,13 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         subagents: 3,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         ctrlCAction: 'stop',
-        transcriptAvailable: true,
         width: 60,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -655,12 +644,14 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         subagents: 3,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        shortcutModifierLabel: 'Option',
         ctrlCAction: 'stop',
-        transcriptAvailable: true,
         width: 44,
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          modifierLabel: 'Option',
+          transcriptAvailable: true,
+        },
       }),
     );
 
@@ -674,11 +665,13 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
         subagents: 3,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         ctrlCAction: 'stop',
         width: 34,
-        shortcutsActive: false,
+        foreground: { shortcutsActive: false },
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
 
@@ -777,9 +770,8 @@ describe('CLI StatusBar display model', () => {
 
     const baseDisplayInput = statusInput({
       status: STREAM_PHASE.CANCELLED,
-      childNavigationAvailable: true,
-      streamFocusAvailable: true,
       ctrlCAction: 'stop root',
+      shortcuts: { childNavigationAvailable: true, streamFocusAvailable: true },
     });
     const display = buildStatusBarDisplay(baseDisplayInput);
 
@@ -818,9 +810,11 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.WAITING,
         isChildStream: true,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         ctrlCAction: 'stop root',
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
     expect(childDisplay.left.map(statusBarSegmentText)).toContain(
@@ -1145,10 +1139,12 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         subagents: 2,
         approvalDepth: 1,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         ctrlCAction: 'stop',
-        shortcutsActive: false,
+        foreground: { shortcutsActive: false },
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
 
@@ -1164,8 +1160,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         approvalDepth: 1,
         approvalKind: 'question',
-        foregroundEscapeAction: 'skip',
-        shortcutsActive: false,
+        foreground: { escapeAction: 'skip', shortcutsActive: false },
       }),
     );
 
@@ -1179,8 +1174,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         approvalDepth: 1,
-        foregroundEscapeAction: 'cancel',
-        shortcutsActive: false,
+        foreground: { escapeAction: 'cancel', shortcutsActive: false },
       }),
     );
 
@@ -1192,11 +1186,13 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 3,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         ctrlCAction: 'stop',
-        shortcutsActive: false,
         width: 40,
+        foreground: { shortcutsActive: false },
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
 
@@ -1208,11 +1204,13 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 3,
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
         ctrlCAction: 'stop',
-        shortcutsActive: false,
         width: 15,
+        foreground: { shortcutsActive: false },
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+        },
       }),
     );
 
@@ -1574,9 +1572,11 @@ describe('CLI StatusBar display model', () => {
   it('uses portable Esc labels for meta shortcuts on macOS', () => {
     const display = buildStatusBarDisplay(
       statusInput({
-        childNavigationAvailable: true,
-        streamFocusAvailable: true,
-        shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
+        shortcuts: {
+          childNavigationAvailable: true,
+          streamFocusAvailable: true,
+          modifierLabel: defaultShortcutModifierLabel('darwin'),
+        },
       }),
     );
 

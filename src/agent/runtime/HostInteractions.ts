@@ -1,4 +1,5 @@
 import { createChannelTrace } from '@agent/trace';
+import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type {
   ToolEditApprovalRequest,
@@ -6,6 +7,7 @@ import type {
 } from '@platform/interfaces';
 import type {
   AgentProposal,
+  FileLocation,
   Plan,
   ProgressPermissionKind as PendingInteractionKind,
   ProviderErrorPartial,
@@ -25,6 +27,15 @@ import type {
 export type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 
 const logger = createChannelTrace('SessionHostInteractions');
+
+/**
+ * Ceiling on presentation notices queued while no host is attached. A session
+ * that never gets one (headless embedders, a window that never opens) would
+ * otherwise accumulate every replayable notice for its whole lifetime. The
+ * newest notices are the ones worth showing, so the oldest is dropped, and the
+ * drop is logged, because a silently discarded notice is a defect.
+ */
+const MAX_PENDING_PRESENTATION_REPLAYS = 256;
 
 export type DiagnosticsReader = (path: string) => Promise<GenericDiagnostic[]>;
 
@@ -50,6 +61,23 @@ export type ToolNotificationHandler = (
   actionCommand?: string,
   actionLabel?: string,
 ) => void;
+
+export interface OpenPdfRequest {
+  readonly location: FileLocation;
+  readonly preserveFocus: boolean;
+}
+
+export type OpenPdfOpener = (request: OpenPdfRequest) => Promise<void> | void;
+
+/**
+ * Collects one agent-review finding. Returns `accepted: false` with a reason
+ * when no review session is collecting issues (or the report is rejected), so
+ * the tool can surface that to the agent.
+ */
+export type ReportReviewIssueSink = (report: ReviewIssueReport) => {
+  readonly accepted: boolean;
+  readonly reason?: string;
+};
 
 export interface HostInteractionOptions {
   /** Internal identity used to cancel one forwarded presentation request. */
@@ -256,6 +284,10 @@ export interface HostInteractions {
   readonly addCriticism?: AddCriticismSink;
   /** Surface unavailable tool groups through the active host UI. */
   readonly notifyUnavailableTools?: ToolNotificationHandler;
+  /** Open a PDF in the active host's viewer. */
+  readonly openPdf?: OpenPdfOpener;
+  /** Report one agent-review finding to the active host's review session. */
+  readonly reportReviewIssue?: ReportReviewIssueSink;
   /** Present non-error information through the currently attached host. */
   showInfoMessage?(message: string): Promise<void> | void;
   requestToolEditApproval?(
@@ -368,7 +400,7 @@ export class SessionHostInteractions implements HostInteractions {
     if (active) {
       active.interactions.emit?.(event, payload);
     } else if (options.replayWhenAttached && !this.disposed) {
-      this.pendingPresentationReplays.push((interactions) =>
+      this.queuePresentationReplay((interactions) =>
         interactions.emit?.(event, payload),
       );
     }
@@ -386,6 +418,14 @@ export class SessionHostInteractions implements HostInteractions {
     return this.activeAttachment?.interactions.notifyUnavailableTools;
   }
 
+  get openPdf(): OpenPdfOpener | undefined {
+    return this.activeAttachment?.interactions.openPdf;
+  }
+
+  get reportReviewIssue(): ReportReviewIssueSink | undefined {
+    return this.activeAttachment?.interactions.reportReviewIssue;
+  }
+
   showInfoMessage(
     message: string,
     options: AgentRuntimeEmitOptions = {},
@@ -393,7 +433,7 @@ export class SessionHostInteractions implements HostInteractions {
     const active = this.activeAttachment;
     if (active) return active.interactions.showInfoMessage?.(message);
     if (options.replayWhenAttached && !this.disposed) {
-      this.pendingPresentationReplays.push((interactions) =>
+      this.queuePresentationReplay((interactions) =>
         interactions.showInfoMessage?.(message),
       );
     }
@@ -593,6 +633,21 @@ export class SessionHostInteractions implements HostInteractions {
     for (const pending of this.pending) {
       if (!pending.cancellationRequested) this.dispatch(pending);
     }
+  }
+
+  private queuePresentationReplay(
+    replay: (interactions: HostInteractions) => Promise<void> | void,
+  ): void {
+    if (
+      this.pendingPresentationReplays.length >= MAX_PENDING_PRESENTATION_REPLAYS
+    ) {
+      this.pendingPresentationReplays.shift();
+      logger.warn(
+        `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
+          'notices are waiting for an interaction host to attach.',
+      );
+    }
+    this.pendingPresentationReplays.push(replay);
   }
 
   private replayPendingPresentations(
