@@ -105,8 +105,8 @@ release lane**), Supabase relay (Deno; billing constants hand-mirrored from
 `sharedConfig.ts` with a rotted pointer comment; llm-zoo pinned ^1.11 vs
 workspace ^1.12; zero CI involvement in deploys), public agent-YAML authoring
 surface (19 definition fields, 10 settings fields), `texra.*` command catalog
-(67 unique ids, SSOT + satisfies-checked), vendored `ink@7.1.0` patch (164
-lines, exact-version keyed).
+(67 unique ids, SSOT + satisfies-checked), then-vendored `ink@7.1.0` patch (164
+lines, exact-version keyed; now carried unchanged as `patches/ink@7.1.1.patch`).
 
 **Test architecture.** 613 suites; 83% mock nothing; 306 mock sites in 104
 suites; 52 host-side mock sites in 32 suites pin runtime-internal module
