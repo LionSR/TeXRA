@@ -86,6 +86,12 @@ interface ArtifactFlushBatch {
   readonly reject: (error: unknown) => void;
 }
 
+interface WaitingRepairProbe {
+  readonly executionId: string;
+  readonly statusGeneration: object | undefined;
+  readonly result: Promise<boolean>;
+}
+
 function createArtifactFlushBatch(): ArtifactFlushBatch {
   let resolve: () => void = () => undefined;
   let reject: (error: unknown) => void = () => undefined;
@@ -172,7 +178,7 @@ export class SessionHandle {
   /** Per-stream {@link repairWaitingIfResumable} result currently in flight. */
   private readonly waitingRepairProbes = new Map<
     StreamTabId,
-    Promise<boolean>
+    WaitingRepairProbe
   >();
   private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
@@ -309,20 +315,31 @@ export class SessionHandle {
    * runtime that owns the stream phase.
    */
   async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
+    const executionId = this.snapshots.getExecutionId(streamId);
+    const inFlight = this.waitingRepairProbes.get(streamId);
+    if (
+      inFlight &&
+      inFlight.executionId === executionId &&
+      this.status.isCurrentGeneration(streamId, inFlight.statusGeneration)
+    ) {
+      return inFlight.result;
+    }
+
+    const statusGeneration = this.status.getGeneration(streamId);
     const phase = this.status.get(streamId);
     if (phase === STREAM_PHASE.WAITING) return true;
     if (isInFlightPhase(phase)) return false;
 
-    const inFlight = this.waitingRepairProbes.get(streamId);
-    if (inFlight) return inFlight;
-
-    const executionId = this.snapshots.getExecutionId(streamId);
     if (!executionId) return false;
 
-    const probe = this.probeWaitingRepair(streamId, executionId);
+    const probe: WaitingRepairProbe = {
+      executionId,
+      statusGeneration,
+      result: this.probeWaitingRepair(streamId, executionId, statusGeneration),
+    };
     this.waitingRepairProbes.set(streamId, probe);
     try {
-      return await probe;
+      return await probe.result;
     } finally {
       if (this.waitingRepairProbes.get(streamId) === probe) {
         this.waitingRepairProbes.delete(streamId);
@@ -333,9 +350,16 @@ export class SessionHandle {
   private async probeWaitingRepair(
     streamId: StreamTabId,
     executionId: string,
+    statusGeneration: object | undefined,
   ): Promise<boolean> {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
+    if (
+      this.snapshots.getExecutionId(streamId) !== executionId ||
+      !this.status.isCurrentGeneration(streamId, statusGeneration)
+    ) {
+      return false;
+    }
     const repaired = this.status.transitionToWaiting(
       streamId,
       STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
