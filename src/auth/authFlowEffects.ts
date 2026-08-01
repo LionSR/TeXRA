@@ -7,11 +7,13 @@
  * not a missing shared coordinator. The extension invalidates its long-lived
  * model cache before publishing a session event. Desktop routes the same
  * transition through its settings-IPC refresh chain because that chain also
- * republishes model, profile, onboarding, and agent-catalog state. Ordinary
- * CLI login and logout commands exit without consuming model options; the
- * long-lived onboarding path invalidates them when it applies the selected
- * access mode. Collapsing these effects would either omit host refresh work or
- * repeat it.
+ * republishes model, profile, and agent-catalog state; its onboarding refresh
+ * is a separate call made by the same desktop session-change handler. Ordinary
+ * CLI login and logout commands exit without consuming model options. The
+ * long-lived CLI paths own their additional state transitions: onboarding
+ * applies the selected access mode, while the chat TUI updates its session API
+ * mode and refreshes credential-dependent views. Collapsing these effects
+ * would either omit host refresh work or repeat it.
  */
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
