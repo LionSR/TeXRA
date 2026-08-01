@@ -326,6 +326,7 @@ async function finalizeChildStream(
     error,
     isSubagent: handle.parentStreamId !== handle.childStreamId,
     stage: options?.stage,
+    flushArtifacts: () => session.flushArtifacts(handle.executionId),
     // No trace emit: child-stream results must stay out of `session.onResult`
     // (host toast) consumers — the loop already presents them as follow-ups.
     persistence: options?.persistence ?? { kind: 'skip' },

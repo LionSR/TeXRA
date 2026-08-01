@@ -13,10 +13,7 @@ import {
   type AgentConfig,
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import {
-  normalizeProviderMessages,
-  ProviderMessageArraySchema,
-} from '@agent/types/ProviderMessage';
+import { normalizeProviderMessages } from '@agent/types/ProviderMessage';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
@@ -136,15 +133,7 @@ export interface ExecutionKVStore {
   readConfig(): Promise<AgentConfig | null>;
   readReport(): Promise<string | null>;
   readTodos(): Promise<TodoEntry[]>;
-  /**
-   * Last-modified time (ms since epoch) of the legacy `todos.json`, or
-   * `undefined` when it has never been written. Lets callers compare
-   * freshness against a durable sidecar written by a different store.
-   */
-  todosModifiedAt(): Promise<number | undefined>;
   readConversation(): Promise<unknown[] | null>;
-  /** Same freshness accessor as {@link todosModifiedAt}, for `conversation.json`. */
-  conversationModifiedAt(): Promise<number | undefined>;
   readWorkspaceFiles(): Promise<string[]>;
   readChildren(): Promise<ChildRecord[]>;
   readResultMeta(): Promise<ResultMeta | null>;
@@ -153,8 +142,6 @@ export interface ExecutionKVStore {
   writeMeta(meta: ExecutionMetaInput): Promise<void>;
   writeConfig(config: AgentConfig): Promise<void>;
   writeReport(report: string): Promise<void>;
-  writeTodos(todos: TodoEntry[]): Promise<void>;
-  writeConversation(messages: unknown[]): Promise<void>;
   writeWorkspaceFiles(paths: readonly string[]): Promise<void>;
   writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void>;
   writeResultMeta(data: ResultMeta): Promise<void>;
@@ -245,10 +232,6 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return (await this.readValidated(KEYS.TODOS, TodoArraySchema)) ?? [];
   }
 
-  async todosModifiedAt(): Promise<number | undefined> {
-    return this.modifiedAt(KEYS.TODOS);
-  }
-
   async readConversation(): Promise<unknown[] | null> {
     const raw = await this.read(KEYS.CONVERSATION);
     if (raw == null) return null;
@@ -261,10 +244,6 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
       return null;
     }
     return messages.length > 0 ? messages : null;
-  }
-
-  async conversationModifiedAt(): Promise<number | undefined> {
-    return this.modifiedAt(KEYS.CONVERSATION);
   }
 
   async readWorkspaceFiles(): Promise<string[]> {
@@ -335,17 +314,6 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   async writeReport(report: string): Promise<void> {
     await this.write(KEYS.REPORT, report);
-  }
-
-  async writeTodos(todos: TodoEntry[]): Promise<void> {
-    await this.write(KEYS.TODOS, todos);
-  }
-
-  async writeConversation(messages: unknown[]): Promise<void> {
-    await this.write(
-      KEYS.CONVERSATION,
-      ProviderMessageArraySchema.parse(messages),
-    );
   }
 
   async writeWorkspaceFiles(paths: readonly string[]): Promise<void> {
