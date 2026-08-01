@@ -93,7 +93,21 @@ const ExecutionMetaBaseSchema = z.object({
   streamId: StreamTabIdSchema.optional(),
 });
 
-export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
+const ConsistentExecutionMetaSchema = ExecutionMetaBaseSchema.superRefine(
+  (meta, ctx) => {
+    if (meta.terminalStatus == null || meta.outcome == null) return;
+    const projectedOutcome = executionStatusToRunOutcome(meta.terminalStatus);
+    if (projectedOutcome == null || projectedOutcome === meta.outcome) return;
+
+    ctx.addIssue({
+      code: 'custom',
+      path: ['outcome'],
+      message: `outcome ${meta.outcome} contradicts terminalStatus ${meta.terminalStatus}`,
+    });
+  },
+);
+
+export const ExecutionMetaSchema = ConsistentExecutionMetaSchema.transform(
   (meta): z.infer<typeof ExecutionMetaBaseSchema> => {
     const outcome =
       meta.outcome ?? executionStatusToRunOutcome(meta.terminalStatus);

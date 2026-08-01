@@ -116,6 +116,18 @@ describe('ExecutionKVStore meta read shims', () => {
     },
   );
 
+  it('rejects contradictory terminal status and outcome metadata', async () => {
+    const id = 'contradictory-terminal-meta' as ExecutionId;
+
+    await expect(
+      getExecutionStore(id).writeMeta({
+        timestamp: '2026-07-04T00:00:00.000Z',
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: RUN_OUTCOME.FAILED,
+      }),
+    ).rejects.toThrow('outcome failed contradicts terminalStatus completed');
+  });
+
   it('writes the current schema version for execution meta', async () => {
     const id = 'versioned-meta' as ExecutionId;
 
