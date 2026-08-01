@@ -4,14 +4,12 @@
  * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
  * execution→stream mapping. The legacy `executions/{id}/conversation.json` /
  * `todos.json` KV projections are READ-ONLY fallbacks for runs recorded
- * before the sidecars existed (or written by builds that still project them)
- * — each fact keeps exactly ONE legacy read arm, here, tracked for D3
- * retirement in the #6981 ledger.
+ * before the sidecars existed. Each fact keeps exactly one legacy read arm,
+ * here, tracked for D3 retirement in the #6981 ledger.
  */
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
-import { KVStore } from '@common/storage/KVStore';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -32,8 +30,7 @@ import {
   resolvePersistedStreamIdForExecution,
   type PersistedStreamIdResolution,
 } from './executionStreamResolver';
-import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
-import { StreamLogStore, STREAM_LOGS_DIR } from './StreamLogStore';
+import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
 type CompletedRunTodosSource = 'streamData' | 'legacyKV' | 'none';
@@ -51,13 +48,6 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
   };
 }
 
-/** Sidecar `workPlan.json` mtime (ms since epoch), or `undefined` if absent. */
-function sidecarModifiedAt(streamId: StreamTabId): Promise<number | undefined> {
-  return new KVStore(streamDataDir(streamId)).modifiedAt(
-    STREAM_DATA_KEYS.WORK_PLAN,
-  );
-}
-
 async function readLegacyTodos(
   executionId: ExecutionId,
 ): Promise<CompletedRunTodosReadResult> {
@@ -70,17 +60,8 @@ async function readLegacyTodos(
 
 /**
  * Read the archived task list for a completed run, preferring the durable
- * stream sidecar (`streamData/{stream}/workPlan.json`) but falling back to
- * `executions/{id}/todos.json` for runs recorded before sidecars existed —
- * or when the legacy write is demonstrably fresher than the sidecar (a final
- * `todo_write` can land before the snapshot store's asynchronous sidecar
- * write has flushed).
- *
- * Freshness detail: millisecond-resolution mtimes (the VS Code filesystem
- * adapter's granularity) can tie when both writes land in the same tick;
- * ties are broken toward the legacy write, since a genuinely later legacy
- * write is the more likely cause of a tie than a genuinely later sidecar
- * write racing to complete in the same millisecond.
+ * stream sidecar (`streamData/{stream}/workPlan.json`), with
+ * `executions/{id}/todos.json` as a read-only fallback for historical runs.
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
@@ -90,24 +71,17 @@ export async function readCompletedRunTodos(
     snapshotStore,
   });
 
-  if (!resolved) return readLegacyTodos(executionId);
-
-  const sidecarMtime = await sidecarModifiedAt(resolved.streamId);
-  if (sidecarMtime === undefined) {
-    return readLegacyTodos(executionId);
+  if (resolved) {
+    const snapshot = await snapshotStore.read(resolved.streamId);
+    if (snapshot.todos.length > 0) {
+      return {
+        todos: snapshot.todos.map(todoItemToEntry),
+        source: 'streamData',
+        streamId: resolved.streamId,
+      };
+    }
   }
-
-  const legacyMtime = await getExecutionStore(executionId).todosModifiedAt();
-  if (legacyMtime !== undefined && legacyMtime >= sidecarMtime) {
-    return readLegacyTodos(executionId);
-  }
-
-  const snapshot = await snapshotStore.read(resolved.streamId);
-  return {
-    todos: snapshot.todos.map(todoItemToEntry),
-    source: 'streamData',
-    streamId: resolved.streamId,
-  };
+  return readLegacyTodos(executionId);
 }
 
 // ============================================================================
@@ -122,13 +96,6 @@ export interface CompletedRunConversationReadResult {
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
   readonly streamId?: StreamTabId;
-}
-
-/** `streamLogs/{stream}.json` mtime (ms since epoch), or `undefined` if absent. */
-function streamLogModifiedAt(
-  streamId: StreamTabId,
-): Promise<number | undefined> {
-  return new KVStore(STREAM_LOGS_DIR).modifiedAt(streamId);
 }
 
 /**
@@ -390,13 +357,9 @@ async function readSidecarConversation(
  * messages, with the legacy `executions/{id}/conversation.json` projection
  * as the fallback arm.
  *
- * Arbitration protocol: the mtime comparison (ties toward legacy, same as
- * {@link readCompletedRunTodos}) decides the ORDER the two sources are
- * tried in — but **an empty result never wins**. A source that reads or
- * reconstructs empty (a present-but-empty legacy file, a resolver pick
- * whose log holds no conversation-shaped rows) falls through to the next
- * source, symmetrically in both directions, until one yields content or
- * all are empty.
+ * The sidecar is tried first. If it has no conversation-shaped rows, the
+ * reader falls back once to the historical projection. An empty source never
+ * wins over a source with content.
  */
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
@@ -429,22 +392,7 @@ export async function readCompletedRunConversation(
           )
         : null;
 
-  // Freshness decides order only. The resolver pick's streamLogs mtime
-  // stands in for "the sidecar's" — an absent log file orders legacy first
-  // (without even statting the legacy file), and the sidecar arm still gets
-  // its turn if legacy is empty.
-  const sidecarMtime = resolved
-    ? await streamLogModifiedAt(resolved.streamId)
-    : undefined;
-  let legacyFirst = true;
-  if (sidecarMtime !== undefined) {
-    const legacyMtime =
-      await getExecutionStore(executionId).conversationModifiedAt();
-    legacyFirst = legacyMtime !== undefined && legacyMtime >= sidecarMtime;
-  }
-
-  const arms = legacyFirst ? [tryLegacy, trySidecar] : [trySidecar, tryLegacy];
-  for (const arm of arms) {
+  for (const arm of [trySidecar, tryLegacy]) {
     const result = await arm();
     if (result) return result;
   }

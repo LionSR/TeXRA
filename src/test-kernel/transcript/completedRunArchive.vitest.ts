@@ -10,9 +10,6 @@
  * proves conversation display, chat export, and todos all read through the
  * facade.
  */
-import { readdir, utimes } from 'node:fs/promises';
-import * as path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
@@ -144,23 +141,6 @@ async function writeSidecarFixture(
   await logs.flush();
 }
 
-/** Locate a file under `dir` by name (recursive), for mtime manipulation. */
-async function findFile(dir: string, name: string): Promise<string> {
-  const entries = await readdir(dir, { withFileTypes: true, recursive: true });
-  const match = entries.find((entry) => entry.isFile() && entry.name === name);
-  if (!match) throw new Error(`Fixture file not found: ${name}`);
-  return path.join(match.parentPath, match.name);
-}
-
-async function setMtime(filePath: string, epochMs: number): Promise<void> {
-  await utimes(filePath, new Date(epochMs), new Date(epochMs));
-}
-
-/** The legacy `conversation.json` projection under the active temp storage. */
-function legacyConversationPath(): Promise<string> {
-  return findFile(tempDirs.at(-1)!, 'conversation.json');
-}
-
 describe('completedRunArchive facade', () => {
   setupPlatform(() => createTempDirPlatform('texra-archive-', tempDirs));
 
@@ -273,11 +253,11 @@ describe('completedRunArchive facade', () => {
   it('falls back to the legacy KV projections when no sidecar exists', async () => {
     const executionId = 'bbb222bbb222' as ExecutionId;
     const store = getExecutionStore(executionId);
-    await store.writeConversation([
+    await store.write('conversation', [
       { role: 'user', content: 'Legacy question' },
       { role: 'assistant', content: 'Legacy answer' },
     ]);
-    await store.writeTodos([{ content: 'Legacy todo', status: 'pending' }]);
+    await store.write('todos', [{ content: 'Legacy todo', status: 'pending' }]);
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult.source).toBe('legacyKV');
@@ -303,56 +283,28 @@ describe('completedRunArchive facade', () => {
     expect(todosResult).toEqual({ todos: [], source: 'none' });
   });
 
-  it('prefers a demonstrably fresher legacy conversation write over the sidecar', async () => {
+  it('prefers the sidecar when a legacy conversation projection also exists', async () => {
     const executionId = 'ddd444ddd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
-    await getExecutionStore(executionId).writeConversation([
-      { role: 'assistant', content: 'Fresher legacy write' },
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'assistant', content: 'Legacy projection' },
     ]);
 
-    const storageDir = tempDirs.at(-1)!;
-    const legacyPath = await legacyConversationPath();
-    const sidecarPath = await findFile(
-      path.dirname(await findFile(storageDir, 'workPlan.json')),
-      'meta.json',
-    );
-    // streamLogs/{stream}.json lives beside the streamData dir; find it by
-    // its encoded name under the streamLogs directory.
-    const streamLogsDir = path.join(
-      path.dirname(path.dirname(path.dirname(sidecarPath))),
-      'streamLogs',
-    );
-    const [streamLogFile] = await readdir(streamLogsDir);
-    const streamLogPath = path.join(streamLogsDir, streamLogFile);
-
-    // Legacy write is strictly fresher than the sidecar -> legacy wins.
-    await setMtime(streamLogPath, Date.now() - 60_000);
-    await setMtime(legacyPath, Date.now());
-
-    const fresher = await readCompletedRunConversation(executionId);
-    expect(fresher.source).toBe('legacyKV');
-    expect(fresher.conversation).toEqual([
-      { role: 'assistant', content: 'Fresher legacy write' },
-    ]);
-
-    // Sidecar strictly fresher -> sidecar wins.
-    await setMtime(legacyPath, Date.now() - 120_000);
-    await setMtime(streamLogPath, Date.now());
-    const sidecarWins = await readCompletedRunConversation(executionId);
-    expect(sidecarWins.source).toBe('streamLog');
+    const result = await readCompletedRunConversation(executionId);
+    expect(result.source).toBe('streamLog');
+    expect(result.streamId).toBe(streamId);
+    expect(result.conversation).not.toContainEqual({
+      role: 'assistant',
+      content: 'Legacy projection',
+    });
   });
 
   it('never lets an empty-but-present legacy file beat a full sidecar (non-empty rule)', async () => {
     const executionId = 'fff666fff666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
-    // Present but EMPTY legacy projection with an mtime after the stream
-    // log — under pure mtime arbitration this would win and hide the full
-    // transcript. The non-empty rule orders legacy first but falls through.
-    await getExecutionStore(executionId).writeConversation([]);
-    const legacyPath = await legacyConversationPath();
-    await setMtime(legacyPath, Date.now() + 60_000);
+    await getExecutionStore(executionId).write('conversation', []);
 
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('streamLog');
@@ -418,13 +370,11 @@ describe('completedRunArchive facade', () => {
     );
     await logs.flush();
 
-    await getExecutionStore(executionId).writeConversation([
+    await getExecutionStore(executionId).write('conversation', [
       { role: 'user', content: 'Pre-sidecar conversation' },
     ]);
-    // The sidecar exists and is fresher, but reconstructs to zero messages —
-    // the facade must not report an empty conversation over real legacy data.
-    const legacyPath = await legacyConversationPath();
-    await setMtime(legacyPath, Date.now() - 60_000);
+    // The sidecar exists but reconstructs to zero messages, so the historical
+    // read fallback remains available.
 
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('legacyKV');

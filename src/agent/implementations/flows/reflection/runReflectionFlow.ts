@@ -310,9 +310,6 @@ export async function runReflectionFlow<C = unknown>(
       baseFiles,
     };
     pf.setServices(services);
-    pf.setProjection(async (s, store) => {
-      if (s.conversation?.length) await store.writeConversation(s.conversation);
-    });
 
     if (isResume) {
       logger.debug('Resuming reflection flow from persistence');
