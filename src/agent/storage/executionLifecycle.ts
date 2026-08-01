@@ -20,7 +20,6 @@ import {
   type ExecutionId,
   type ExecutionMeta,
   type ExecutionStatus,
-  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
@@ -31,7 +30,6 @@ import {
   captureOwnedExecutionLease,
   releaseOwnedExecutionLease,
 } from './executionLease';
-import { ResultMetaSchema } from './resultMeta';
 
 const CHANNEL = 'ExecutionLifecycle';
 
@@ -212,42 +210,28 @@ async function persistSupplementaryMetaFieldsBestEffort(
 }
 
 /**
- * Align an existing agent result after a suspended run terminates between
- * turns. Call this only when no later turn-owned result write can replace the
- * record. The durable execution outcome is checked first, so a failed status
- * write cannot relabel the result on its own.
+ * Drop the previous run's terminal facts as a persisted execution is admitted
+ * for resumption. `meta.outcome` owns "how did this run end" and every reader
+ * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
+ * an execution that resumes while still carrying its interrupted predecessor's
+ * outcome relabels every turn the resumed run writes until its next terminal
+ * finalize. Both fields go together: `ExecutionMetaSchema` re-derives `outcome`
+ * from a surviving `terminalStatus`.
+ *
+ * Metadata that is absent or unreadable is left alone: `readResultMeta` reads
+ * the same metadata, so there is no outcome to project either way, and the
+ * store already warns about metadata it could not parse.
  */
-export async function synchronizeAgentResultOutcome(
+export async function clearTerminalExecutionState(
   executionId: ExecutionId,
-  outcome: RunOutcome,
 ): Promise<void> {
-  try {
-    const store = getExecutionStore(executionId);
-    const meta = await store.readMeta();
-    if (meta?.outcome !== outcome) return;
-
-    const resultMeta = await store.readResultMeta();
-    if (
-      !resultMeta ||
-      resultMeta.producer === 'backgroundBash' ||
-      resultMeta.result.outcome === outcome
-    ) {
-      return;
-    }
-    const updatedResultMeta = ResultMetaSchema.parse({
-      ...resultMeta,
-      result: { ...resultMeta.result, outcome },
-    });
-    await store.writeResultMeta(updatedResultMeta);
-  } catch (err) {
-    // Terminal cleanup stays non-throwing, but this leaves the public result
-    // stale and must remain visible to operators.
-    logger.warn(
-      CHANNEL,
-      `Failed to synchronize result outcome for ${executionId}: ${toErrorMessage(err)}`,
-      { data: err },
-    );
-  }
+  const meta = await getExecutionStore(executionId).readMeta();
+  if (!meta) return;
+  if (meta.terminalStatus === undefined && meta.outcome === undefined) return;
+  await enqueueMetaUpdate(executionId, () => ({
+    terminalStatus: undefined,
+    outcome: undefined,
+  }));
 }
 
 /**

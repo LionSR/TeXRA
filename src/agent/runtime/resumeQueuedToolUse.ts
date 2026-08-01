@@ -84,7 +84,7 @@ export async function resumeQueuedToolUseFromResumeData(
   const existingHandle = session.executions.getHandle(resume.executionId);
   if (
     existingHandle instanceof AgentExecutionHandle &&
-    existingHandle.waitingTerminationStarted
+    existingHandle.suspendedTerminationStarted
   ) {
     return false;
   }

@@ -13,6 +13,7 @@ import {
   AgentExecutionHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
+import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import {
   SessionEventHub,
@@ -43,7 +44,6 @@ import {
 
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
-  synchronizeAgentResultOutcome: vi.fn(),
 }));
 
 const channelTraceMocks = vi.hoisted(() => ({
@@ -53,13 +53,9 @@ const channelTraceMocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
-  storageMocks.synchronizeAgentResultOutcome.mockImplementation(
-    actual.synchronizeAgentResultOutcome,
-  );
   return {
     ...actual,
     finalizeExecution: storageMocks.finalizeExecution,
-    synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
   };
 });
 
@@ -132,7 +128,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('retains an in-progress waiting cleanup after registrations are cleared', async () => {
+  it('lets exactly one stop claim a suspended run and reports its teardown', async () => {
     const handle = createHandle(
       'exec-waiting-cleanup-completion',
       'stream-waiting-cleanup-completion' as StreamTabId,
@@ -142,12 +138,16 @@ describe('executionRegistry', () => {
     const cleanupFinished = new Promise<void>((resolve) => {
       finishCleanup = resolve;
     });
-    handle.registerWaitingCleanup(() => cleanupFinished);
+    handle.suspend(() => cleanupFinished);
 
-    expect(handle.runWaitingCleanup()).toBe(true);
-    handle.clearWaitingCleanup();
+    const teardown = handle.beginSuspendedTermination();
+    expect(teardown).toBeDefined();
+    expect(handle.suspendedTerminationStarted).toBe(true);
+    // A second stop of the same suspended run finds the claim taken, so it
+    // cannot start a second teardown or publish a second terminal outcome.
+    expect(handle.beginSuspendedTermination()).toBeUndefined();
     let observedCompletion = false;
-    const observation = handle.waitForWaitingCleanup().then(() => {
+    const observation = teardown?.then(() => {
       observedCompletion = true;
     });
     await Promise.resolve();
@@ -168,7 +168,7 @@ describe('executionRegistry', () => {
 
     try {
       registry.track(handle);
-      handle.registerWaitingCleanup(() => {});
+      handle.suspend(() => {});
       handle.markExecutionLeaseLost();
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
 
@@ -313,7 +313,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('falls back to a registered waiting-cleanup when a suspended handle has no live interrupt (issue #7287)', async () => {
+  it('falls back to the parked teardown when a suspended handle has no live interrupt (issue #7287)', async () => {
     // Regression: a native subagent suspended at WAITING has already had its
     // live interrupt context detached (runToolUseFlow's finally), while the
     // handle stays tracked for resume. Before the fix, terminate() found no
@@ -329,10 +329,10 @@ describe('executionRegistry', () => {
     try {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      handle.registerWaitingCleanup(cleanup);
+      handle.suspend(cleanup);
       // No handle interrupt target: mirrors a suspended subagent whose live
-      // tool-use session has already been disposed.
-      // Genuinely suspended: only `transitionToWaiting` reaches this status.
+      // tool-use session has already been disposed. The stream phase follows
+      // the same suspension, as it does in production.
       seedStreamStatusForTest(
         streamStatus,
         childStreamId,
@@ -385,7 +385,7 @@ describe('executionRegistry', () => {
         leaseScope,
       });
       registry.track(handle);
-      handle.registerWaitingCleanup(() => {});
+      handle.suspend(() => {});
       // Genuinely suspended: only `transitionToWaiting` reaches this status.
       seedStreamStatusForTest(
         streamStatus,
@@ -445,7 +445,7 @@ describe('executionRegistry', () => {
         childStreamId,
       );
       registry.track(handle);
-      handle.registerWaitingCleanup(async () => {
+      handle.suspend(async () => {
         await cleanupGate;
         order.push('cleanup');
       });
@@ -493,7 +493,7 @@ describe('executionRegistry', () => {
         childStreamId,
       );
       registry.track(previous);
-      previous.registerWaitingCleanup(() => cleanupGate);
+      previous.suspend(() => cleanupGate);
       seedStreamStatusForTest(
         streamStatus,
         childStreamId,
@@ -542,7 +542,7 @@ describe('executionRegistry', () => {
         leaseScope: lostScope,
       });
       registry.track(previous);
-      previous.registerWaitingCleanup(() => undefined);
+      previous.suspend(() => undefined);
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
 
       expect(registry.kill(executionId)).toBe(true);
@@ -577,7 +577,7 @@ describe('executionRegistry', () => {
         childStreamId,
       );
       registry.track(handle);
-      handle.registerWaitingCleanup(() => {});
+      handle.suspend(() => {});
       seedStreamStatusForTest(
         streamStatus,
         childStreamId,
@@ -610,13 +610,12 @@ describe('executionRegistry', () => {
       terminalStatusPersisted: false,
       error: durabilityError,
     });
-    storageMocks.synchronizeAgentResultOutcome.mockClear();
     channelTraceMocks.warn.mockClear();
 
     try {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      handle.registerWaitingCleanup(() => {});
+      handle.suspend(() => {});
       seedStreamStatusForTest(
         streamStatus,
         childStreamId,
@@ -645,7 +644,6 @@ describe('executionRegistry', () => {
           },
         );
       });
-      expect(storageMocks.synchronizeAgentResultOutcome).not.toHaveBeenCalled();
     } finally {
       registry.dispose();
     }
@@ -663,13 +661,12 @@ describe('executionRegistry', () => {
       terminalStatusPersisted: true,
       flowRecord: 'deleted',
     });
-    storageMocks.synchronizeAgentResultOutcome.mockResolvedValueOnce(undefined);
     channelTraceMocks.warn.mockClear();
 
     try {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      handle.registerWaitingCleanup(() => Promise.reject(cleanupError));
+      handle.suspend(() => Promise.reject(cleanupError));
       seedStreamStatusForTest(
         streamStatus,
         childStreamId,
@@ -695,7 +692,7 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('synchronizes a waiting stop when only flow-record deletion fails', async () => {
+  it('persists a waiting stop when only flow-record deletion fails', async () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-waiting-kill-flow-delete-failure' as ExecutionId;
@@ -710,14 +707,12 @@ describe('executionRegistry', () => {
       terminalStatusPersisted: true,
       error: cleanupError,
     });
-    storageMocks.synchronizeAgentResultOutcome.mockResolvedValueOnce(undefined);
-    storageMocks.synchronizeAgentResultOutcome.mockClear();
     channelTraceMocks.warn.mockClear();
 
     try {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      handle.registerWaitingCleanup(() => {});
+      handle.suspend(() => {});
       seedStreamStatusForTest(
         streamStatus,
         childStreamId,
@@ -727,9 +722,12 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(
-          storageMocks.synchronizeAgentResultOutcome,
-        ).toHaveBeenCalledExactlyOnceWith(executionId, RUN_OUTCOME.CANCELLED);
+        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+          executionId,
+          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
+            .executionStatus,
+          flowRecord: 'delete',
+        });
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
         'Failed to finalize stopped waiting execution',
@@ -747,12 +745,11 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('reports a failed kill for a tracked handle with neither an interrupt nor a waiting-cleanup', () => {
-    // Guards the fallback above: a handle that never registered a
-    // waiting-cleanup (i.e. was never confirmed suspended at WAITING) must
-    // still no-op exactly like before the fix — otherwise the fallback could
-    // spuriously tear down a handle mid-completion, in the narrow window
-    // between its own interrupt unregister and its own untrack.
+  it('reports a failed kill for a tracked handle with neither an interrupt nor a suspension', () => {
+    // Guards the fallback above: a handle that never parked must still no-op
+    // exactly like before the fix — otherwise the fallback could spuriously
+    // tear down a handle mid-completion, in the narrow window between its own
+    // interrupt unregister and its own untrack.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-no-cleanup-kill-test';
@@ -772,38 +769,101 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('does not abandon a handle with a stale waiting-cleanup when the stream never actually reached WAITING (review: waiting cleanup on non-suspend paths)', () => {
-    // A registered waiting-cleanup alone does not prove genuine suspension —
-    // if a registrant ever registers one without the flow actually
-    // transitioning to WAITING (streamStatus stays whatever it was), and a
-    // kill lands in the narrow window between that turn's interrupt-
-    // unregister and its handle's normal untrack, terminate() must not
-    // mistake the stale registered cleanup for a genuine suspension and
-    // incorrectly abandon/cancel a run that is still executing or has
-    // already completed. `runFlowWithLifecycle` is the only registrant today
-    // (see AgentRunLifecycle.ts) and only registers after `streamStatus` has
-    // already reached WAITING, so this guard is defensive against any future
-    // registrant that doesn't hold that invariant.
+  it('leaves a never-suspended handle alone even while its stream reads WAITING', () => {
+    // The handle owns the suspension fact; the stream phase is only a
+    // projection of it. A stop landing in the narrow window between a live
+    // turn's interrupt-handler detach and its own untrack must not abandon a
+    // run that never parked, no matter what phase the stream currently shows.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
-    const executionId = 'exec-non-suspend-stale-cleanup-test';
+    const executionId = 'exec-never-suspended-phase-only-test';
     const parentStreamId =
-      'parent-non-suspend-stale-cleanup-test' as StreamTabId;
-    const childStreamId = 'child-non-suspend-stale-cleanup-test' as StreamTabId;
-    const cleanup = vi.fn();
+      'parent-never-suspended-phase-only-test' as StreamTabId;
+    const childStreamId =
+      'child-never-suspended-phase-only-test' as StreamTabId;
 
     try {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      // A cleanup gets registered directly here, simulating any registrant
-      // that registers one without the flow actually suspending — streamStatus
-      // was never transitioned to WAITING (no `transitionToWaiting` call).
-      handle.registerWaitingCleanup(cleanup);
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
 
       expect(registry.kill(executionId)).toBe(false);
 
-      expect(cleanup).not.toHaveBeenCalled();
       expect(registry.getHandle(executionId)).toBe(handle);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('refuses a waiting stop once a terminal finalize has claimed the run', async () => {
+    // Both terminal writers claim the same gate, so a kill landing while
+    // `finalizeRunTerminal` is parked at its persist await cannot run the
+    // suspended teardown, publish a second `result`, or persist a second
+    // terminal status over the finalizer's outcome.
+    const streamStatus = new StreamStatusMachine();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const executionId = 'exec-waiting-stop-after-claim' as ExecutionId;
+    const childStreamId = 'child-waiting-stop-after-claim' as StreamTabId;
+    const teardown = vi.fn();
+    storageMocks.finalizeExecution.mockClear();
+    let releasePersist: (() => void) | undefined;
+    storageMocks.finalizeExecution.mockImplementationOnce(
+      async () =>
+        new Promise((resolve) => {
+          releasePersist = () =>
+            resolve({
+              status: 'durable',
+              terminalStatusPersisted: true,
+              flowRecord: 'deleted',
+            });
+        }),
+    );
+
+    try {
+      const handle = createHandle(
+        executionId,
+        'parent-waiting-stop-after-claim' as StreamTabId,
+        childStreamId,
+      );
+      registry.track(handle);
+      handle.suspend(teardown);
+      seedStreamStatusForTest(
+        streamStatus,
+        childStreamId,
+        STREAM_STATUS.WAITING,
+      );
+
+      const finalized = finalizeRunTerminal({
+        handle,
+        executions: registry,
+        streamStatus,
+        outcome: RUN_OUTCOME.COMPLETED,
+        isSubagent: true,
+        persistence: { kind: 'finalize', flowRecord: 'delete' },
+      });
+      await vi.waitFor(() => expect(releasePersist).toBeDefined());
+
+      expect(registry.kill(executionId)).toBe(false);
+
+      releasePersist?.();
+      await finalized;
+      expect(teardown).not.toHaveBeenCalled();
+      await expect(handle.result).resolves.toMatchObject({
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith({
+        executionId,
+        terminalStatus: projectRunOutcome(RUN_OUTCOME.COMPLETED)
+          .executionStatus,
+        flowRecord: 'delete',
+      });
+      expect(registry.getHandle(executionId)).toBeUndefined();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
       registry.dispose();
     }
@@ -812,11 +872,9 @@ describe('executionRegistry', () => {
   it('tears down and aligns a suspended handle killed during RESUMING', async () => {
     // Regression: `resumeQueuedToolUseFromResumeData` flips `streamStatus` to
     // RUNNING with a RESUMING substate *before* the resumed run installs its
-    // own interrupt context. A kill landing in that window would otherwise
-    // find this same still-suspended handle (its waiting-cleanup from the
-    // earlier genuine WAITING suspension is still registered) but a
-    // non-WAITING phase, and get wrongly no-opped by the WAITING-only guard
-    // above — silently ignoring a stop the user actually issued.
+    // own interrupt context. The handle it is resuming is still parked from
+    // the earlier genuine WAITING suspension, so a kill landing in that window
+    // tears it down off that fact alone — no phase or substate is consulted.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-resuming-window-kill-test' as ExecutionId;
@@ -844,7 +902,7 @@ describe('executionRegistry', () => {
       });
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      handle.registerWaitingCleanup(cleanup);
+      handle.suspend(cleanup);
       // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
       // the resumed run's own context — RUNNING phase, RESUMING substate.
       seedStreamStatusForTest(

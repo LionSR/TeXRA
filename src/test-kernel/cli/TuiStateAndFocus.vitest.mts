@@ -1097,7 +1097,10 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('uses child slice status as a fallback for focused child follow-ups', () => {
+  // The roster row carries no status of its own: `reconstruct` resolves every
+  // child row's status from the stream status map, so a roster snapshot that
+  // still says RUNNING cannot keep a stopped child accepting follow-ups.
+  it('routes focused child follow-ups from the stream status, not the roster row', () => {
     patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
     applySubagentRoster(root, [
       {

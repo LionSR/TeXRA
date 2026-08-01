@@ -5,6 +5,13 @@
 // the next entry. `clearApprovals` resolves every caller promise directly, so
 // a session interrupt cannot leave a hidden scheduler task or queue slot
 // blocked.
+//
+// The queue is also the only owner of "this request is still live".
+// `reserveApproval` takes a slot before the request can be shown (a retry has
+// to read the keychain first) and keeps it after the decision while its owner
+// commits, so one clear or cancel settles the pre-modal lookup, the modal, and
+// the committing work through the same structure — there is no second registry
+// to sweep and no staleness re-check at the call sites.
 
 import { signal, type Signal } from '@lit-labs/signals';
 
@@ -74,7 +81,16 @@ export interface ApprovalQueueStatus {
 }
 
 export interface EnqueueApprovalOptions {
-  readonly onPresent?: () => void;
+  /** Called with the payload as presented, once, when the entry becomes the
+   *  foreground modal. */
+  readonly onPresent?: (payload: ApprovalPayload) => void;
+}
+
+interface ReserveApprovalOptions extends EnqueueApprovalOptions {
+  /** The host attachment this reservation belongs to. Hosts overlap while a
+   *  previous run's detached children finish, so a detaching host must settle
+   *  its own reservations without touching the live host's. */
+  readonly owner?: object;
 }
 
 /** Derived from the wire contract, so the queue's payload kinds and every
@@ -109,12 +125,28 @@ export const pendingApprovalSummaries = PENDING_SUMMARIES as Signal.State<
   readonly PendingApprovalSummary[]
 >;
 
-const clearListeners = new Set<() => void>();
+/**
+ * `preparing` holds a slot for a request that cannot be shown yet: invisible
+ * to the modal, the depth, and the summaries, but settleable and cancellable.
+ * `pending` is a live request waiting for its turn at the modal. `committing`
+ * is a decided reservation whose owner is still acting on the answer, so a
+ * later cancel can still reach that work.
+ */
+type ApprovalQueuePhase = 'preparing' | 'pending' | 'committing';
 
 interface ApprovalQueueItem {
-  readonly payload: ApprovalPayload;
+  /** Mutable so a reservation can publish the finished request when it
+   *  presents; every other entry keeps the payload it was queued with. */
+  payload: ApprovalPayload;
   readonly resolve: (decision: ApprovalDecision) => void;
-  readonly onPresent?: () => void;
+  readonly onPresent?: (payload: ApprovalPayload) => void;
+  /** Reservations only. Aborted when the entry is cleared or replaced — never
+   *  by its own decision — so preparation and commit work stops at its next
+   *  await. */
+  readonly preparation?: AbortController;
+  /** Reservations only. The host attachment that took the slot. */
+  readonly owner?: object;
+  phase: ApprovalQueuePhase;
   /** Set once the item has been foregrounded, so re-presentations after a
    *  queue reorder cannot re-fire focus/notification side effects. */
   presented?: boolean;
@@ -122,38 +154,30 @@ interface ApprovalQueueItem {
 
 const pendingItems: ApprovalQueueItem[] = [];
 
-/** Split `items` into [matching, non-matching], each order-preserving. */
-function partitionItems(
-  items: readonly ApprovalQueueItem[],
-  predicate: (item: ApprovalQueueItem) => boolean,
-): [ApprovalQueueItem[], ApprovalQueueItem[]] {
-  const matching: ApprovalQueueItem[] = [];
-  const rest: ApprovalQueueItem[] = [];
-  for (const item of items) {
-    (predicate(item) ? matching : rest).push(item);
-  }
-  return [matching, rest];
-}
-
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
   userMessage: 'Session interrupted.',
 };
 
+/** The entry the modal shows: the first one waiting for a user decision. */
+function foregroundItem(): ApprovalQueueItem | undefined {
+  return pendingItems.find((item) => item.phase === 'pending');
+}
+
 function presentForeground(): void {
-  const item = pendingItems[0];
+  const item = foregroundItem();
   if (!item || CURRENT.get()) return;
 
   if (!item.presented) {
     item.presented = true;
     try {
-      item.onPresent?.();
+      item.onPresent?.(item.payload);
     } catch {
       // Presentation hooks update surrounding TUI state only; approval
       // resolution must remain available even if focus activation fails.
     }
   }
-  if (pendingItems[0] !== item) return;
+  if (foregroundItem() !== item) return;
 
   CURRENT.set({
     payload: item.payload,
@@ -164,32 +188,61 @@ function presentForeground(): void {
 }
 
 /**
- * Atomically remove and settle every matching item. The queue is partitioned
- * before any promise resolves or survivor is presented, so a bulk cancellation
- * cannot briefly foreground another item that the same operation removes.
+ * Apply one queue mutation and re-project the foreground from the result.
+ * `settle` runs at the single point where the queue is already consistent and
+ * the next modal has not been presented yet, so a bulk cancellation cannot
+ * briefly foreground an item that the same operation removes.
+ */
+function updateQueue(mutate: () => void, settle?: () => void): void {
+  const previousForeground = foregroundItem();
+  mutate();
+  const foregroundChanged = previousForeground !== foregroundItem();
+  if (foregroundChanged) CURRENT.set(undefined);
+  syncApprovalStatus();
+  settle?.();
+  if (foregroundChanged) presentForeground();
+}
+
+/**
+ * Settle every matching entry with `decision`. A cancelled settlement drops
+ * each entry and aborts any reservation among them; an answered one keeps a
+ * reservation's slot (as `committing`) until its owner releases it, so a
+ * cancel arriving after the decision still reaches the work that decision
+ * started.
  */
 function settleItems(
   predicate: (item: ApprovalQueueItem) => boolean,
   decision: ApprovalDecision,
+  options: { readonly cancelled?: boolean } = {},
 ): number {
-  const previousForeground = pendingItems[0];
-  const [removed, retained] = partitionItems(pendingItems, predicate);
-  if (removed.length === 0) return 0;
+  const matched = pendingItems.filter(predicate);
+  if (matched.length === 0) return 0;
+  const dropped = new Set(
+    options.cancelled === true
+      ? matched
+      : matched.filter((item) => !item.preparation),
+  );
 
-  pendingItems.splice(0, pendingItems.length, ...retained);
-  const foregroundChanged = previousForeground !== pendingItems[0];
-  if (foregroundChanged) CURRENT.set(undefined);
-  syncApprovalStatus();
-  for (const item of removed) item.resolve(decision);
-  if (foregroundChanged) presentForeground();
-  return removed.length;
-}
-
-export function onApprovalsCleared(listener: () => void): () => void {
-  clearListeners.add(listener);
-  return () => {
-    clearListeners.delete(listener);
-  };
+  updateQueue(
+    () => {
+      if (dropped.size > 0) {
+        const retained = pendingItems.filter((item) => !dropped.has(item));
+        pendingItems.splice(0, pendingItems.length, ...retained);
+      }
+      for (const item of matched) {
+        if (!dropped.has(item)) item.phase = 'committing';
+      }
+    },
+    () => {
+      for (const item of matched) {
+        if (options.cancelled === true) {
+          item.preparation?.abort(new Error('Approval request was cancelled.'));
+        }
+        item.resolve(decision);
+      }
+    },
+  );
+  return matched.length;
 }
 
 function statusKindForPayload(
@@ -224,10 +277,6 @@ function approvalQueueStatusKind(
   return sawQuestion ? 'question' : 'approval';
 }
 
-function* pendingApprovalPayloads(): Iterable<ApprovalPayload> {
-  for (const item of pendingItems) yield item.payload;
-}
-
 export function approvalPayloadStreamId(
   payload: ApprovalPayload,
 ): StreamTabId | undefined {
@@ -246,16 +295,18 @@ export function approvalPayloadStreamId(
 }
 
 function syncApprovalStatus(): void {
-  const depth = pendingItems.length;
+  // Only `pending` entries are requests the user can act on: a reservation is
+  // not a prompt before it presents, and no longer one once it is decided.
+  const waiting = pendingItems.filter((item) => item.phase === 'pending');
   STATUS.set({
-    depth,
+    depth: waiting.length,
     kind:
-      depth === 0
+      waiting.length === 0
         ? 'approval'
-        : approvalQueueStatusKind(pendingApprovalPayloads()),
+        : approvalQueueStatusKind(waiting.map((item) => item.payload)),
   });
   PENDING_SUMMARIES.set(
-    pendingItems.map((item) => ({
+    waiting.map((item) => ({
       streamKey:
         approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY,
       kind: item.payload.kind,
@@ -284,21 +335,17 @@ export function promoteApprovalsForStream(
       (options.includeSessionWide === true && itemStreamId === undefined)
     );
   };
-  const [promoted, rest] = partitionItems(pendingItems, matches);
+  const promoted = pendingItems.filter(matches);
   if (promoted.length === 0) return;
-  const next = [...promoted, ...rest];
+  const next = [...promoted, ...pendingItems.filter((item) => !matches(item))];
   // Already a contiguous prefix (a head-only check would miss matching items
   // still parked behind other streams) — nothing to reorder.
   if (next.every((item, index) => item === pendingItems[index])) return;
-  const headChanged = pendingItems[0] !== next[0];
-  pendingItems.splice(0, pendingItems.length, ...next);
-  // Only re-project when the head actually moved; the current projection's
-  // decide closure settles by item identity, so it stays valid either way.
-  if (headChanged) {
-    CURRENT.set(undefined);
-    presentForeground();
-  }
-  syncApprovalStatus();
+  // The current projection's decide closure settles by item identity, so it
+  // stays valid when the foreground entry keeps its place.
+  updateQueue(() => {
+    pendingItems.splice(0, pendingItems.length, ...next);
+  });
 }
 
 export function enqueueApproval(
@@ -306,31 +353,104 @@ export function enqueueApproval(
   options: EnqueueApprovalOptions = {},
 ): Promise<ApprovalDecision> {
   return new Promise<ApprovalDecision>((resolve) => {
-    const wasEmpty = pendingItems.length === 0;
-    pendingItems.push({ payload, resolve, onPresent: options.onPresent });
+    pendingItems.push({
+      payload,
+      resolve,
+      onPresent: options.onPresent,
+      phase: 'pending',
+    });
     syncApprovalStatus();
-    if (wasEmpty) presentForeground();
+    presentForeground();
   });
 }
 
 /**
- * Hard-cancel every pending resolver and clear the foreground projection.
+ * A queue entry held from before its request can be shown until its owner has
+ * finished acting on the decision. Every operation is a no-op once the queue
+ * has settled the entry from the other direction, which is what makes a
+ * staleness check at the call site unnecessary.
+ */
+interface ApprovalReservation {
+  /** Resolves once the queue answers this entry: its own modal decision, an
+   *  auto-decision passed to {@link settle}, a replacement, or a clear. */
+  readonly decided: Promise<ApprovalDecision>;
+  /** Aborts when the entry is cleared or replaced, never on its own decision,
+   *  so work running for the entry stops at its next await. */
+  readonly signal: AbortSignal;
+  /** Publish the finished payload and join the visible queue. */
+  readonly present: (payload: ApprovalPayload) => void;
+  /** Answer the entry without showing a modal. */
+  readonly settle: (decision: ApprovalDecision) => void;
+  /** Hand the slot back once the decision has been acted on. */
+  readonly release: () => void;
+}
+
+/**
+ * Take a queue slot for a request that is not ready to show yet.
+ */
+export function reserveApproval(
+  payload: ApprovalPayload,
+  options: ReserveApprovalOptions = {},
+): ApprovalReservation {
+  const preparation = new AbortController();
+  let decide!: (decision: ApprovalDecision) => void;
+  const decided = new Promise<ApprovalDecision>((resolve) => {
+    decide = resolve;
+  });
+  const item: ApprovalQueueItem = {
+    payload,
+    resolve: decide,
+    onPresent: options.onPresent,
+    preparation,
+    owner: options.owner,
+    phase: 'preparing',
+  };
+  pendingItems.push(item);
+
+  return {
+    decided,
+    signal: preparation.signal,
+    present: (presented) => {
+      if (item.phase !== 'preparing' || !pendingItems.includes(item)) return;
+      updateQueue(() => {
+        item.payload = presented;
+        item.phase = 'pending';
+        // Enter the visible queue at its tail: the reservation held liveness,
+        // not a place in line, so a request that only became showable now
+        // cannot displace a modal the user is already answering.
+        pendingItems.splice(pendingItems.indexOf(item), 1);
+        pendingItems.push(item);
+      });
+    },
+    settle: (decision) => {
+      settleItems((candidate) => candidate === item, decision);
+    },
+    release: () => {
+      if (!pendingItems.includes(item)) return;
+      updateQueue(() => {
+        pendingItems.splice(pendingItems.indexOf(item), 1);
+      });
+    },
+  };
+}
+
+/**
+ * Hard-cancel every entry and clear the foreground projection.
  */
 export function clearApprovals(): void {
-  CURRENT.set(undefined);
-  for (const listener of clearListeners) {
-    try {
-      listener();
-    } catch {
-      // Clear hooks invalidate surrounding async state only; approval
-      // interruption must continue even if a hook fails.
-    }
-  }
-  const items = pendingItems.splice(0);
-  syncApprovalStatus();
-  for (const item of items) {
-    item.resolve(INTERRUPT);
-  }
+  settleItems(() => true, INTERRUPT, { cancelled: true });
+}
+
+/**
+ * Settle the reservations `owner` took, leaving every other entry alone. A host
+ * detaches when the last execution it owns finishes, which can be after a newer
+ * host has taken over the session, so this must not reach the newer host's
+ * requests.
+ */
+export function clearApprovalsForOwner(owner: object): number {
+  return settleItems((item) => item.owner === owner, INTERRUPT, {
+    cancelled: true,
+  });
 }
 
 export function clearRetryApprovalsForStream(streamId: string): void {
@@ -359,5 +479,7 @@ export function clearApprovalsWhere(
   predicate: (payload: ApprovalPayload) => boolean,
   decision: ApprovalDecision = INTERRUPT,
 ): number {
-  return settleItems((item) => predicate(item.payload), decision);
+  return settleItems((item) => predicate(item.payload), decision, {
+    cancelled: true,
+  });
 }

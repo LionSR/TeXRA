@@ -20,11 +20,27 @@ const mocks = vi.hoisted(() => ({
   preferSubscription: true,
   notify: vi.fn(),
   openRouter: false,
+  retryCopyFailure: undefined as Error | undefined,
   secrets: {},
   setCliApiMode: vi.fn(),
   setCliCodexSubscription: vi.fn(),
   updateGlobalState: vi.fn(),
 }));
+
+// Injection point for a pre-modal preparation failure: the retry copy is read
+// while the request is still being assembled, before the modal can be shown.
+vi.mock('@cli/tui/ui/retryCopy', async (importActual) => {
+  const actual = await importActual<typeof import('@cli/tui/ui/retryCopy')>();
+  return {
+    ...actual,
+    missingApiKeyRetryMessage: (
+      ...args: Parameters<typeof actual.missingApiKeyRetryMessage>
+    ): string => {
+      if (mocks.retryCopyFailure) throw mocks.retryCopyFailure;
+      return actual.missingApiKeyRetryMessage(...args);
+    },
+  };
+});
 
 vi.mock('@model/codex/codexPreference', () => ({
   isPreferCodexSubscription: () => mocks.preferSubscription,
@@ -78,6 +94,7 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  approvalQueueStatus,
   clearApprovals,
   currentApproval,
   enqueueApproval,
@@ -93,6 +110,7 @@ import {
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type RetryPermission } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -174,8 +192,8 @@ function relayRetry(params: {
   } as RetryPermission;
 }
 
-/** Relay retry on the shared `same-stream` route the route-replacement cases
- *  below queue two requests against. */
+/** Relay retry on the shared `same-stream` stream the replacement cases below
+ *  queue two requests against. */
 function requestSameStreamRetry(
   interactions: HostInteractions,
   message: string,
@@ -273,6 +291,7 @@ afterEach(() => {
   clearApprovals();
   cleanupAllApprovals();
   resetCliState();
+  mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
   mocks.invalidateApiKeyCache.mockReset();
@@ -1071,6 +1090,72 @@ describe('TUI retry approvals', () => {
     expect(mocks.setCliCodexSubscription).not.toHaveBeenCalled();
   });
 
+  it('holds a preparing retry out of the queue, then joins behind the open modal', async () => {
+    let resolveLookup: ((value: boolean) => void) | undefined;
+    mocks.hasUsableApiKey.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveLookup = resolve;
+        }),
+    );
+
+    const { interactions } = tui();
+    const retry = interactions.requestRetry?.(
+      relayRetry({ streamId: 'preparing-stream', provider: 'openai' }),
+    );
+    const bash = interactions.requestBashApproval?.({
+      command: 'echo ok',
+      streamId: 'bash-stream',
+    });
+
+    await waitForApproval('bash', { streamId: 'bash-stream' });
+    // The retry owns a queue slot from the moment it is requested, but it is
+    // not a request the user can act on until its key lookup finishes.
+    expect(approvalQueueStatus.get().depth).toBe(1);
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'bash-stream', kind: 'bash' },
+    ]);
+
+    resolveLookup?.(false);
+    await vi.waitFor(() => {
+      expect(pendingApprovalSummaries.get()).toEqual([
+        { streamKey: 'bash-stream', kind: 'bash' },
+        { streamKey: 'preparing-stream', kind: 'retry' },
+      ]);
+    });
+    // It joined behind the modal the user is already answering.
+    expect(currentApproval.get()?.payload).toMatchObject({ kind: 'bash' });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(bash).resolves.toEqual({ action: 'approve' });
+    await waitForApproval('retry', { streamId: 'preparing-stream' });
+    decideRetry({ accepted: false });
+    await expect(retry).resolves.toEqual({ action: 'cancel' });
+  });
+
+  it('records an approval denial for a refused retry but not for a cleared one', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(false);
+
+    const { cliContext, interactions } = tui();
+    const cleared = interactions.requestRetry?.(
+      relayRetry({ streamId: 'cleared-retry', provider: 'openai' }),
+    );
+    await waitForApproval('retry', { streamId: 'cleared-retry' });
+    clearApprovals();
+
+    await expect(cleared).resolves.toEqual({ action: 'cancel' });
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
+
+    const refused = interactions.requestRetry?.(
+      relayRetry({ streamId: 'refused-retry', provider: 'openai' }),
+    );
+    await waitForApproval('retry', { streamId: 'refused-retry' });
+    decideRetry({ accepted: false });
+
+    await expect(refused).resolves.toEqual({ action: 'cancel' });
+    expect(hasCliApprovalDenied(cliContext)).toBe(true);
+  });
+
   it('cancels ordinary retry preparation after approval', async () => {
     const ordinaryPrepare = vi.fn(
       async (_selection, _signal?: AbortSignal) =>
@@ -1091,6 +1176,10 @@ describe('TUI retry approvals', () => {
     await waitForApproval('retry', { streamId: 'cancelled-ordinary' });
     decideRetry({ accepted: true });
     await vi.waitFor(() => expect(ordinaryPrepare).toHaveBeenCalledOnce());
+    // The decided retry no longer reads as a request waiting on the user,
+    // but the queue still owns it, so the cancel below reaches its
+    // preparation.
+    expect(approvalQueueStatus.get()).toEqual({ depth: 0, kind: 'approval' });
     interactions.cancel({
       streamId: 'cancelled-ordinary',
       kind: 'retry',
@@ -1217,6 +1306,133 @@ describe('TUI retry approvals', () => {
     void requestSameStreamRetry(interactions, 'second retry');
 
     await waitForApproval('retry', { errorMessage: 'second retry' });
+  });
+
+  it('detaches one host without settling the live host retry', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(false);
+
+    const older = tui();
+    const newer = tui();
+    const detached = older.interactions.requestRetry?.(
+      relayRetry({ streamId: 'detached-host', provider: 'openai' }),
+    );
+    const live = newer.interactions.requestRetry?.(
+      relayRetry({ streamId: 'live-host', provider: 'openai' }),
+    );
+    await vi.waitFor(() => {
+      expect(pendingApprovalSummaries.get()).toEqual([
+        { streamKey: 'detached-host', kind: 'retry' },
+        { streamKey: 'live-host', kind: 'retry' },
+      ]);
+    });
+
+    // The older host releases once the last execution it owned finishes, which
+    // is after the newer host has taken over the session.
+    older.dispose();
+
+    await expect(detached).resolves.toEqual({ action: 'cancel' });
+    expect(pendingApprovalSummaries.get()).toEqual([
+      { streamKey: 'live-host', kind: 'retry' },
+    ]);
+    await waitForApproval('retry', { streamId: 'live-host' });
+    decideRetry({ accepted: true });
+    await expect(live).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+  });
+
+  it('cancels a retry aborted while its preparation was resolving', async () => {
+    const preparation = pDefer<void>();
+    const prepareRetry = vi.fn(() => preparation.promise);
+
+    const { interactions } = tui();
+    const result = interactions.requestRetry?.(
+      {
+        requestId: 'abort-at-resolution',
+        streamId: 'abort-at-resolution',
+        operation: 'model request',
+        errorMessage: 'Temporary connection error.',
+      },
+      { prepareRetry },
+    );
+    await waitForApproval('retry', { streamId: 'abort-at-resolution' });
+    decideRetry({ accepted: true });
+    await vi.waitFor(() => expect(prepareRetry).toHaveBeenCalledOnce());
+
+    // Registered after the abort-aware wrapper, so the interrupt lands once
+    // that wrapper has resolved and dropped its abort listener, and before the
+    // retry's own continuation runs: no await is left to observe the abort.
+    void preparation.promise.then(() => {
+      clearApprovals();
+    });
+    preparation.resolve();
+
+    await expect(result).resolves.toEqual({ action: 'cancel' });
+  });
+
+  it('shows the retry modal when pre-modal preparation fails', async () => {
+    mocks.retryCopyFailure = new Error('retry copy unavailable');
+
+    const { cliContext, interactions, prepareRetry } = tui();
+    const result = interactions.requestRetry?.(
+      relayRetry({ streamId: 'preparation-failure', provider: 'openai' }),
+    );
+
+    await waitForApproval('retry', { streamId: 'preparation-failure' });
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
+    decideRetry({ accepted: true });
+
+    await expect(result).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(prepareRetry).toHaveBeenCalledWith('configured', expect.anything());
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
+  });
+
+  it('cancels a retry parked behind another commit without waiting for it', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(true);
+    const blockingWrite = pDefer<undefined>();
+    mocks.setCliApiMode.mockImplementationOnce(async (mode) => {
+      mocks.apiMode = mode;
+      await blockingWrite.promise;
+    });
+    const queuedPreparation = pDefer<void>();
+    const queuedPrepare = vi.fn(() => queuedPreparation.promise);
+
+    const { interactions } = tui();
+    const blocking = interactions.requestRetry?.(
+      relayRetry({ streamId: 'blocking-commit', provider: 'openai' }),
+    );
+    await vi.waitFor(() => expect(mocks.setCliApiMode).toHaveBeenCalledOnce());
+
+    const queued = interactions.requestRetry?.(
+      relayRetry({ streamId: 'queued-commit', provider: 'openai' }),
+      { prepareRetry: queuedPrepare },
+    );
+    await vi.waitFor(() => expect(queuedPrepare).toHaveBeenCalledOnce());
+    queuedPreparation.resolve();
+    // One tick for the abort-aware wrapper around the preparation, one for the
+    // retry's continuation, which parks the commit behind the blocked one.
+    await queuedPreparation.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    interactions.cancel({
+      streamId: 'queued-commit',
+      kind: 'retry',
+      cause: 'Cancelled in test.',
+    });
+    await expect(queued).resolves.toEqual({ action: 'cancel' });
+    expect(mocks.setCliApiMode).toHaveBeenCalledOnce();
+
+    blockingWrite.resolve(undefined);
+    await expect(blocking).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+    expect(mocks.setCliApiMode).toHaveBeenCalledOnce();
   });
 
   it('serializes a newer switch behind stale-switch rollback', async () => {

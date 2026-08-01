@@ -45,6 +45,17 @@ export interface ExecutionInterruptHandler {
   readonly ownsBackgroundProcess?: boolean;
 }
 
+/**
+ * A run parked at WAITING, and whether a stop has already claimed its teardown.
+ *
+ * Presence is the authoritative suspension fact: only the WAITING branch of
+ * `runFlowWithLifecycle` parks a handle, so no reader has to cross-check the
+ * stream phase to learn whether a run is really suspended.
+ */
+type RunSuspension =
+  | { readonly state: 'parked'; readonly teardown: () => void | Promise<void> }
+  | { readonly state: 'terminating'; readonly completion: Promise<void> };
+
 export interface LiveToolUseFlowContext {
   readonly ownerSession?: SessionHandle;
   readonly session: {
@@ -79,9 +90,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private toolUseFlowContext?: LiveToolUseFlowContext;
   private acceptsPendingInterrupt = false;
   private pendingInterrupt = false;
-  private waitingCleanups?: Set<() => void | Promise<void>>;
-  private waitingCleanupCompletion: Promise<void> = Promise.resolve();
-  private _waitingTerminationStarted = false;
+  private suspension?: RunSuspension;
   private _executionLeaseLost = false;
   private executionLeaseScope?: OwnedExecutionLeaseScope;
 
@@ -131,9 +140,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
    * Returns true for exactly one caller — the flag flips synchronously in the
    * same tick as the check, so two `finalizeRunTerminal` calls racing across
    * await points (e.g. a lifecycle arm vs a concurrent finalize of the same
-   * handle) cannot both win. Also refuses when a terminal result already
-   * settled outside the finalizer (`terminateWaitingHandle` settles directly),
-   * so a late finalize cannot publish a second, contradictory result.
+   * handle) cannot both win. A stop of a suspended run claims through the same
+   * gate ({@link beginSuspendedTermination}), so the run lifecycle and the
+   * registry cannot both publish a terminal outcome for one run.
    */
   claimTerminalFinalize(): boolean {
     if (this._finalizeClaimed || this._settled) return false;
@@ -270,56 +279,44 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   /**
-   * Register a teardown callback for when this handle is torn down while
-   * suspended at WAITING — the live tool-use session and interrupt
-   * context is already gone by then (`runToolUseFlow`'s `finally` detaches
-   * it unconditionally on return, while the handle itself stays tracked so a
-   * later resume can find it). `ExecutionRegistry.terminate()`
-   * runs these instead of the (now absent) live interrupt when a stop/kill
-   * targets a suspended subagent that has no loop-level interrupt handler
-   * covering the gap (see `childRunLoop.ts`'s own whole-lifetime
-   * handler, which is the primary path for a loop-driven child).
+   * Park this handle at WAITING, carrying the teardown a stop must run.
+   *
+   * The live tool-use session and interrupt context are already gone by the
+   * time a run suspends (`runToolUseFlow`'s `finally` detaches them on return)
+   * while the handle stays tracked so a later resume can find it, so
+   * `ExecutionRegistry.terminate()` reaches a suspended run through
+   * {@link beginSuspendedTermination} instead of a live interrupt (#7287).
    */
-  registerWaitingCleanup(cleanup: () => void | Promise<void>): void {
-    (this.waitingCleanups ??= new Set()).add(cleanup);
+  suspend(teardown: () => void | Promise<void>): void {
+    this.suspension = { state: 'parked', teardown };
+  }
+
+  /** True once a stop claimed this suspended run and its teardown began. */
+  get suspendedTerminationStarted(): boolean {
+    return this.suspension?.state === 'terminating';
   }
 
   /**
-   * Drop every registered waiting-cleanup without running it. The run
-   * lifecycle calls this on every non-WAITING terminal path: a flow that
-   * continues past the wait (queued follow-up, root mode only) or errors out
-   * must not leave a stale cleanup that `ExecutionRegistry.terminate()` could
-   * mistake for a suspended handle during normal teardown.
+   * Claim the terminal outcome of a run parked at WAITING and start its
+   * teardown, returning the teardown's completion. Returns undefined when this
+   * handle never parked, when a stop already claimed it, or when a
+   * `finalizeRunTerminal` already claimed the run's terminal outcome. The whole
+   * transition is synchronous, so a stop and a concurrent finalize of the same
+   * handle cannot both proceed.
    */
-  clearWaitingCleanup(): void {
-    this.waitingCleanups = undefined;
-  }
-
-  /**
-   * Run and clear every registered waiting-cleanup callback.
-   * Returns whether any callback was registered (and thus ran).
-   */
-  runWaitingCleanup(): boolean {
-    const cleanups = this.waitingCleanups;
-    if (!cleanups || cleanups.size === 0) return false;
-    this._waitingTerminationStarted = true;
-    this.waitingCleanups = undefined;
-    this.waitingCleanupCompletion = Promise.all(
-      [...cleanups].map(async (cleanup) => cleanup()),
-    ).then(() => undefined);
+  beginSuspendedTermination(): Promise<void> | undefined {
+    if (this.suspension?.state !== 'parked') return undefined;
+    if (!this.claimTerminalFinalize()) return undefined;
+    const { teardown } = this.suspension;
+    const completion = (async (): Promise<void> => {
+      await teardown();
+    })();
     // The registry normally awaits this before terminal persistence. Retain a
     // rejection handler for the lease-loss branch, which intentionally skips
     // durable finalization but must not create an unhandled rejection.
-    void this.waitingCleanupCompletion.catch(() => undefined);
-    return true;
-  }
-
-  get waitingTerminationStarted(): boolean {
-    return this._waitingTerminationStarted;
-  }
-
-  waitForWaitingCleanup(): Promise<void> {
-    return this.waitingCleanupCompletion;
+    void completion.catch(() => undefined);
+    this.suspension = { state: 'terminating', completion };
+    return completion;
   }
 }
 
@@ -334,7 +331,6 @@ export type AgentRunHandle = Pick<
   | 'trace'
   | 'result'
   | 'deliveryTargetStreamId'
-  | 'registerWaitingCleanup'
   | 'interrupt'
 >;
 

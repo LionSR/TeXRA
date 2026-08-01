@@ -1,6 +1,5 @@
 import {
   finalizeExecution as defaultFinalizeExecution,
-  synchronizeAgentResultOutcome as defaultSynchronizeResultOutcome,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
 } from '@agent/storage/executionLifecycle';
@@ -49,11 +48,6 @@ export interface RestartRepairOptions {
   finalizeExecution?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
-  /** Align the latest persisted envelope after terminal metadata is durable. */
-  synchronizeResultOutcome?: (
-    executionId: ExecutionId,
-    outcome: RunOutcome,
-  ) => Promise<void>;
   /** Serialize liveness validation and repair mutations with acquisition. */
   runWithInactiveExecutionLease?: <T>(
     executionId: ExecutionId,
@@ -242,10 +236,6 @@ async function writeFailedTerminalStatuses(
   finalizeExecution: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>,
-  synchronizeResultOutcome: (
-    executionId: ExecutionId,
-    outcome: RunOutcome,
-  ) => Promise<void>,
   logger: RestartRepairLogger | undefined,
 ): Promise<ExecutionId[]> {
   const status = projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus;
@@ -264,10 +254,6 @@ async function writeFailedTerminalStatuses(
   );
 
   const updated: ExecutionId[] = [];
-  const synchronizationWrites: Array<{
-    streamId: StreamTabId;
-    executionId: ExecutionId;
-  }> = [];
   for (const [index, result] of results.entries()) {
     const { streamId, executionId } = writes[index];
     if (result.status === 'fulfilled') {
@@ -285,7 +271,6 @@ async function writeFailedTerminalStatuses(
       }
       if (finalization.terminalStatusPersisted) {
         updated.push(executionId);
-        synchronizationWrites.push({ streamId, executionId });
       }
       continue;
     }
@@ -294,18 +279,6 @@ async function writeFailedTerminalStatuses(
     });
   }
 
-  const synchronizationResults = await Promise.allSettled(
-    synchronizationWrites.map(({ executionId }) =>
-      synchronizeResultOutcome(executionId, RUN_OUTCOME.FAILED),
-    ),
-  );
-  for (const [index, result] of synchronizationResults.entries()) {
-    if (result.status === 'fulfilled') continue;
-    const { streamId, executionId } = synchronizationWrites[index];
-    logger?.warn('Failed to align restart-repair result outcome', {
-      data: { streamId, executionId, error: result.reason },
-    });
-  }
   return updated;
 }
 
@@ -505,7 +478,6 @@ async function repairRestartedStream(
       ? new Map<StreamTabId, ExecutionId>([[streamId, executionId]])
       : options.executionIds,
     options.finalizeExecution ?? defaultFinalizeExecution,
-    options.synchronizeResultOutcome ?? defaultSynchronizeResultOutcome,
     options.logger,
   );
   return {
