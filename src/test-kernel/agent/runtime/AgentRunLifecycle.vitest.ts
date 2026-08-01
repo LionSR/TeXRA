@@ -51,7 +51,7 @@ import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
+} from '@test/support/streamStatusTestUtils';
 import { StorageFS } from '@utils/files';
 
 // Local file imports

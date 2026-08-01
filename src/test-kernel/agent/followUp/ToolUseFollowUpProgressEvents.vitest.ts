@@ -20,7 +20,7 @@ import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import {
   clearAllStreamStatusesForTest,
   seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
+} from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
