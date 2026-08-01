@@ -9,6 +9,7 @@
  */
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
+import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
   formatConversationMessage,
   stringifyConversationValue,
@@ -26,6 +27,7 @@ import {
   type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
+import { ToolResultSchema } from '@shared/schemas/toolResult';
 import { assertNever, generateShortId, isObject } from '@utils/core';
 
 import {
@@ -104,19 +106,24 @@ export interface CompletedRunConversationReadResult {
 
 /**
  * Deliberate non-goal (#7508): image blocks inside a tool result are not
- * reconstructed here. `ToolUseLog.output` only ever carries display text —
- * a local `ToolResult.output` is a plain string, and any image content a
- * tool_result block sends to the provider is built at message-construction
- * time from `ToolResult.files` (base64 attachment bytes), which never
- * reaches the transcript row. Unlike the web-fetch page-content case,
- * there's no existing size-capped/marker-only slot for this in the export
- * pipeline (`ExportNode`'s `tool-result` kind is `{text}` only), and
- * reconstructing one would mean threading attachment bytes through
- * `tool.end` just to summarize them — out of scope here.
+ * reconstructed here. `ToolUseLog.output` carries either historical display
+ * text or the attachment-stripped `ToolResult` fields; attachment bytes never
+ * reach the transcript row. Unlike the web-fetch page-content case, there's
+ * no existing size-capped/marker-only slot for this in the export pipeline
+ * (`ExportNode`'s `tool-result` kind is `{text}` only), and reconstructing one
+ * would mean threading attachment bytes through `tool.end` just to summarize
+ * them — out of scope here.
  */
 function toolResultText(tool: ToolUseLog): string | undefined {
   if (tool.error !== undefined) return tool.error;
   if (typeof tool.output === 'string') return tool.output;
+  if (isObject(tool.output)) {
+    const result = ToolResultSchema.safeParse({
+      ...tool.output,
+      status: tool.isError ? 'error' : 'executed',
+    });
+    if (result.success) return formatToolResultAsText(result.data);
+  }
   if (tool.output !== undefined) return stringifyConversationValue(tool.output);
   return tool.summary;
 }

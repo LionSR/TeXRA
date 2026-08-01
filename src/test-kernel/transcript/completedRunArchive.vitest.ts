@@ -361,6 +361,73 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('reconstructs structured successful and failed tool results as model-facing text', async () => {
+    const executionId = '0ee5550ee555' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(streamId);
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.TOOL_USE, {
+        data: {
+          toolName: 'write_file',
+          input: { path: 'proof.tex' },
+          output: { output: 'File written.' },
+          status: 'completed',
+        },
+      }),
+    );
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.TOOL_USE, {
+        data: {
+          toolName: 'read_file',
+          input: { path: 'missing.tex' },
+          output: { error: 'File not found.' },
+          isError: true,
+          status: 'failed',
+        },
+      }),
+    );
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result.conversation).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            name: 'write_file',
+            input: { path: 'proof.tex' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: 'File written.' }],
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            name: 'read_file',
+            input: { path: 'missing.tex' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: 'File not found.' }],
+      },
+    ]);
+  });
+
   it('never lets an empty-but-present legacy file beat a full sidecar (non-empty rule)', async () => {
     const executionId = 'fff666fff666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
