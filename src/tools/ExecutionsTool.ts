@@ -84,10 +84,7 @@ import {
   formatPaginationHint,
   ViewRangeSchema,
 } from './formatting';
-import {
-  applyViewRange,
-  formatConversation,
-} from './executions/conversationFormat';
+import { formatConversation } from './executions/conversationFormat';
 import { listRunDirectoryFiles } from './executions/runDirectoryFiles';
 import { serializeFilteredConfig } from './executions/configFieldFilter';
 import {
