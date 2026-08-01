@@ -706,7 +706,9 @@ describe('runFlowWithLifecycle', () => {
         return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      // The caller receives the same verdict persistence carries: the stop
+      // won on the stream, so the flow's COMPLETED report is relabeled.
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           terminalStatus: EXECUTION_STATUS.INTERRUPTED,

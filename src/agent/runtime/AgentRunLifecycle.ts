@@ -543,14 +543,17 @@ export async function runFlowWithLifecycle(
     // Persist the terminal fact before any supplementary UX state. In
     // particular, a completed tool-use flow must not remain resumable while an
     // onboarding write is pending.
-    await finalizeTerminal({ outcome: result.outcome });
+    const finalized = await finalizeTerminal({ outcome: result.outcome });
+    // The phase decides the verdict here exactly as in the catch arm: a stop
+    // that won on the stream must not let the caller observe COMPLETED.
+    const resolvedOutcome = finalized?.event.outcome ?? result.outcome;
 
     // Onboarding funnel (PRD: agent-native onboarding): State 1 ends when any
     // real run completes. The setup conversation itself doesn't count, but the
     // demo it delegates does (subagent runs land here too). Best-effort: a
     // state write failure must never affect the run.
     if (
-      result.outcome === RUN_OUTCOME.COMPLETED &&
+      resolvedOutcome === RUN_OUTCOME.COMPLETED &&
       baseAgentName(agentIdentifier) !== SETUP_AGENT_NAME
     ) {
       try {
@@ -563,8 +566,8 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    logger.debug(`Task completed with outcome: ${result.outcome}`);
-    return result;
+    logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
+    return withResolvedOutcome(result, resolvedOutcome);
   } catch (err) {
     const kind = classifyAgentError(err);
     const outcome = AGENT_ERROR_OUTCOME[kind];
