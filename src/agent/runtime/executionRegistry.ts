@@ -840,9 +840,10 @@ export class ExecutionRegistry {
                 await this.releaseRootExecutionLease(handle.executionId);
               }
             });
-            logger.warn('Waiting-execution termination failed unexpectedly', {
-              data: { executionId: handle.executionId, recoveryFailures },
-            });
+            logger.warn(
+              'Waiting-execution termination failed; recovered under the execution lease',
+              { data: { executionId: handle.executionId, recoveryFailures } },
+            );
             return;
           } catch (recoveryError) {
             recoveryFailures.push(recoveryError);
@@ -864,9 +865,10 @@ export class ExecutionRegistry {
         } catch (recoveryError) {
           recoveryFailures.push(recoveryError);
         }
-        logger.warn('Waiting-execution termination failed unexpectedly', {
-          data: { executionId: handle.executionId, recoveryFailures },
-        });
+        logger.warn(
+          'Waiting-execution termination failed; settled the run without durable finalization',
+          { data: { executionId: handle.executionId, recoveryFailures } },
+        );
       },
     );
     return true;

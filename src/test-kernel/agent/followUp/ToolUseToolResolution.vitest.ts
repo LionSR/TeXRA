@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';

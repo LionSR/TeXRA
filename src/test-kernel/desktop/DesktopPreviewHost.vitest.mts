@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createModuleMocks } from '@test/support/moduleMocks';
 import {
   cleanupTempDirs,
   makeTempDir as makeSharedTempDir,
@@ -11,18 +12,20 @@ import { createExternalLocation } from '@utils/files';
 
 import { loadSourceModule } from './loadSourceModule.mjs';
 
+const mocks = createModuleMocks();
+
 async function loadDesktopPreviewHost(
   compileLatex2Pdf = vi.fn(async () => ({ ok: true })),
   access?: (filePath: string) => Promise<void>,
   checkToolInstalled = vi.fn(async () => true),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
   vi.resetModules();
-  vi.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
-  vi.doMock('@latex/latexToolchain', () => ({
+  mocks.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
+  mocks.doMock('@latex/latexToolchain', () => ({
     hasLatexCompiler: checkToolInstalled,
   }));
   if (access != null) {
-    vi.doMock('node:fs/promises', async (importOriginal) => ({
+    mocks.doMock('node:fs/promises', async (importOriginal) => ({
       ...(await importOriginal<typeof import('node:fs/promises')>()),
       access,
     }));
@@ -41,9 +44,6 @@ describe('desktop preview host', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
-    vi.doUnmock('@latex/texTools');
-    vi.doUnmock('@latex/latexToolchain');
-    vi.doUnmock('node:fs/promises');
     vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
   });

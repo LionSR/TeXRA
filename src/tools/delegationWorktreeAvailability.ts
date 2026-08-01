@@ -14,7 +14,7 @@
  * appended to it.
  */
 
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 

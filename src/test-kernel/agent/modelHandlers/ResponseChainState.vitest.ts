@@ -39,29 +39,19 @@ describe('ResponseChainState', () => {
     expect(state.getCumulativeInputTokens()).toBe(500);
   });
 
-  it('setPreviousResponseId is a raw setter that does not touch other bookkeeping', () => {
+  it('resetChainForNewSession drops the anchor and every bookkeeping field', () => {
     const state = new ResponseChainState();
     state.recordChained('resp-1', 3);
     state.setCumulativeInputTokens(500);
-
-    state.setPreviousResponseId(null);
-
-    expect(state.getPreviousResponseId()).toBeNull();
-    // Unlike invalidateChain(), the raw setter leaves sentMessages untouched.
-    expect(state.getSentMessagesCount()).toBe(3);
-    expect(state.getCumulativeInputTokens()).toBe(500);
-  });
-
-  it('resetConversationState zeroes bookkeeping without touching the anchor', () => {
-    const state = new ResponseChainState();
-    state.recordChained('resp-1', 3);
-    state.setCumulativeInputTokens(500);
+    state.markCompactionApplied();
     state.markOpenRouterSkipLogged();
 
-    state.resetConversationState();
+    state.resetChainForNewSession();
 
-    expect(state.getPreviousResponseId()).toBe('resp-1');
+    expect(state.getPreviousResponseId()).toBeNull();
+    expect(state.hasPreviousResponseId()).toBe(false);
     expect(state.getSentMessagesCount()).toBe(0);
+    // Unlike invalidateChain(), a new session also drops the token history.
     expect(state.getCumulativeInputTokens()).toBe(0);
     expect(state.getIsCompacted()).toBe(false);
     expect(state.hasLoggedOpenRouterSkip()).toBe(false);

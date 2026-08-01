@@ -287,6 +287,38 @@ describe('runtime model registry', () => {
     expect(getRuntimeModelConfig('copilot:sonnet46')).toBeUndefined();
   });
 
+  it('discards a discovery that an invalidation superseded mid-flight', async () => {
+    let releaseDiscovery: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    const deferred = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseDiscovery = resolve;
+    });
+    await installPlatform(
+      {},
+      {
+        languageModel: {
+          ...languageModelPort([]),
+          selectModels: () => deferred,
+        },
+      },
+    );
+
+    const inFlight = refreshRuntimeModelRegistry();
+    invalidateRuntimeModelRegistry();
+    releaseDiscovery([SONNET]);
+    await inFlight;
+
+    // The superseded result must not land, and the registry must still be
+    // stale enough that the next refresh re-probes the (new) port.
+    expect(availableRuntimeModelIds()).toEqual([]);
+
+    const port = await installModels(GPT_56);
+    await refreshRuntimeModelRegistry();
+
+    expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
+    expect(availableRuntimeModelIds()).toEqual(['copilot:gpt56']);
+  });
+
   it('does not make static models depend on native discovery', async () => {
     await installPlatform({}, { languageModel: failingDiscoveryPort() });
 

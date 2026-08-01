@@ -33,7 +33,7 @@ function buildServices(
     toolRegistry: {} as never,
     userVarChannels: { input: {}, transient: {} },
     checkInterruption: () => false,
-    setAbortController: () => {},
+    abortSignal: new AbortController().signal,
     ...overrides,
   } as ToolUseServices<unknown>;
 }

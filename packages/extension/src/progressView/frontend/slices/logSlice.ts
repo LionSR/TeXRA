@@ -15,10 +15,6 @@ import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjectio
 import { appState } from '../progressState';
 import { ensureStreamState, type StreamLogs, type StreamState } from '../store';
 
-/** Built once: `applyEntry` runs per delta entry in the streaming path. */
-const OptionalContextStateData =
-  ContextStateDataSchema.optional().catch(undefined);
-
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
   return {
     id: entry.id,
@@ -57,10 +53,17 @@ function applyEntry(
   );
 
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
-    const contextState = OptionalContextStateData.parse(entry.data);
-    if (contextState) {
-      streamState.contextState = contextState;
+    const contextState = ContextStateDataSchema.safeParse(entry.data);
+    if (contextState.success) {
+      streamState.contextState = contextState.data;
       stateChanged = true;
+    } else {
+      // The context gauge silently freezing at its last value is the visible
+      // symptom of a producer/schema mismatch, so say so.
+      console.warn(
+        '[logSlice] Dropped malformed context-state entry',
+        contextState.error,
+      );
     }
   }
 

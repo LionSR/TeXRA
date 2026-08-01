@@ -1017,24 +1017,34 @@ interface SplitPanelElement extends HTMLElement {
   readonly positionInPixels: number;
 }
 
+/**
+ * Record a size the user just dragged a split handle to. Deliberately not
+ * `updateShell`: the panel has already moved itself and the surface
+ * ResizeObserver relays the new bounds, so re-rendering here would only fight
+ * the drag. The value is kept so the next render starts from it.
+ */
+function recordLayoutMeasurement(next: DesktopTaskShellState): void {
+  shellState = next;
+}
+
 function rememberSidebarWidth(event: Event): void {
   const width = (event.currentTarget as SplitPanelElement).positionInPixels;
-  shellState = setSidebarWidth(shellState, width);
+  recordLayoutMeasurement(setSidebarWidth(shellState, width));
 }
 
 function rememberProjectSectionPosition(event: Event): void {
   const position = (event.currentTarget as SplitPanelElement).position;
-  shellState = setProjectSectionPosition(shellState, position);
+  recordLayoutMeasurement(setProjectSectionPosition(shellState, position));
 }
 
 function rememberBottomPanelHeight(event: Event): void {
   const height = (event.currentTarget as SplitPanelElement).positionInPixels;
-  shellState = setBottomPanelHeight(shellState, height);
+  recordLayoutMeasurement(setBottomPanelHeight(shellState, height));
 }
 
 function rememberWorkbenchWidth(event: Event): void {
   const width = (event.currentTarget as SplitPanelElement).positionInPixels;
-  shellState = setWorkbenchWidth(shellState, width);
+  recordLayoutMeasurement(setWorkbenchWidth(shellState, width));
 }
 
 function taskRightLayoutTemplate(

@@ -1,17 +1,18 @@
 import type { ApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import {
-  type ActiveStreamId,
+import type {
+  ActiveStreamId,
   ProgressViewState,
-  type StreamBadgeSnapshot,
+  StreamBadgeSnapshot,
 } from '@controllers/progressView/backend/state/ProgressViewState';
 import {
   buildStreamInfo,
   buildStreamInfos,
+  type StreamInfoListSource,
+  type StreamInfoSource,
 } from '@controllers/progressView/backend/streamInfoUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
-  AgentCategoryFilter,
   CompileFailure,
   ConversationProgress,
   InquiryThreadUpdatedEvent,
@@ -34,6 +35,15 @@ import type {
 } from '@shared/schemas';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { GoalStatus } from '@shared/schemas/goal';
+
+/** The state one stream's wire metadata is projected from. */
+type StreamMetadataSource = StreamInfoSource &
+  Pick<ProgressViewState, 'getStreamState' | 'streamLogs'>;
+
+/** The state a full stream-tabs refresh is projected from. */
+type StreamListMetadataSource = StreamMetadataSource &
+  StreamInfoListSource &
+  Pick<ProgressViewState, 'rotateActiveStream'>;
 
 /**
  * Manages webview updates for the progress view.
@@ -71,7 +81,6 @@ export class WebviewUpdater {
   updateStreams(
     streams: StreamTabInfo[],
     activeStream: ActiveStreamId,
-    agentFilter: AgentCategoryFilter,
     streamStates?: Record<StreamTabId, StreamMetadata>,
   ): void {
     const unsupportedCommands = this.getUnsupportedCommands?.();
@@ -82,23 +91,17 @@ export class WebviewUpdater {
       unsupportedCommands: unsupportedCommands
         ? [...unsupportedCommands]
         : undefined,
-      agentFilter,
       streamStates,
     });
   }
 
   updateStreamMetadata(
-    state: ProgressViewState,
+    state: StreamMetadataSource,
     streamId: StreamTabId,
     streamStates?: Map<StreamTabId, StreamPhaseState>,
-    options?: {
-      activeStream?: ActiveStreamId;
-      agentFilter?: AgentCategoryFilter;
-    },
+    options?: { activeStream?: ActiveStreamId },
   ): void {
-    const streamInfo = buildStreamInfo(state, streamId, 'all');
-    if (!streamInfo) return;
-
+    const streamInfo = buildStreamInfo(state, streamId);
     const streamState = this.buildStreamMetadataForStream(
       state,
       streamInfo,
@@ -110,7 +113,6 @@ export class WebviewUpdater {
       streamInfo,
       streamState,
       activeStream: options?.activeStream,
-      agentFilter: options?.agentFilter,
     });
   }
 
@@ -355,34 +357,24 @@ export class WebviewUpdater {
    * Note: This method computes valid active stream via ProgressViewState
    * (single source of truth) and explicitly persists if changed.
    *
-   * Use this for structural updates (initial sync, filter changes, stream add/remove).
+   * Use this for structural updates (initial sync, stream add/remove).
    * For incremental updates, prefer targeted messages like:
    * setActiveStream(), updateConversationProgress(), updateStreamBadges(),
    * updateParentStream(), updateStreamStatus().
    */
   sendStreamMetadata(
-    state: ProgressViewState,
+    state: StreamListMetadataSource,
     streamStates?: Map<StreamTabId, StreamPhaseState>,
     theme?: 'dark' | 'light',
   ): ActiveStreamId {
-    // Send every stream so streamById stays comprehensive for consumers like
-    // BackgroundTasksPanel that need to render cross-filter subagent children
-    // (e.g., tool-use subagents of a workflow orchestrator under a workflow
-    // filter). The frontend still applies `state.agentCategoryFilter` at the
-    // sidebar display layer via `tabStreams$`.
     const streams = buildStreamInfos(state);
 
-    // Active-stream validation still respects the filter so a filter change
-    // auto-rotates to a matching tab instead of leaving a hidden tab selected.
-    const filter = state.agentCategoryFilter;
-    const selectableNames = streams
-      .filter((info) => filter === 'all' || info.agentCategory === filter)
-      .map((info) => info.name);
     // The previously-active stream may have finished while visible —
-    // setStreamStatus skipped release for the active tab, and the
-    // filter-driven switch path doesn't go through setActiveStream, so the
-    // rotation below is what releases the completed log.
-    const activeStream = state.rotateActiveStream(selectableNames);
+    // setStreamStatus skipped release for the active tab, so the rotation
+    // below is what releases the completed log.
+    const activeStream = state.rotateActiveStream(
+      streams.map((info) => info.name),
+    );
 
     if (!this.isAvailable()) {
       return activeStream;
@@ -402,12 +394,7 @@ export class WebviewUpdater {
       );
     }
 
-    this.updateStreams(
-      streams,
-      activeStream,
-      state.agentCategoryFilter,
-      streamMetadata,
-    );
+    this.updateStreams(streams, activeStream, streamMetadata);
 
     return activeStream;
   }
@@ -417,7 +404,7 @@ export class WebviewUpdater {
   }
 
   private buildStreamMetadataForStream(
-    state: ProgressViewState,
+    state: StreamMetadataSource,
     streamInfo: StreamTabInfo,
     streamStates?: Map<StreamTabId, StreamPhaseState>,
   ): StreamMetadata {

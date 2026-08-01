@@ -68,4 +68,69 @@ describe('AgentReviewRunController', () => {
     expect(first.stopAgentStream).not.toHaveBeenCalled();
     expect(second.stopAgentStream).toHaveBeenCalledOnce();
   });
+
+  it('carries the collection only while the run is current', () => {
+    const controller = new AgentReviewRunController();
+    const { session } = createRunHarness();
+    const run = controller.start(session);
+    const collection = {
+      repoRoot: '/repo',
+      baseDescription: 'main branch',
+      changedFiles: ['src/a.ts'],
+    };
+
+    expect(controller.collection).toBeUndefined();
+    controller.collect(run, collection);
+    expect(controller.isCurrent(run)).toBe(true);
+    expect(controller.collection).toBe(collection);
+
+    expect(controller.finish(run)).toBe(true);
+    expect(controller.isCurrent(run)).toBe(false);
+    expect(controller.collection).toBeUndefined();
+  });
+
+  it('discards a running review without releasing the slot', () => {
+    const controller = new AgentReviewRunController();
+    const { bind, session, stopAgentStream } = createRunHarness();
+    const run = controller.start(session);
+    bind(controller, run, 'review-a');
+    controller.collect(run, {
+      repoRoot: '/repo',
+      baseDescription: 'main branch',
+      changedFiles: ['src/a.ts'],
+    });
+
+    controller.discard();
+
+    expect(stopAgentStream).toHaveBeenCalledOnce();
+    // The execution settles on its own schedule, so the slot stays claimed
+    // while its results and any further reports are dropped.
+    expect(controller.isActive).toBe(true);
+    expect(controller.isCurrent(run)).toBe(false);
+    expect(controller.collection).toBeUndefined();
+
+    controller.collect(run, {
+      repoRoot: '/repo',
+      baseDescription: 'main branch',
+      changedFiles: ['src/b.ts'],
+    });
+    expect(controller.collection).toBeUndefined();
+
+    expect(controller.finish(run)).toBe(true);
+    expect(controller.isActive).toBe(false);
+  });
+
+  it('leaves a later run current after an earlier one was discarded', () => {
+    const controller = new AgentReviewRunController();
+    const first = createRunHarness();
+    const runA = controller.start(first.session);
+    first.bind(controller, runA, 'review-a');
+    controller.discard();
+    expect(controller.finish(runA)).toBe(true);
+
+    const second = createRunHarness();
+    const runB = controller.start(second.session);
+    expect(controller.isCurrent(runB)).toBe(true);
+    expect(controller.isCurrent(runA)).toBe(false);
+  });
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ToolDefinitionSchema } from '@model';
+import { ToolDefinitionSchema } from '@model/ToolDefinition';
 import {
   AgentCategory,
   AgentCategorySchema,

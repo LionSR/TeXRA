@@ -814,11 +814,14 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Flag to force compaction on the next API call, set by {@link requestCompaction}.
-   * Read by the per-provider compaction paths and cleared once compaction is
-   * attempted. Inert for handlers that don't run compaction.
+   * Whether compaction is forced on the next API call. Private so that every
+   * set and clear carries an ownership token: a handler-internal compaction
+   * request (pre-flight threshold, overflow recovery) must mint a FRESH token
+   * via {@link requestCompaction}, otherwise the flow's
+   * {@link clearCompactionRequest} for an older request would cancel it.
+   * Inert for handlers that don't run compaction.
    */
-  protected compactionRequested = false;
+  private compactionRequested = false;
   private compactionRequestId = 0;
 
   /**
@@ -859,6 +862,24 @@ export abstract class ModelHandler<
   /** Snapshot the ownership token for the currently pending request. */
   protected getPendingCompactionRequestId(): number | undefined {
     return this.compactionRequested ? this.compactionRequestId : undefined;
+  }
+
+  /** Whether a compaction request is pending, without consuming it. */
+  protected isCompactionRequested(): boolean {
+    return this.compactionRequested;
+  }
+
+  /**
+   * Consume a pending compaction request: reports whether one was pending and
+   * clears it. The token is deliberately not advanced — a later
+   * {@link clearCompactionRequest} for the consumed request is already a no-op
+   * on the cleared flag, while a new request minted meanwhile carries a newer
+   * token that the stale clear cannot match.
+   */
+  protected consumeCompactionRequest(): boolean {
+    const requested = this.compactionRequested;
+    this.compactionRequested = false;
+    return requested;
   }
 
   /** Clear a pending compaction request only while the caller still owns it. */
@@ -1306,7 +1327,7 @@ export abstract class ModelHandler<
    */
   protected shouldCompactByInputTokens(inputTokens: number): boolean {
     if (!this.isToolUseMode()) return false;
-    if (this.compactionRequested) return true;
+    if (this.isCompactionRequested()) return true;
 
     const thresholdPercent = this.getCompactionThresholdPercent();
     if (thresholdPercent <= 0) return false;
@@ -1341,8 +1362,7 @@ export abstract class ModelHandler<
       return { compactedMessages: messages, didCompact: false };
     }
 
-    const manuallyRequested = this.compactionRequested;
-    this.compactionRequested = false;
+    const manuallyRequested = this.consumeCompactionRequest();
 
     const thresholdPercent = this.getCompactionThresholdPercent();
     const contextWindow = this.getEffectiveContextWindow();

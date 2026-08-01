@@ -54,6 +54,7 @@ import {
 } from '@test/helpers/streamStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
+import * as subagentResults from '@tools/subagentResults';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
@@ -160,8 +161,7 @@ function roundServices(opts: {
   logger: ToolUseRoundServices<OpenAI>['logger'];
   streamId: StreamTabId;
   toolRegistry: ToolUseRoundServices<OpenAI>['toolRegistry'];
-  checkInterruption?: () => boolean;
-  setAbortController?: (controller: AbortController | null) => void;
+  abortSignal?: AbortSignal;
 }): ToolUseRoundServices<OpenAI> {
   return {
     runScope: testRunScope(opts.streamId),
@@ -184,8 +184,8 @@ function roundServices(opts: {
     client: {} as OpenAI,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,
-    checkInterruption: opts.checkInterruption ?? (() => false),
-    setAbortController: opts.setAbortController ?? (() => {}),
+    abortSignal: opts.abortSignal ?? new AbortController().signal,
+    checkInterruption: () => false,
     onRoundFinalized: () => {},
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
@@ -818,6 +818,56 @@ describe('BashTool', () => {
     defaultSession().followUps.terminalize(parentStreamId);
   });
 
+  it('finalizes the background child when the completion path throws before its normal finalize', async () => {
+    // Nothing else finalizes a background child: before the latch, an
+    // unexpected throw on the completion path left the child stream RUNNING
+    // forever, with its interrupt handler still attached to a dead process.
+    let resolveCommand: ((result: ExecResult) => void) | undefined;
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCommand = resolve;
+        }),
+    );
+    vi.spyOn(subagentResults, 'formatBashDelivery').mockImplementation(() => {
+      throw new Error('delivery formatting blew up');
+    });
+    await installPlatform({
+      workspacePath: '/workspace',
+      config: { 'texra.toolUse.requireBashApproval': false },
+    });
+    const parentStreamId = 'bash-completion-path-throw' as StreamTabId;
+    const recorded = recordSessionEvents(defaultSession().events);
+
+    const launchResult = await launchBackgroundBash(parentStreamId);
+    const launchOutput = String(launchResult.output ?? '');
+    const executionId = /Execution ID: (\S+)/.exec(launchOutput)?.[1];
+    const childStreamId = /Stream tab: (\S+)/.exec(launchOutput)?.[1] as
+      StreamTabId | undefined;
+    assert.ok(executionId, launchOutput);
+    assert.ok(childStreamId, launchOutput);
+
+    resolveCommand?.({
+      success: true,
+      stdout: 'done\n',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    await vi.waitFor(() => {
+      assert.equal(
+        defaultSession().status.get(childStreamId),
+        STREAM_PHASE.FAILED,
+      );
+    });
+    assert.equal(defaultSession().executions.getHandle(executionId), undefined);
+
+    recorded.detach();
+    clearStreamStatusForTest(defaultSession().status, childStreamId);
+    defaultSession().followUps.terminalize(parentStreamId);
+  });
+
   it('persists a killed background command as interrupted, not failed', async () => {
     let resolveCommand: ((result: ExecResult) => void) | undefined;
     vi.spyOn(execUtils, 'executeCommand').mockImplementation(
@@ -917,14 +967,14 @@ describe('BashTool', () => {
   });
 
   it('finalizes deferred progress card when foreground bash is aborted', async () => {
-    let activeController: AbortController | null = null;
+    const runController = new AbortController();
     let receivedSignal: AbortSignal | undefined;
 
     mockStreamingCommand(
       (options) => {
         receivedSignal = options.signal;
         options.onStdout?.('started\n');
-        activeController?.abort();
+        runController.abort();
       },
       {
         success: false,
@@ -949,10 +999,7 @@ describe('BashTool', () => {
       logger: runTrace.trace,
       streamId: 'bash-tool' as StreamTabId,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
-      checkInterruption: () => activeController?.signal.aborted ?? false,
-      setAbortController: (controller) => {
-        activeController = controller;
-      },
+      abortSignal: runController.signal,
     });
 
     const call = {

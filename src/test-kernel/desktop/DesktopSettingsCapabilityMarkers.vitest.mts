@@ -107,7 +107,6 @@ function realToolingController(): DefaultDesktopToolingSettingsController {
       buildItems: async () => [],
       getCachedCheckResults: async () => undefined,
       refreshAvailability: noOp,
-      refreshDisabledCache: noOp,
       planTerminalAction: async () => ({
         kind: 'none',
         reason: 'unknownTool',

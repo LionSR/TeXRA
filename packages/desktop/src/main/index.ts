@@ -93,7 +93,6 @@ import {
   buildDefaultToolDashboardItems,
   getCachedToolCheckResults,
   planDefaultToolTerminalAction,
-  refreshDefaultDisabledToolCache,
   refreshDefaultToolAvailability,
 } from './desktopSettingsIpcHelpers.js';
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -144,7 +143,12 @@ const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const desktopMainDir = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
-let workspaceRelaunchInProgress = false;
+// Both the relaunch payload and the "a relaunch is under way" fact. It stays
+// set from the folder pick until the process is replaced, so `window-all-closed`
+// leaves quitting to the relaunch path instead of racing it; only the user
+// keeping a dirty editor clears it.
+let pendingWorkspaceRelaunch:
+  { selectedPath: string; args: string[] } | undefined;
 let continueQuitAfterWindowClose: (() => void) | undefined;
 
 // Playwright relaunch tests need a deterministic Electron profile so
@@ -507,8 +511,6 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
   );
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
-  let pendingWorkspaceRelaunch:
-    { selectedPath: string; args: string[] } | undefined;
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler
   // observes a dirty Monaco buffer and refuses the unload, so every close path
@@ -528,7 +530,6 @@ function createWindow(options: {
       return;
     }
     pendingWorkspaceRelaunch = undefined;
-    workspaceRelaunchInProgress = false;
     continueQuitAfterWindowClose = undefined;
   });
   const openLogsFolder = async () =>
@@ -545,7 +546,6 @@ function createWindow(options: {
       selectedPath,
       args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
     };
-    workspaceRelaunchInProgress = true;
     // Attempt the close unconditionally: the renderer decides whether there is
     // anything to discard, and the will-prevent-unload handler above clears the
     // pending relaunch when the user keeps editing. The replacement is
@@ -601,11 +601,12 @@ function createWindow(options: {
   };
   let agentExecution: DesktopProgressBridge | undefined;
   let agentExecutionLoad: Promise<DesktopProgressBridge> | undefined;
-  let windowClosed = false;
+  // Aborted once the window is closed: the signal is both the presentation
+  // cancellation token and this window's "gone" fact.
   const presentationAbort = new AbortController();
   const getAgentExecution = async (): Promise<DesktopProgressBridge> => {
     if (agentExecution) return agentExecution;
-    if (windowClosed) {
+    if (presentationAbort.signal.aborted) {
       throw new Error(
         'Cannot load desktop agent execution after window close.',
       );
@@ -617,7 +618,7 @@ function createWindow(options: {
           ...agentExecutionOptions,
           presentationSignal: presentationAbort.signal,
         });
-        if (windowClosed) {
+        if (presentationAbort.signal.aborted) {
           created.dispose();
           throw new Error(
             'Desktop window closed before agent execution finished loading.',
@@ -779,7 +780,6 @@ function createWindow(options: {
         buildItems: buildDefaultToolDashboardItems,
         getCachedCheckResults: getCachedToolCheckResults,
         refreshAvailability: refreshDefaultToolAvailability,
-        refreshDisabledCache: refreshDefaultDisabledToolCache,
         planTerminalAction: planDefaultToolTerminalAction,
       },
       navigation: { openExternal: previewHost.openExternal },
@@ -811,7 +811,7 @@ function createWindow(options: {
         const execution = await getAgentExecution();
         return await execution.revealStream(streamId);
       } catch (error) {
-        if (!windowClosed) reportAsyncError(error);
+        if (!presentationAbort.signal.aborted) reportAsyncError(error);
         return 'unavailable';
       }
     },
@@ -853,7 +853,7 @@ function createWindow(options: {
   );
   const debouncedHistoryRepost = debounce(async () => {
     try {
-      if (windowClosed) return;
+      if (presentationAbort.signal.aborted) return;
       await historySettingsController.postHistoryData();
     } catch (error) {
       reportAsyncError(error);
@@ -1148,11 +1148,11 @@ function createWindow(options: {
     Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),
   );
   window.once('closed', () => {
+    // Read, never cleared: `window-all-closed` fires after this handler and
+    // must still see the relaunch so it defers quitting to the branch below.
     const workspaceRelaunch = pendingWorkspaceRelaunch;
-    pendingWorkspaceRelaunch = undefined;
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
-    windowClosed = true;
     disposeWindowTitle();
     presentationAbort.abort();
     executionsWatcher?.close();
@@ -1187,6 +1187,13 @@ function createWindow(options: {
           );
         } catch (error) {
           reportAsyncError(error);
+        }
+        // Consumed. The synchronous `window-all-closed` in this same turn has
+        // already seen the pending value and deferred quitting; clearing here
+        // stops a later window's closed handler (macOS dock reactivation
+        // during the drain) from scheduling a second relaunch.
+        if (pendingWorkspaceRelaunch === workspaceRelaunch) {
+          pendingWorkspaceRelaunch = undefined;
         }
         // The development supervisor owns Vite and the Electron child. Let it
         // replace the child so the new process keeps a live renderer URL.
@@ -1364,6 +1371,6 @@ if (protocolLifecycle.shouldContinue) {
 }
 
 app.on('window-all-closed', () => {
-  if (workspaceRelaunchInProgress) return;
+  if (pendingWorkspaceRelaunch) return;
   if (process.platform !== 'darwin') app.quit();
 });

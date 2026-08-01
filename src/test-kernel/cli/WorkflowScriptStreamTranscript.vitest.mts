@@ -27,6 +27,7 @@ import {
   resetCliState,
   streams,
   type ConversationEntry,
+  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
@@ -228,10 +229,10 @@ describe('CLI workflow-script child-stream transcript', () => {
         status: 'running',
       },
     });
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
-    }));
+    });
 
     // This exercises both terminal-status finalization entry points:
     // syncStreamLog's settled-prefix promotion and the explicit
@@ -301,8 +302,11 @@ describe('CLI workflow-script child-stream transcript', () => {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       model: 'deepseekT',
-      status: STREAM_PHASE.CANCELLED,
     }));
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
+      status: STREAM_PHASE.CANCELLED,
+    });
     projectStreamTranscript(STREAM_ID, { finalize: true });
 
     expect(streams.get().get(STREAM_ID)?.entries.at(0)).toMatchObject({
@@ -397,10 +401,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       phase: STREAM_PHASE.CANCELLED,
       cause: STREAM_TRANSITION_CAUSE.USER_STOP,
     });
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
       status: STREAM_PHASE.CANCELLED,
-    }));
+    });
     projectStreamTranscript(STREAM_ID, { finalize: true });
 
     liveItems = appendItems(liveItems);
@@ -482,9 +486,12 @@ describe('CLI workflow-script child-stream transcript', () => {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       model: 'deepseekT',
-      status: STREAM_PHASE.CANCELLED,
       entries: syntheticEntry ? [syntheticEntry] : [],
     }));
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
+      status: STREAM_PHASE.CANCELLED,
+    });
     syncStreamLog(STREAM_ID, { forceFull: true });
     const coldItems = appendItems();
 
@@ -950,10 +957,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
 
     // Finalize the stream so the settled prefix promotes into scrollback.
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
       status: STREAM_PHASE.COMPLETED,
-    }));
+    });
     syncStreamLog(STREAM_ID);
 
     const finalized = streams.get().get(STREAM_ID)?.entries ?? [];

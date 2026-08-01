@@ -41,6 +41,9 @@ export function registerDiffRefresh(
 ): void {
   refreshListener?.dispose();
   diffInfo = { left, right, title };
+  // A new diff starts its own throttle window: keeping the previous diff's
+  // timestamp would swallow this diff's first refresh.
+  lastRefresh = 0;
   refreshListener = vscode.window.onDidChangeTextEditorViewColumn(refreshDiff);
   logger.debug(CHANNEL, 'Registered diff refresh listeners');
 }

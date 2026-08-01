@@ -97,18 +97,21 @@ export async function readMeta(
   if (raw === undefined) return undefined;
   const parsed = StreamTabMetaSchema.safeParse(raw);
   if (!parsed.success) return undefined;
-  // Validate the executionId VALUE at this single disk-read entry: a malformed
-  // or legacy id degrades to absent (taskState/description still survive) so
-  // every downstream consumer can trust it without re-validating — and the
-  // strict ExecutionIdSchema in assembleSnapshot can never throw on resume.
+  // Normalize the execution identity at this single disk-read entry so every
+  // downstream consumer reads ONE field and they cannot disagree.
+  // `runDescriptor.executionId` is canonical and wins; the top-level field is
+  // the legacy mirror (written before descriptors existed, and still
+  // dual-written so older builds sharing `~/.texra` keep reading it). A
+  // malformed or legacy value with no descriptor to correct it degrades to
+  // absent (taskState/description still survive), so the strict
+  // ExecutionIdSchema in assembleSnapshot can never throw on resume.
   const meta = parsed.data;
-  if (
-    meta.executionId !== undefined &&
-    !ExecutionIdSchema.safeParse(meta.executionId).success
-  ) {
-    return { ...meta, executionId: undefined };
-  }
-  return meta;
+  const canonical = meta.runDescriptor?.executionId ?? meta.executionId;
+  const executionId =
+    canonical !== undefined && ExecutionIdSchema.safeParse(canonical).success
+      ? canonical
+      : undefined;
+  return executionId === meta.executionId ? meta : { ...meta, executionId };
 }
 
 /**

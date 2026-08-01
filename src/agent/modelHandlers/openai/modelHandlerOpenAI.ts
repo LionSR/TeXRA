@@ -32,7 +32,7 @@ import {
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,

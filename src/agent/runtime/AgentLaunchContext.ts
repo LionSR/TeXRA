@@ -29,6 +29,7 @@ import {
   createModelHandler,
   createModelHandlerForCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
+import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
@@ -46,6 +47,7 @@ import {
 } from '@shared/schemas';
 import { INSTRUCTION_ACTION } from '@shared/schemas';
 import type { AgentSource } from '@shared/schemas/agent';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -342,9 +344,7 @@ async function assembleAgentLaunchContext(
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
-  const displayInstruction = (
-    config.displayInstruction ?? config.instruction
-  )?.trim();
+  const displayInstruction = getDisplayedInstruction(config);
   const initialInstruction =
     displayInstruction && !input.streamTabIdOverride
       ? displayInstruction
@@ -514,6 +514,7 @@ function compensateFailedActivation(args: {
       !streamStatus.transitionToTerminal(
         activatedStreamId,
         STREAM_PHASE.FAILED,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
         runTrace ? { trace: runTrace.trace } : {},
       )
     ) {

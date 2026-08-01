@@ -11,7 +11,7 @@
  */
 
 // Local imports
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 
 /**

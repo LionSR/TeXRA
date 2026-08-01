@@ -21,5 +21,5 @@ export function getProgressStreamLabel(
 ): string | undefined {
   const state = ProgressViewProvider.getInstance()?.state;
   if (!state) return undefined;
-  return buildStreamInfo(state, streamId, 'all')?.label;
+  return buildStreamInfo(state, streamId).label;
 }

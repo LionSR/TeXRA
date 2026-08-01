@@ -156,9 +156,13 @@ describe('StreamStatusMachine', () => {
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
 
-    expect(machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED)).toBe(
-      true,
-    );
+    expect(
+      machine.transitionToTerminal(
+        streamId,
+        STREAM_PHASE.FAILED,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      ),
+    ).toBe(true);
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.FAILED);
     expect(statusPayloads()).toEqual([
@@ -177,14 +181,50 @@ describe('StreamStatusMachine', () => {
     ]);
   });
 
+  it('terminalizes waiting streams with the restart-repair cause', () => {
+    const { machine, statusPayloads, streamId } = setupMachine(
+      'stream-status-waiting-terminal-restart-repair',
+    );
+
+    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
+
+    expect(
+      machine.transitionToTerminal(
+        streamId,
+        STREAM_PHASE.FAILED,
+        STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+      ),
+    ).toBe(true);
+
+    expect(machine.get(streamId)).toBe(STREAM_PHASE.FAILED);
+    expect(statusPayloads()).toEqual([
+      {
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+        previousStatus: STREAM_PHASE.WAITING,
+        cause: 'resume',
+      },
+      {
+        streamId,
+        status: STREAM_PHASE.FAILED,
+        previousStatus: STREAM_PHASE.RUNNING,
+        cause: 'restart-repair',
+      },
+    ]);
+  });
+
   it('terminalizes visible streams that were not started yet', () => {
     const { machine, statusPayloads, streamId } = setupMachine(
       'stream-status-undefined-terminal-repair',
     );
 
-    expect(machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED)).toBe(
-      true,
-    );
+    expect(
+      machine.transitionToTerminal(
+        streamId,
+        STREAM_PHASE.FAILED,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      ),
+    ).toBe(true);
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.FAILED);
     expect(statusPayloads()).toEqual([
@@ -209,9 +249,13 @@ describe('StreamStatusMachine', () => {
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.CANCELLED);
 
-    expect(machine.transitionToTerminal(streamId, STREAM_PHASE.CANCELLED)).toBe(
-      true,
-    );
+    expect(
+      machine.transitionToTerminal(
+        streamId,
+        STREAM_PHASE.CANCELLED,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      ),
+    ).toBe(true);
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
     expect(statusPayloads()).toEqual([]);

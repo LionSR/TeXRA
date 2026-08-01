@@ -15,7 +15,6 @@ import {
   requireOAuthRedirectUrl,
 } from '@auth/authFlowEffects';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   type SupabaseCallbackResult,
   type SupabaseSession,
@@ -171,6 +170,21 @@ function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
   return Date.now() - state.createdAt > AUTH_CALLBACK_TIMEOUT_MS;
 }
 
+/**
+ * One sign-in attempt. Object identity is the ownership token: every step that
+ * can commit or clear auth state re-checks `activeAttempt === attempt`, so a
+ * superseded attempt can neither store its session nor cancel the newer one.
+ */
+interface DesktopAuthAttempt {
+  readonly nonce: string;
+  /** Resolves the `signInAndWaitForSession` waiter attached to this attempt. */
+  settle(success: boolean): void;
+}
+
+function createAuthAttempt(nonce: string): DesktopAuthAttempt {
+  return { nonce, settle: () => {} };
+}
+
 export function createDesktopSupabaseAuth(
   options: DesktopSupabaseAuthOptions,
 ): DesktopSupabaseAuth {
@@ -179,61 +193,41 @@ export function createDesktopSupabaseAuth(
   // Serialized so a second deeplink cannot commit a session while the first is
   // still storing one.
   const callbackQueue = new PQueue({ concurrency: 1 });
-  const pendingCompletions = new Map<
-    string,
-    { settle(success: boolean): void }
-  >();
-  const settleCompletion = (nonce: string, success: boolean): void => {
-    pendingCompletions.get(nonce)?.settle(success);
-  };
-  const settleAllCompletions = (): void => {
-    for (const completion of pendingCompletions.values()) {
-      completion.settle(false);
-    }
-  };
-  let attemptGeneration = 0;
-  let activeAttempt:
-    { readonly generation: number; readonly nonce: string } | undefined;
-  const ownsAttempt = (generation: number, nonce: string): boolean =>
-    activeAttempt?.generation === generation && activeAttempt.nonce === nonce;
+  let activeAttempt: DesktopAuthAttempt | undefined;
+  const ownsAttempt = (attempt: DesktopAuthAttempt): boolean =>
+    activeAttempt === attempt;
   const authCommitQueue = new PQueue({ concurrency: 1 });
   // `add` widens to `T | void` to cover abort via signal/timeout; we pass
   // neither, so the task always runs and resolves with `T`.
   const runAuthCommit = <T>(commit: () => Promise<T>): Promise<T> =>
     authCommitQueue.add(commit) as Promise<T>;
   const invalidateActiveAttempt = (): void => {
-    attemptGeneration += 1;
+    const superseded = activeAttempt;
     activeAttempt = undefined;
-    settleAllCompletions();
+    superseded?.settle(false);
   };
-  const waitForCompletion = (
-    nonce: string,
-    generation: number,
-    timeoutMs: number,
-  ) =>
+  const waitForCompletion = (attempt: DesktopAuthAttempt, timeoutMs: number) =>
     new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
-        settleCompletion(nonce, false);
-        if (ownsAttempt(generation, nonce)) {
+        attempt.settle(false);
+        if (ownsAttempt(attempt)) {
           activeAttempt = undefined;
-          void callbackState.clearAwaitingCallback(nonce).catch(() => {});
+          void callbackState
+            .clearAwaitingCallback(attempt.nonce)
+            .catch(() => {});
         }
       }, timeoutMs);
       let settled = false;
-      pendingCompletions.set(nonce, {
-        settle(success) {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          pendingCompletions.delete(nonce);
-          resolve(success);
-        },
-      });
+      attempt.settle = (success) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(success);
+      };
     });
   const runQueuedCallback = async (queued: {
     callback: DesktopProtocolCallback;
-    nonce: string;
-    generation: number;
+    attempt: DesktopAuthAttempt;
   }): Promise<void> => {
     try {
       const success = await processProtocolCallback(
@@ -241,16 +235,16 @@ export function createDesktopSupabaseAuth(
         queued.callback,
         host,
         log,
-        () => ownsAttempt(queued.generation, queued.nonce),
+        () => ownsAttempt(queued.attempt),
         runAuthCommit,
       );
-      settleCompletion(queued.nonce, success);
-      if (ownsAttempt(queued.generation, queued.nonce)) {
+      queued.attempt.settle(success);
+      if (ownsAttempt(queued.attempt)) {
         activeAttempt = undefined;
       }
     } catch (error) {
-      settleCompletion(queued.nonce, false);
-      if (ownsAttempt(queued.generation, queued.nonce)) {
+      queued.attempt.settle(false);
+      if (ownsAttempt(queued.attempt)) {
         activeAttempt = undefined;
       }
       const message = toErrorMessage(error);
@@ -279,10 +273,7 @@ export function createDesktopSupabaseAuth(
       );
       return;
     }
-    if (!activeAttempt) {
-      attemptGeneration += 1;
-      activeAttempt = { generation: attemptGeneration, nonce: callbackNonce };
-    }
+    activeAttempt ??= createAuthAttempt(callbackNonce);
     const claimedAttempt = activeAttempt;
     if (claimedAttempt.nonce !== callbackNonce) return;
     void callbackState
@@ -298,26 +289,22 @@ export function createDesktopSupabaseAuth(
       );
     }
     void callbackQueue.add(() =>
-      runQueuedCallback({
-        callback,
-        nonce: callbackNonce,
-        generation: claimedAttempt.generation,
-      }),
+      runQueuedCallback({ callback, attempt: claimedAttempt }),
     );
   });
 
   const startSignIn = async (
     provider: OAuthProvider,
-    onAttempt?: (attempt: { generation: number; nonce: string }) => void,
+    onAttempt?: (attempt: DesktopAuthAttempt) => void,
   ): Promise<void> => {
     invalidateActiveAttempt();
-    const generation = attemptGeneration;
     const nonce = randomBytes(16).toString('hex');
-    activeAttempt = { generation, nonce };
-    onAttempt?.({ generation, nonce });
+    const attempt = createAuthAttempt(nonce);
+    activeAttempt = attempt;
+    onAttempt?.(attempt);
     try {
       await runAuthCommit(async () => {});
-      if (!ownsAttempt(generation, nonce)) return;
+      if (!ownsAttempt(attempt)) return;
 
       // Bind this attempt to a one-time nonce carried on the callback URL.
       // Supabase preserves redirect_to query params through to the callback
@@ -328,20 +315,20 @@ export function createDesktopSupabaseAuth(
       const sep = callbackUri.includes('?') ? '&' : '?';
       const redirectTo = `${callbackUri}${sep}app_nonce=${nonce}`;
       await callbackState.beginAuthAttempt(nonce);
-      if (!ownsAttempt(generation, nonce)) return;
+      if (!ownsAttempt(attempt)) return;
       const { data, error } = await oauthClient.auth.signInWithOAuth({
         provider,
         options: { redirectTo },
       });
       const authUrl = requireOAuthRedirectUrl(data, error);
-      if (!ownsAttempt(generation, nonce)) return;
+      if (!ownsAttempt(attempt)) return;
 
       await host.openExternalUrl(authUrl);
       await host.showInfoMessage(
         'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
       );
     } catch (error) {
-      if (ownsAttempt(generation, nonce)) activeAttempt = undefined;
+      if (ownsAttempt(attempt)) activeAttempt = undefined;
       await callbackState.clearAwaitingCallback(nonce);
       await host.showErrorMessage(`Sign-in failed: ${toErrorMessage(error)}`);
       throw error;
@@ -357,19 +344,18 @@ export function createDesktopSupabaseAuth(
       provider = DEFAULT_OAUTH_PROVIDER,
       waitOptions = {},
     ) {
-      let nonce: string | undefined;
+      let startedAttempt: DesktopAuthAttempt | undefined;
       let completion: Promise<boolean> | undefined;
       try {
         await startSignIn(provider, (attempt) => {
-          nonce = attempt.nonce;
+          startedAttempt = attempt;
           completion = waitForCompletion(
-            attempt.nonce,
-            attempt.generation,
+            attempt,
             waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
           );
         });
       } catch (error) {
-        if (nonce) settleCompletion(nonce, false);
+        startedAttempt?.settle(false);
         throw error;
       }
       return completion ?? false;
@@ -381,7 +367,6 @@ export function createDesktopSupabaseAuth(
         await callbackState.clearAwaitingCallback();
         await coordinator.clearSession();
       });
-      SupabaseClient.setTokenExpiry(null);
       clearDesktopServerSideKeyCaches(log);
       await refreshRemoteAgentCatalogAfterSignOut(
         invalidateRemoteAgentsAfterSignOut,

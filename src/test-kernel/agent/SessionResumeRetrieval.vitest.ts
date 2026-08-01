@@ -38,7 +38,7 @@ import {
   runToolUseFlow,
   type RunToolUseFlowResult,
   type RunToolUseFlowInput,
-  type ToolUseFlowSetupCallback,
+  type ToolUseFlowAttachment,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import {
   migrateSharedState,
@@ -76,7 +76,7 @@ const VALID_TOOL_USE_SHARED = {
   shouldSkipCycle: false,
   stateSlices: null,
 };
-type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
+type ToolUseSetupContext = Parameters<ToolUseFlowAttachment['attach']>[0];
 
 // A record parked on the wait node, as a resumable turn leaves it.
 const WAITING_AT_START = {
@@ -179,7 +179,7 @@ async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
   resume: ToolUseResumeData | undefined,
-  onSetup?: ToolUseFlowSetupCallback,
+  attachment?: Partial<ToolUseFlowAttachment>,
   session: SessionHandle = createTestSession(),
   options: {
     readonly isSubagent?: boolean;
@@ -207,6 +207,12 @@ async function runPersistedFlow(
     runScope,
   });
   let interrupted = false;
+  const hostAttachment = attachment && {
+    attach: (flowContext: ToolUseSetupContext): void =>
+      attachment.attach?.(flowContext),
+    detach: (flowContext: ToolUseSetupContext): void =>
+      attachment.detach?.(flowContext),
+  };
 
   try {
     return await withRunContext(context, () =>
@@ -223,7 +229,7 @@ async function runPersistedFlow(
           onInterrupt: () => {
             interrupted = true;
           },
-          setAbortController: () => {},
+          abortSignal: new AbortController().signal,
           onRoundFinalized: () => {},
           ...(resume !== undefined && { resume }),
           isSubagent: options.isSubagent ?? true,
@@ -233,7 +239,7 @@ async function runPersistedFlow(
           toolInjections: new ToolInjectionRegistry(),
         },
         new MapToolRegistry({}),
-        onSetup,
+        hostAttachment,
       ),
     );
   } finally {
@@ -530,9 +536,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       executionId,
       streamId,
       snapshot,
-      () => {
-        boundaryEvents.push('attach');
-        return () => boundaryEvents.push('detach');
+      {
+        attach: () => {
+          boundaryEvents.push('attach');
+        },
+        detach: () => {
+          boundaryEvents.push('detach');
+        },
       },
       undefined,
       { takePendingFollowUps },
@@ -541,6 +551,30 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
     expect(takePendingFollowUps).toHaveBeenCalledTimes(2);
     expect(boundaryEvents).toEqual(['attach', 'take', 'detach', 'take']);
+  });
+
+  it('detaches a host whose attach threw after wiring itself up', async () => {
+    // `executeAgent`'s attach registers the flow context on the run handle and
+    // may then interrupt it. A throw anywhere after that first statement used
+    // to strand the live context on the handle, because the pairing lived in
+    // the value the callback never got to return.
+    const executionId = 'abc-flow-attach-failure' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-attach-failure' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const attachFailure = new Error('host wiring failed');
+    const detached: ToolUseSetupContext[] = [];
+
+    await expect(
+      runPersistedFlow(executionId, streamId, snapshot, {
+        attach: () => {
+          throw attachFailure;
+        },
+        detach: (context) => {
+          detached.push(context);
+        },
+      }),
+    ).rejects.toBe(attachFailure);
+    expect(detached).toHaveLength(1);
   });
 
   it('releases follow-ups while preserving the record after a persistence read failure', async () => {
@@ -566,10 +600,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
             executionId,
             streamId,
             snapshot,
-            (context) => {
-              context.session.appendFollowUp({
-                text: 'queued before recovery',
-              });
+            {
+              attach: (context) => {
+                context.session.appendFollowUp({
+                  text: 'queued before recovery',
+                });
+              },
             },
             session,
           ),
@@ -621,8 +657,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           executionId,
           streamId,
           snapshot,
-          () => () => {
-            throw teardownFailure;
+          {
+            detach: () => {
+              throw teardownFailure;
+            },
           },
           session,
         );
@@ -662,11 +700,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           executionId,
           streamId,
           snapshot,
-          (context) => {
-            context.interrupt();
-            return () => {
+          {
+            attach: (context) => context.interrupt(),
+            detach: () => {
               throw teardownFailure;
-            };
+            },
           },
           session,
         ),
@@ -708,8 +746,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           executionId,
           streamId,
           snapshot,
-          () => () => {
-            throw teardownFailure;
+          {
+            detach: () => {
+              throw teardownFailure;
+            },
           },
           session,
         ),
@@ -808,12 +848,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runPersistedFlow(
-        executionId,
-        streamId,
-        snapshot,
-        (flowContext) => flowContext.interrupt(),
-      );
+      const result = await runPersistedFlow(executionId, streamId, snapshot, {
+        attach: (flowContext) => flowContext.interrupt(),
+      });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
@@ -841,7 +878,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         executionId,
         streamId,
         undefined,
-        (flowContext) => flowContext.interrupt(),
+        { attach: (flowContext) => flowContext.interrupt() },
         session,
         { onFlowRecordDisposition: (value) => dispositions.push(value) },
       );
@@ -885,14 +922,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const deleteSpy = vi.spyOn(store, 'delete');
 
     try {
-      const result = await runPersistedFlow(
-        executionId,
-        streamId,
-        snapshot,
-        (context) => {
+      const result = await runPersistedFlow(executionId, streamId, snapshot, {
+        attach: (context) => {
           flowContext = context;
         },
-      );
+      });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).toHaveBeenCalledWith(flowKey(executionId));
@@ -916,8 +950,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       executionId,
       streamId,
       snapshot,
-      (context) => {
-        flowContext = context;
+      {
+        attach: (context) => {
+          flowContext = context;
+        },
       },
       createTestSession(),
       {
@@ -996,8 +1032,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           executionId,
           streamId,
           snapshot,
-          (context) => {
-            flowContext = context;
+          {
+            attach: (context) => {
+              flowContext = context;
+            },
           },
           undefined,
           { onFlowRecordDisposition: (value) => dispositions.push(value) },
@@ -1027,11 +1065,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // unconditionally released it again, so neither the caller
     // (`resumeQueuedToolUseFromResumeData`, which never restores follow-ups on
     // this success path) nor a later resume could ever recover the user's
-    // queued input. Fixed by routing this window's cancellation through
-    // `ToolUseSessionLifecycle.interruptPreservingQueue()` (cancels the
-    // pending wait without dropping queued items) and by skipping the queue
-    // release in `runToolUseFlow`'s finally whenever the flow record itself
-    // is preserved.
+    // queued input. Fixed by asking `ToolUseSessionLifecycle.interrupt()` to
+    // preserve the queue for this window (cancelling the pending wait without
+    // dropping queued items) and by skipping the queue release in
+    // `runToolUseFlow`'s finally whenever the flow record itself is preserved.
     const executionId = 'abc-cancel-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
@@ -1050,9 +1087,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         executionId,
         streamId,
         snapshot,
-        (context) => {
-          flowContext = context;
-          context.session.appendFollowUp({ text: 'queued during resume' });
+        {
+          attach: (context) => {
+            flowContext = context;
+            context.session.appendFollowUp({ text: 'queued during resume' });
+          },
         },
         session,
       );
@@ -1081,6 +1120,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       storedShared,
     );
     await writeFlowRecord(executionId, storedShared);
+    // `resumeQueuedToolUseFromResumeData` holds the recovery lease across the
+    // whole host resume, so the flow borrows that consumer's queue instead of
+    // claiming one. Model that here: the borrower may cancel its own wait but
+    // never drops the owner's queued input, whatever the run's own outcome.
+    const recovery = session.followUps.claimRecovery(streamId, true);
+    expect(recovery).toBeDefined();
     let flowContext: ToolUseSetupContext | undefined;
     const abortError = new DOMException(
       'This operation was aborted',
@@ -1100,8 +1145,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           executionId,
           streamId,
           snapshot,
-          (context) => {
-            flowContext = context;
+          {
+            attach: (context) => {
+              flowContext = context;
+            },
           },
           session,
           { takePendingFollowUps: () => [] },
@@ -1109,6 +1156,62 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
         'late active-turn input',
+      ]);
+    } finally {
+      runSpy.mockRestore();
+      session.followUps.terminalize(streamId);
+    }
+  });
+
+  it('leaves a child loop its queued input when the borrowed inner turn is interrupted', async () => {
+    // A native subagent's inner turn resumes without `takePendingFollowUps`:
+    // the child-run loop owns the queue across all of its turns and releases it
+    // with the terminal/recoverable decision. The borrowing flow may cancel its
+    // own wait, but dropping the owner's queued items is not its call to make.
+    const executionId = 'abc-cancel-child-followup' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-cancel-child-followup' as StreamTabId;
+    const session = createTestSession();
+    const storedShared = {
+      ...VALID_TOOL_USE_SHARED,
+      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
+    };
+    const snapshot = buildToolUseResumeData(
+      executionId,
+      streamId,
+      storedShared,
+    );
+    await writeFlowRecord(executionId, storedShared);
+    const childLease = session.followUps.claimLive(streamId, 'child');
+    expect(childLease).toBeDefined();
+    let flowContext: ToolUseSetupContext | undefined;
+    const abortError = new DOMException(
+      'This operation was aborted',
+      'AbortError',
+    );
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockImplementationOnce(async () => {
+        flowContext?.session.appendFollowUp({ text: 'queued for next turn' });
+        flowContext?.interrupt();
+        throw abortError;
+      });
+
+    try {
+      await expect(
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          {
+            attach: (context) => {
+              flowContext = context;
+            },
+          },
+          session,
+        ),
+      ).rejects.toBe(abortError);
+      expect(session.followUps.getAll(streamId)).toEqual([
+        'queued for next turn',
       ]);
     } finally {
       runSpy.mockRestore();

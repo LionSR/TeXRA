@@ -17,24 +17,31 @@ import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
 type FunctionCallMessage = { type: string; call_id: string };
 
 /**
- * A two-tool round whose `checkInterruption` reports "not interrupted" for
- * the first `interruptAfterCheck` calls and "interrupted" from then on, so a
- * scenario picks exactly where in the dispatch sequence the run is stopped.
+ * A three-tool round driven by the run's own interrupt controller — the same
+ * single owner production wires in — so a scenario picks where the run is
+ * stopped by choosing what aborts it, not by counting internal checks.
+ *
+ * `'tool-call-extraction'` aborts while the model response is being
+ * processed, so the round reaches dispatch with tool calls pending and
+ * `prep()` stops it; `'tool-b'` aborts from inside the second tool, so call-a
+ * finishes normally, call-b is aborted mid-flight, and call-c never starts.
  */
-function createRoundFixture(interruptAfterCheck: number) {
-  let checkCount = 0;
-  const checkInterruption = vi.fn(() => {
-    checkCount += 1;
-    return checkCount > interruptAfterCheck;
-  });
+function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
+  const controller = new AbortController();
+  const abort = (): void =>
+    controller.abort(new DOMException('Run interrupted', 'AbortError'));
 
   const toolACall = vi.fn(async () => ({
     status: 'executed' as const,
     output: 'toolA done',
   }));
-  const toolBCall = vi.fn(async () => ({
+  const toolBCall = vi.fn(async () => {
+    if (abortOn === 'tool-b') abort();
+    return { status: 'executed' as const, output: 'toolB done' };
+  });
+  const toolCCall = vi.fn(async () => ({
     status: 'executed' as const,
-    output: 'toolB done',
+    output: 'toolC done',
   }));
 
   const createResponse = vi.fn(async () => ({
@@ -43,7 +50,8 @@ function createRoundFixture(interruptAfterCheck: number) {
 
   const services = {
     ...baseRoundServices('ToolUseDispatchInterruption'),
-    checkInterruption,
+    abortSignal: controller.signal,
+    checkInterruption: () => controller.signal.aborted,
     modelHandler: roundModelHandler({
       createResponse,
       createToolUseFollowUpMessages: vi.fn(
@@ -72,8 +80,9 @@ function createRoundFixture(interruptAfterCheck: number) {
         usage: null,
         stopReason: response.toolCalls ? 'tool_calls' : 'stop',
       }),
-      extractToolUse: (response: { toolCalls?: boolean }) =>
-        response.toolCalls
+      extractToolUse: (response: { toolCalls?: boolean }) => {
+        if (abortOn === 'tool-call-extraction') abort();
+        return response.toolCalls
           ? [
               {
                 callId: 'call-a',
@@ -89,19 +98,28 @@ function createRoundFixture(interruptAfterCheck: number) {
                 provider: 'test',
                 raw: {},
               },
+              {
+                callId: 'call-c',
+                input: {},
+                name: 'toolC',
+                provider: 'test',
+                raw: {},
+              },
             ]
-          : [],
+          : [];
+      },
     }),
     session: {
       hasQueuedFollowUp: () => false,
     },
     setting: {
       temperature: 0,
-      tools: [{ name: 'toolA' }, { name: 'toolB' }],
+      tools: [{ name: 'toolA' }, { name: 'toolB' }, { name: 'toolC' }],
     },
     toolRegistry: new MapToolRegistry({
       toolA: { call: toolACall, definition: { name: 'toolA' } } as never,
       toolB: { call: toolBCall, definition: { name: 'toolB' } } as never,
+      toolC: { call: toolCCall, definition: { name: 'toolC' } } as never,
     }),
   } as unknown as ToolUseRoundServices;
 
@@ -120,7 +138,7 @@ function createRoundFixture(interruptAfterCheck: number) {
     roundNormalizedUsage: undefined,
   };
 
-  return { createResponse, services, shared, toolACall, toolBCall };
+  return { createResponse, services, shared, toolACall, toolBCall, toolCCall };
 }
 
 function runRound(
@@ -161,13 +179,17 @@ function messagesOfType(
  * never ran being synthesized "cancelled" results.
  */
 describe('ToolUseDispatchNode interruption', () => {
-  it('synthesizes a cancelled tool_result for a call skipped mid-round, keeping tool_use/tool_result counts paired', async () => {
-    // Checks 1-4 (round prep, dispatch prep, call-a's pre-dispatch check,
-    // call-a's post-invoke check) report "not interrupted" so call-a runs
-    // to completion. From call-b's pre-dispatch check (5) onward,
-    // interruption is detected — call-b never executes.
-    const { createResponse, services, shared, toolACall, toolBCall } =
-      createRoundFixture(4);
+  it('synthesizes cancelled tool_results for the calls aborted mid-round, keeping tool_use/tool_result counts paired', async () => {
+    // call-a completes before anything aborts, call-b aborts the run from
+    // inside the tool, and call-c never starts.
+    const {
+      createResponse,
+      services,
+      shared,
+      toolACall,
+      toolBCall,
+      toolCCall,
+    } = createRoundFixture('tool-b');
 
     await runRound(services, shared);
 
@@ -175,46 +197,61 @@ describe('ToolUseDispatchNode interruption', () => {
     // rather than calling the model again.
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(toolACall).toHaveBeenCalledTimes(1);
-    expect(toolBCall).not.toHaveBeenCalled();
+    expect(toolBCall).toHaveBeenCalledTimes(1);
+    expect(toolCCall).not.toHaveBeenCalled();
     expect(shared.shouldStop).toBe(true);
 
     const functionCalls = messagesOfType(shared, 'function_call');
     const functionResults = messagesOfType(shared, 'function_call_output');
 
-    // Both tool_use blocks the model requested must be paired with a
-    // tool_result, even though only one of them actually executed.
-    expect(functionCalls).toHaveLength(2);
-    expect(functionResults).toHaveLength(2);
+    // Every tool_use block the model requested must be paired with a
+    // tool_result, even though only one of them kept a real result.
+    expect(functionCalls).toHaveLength(3);
+    expect(functionResults).toHaveLength(3);
     expect(functionCalls.map((m) => m.call_id).sort()).toEqual([
       'call-a',
       'call-b',
+      'call-c',
     ]);
     expect(functionResults.map((m) => m.call_id).sort()).toEqual([
       'call-a',
       'call-b',
+      'call-c',
     ]);
 
-    const cancelledResult = functionResults.find((m) => m.call_id === 'call-b');
-    expect(cancelledResult?.output).toContain('"status":"error"');
-    expect(cancelledResult?.output.toLowerCase()).toContain('cancelled');
+    // The call that finished before the interrupt keeps its real output.
+    const executedResult = functionResults.find((m) => m.call_id === 'call-a');
+    expect(executedResult?.output).toContain('toolA done');
+
+    // Aborted mid-flight and never started both surface as cancelled.
+    for (const callId of ['call-b', 'call-c']) {
+      const cancelledResult = functionResults.find((m) => m.call_id === callId);
+      expect(cancelledResult?.output).toContain('"status":"error"');
+      expect(cancelledResult?.output.toLowerCase()).toContain('cancelled');
+    }
   });
 
   it('synthesizes cancelled tool_results for every requested call when interruption is detected in dispatch prep() before any call executes', async () => {
-    // Check 1 is ToolUseRoundPrepNode's pre-model-call check (not
-    // interrupted, so the model call proceeds and returns two tool calls).
-    // Check 2 is ToolUseDispatchNode.prep()'s own check, which now reports
-    // interrupted — before either call is dispatched. `exec()` is never
-    // invoked for call-a or call-b in this scenario.
-    const { createResponse, services, shared, toolACall, toolBCall } =
-      createRoundFixture(1);
+    // The model call completes and its tool calls are extracted, then the run
+    // is interrupted — so ToolUseDispatchNode.prep()'s own check stops the
+    // round before any call is dispatched.
+    const {
+      createResponse,
+      services,
+      shared,
+      toolACall,
+      toolBCall,
+      toolCCall,
+    } = createRoundFixture('tool-call-extraction');
 
     await runRound(services, shared);
 
-    // Only one round was attempted, and neither tool call ever executed —
-    // dispatch prep() caught the interruption before exec() ran for either.
+    // Only one round was attempted, and no tool call ever executed —
+    // dispatch prep() caught the interruption before exec() ran for any.
     expect(createResponse).toHaveBeenCalledTimes(1);
     expect(toolACall).not.toHaveBeenCalled();
     expect(toolBCall).not.toHaveBeenCalled();
+    expect(toolCCall).not.toHaveBeenCalled();
     expect(shared.shouldStop).toBe(true);
     // The pending calls must be cleared, not left dangling on shared state.
     expect(shared.toolCalls).toEqual([]);
@@ -222,20 +259,22 @@ describe('ToolUseDispatchNode interruption', () => {
     const functionCalls = messagesOfType(shared, 'function_call');
     const functionResults = messagesOfType(shared, 'function_call_output');
 
-    // Both tool_use blocks the model requested must still be paired with a
-    // tool_result, even though prep() never dispatched either of them.
-    expect(functionCalls).toHaveLength(2);
-    expect(functionResults).toHaveLength(2);
+    // Every tool_use block the model requested must still be paired with a
+    // tool_result, even though prep() never dispatched any of them.
+    expect(functionCalls).toHaveLength(3);
+    expect(functionResults).toHaveLength(3);
     expect(functionCalls.map((m) => m.call_id).sort()).toEqual([
       'call-a',
       'call-b',
+      'call-c',
     ]);
     expect(functionResults.map((m) => m.call_id).sort()).toEqual([
       'call-a',
       'call-b',
+      'call-c',
     ]);
 
-    for (const callId of ['call-a', 'call-b']) {
+    for (const callId of ['call-a', 'call-b', 'call-c']) {
       const cancelledResult = functionResults.find((m) => m.call_id === callId);
       expect(cancelledResult?.output).toContain('"status":"error"');
       expect(cancelledResult?.output.toLowerCase()).toContain('cancelled');

@@ -288,13 +288,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
     await rejection;
 
-    expect(calls.cancel).toContain('int_1');
-    // The pending-id (cancel target) is reset on abort so a later abort can't
-    // cancel the wrong interaction.
-    expect(
-      (handler as unknown as { pendingBackgroundInteractionId: string | null })
-        .pendingBackgroundInteractionId,
-    ).toBeNull();
+    expect(calls.cancel).toEqual(['int_1']);
 
     // No leak: a fresh serial call on the same handler succeeds.
     const { client: client2 } = bgClient({
@@ -304,6 +298,30 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     await expect(
       runWithPolls(respond(handler, client2, [userStep('b')]), 1),
     ).resolves.toBeDefined();
+
+    // A later abort cancels ITS OWN interaction, never the earlier one: the
+    // cancel target is the id captured by that poll invocation, so no handler
+    // state can point a second abort at a stale interaction.
+    const controller3 = new AbortController();
+    const { client: client3, calls: calls3 } = bgClient({
+      submit: () => ({ id: 'int_3', status: 'in_progress' }),
+      getSequence: [{ id: 'int_3', status: 'in_progress' }],
+    });
+    const promise3 = respond(
+      handler,
+      client3,
+      [userStep('c')],
+      controller3.signal,
+    );
+    const rejection3 = expect(promise3).rejects.toThrow();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+    controller3.abort();
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await rejection3;
+
+    expect(calls3.cancel).toEqual(['int_3']);
+    expect(calls.cancel).toEqual(['int_1']);
   });
 
   it('B5: background + stateless takes the non-background path', async () => {

@@ -354,6 +354,23 @@ describe('computeModelOptionsData relay quota state', () => {
     );
   });
 
+  it('asks for an OpenRouter key, not the provider key, on the OpenRouter route', async () => {
+    const access = {
+      ...createModelOptionsAccess({ useIncludedAccess: false }, {}),
+      useOpenRouter: true,
+    };
+
+    const [model] = await computeModelOptionsData(['gpt55'], access);
+    const reason = await getModelUnavailableReason('gpt55', access);
+
+    expect(model).toMatchObject({
+      availability: 'missing-key',
+      disabled: true,
+      requiresKey: true,
+    });
+    expect(reason).toBe('Model "gpt55" requires an OpenRouter API key.');
+  });
+
   it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
     await installPlatform({
       config: {

@@ -50,6 +50,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { createModuleMocks } from '@test/support/moduleMocks';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import {
@@ -71,6 +72,8 @@ import {
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.mjs';
 import { loadSourceModule } from './loadSourceModule.mjs';
+
+const mocks = createModuleMocks();
 
 type DesktopProgressBridgeOptions =
   import('@desktop/main/desktopAgentExecution').DesktopProgressBridgeOptions;
@@ -226,7 +229,6 @@ type ProgressMessage = {
   action?: string;
   kind?: string;
   activeStream?: string;
-  agentFilter?: string;
   stream?: string;
   streamId?: string;
   todos?: unknown[];
@@ -292,22 +294,22 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     import('@test/support/FakePlatform'),
   ]);
   initPlatform(createFakePlatform({}, { agentResume }));
-  vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
+  mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),
   }));
-  vi.doMock('@agent/runtime/executeAgent', () => ({
+  mocks.doMock('@agent/runtime/executeAgent', () => ({
     resumeToolUseFromResumeData:
       options.resumeToolUseFromResumeData ?? vi.fn(async () => {}),
   }));
-  vi.doMock('@agent/runtime/runAgent', () => ({
+  mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
-  vi.doMock('@agent/storage/detectWaitingStreams', () => ({
+  mocks.doMock('@agent/storage/detectWaitingStreams', () => ({
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
-  vi.doMock('@common/storage/KVStore', () => ({
+  mocks.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       constructor(private readonly dir: string) {}
 
@@ -355,72 +357,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
       }
     },
   }));
-  vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
+  mocks.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
-  }));
-  vi.doMock('vscode', () => ({
-    commands: {
-      executeCommand: vi.fn(),
-    },
-    Disposable: class {
-      constructor(private readonly onDispose: () => void = () => undefined) {}
-
-      dispose(): void {
-        this.onDispose();
-      }
-
-      static from(...disposables: Array<{ dispose(): void }>): {
-        dispose(): void;
-      } {
-        return {
-          dispose: () =>
-            disposables.forEach((disposable) => disposable.dispose()),
-        };
-      }
-    },
-    env: {
-      openExternal: vi.fn(),
-    },
-    FileSystemError: {
-      FileNotFound: class extends Error {},
-    },
-    FileType: {
-      File: 1,
-      Directory: 2,
-      SymbolicLink: 64,
-    },
-    Uri: {
-      file: (fsPath: string) => ({
-        fsPath,
-        path: fsPath,
-        toString: () => fsPath,
-      }),
-      parse: (value: string) => ({
-        fsPath: value,
-        path: value,
-        toString: () => value,
-      }),
-    },
-    window: {
-      createOutputChannel: vi.fn(() => ({
-        appendLine: vi.fn(),
-        append: vi.fn(),
-        clear: vi.fn(),
-        dispose: vi.fn(),
-        show: vi.fn(),
-      })),
-      showErrorMessage: vi.fn(),
-      showInformationMessage: vi.fn(),
-      showWarningMessage: vi.fn(),
-    },
-    workspace: {
-      fs: {},
-      getConfiguration: vi.fn(() => ({
-        get: vi.fn(),
-        update: vi.fn(),
-      })),
-      workspaceFolders: [],
-    },
   }));
   const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
   const createProgressSnapshotStore = (): ProgressSnapshotStore =>
@@ -765,13 +703,6 @@ function completedRootResult(executionId: ExecutionId): ResultEvent {
 
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
-    vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
-    vi.doUnmock('@agent/runtime/executeAgent');
-    vi.doUnmock('@agent/runtime/runAgent');
-    vi.doUnmock('@agent/storage/detectWaitingStreams');
-    vi.doUnmock('@common/storage/KVStore');
-    vi.doUnmock('@controllers/mainView/MainViewExecutionController');
-    vi.doUnmock('vscode');
     vi.restoreAllMocks();
   });
 
@@ -1652,13 +1583,6 @@ describe('DesktopProgressBridge', () => {
       agentCategory: AgentCategory.Workflow,
     });
     await settleProgressEvents();
-    const filterStreams = assertSupported(
-      bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.FILTER_STREAMS],
-    );
-    await filterStreams({
-      command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
-      filter: 'toolUse',
-    });
     messages.length = 0;
 
     await bridge.revealStream('goal-owning-stream');
@@ -1671,10 +1595,7 @@ describe('DesktopProgressBridge', () => {
     });
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
-    ).toMatchObject({
-      activeStream: 'goal-owning-stream',
-      agentFilter: 'all',
-    });
+    ).toMatchObject({ activeStream: 'goal-owning-stream' });
   });
 
   it('revealStream posts nothing when the stream is unknown', async () => {
@@ -1689,7 +1610,7 @@ describe('DesktopProgressBridge', () => {
     expect(messages).toEqual([]);
   });
 
-  it('revealStream keeps a matching filter for a canonical stream with no live session facts yet (issue #7851)', async () => {
+  it('revealStream selects a canonical stream with no live session facts yet (issue #7851)', async () => {
     const messages: unknown[] = [];
     const streamId = 'persisted-tool-use-stream' as StreamTabId;
     const executionId = 'f00d123' as ExecutionId;
@@ -1710,23 +1631,13 @@ describe('DesktopProgressBridge', () => {
       },
     });
 
-    const filterStreams = assertSupported(
-      bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.FILTER_STREAMS],
-    );
-    await filterStreams({
-      command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
-      filter: 'toolUse',
-    });
     messages.length = 0;
 
     await bridge.revealStream(streamId);
 
     expect(
       progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(-1),
-    ).toMatchObject({
-      activeStream: streamId,
-      agentFilter: 'toolUse',
-    });
+    ).toMatchObject({ activeStream: streamId });
   });
 
   it('reveals a goal-owned stream after persistent opening completes', async () => {
@@ -3269,27 +3180,18 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('makes one headless approval visible when reopening under an excluding filter', async () => {
-      const streamId = 'rebound-filtered-approval' as StreamTabId;
+    it('makes one headless approval visible when its window reopens', async () => {
+      const streamId = 'rebound-headless-approval' as StreamTabId;
       const owner = await createProcessOwner({
         streamId,
         executionId: 'ec00fa' as ExecutionId,
       });
-      const filterStreams = assertSupported(
-        owner.bridgeA.progressViewInboundHandlers[
-          PROGRESS_VIEW_COMMANDS.FILTER_STREAMS
-        ],
-      );
-      await filterStreams({
-        command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS,
-        filter: 'toolUse',
-      });
       owner.close();
       const pendingApproval =
         owner.processSession.interactions.requestPlanApproval({
-          approvalId: 'plan-filtered-while-headless',
+          approvalId: 'plan-requested-while-headless',
           streamId,
-          plan: { objective: 'Restore the hidden approval stream.' },
+          plan: { objective: 'Restore the detached approval stream.' },
           goalEnabled: false,
         });
       const messagesB: unknown[] = [];
@@ -3306,7 +3208,7 @@ describe('DesktopProgressBridge', () => {
             (message) =>
               message.action === 'show' &&
               message.permission?.data?.approvalId ===
-                'plan-filtered-while-headless',
+                'plan-requested-while-headless',
           );
           expect(approvalShows).toHaveLength(1);
           expect(
@@ -3316,7 +3218,6 @@ describe('DesktopProgressBridge', () => {
             ).at(-1),
           ).toMatchObject({
             activeStream: streamId,
-            agentFilter: 'all',
             streams: expect.arrayContaining([
               expect.objectContaining({ name: streamId }),
             ]),
@@ -3324,7 +3225,7 @@ describe('DesktopProgressBridge', () => {
         });
         expect(
           bridgeB.hostInteractions.submitPlanDecision(
-            'plan-filtered-while-headless',
+            'plan-requested-while-headless',
             { action: 'approve' },
           ),
         ).toBe(true);
@@ -3694,6 +3595,7 @@ describe('DesktopProgressBridge', () => {
           owner.processSession.status.transitionToTerminal(
             streamId,
             STREAM_PHASE.FAILED,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
             { trace: freshTrace as unknown as AgentTrace },
           ),
         ).toBe(true);
@@ -3891,6 +3793,7 @@ describe('DesktopProgressBridge', () => {
           owner.bridgeA.session.status.transitionToTerminal(
             childStreamId,
             STREAM_PHASE.COMPLETED,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
           ),
         ).toBe(true);
         expect(bridgeB.session.status.get(childStreamId)).toBe(
@@ -3927,6 +3830,7 @@ describe('DesktopProgressBridge', () => {
           owner.bridgeA.session.status.transitionToTerminal(
             streamId,
             STREAM_PHASE.COMPLETED,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
           ),
         ).toBe(true);
         expect(bridgeB.session.status.get(streamId)).toBe(

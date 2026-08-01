@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
 import type { BashPermission } from '@shared/schemas';
+import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
 import {
@@ -39,18 +40,6 @@ function querySplitButton(element: BashRequestPanel): ApproveSplit | null {
     element.shadowRoot?.querySelector<ApproveSplit>('approve-split-button') ??
     null
   );
-}
-
-function recordPermissionActions(
-  element: BashRequestPanel,
-): Array<{ action: string }> {
-  const actions: Array<{ action: string }> = [];
-  element.addEventListener('permission-action', (event) => {
-    actions.push(
-      (event as CustomEvent<{ decision: { action: string } }>).detail.decision,
-    );
-  });
-  return actions;
 }
 
 // Parity with ToolEditRequestPanel: the bash panel gets the Yolo affordance

@@ -267,7 +267,10 @@ export const NO_BYPASS: BypassState = {
   superYolo: false,
 };
 
-function emptySlice(streamId: StreamTabId): StreamSlice {
+/** The zero value of a stream slice: every field at its pre-run default.
+ *  Tests build fixtures from this so a new `StreamSlice` field cannot drift
+ *  away from what the store actually seeds. */
+export function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
     model: undefined,
@@ -343,17 +346,50 @@ export function isCliStreamRetired(streamId: StreamTabId): boolean {
   return RETIRED_STREAMS.has(streamId);
 }
 
+/** A stream slice minus the lifecycle triple. `status`, its `substate`, and
+ *  the `runStartedAt` derived from them belong to
+ *  {@link setStreamStatusInCliState}, which is the only writer that enforces
+ *  the removed/retired liveness rule. */
+type PatchableStreamSlice = Omit<
+  StreamSlice,
+  'status' | 'substate' | 'runStartedAt'
+>;
+
+/** What a `patchStream` updater may return: the patchable fields, with the
+ *  lifecycle triple closed off so re-writing `status` from a patch is a
+ *  compile error rather than a second, unguarded status owner. */
+type StreamSlicePatch = PatchableStreamSlice & {
+  readonly status?: never;
+  readonly substate?: never;
+  readonly runStartedAt?: never;
+};
+
+/**
+ * Patch one stream's view state. The updater receives the same slice twice:
+ * once typed for patching (no lifecycle fields to spread back) and once whole,
+ * for the patches that derive from the current status.
+ */
 export function patchStream(
   streamId: StreamTabId,
-  update: (slice: StreamSlice) => StreamSlice,
+  update: (
+    slice: PatchableStreamSlice,
+    lifecycle: Readonly<
+      Pick<StreamSlice, 'status' | 'substate' | 'runStartedAt'>
+    >,
+  ) => StreamSlicePatch,
 ): void {
   RETIRED_STREAMS.delete(streamId);
   const current = streams.get();
   const slice = current.get(streamId) ?? emptySlice(streamId);
-  const next = update(slice);
+  const next = update(slice, slice);
   if (next === slice) return;
   const out = new Map(current);
-  out.set(streamId, next);
+  out.set(streamId, {
+    ...next,
+    status: slice.status,
+    substate: slice.substate,
+    runStartedAt: slice.runStartedAt,
+  });
   streams.set(out);
 }
 
@@ -462,24 +498,44 @@ function defaultSessionMeta(): SessionMeta {
 // ---------------------------------------------------------------------------
 
 // Which stream is focused / rooted, and whether starting a new root run is
-// currently available. No update logic beyond plain get/set lives here —
+// currently available. Focus moves only through `focusStream`;
 // stream-lifecycle side effects that touch these signals alongside others
-// (e.g. `removeStream`) live in `./removeStream`.
+// (e.g. `removeStream`) live in the `removeStream` section below.
 
 /** The stream currently focused in the transcript / status bar. */
 export const activeStreamId = signal<StreamTabId | undefined>(undefined);
+
+/**
+ * Move transcript/status focus onto a stream. Sole focus writer: a stream
+ * identity tombstoned by `removeStream`, or retired by `resetCliState`, is
+ * never focused, so a fact that arrives after the row is gone cannot pull the
+ * view onto a stream that no longer exists. `onlyIfUnset` is for the facts
+ * that adopt focus only while nothing holds it (the first log sync, the first
+ * local transcript row).
+ */
+export function focusStream(
+  streamId: StreamTabId,
+  options: { readonly onlyIfUnset?: boolean } = {},
+): void {
+  if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) return;
+  if (options.onlyIfUnset === true && activeStreamId.get() !== undefined) {
+    return;
+  }
+  activeStreamId.set(streamId);
+}
+
 /** The top-level stream the current session rooted at. */
 export const rootStreamId = signal<StreamTabId | undefined>(undefined);
 /** Whether starting a new root run is currently available. */
 export const rootRunStartAvailable = signal<boolean>(true);
 /** Whether the root session holds an unfinished run claim (run promise
- *  pending). Published only by `publishChatTuiRunState`, so renders read the
- *  session run-state reactively instead of calling impure session closures
- *  that memoized renders would cache stale (#8273). */
+ *  pending). Published only by `TuiSession`, so renders read the session
+ *  run-state reactively instead of calling impure session closures that
+ *  memoized renders would cache stale (#8273). */
 export const rootRunPending = signal<boolean>(false);
 /** Run-control mirror of `TuiSession.streamId` — cleared while a new run is
  *  pending, unlike `rootStreamId`, which stays put as the transcript anchor
- *  across pending windows. Published only by `publishChatTuiRunState`. */
+ *  across pending windows. Published only by `TuiSession`. */
 export const rootRunStreamId = signal<StreamTabId | undefined>(undefined);
 
 // ---------------------------------------------------------------------------

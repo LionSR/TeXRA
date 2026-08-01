@@ -10,12 +10,21 @@ import {
   streamStatusToSubstate,
 } from '@shared/schemas';
 
+/**
+ * The machine's single per-stream entry map. Seeding writes the settled
+ * `phase` form directly, which also replaces any reservation on that stream.
+ */
 interface StreamStatusMachineInternals {
-  readonly phases: Map<
+  readonly streams: Map<
     StreamTabId,
-    { readonly phase: StreamPhase; readonly substate?: StreamSubstate }
+    {
+      readonly kind: 'phase';
+      readonly state: {
+        readonly phase: StreamPhase;
+        readonly substate?: StreamSubstate;
+      };
+    }
   >;
-  readonly reservations: Set<StreamTabId>;
 }
 
 function internals(machine: StreamStatusMachine): StreamStatusMachineInternals {
@@ -40,10 +49,9 @@ export function seedStreamStatusForTest(
   streamId: StreamTabId,
   status: StreamPhase | StreamStatus,
 ): void {
-  const state = internals(machine);
-  state.reservations.delete(streamId);
+  const { streams } = internals(machine);
   if (status === STREAM_STATUS.READY) {
-    state.phases.delete(streamId);
+    streams.delete(streamId);
     return;
   }
 
@@ -51,10 +59,13 @@ export function seedStreamStatusForTest(
   const substate = phase.success
     ? undefined
     : streamStatusToSubstate(status as StreamStatus);
-  state.phases.set(streamId, {
-    phase: phase.success
-      ? phase.data
-      : streamStatusToPhase(status as StreamStatus),
-    ...(substate ? { substate } : {}),
+  streams.set(streamId, {
+    kind: 'phase',
+    state: {
+      phase: phase.success
+        ? phase.data
+        : streamStatusToPhase(status as StreamStatus),
+      ...(substate ? { substate } : {}),
+    },
   });
 }

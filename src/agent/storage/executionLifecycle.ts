@@ -6,8 +6,6 @@
  * with no cross-store mutations or error-swallowing policies.
  */
 
-import PQueue from 'p-queue';
-
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
@@ -22,6 +20,7 @@ import {
   type ExecutionStatus,
   type StreamTabId,
 } from '@shared/schemas';
+import { KeyedMutex } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getExecutionStore } from './ExecutionKVStore';
@@ -77,46 +76,26 @@ export async function hasPersistedParent(
 }
 
 // ---------------------------------------------------------------------------
-// Per-execution write queue — serializes read-modify-write cycles on meta
-// so that concurrent writeTerminalStatus / writeSessionDescription calls
-// never race and silently drop each other's fields.
+// Per-execution write serialization — read-modify-write cycles on meta run one
+// at a time per execution so that concurrent writeTerminalStatus /
+// writeSessionDescription calls never race and silently drop each other's
+// fields. Different executions proceed independently.
 // ---------------------------------------------------------------------------
 
-const metaWriteQueues = new Map<ExecutionId, PQueue>();
+const metaWriteLocks = new KeyedMutex<ExecutionId>();
 
-/**
- * Enqueue a read-modify-write operation on an execution's metadata.
- * Operations for the same executionId are serialized (a rejected update
- * doesn't stop the queue from running subsequent ones); different IDs run
- * independently. The queue entry is cleaned up once it goes idle.
- */
+/** Run a read-modify-write cycle on an execution's metadata under its lock. */
 function enqueueMetaUpdate(
   executionId: ExecutionId,
   updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
 ): Promise<void> {
-  let queue = metaWriteQueues.get(executionId);
-  if (!queue) {
-    queue = new PQueue({ concurrency: 1 });
-    metaWriteQueues.set(executionId, queue);
-  }
-  // `add` widens to `T | void` to cover abort via signal/timeout; we pass
-  // neither, so the task always runs and resolves with `void`.
-  const task = queue.add(async () => {
+  return metaWriteLocks.runExclusive(executionId, async () => {
     const store = getExecutionStore(executionId);
     const existing = await store.readMeta();
     if (!existing) {
       throw new Error(`Execution metadata not found for ${executionId}`);
     }
     await store.writeMeta({ ...existing, ...updater(existing) });
-  }) as Promise<void>;
-  return task.finally(() => {
-    if (
-      queue.pending === 0 &&
-      queue.size === 0 &&
-      metaWriteQueues.get(executionId) === queue
-    ) {
-      metaWriteQueues.delete(executionId);
-    }
   });
 }
 

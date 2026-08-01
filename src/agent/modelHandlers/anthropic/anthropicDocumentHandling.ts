@@ -143,7 +143,7 @@ export async function replaceDocumentDataWithUploads(
   client: Anthropic,
   messages: MessageParam[],
   supportsNativePdf: boolean,
-  uploadedPdfPageCounts: Map<string, number>,
+  onPageCount: (fileId: string, pageCount: number) => void,
 ): Promise<ReplaceDocumentUploadsResult> {
   if (!supportsNativePdf) {
     return { uploaded: false, hasFileReference: false };
@@ -195,7 +195,7 @@ export async function replaceDocumentDataWithUploads(
       } as BetaRequestDocumentBlock['source'];
 
       if (pageCount > 0) {
-        uploadedPdfPageCounts.set(uploadedFile.id, pageCount);
+        onPageCount(uploadedFile.id, pageCount);
       }
     } finally {
       buffer = wipeBuffer(buffer);

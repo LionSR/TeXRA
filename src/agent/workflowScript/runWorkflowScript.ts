@@ -97,6 +97,16 @@ type WorkflowScriptAttemptMetadata = Pick<
 >;
 
 /**
+ * Control-plane state for one in-flight `agent()` attempt: the controller
+ * `skip()`/`retry()` aborts, and the action that abort requested. One record so
+ * the action can never outlive or precede the attempt it belongs to.
+ */
+interface InFlightAgentCall {
+  readonly controller: AbortController;
+  action?: 'skip' | 'retry';
+}
+
+/**
  * The fan-out primitive, defined INSIDE the sandbox realm (trusted prelude,
  * compiled by the host, run before the script body). They must not live
  * host-side: parallel consumes script-created arrays and thunks, and any host
@@ -198,13 +208,13 @@ export async function runWorkflowScript(
   const journal = new Map<number, WorkflowJournalEntry>();
   const queue = new PQueue({ concurrency });
   const runAbort = new AbortController();
-  // One AbortController per in-flight call, keyed by call index and linked to
-  // runAbort (a run abort cascades to every entry; a per-call abort leaves the
-  // others running). skip()/retry() target a single entry; the entry is
-  // removed as soon as its call settles. Control state is control-plane only —
+  // One record per in-flight call, keyed by call index and linked to runAbort
+  // (a run abort cascades to every entry; a per-call abort leaves the others
+  // running). skip()/retry() target a single entry; the entry is removed as
+  // soon as its call settles, and the attempt reads its own requested action
+  // from the record it still holds. Control state is control-plane only —
   // never journaled, so resume identity is untouched.
-  const callControllers = new Map<number, AbortController>();
-  const pendingControlActions = new Map<number, 'skip' | 'retry'>();
+  const inFlightCalls = new Map<number, InFlightAgentCall>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -245,11 +255,13 @@ export async function runWorkflowScript(
   };
 
   const requestControl = (index: number, action: 'skip' | 'retry'): void => {
-    const controller = callControllers.get(index);
+    const call = inFlightCalls.get(index);
     // No-op when the call is not in flight (never started, or already settled).
-    if (!controller) return;
-    pendingControlActions.set(index, action);
-    controller.abort(new Error(`Workflow agent() call ${index} ${action}.`));
+    if (!call) return;
+    call.action = action;
+    call.controller.abort(
+      new Error(`Workflow agent() call ${index} ${action}.`),
+    );
   };
   const control: WorkflowScriptControl = {
     skip: (index) => requestControl(index, 'skip'),
@@ -532,11 +544,12 @@ export async function runWorkflowScript(
         throw fatal;
       }
       const callController = new AbortController();
+      const call: InFlightAgentCall = { controller: callController };
       // Link this call to the run: any run-level abort cascades to it, so a
       // runner watching invocation.signal still stops on timeout/cap.
       const cascade = () => callController.abort(runAbort.signal.reason);
       const detachCascade = onAbort(runAbort.signal, cascade);
-      callControllers.set(index, callController);
+      inFlightCalls.set(index, call);
       if (!startEmitted) {
         startEmitted = true;
         emit({ type: 'agent:start', ...eventBase });
@@ -597,15 +610,14 @@ export async function runWorkflowScript(
         attemptError = { error };
       } finally {
         detachCascade();
-        if (callControllers.get(index) === callController) {
-          callControllers.delete(index);
+        if (inFlightCalls.get(index) === call) {
+          inFlightCalls.delete(index);
         }
       }
 
       // Control action wins over whatever the (possibly signal-ignoring) runner
       // did: a deliberate skip/retry discards this attempt's outcome.
-      const action = pendingControlActions.get(index);
-      if (action) pendingControlActions.delete(index);
+      const action = call.action;
       if (action === 'retry') continue;
       if (action === 'skip') {
         emit({

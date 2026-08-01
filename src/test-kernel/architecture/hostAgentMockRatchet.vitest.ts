@@ -1,7 +1,8 @@
 // QA-2 host-side mock ratchet (issue #7684). Host suites (CLI + desktop, in
 // src/test-kernel/cli and src/test-kernel/desktop) reach into `@agent/*`
-// internals via `vi.mock('@agent/...')` or `vi.doMock('@agent/...')`,
-// pinning agent's current internal module layout from outside src/agent.
+// internals via `mock('@agent/...')` or `doMock('@agent/...')` — on `vi` or on
+// a suite's `createModuleMocks()` recorder — pinning agent's current internal
+// module layout from outside src/agent.
 // Clones the checked-in-baseline +
 // AST-scanning vitest pattern from LAY-1 (subsystemEdgeRatchet.vitest.ts,
 // PR #7774): baseline the current site count and fail only on an increase;
@@ -58,8 +59,7 @@ function mockFormFromCall(
   if (
     !ts.isCallExpression(node) ||
     !ts.isPropertyAccessExpression(node.expression) ||
-    !ts.isIdentifier(node.expression.expression) ||
-    node.expression.expression.text !== 'vi'
+    !ts.isIdentifier(node.expression.expression)
   ) {
     return null;
   }
@@ -124,7 +124,7 @@ function readBaseline(): MockBaseline {
 }
 
 describe('QA-2 host-side @agent mock ratchet', () => {
-  it("does not increase the count of either vi.mock or vi.doMock('@agent/...') sites in CLI/desktop suites", () => {
+  it("does not increase the count of either mock or doMock('@agent/...') sites in CLI/desktop suites", () => {
     const baseline = readBaseline();
     const current = collectHostAgentMockSites();
     const baselineCounts = countSitesByForm(baseline.sites);
@@ -133,10 +133,10 @@ describe('QA-2 host-side @agent mock ratchet', () => {
     for (const form of MOCK_FORMS) {
       expect(
         currentCounts[form],
-        `host-side @agent vi.${form} sites grew from ${baselineCounts[form]} to ${currentCounts[form]}:\n` +
+        `host-side @agent ${form} sites grew from ${baselineCounts[form]} to ${currentCounts[form]}:\n` +
           `${current
             .filter((site) => site.form === form)
-            .map((site) => `${site.file}: vi.${site.form}('${site.specifier}')`)
+            .map((site) => `${site.file}: ${site.form}('${site.specifier}')`)
             .join('\n')}\n\n` +
           `If this growth is intentional, update ${BASELINE_FILE} in this PR.`,
       ).toBeLessThanOrEqual(baselineCounts[form]);

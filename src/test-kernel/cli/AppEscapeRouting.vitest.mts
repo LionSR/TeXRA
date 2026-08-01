@@ -14,12 +14,13 @@ import {
   resetCliState,
   rootRunStartAvailable,
   rootStreamId,
+  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import {
-  FakeStdin,
-  FakeStdout,
   loadInk,
+  renderInteractive,
+  type InkRenderHandles,
 } from '@test/support/inkTestHarness.mts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
@@ -29,10 +30,10 @@ const ESC = String.fromCharCode(27);
 function seedRootStream(): void {
   rootStreamId.set(ROOT);
   rootRunStartAvailable.set(false);
-  patchStream(ROOT, (slice) => ({
-    ...slice,
+  setStreamStatusInCliState({
+    streamId: ROOT,
     status: STREAM_PHASE.RUNNING,
-  }));
+  });
   activeStreamId.set(ROOT);
 }
 
@@ -51,18 +52,11 @@ function appProps(
   };
 }
 
-async function renderApp(
-  props: AppProps,
-  stdin: FakeStdin,
-  stdout: FakeStdout,
-) {
+async function renderApp(props: AppProps): Promise<InkRenderHandles> {
   const { ink, React } = await loadInk();
-  return ink.render(React.createElement(App, props), {
-    stdin,
-    stdout,
-    interactive: true,
-    exitOnCtrlC: false,
-    patchConsole: false,
+  return renderInteractive(ink, React.createElement(App, props), {
+    columns: 100,
+    rows: 30,
   });
 }
 
@@ -84,12 +78,7 @@ describe('App foreground Escape ownership', () => {
     seedRootStream();
     openInfoPane('Reference', 'Foreground content');
     const onInterruptStream = vi.fn();
-    const stdin = new FakeStdin();
-    const instance = await renderApp(
-      appProps(onInterruptStream),
-      stdin,
-      new FakeStdout(100, 30),
-    );
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
@@ -106,22 +95,16 @@ describe('App foreground Escape ownership', () => {
   it('returns keyboard ownership to prompt history after stopping the root', async () => {
     seedRootStream();
     const onInterruptStream = vi.fn((streamId: StreamTabId) => {
-      patchStream(streamId, (slice) => ({
-        ...slice,
+      setStreamStatusInCliState({
+        streamId: streamId,
         status: STREAM_PHASE.CANCELLED,
-      }));
+      });
       rootRunStartAvailable.set(true);
     });
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout(100, 30);
-    const instance = await renderApp(
-      {
-        ...appProps(onInterruptStream),
-        history: fakeHistory(['older prompt', 'latest prompt']),
-      },
-      stdin,
-      stdout,
-    );
+    const { instance, stdin, stdout } = await renderApp({
+      ...appProps(onInterruptStream),
+      history: fakeHistory(['older prompt', 'latest prompt']),
+    });
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);

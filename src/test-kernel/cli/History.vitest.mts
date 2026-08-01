@@ -37,17 +37,20 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async () => {
   const actual =
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+  const { createFakeKv } = await import('@test/support/FakeExecutionKVStore');
   return {
     ...actual,
-    getExecutionStore: vi.fn(() => ({
-      readConfig: mocks.readConfig,
-      readConversation: mocks.readConversation,
-      readWorkspaceFiles: mocks.readWorkspaceFiles,
-      readMeta: mocks.readMeta,
-      readResultMeta: mocks.readResultMeta,
-      readReport: mocks.readReport,
-      exists: mocks.exists,
-    })),
+    getExecutionStore: vi.fn((executionId: ExecutionId) =>
+      createFakeKv(executionId, {
+        readConfig: mocks.readConfig,
+        readConversation: mocks.readConversation,
+        readWorkspaceFiles: mocks.readWorkspaceFiles,
+        readMeta: mocks.readMeta,
+        readResultMeta: mocks.readResultMeta,
+        readReport: mocks.readReport,
+        exists: mocks.exists,
+      }),
+    ),
     deriveResumability: mocks.deriveResumability,
     listExecutions: mocks.listExecutions,
     deleteExecution: mocks.deleteExecution,

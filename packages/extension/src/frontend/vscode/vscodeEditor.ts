@@ -6,7 +6,11 @@
 
 import * as vscode from 'vscode';
 
+import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'vscodeEditor';
 
 /**
  * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
@@ -91,7 +95,11 @@ export async function openFileInEditor(
     }
 
     return uri.fsPath;
-  } catch {
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to open ${filePath} in an editor: ${toErrorMessage(err)}`,
+    );
     return undefined;
   }
 }
@@ -119,7 +127,11 @@ export async function ensureFileOpen(
     }
 
     return { editor, absolutePath: uri.fsPath };
-  } catch {
+  } catch (err) {
+    logger.warn(
+      CHANNEL,
+      `Failed to ensure ${filePath} is open in an editor: ${toErrorMessage(err)}`,
+    );
     return undefined;
   }
 }

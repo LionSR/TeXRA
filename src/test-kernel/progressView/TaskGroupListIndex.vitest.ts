@@ -314,6 +314,32 @@ describe('task-group-list ungrouped message indexes', () => {
       400,
     );
   });
+
+  it('leaves the derived structures alone while terminal mode is on', () => {
+    const first = createMessage('m1', 'first', 1);
+    const second = createMessage('m2', 'second', 2);
+    const list = createList([first]);
+
+    expect(list.index.timeline.map((entry) => entry.key)).toEqual(['m1']);
+
+    list.terminal = true;
+    list.messages = [first, second];
+    list.willUpdate(
+      new Map<string, unknown>([
+        ['terminal', false],
+        ['messages', [first]],
+      ]),
+    );
+
+    // Terminal mode renders raw text, so the timeline is not maintained.
+    expect(list.index.timeline.map((entry) => entry.key)).toEqual(['m1']);
+
+    list.terminal = false;
+    list.willUpdate(new Map<string, unknown>([['terminal', true]]));
+
+    // Leaving terminal mode rebuilds everything the skipped updates missed.
+    expect(list.index.timeline.map((entry) => entry.key)).toEqual(['m1', 'm2']);
+  });
 });
 
 describe('task-group-list orphan re-rooting', () => {

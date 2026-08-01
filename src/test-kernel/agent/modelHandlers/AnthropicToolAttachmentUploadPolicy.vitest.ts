@@ -66,7 +66,8 @@ describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)
       client,
       attachments,
       logger,
-      new Map(),
+      0,
+      () => {},
       100,
     );
 

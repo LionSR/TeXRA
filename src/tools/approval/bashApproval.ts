@@ -14,11 +14,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import {
-  StreamTabIdSchema,
-  type BashPermission,
-  type StreamTabId,
-} from '@shared/schemas';
+import { StreamTabIdSchema, type BashPermission } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
@@ -89,24 +85,14 @@ export async function requestBashApproval(
 
   requireInteractions('bash approval', context);
 
-  return session.approvals.bash.enqueue(streamId, () =>
-    showApprovalPrompt(request, streamId, session),
-  );
-}
-
-async function showApprovalPrompt(
-  request: BashApprovalRequest,
-  streamId: StreamTabId | undefined,
-  session: SessionHandle,
-): Promise<BashSettlement> {
-  if (streamId && session.approvals.bash.bypass.isBypassed(streamId)) {
-    return { action: 'approve' };
-  }
-
-  return session.interactions.requestBashApproval({
-    command: request.command,
-    ...(request.cwd ? { cwd: request.cwd } : {}),
-    streamId,
+  return session.approvals.bash.enqueue(streamId, {
+    prompt: () =>
+      session.interactions.requestBashApproval({
+        command: request.command,
+        ...(request.cwd ? { cwd: request.cwd } : {}),
+        streamId,
+      }),
+    bypassed: () => ({ action: 'approve' }),
   });
 }
 

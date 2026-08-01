@@ -1,9 +1,16 @@
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import type { ExecutionId } from '@shared/schemas';
 
-/** Minimal in-memory stand-in for ExecutionKVStore; only read/write/getExecutionId are exercised by PersistedFlow. */
+/**
+ * In-memory stand-in for the store `getExecutionStore()` returns. The generic
+ * key/value half is real; the typed accessors answer empty by default and each
+ * suite overrides only the ones it drives. Covering the whole interface is the
+ * point: a partial object literal per suite silently rots as `ExecutionKVStore`
+ * grows, and calling an unstubbed accessor there throws a bare `TypeError`.
+ */
 export function createFakeKv(
   executionId = 'test-exec-0001' as ExecutionId,
+  overrides: Partial<ExecutionKVStore> = {},
 ): ExecutionKVStore {
   const store = new Map<string, unknown>();
   return {
@@ -37,5 +44,6 @@ export function createFakeKv(
     writeWorkspaceFiles: async () => {},
     writeChild: async () => {},
     writeResultMeta: async () => {},
+    ...overrides,
   };
 }

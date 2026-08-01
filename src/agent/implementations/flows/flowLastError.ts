@@ -10,12 +10,16 @@
  */
 
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
-import { toProviderErrorFromRetry, type RetryErrorInfo } from '@shared/schemas';
+import type { RetryErrorInfo } from '@shared/schemas';
 
 export function throwFlowLastError(
   err: Error,
   lastError: RetryErrorInfo,
 ): never {
-  attachProviderError(err, toProviderErrorFromRetry(lastError));
+  // `RetryErrorInfo` is a `ProviderError` minus the bulky `rawErrorBody`, so it
+  // attaches as-is: the missing field stays absent and `isRelayError` stays
+  // `undefined` when it was, keeping `normalizeProviderError` from reading a
+  // wrong relay verdict off the retry-state shape.
+  attachProviderError(err, lastError);
   throw err;
 }

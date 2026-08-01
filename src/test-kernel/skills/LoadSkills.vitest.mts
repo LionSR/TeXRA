@@ -36,7 +36,7 @@ describe('discoverSkills', () => {
 
     expect(result.errors).toEqual([]);
     expect(result.skills).toHaveLength(1);
-    expect(result.skills[0]).toMatchObject({
+    expect(result.skills[0]?.skill).toMatchObject({
       name: 'manuscript-review',
       description:
         'Reviews mathematical manuscripts for correctness and exposition.',
@@ -70,7 +70,7 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map((skill) => skill.name)).toEqual([
+    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
       'frontmatter-name',
     ]);
     expect(result.errors).toContainEqual(
@@ -97,7 +97,9 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map((skill) => skill.name)).toEqual(['valid-skill']);
+    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
+      'valid-skill',
+    ]);
     expect(result.errors).toContainEqual(
       expect.objectContaining({
         severity: 'error',
@@ -120,7 +122,9 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map((skill) => skill.name)).toEqual(['actual-skill']);
+    expect(result.skills.map(({ skill }) => skill.name)).toEqual([
+      'actual-skill',
+    ]);
     expect(result.errors).toContainEqual(
       expect.objectContaining({
         severity: 'warning',
@@ -142,7 +146,7 @@ describe('discoverSkills', () => {
 
     const result = await discoverSkills(root);
 
-    expect(result.skills.map((skill) => skill.description)).toEqual([
+    expect(result.skills.map(({ skill }) => skill.description)).toEqual([
       'The first skill with this name.',
     ]);
     expect(result.errors).toContainEqual(

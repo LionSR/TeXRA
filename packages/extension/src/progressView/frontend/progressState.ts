@@ -98,7 +98,6 @@ export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
 // ---------------------------------------------------------------------------
 
 export const streamById$ = select(appState, (s) => s.streamById);
-const streamFilter$ = select(appState, (s) => s.streamFilter);
 export const streamStates$ = select(appState, (s) => s.streamStates);
 const streamLogs$ = select(appState, (s) => s.streamLogs);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
@@ -113,18 +112,10 @@ export const streams$ = new Signal.Computed(() => [
   ...streamById$.get().values(),
 ]);
 
-/** Top-level streams, independent of the progress view's category filter. */
+/** Top-level streams: the tab list, with child streams excluded. */
 export const topLevelStreams$ = new Signal.Computed(() =>
   streams$.get().filter((stream) => !stream.parentStreamId),
 );
-
-/** Top-level streams for the tab list (child streams excluded). */
-export const tabStreams$ = new Signal.Computed(() => {
-  const topLevel = topLevelStreams$.get();
-  const filter = streamFilter$.get();
-  if (filter === 'all') return topLevel;
-  return topLevel.filter((stream) => stream.agentCategory === filter);
-});
 
 /**
  * Child streams grouped by parent stream ID.
@@ -202,14 +193,15 @@ const activeStreamInfo$ = new Signal.Computed(() => {
 });
 
 /**
- * True when the current filter yields at least one tab. Gates the
- * "no streams match" placeholder — backend now sends every stream
- * unfiltered, so `streamById.size` alone can't distinguish "nothing
- * visible" from "everything hidden by filter".
+ * True when at least one top-level tab exists. Gates the empty-state
+ * placeholder — `streamById` also holds child streams, which the tab list
+ * never renders on its own.
  */
-const hasStreams$ = new Signal.Computed(() => tabStreams$.get().length > 0);
+const hasStreams$ = new Signal.Computed(
+  () => topLevelStreams$.get().length > 0,
+);
 
-/** True only when the backend knows no streams at all, independent of filter. */
+/** True when the backend knows any stream at all, child streams included. */
 export const hasAnyStreams$ = new Signal.Computed(
   () => streamById$.get().size > 0,
 );

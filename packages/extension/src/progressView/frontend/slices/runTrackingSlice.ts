@@ -10,10 +10,7 @@
 import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  sumUsageStats,
-  type ProgressViewOutboundHandlerRegistry,
-} from '@shared/schemas';
+import { type ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import { setStreamStateForId } from '../progressState';
 import { updateWorkflowState, updateRounds } from '../stateUtils';
@@ -60,12 +57,11 @@ export const runTrackingHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE]: (data) => {
     const { stream, runId, usage } = data;
-    // Both stream kinds carry runUsage/sessionUsage (BaseStreamStateSchema),
-    // so no kind narrowing is needed here.
+    // Both stream kinds carry runUsage (BaseStreamStateSchema), so no kind
+    // narrowing is needed here.
     setStreamStateForId(stream, (prev) =>
       create(prev, (draft) => {
         draft.runUsage[runId] = usage;
-        draft.sessionUsage = sumUsageStats(Object.values(draft.runUsage));
       }),
     );
   },

@@ -30,7 +30,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   applyExecutionOutcome,
-  parsePersistedResultMeta,
+  parseLegacyResultMeta,
   ResultMetaSchema,
   type ResultMeta,
 } from './resultMeta';
@@ -307,7 +307,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     const config = await this.readConfig();
     try {
       return applyExecutionOutcome(
-        parsePersistedResultMeta(raw, {
+        parseLegacyResultMeta(raw, {
           category: config?.agentCategory,
           outcome: meta?.outcome,
         }),

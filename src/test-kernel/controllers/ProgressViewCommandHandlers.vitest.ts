@@ -74,7 +74,6 @@ function createActions(
   return {
     lifecycle: {
       setActiveStream: vi.fn(),
-      setAgentFilter: vi.fn(),
       deleteStream: vi.fn(),
       deleteAllStreams: vi.fn(),
       stopStream: vi.fn(),
@@ -188,10 +187,6 @@ describe('createProgressViewCommandHandlers', () => {
       handlers,
     );
     expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, filter: 'all' },
-      handlers,
-    );
-    expectDispatched(
       { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: 'stream-b' },
       handlers,
     );
@@ -202,7 +197,6 @@ describe('createProgressViewCommandHandlers', () => {
     );
 
     expect(actions.lifecycle.setActiveStream).toHaveBeenCalledWith('stream-a');
-    expect(actions.lifecycle.setAgentFilter).toHaveBeenCalledWith('all');
     expect(actions.lifecycle.deleteStream).toHaveBeenCalledWith('stream-b');
     expect(actions.lifecycle.deleteAllStreams).toHaveBeenCalledWith();
     expect(actions.lifecycle.stopStream).toHaveBeenCalledWith('stream-c');

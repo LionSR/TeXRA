@@ -10,7 +10,6 @@ import {
   phaseStages$,
   resetProgressState,
   setStreamStateForId,
-  tabStreams$,
   topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import {
@@ -66,12 +65,11 @@ describe('stream meta frontend state', () => {
     resetProgressState();
   });
 
-  it('keeps the unfiltered top-level stream list independent of the progress filter', () => {
+  it('excludes child streams from the top-level stream list', () => {
     const workflowId = 'workflow' as StreamTabId;
     const toolUseId = 'tool-use' as StreamTabId;
     const childId = 'child' as StreamTabId;
     const state = createInitialState();
-    state.streamFilter = 'workflow';
     registerStream(state, workflowId);
     registerStream(state, toolUseId, {
       agentCategory: AgentCategory.ToolUse,
@@ -84,9 +82,6 @@ describe('stream meta frontend state', () => {
     });
     seedState(state);
 
-    expect(tabStreams$.get().map((stream) => stream.name)).toEqual([
-      workflowId,
-    ]);
     expect(topLevelStreams$.get().map((stream) => stream.name)).toEqual([
       workflowId,
       toolUseId,
@@ -98,7 +93,6 @@ describe('stream meta frontend state', () => {
     const siblingId = 'stream-b' as StreamTabId;
     const state = createInitialState();
     state.activeStreamId = streamId;
-    state.streamFilter = 'workflow';
     registerStream(state, siblingId, {
       label: 'old sibling',
       agentCategory: AgentCategory.ToolUse,
@@ -144,7 +138,6 @@ describe('stream meta frontend state', () => {
         subagents: [],
       },
       activeStream: siblingId,
-      agentFilter: 'toolUse',
     });
 
     expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
@@ -162,7 +155,6 @@ describe('stream meta frontend state', () => {
       subagents: [],
     });
     expect(getState().activeStreamId).toBe(siblingId);
-    expect(getState().streamFilter).toBe('workflow');
     expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
   });
 
@@ -205,7 +197,6 @@ describe('stream meta frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     state.activeStreamId = streamId;
-    state.streamFilter = 'workflow';
     registerStream(state, streamId);
     state.streamStates.set(
       streamId,
@@ -228,7 +219,6 @@ describe('stream meta frontend state', () => {
         },
       ],
       activeStream: streamId,
-      agentFilter: 'all',
       streamStates: {
         [streamId]: {
           kind: AgentCategory.Workflow,
@@ -245,7 +235,6 @@ describe('stream meta frontend state', () => {
     expect(getState().streamStates.get(streamId)?.status).toBe(
       STREAM_PHASE.COMPLETED,
     );
-    expect(getState().streamFilter).toBe('workflow');
     expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
   });
 

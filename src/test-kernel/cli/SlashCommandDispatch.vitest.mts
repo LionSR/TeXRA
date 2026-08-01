@@ -35,14 +35,14 @@ import {
   streams,
   transientNotice,
   type ConversationEntry,
+  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
-import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { CliExitCode } from '@cli/runtime/exitCodes';
+import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import * as codexPreference from '@model/codex/codexPreference';
 import {
@@ -61,15 +61,7 @@ afterEach(() => {
 });
 
 function createSession(): TuiSession {
-  return {
-    streamId: undefined,
-    interruptedStreamId: undefined,
-    executionId: undefined,
-    runPromise: undefined,
-    runExitCode: CliExitCode.Success,
-    runCompleted: false,
-    stopRequested: false,
-  };
+  return new TuiSession();
 }
 
 function mockModelAccessOverview(): void {
@@ -474,7 +466,7 @@ describe('handleTuiSlashCommand', () => {
         message: 'Model access: ChatGPT subscription.',
       });
     const session = createSession();
-    session.runPromise = new Promise(() => undefined);
+    session.markRunPending(new Promise(() => undefined));
     const context = createContext(session, {
       cliContext: createCliContext({ apiMode: 'included' }),
     });
@@ -656,10 +648,10 @@ describe('handleTuiSlashCommand', () => {
     session.streamId = streamId;
     session.executionId = 'exec-1' as ExecutionId;
     activeStreamId.set(streamId);
-    patchStream(streamId, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: streamId,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
 
     const handled = await handleTuiSlashCommand(
       '/status',
@@ -682,7 +674,6 @@ describe('handleTuiSlashCommand', () => {
     patchStream(streamId, (slice) => ({
       ...slice,
       model: 'gpt55',
-      status: STREAM_PHASE.WAITING,
       usage: {
         inputTokens: 1_000,
         outputTokens: 100,
@@ -690,6 +681,10 @@ describe('handleTuiSlashCommand', () => {
         usageRoute: 'relay',
       },
     }));
+    setStreamStatusInCliState({
+      streamId: streamId,
+      status: STREAM_PHASE.WAITING,
+    });
 
     await handleTuiSlashCommand('/status', createContext(session));
 
@@ -723,10 +718,10 @@ describe('handleTuiSlashCommand', () => {
     session.executionId = 'exec-ephemeral' as ExecutionId;
     activeStreamId.set(streamId);
     patchSessionMeta({ transcriptMode: 'ephemeral' });
-    patchStream(streamId, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: streamId,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
 
     await handleTuiSlashCommand('/status', createContext(session));
 

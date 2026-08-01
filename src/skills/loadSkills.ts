@@ -14,18 +14,24 @@ import type { Skill } from './SkillSchema';
 
 export { type SkillLoadIssue } from './skillLoader';
 
+interface DiscoveredSkill {
+  skill: Skill;
+  /** Canonical `SKILL.md` path, resolved while the skill was discovered. */
+  realPath: string;
+}
+
 export interface DiscoverSkillsResult {
-  skills: Skill[];
+  skills: DiscoveredSkill[];
   errors: SkillLoadIssue[];
 }
 
 type SkillSourceScope = 'bundled' | 'user' | 'project' | 'interop' | 'custom';
 
 export interface SkillSource {
-  scope: SkillSourceScope;
-  path: string;
-  label?: string;
-  required?: boolean;
+  readonly scope: SkillSourceScope;
+  readonly path: string;
+  readonly label?: string;
+  readonly required?: boolean;
 }
 
 export interface SourcedSkill {
@@ -69,7 +75,7 @@ function dupRealpathIssue(
 export async function discoverSkills(
   root: string,
 ): Promise<DiscoverSkillsResult> {
-  const skills: Skill[] = [];
+  const skills: DiscoveredSkill[] = [];
   const errors: SkillLoadIssue[] = [];
   const seenNames = new Set<string>();
   const seenRealPaths = new Set<string>();
@@ -125,7 +131,7 @@ export async function discoverSkills(
     }
 
     seenNames.add(loaded.skill.name);
-    skills.push(loaded.skill);
+    skills.push({ skill: loaded.skill, realPath: realSkillPath });
   }
 
   return { skills, errors };
@@ -195,17 +201,9 @@ export async function discoverSkillSources(
       ),
     );
 
-    for (const skill of result.skills) {
-      let realSkillPath = skill.path;
-      try {
-        realSkillPath = await fs.realpath(skill.path);
-      } catch {
-        // The one-root loader has already read this file. If the path vanishes
-        // between the read and this check, name deduplication still suffices.
-      }
-
-      if (seenRealPaths.has(realSkillPath)) {
-        errors.push(dupRealpathIssue(realSkillPath, skill.path, skill.name));
+    for (const { skill, realPath } of result.skills) {
+      if (seenRealPaths.has(realPath)) {
+        errors.push(dupRealpathIssue(realPath, skill.path, skill.name));
         continue;
       }
 
@@ -214,7 +212,7 @@ export async function discoverSkillSources(
         continue;
       }
 
-      seenRealPaths.add(realSkillPath);
+      seenRealPaths.add(realPath);
       seenNames.add(skill.name);
       skills.push({ skill, source });
     }

@@ -104,12 +104,10 @@ import {
   updateMultiFiles,
 } from './mainViewActions';
 import {
-  flushPendingInstructionSave,
+  flushPendingSave,
   handleRestoreState,
   resetPersistenceRuntime,
   restorePersistedState,
-  saveState,
-  scheduleInstructionSave,
 } from './persistence';
 import { mainViewMessageHandlers } from './messageDispatcher';
 import { FILE_SELECT_CONFIGS, MULTI_FILE_LISTS } from './store';
@@ -191,14 +189,12 @@ export class MainApp extends MainAppBase {
     detail,
   }: CustomEvent<LatexDiffsToggleDetail>): void => {
     latexdiffsVisible$.set(detail.visible);
-    saveState();
   };
 
   private readonly onInstructionInput = ({
     detail,
   }: CustomEvent<InstructionChangeDetail>): void => {
     setInstruction(detail.value);
-    scheduleInstructionSave();
   };
 
   override connectedCallback(): void {
@@ -207,7 +203,7 @@ export class MainApp extends MainAppBase {
   }
 
   override disconnectedCallback(): void {
-    flushPendingInstructionSave();
+    flushPendingSave();
     super.disconnectedCallback();
   }
 
@@ -418,7 +414,6 @@ export class MainApp extends MainAppBase {
         }: CustomEvent<WorkingDirectoryChangeDetail>) =>
           changeWorkingDirectory(detail.value)}
         @instruction-input=${this.onInstructionInput}
-        @instruction-paste=${() => saveState()}
         @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
           runPanelAction(detail.action)}
         @execute=${() => executeAgent()}

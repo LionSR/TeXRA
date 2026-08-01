@@ -900,6 +900,39 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
+  it('resolves the descriptor execution id everywhere when the legacy mirror is malformed', async () => {
+    await installPlatform();
+    // A per-test execution id: `getExecutionStore` caches one store per id
+    // across tests, and a reused id would inherit a handle whose directory
+    // this test's temp platform no longer has.
+    const executionId = 'aa11bb22' as ExecutionId;
+    const taskState = toolUseTaskState('legacy-search');
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      // A legacy sidecar whose top-level mirror never held a real execution id.
+      executionId: 'not-an-execution-id!',
+      runDescriptor: buildRunDescriptor({
+        streamId: STREAM,
+        executionId,
+        agent: 'legacy-search',
+        category: AgentCategory.ToolUse,
+        kind: 'agent',
+      }),
+    });
+
+    const store = new StreamSnapshotStore();
+    // The meta-only scan the execution→stream resolver runs, and the seeded
+    // accessors, must agree instead of one finding the run and the other not.
+    expect(await store.readPersistedExecutionId(STREAM)).toBe(executionId);
+    await store.load([STREAM]);
+
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.getExecutionIdMap().get(STREAM)).toBe(executionId);
+    expect((await store.read(STREAM)).executionId).toBe(executionId);
+  });
+
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
     await installPlatform();
     const oldExecutionId = 'abc123' as ExecutionId;

@@ -17,6 +17,7 @@ import {
   patchStream,
   resetCliState,
   streams,
+  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   LOG_LEVELS,
@@ -52,6 +53,9 @@ describe('subscribeStreamLog batching and dispose', () => {
     // `subscribeStreamLog()` reads the default session's own `transcripts`
     // store, so clear it in place instead.
     await defaultSession().transcripts.clear();
+    // Twice: the first reset retires the ids this suite reuses across tests,
+    // the second starts the lifetime with no retired identity.
+    resetCliState();
     resetCliState();
     vi.useFakeTimers();
   });
@@ -121,10 +125,10 @@ describe('subscribeStreamLog batching and dispose', () => {
   it('releases a completed transcript whose focus load finishes late', async () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamA, 'a-1', 'loaded late');
-    patchStream(streamA, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: streamA,
       status: STREAM_PHASE.COMPLETED,
-    }));
+    });
 
     let finishLoad = (): void => {};
     let loadFinished = false;
@@ -180,10 +184,10 @@ describe('subscribeStreamLog batching and dispose', () => {
   it('requests bounded residency for a hidden WAITING transcript', () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamB, 'b-1', 'waiting for retry');
-    patchStream(streamB, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: streamB,
       status: STREAM_PHASE.WAITING,
-    }));
+    });
     activeStreamId.set(streamA);
     const requestEviction = vi.spyOn(store, 'requestEviction');
 

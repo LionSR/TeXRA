@@ -8,12 +8,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import {
-  createKey,
-  getAgent,
-  loadAgents,
-  refresh as refreshAgents,
-} from '@agent/index';
+import { getAgent, loadAgents, refresh as refreshAgents } from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -30,6 +25,7 @@ import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalog
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { agentKey } from '@shared/schemas';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -259,7 +255,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to create custom agent copy',
       async () => {
-        const key = createKey(data.agentSource, data.agentName);
+        const key = agentKey(data.agentSource, data.agentName);
         const entry = getAgent(key);
         if (!entry?.path) {
           await showLoggedMessage(
@@ -325,7 +321,7 @@ export class AgentHandlers {
         this.ctx,
         'Failed to delete custom agent',
         async () => {
-          const key = createKey('custom', data.agentName);
+          const key = agentKey('custom', data.agentName);
           const entry = getAgent(key);
           if (!entry?.path) {
             await showLoggedMessage(
