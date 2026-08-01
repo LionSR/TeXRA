@@ -1,5 +1,6 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
+import { warn } from '@logger/logUtils';
 import type {
   ClaudeAgentEffort,
   TokenUsageStats,
@@ -8,6 +9,8 @@ import type {
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
+
+const LOG_CHANNEL = 'claudeAgent';
 
 /**
  * Compile-time guard: `ClaudeAgentEffort` in `@shared` (the single source of
@@ -92,6 +95,36 @@ export function buildClaudeUsageStats(usage: ClaudeTurnUsage): TokenUsageStats {
   };
 }
 
+/** Narrow an SDK-sourced value to a plain record, the way every built-in
+ *  tool's `input` arrives per the tool-use protocol (a no-argument call still
+ *  sends `{}`, never a bare primitive or `null`). Shared so the guard is
+ *  written once and `buildClaudeToolUseLog` and `describeToolInput` can't
+ *  drift apart on what counts as "object-shaped". */
+function isToolRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+/**
+ * Narrow a `tool_use` block's `input` to a record for storage on
+ * `ToolUseLog`. A non-object payload here means the SDK sent something
+ * outside the tool-use contract (every call — including no-argument ones —
+ * carries a JSON object), so it's worth a loud warning rather than a cast
+ * that silently misrepresents the value as a record.
+ */
+function toToolInputRecord(
+  toolName: string,
+  input: unknown,
+): Record<string, unknown> | undefined {
+  if (input === undefined) return undefined;
+  if (isToolRecord(input)) return input;
+  warn(
+    LOG_CHANNEL,
+    `Claude tool "${toolName}" sent a non-object input; expected a JSON object per the tool-use protocol.`,
+    { data: { input } },
+  );
+  return undefined;
+}
+
 /**
  * Build a tool-use log entry for a Claude `tool_use` content block.
  * Mirrors the rendering of Codex's command/file-change events while retaining
@@ -109,10 +142,12 @@ export function buildClaudeToolUseLog(params: {
   return {
     toolName: `claude:${params.toolName}`,
     summary: truncateSummary(summarySource, SUMMARY_MAX_LENGTH),
-    input: params.input as Record<string, unknown>,
-    ...(params.output !== undefined && {
-      output: params.output as Record<string, unknown>,
-    }),
+    input: toToolInputRecord(params.toolName, params.input),
+    // Unlike `input`, a tool_result's `output` is routinely a plain string
+    // (or other non-object value) — that's a normal outcome, not a
+    // protocol violation, so it's stored as-is (matching `ToolUseLog.output`'s
+    // `unknown` type) with no record cast and no warning.
+    ...(params.output !== undefined && { output: params.output }),
     ...(params.isError &&
       params.errorMessage && {
         error: params.errorMessage,
@@ -127,8 +162,8 @@ export function buildClaudeToolUseLog(params: {
  * to the tool name when the input shape isn't recognized.
  */
 function describeToolInput(toolName: string, input: unknown): string {
-  if (input == null || typeof input !== 'object') return toolName;
-  const record = input as Record<string, unknown>;
+  if (!isToolRecord(input)) return toolName;
+  const record = input;
 
   switch (toolName) {
     case 'Bash':

@@ -32,6 +32,7 @@ import { setsEqual } from './utils';
 import { clearFollowUpInputTransientStateStore } from './followUpInputState';
 import {
   createInitialState,
+  ensureStreamState,
   EMPTY_STREAM_LOGS,
   isToolUseState,
   type StreamState,
@@ -390,6 +391,10 @@ export function setStreamStateForId(
   if (updated === current) return;
   appState.set(
     create(state, (draft) => {
+      // Backfills streamLogs/followupOptionsByStream alongside streamStates
+      // when this is the first handler to observe the stream (see
+      // `ensureStreamState`'s doc comment for the owned key list).
+      ensureStreamState(draft, streamId, current.kind);
       draft.streamStates.set(streamId, updated);
     }),
   );

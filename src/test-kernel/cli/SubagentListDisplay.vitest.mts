@@ -65,7 +65,7 @@ function workflowAgentSlice(
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,
-    roundStage: undefined,
+    stage: undefined,
     entries: [],
     queuedFollowUpMessages: [],
     todos: [],
@@ -700,7 +700,7 @@ describe('CLI child list display model', () => {
               active: false,
               slice: workflowAgentSlice('run', {
                 status: STREAM_PHASE.RUNNING,
-                phaseStage: { label: 'Reduce', index: 1, total: 3 },
+                stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
               }),
             },
             {
@@ -709,7 +709,7 @@ describe('CLI child list display model', () => {
               active: false,
               slice: workflowAgentSlice('reflect', {
                 status: STREAM_PHASE.RUNNING,
-                roundStage: { index: 1, total: 3 },
+                stage: { kind: 'round', index: 1, total: 3 },
               }),
             },
           ],
@@ -1016,32 +1016,6 @@ describe('CLI child list display model', () => {
     expect(wideOutput.indexOf('writer-attempt')).toBeLessThan(
       wideOutput.indexOf('Reduce (2/2)'),
     );
-  });
-
-  it('never shows both a phase and a round on one row', async () => {
-    const run = 'run' as StreamTabId;
-    const output = await renderSubagentList(
-      {
-        maxRows: 3,
-        sessions: [
-          {
-            id: run,
-            label: 'workflow-script',
-            active: false,
-            slice: workflowAgentSlice('run', {
-              status: STREAM_PHASE.RUNNING,
-              phaseStage: { label: 'Reduce', index: 1, total: 3 },
-              roundStage: { index: 0, total: 9 },
-            }),
-          },
-        ],
-      },
-      100,
-      { until: (frame) => frame.includes('workflow-script') },
-    );
-
-    expect(output).toContain('Reduce 2/3');
-    expect(output).not.toContain('r1/9');
   });
 
   // The right-aligned metadata column is the one row element `SubagentList`

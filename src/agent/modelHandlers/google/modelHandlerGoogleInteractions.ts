@@ -218,20 +218,28 @@ function isBackgroundUnsupportedError(error: unknown): boolean {
   );
 }
 
-/** Mutable accumulator for a single in-flight step during streaming. */
-interface PendingStep {
-  type: Step['type'] | string;
+/**
+ * Raw accumulator for a single in-flight step during streaming.
+ *
+ * This buffers delta fragments ONLY — it carries no discriminant `type` tag.
+ * Earlier versions mutated a `.type` field as different SSE delta kinds
+ * arrived (`'model_output'` / `'thought'` / `'function_call'`), which made the
+ * final kind depend on mutation order rather than on the data actually
+ * accumulated. `finalizeSteps` now derives the kind once, from which of these
+ * fields are populated (see the precedence comment there).
+ */
+interface PendingStepBuffer {
   /** model_output text accumulator */
-  text: string;
+  text?: string;
   /** thought summary accumulator */
-  thought: string;
+  thought?: string;
   /** thought signature, captured from ThoughtSignatureDelta */
   signature?: string;
-  /** function_call fields */
+  /** function_call id/name, seeded from a function_call step.start event */
   callId?: string;
   callName?: string;
   /** concatenated arguments_delta fragments, parsed at step.stop */
-  argsBuffer: string;
+  argsBuffer?: string;
   /** parsed arguments after step.stop */
   args?: Record<string, unknown>;
 }
@@ -1643,7 +1651,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     let streamsFinalized = false;
 
     try {
-      const pending = new Map<number, PendingStep>();
+      const pending = new Map<number, PendingStepBuffer>();
       let completedInteraction: GoogleGenAIInteraction | undefined;
       let runningUsage: Usage | undefined;
       let interactionId: string | undefined;
@@ -1670,8 +1678,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
           }
 
           case 'step.stop': {
+            // argsBuffer only ever accumulates via `arguments_delta`, which is
+            // exclusive to function_call steps — its presence is itself the
+            // "this is a function call" signal, so no separate kind check is
+            // needed here.
             const slot = pending.get(event.index);
-            if (slot && slot.type === 'function_call' && slot.argsBuffer) {
+            if (slot?.argsBuffer) {
               slot.args = parseToolInputAsObject(
                 slot.argsBuffer,
                 slot.callId ?? 'unknown',
@@ -1751,20 +1763,20 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     }
   }
 
-  private seedPendingStep(step?: Step): PendingStep {
-    return {
-      type: step?.type ?? 'model_output',
-      text: '',
-      thought: '',
-      argsBuffer: '',
-      ...(step?.type === 'function_call'
-        ? { callId: step.id, callName: step.name }
-        : {}),
-    };
+  /**
+   * Seed a fresh accumulator for a `step.start` event. The only up-front data
+   * worth capturing is a function_call step's id/name (arguments stream in
+   * later via `arguments_delta`, handled by {@link applyDelta}); every other
+   * step kind starts empty and is categorized later in {@link finalizeSteps}.
+   */
+  private seedPendingStep(step?: Step): PendingStepBuffer {
+    return step?.type === 'function_call'
+      ? { callId: step.id, callName: step.name }
+      : {};
   }
 
   private applyDelta(
-    slot: PendingStep,
+    slot: PendingStepBuffer,
     delta: Interactions.StepDelta['delta'],
     output: ReturnType<ModelHandlerGoogleInteractions['createOutputStream']>,
     thinking: ReturnType<
@@ -1774,32 +1786,30 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   ): void {
     switch (delta.type) {
       case 'text':
-        slot.type = 'model_output';
         if (delta.text) {
-          slot.text += delta.text;
+          slot.text = (slot.text ?? '') + delta.text;
           output.append(delta.text);
           onOutputText(delta.text);
         }
         break;
       case 'thought_summary': {
-        slot.type = 'thought';
         const text =
           delta.content && isTextContent(delta.content)
             ? delta.content.text
             : '';
         if (text) {
-          slot.thought += text;
+          slot.thought = (slot.thought ?? '') + text;
           thinking.append(text);
         }
         break;
       }
       case 'thought_signature':
-        slot.type = 'thought';
         if (delta.signature) slot.signature = delta.signature;
         break;
       case 'arguments_delta':
-        slot.type = 'function_call';
-        if (delta.arguments) slot.argsBuffer += delta.arguments;
+        if (delta.arguments) {
+          slot.argsBuffer = (slot.argsBuffer ?? '') + delta.arguments;
+        }
         break;
       default:
         // Media / built-in tool deltas are ignored in v0 (no media-out, no
@@ -1809,14 +1819,24 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   }
 
   /** Turn the per-index accumulators into a verbatim model-generated Step[]. */
-  private finalizeSteps(pending: Map<number, PendingStep>): Step[] {
+  private finalizeSteps(pending: Map<number, PendingStepBuffer>): Step[] {
     const ordered = [...pending.entries()].toSorted((a, b) => a[0] - b[0]);
     const steps: Step[] = [];
     for (const [, slot] of ordered) {
-      if (slot.type === 'thought') {
+      // Derive the step's kind ONCE from which raw fields actually
+      // accumulated data, instead of the old approach of mutating a `.type`
+      // tag as each delta arrived. Precedence — thought, then function_call,
+      // then model_output text — mirrors the branch order the mutation-based
+      // version checked in, and is safe because the Interactions SSE
+      // contract never mixes delta families within one step index: a thought
+      // step only ever receives thought_summary/thought_signature deltas, a
+      // function_call step only arguments_delta (plus its id/name seeded at
+      // step.start), and a model_output step only text — so at most one of
+      // these signal groups is ever populated for a given index.
+      if (slot.signature || slot.thought) {
         const step = this.thoughtStep(slot.signature, slot.thought);
         if (step) steps.push(step);
-      } else if (slot.type === 'function_call') {
+      } else if (slot.callId || slot.callName || slot.argsBuffer || slot.args) {
         steps.push({
           type: 'function_call',
           id: slot.callId ?? generateShortId(),
@@ -1824,7 +1844,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
           arguments:
             slot.args ??
             parseToolInputAsObject(
-              slot.argsBuffer,
+              slot.argsBuffer ?? '',
               slot.callId ?? 'unknown',
               this.logger,
             ),

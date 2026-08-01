@@ -9,7 +9,6 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  createStreamState,
   type ProgressViewOutboundHandlerRegistry,
   type StreamMetadata,
   type StreamTabId,
@@ -18,6 +17,7 @@ import {
 
 import {
   deleteStreamState,
+  ensureStreamState,
   firstStreamId,
   type ProgressState,
   type StreamState,
@@ -59,13 +59,18 @@ function updateStreamInfo(
   // Explicit description on StreamTabInfo wins over the pending buffer.
   const mergedStates = new Map<string, StreamState>();
   const newStreamById = new Map<string, StreamTabInfo>();
+  // Streams with no backend metadata and no prior state yet: routed through
+  // `ensureStreamState` below so their default streamStates entry and its
+  // streamLogs/followupOptionsByStream companions are created together,
+  // instead of synthesizing a bare streamStates default here.
+  const streamsNeedingDefaultState: StreamTabInfo[] = [];
   for (const stream of streams) {
     const existing = state.streamStates.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
     if (metadata) {
       mergedStates.set(stream.name, mergeBackendOwnedState(existing, metadata));
     } else if (!existing) {
-      mergedStates.set(stream.name, createStreamState(stream.agentCategory));
+      streamsNeedingDefaultState.push(stream);
     }
     // Always drain the pending buffer so stale entries don't linger once the
     // stream registers, even if the payload already carries a description.
@@ -97,6 +102,10 @@ function updateStreamInfo(
 
     for (const [name, merged] of mergedStates) {
       draft.streamStates.set(name, merged);
+    }
+
+    for (const stream of streamsNeedingDefaultState) {
+      ensureStreamState(draft, stream.name, stream.agentCategory);
     }
 
     draft.streamById = newStreamById;
