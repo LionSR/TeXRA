@@ -109,10 +109,16 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import type { ApiProvider } from '@model/apiProviders';
-import { AgentCategory, type RetryPermission } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_OUTCOME,
+  type RetryPermission,
+} from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
@@ -323,7 +329,10 @@ describe('TUI retry approvals', () => {
       reason:
         'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     });
-    expect(hasCliApprovalDenied(cliContext)).toBe(true);
+    expect(hasCliApprovalDenied(cliContext)).toBe(false);
+    expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, cliContext)).toBe(
+      CliExitCode.AgentError,
+    );
     expect(currentApproval.get()).toBeUndefined();
   });
 
