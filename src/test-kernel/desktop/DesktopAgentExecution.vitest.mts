@@ -52,7 +52,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 import {
   isApprovalBypassedForStream,

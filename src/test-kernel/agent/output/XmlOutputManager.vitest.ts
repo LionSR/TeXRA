@@ -18,7 +18,7 @@ const formatterMocks = vi.hoisted(() => ({
   runLatexFormatter: vi.fn(),
 }));
 
-vi.mock('@latex/texFormatter', () => ({
+vi.mock('@latex/formatter/texFormatter', () => ({
   runLatexFormatter: formatterMocks.runLatexFormatter,
 }));
 

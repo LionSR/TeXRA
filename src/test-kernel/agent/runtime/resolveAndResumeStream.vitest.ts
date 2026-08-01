@@ -19,7 +19,7 @@ import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
+} from '@test/support/streamStatusTestUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
