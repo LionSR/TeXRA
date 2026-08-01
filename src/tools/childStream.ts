@@ -245,7 +245,7 @@ export async function createRehydratedChildStream(
   options: CreateChildStreamOptions,
 ): Promise<ChildStream> {
   const session = currentSession();
-  const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
+  const childStreamId = getChildStreamId(executionId, options.streamPrefix);
   const writer = await session.transcripts.loadAndAcquireWriter(
     childStreamId,
     executionId,

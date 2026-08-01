@@ -62,7 +62,7 @@ async function scanPersistedStreamsForExecution(
 }
 
 /** Streams whose id carries the `#executionId` suffix, in the given order. */
-export function findExecutionSuffixMatches(
+function findExecutionSuffixMatches(
   streams: readonly StreamTabId[],
   executionId: ExecutionId,
 ): StreamTabId[] {
