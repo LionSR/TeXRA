@@ -38,8 +38,8 @@ All notable changes to this project will be documented in this file.
   previously arrived as `unexpected`.
 - **Execution conversation pagination now uses messages rather than rendered
   lines** — callers of `/executions/{id}/conversation` should replace
-  `view_range` with `offset` and `limit`. Archive reads now report the returned
-  message interval and next offset.
+  `view_range` with `offset` and `limit`. Responses report the returned message
+  interval and next offset.
 
 #### Bug Fixes
 

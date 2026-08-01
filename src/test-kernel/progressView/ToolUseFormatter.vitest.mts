@@ -293,6 +293,43 @@ return { papers, question: args.question };`;
     expect(container.textContent).not.toContain('3600s');
   });
 
+  it('renders guarded executions conversation pagination arguments', () => {
+    const valid = renderTemplate(
+      formatToolUseTemplate(
+        toolUseMessage('executions-conversation-page', {
+          toolName: 'executions',
+          input: {
+            path: '/executions/abc123/conversation',
+            offset: 0,
+            limit: 25,
+          },
+        }),
+      ),
+    );
+    const labels = [...valid.querySelectorAll('.tool-use-sublabel')].map(
+      (label) => label.textContent,
+    );
+
+    expect(labels).toEqual(['Path:', 'Offset:', 'Limit:']);
+    expect(valid.textContent).toContain('0');
+    expect(valid.textContent).toContain('25');
+
+    const invalid = renderTemplate(
+      formatToolUseTemplate(
+        toolUseMessage('executions-invalid-conversation-page', {
+          toolName: 'executions',
+          input: {
+            path: '/executions/abc123/conversation',
+            offset: '0',
+            limit: null,
+          },
+        }),
+      ),
+    );
+    expect(invalid.textContent).not.toContain('Offset:');
+    expect(invalid.textContent).not.toContain('Limit:');
+  });
+
   it('labels executions targets when the display model knows the subagents', () => {
     const message = toolUseMessage('executions-subagents', {
       toolName: 'executions',
