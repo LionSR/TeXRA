@@ -98,6 +98,7 @@ export class ToolUseCycleNode<C> extends Node<
       ...this.services,
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
+      onRoundResponse: this.services.onCycleResponse,
     });
 
     const { onProgress } = this.services;
@@ -182,9 +183,6 @@ export class ToolUseCycleNode<C> extends Node<
     };
     const cycleResponse = prepRes.workspaceState.assembly.lastResponse;
     shared.lastResponse = cycleResponse || shared.lastResponse;
-    if (!prepRes.shouldSkipCycle && cycleResponse) {
-      this.services.onCycleResponse?.(cycleResponse);
-    }
 
     if (execRes.outcome === 'completed') {
       const { interactions } = prepRes.workspaceState;

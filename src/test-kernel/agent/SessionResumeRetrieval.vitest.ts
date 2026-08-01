@@ -195,18 +195,8 @@ function responseModelHandler(
 }
 
 function partialFailureModelHandler(text: string) {
-  let workspace: AgentWorkspaceState | undefined;
   return responseModelHandler([{ text }], {
-    processThinkingBlock: (
-      _response: unknown,
-      currentWorkspace: AgentWorkspaceState,
-    ) => {
-      workspace = currentWorkspace;
-      return null;
-    },
     createAssistantMessageFromResponse: () => {
-      if (!workspace) throw new Error('Expected the round workspace');
-      workspace.assembly.lastResponse = text;
       throw new Error('Provider stream failed after partial output');
     },
   });

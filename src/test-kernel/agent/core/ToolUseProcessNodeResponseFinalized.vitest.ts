@@ -24,6 +24,7 @@ function buildServices(
       resetReasoning: vi.fn(),
     },
     onRoundFinalized: vi.fn(),
+    onRoundResponse: vi.fn(),
     modelCell: testModelCell({
       createAssistantMessageFromResponse: vi.fn(() => ({
         role: 'assistant',
@@ -116,5 +117,6 @@ describe('ToolUseProcessNode.post responseFinalized (#7086)', () => {
     // Non-final rounds never update `assembly.lastResponse` — only the round
     // that ends the turn does.
     expect(services.workspace.assembly.lastResponse).toBe('');
+    expect(services.onRoundResponse).toHaveBeenCalledWith('Let me check that.');
   });
 });
