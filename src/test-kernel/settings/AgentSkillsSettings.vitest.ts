@@ -2,17 +2,18 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { writeSetting } from '@shared/config/settingsAccess';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
 } from '@shared/schemas/agentSkills';
 import {
-  AGENT_SKILLS_CONFIG_TARGET,
   buildAgentSkillsSettingsMessage,
   readAgentSkillsEnabled,
-  setAgentSkillsEnabled,
 } from '@shared/settingsView/handlers/agentSkillsHandlers';
+import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 describe('agent skills settings', () => {
@@ -45,13 +46,18 @@ describe('agent skills settings', () => {
 
   it('persists the switch in workspace configuration', async () => {
     const config = new FakeConfigProvider();
+    const entry = settingsViewSettingByKey(AGENT_SKILLS_CONFIG_KEY);
+    expect(entry).toBeDefined();
 
-    await setAgentSkillsEnabled(config, false);
+    await writeSetting(entry!, false, {
+      config,
+      workspaceState: new MemoryStateStore(),
+      globalState: new MemoryStateStore(),
+    });
 
     expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
     expect(config.inspect(AGENT_SKILLS_CONFIG_KEY)).toMatchObject({
       workspaceValue: false,
     });
-    expect(AGENT_SKILLS_CONFIG_TARGET).toBe('workspace');
   });
 });

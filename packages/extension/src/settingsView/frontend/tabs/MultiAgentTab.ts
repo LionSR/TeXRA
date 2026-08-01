@@ -190,9 +190,12 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) orchestratorAgents: string[] = [];
   @state() private activePresetId: string | null = null;
 
-  private postToggle(command: string, event: Event): void {
+  private postStateToggle(key: WorkspaceStateKey, event: Event): void {
     const target = event.target as WaSwitch | null;
-    postMessage(command, { enabled: Boolean(target?.checked) });
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key,
+      value: Boolean(target?.checked),
+    });
   }
 
   private handlePresetClick(preset: AgentModePreset): void {
@@ -372,8 +375,8 @@ export class MultiAgentTab extends LitElement {
               'The orchestrator can cancel agents that are stuck or no longer needed. Turn this off if you want every agent to finish.',
             checked: this.allowOrchestratorKill,
             onChange: (e) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+              this.postStateToggle(
+                WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
                 e,
               ),
           })}
@@ -383,8 +386,8 @@ export class MultiAgentTab extends LitElement {
               'Let agents that are already mid-task finish independently.',
             checked: this.detachSubagentsOnStop,
             onChange: (e) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+              this.postStateToggle(
+                WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
                 e,
               ),
           })}

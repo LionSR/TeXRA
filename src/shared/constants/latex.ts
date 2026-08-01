@@ -507,15 +507,6 @@ export const LATEX_FIELD_TO_KEY = {
 export type LatexConfigField = keyof typeof LATEX_FIELD_TO_KEY;
 
 /**
- * Ordered list of LaTeX config field names — derived from
- * `LATEX_FIELD_TO_KEY` so the Zod enum schema and any UI iteration can never
- * drift from the canonical field→state-key map.
- */
-export const LATEX_CONFIG_FIELDS = Object.keys(
-  LATEX_FIELD_TO_KEY,
-) as ReadonlyArray<LatexConfigField>;
-
-/**
  * Workspace directories that bulk file operations (formatting, cleaning,
  * packing) skip — generated artifacts and TeXRA-managed bookkeeping dirs.
  * Compared case-insensitively (lowercase entries).

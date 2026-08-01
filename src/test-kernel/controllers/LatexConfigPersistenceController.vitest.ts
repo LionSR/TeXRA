@@ -57,40 +57,4 @@ describe('LatexConfigPersistenceController', () => {
       expected,
     );
   });
-
-  const planUpdateCases: Array<{
-    name: string;
-    input: Parameters<LatexConfigPersistenceController['planUpdate']>[0];
-    expected: unknown;
-  }> = [
-    {
-      name: 'plans validated field updates using workspace storage keys',
-      input: { field: 'latexdiffTimeoutMs', value: 25000 },
-      expected: {
-        ok: true,
-        update: { key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS, value: 25000 },
-      },
-    },
-    {
-      name: 'normalizes null writes to undefined so callers clear the key',
-      input: { field: 'latexFormatter', value: null },
-      expected: {
-        ok: true,
-        update: { key: WorkspaceStateKey.LATEX_FORMATTER, value: undefined },
-      },
-    },
-  ];
-
-  it.each(planUpdateCases)('$name', ({ input, expected }) => {
-    assert.deepEqual(controller.planUpdate(input), expected);
-  });
-
-  it('rejects values that do not match the selected field schema', () => {
-    const plan = controller.planUpdate({
-      field: 'workflowAutoCompileTimeoutMs',
-      value: 1000,
-    });
-
-    assert.equal(plan.ok, false);
-  });
 });
