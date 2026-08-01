@@ -318,14 +318,14 @@ function buildLegacyAgentFinalResult(
   });
 }
 
-/** Parse a canonical record or normalize one historical persisted shape. */
-export function parsePersistedResultMeta(
+/**
+ * Normalize one historical persisted shape into the canonical record. Callers
+ * try {@link ResultMetaSchema} first; this is the legacy-decode arm only.
+ */
+export function parseLegacyResultMeta(
   raw: unknown,
   context: ResultMetaReadContext,
 ): ResultMeta {
-  const canonical = ResultMetaSchema.safeParse(raw);
-  if (canonical.success) return canonical.data;
-
   const legacy = LegacyPersistedResultMetaSchema.parse(raw);
   if (legacy.kind === 'backgroundBash') {
     return ResultMetaSchema.parse({

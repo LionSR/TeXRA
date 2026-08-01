@@ -9,7 +9,7 @@ import type {
   AgentProposal,
   ModelOptionData,
 } from '@shared/schemas';
-import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -59,7 +59,6 @@ interface ProgressViewFollowUpSubmission {
 
 export interface ProgressViewLifecycleCommandActions {
   setActiveStream(stream: StreamTabId): Promise<void> | void;
-  setAgentFilter(filter: AgentCategoryFilter): Promise<void> | void;
   deleteStream(stream: StreamTabId): Promise<void> | void;
   deleteAllStreams(): Promise<void> | void;
   stopStream(stream: StreamTabId): Promise<void> | void;
@@ -191,8 +190,6 @@ export function createProgressViewCommandHandlers(
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream),
-    [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) =>
-      lifecycle.setAgentFilter(data.filter),
     [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
       lifecycle.deleteStream(data.stream),
     [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => lifecycle.deleteAllStreams(),

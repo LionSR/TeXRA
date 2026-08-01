@@ -39,11 +39,7 @@ import {
 } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { AgentCategory } from '@shared/schemas/agent';
-import {
-  FakeStdin,
-  FakeStdout,
-  loadInk,
-} from '@test/support/inkTestHarness.mts';
+import { loadInk, renderInteractive } from '@test/support/inkTestHarness.mts';
 import {
   createDeferred,
   waitForCondition as waitFor,
@@ -525,16 +521,9 @@ describe('slashRegistry', () => {
     expect(formProgress.get()?.archiveCopyable).toBeTypeOf('function');
 
     const { ink } = await loadInk();
-    const stdout = new FakeStdout();
-    const instance = ink.render(
+    const { instance, stdout } = renderInteractive(
+      ink,
       activeForm.get()?.render(() => {}, 20),
-      {
-        stdin: new FakeStdin(),
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
     try {
       instance.rerender(activeForm.get()?.render(() => {}, 4));

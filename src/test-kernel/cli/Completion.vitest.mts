@@ -11,10 +11,27 @@ import {
   generateCompletionScript,
 } from '@cli/runtime/completion';
 import { bashCompletion } from '@cli/runtime/completionBash';
-import { collectCommands } from '@cli/runtime/completionCommandTree';
+import {
+  collectCommands,
+  type CompletionCommand,
+} from '@cli/runtime/completionCommandTree';
 
 function bashQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** Resolve one command by its space-joined path. A path that no longer exists
+ *  is a broken test, not a command that offers no flags, so this throws rather
+ *  than letting the `not.toContain` assertions below pass on `undefined`. */
+function commandAt(
+  commands: readonly CompletionCommand[],
+  path: string,
+): CompletionCommand {
+  const command = commands.find(
+    (candidate) => candidate.path.join(' ') === path,
+  );
+  if (!command) throw new Error(`no completion command at path "${path}"`);
+  return command;
 }
 
 describe('CLI shell completion', () => {
@@ -268,9 +285,7 @@ printf '%s\\n' "\${COMPREPLY[@]}"
   it('does not offer headless-only flags on interactive commands', async () => {
     const commands = await collectCommands(rootCommand);
     const flagsFor = (path: string) =>
-      commands
-        .find((command) => command.path.join(' ') === path)
-        ?.flags.map((flag) => flag.name);
+      commandAt(commands, path).flags.map((flag) => flag.name);
 
     expect(flagsFor('chat')).not.toContain('print');
     expect(flagsFor('chat')).not.toContain('output-format');
@@ -283,9 +298,7 @@ printf '%s\\n' "\${COMPREPLY[@]}"
 
   it('describes multi-agent root options without calling orchestrators tool-use agents', async () => {
     const commands = await collectCommands(rootCommand);
-    const runFlags =
-      commands.find((command) => command.path.join(' ') === 'multi-agent run')
-        ?.flags ?? [];
+    const runFlags = commandAt(commands, 'multi-agent run').flags;
 
     expect(runFlags.find((flag) => flag.name === 'agent')?.description).toBe(
       'Root agent for the team run (defaults to the preset orchestrator)',

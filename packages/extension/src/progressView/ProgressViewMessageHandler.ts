@@ -508,10 +508,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       commands: {
         lifecycle: {
           setActiveStream: (stream) => this.provider.setActiveStream(stream),
-          setAgentFilter: (filter) => {
-            this.provider.state.agentCategoryFilter = filter;
-            this.provider.syncFullView();
-          },
           deleteStream: (stream) => this.provider.backend.deleteStream(stream),
           deleteAllStreams: () => this.handleDeleteAll(),
           stopStream: (stream) => this.provider.backend.stopStream(stream),

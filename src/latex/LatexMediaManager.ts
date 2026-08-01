@@ -52,7 +52,7 @@ type PathInput = string | FileLocation;
  * processing stays independent of agent execution internals.
  */
 export interface MediaWorkspaceState {
-  media: { addMediaFiles(locations: FileLocation[]): void };
+  media: { addMediaFiles(locations: readonly FileLocation[]): void };
 }
 
 /**

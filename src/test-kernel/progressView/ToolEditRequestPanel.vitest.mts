@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { ToolEditRequestPanel } from '@progressView/frontend/components/ToolEditRequestPanel';
 import type { ToolEditPermission } from '@shared/schemas';
+import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
 import {
@@ -51,18 +52,6 @@ function querySplitButton(element: ToolEditRequestPanel): ApproveSplit | null {
     element.shadowRoot?.querySelector<ApproveSplit>('approve-split-button') ??
     null
   );
-}
-
-function recordPermissionActions(
-  element: ToolEditRequestPanel,
-): Array<{ action: string }> {
-  const actions: Array<{ action: string }> = [];
-  element.addEventListener('permission-action', (event) => {
-    actions.push(
-      (event as CustomEvent<{ decision: { action: string } }>).detail.decision,
-    );
-  });
-  return actions;
 }
 
 describe('tool-edit-request-panel', () => {

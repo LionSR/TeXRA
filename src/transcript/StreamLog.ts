@@ -6,6 +6,7 @@ import {
   isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type StreamLogTextDelta,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
@@ -44,15 +45,26 @@ export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
   return data.status === 'running';
 }
 
-export function isNonterminalWorkflowCallEntry(entry: StreamLogEntry): boolean {
+/**
+ * The workflow-call progress carried by a workflow-task row that has not
+ * reached a terminal status, or `undefined` for every other entry. Returns the
+ * parsed call rather than a boolean so the recovery sweep that rewrites such a
+ * row does not parse the same payload a second time.
+ */
+export function nonterminalWorkflowCall(
+  entry: StreamLogEntry,
+): WorkflowCallProgress | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
     entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK
   ) {
-    return false;
+    return undefined;
   }
   const call = WorkflowCallProgressSchema.safeParse(entry.data);
-  return call.success && !isTerminalWorkflowCallProgress(call.data);
+  if (!call.success || isTerminalWorkflowCallProgress(call.data)) {
+    return undefined;
+  }
+  return call.data;
 }
 
 export class StreamLog {
@@ -109,7 +121,7 @@ export class StreamLog {
     if (isRunningStreamingTextEntry(entry)) {
       this.runningStreamingTextCount += delta;
     }
-    if (isNonterminalWorkflowCallEntry(entry)) {
+    if (nonterminalWorkflowCall(entry) !== undefined) {
       this.nonterminalWorkflowCallCount += delta;
     }
   }

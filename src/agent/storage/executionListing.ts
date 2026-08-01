@@ -17,7 +17,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { platform, type Platform } from '@platform/platform';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
@@ -93,8 +93,44 @@ export function isUserVisibleExecution(
 // Legacy migration state
 // ============================================================================
 
-let migrated = false;
-let migratedWorkspacePath: string | undefined;
+/**
+ * In-flight or completed legacy migration per workspace path. The promise is
+ * the memo, so concurrent listings share one migration instead of racing two
+ * backfills over the same legacy entries. An incomplete or failed migration is
+ * forgotten so the next listing retries it.
+ *
+ * The memo describes the storage the current platform exposes, so installing a
+ * different platform drops it — a host that re-initializes its platform gets a
+ * fresh migration decision rather than one made against the previous storage.
+ */
+const migrationsByWorkspace = new Map<string | undefined, Promise<boolean>>();
+let migrationPlatform: Platform | undefined;
+
+function migrateOncePerWorkspace(
+  workspacePath: string | undefined,
+): Promise<boolean> {
+  const currentPlatform = platform();
+  if (currentPlatform !== migrationPlatform) {
+    migrationPlatform = currentPlatform;
+    migrationsByWorkspace.clear();
+  }
+
+  const inFlight = migrationsByWorkspace.get(workspacePath);
+  if (inFlight) return inFlight;
+
+  const migration = migrateIfNeeded().then(
+    (complete) => {
+      if (!complete) migrationsByWorkspace.delete(workspacePath);
+      return complete;
+    },
+    (error: unknown) => {
+      migrationsByWorkspace.delete(workspacePath);
+      throw error;
+    },
+  );
+  migrationsByWorkspace.set(workspacePath, migration);
+  return migration;
+}
 
 /**
  * Read a storage directory, returning an empty array if it doesn't exist.
@@ -132,15 +168,7 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
  * cannot observe another host's writes or metadata updates reliably.
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  const currentPath = WorkspaceFS.getPath();
-  if (currentPath !== migratedWorkspacePath) {
-    migrated = false;
-    migratedWorkspacePath = currentPath;
-  }
-
-  if (!migrated) {
-    migrated = await migrateIfNeeded();
-  }
+  await migrateOncePerWorkspace(WorkspaceFS.getPath());
 
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
@@ -316,16 +344,31 @@ async function migrateIfNeeded(): Promise<boolean> {
 
 /** Migrate entries from executions/index.json into per-execution KV. */
 async function migrateIndexJson(): Promise<boolean> {
-  let items: unknown[];
+  let raw: unknown;
   try {
-    const raw = await StorageFS.readJson<unknown[]>(INDEX_PATH);
-    if (!Array.isArray(raw) || raw.length === 0) return true;
-    items = raw;
-  } catch {
-    return true; // File doesn't exist
+    raw = await StorageFS.readJson<unknown>(INDEX_PATH);
+  } catch (error) {
+    // Nothing to migrate only when the legacy file is genuinely absent. Any
+    // other read failure (unreadable, malformed JSON) leaves history behind,
+    // so report it and let the next listing retry.
+    if (isFileNotFoundError(error)) return true;
+    logger.warn(
+      CHANNEL,
+      `Failed to read legacy ${INDEX_PATH}: ${toErrorMessage(error)}`,
+    );
+    return false;
   }
 
-  if (!(await backfillEntries(items))) return false;
+  if (!Array.isArray(raw)) {
+    logger.warn(
+      CHANNEL,
+      `Legacy ${INDEX_PATH} is not an array; leaving it untouched.`,
+    );
+    return true;
+  }
+  if (raw.length === 0) return true;
+
+  if (!(await backfillEntries(raw))) return false;
 
   try {
     await StorageFS.delete(INDEX_PATH);

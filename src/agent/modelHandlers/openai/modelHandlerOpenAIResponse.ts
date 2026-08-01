@@ -617,21 +617,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Manually set the previous response ID to resume a conversation.
-   * Call with `null` to reset the stored ID.
-   */
-  setPreviousResponseId(id: string | null): void {
-    this.chainState.setPreviousResponseId(id);
-    this.chainState.resetConversationState();
-    this.backgroundLifecycle.clearPending();
-  }
-
-  /** Retrieve the stored previous response ID. */
-  getPreviousResponseId(): string | null {
-    return this.chainState.getPreviousResponseId();
-  }
-
-  /**
    * Calculate the absolute token threshold based on the model's context window
    * and the configured percentage threshold.
    */
@@ -662,7 +647,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * Automatic compaction is decided by the live pre-flight token count in
    * {@link createResponseImpl} — one measurement of the CURRENT request owns
-   * the decision (it sets {@link compactionRequested} and retries
+   * the decision (it mints its own compaction request and retries
    * internally). The cumulative-usage threshold below is only the fallback
    * decision for models that cannot count tokens pre-flight; the cumulative
    * figure comes from the PREVIOUS successful response and goes stale the
@@ -670,14 +655,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private shouldCompact(): boolean {
     if (!this.supportsManualCompaction) {
-      this.compactionRequested = false;
+      this.consumeCompactionRequest();
       return false;
     }
 
     // Manual/requested compaction bypasses threshold checks.
     // The flag is NOT cleared here - the caller clears it after compaction
     // is attempted to preserve the request across retries.
-    if (this.compactionRequested) {
+    if (this.isCompactionRequested()) {
       return this.canCompactRoute();
     }
 
@@ -1188,8 +1173,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
   ): Promise<ResponseInputItem[]> {
-    this.chainState.setPreviousResponseId(null);
-    this.chainState.resetConversationState();
+    this.chainState.resetChainForNewSession();
     this.backgroundLifecycle.clearPending();
     this.wsTransport?.dispose();
 
@@ -1618,11 +1602,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       compactedThisCall = true;
       compactedMessages = reusableCompaction.compactedMessages;
     } else if (this.shouldCompact()) {
-      // Capture whether this was a manual request before clearing the flag.
-      const wasManualRequest = this.compactionRequested;
-      // Clear manual compaction flag now that compaction is being attempted.
-      // For automatic compaction (threshold-based), this is a no-op since the flag is false.
-      this.compactionRequested = false;
+      // Consume the manual compaction request now that compaction is being
+      // attempted. For automatic compaction (threshold-based) no request is
+      // pending, so this reports false and changes nothing.
+      const wasManualRequest = this.consumeCompactionRequest();
       if (wasManualRequest) {
         // Requested compactions come from the manual command, the live-count
         // threshold, or the overflow recovery — each already logged its
@@ -1810,7 +1793,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         `Compacting conversation (pre-flight count ${preFlightTokens} tokens exceeds ${this.getCompactionThresholdPercent()}% threshold of ${this.getCompactionTokenThreshold()} tokens)`,
       );
       this.compactionRetrySource = 'threshold';
-      this.compactionRequested = true;
+      this.requestCompaction();
       this._diagPreFlightTokens = null;
       return this.createResponseImpl(options);
     }
@@ -2341,11 +2324,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         'Context window exceeded — compacting conversation and retrying.',
       );
       this.chainState.invalidateChain();
-      // Don't call resetConversationState() — it zeroes cumulativeInputTokens
-      // which would prevent shouldCompact() from triggering on the retry.
+      // invalidateChain(), not resetChainForNewSession() — the latter zeroes
+      // cumulativeInputTokens, which would prevent shouldCompact() from
+      // triggering on the retry.
       this.backgroundLifecycle.clearPending();
       this.compactionRetrySource = 'overflow';
-      this.compactionRequested = true;
+      this.requestCompaction();
       this._diagPreFlightTokens = null;
       // Retry internally: the recursive call will compact (shouldCompact()=true)
       // and send all messages without server-side state.

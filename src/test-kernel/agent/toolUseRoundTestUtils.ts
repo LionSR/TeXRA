@@ -20,6 +20,7 @@ export function baseRoundServices(
 ) {
   return {
     runScope: testRunScope(streamId),
+    abortSignal: new AbortController().signal,
     checkInterruption: () => false,
     client: {},
     config: { agent: 'test-agent', model: 'test-model' },
@@ -30,7 +31,6 @@ export function baseRoundServices(
     onRoundFinalized: () => {},
     prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
     run: AgentRunStateSnapshotSchema.parse({}),
-    setAbortController: () => {},
     userVarChannels: { input: {}, transient: {} },
     workspace: AgentWorkspaceState.create(),
   };

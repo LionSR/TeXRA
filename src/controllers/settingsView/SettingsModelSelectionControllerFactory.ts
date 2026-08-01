@@ -29,7 +29,7 @@ export function createModelSelectionController(
     ...extras,
     state: {
       getEnabledModels: () =>
-        globalState.get<string[]>(
+        globalState.get<readonly string[]>(
           GlobalStateKey.ENABLED_MODELS,
           DEFAULT_MODELS,
         ),

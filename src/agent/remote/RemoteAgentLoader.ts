@@ -11,7 +11,8 @@ import {
   AgentSettingSchema,
   AgentDefinitionSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { extractToolNames, updateAgentMeta } from '@agent/index/agentRegistry';
+import { updateAgentMeta } from '@agent/index/agentRegistry';
+import { extractToolNames } from '@agent/index/agentYamlScanner';
 import { resolveAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';

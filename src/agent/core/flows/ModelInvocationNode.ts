@@ -20,7 +20,7 @@ import {
   isRelayRequestGateReachableFailure,
   isRelayRequestGateUnobservedFailure,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 
 import { FlowTransition } from './FlowTransitions';
 import {
@@ -63,7 +63,7 @@ export interface ModelInvocationConfig<TShared, TServices> {
  * Only the services this node and its `RetryableInvocationNode` base class
  * actually read: the model handler, logger, setting (temperature/tools),
  * config (for `saveCycleDebug`'s log context), the run scope (retry gate and
- * debug-log identity), the retry machinery's abort controller setter, plus the
+ * debug-log identity), the run's abort signal, plus the
  * live model client. Picking
  * from `AgentCore`/`BaseFlowContextInit` instead of requiring the literal
  * type keeps every existing caller, which passes the full services bag,
@@ -73,7 +73,7 @@ type InvocationServices = Pick<
   AgentCore,
   'modelHandler' | 'logger' | 'setting' | 'config' | 'runScope'
 > &
-  Pick<BaseFlowContextInit, 'setAbortController'> &
+  Pick<BaseFlowContextInit, 'abortSignal'> &
   ModelClientServices;
 
 export class ModelInvocationNode<
@@ -118,7 +118,7 @@ export class ModelInvocationNode<
     const services = this.services;
     services.modelHandler.setOutputStreaming(this._config.streaming);
 
-    return this.withAbortController(async (signal) => {
+    return this.invokeWithRelayRecovery(async (signal) => {
       const wireRoute = services.modelHandler.getWireRouteKey(services.client);
       const modelRetryRoute = services.modelHandler.getModelRetryRouteKey(
         services.client,

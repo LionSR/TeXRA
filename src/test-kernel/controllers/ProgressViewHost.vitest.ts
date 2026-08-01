@@ -83,7 +83,6 @@ function createHostHarness(taskState: TaskState): HostHarness {
     commands: {
       lifecycle: {
         setActiveStream: vi.fn(),
-        setAgentFilter: vi.fn(),
         deleteStream: vi.fn(),
         deleteAllStreams: vi.fn(),
         stopStream: vi.fn(),

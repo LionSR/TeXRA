@@ -108,7 +108,7 @@ describe('run-scoped tool overlay', () => {
               },
               modelHandler,
               checkInterruption: () => false,
-              setAbortController: () => {},
+              abortSignal: new AbortController().signal,
               onRoundFinalized: () => {},
               isSubagent: true,
               tools: [tool('first'), tool('second')],

@@ -781,7 +781,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       },
       this.isToolUseMode(),
       isCompactionEligibleModel(this.config.fullName),
-      this.compactionRequested,
+      this.isCompactionRequested(),
     );
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed
@@ -842,7 +842,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         client,
         messages,
         this.capabilities.supportsNativePdf,
-        this.uploadedPdfPageCounts,
+        (fileId, pageCount) =>
+          this.uploadedPdfPageCounts.set(fileId, pageCount),
       );
       if (uploadResult.hasFileReference) {
         hasFileReference = true;
@@ -1544,7 +1545,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
         attachments,
         this.logger,
-        this.uploadedPdfPageCounts,
+        this.getTrackedPdfPageCount(),
+        (fileId, pageCount) =>
+          this.uploadedPdfPageCounts.set(fileId, pageCount),
         this.getMaxPdfPages(),
       );
       uploadedAttachments = uploadResult.uploaded;

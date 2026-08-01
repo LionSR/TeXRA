@@ -87,13 +87,6 @@ interface AgentReviewStateSnapshot {
   summary: string | undefined;
 }
 
-/** Context of the in-flight review session that issue reports are checked against. */
-interface ActiveReview {
-  repoRoot: string;
-  baseDescription: string;
-  changedFiles: string[];
-}
-
 /** Pre-run results captured so a session that reports nothing can restore them. */
 interface ReviewSnapshot {
   issues: ReviewIssue[];
@@ -126,9 +119,6 @@ class AgentReviewServiceImpl {
   /** Repository root the current issues' paths are relative to. */
   private reviewRoot: string | undefined;
   private baseDescription = 'main branch';
-  private activeReview: ActiveReview | undefined;
-  /** Bumped per review run and by `clear()`; stale runs check it before applying results. */
-  private reviewGeneration = 0;
   /** A commit arrived while a review was running; run once more afterwards. */
   private pendingCommitReview: AgentReviewRunOptions | undefined;
 
@@ -196,7 +186,6 @@ class AgentReviewServiceImpl {
     }
 
     const run = this.reviewRuns.start(currentSession());
-    const generation = ++this.reviewGeneration;
     this.summary = 'Reviewing changes…';
     await this.syncContextKeys();
     this.emitter.fire();
@@ -207,7 +196,7 @@ class AgentReviewServiceImpl {
           location: { viewId: AGENT_REVIEW_VIEW_ID },
           title: 'Agent review',
         },
-        () => this.executeReview(cwd, trigger, options, run, generation),
+        () => this.executeReview(cwd, trigger, options, run),
       );
     } catch (err) {
       // Backstop for anything executeReview's own handling missed — the
@@ -219,7 +208,6 @@ class AgentReviewServiceImpl {
       );
     } finally {
       if (this.reviewRuns.finish(run)) {
-        this.activeReview = undefined;
         const pending = this.pendingCommitReview;
         this.pendingCommitReview = undefined;
         this.emitter.fire();
@@ -236,11 +224,10 @@ class AgentReviewServiceImpl {
     trigger: AgentReviewTrigger,
     options: AgentReviewRunOptions,
     run: AgentReviewRunToken,
-    generation: number,
   ): Promise<void> {
-    // `clear()` bumps the generation. Check before collecting so a clear that
+    // `clear()` discards the run. Check before collecting so a clear that
     // landed during the initial context-key update cannot start stale work.
-    if (generation !== this.reviewGeneration) return;
+    if (!this.reviewRuns.isCurrent(run)) return;
     const collected = await collectReviewDiff({
       cwd,
       includeUntracked: getConfig<boolean>(
@@ -255,7 +242,7 @@ class AgentReviewServiceImpl {
       baseDescription: options.baseDescription,
       baseBranch: options.baseBranch,
     });
-    if (generation !== this.reviewGeneration) return;
+    if (!this.reviewRuns.isCurrent(run)) return;
     if (run.stopRequested) {
       this.summary = 'Review cancelled';
       return;
@@ -300,7 +287,7 @@ class AgentReviewServiceImpl {
     this.baseDescription = baseDescription;
     this.issues = [];
     this.updateDiagnostics();
-    this.activeReview = { repoRoot, baseDescription, changedFiles };
+    this.reviewRuns.collect(run, { repoRoot, baseDescription, changedFiles });
     this.emitter.fire();
 
     let outcome: RunOutcome;
@@ -353,7 +340,7 @@ class AgentReviewServiceImpl {
       );
       outcome = result.outcome;
     } catch (err) {
-      if (generation !== this.reviewGeneration) return;
+      if (!this.reviewRuns.isCurrent(run)) return;
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
       const restored = this.restorePreviousResults(previous);
@@ -365,7 +352,7 @@ class AgentReviewServiceImpl {
       return;
     }
 
-    if (generation !== this.reviewGeneration) {
+    if (!this.reviewRuns.isCurrent(run)) {
       logger.info(
         CHANNEL,
         'Agent review results were cleared while the session ran; discarding its outcome',
@@ -425,7 +412,7 @@ class AgentReviewServiceImpl {
     accepted: boolean;
     reason?: string;
   } {
-    const active = this.activeReview;
+    const active = this.reviewRuns.collection;
     if (!active) {
       return {
         accepted: false,
@@ -490,13 +477,11 @@ class AgentReviewServiceImpl {
    * The run slot stays occupied until that execution actually settles.
    */
   clear(): void {
-    this.reviewRuns.requestStop();
+    this.reviewRuns.discard();
     this.issues = [];
     this.dismissed.clear();
     this.summary = undefined;
-    this.activeReview = undefined;
     this.pendingCommitReview = undefined;
-    this.reviewGeneration++;
     this.publishIssues();
   }
 

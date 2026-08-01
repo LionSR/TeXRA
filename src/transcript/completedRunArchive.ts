@@ -44,10 +44,6 @@ export interface CompletedRunTodosReadResult {
   readonly streamId?: StreamTabId;
 }
 
-export interface CompletedRunReaderOptions {
-  readonly snapshotStore?: StreamSnapshotStore;
-}
-
 function todoItemToEntry(todo: TodoItem): TodoEntry {
   return {
     content: todo.content,
@@ -88,9 +84,8 @@ async function readLegacyTodos(
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
-  options: CompletedRunReaderOptions = {},
 ): Promise<CompletedRunTodosReadResult> {
-  const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
+  const snapshotStore = new StreamSnapshotStore();
   const resolved = await resolvePersistedStreamIdForExecution(executionId, {
     snapshotStore,
   });
@@ -127,14 +122,6 @@ export interface CompletedRunConversationReadResult {
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
   readonly streamId?: StreamTabId;
-}
-
-export interface CompletedRunConversationReaderOptions extends CompletedRunReaderOptions {
-  /**
-   * An already-open store. When omitted a call-scoped read-only instance is
-   * opened so this reader neither reloads a live store nor mutates persistence.
-   */
-  readonly streamLogStore?: StreamLogStore;
 }
 
 /** `streamLogs/{stream}.json` mtime (ms since epoch), or `undefined` if absent. */
@@ -443,11 +430,11 @@ async function readSidecarConversation(
  */
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
-  options: CompletedRunConversationReaderOptions = {},
 ): Promise<CompletedRunConversationReadResult> {
-  const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const streamLogStore =
-    options.streamLogStore ?? (await StreamLogStore.openReadOnly());
+  const snapshotStore = new StreamSnapshotStore();
+  // A call-scoped read-only store, so this reader neither reloads a live store
+  // nor mutates persistence.
+  const streamLogStore = await StreamLogStore.openReadOnly();
 
   const resolved = await resolvePersistedStreamIdForExecution(executionId, {
     snapshotStore,

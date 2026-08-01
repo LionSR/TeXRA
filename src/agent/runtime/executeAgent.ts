@@ -205,13 +205,18 @@ async function launchToolUseRun(
             }),
       },
       undefined,
-      (flowContext) => {
-        handle.attachToolUseFlow(flowContext);
-        if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
-          variant.onCancellationAtFlowAttachment?.();
-          flowContext.interrupt();
-        }
-        return () => handle.detachToolUseFlow(flowContext);
+      {
+        attach: (flowContext) => {
+          handle.attachToolUseFlow(flowContext);
+          if (
+            variant.kind === 'resume' &&
+            variant.isCancellationRequested?.()
+          ) {
+            variant.onCancellationAtFlowAttachment?.();
+            flowContext.interrupt();
+          }
+        },
+        detach: (flowContext) => handle.detachToolUseFlow(flowContext),
       },
     );
     return buildToolUseFlowResult(

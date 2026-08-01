@@ -102,7 +102,6 @@ function createInitialState(pr: PRKey): SubscriptionState {
     lastAnnotationKeys: new Set(),
     annotationLevelByListener: new Map(),
     currentShaState: undefined,
-    headSha: undefined,
     state: undefined,
     merged: false,
     mergeableState: undefined,
@@ -161,13 +160,12 @@ interface SubscriptionState extends BasePollSubscriptionState {
     (text: string) => void,
     GitHubCheckAnnotationLevel
   >;
-  headSha: string | undefined;
   /**
-   * Everything scoped to the current `headSha`: the CI one-shot markers, the
-   * check-runs page cache, and the pending annotation-fetch queue. Replaced
-   * wholesale whenever `headSha` changes (see the reset in `pollOne`), so a
-   * future per-SHA field added here can't leak stale state across a push —
-   * there's no separate list of fields to remember to clear.
+   * Everything scoped to the current head SHA: the SHA itself, the CI one-shot
+   * markers, the check-runs page cache, and the pending annotation-fetch
+   * queue. Replaced wholesale whenever the head SHA changes (see the reset in
+   * `pollOne`), so a future per-SHA field added here can't leak stale state
+   * across a push — there's no separate list of fields to remember to clear.
    */
   currentShaState: CurrentShaState | undefined;
   state: 'open' | 'closed' | undefined;
@@ -182,7 +180,7 @@ interface SubscriptionState extends BasePollSubscriptionState {
   };
 }
 
-/** Per-`headSha` state; reset wholesale whenever the head SHA changes. */
+/** Per-head-SHA state; reset wholesale whenever the head SHA changes. */
 interface CurrentShaState {
   sha: string;
   /** Whether the one-shot "CI triggered" event has been emitted for `sha`. */
@@ -349,7 +347,7 @@ export class PRPollingSource extends PollingSourceBase<
       // SHA's runs will re-enqueue from the next 200 tick. Replacing the
       // whole per-SHA object (rather than clearing fields one by one) means
       // a future per-SHA field can't be left stale across a push.
-      if (state.headSha !== newHead) {
+      if (state.currentShaState?.sha !== newHead) {
         state.currentShaState = {
           sha: newHead,
           ciStarted: false,
@@ -359,7 +357,6 @@ export class PRPollingSource extends PollingSourceBase<
           pendingAnnotationRuns: [],
         };
       }
-      state.headSha = newHead;
 
       // Mergeable-state transitions: only definite-to-definite reads count,
       // so the seeding tick (and any tick where GitHub returns `'unknown'`)
@@ -426,12 +423,12 @@ export class PRPollingSource extends PollingSourceBase<
           `${prPath}/reviews?per_page=100`,
           state.etags.reviews,
         ),
-        state.headSha
+        state.currentShaState?.sha
           ? fetchAllCheckRunsClient(
               pr.owner,
               pr.repo,
-              state.headSha,
-              state.currentShaState?.checkRunsCache,
+              state.currentShaState.sha,
+              state.currentShaState.checkRunsCache,
               this.logger,
             )
           : Promise.resolve({
@@ -484,7 +481,7 @@ export class PRPollingSource extends PollingSourceBase<
             state.lastAnnotationKeys.add(checkKey(r));
           }
         }
-        if (state.headSha && runs.length > 0 && state.currentShaState) {
+        if (state.currentShaState?.sha && runs.length > 0) {
           state.currentShaState.ciStarted = true;
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
@@ -492,7 +489,7 @@ export class PRPollingSource extends PollingSourceBase<
         // `ciTerminalStatus` for the gating rationale (empty/partial run sets,
         // page-shift safety).
         const { complete, passed } = ciTerminalStatus(
-          state.headSha,
+          state.currentShaState?.sha,
           runs,
           checksRes.data.total_count,
         );
@@ -547,7 +544,7 @@ export class PRPollingSource extends PollingSourceBase<
       // `state.etags` here.
       const runs = checksRes.data.check_runs;
 
-      const headSha = state.headSha;
+      const headSha = state.currentShaState?.sha;
       if (
         headSha &&
         runs.length > 0 &&
@@ -592,12 +589,12 @@ export class PRPollingSource extends PollingSourceBase<
       // See `ciTerminalStatus` for the gating rationale (empty/partial run
       // sets, page-shift safety).
       const { complete, passed } = ciTerminalStatus(
-        state.headSha,
+        state.currentShaState?.sha,
         runs,
         checksRes.data.total_count,
       );
-      if (complete && state.headSha && state.currentShaState) {
-        const headSha = state.headSha;
+      if (complete && state.currentShaState?.sha) {
+        const headSha = state.currentShaState.sha;
         if (!state.currentShaState.ciComplete) {
           state.currentShaState.ciComplete = true;
           this.emit(

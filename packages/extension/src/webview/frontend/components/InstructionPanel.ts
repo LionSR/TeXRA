@@ -295,8 +295,6 @@ export class InstructionPanel extends LitElement {
           value: getTextareaValue(this.instructionTextarea),
         }),
       );
-      // Dispatch additional event so parent can save state
-      this.dispatchEvent(MainViewEvents.instructionPaste());
     }
   };
 

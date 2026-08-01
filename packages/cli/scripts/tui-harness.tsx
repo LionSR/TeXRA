@@ -90,6 +90,7 @@ import {
   patchStream,
   streams,
   type ConversationEntry,
+  setStreamStatusInCliState,
 } from '../src/chat/tui/state/cliState';
 import {
   activeSubagentsFor,
@@ -316,7 +317,9 @@ const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
-let harnessApprovalPolicy: CliApprovalPolicy =
+// Seed only: `sessionMeta.approvalPolicy` is the live value once the harness
+// session state exists, exactly as in the real chat session.
+const HARNESS_INITIAL_APPROVAL_POLICY: CliApprovalPolicy =
   parseCliApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ?? 'ask';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
@@ -330,7 +333,7 @@ const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
   apiMode: HARNESS_API_MODE,
-  approvalPolicy: harnessApprovalPolicy,
+  approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
   cliConfig: {},
   commandName: 'texra',
   configWarnings: [],
@@ -695,6 +698,7 @@ if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
     getStoredSessionState: async () =>
       accessToken === null ? 'none' : 'authenticated',
     getStoredAccountLabel: async () => null,
+    isTokenExpiringSoon: () => false,
     getLastRefreshFailure: () => null,
   });
 }
@@ -1178,9 +1182,12 @@ async function appendHarnessPlanDecision(
     await GoalStore.start(STREAM_ID, PLAN_APPROVAL_OBJECTIVE);
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
-      status: STREAM_PHASE.RUNNING,
       bypass: { ...slice.bypass, bash: true },
     }));
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
+      status: STREAM_PHASE.RUNNING,
+    });
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
@@ -1195,12 +1202,10 @@ const HARNESS_RUN_ACTIVE =
   QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
 const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
 
-function harnessInitialStreamStatus(
-  current: StreamPhase | undefined,
-): StreamPhase | undefined {
+function harnessInitialStreamStatus(): StreamPhase | undefined {
   if (HARNESS_RUN_ACTIVE) return STREAM_PHASE.RUNNING;
   if (HARNESS_RUN_IDLE) return STREAM_PHASE.WAITING;
-  return current;
+  return undefined;
 }
 
 function harnessInitialEntries(): ConversationEntry[] {
@@ -1219,7 +1224,7 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   apiMode: HARNESS_API_MODE,
-  approvalPolicy: harnessApprovalPolicy,
+  approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
   canDelegate: CAN_DELEGATE,
   transcriptMode: 'persistent',
   teamName: TEAM_NAME,
@@ -1228,11 +1233,18 @@ sessionMeta.set({
 activeStreamIdSignal.set(STREAM_ID);
 patchStream(STREAM_ID, (slice) => ({
   ...slice,
-  status: harnessInitialStreamStatus(slice.status),
-  runStartedAt: HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : slice.runStartedAt,
   entries: harnessInitialEntries(),
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
+const HARNESS_INITIAL_STREAM_STATUS = harnessInitialStreamStatus();
+if (HARNESS_INITIAL_STREAM_STATUS) {
+  setStreamStatusInCliState({
+    streamId: STREAM_ID,
+    status: HARNESS_INITIAL_STREAM_STATUS,
+    // Backdated so the status bar shows a plausible elapsed time.
+    ...(HARNESS_RUN_ACTIVE ? { nowMs: Date.now() - 42_000 } : {}),
+  });
+}
 
 if (SHOW_LIVE_TOOL_ONLY) {
   seedLiveToolOnlyTranscript();
@@ -1559,6 +1571,7 @@ function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
   defaultSession().status.transitionToTerminal(
     streamId,
     STREAM_PHASE.COMPLETED,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
   );
 }
 
@@ -1758,11 +1771,11 @@ if (SHOW_CHILDREN) {
   // survives.
   applySubagentRoster(STREAM_ID, childStreams);
   applySubagentRoster(STREAM_ID, activeSubagents);
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
+  setStreamStatusInCliState({
+    streamId: STREAM_ID,
     status: STREAM_PHASE.RUNNING,
-    runStartedAt: startedAt,
-  }));
+    nowMs: startedAt,
+  });
   for (const child of childStreams) {
     const streamId = child.childStreamId;
     const addNestedChildren =
@@ -1771,11 +1784,8 @@ if (SHOW_CHILDREN) {
     if (addNestedChildren) applySubagentRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
-      status: child.status,
       description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
-      runStartedAt:
-        child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
       // One child carries usage so scenarios pin the row metadata column's
       // generated-token figure (`↓40k`).
       cumulativeUsage:
@@ -1783,6 +1793,12 @@ if (SHOW_CHILDREN) {
           ? { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 }
           : slice.cumulativeUsage,
     }));
+    setStreamStatusInCliState({
+      streamId: streamId,
+      status: child.status,
+      nowMs:
+        child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
+    });
   }
   if (SHOW_NESTED_CHILDREN) {
     setParentStream(
@@ -1791,11 +1807,14 @@ if (SHOW_CHILDREN) {
     );
     patchStream('harness-nested-local-checker-stream', (slice) => ({
       ...slice,
-      status: STREAM_PHASE.RUNNING,
       description: 'localChecker nested proof check',
       entries: makeChildEntries('localChecker', 'nested proof check'),
-      runStartedAt: nestedStartedAt,
     }));
+    setStreamStatusInCliState({
+      streamId: 'harness-nested-local-checker-stream',
+      status: STREAM_PHASE.RUNNING,
+      nowMs: nestedStartedAt,
+    });
   }
 }
 
@@ -1963,8 +1982,6 @@ function markHarnessInterrupted(): void {
   applySubagentRoster(STREAM_ID, []);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
     entries: [
       ...slice.entries,
       {
@@ -1975,12 +1992,17 @@ function markHarnessInterrupted(): void {
       },
     ],
   }));
+  setStreamStatusInCliState({
+    streamId: STREAM_ID,
+    status: STREAM_PHASE.CANCELLED,
+    nowMs: undefined,
+  });
   for (const streamId of childStreamIds) {
-    patchStream(streamId, (slice) => ({
-      ...slice,
+    setStreamStatusInCliState({
+      streamId: streamId,
       status: STREAM_PHASE.CANCELLED,
-      runStartedAt: undefined,
-    }));
+      nowMs: undefined,
+    });
   }
 }
 
@@ -2019,8 +2041,6 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
   }
   patchStream(streamId, (slice) => ({
     ...slice,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
     entries: [
       ...slice.entries,
       {
@@ -2031,6 +2051,11 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
       },
     ],
   }));
+  setStreamStatusInCliState({
+    streamId: streamId,
+    status: STREAM_PHASE.CANCELLED,
+    nowMs: undefined,
+  });
   defaultSession().status.transition(
     streamId,
     STREAM_PHASE.CANCELLED,
@@ -2084,7 +2109,6 @@ function defaultHarnessTranscriptStreamId(): StreamTabId {
 }
 
 function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
-  harnessApprovalPolicy = policy;
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -2157,8 +2181,6 @@ function markHarnessExecutionStopped(executionId: string): void {
   if (!executionRow.childStreamId) return;
   patchStream(executionRow.childStreamId, (slice) => ({
     ...slice,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
     entries: [
       ...slice.entries,
       harnessMessageEntry(
@@ -2167,6 +2189,11 @@ function markHarnessExecutionStopped(executionId: string): void {
       ),
     ],
   }));
+  setStreamStatusInCliState({
+    streamId: executionRow.childStreamId,
+    status: STREAM_PHASE.CANCELLED,
+    nowMs: undefined,
+  });
 }
 
 function handleHarnessSubmit(line: string): void {
@@ -2211,7 +2238,7 @@ function appendHarnessStatus(): void {
         subscriptionActive: false,
         usageRoute: slice?.usage?.usageRoute,
       }),
-      approval: formatCliApprovalPolicy(harnessApprovalPolicy),
+      approval: formatCliApprovalPolicy(meta.approvalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       goal: GoalStore.getForStream(streamId),
@@ -2231,10 +2258,7 @@ function resetHarnessForClear(): void {
       // The harness reset is best-effort; visible cliState is reset below.
     });
   }
-  resetCliState({
-    ...meta,
-    approvalPolicy: harnessApprovalPolicy,
-  });
+  resetCliState(meta);
   activeStreamIdSignal.set(STREAM_ID);
   inkRef.current?.repaint({
     clearScrollback: true,
@@ -2297,7 +2321,7 @@ registerBuiltinSlashCommands({
   canSelectAgent: () => CAN_SELECT_AGENT,
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
-  getApprovalPolicy: () => harnessApprovalPolicy,
+  getApprovalPolicy: () => sessionMeta.get().approvalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) => {
     setCliSessionModelOverride(model);

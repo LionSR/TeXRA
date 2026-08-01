@@ -9,11 +9,7 @@ import type { MainViewHandlerRegistry } from '@shared/schemas';
 // Local imports - main view
 import { SESSION_TYPES, parseSessionType } from '../constants';
 import { sessionType$, toolUseAgent$, workflowAgent$ } from '../mainViewState';
-import {
-  refreshInstructionPlaceholder,
-  swapModeInstruction,
-} from '../mainViewActions';
-import { saveState } from '../persistence';
+import { refreshInstructionPlaceholder } from '../mainViewActions';
 
 // `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
 // owns only session commands; see bannerSlice.ts for why (registry is now
@@ -22,7 +18,6 @@ export const sessionHandlers = {
   [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (message) => {
     const sessionType = parseSessionType(message.sessionType ?? undefined);
     if (sessionType) {
-      swapModeInstruction(sessionType$.get(), sessionType);
       sessionType$.set(sessionType);
     }
     if (message.agentId) {
@@ -33,6 +28,5 @@ export const sessionHandlers = {
       }
     }
     refreshInstructionPlaceholder();
-    saveState();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

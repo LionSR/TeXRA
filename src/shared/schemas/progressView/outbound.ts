@@ -48,17 +48,12 @@ import {
 import { PlanSchema } from '../plan';
 import { TodoItemSchema } from '../todo';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
-import {
-  AgentCategoryFilterSchema,
-  ProgressViewPlacementSchema,
-  StreamScopedBaseSchema,
-} from './data';
+import { ProgressViewPlacementSchema, StreamScopedBaseSchema } from './data';
 
 const UpdateStreamsMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS),
   streams: z.array(StreamTabInfoSchema),
   activeStream: z.union([StreamTabIdSchema, z.literal('')]),
-  agentFilter: AgentCategoryFilterSchema,
   streamStates: z.record(z.string(), StreamMetadataSchema).optional(),
   /**
    * Commands this host's inbound registry declares `unsupported(...)` —
@@ -75,7 +70,6 @@ const UpdateStreamMetadataMessageSchema = z.object({
   streamInfo: StreamTabInfoSchema,
   streamState: StreamMetadataSchema,
   activeStream: z.union([StreamTabIdSchema, z.literal('')]).optional(),
-  agentFilter: AgentCategoryFilterSchema.optional(),
 });
 
 const SetActiveStreamMessageSchema = z.object({

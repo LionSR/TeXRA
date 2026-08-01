@@ -223,11 +223,3 @@ export function toRetryErrorInfo(err: ProviderError): RetryErrorInfo {
   const { rawErrorBody, ...rest } = err;
   return rest;
 }
-
-/** Reconstruct a ProviderError from retry-state info. `rawErrorBody` is absent
- *  and `isRelayError` stays `undefined` when it was absent, so
- *  `normalizeProviderError` does not read a wrong relay verdict from the cached
- *  shape. */
-export function toProviderErrorFromRetry(info: RetryErrorInfo): ProviderError {
-  return { ...info };
-}

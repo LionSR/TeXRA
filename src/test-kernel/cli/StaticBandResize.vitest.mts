@@ -29,6 +29,7 @@ import {
   FakeStdin,
   FakeStdout,
   loadInk,
+  renderInteractive,
   renderWithTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 import { pollForCondition } from '@test/support/asyncTestUtils';
@@ -340,12 +341,9 @@ describe('Static band resize', () => {
         );
       }
     });
-    const inst = ink.render(createElement(App), {
+    const { instance: inst } = renderInteractive(ink, createElement(App), {
       stdout: out,
       stdin: new FakeStdin(false),
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
     });
 
     try {

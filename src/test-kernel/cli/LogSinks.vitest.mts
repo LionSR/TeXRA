@@ -21,7 +21,7 @@ function createStdoutStub(writeResults: boolean[] = [true]) {
       listeners.get(event)?.();
     },
     stdout: {
-      destroyed: false,
+      usable: true,
       write: vi.fn((line: string) => {
         lines.push(line);
         return writeResults.shift() ?? true;
@@ -106,6 +106,18 @@ describe('NdjsonStdoutSink', () => {
       expect(lines.map((line) => JSON.parse(line).kind)).toEqual(['version']);
     },
   );
+
+  it('writes nothing once the target reports itself unusable', async () => {
+    const { lines, stdout } = createStdoutStub();
+    stdout.usable = false;
+    const sink = new NdjsonStdoutSink(stdout);
+
+    sink.writeRecord({ kind: 'version', version: '1.0.0' });
+    await sink.flush();
+
+    expect(lines).toEqual([]);
+    expect(stdout.write).not.toHaveBeenCalled();
+  });
 });
 
 describe('CLI pipe errors', () => {

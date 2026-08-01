@@ -56,9 +56,11 @@ import {
 } from '@shared/schemas/stateSettings';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
-  FakeStdin,
-  FakeStdout,
   loadInk,
+  renderInteractive,
+  type FakeStdin,
+  type FakeStdout,
+  type InkRenderHandles,
 } from '@test/support/inkTestHarness.mts';
 import {
   isStored,
@@ -124,23 +126,11 @@ function entryByKey(key: string): StateSettingEntry {
   return entry;
 }
 
-async function renderInkElement(element: unknown): Promise<{
-  readonly stdin: FakeStdin;
-  readonly stdout: FakeStdout;
-  readonly instance: { unmount(): void };
-}> {
+async function renderInkElement(element: unknown): Promise<InkRenderHandles> {
   const { ink } = await loadInk();
-  const stdin = new FakeStdin();
-  const stdout = new FakeStdout(100, 30);
-  const instance = ink.render(element, {
-    stdin,
-    stdout,
-    interactive: true,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
-  await waitFor(() => stdin.listenerCount('readable') > 0);
-  return { stdin, stdout, instance };
+  const handles = renderInteractive(ink, element, { columns: 100, rows: 30 });
+  await waitFor(() => handles.stdin.listenerCount('readable') > 0);
+  return handles;
 }
 
 async function renderCliConfigForm(

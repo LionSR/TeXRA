@@ -3,11 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelAccessForm } from '@cli/chat/tui/forms/ModelAccessForm';
 import { cliApiFallbackSelection } from '@cli/runtime/modelAccessRoute';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import {
-  FakeStdin,
-  FakeStdout,
-  loadInk,
-} from '@test/support/inkTestHarness.mts';
+import { loadInk, renderInteractive } from '@test/support/inkTestHarness.mts';
 
 const loadCliModelAccessOverview = vi.hoisted(() => vi.fn());
 
@@ -20,25 +16,18 @@ afterEach(() => vi.clearAllMocks());
 
 async function renderModelAccessForm(apiMode: 'included' | 'personal') {
   const { ink, React } = await loadInk();
-  const stdin = new FakeStdin();
-  const stdout = new FakeStdout(120);
   const onSelect = vi.fn();
-  const instance = ink.render(
+  const handles = renderInteractive(
+    ink,
     React.createElement(ModelAccessForm, {
       apiMode,
       onSelect,
       onCancel: () => undefined,
     }),
-    {
-      stdin,
-      stdout,
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    },
+    { columns: 120 },
   );
 
-  return { instance, onSelect, stdin, stdout };
+  return { ...handles, onSelect };
 }
 
 describe('ModelAccessForm status', () => {

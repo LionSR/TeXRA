@@ -212,7 +212,6 @@ interface SdkMessage {
 
 export async function runStreamedTurn(params: {
   prompt: string;
-  childStreamId: StreamTabId;
   logger: AgentTrace;
   abortController: AbortController;
   model: string;
@@ -444,7 +443,6 @@ function startClaudeAgentLoop(params: {
     lastPrompt = followUps.map((f) => f.text).join('\n\n');
     const turn = await runStreamedTurn({
       prompt: lastPrompt,
-      childStreamId,
       logger,
       abortController,
       model: params.model,

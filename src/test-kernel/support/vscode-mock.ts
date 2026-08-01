@@ -11,14 +11,18 @@ export const window = {
   createOutputChannel: (_name: string) => ({
     appendLine: (_text: string) => {},
     append: (_text: string) => {},
+    clear: () => {},
     show: () => {},
     dispose: () => {},
   }),
 };
 
 export const workspace = {
+  fs: {},
+  workspaceFolders: [] as Array<{ uri: { fsPath: string } }>,
   getConfiguration: (_section?: string) => ({
     get: <T>(_key: string, defaultValue?: T): T | undefined => defaultValue,
+    update: async (..._: unknown[]) => undefined,
   }),
   onDidChangeConfiguration: () => ({ dispose: () => {} }),
   createFileSystemWatcher: () => ({
@@ -33,6 +37,14 @@ export const commands = {
   executeCommand: async (..._: unknown[]) => undefined,
 };
 
+export const env = {
+  openExternal: async (_target: unknown) => true,
+};
+
+export const FileSystemError = {
+  FileNotFound: class extends Error {},
+};
+
 export const Uri = {
   file: (p: string) => ({ fsPath: p, toString: () => p, path: p }),
   parse: (s: string) => ({ fsPath: s, toString: () => s, path: s }),
@@ -44,6 +56,13 @@ export class RelativePattern {
     public readonly pattern: string,
   ) {}
 }
+
+export const DiagnosticSeverity = {
+  Error: 0,
+  Warning: 1,
+  Information: 2,
+  Hint: 3,
+};
 
 export const FileType = {
   Unknown: 0,
@@ -59,8 +78,10 @@ export class EventEmitter<T> {
 }
 
 export class Disposable {
-  static from(..._: { dispose(): unknown }[]): Disposable {
-    return new Disposable(() => {});
+  static from(...disposables: { dispose(): unknown }[]): Disposable {
+    return new Disposable(() => {
+      for (const disposable of disposables) disposable.dispose();
+    });
   }
   constructor(private callOnDispose: () => unknown) {}
   dispose() {

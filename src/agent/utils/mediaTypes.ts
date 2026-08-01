@@ -11,8 +11,6 @@ export interface MediaEntry {
   media_type: string;
   /** Category of the media, e.g. 'image' or 'audio' */
   media_category: string;
-  /** Optional binary payload for providers that accept raw bytes */
-  binary_data?: Buffer;
   /** Absolute path to the original file when available */
   source_path?: string;
   /** Indicates whether the binary payload matches the on-disk source */

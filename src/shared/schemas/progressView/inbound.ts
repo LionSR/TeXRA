@@ -21,7 +21,7 @@ import {
   InquirySubmitActionSchema,
 } from '../inquiry';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
-import { AgentCategoryFilterSchema, StreamScopedBaseSchema } from './data';
+import { StreamScopedBaseSchema } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
 
@@ -125,11 +125,6 @@ const RetryStreamRequestMessageSchema = StreamScopedBaseSchema.extend({
 const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
   requestId: z.string(),
-});
-
-const FilterStreamsMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS),
-  filter: AgentCategoryFilterSchema,
 });
 
 const ShowInformationMessageSchema = z.object({
@@ -300,7 +295,6 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.RESTORE_STATE),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
-    FilterStreamsMessageSchema,
     SendFollowUpMessageSchema,
     PolishFollowUpMessageSchema,
     RetryStreamRequestMessageSchema,

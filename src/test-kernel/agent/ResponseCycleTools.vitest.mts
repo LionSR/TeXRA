@@ -107,7 +107,7 @@ describe('response cycle tool visibility', () => {
       },
       runScope: testRunScope('response-cycle-invocation'),
       interactions: { emit: vi.fn() },
-      setAbortController: vi.fn(),
+      abortSignal: new AbortController().signal,
       setting: {
         temperature: 0,
         tools: [{ name: 'bash' }],

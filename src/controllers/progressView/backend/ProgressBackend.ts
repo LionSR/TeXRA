@@ -15,21 +15,23 @@ import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater
 import {
   ProgressFactApplier,
   type GetProgressStreamControls,
-  type ProgressEventSubscription,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
-import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
   type ApprovalRequestHandlerSet,
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
+import * as logger from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
+
+const CHANNEL = 'ProgressBackend';
+
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
   'webviewUpdater'
@@ -96,6 +98,7 @@ export class ProgressBackend {
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
   private readonly stateOwnership: 'backend' | 'session';
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
+  private readonly detachEventListeners: Array<() => void> = [];
   private storageGeneration = 0;
   private presentationReloadPending = false;
   private disposed = false;
@@ -106,10 +109,17 @@ export class ProgressBackend {
     this.lifecycle = options.lifecycle;
     this.postMessage = (message) => {
       if (!options.hasTarget()) return;
-      // View refreshes are best-effort; a closed transport must not take
-      // down the backend. The async wrapper funnels sync throws and
-      // rejections into one swallowed path.
-      void (async () => options.sendMessage(message))().catch(() => undefined);
+      // View refreshes are best-effort; a closed transport must not take down
+      // the backend. The async wrapper funnels sync throws and rejections into
+      // one reporting path, logged at debug like `WebviewBridge.deliver` — the
+      // next full refresh re-sends whatever this frame carried.
+      void (async () => options.sendMessage(message))().catch(
+        (error: unknown) => {
+          logger.debug(CHANNEL, 'Failed to deliver message to webview', {
+            data: { command: message.command, error },
+          });
+        },
+      );
     };
     this.state = new ProgressViewState(
       options.storage,
@@ -216,15 +226,12 @@ export class ProgressBackend {
 
     let shouldActivateStream = false;
     const activeAfterClear = this.state.activeStream;
-    const visibleStreams = buildStreamInfos(
-      this.state,
-      this.state.agentCategoryFilter,
-    ).map((info) => info.name);
+    const remainingStreams = this.state.selectableStreamNames();
     const hasVisibleActive =
-      activeAfterClear !== '' && visibleStreams.includes(activeAfterClear);
+      activeAfterClear !== '' && remainingStreams.includes(activeAfterClear);
     if (activeAfterClear === stream || (wasActive && !hasVisibleActive)) {
       shouldActivateStream =
-        this.state.rotateActiveStream(visibleStreams) !== '';
+        this.state.rotateActiveStream(remainingStreams) !== '';
     } else if (wasActive && hasVisibleActive) {
       shouldActivateStream = true;
     }
@@ -355,11 +362,8 @@ export class ProgressBackend {
     return this.enqueueStorageOperation(reload);
   }
 
-  private async loadPresentationState(): Promise<void> {
-    await this.state.load(this.stateOwnership);
-    // The category control no longer exists, so legacy preferences must not
-    // constrain active-stream selection or hide sessions.
-    this.state.agentCategoryFilter = 'all';
+  private loadPresentationState(): Promise<void> {
+    return this.state.load(this.stateOwnership);
   }
 
   /**
@@ -397,38 +401,41 @@ export class ProgressBackend {
     return operation;
   }
 
-  setupEventListeners(): ProgressEventSubscription {
-    const factApplierSubscription = this.factApplier.createLocalSubscription();
-    const detachSessionFacts = this.session.events.subscribe(
-      (sessionEvent) => {
-        if (this.disposed) return;
-        if (sessionEvent.scope !== 'session') return;
-        this.factApplier.handleSessionFact(sessionEvent.event);
-      },
-      { scope: 'session' },
+  /**
+   * Attach this backend's session-fact listeners. {@link dispose} detaches
+   * them, so a fact emitted afterwards reaches no handler and callers need no
+   * subscription handle of their own. Attaching after disposal is a no-op:
+   * a host can close its window while its presentation is still being built.
+   */
+  setupEventListeners(): void {
+    if (this.disposed) return;
+    this.detachEventListeners.push(
+      this.session.events.subscribe(
+        (sessionEvent) => {
+          if (sessionEvent.scope !== 'session') return;
+          this.factApplier.handleSessionFact(sessionEvent.event);
+        },
+        { scope: 'session' },
+      ),
+      this.session.events.subscribe(
+        (sessionEvent) => {
+          if (sessionEvent.scope !== 'run') return;
+          this.factApplier.handleRunFact(
+            sessionEvent.streamId,
+            sessionEvent.event,
+          );
+        },
+        { scope: 'run', types: RUN_FACT_EVENT_TYPES },
+      ),
     );
-    const detachRunFacts = this.session.events.subscribe(
-      (sessionEvent) => {
-        if (this.disposed) return;
-        if (sessionEvent.scope !== 'run') return;
-        this.factApplier.handleRunFact(
-          sessionEvent.streamId,
-          sessionEvent.event,
-        );
-      },
-      { scope: 'run', types: RUN_FACT_EVENT_TYPES },
-    );
-    return {
-      dispose: () => {
-        detachRunFacts();
-        detachSessionFacts();
-        factApplierSubscription.dispose();
-      },
-    };
   }
 
+  /** The backend's single teardown: no host holds a second disposal handle. */
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
+    for (const detach of this.detachEventListeners.splice(0)) detach();
+    this.factApplier.dispose();
     this.webviewBridge.dispose();
   }
 }

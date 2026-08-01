@@ -5,11 +5,7 @@ import {
 } from '@supabase/supabase-js';
 import * as logger from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  TOKEN_REFRESH_THRESHOLD_MS,
-  UserTierSchema,
-  type UserTier,
-} from './config';
+import { UserTierSchema, type UserTier } from './config';
 import {
   fetchRelayTokenStatus,
   getCachedRelayTokenState,
@@ -39,13 +35,6 @@ export class SupabaseClient {
   private static readinessError: Error | null = null;
 
   /**
-   * Cached token expiry time (ms since epoch).
-   * Updated by SupabaseAuthProvider whenever a session is stored or loaded.
-   * Used for fast, synchronous expiry checks before each relay call.
-   */
-  private static tokenExpiresAt: number | null = null;
-
-  /**
    * Register an auth provider for token refresh.
    * Called by SupabaseAuthProvider on initialization.
    */
@@ -60,7 +49,6 @@ export class SupabaseClient {
     this.authProvider = null;
     this.initError = null;
     this.readinessError = null;
-    this.tokenExpiresAt = null;
   }
 
   /**
@@ -79,23 +67,13 @@ export class SupabaseClient {
   }
 
   /**
-   * Update the cached token expiry time, or clear it on sign-out.
-   * Called by SupabaseAuthProvider when a session is stored, loaded, or removed.
-   */
-  static setTokenExpiry(expiresAt: number | null): void {
-    this.tokenExpiresAt = expiresAt;
-  }
-
-  /**
-   * Check if the current token will expire within {@link TOKEN_REFRESH_THRESHOLD_MS}.
-   * Synchronous and in-memory — safe to call before every model invocation.
-   * Returns false if no expiry is tracked (e.g., not authenticated or not using relay).
+   * Check whether the stored session's token is close enough to expiry that
+   * the auth provider would refresh it. Synchronous and in-memory — safe to
+   * call before every model invocation. Returns false when no auth provider is
+   * registered or it has observed no session.
    */
   static isTokenExpiringSoon(): boolean {
-    if (this.tokenExpiresAt === null) {
-      return false;
-    }
-    return this.tokenExpiresAt - Date.now() < TOKEN_REFRESH_THRESHOLD_MS;
+    return this.authProvider?.isTokenExpiringSoon() ?? false;
   }
 
   /**
@@ -382,7 +360,13 @@ export class SupabaseClient {
     if (!this.authProvider) return null;
     try {
       return await this.authProvider.getStoredAccountLabel();
-    } catch {
+    } catch (error) {
+      // Callers render "N/A" for null, so a failed read would otherwise be
+      // indistinguishable from "no session stored".
+      logger.warn(
+        'SupabaseClient',
+        `Error reading stored account label: ${toErrorMessage(error)}`,
+      );
       return null;
     }
   }

@@ -89,7 +89,6 @@ function createProgressViewProvider(): ProgressViewProviderFake {
   };
   const state = {
     activeStream: '',
-    agentCategoryFilter: 'all',
     streamLogs: new Map<StreamTabId, unknown>(),
     snapshots,
     pickValidActiveStream: vi.fn(() => ''),

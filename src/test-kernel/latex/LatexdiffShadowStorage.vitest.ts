@@ -173,7 +173,7 @@ describe('LaTeXdiffService shadow output', () => {
       progress: { report: vi.fn() },
     });
 
-    expect(result).toMatchObject({ totalOperations: 3 });
+    expect(result.results).toHaveLength(3);
     expect(result.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

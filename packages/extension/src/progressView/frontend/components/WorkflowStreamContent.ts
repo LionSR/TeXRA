@@ -4,6 +4,9 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
+// Local imports - shared schemas
+import { sumUsageStats } from '@shared/schemas';
+
 // Local imports - progress view
 import { hasOutputFiles } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
@@ -57,7 +60,7 @@ export class WorkflowStreamContent extends BaseStreamContent {
 
         <div class="conversation-column conversation-epilogue">
           <usage-panel
-            .usage=${state.sessionUsage ?? null}
+            .usage=${sumUsageStats(Object.values(state.runUsage))}
             .contextState=${state.contextState ?? null}
           ></usage-panel>
 

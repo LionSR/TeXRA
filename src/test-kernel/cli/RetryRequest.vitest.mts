@@ -11,9 +11,8 @@ import {
 import type { StreamTabId } from '@shared/schemas';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import {
-  FakeStdin,
-  FakeStdout,
   loadInk,
+  renderInteractive,
   renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 
@@ -56,18 +55,12 @@ describe('CLI retry request', () => {
         personalApiKeyAvailable: true,
       },
     });
-    const stdin = new FakeStdin();
-    const instance = ink.render(
+    const { instance, stdin } = renderInteractive(
+      ink,
       React.createElement(ApprovalModal, {
         pending: currentApproval.get(),
       }),
-      {
-        stdin,
-        stdout: new FakeStdout(100),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
+      { columns: 100 },
     );
 
     try {

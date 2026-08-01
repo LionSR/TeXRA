@@ -13,7 +13,6 @@ import {
   type ActiveStreamId,
   type StreamExecutionState,
 } from '@controllers/progressView/backend/state/ProgressViewState';
-import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
   STREAM_PHASE,
@@ -132,8 +131,7 @@ export class ProgressFactApplier {
         );
       }
     },
-    'run.config': (_streamId, event) =>
-      this.handleSetTaskState(event.streamId, event.config.agentCategory),
+    'run.config': (_streamId, event) => this.handleSetTaskState(event.streamId),
     updateTodos: (_streamId, event) => this.handleUpdateTodos(event),
     updatePlan: (_streamId, event) => this.handleUpdatePlan(event),
     addOutputFiles: (_streamId, event) => this.handleAddOutputFiles(event),
@@ -191,18 +189,6 @@ export class ProgressFactApplier {
     this.logger = createChannelTrace('ProgressFactApplier');
   }
 
-  private maybeUpdateFilterForCategory(
-    category: AgentCategory | undefined,
-  ): void {
-    if (
-      category &&
-      this.state.agentCategoryFilter !== 'all' &&
-      this.state.agentCategoryFilter !== category
-    ) {
-      this.state.agentCategoryFilter = category;
-    }
-  }
-
   private handleRunningTransition(
     streamId: StreamTabId,
   ): AgentCategory | undefined {
@@ -214,21 +200,14 @@ export class ProgressFactApplier {
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetPerRunChildState(streamId);
     this.pendingProgressUpdates.delete(streamId);
-
-    if (this.state.activeStream === streamId) {
-      this.maybeUpdateFilterForCategory(knownCategory);
-    }
     return knownCategory;
   }
 
-  createLocalSubscription(): ProgressEventSubscription {
-    return {
-      dispose: () => {
-        this.progressDebounce.cancel();
-        this.pendingProgressUpdates.clear();
-        this.webviewBridge.clearAll();
-      },
-    };
+  /** Drop the work this applier has buffered; called by `ProgressBackend.dispose`. */
+  dispose(): void {
+    this.progressDebounce.cancel();
+    this.pendingProgressUpdates.clear();
+    this.webviewBridge.clearAll();
   }
 
   handleSessionFact(fact: SessionFact): void {
@@ -405,13 +384,12 @@ export class ProgressFactApplier {
   ): Promise<void> {
     const { streamId, isRemote } = payload;
     if (!streamId) {
-      this.state.activeStream = '';
+      this.state.switchActiveStream('');
       this.webviewUpdater.setActiveStream('');
       return;
     }
 
     const wasKnownStream = this.state.streamLogs.has(streamId);
-    const previousFilter = this.state.agentCategoryFilter;
     this.state.streamLogs.ensureStream(streamId);
     // Only pass fields the event actually knows; omitted fields retain the
     // canonical metadata already owned by ProgressViewState.
@@ -433,14 +411,6 @@ export class ProgressFactApplier {
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
-    if (
-      payload.suppressViewSwitch === true &&
-      payload.ensureVisible === true &&
-      this.state.agentCategoryFilter !== 'all' &&
-      (!agentCategory || this.state.agentCategoryFilter !== agentCategory)
-    ) {
-      this.state.agentCategoryFilter = 'all';
-    }
     // Don't switch away from the current stream if it has pending permissions
     // (retry, tool-edit, bash approval, or agent proposal) — the user needs to
     // interact with the approval panel before losing sight of it.
@@ -451,12 +421,6 @@ export class ProgressFactApplier {
       payload.suppressViewSwitch !== true &&
       (!currentStream || !this.hasPendingPermissions(currentStream));
     if (shouldSwitch) {
-      // Update the category filter only when actually switching. If we change
-      // the filter while suppressing the switch, sendStreamMetadata →
-      // pickValidActiveStream rebuilds the stream list with the new filter,
-      // which may exclude the current stream and override state.activeStream —
-      // completely bypassing the pending-permissions guard.
-      this.maybeUpdateFilterForCategory(agentCategory);
       // The switch also releases the previously-active stream if it reached a
       // terminal status while visible — setStreamStatus skips release for the
       // active stream, so this is our only chance.
@@ -475,23 +439,12 @@ export class ProgressFactApplier {
     // overwrite its content with stale data.
     if (shouldSwitch && this.state.activeStream !== streamId) return;
 
-    const filterChanged = this.state.agentCategoryFilter !== previousFilter;
-    if (filterChanged && payload.ensureVisible === true) {
-      this.webviewUpdater.sendStreamMetadata(
-        this.state,
-        this.state.streamStatus.getAllStreamStates(),
-      );
-    } else if (!wasKnownStream || filterChanged) {
+    if (!wasKnownStream) {
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,
         this.state.streamStatus.getAllStreamStates(),
-        {
-          activeStream: shouldSwitch ? this.state.activeStream : undefined,
-          agentFilter: filterChanged
-            ? this.state.agentCategoryFilter
-            : undefined,
-        },
+        { activeStream: shouldSwitch ? this.state.activeStream : undefined },
       );
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
@@ -500,7 +453,7 @@ export class ProgressFactApplier {
     // the webview — even when we suppress the view switch. includeActiveState
     // is only relevant when this IS the active stream.
     this.syncStreamContent(streamId, {
-      includeActiveState: shouldSwitch && wasKnownStream && !filterChanged,
+      includeActiveState: shouldSwitch && wasKnownStream,
     });
   }
 
@@ -512,16 +465,8 @@ export class ProgressFactApplier {
     });
   }
 
-  private handleSetTaskState(
-    streamId: StreamTabId,
-    category: AgentCategory,
-  ): void {
-    const isActiveStream = this.state.activeStream === streamId;
+  private handleSetTaskState(streamId: StreamTabId): void {
     this.state.refreshStreamMetadataFromSnapshot(streamId);
-
-    if (isActiveStream) {
-      this.maybeUpdateFilterForCategory(category);
-    }
 
     if (this.webviewUpdater.isAvailable()) {
       // setTaskState may change agentConfig (agent name, model, label), which
@@ -531,11 +476,6 @@ export class ProgressFactApplier {
         this.state,
         streamId,
         this.state.streamStatus.getAllStreamStates(),
-        {
-          agentFilter: isActiveStream
-            ? this.state.agentCategoryFilter
-            : undefined,
-        },
       );
     }
   }
@@ -826,45 +766,19 @@ export class ProgressFactApplier {
     }
 
     if (isNewStream) {
-      const previousFilter = this.state.agentCategoryFilter;
-      this.maybeUpdateFilterForCategory(streamCategory);
-      const filterChanged = this.state.agentCategoryFilter !== previousFilter;
-      const matchesFilter =
-        this.state.agentCategoryFilter === 'all' ||
-        this.state.agentCategoryFilter === category;
-      if (!this.state.activeStream && matchesFilter) {
-        this.state.activeStream = streamId;
+      if (!this.state.activeStream) {
+        this.state.switchActiveStream(streamId);
       }
-      let activeStream: ActiveStreamId | undefined =
+      const activeStream =
         !this.state.activeStream || this.state.activeStream === streamId
           ? this.state.activeStream
           : undefined;
-      let activeStreamToSync: ActiveStreamId | undefined;
-      if (filterChanged) {
-        const selectableStreams = buildStreamInfos(
-          this.state,
-          this.state.agentCategoryFilter,
-        ).map((stream) => stream.name);
-        const previousActiveStream = this.state.activeStream;
-        const nextActiveStream =
-          this.state.rotateActiveStream(selectableStreams);
-        if (nextActiveStream !== previousActiveStream) {
-          activeStreamToSync = nextActiveStream;
-        }
-        activeStream = nextActiveStream;
-      }
       this.webviewUpdater.updateStreamMetadata(
         this.state,
         streamId,
         this.buildStreamStatesForRefresh(streamId, status, substate),
-        {
-          activeStream,
-          agentFilter: this.state.agentCategoryFilter,
-        },
+        { activeStream },
       );
-      if (activeStreamToSync !== undefined) {
-        await this.syncFilterDrivenActiveStreamContent(activeStreamToSync);
-      }
     } else if (isNewRunningTransition) {
       this.webviewUpdater.updateStreamMetadata(
         this.state,
@@ -880,24 +794,6 @@ export class ProgressFactApplier {
         substate,
       );
     }
-  }
-
-  private async syncFilterDrivenActiveStreamContent(
-    stream: ActiveStreamId,
-  ): Promise<void> {
-    if (!stream) {
-      if (this.state.activeStream === '') {
-        this.syncStreamContent('');
-      }
-      return;
-    }
-
-    await this.state.streamLogs.ensureLoaded(stream);
-
-    // A newer tab switch may have happened while the released log was loading.
-    if (this.state.activeStream !== stream) return;
-
-    this.syncStreamContent(stream, { includeActiveState: true });
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {

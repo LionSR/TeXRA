@@ -331,7 +331,6 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
             data: Buffer.from('%PDF-1.4').toString('base64'),
             media_type: 'application/pdf',
             media_category: 'image',
-            binary_data: Buffer.from('%PDF-1.4'),
           },
         ],
         results: [{ path: 'doc.pdf', ok: true }],

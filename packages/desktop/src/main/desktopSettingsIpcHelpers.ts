@@ -28,11 +28,6 @@ export async function getCachedToolCheckResults(): Promise<
   return getLastCheckResults() ?? undefined;
 }
 
-export async function refreshDefaultDisabledToolCache(): Promise<void> {
-  const { refreshDisabledToolCache } = await import('@tools/toolAvailability');
-  refreshDisabledToolCache();
-}
-
 export async function refreshDefaultToolAvailability(): Promise<void> {
   const { refreshToolAvailability } = await import('@tools/toolAvailability');
   await refreshToolAvailability();

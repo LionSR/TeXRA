@@ -74,8 +74,8 @@ function makeCall(
 interface HarnessOptions {
   tools: Record<string, ITool>;
   rootUserInstruction?: string;
-  checkInterruption?: () => boolean;
-  setAbortController?: (controller: AbortController | null) => void;
+  /** The run's one interrupt signal; defaults to a run nobody interrupts. */
+  abortSignal?: AbortSignal;
 }
 
 function dispatchHarness(opts: HarnessOptions) {
@@ -89,9 +89,8 @@ function dispatchHarness(opts: HarnessOptions) {
     }),
     logger: runTrace.trace,
     toolRegistry: new MapToolRegistry(opts.tools),
-    checkInterruption: opts.checkInterruption ?? (() => false),
+    abortSignal: opts.abortSignal ?? new AbortController().signal,
     onRoundFinalized: () => {},
-    setAbortController: opts.setAbortController ?? (() => {}),
     modelHandler: {
       requiresBatchedParallelToolResults: false,
       createToolUseFollowUpMessages: async () => [],
@@ -324,15 +323,15 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     }
   });
 
-  it('registers one batch abort controller that cancels concurrent calls', async () => {
+  it('cancels every concurrent call from the one run signal', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    const registered: (AbortController | null)[] = [];
+    const runController = new AbortController();
     const { node, dispose } = dispatchHarness({
       tools: {
         grep: probeTool(probe, 'grep', 60, { parallelSafe: true }),
         read_file: probeTool(probe, 'read_file', 60, { parallelSafe: true }),
       },
-      setAbortController: (controller) => registered.push(controller),
+      abortSignal: runController.signal,
     });
     try {
       const pending = runDispatch(node, [
@@ -340,9 +339,8 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         makeCall('c2', 'read_file', { path: 'b' }),
       ]);
       await delay(15);
-      const batchController = registered[0];
-      assert.ok(batchController, 'batch controller should be registered');
-      batchController.abort();
+      assert.equal(probe.maxInFlight, 2, 'both calls should be in flight');
+      runController.abort();
 
       const results = (await pending) as ExecResult[];
       assert.deepEqual(
@@ -350,8 +348,6 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         [null, null],
         'aborted concurrent calls should resolve to null',
       );
-      // Exactly one controller for the whole batch, cleared afterwards.
-      assert.deepEqual(registered, [batchController, null]);
     } finally {
       dispose();
     }
@@ -385,10 +381,10 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
 
   it('leaves unsafe duplicates cancelled when their primary never ran', async () => {
     const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
-    let interrupted = false;
+    const runController = new AbortController();
     const { node, dispose } = dispatchHarness({
       tools: { write_file: probeTool(probe, 'write_file', 5) },
-      checkInterruption: () => interrupted,
+      abortSignal: runController.signal,
     });
     try {
       const calls = [
@@ -398,7 +394,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       const shared = { toolCalls: calls, shouldStop: false, messages: [] };
       const prepped = await internals(node).prep(shared);
       // Interrupt lands after planning but before anything executes.
-      interrupted = true;
+      runController.abort();
       const results = (await execPrepped(node, prepped)) as ExecResult[];
 
       assert.equal(probe.events.length, 0, 'nothing should execute');

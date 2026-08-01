@@ -27,7 +27,6 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
     ): Promise<ToolDashboardItem[]>;
     getCachedCheckResults(): Promise<ExternalToolCheckResult[] | undefined>;
     refreshAvailability(): Promise<void>;
-    refreshDisabledCache(): Promise<void>;
     planTerminalAction(
       toolId: string,
       kind: ToolCommandKind,
@@ -109,7 +108,6 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   private async toggleTool(toolId: string, enabled: boolean): Promise<void> {
     await setToolEnabled(toolId, enabled, this.options.globalState);
-    await this.options.dashboard.refreshDisabledCache();
     await this.postToolDashboardData(true);
   }
 
