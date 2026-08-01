@@ -95,8 +95,8 @@ describe('AgentFinalResult', () => {
       outcome: 'completed',
       executionId: 'abcdefabcdef' as ExecutionId,
       streamId: 'stream:tool-use' as StreamTabId,
-      lastResponse: 'Checked the argument.',
-      touchedFiles: ['notes.md'],
+      response: 'Checked the argument.',
+      files: ['notes.md'],
       totalCostUsd: 0.2,
     };
 

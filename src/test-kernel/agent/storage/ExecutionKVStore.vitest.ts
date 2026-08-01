@@ -189,7 +189,7 @@ describe('ExecutionKVStore meta read shims', () => {
     });
   });
 
-  it('normalizes legacy flat subagent result metadata', async () => {
+  it('normalizes legacy aliases with canonical fields taking precedence', async () => {
     const id = 'legacy-result-subagent' as ExecutionId;
     await getExecutionStore(id).write('result-meta', {
       agentName: 'reviewer',
@@ -197,8 +197,10 @@ describe('ExecutionKVStore meta read shims', () => {
       outcome: RUN_OUTCOME.COMPLETED,
       success: true,
       wallTimeMs: 25,
-      lastResponse: 'done',
-      touchedFiles: ['notes.md'],
+      response: 'canonical response',
+      lastResponse: 'legacy response',
+      files: ['canonical.md'],
+      touchedFiles: ['legacy.md'],
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toEqual({
@@ -208,8 +210,8 @@ describe('ExecutionKVStore meta read shims', () => {
       result: {
         category: 'toolUse',
         outcome: RUN_OUTCOME.COMPLETED,
-        response: 'done',
-        files: ['notes.md'],
+        response: 'canonical response',
+        files: ['canonical.md'],
         cost: 0,
       },
     });
