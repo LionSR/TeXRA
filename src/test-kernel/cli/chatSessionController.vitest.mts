@@ -339,7 +339,7 @@ function installOwnerSession(): {
   readonly interactions: SessionHostInteractions;
 } {
   const events = new SessionEventHub();
-  const status = new StreamStatusMachine();
+  const status = new StreamStatusMachine(events);
   const executions = new ExecutionRegistry({ events, streamStatus: status });
   const interactions = new SessionHostInteractions();
   installSession({

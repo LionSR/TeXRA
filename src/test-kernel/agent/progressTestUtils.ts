@@ -71,7 +71,21 @@ export function recordSessionEvents(
   return { events, detach };
 }
 
-export function sessionFactPayloads<T extends SessionFact['type']>(
+export function sessionFactsOfType<T extends SessionFact['type']>(
+  events: readonly SessionEvent[],
+  type: T,
+): Array<Extract<SessionFact, { type: T }>> {
+  const facts: Array<Extract<SessionFact, { type: T }>> = [];
+  for (const entry of events) {
+    if (entry.scope !== 'session' || entry.event.type !== type) continue;
+    facts.push(entry.event as Extract<SessionFact, { type: T }>);
+  }
+  return facts;
+}
+
+export type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
+
+export function sessionFactPayloads<T extends PayloadSessionFact['type']>(
   events: readonly SessionEvent[],
   type: T,
 ): unknown[] {

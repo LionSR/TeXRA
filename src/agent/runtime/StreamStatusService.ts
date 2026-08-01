@@ -1,5 +1,5 @@
 import type { AgentTrace, StatusEvent } from '@agent/trace';
-import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -15,14 +15,6 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
-
-export interface StreamStatusChange {
-  streamId: StreamTabId;
-  status: StreamPhase;
-  previousStatus?: StreamPhase;
-  cause: StreamTransitionCause;
-  substate?: StreamSubstate;
-}
 
 export interface StreamStatusEmitOptions {
   trace?: AgentTrace;
@@ -63,29 +55,29 @@ function effectiveState(entry: StreamEntry): StreamPhaseState {
   return entry.kind === 'reserved' ? RESERVED_STATE : entry.state;
 }
 
-function projectStatusEvent(event: StatusEvent): StreamStatusChange {
-  return {
-    streamId: event.streamId,
-    status: event.phase,
-    ...(event.previousPhase ? { previousStatus: event.previousPhase } : {}),
-    cause: event.cause,
-    ...(event.substate ? { substate: event.substate } : {}),
-  };
-}
-
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
-  private readonly statusListeners = new Set<
-    (change: StreamStatusChange) => void
-  >();
+  private eventHub: SessionEventHub;
 
   /**
-   * @param events Session hub this machine publishes `updateStreamStatus`
-   *   facts on. The session constructs both and hands the hub over once, so a
-   *   transition reaches every projector on the session-fact rail no matter
-   *   which caller triggered it — callers pass only their own trace.
+   * @param events Session hub this machine publishes canonical `status` facts
+   *   on. The session constructs both and hands the hub over once, so a
+   *   transition reaches every consumer on the session-fact rail no matter
+   *   which caller triggered it. Callers pass a trace only for the transcript
+   *   compatibility bridge.
    */
-  constructor(private readonly events?: SessionEventHub) {}
+  constructor(events: SessionEventHub = new SessionEventHub()) {
+    this.eventHub = events;
+  }
+
+  /** Bind status publication to the owning session's fact rail. */
+  attachSessionEvents(events: SessionEventHub): void {
+    this.eventHub = events;
+  }
+
+  get sessionEvents(): SessionEventHub {
+    return this.eventHub;
+  }
 
   get(stream: StreamTabId): StreamPhase | undefined {
     return this.stateFor(stream)?.phase;
@@ -295,13 +287,6 @@ export class StreamStatusMachine {
     return isInFlightPhase(this.get(stream));
   }
 
-  onDidChange(listener: (change: StreamStatusChange) => void): () => void {
-    this.statusListeners.add(listener);
-    return () => {
-      this.statusListeners.delete(listener);
-    };
-  }
-
   private stateFor(stream: StreamTabId): StreamPhaseState | undefined {
     const entry = this.streams.get(stream);
     return entry ? effectiveState(entry) : undefined;
@@ -325,18 +310,14 @@ export class StreamStatusMachine {
         : {}),
       ...(options.substate ? { substate: options.substate } : {}),
     };
+    // Transcript recording still consumes run traces. Forward the same
+    // canonical fact first so recorder-owned rows settle before synchronous
+    // host projectors read them. This is a compatibility bridge, not a second
+    // status vocabulary or delivery rail.
     options.trace?.emit(event);
-
-    const change = projectStatusEvent(event);
-    this.events?.emit({
+    this.eventHub.emit({
       scope: 'session',
-      event: {
-        type: 'updateStreamStatus',
-        payload: change,
-      },
+      event,
     });
-    for (const listener of this.statusListeners) {
-      listener(change);
-    }
   }
 }

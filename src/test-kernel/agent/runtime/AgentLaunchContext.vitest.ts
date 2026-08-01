@@ -146,8 +146,8 @@ describe('AgentLaunchContext', () => {
       responseTextProcessing,
     });
     const detachEvents = session.events.subscribe(() => undefined);
-    const detachStatus = session.status.onDidChange(({ status }) => {
-      if (status === STREAM_PHASE.FAILED) order.push('terminal');
+    const detachStatus = session.events.subscribeStatus(({ phase }) => {
+      if (phase === STREAM_PHASE.FAILED) order.push('terminal');
     });
     const stage = noopTrace.openStage('Run');
     const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
