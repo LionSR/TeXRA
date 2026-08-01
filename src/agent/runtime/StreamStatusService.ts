@@ -83,6 +83,19 @@ export class StreamStatusMachine {
     return this.stateFor(stream)?.phase;
   }
 
+  /** Opaque identity replaced whenever this stream's status entry changes. */
+  getGeneration(stream: StreamTabId): object | undefined {
+    return this.streams.get(stream);
+  }
+
+  /** Whether an earlier status read, including absence, is still current. */
+  isCurrentGeneration(
+    stream: StreamTabId,
+    generation: object | undefined,
+  ): boolean {
+    return this.streams.get(stream) === generation;
+  }
+
   getSubstate(stream: StreamTabId): StreamSubstate | undefined {
     return this.stateFor(stream)?.substate;
   }
