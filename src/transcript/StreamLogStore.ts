@@ -733,21 +733,33 @@ export class StreamLogStore {
     return appended;
   }
 
-  update(
+  /**
+   * Shared body of the entry mutators: guard writability, resolve the resident
+   * log, apply the mutation, and commit only when the log reports a change.
+   * The three public mutators differ solely in which `StreamLog` method runs.
+   */
+  private mutateEntry(
     streamId: StreamTabId,
-    id: string,
-    patch: StreamLogUpdatePatch,
+    apply: (log: StreamLog) => StreamLogEntry | undefined,
   ): StreamLogEntry | undefined {
     this.assertWritableStream(streamId);
     const logInstance = this.streams.get(streamId)?.log;
     if (!logInstance) return undefined;
 
-    const updated = logInstance.update(id, patch);
+    const updated = apply(logInstance);
     if (!updated) return undefined;
 
     this.commitChange(streamId, logInstance);
     void this.save();
     return updated;
+  }
+
+  update(
+    streamId: StreamTabId,
+    id: string,
+    patch: StreamLogUpdatePatch,
+  ): StreamLogEntry | undefined {
+    return this.mutateEntry(streamId, (log) => log.update(id, patch));
   }
 
   settle(
@@ -755,16 +767,7 @@ export class StreamLogStore {
     id: string,
     patch: StreamLogUpdatePatch,
   ): StreamLogEntry | undefined {
-    this.assertWritableStream(streamId);
-    const logInstance = this.streams.get(streamId)?.log;
-    if (!logInstance) return undefined;
-
-    const updated = logInstance.settle(id, patch);
-    if (!updated) return undefined;
-
-    this.commitChange(streamId, logInstance);
-    void this.save();
-    return updated;
+    return this.mutateEntry(streamId, (log) => log.settle(id, patch));
   }
 
   appendText(
@@ -772,16 +775,7 @@ export class StreamLogStore {
     id: string,
     appendText: string,
   ): StreamLogEntry | undefined {
-    this.assertWritableStream(streamId);
-    const logInstance = this.streams.get(streamId)?.log;
-    if (!logInstance) return undefined;
-
-    const updated = logInstance.appendText(id, appendText);
-    if (!updated) return undefined;
-
-    this.commitChange(streamId, logInstance);
-    void this.save();
-    return updated;
+    return this.mutateEntry(streamId, (log) => log.appendText(id, appendText));
   }
 
   clearDirtyUpdates(streamId: StreamTabId): void {
