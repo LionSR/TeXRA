@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
+  createOpenAIBackgroundPollingTimeoutError,
   createOpenAIBackgroundTerminalError,
   normalizeOpenAIResponseError,
 } from '@agent/modelHandlers/openai/openAIResponseErrors';
@@ -83,6 +84,21 @@ describe('OpenAI Responses error normalization', () => {
     expect(normalized.statusCode).toBeUndefined();
     expect(normalized.requestId).toBe('req_poll');
     expect(normalized.userRetryable).toBe(true);
+  });
+
+  it('classifies an exhausted polling lifetime as non-retryable', () => {
+    const error = createOpenAIBackgroundPollingTimeoutError(
+      'resp_expired',
+      10_800_000,
+      'openai',
+    );
+
+    const providerError = normalizeProviderError(error);
+
+    expect(providerError.userRetryable).toBe(false);
+    expect(providerError.provider).toBe('openai');
+    expect(providerError.message).toContain('resp_expired');
+    expect(providerError.message).not.toContain('Retry later');
   });
 
   it('classifies internally tagged context-window overflows as non-retryable', () => {

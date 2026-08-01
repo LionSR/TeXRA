@@ -23,6 +23,7 @@ import { tagOpenAISdkError } from './openAISdkError';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
+  createOpenAIBackgroundPollingTimeoutError,
   createOpenAIBackgroundTerminalError,
 } from './openAIResponseErrors';
 import type OpenAI from 'openai';
@@ -37,6 +38,7 @@ const BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] = [
   'queued',
   'in_progress',
 ];
+const BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000;
 
 /** Collaborators the lifecycle borrows from the owning handler. */
 interface BackgroundRunLifecycleDeps {
@@ -50,7 +52,7 @@ interface BackgroundRunLifecycleDeps {
 export class BackgroundRunLifecycle {
   private readonly backgroundPoller = new BackgroundPoller<Response>({
     pollIntervalMs: 15000,
-    maxDurationMs: 3 * 60 * 60 * 1000, // 3 hours
+    maxDurationMs: BACKGROUND_MAX_DURATION_MS,
     isPending: (r) => this.isPending(r),
     logger: this.deps.logger,
   });
@@ -62,6 +64,7 @@ export class BackgroundRunLifecycle {
    */
   private pendingResponseId: string | null = null;
   private pendingRetrieveParams: ResponseRetrieveParamsNonStreaming | undefined;
+  private pendingDeadlineAtMs: number | null = null;
 
   constructor(private readonly deps: BackgroundRunLifecycleDeps) {}
 
@@ -90,14 +93,29 @@ export class BackgroundRunLifecycle {
   clearPending(): void {
     this.pendingResponseId = null;
     this.pendingRetrieveParams = undefined;
+    this.pendingDeadlineAtMs = null;
   }
 
   private rememberPending(
     responseId: string,
     retrieveParams?: ResponseRetrieveParamsNonStreaming,
   ): void {
+    if (
+      this.pendingResponseId !== responseId ||
+      this.pendingDeadlineAtMs === null
+    ) {
+      this.pendingDeadlineAtMs = Date.now() + BACKGROUND_MAX_DURATION_MS;
+    }
     this.pendingResponseId = responseId;
     this.pendingRetrieveParams = retrieveParams;
+  }
+
+  private pollingTimeoutError(responseId: string): Error {
+    return createOpenAIBackgroundPollingTimeoutError(
+      responseId,
+      BACKGROUND_MAX_DURATION_MS,
+      this.deps.provider,
+    );
   }
 
   /**
@@ -115,6 +133,12 @@ export class BackgroundRunLifecycle {
       return null;
     }
     const retrieveParams = this.pendingRetrieveParams;
+    if (
+      this.pendingDeadlineAtMs !== null &&
+      Date.now() >= this.pendingDeadlineAtMs
+    ) {
+      throw this.pollingTimeoutError(pendingId);
+    }
 
     this.logger.debug(
       `Resuming polling for pending background response ${pendingId}`,
@@ -310,12 +334,12 @@ export class BackgroundRunLifecycle {
       extractId: (r) => r.id,
       extractStatus: (r) => r.status ?? 'unknown',
       signal,
+      deadlineAtMs: this.pendingDeadlineAtMs ?? undefined,
       resourceLabel: 'response',
       providerLabel: 'OpenAI',
       onAbort: () => this.clearPending(),
-      formatTimeoutError: ({ responseId, maxDurationMs }) =>
-        `OpenAI response ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms. ` +
-        `Retry later or cancel the job with client.responses.cancel("${responseId}").`,
+      formatTimeoutError: ({ responseId }) =>
+        this.pollingTimeoutError(responseId),
       extraFinishData: (response) => ({
         usage: response.usage ?? undefined,
       }),
