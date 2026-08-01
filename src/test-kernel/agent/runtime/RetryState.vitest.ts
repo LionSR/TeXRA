@@ -56,7 +56,11 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import {
+  DEFAULT_CORE_SETTINGS,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+} from '@shared/schemas/coreSettings';
+import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -318,11 +322,12 @@ describe('RetryState', () => {
     installTexraModelAccess();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllEnvs();
     resetRelayTokenTierCacheForTests();
     setIncludedModelAccess(null);
     SupabaseClient.resetForTests();
+    await installPlatform();
   });
 
   it('records a failed invocation without logging bookkeeping', () => {
@@ -386,6 +391,33 @@ describe('RetryState', () => {
       1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
     );
     expect(node.wait).toBe(RETRY_BACKOFF_SECONDS);
+  });
+
+  it('accepts the canonical maximum number of automatic retries', async () => {
+    await installPlatform({
+      config: {
+        'texra.model.retry.maxAttempts': MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+      },
+    });
+
+    const node = new ExposedRetryNode();
+
+    expect(node.maxRetries).toBe(1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.max);
+  });
+
+  it('falls back when a stored retry count exceeds the canonical maximum', async () => {
+    await installPlatform({
+      config: {
+        'texra.model.retry.maxAttempts':
+          MODEL_RETRY_MAX_ATTEMPTS_SETTING.max + 1,
+      },
+    });
+
+    const node = new ExposedRetryNode();
+
+    expect(node.maxRetries).toBe(
+      1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+    );
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {

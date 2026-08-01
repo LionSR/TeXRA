@@ -49,6 +49,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Automatic model retry settings are bounded** — the retry setting now
+  accepts zero to five additional attempts after the initial request. Invalid
+  stored values fall back to the documented default instead of creating an
+  arbitrarily long automatic retry sequence.
 - **Runs that overflow the model context window say so** — instead of a generic
   failure message, the run now reports that the conversation exceeds the
   model's context window and suggests starting a new session or reducing
