@@ -5,8 +5,8 @@ import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { relayTokenSignOutNotice } from '@auth/relayToken';
 import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import { confirmModal } from '@frontend/ui/dialogs';
 import {
-  confirmModal,
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';

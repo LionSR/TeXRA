@@ -92,10 +92,12 @@ export function formatFileView({
   const rangeProvided = viewRange != null;
   const startLine = Math.max(viewRange?.[0] ?? 1, 1);
   const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
-  const fullRange = sliceLineRange(lines, startLine, endLine);
-  const rangeSize = fullRange.length;
+  const rangeStartIndex = Math.min(startLine - 1, totalLines);
+  const rangeEndIndex = Math.max(endLine, rangeStartIndex);
+  const rangeSize = rangeEndIndex - rangeStartIndex;
   const truncated = rangeSize > maxLines;
-  const visibleLines = truncated ? fullRange.slice(0, maxLines) : fullRange;
+  const visibleEndLine = Math.min(endLine, startLine + maxLines - 1);
+  const visibleLines = sliceLineRange(lines, startLine, visibleEndLine);
   const visibleCount = visibleLines.length;
 
   // -- output ---------------------------------------------------------------

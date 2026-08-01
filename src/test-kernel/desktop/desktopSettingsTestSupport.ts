@@ -146,7 +146,6 @@ export function createStubDesktopToolingSettingsController(
         'Desktop cannot host VS Code extensions.',
       ),
       runInstallCommand: noOp,
-      setConfigValue: noOp,
     },
     postLatexConfigValues: () => undefined,
     postStartupData: noOp,

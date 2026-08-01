@@ -28,10 +28,8 @@ import type { SettingsAgentCatalogController } from '@controllers/settingsView/S
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import {
-  confirmModal,
-  showLoggedMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { confirmModal } from '@frontend/ui/dialogs';
+import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,

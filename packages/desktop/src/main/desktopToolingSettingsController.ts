@@ -4,7 +4,6 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { type LatexConfigField } from '@shared/constants/latex';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type {
   ToolCommandKind,
@@ -70,7 +69,6 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       applySettings: () => this.postLatexSettingsStatus(),
       installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
       runInstallCommand: (command) => this.runLatexInstallCommand(command),
-      setConfigValue: (input) => this.updateLatexConfigValue(input),
     };
   }
 
@@ -144,25 +142,6 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       throw new Error(`Rejected unknown install command: ${command}`);
     }
     await this.options.commands.run(command);
-  }
-
-  private async updateLatexConfigValue(input: {
-    field: LatexConfigField;
-    value: unknown;
-  }): Promise<void> {
-    const plan =
-      this.options.latexConfigPersistenceController.planUpdate(input);
-    if (!plan.ok) {
-      throw new Error(`Invalid LaTeX config value for ${input.field}`, {
-        cause: plan.error,
-      });
-    }
-
-    await this.options.workspaceState.update(
-      plan.update.key,
-      plan.update.value,
-    );
-    this.postLatexConfigValues();
   }
 }
 

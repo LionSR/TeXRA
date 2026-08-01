@@ -49,26 +49,6 @@ export async function showLoggedInfoMessage(
   return message;
 }
 
-/**
- * Show a modal warning dialog with `actionLabel` as the primary button
- * (plus any `otherLabels`, in order) and resolve `true` iff the user picked
- * `actionLabel`. Dismissing the dialog (Escape/X) resolves `false`, same as
- * picking any other button.
- */
-export async function confirmModal(
-  message: string,
-  actionLabel: string,
-  ...otherLabels: string[]
-): Promise<boolean> {
-  const choice = await vscode.window.showWarningMessage(
-    message,
-    { modal: true },
-    actionLabel,
-    ...otherLabels,
-  );
-  return choice === actionLabel;
-}
-
 /** Log an error message, display it with a docs action, and open the docs if selected. */
 export async function showLoggedMessageWithDocs(
   channel: string,

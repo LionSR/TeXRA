@@ -6,9 +6,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { appSignals } from '@eventBus/AppSignals';
+import { confirmModal } from '@frontend/ui/dialogs';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
-  confirmModal,
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
