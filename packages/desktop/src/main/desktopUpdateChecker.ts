@@ -1,11 +1,11 @@
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  DAILY_UPDATE_CHECK_INTERVAL_MS,
-  isNewerSemverVersion,
-  UPDATE_CHECK_SKIP_ENV,
-} from '@utils/system/semverUpdateCheck';
+import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import {
+  fetchJsonStringField,
+  runDailyUpdateCheck,
+} from '@utils/system/updateCheck';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).
@@ -30,8 +30,6 @@ export const DESKTOP_RELEASES_PAGE_URL =
 /** Stable identifier for GitHub API request logging/diagnostics. */
 const GITHUB_USER_AGENT = 'TeXRA-Desktop';
 const FETCH_TIMEOUT_MS = 5000;
-/** Poll at most once per day so a normal multi-launch day makes one request. */
-const CHECK_INTERVAL_MS = DAILY_UPDATE_CHECK_INTERVAL_MS;
 
 interface DesktopLatestRelease {
   /** Release version with any leading `v` stripped, e.g. `0.40.0`. */
@@ -43,23 +41,17 @@ async function fetchLatestDesktopRelease(options?: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): Promise<DesktopLatestRelease | undefined> {
-  const fetchImpl = options?.fetchImpl ?? fetch;
-  try {
-    const response = await fetchImpl(RELEASES_API_URL, {
-      signal: AbortSignal.timeout(options?.timeoutMs ?? FETCH_TIMEOUT_MS),
-      headers: {
-        accept: 'application/vnd.github+json',
-        'user-agent': GITHUB_USER_AGENT,
-      },
-    });
-    if (!response.ok) return undefined;
-    const body = (await response.json()) as { tag_name?: unknown };
-    const tag = typeof body.tag_name === 'string' ? body.tag_name : undefined;
-    if (!tag) return undefined;
-    return { version: tag.replace(/^v/, '') };
-  } catch {
-    return undefined;
-  }
+  const tag = await fetchJsonStringField({
+    url: RELEASES_API_URL,
+    field: 'tag_name',
+    timeoutMs: options?.timeoutMs ?? FETCH_TIMEOUT_MS,
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': GITHUB_USER_AGENT,
+    },
+    fetchImpl: options?.fetchImpl,
+  });
+  return tag ? { version: tag.replace(/^v/, '') } : undefined;
 }
 
 export interface CheckForDesktopUpdateOptions {
@@ -118,35 +110,17 @@ async function runDesktopUpdateCheck({
   if (!isPackaged) return;
   if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV, env)) return;
 
-  const lastCheckedAt = globalState.get<number>(
-    GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-    0,
-  );
-  const nowMs = now();
-  if (nowMs - lastCheckedAt < CHECK_INTERVAL_MS) return;
-
-  const release = await fetchRelease();
-  if (!release) return;
-
-  // Notify at most once per release version; a matching-or-older release just
-  // refreshes the throttle stamp below.
-  if (
-    isNewerSemverVersion(release.version, currentVersion) &&
-    globalState.get<string>(
+  await runDailyUpdateCheck({
+    currentVersion,
+    state: globalState,
+    lastCheckedAtKey: GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+    lastNotifiedVersionKey:
       GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
-    ) !== release.version
-  ) {
-    await notify(release);
-    await globalState.update(
-      GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
-      release.version,
-    );
-  }
-
-  // Stamp the daily throttle only after a successful fetch and any required
-  // notification, so a failed check retries on the next launch.
-  await globalState.update(
-    GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-    nowMs,
-  );
+    fetchLatest: async () => {
+      const release = await fetchRelease();
+      return { version: release?.version, refreshed: release !== undefined };
+    },
+    notify: (version) => notify({ version }),
+    now,
+  });
 }
