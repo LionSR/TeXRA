@@ -1,3 +1,6 @@
+// Third-party imports
+import { vi } from 'vitest';
+
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -5,6 +8,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
+import type { ProgressBackendOptions } from '@controllers/progressView/backend/ProgressBackend';
 import {
   ProgressWorkflowActionsController,
   type WorkflowDiffRequest,
@@ -161,5 +165,31 @@ export function createProgressWorkflowActionsHarness(
     }),
     diffs,
     fileOperations,
+  };
+}
+
+/** Approval transport a backend can send through, recording retry/proposal UI. */
+export function createApprovalOptions(): ProgressBackendOptions['approvals'] {
+  return {
+    canSend: () => true,
+    overrides: {
+      retry: { show: vi.fn(), dismiss: vi.fn() },
+      proposal: { show: vi.fn(), dismiss: vi.fn() },
+    },
+  };
+}
+
+/** Host lifecycle callbacks as spies, so a suite asserts on what the backend asked its host to do. */
+export function createLifecycleOptions(
+  overrides: Partial<ProgressBackendOptions['lifecycle']> = {},
+): ProgressBackendOptions['lifecycle'] {
+  return {
+    stopStream: vi.fn(),
+    cleanupDeletedStream: vi.fn(),
+    cleanupDeletedStreams: vi.fn(),
+    rebuildRenderedStreams: vi.fn(),
+    activateStream: vi.fn(),
+    notifyDeletionRetained: vi.fn(),
+    ...overrides,
   };
 }

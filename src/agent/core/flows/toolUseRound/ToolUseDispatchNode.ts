@@ -121,7 +121,7 @@ export class ToolUseDispatchNode<C> extends Node<
       return [];
     }
 
-    if (this.services.checkInterruption()) {
+    if (this.services.abortSignal.aborted) {
       shared.shouldStop = true;
       return [];
     }
@@ -157,7 +157,7 @@ export class ToolUseDispatchNode<C> extends Node<
    *
    * Bypasses Node._exec's per-item retry machinery on purpose: tool calls
    * are never auto-retried (default maxRetries, exec never throws), and
-   * cancellation runs through the batch abort controller, not `this.signal`.
+   * cancellation runs through the run's abort signal, not `this.signal`.
    */
   async _exec(calls: SdkToolCall[]): Promise<(ToolExecutionResult | null)[]> {
     if (calls.length === 0) return [];
@@ -173,56 +173,42 @@ export class ToolUseDispatchNode<C> extends Node<
         ? []
         : [index],
     );
-    const batchController = new AbortController();
-    this.services.setAbortController(batchController);
-    try {
-      const queue = new PQueue({ concurrency: MAX_PARALLEL_TOOL_CALLS });
-      let i = 0;
-      while (i < live.length) {
-        if (
-          batchController.signal.aborted ||
-          this.services.checkInterruption()
-        ) {
-          break;
-        }
-        if (!this.isParallelSafe(calls[live[i]])) {
-          // Barrier: mutating/unknown tools run alone, in order.
-          const index = live[i];
-          results[index] = await this.execCall(
-            calls[index],
-            batchController.signal,
-          );
-          i += 1;
-          if (endsToolUseTurn(results[index])) break;
-          continue;
-        }
-        // Contiguous run of parallel-safe calls executes concurrently.
-        const run: number[] = [];
-        while (i < live.length && this.isParallelSafe(calls[live[i]])) {
-          run.push(live[i]);
-          i += 1;
-        }
-        await Promise.all(
-          run.map((index) =>
-            queue.add(async () => {
-              // Re-check after waiting for a slot: an interrupt while this
-              // call was queued must not start new work.
-              if (batchController.signal.aborted) return;
-              results[index] = await this.execCall(
-                calls[index],
-                batchController.signal,
-              );
-            }),
-          ),
-        );
-        if (run.some((index) => endsToolUseTurn(results[index]))) break;
+    const { abortSignal } = this.services;
+    const queue = new PQueue({ concurrency: MAX_PARALLEL_TOOL_CALLS });
+    let i = 0;
+    while (i < live.length) {
+      if (abortSignal.aborted) {
+        break;
       }
-      this.fanOutDuplicateResults(calls, results);
-      this.rejectUnsafeDuplicates(calls, results);
-      return results;
-    } finally {
-      this.services.setAbortController(null);
+      if (!this.isParallelSafe(calls[live[i]])) {
+        // Barrier: mutating/unknown tools run alone, in order.
+        const index = live[i];
+        results[index] = await this.exec(calls[index]);
+        i += 1;
+        if (endsToolUseTurn(results[index])) break;
+        continue;
+      }
+      // Contiguous run of parallel-safe calls executes concurrently.
+      const run: number[] = [];
+      while (i < live.length && this.isParallelSafe(calls[live[i]])) {
+        run.push(live[i]);
+        i += 1;
+      }
+      await Promise.all(
+        run.map((index) =>
+          queue.add(async () => {
+            // Re-check after waiting for a slot: an interrupt while this
+            // call was queued must not start new work.
+            if (abortSignal.aborted) return;
+            results[index] = await this.exec(calls[index]);
+          }),
+        ),
+      );
+      if (run.some((index) => endsToolUseTurn(results[index]))) break;
     }
+    this.fanOutDuplicateResults(calls, results);
+    this.rejectUnsafeDuplicates(calls, results);
+    return results;
   }
 
   /** Answer side-effect duplicates with a synthetic error (never executed). */
@@ -280,20 +266,13 @@ export class ToolUseDispatchNode<C> extends Node<
 
   /** Execute a single tool call, returning null if interrupted. */
   async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
-    return this.execCall(call, null);
-  }
-
-  private async execCall(
-    call: SdkToolCall,
-    batchSignal: AbortSignal | null,
-  ): Promise<ToolExecutionResult | null> {
-    if (this.services.checkInterruption()) {
+    if (this.services.abortSignal.aborted) {
       return null;
     }
 
     this.services.workspace.interactions.recordToolCall();
 
-    return this.executeToolCall(call, batchSignal);
+    return this.executeToolCall(call);
   }
 
   /**
@@ -341,9 +320,9 @@ export class ToolUseDispatchNode<C> extends Node<
     call: SdkToolCall,
     tool: { call(input: unknown): Promise<ToolResult> } | undefined,
     parsedInput: unknown,
-    onExecutionReady?: () => void,
-    onToolOutput?: (chunk: string) => void,
-    signal?: AbortSignal,
+    onExecutionReady: (() => void) | undefined,
+    onToolOutput: ((chunk: string) => void) | undefined,
+    signal: AbortSignal,
   ): Promise<ToolResult> {
     if (!tool) {
       return {
@@ -391,7 +370,6 @@ export class ToolUseDispatchNode<C> extends Node<
   /** Execute a single tool call and return the result with metadata. */
   private async executeToolCall(
     call: SdkToolCall,
-    batchSignal: AbortSignal | null,
   ): Promise<ToolExecutionResult | null> {
     const options = this.services;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
@@ -443,42 +421,18 @@ export class ToolUseDispatchNode<C> extends Node<
       };
     }
 
-    // Each call gets its own controller. Inside a dispatch batch it chains
-    // to the batch-wide signal (one interrupt cancels every in-flight call);
-    // standalone exec() (tests, direct invocation) registers it as before.
-    const controller = new AbortController();
-    let detachBatchAbort: (() => void) | undefined;
-    if (batchSignal) {
-      if (batchSignal.aborted) {
-        controller.abort();
-      } else {
-        const onBatchAbort = () => controller.abort();
-        batchSignal.addEventListener('abort', onBatchAbort, { once: true });
-        detachBatchAbort = () =>
-          batchSignal.removeEventListener('abort', onBatchAbort);
-      }
-    } else {
-      options.setAbortController(controller);
-    }
+    // Every call runs under the run's one signal, so a single interrupt
+    // cancels the whole in-flight batch.
+    const result = await this.invokeToolSafely(
+      call,
+      tool,
+      parsedInput,
+      onExecutionReady,
+      onToolOutput,
+      options.abortSignal,
+    );
 
-    let result: ToolResult;
-    try {
-      result = await this.invokeToolSafely(
-        call,
-        tool,
-        parsedInput,
-        onExecutionReady,
-        onToolOutput,
-        controller.signal,
-      );
-    } finally {
-      detachBatchAbort?.();
-      if (!batchSignal) {
-        options.setAbortController(null);
-      }
-    }
-
-    if (controller.signal.aborted || options.checkInterruption()) {
+    if (options.abortSignal.aborted) {
       if (logRef.logId) {
         endToolUseCard(
           options.logger,

@@ -6,6 +6,7 @@ import type { ExternalInquiryPanel } from '@progressView/frontend/components/Ext
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExternalInquiryPermission } from '@shared/schemas';
+import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
 import {
@@ -54,19 +55,6 @@ function mountPanel(
   return mountComponent<ExternalInquiryPanel>('external-inquiry-panel', {
     permission,
   });
-}
-
-function recordPermissionActions(
-  element: ExternalInquiryPanel,
-): Record<string, unknown>[] {
-  const actions: Record<string, unknown>[] = [];
-  element.addEventListener('permission-action', (event) => {
-    actions.push(
-      (event as CustomEvent<{ decision: Record<string, unknown> }>).detail
-        .decision,
-    );
-  });
-  return actions;
 }
 
 function setTextareaValue(textarea: HTMLElement, value: string): void {

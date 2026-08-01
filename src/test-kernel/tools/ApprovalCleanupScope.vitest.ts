@@ -211,14 +211,15 @@ describe('session-owned approval state (#8144)', () => {
 
     try {
       // Session A's prompt slot is occupied by a never-answered approval.
-      void sessionA.approvals.bash.enqueue(
-        undefined,
-        () => new Promise(() => {}),
-      );
+      void sessionA.approvals.bash.enqueue(undefined, {
+        prompt: () => new Promise(() => {}),
+        bypassed: () => 'never bypassed',
+      });
 
-      const ranInB = sessionB.approvals.bash.enqueue(undefined, () =>
-        Promise.resolve('answered'),
-      );
+      const ranInB = sessionB.approvals.bash.enqueue(undefined, {
+        prompt: () => Promise.resolve('answered'),
+        bypassed: () => 'never bypassed',
+      });
 
       await expect(ranInB).resolves.toBe('answered');
     } finally {

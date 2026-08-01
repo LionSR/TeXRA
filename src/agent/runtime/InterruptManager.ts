@@ -7,31 +7,25 @@ import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
  */
 type InterruptCallbacks = Pick<
   BaseFlowContextInit,
-  'checkInterruption' | 'setAbortController' | 'onInterrupt'
+  'checkInterruption' | 'abortSignal' | 'onInterrupt'
 >;
 
 /**
- * Create interrupt callbacks for a single flow execution.
+ * Create the interrupt controller for a single flow execution.
+ *
+ * One controller owns cancellation for the whole run: nodes read its signal
+ * instead of registering controllers of their own, so an interrupt is
+ * delivered once and stays delivered. There is no empty slot to miss and no
+ * later registration to stomp.
  *
  * Returns callbacks directly - spread into flow inputs with `...createInterruptCallbacks()`.
  */
 export function createInterruptCallbacks(): InterruptCallbacks {
-  let isInterrupted = false;
-  let abortController: AbortController | null = null;
+  const controller = new AbortController();
 
   return {
-    checkInterruption: () => isInterrupted,
-    // Nodes null the slot in their `finally`, so an interrupt can land while
-    // it is empty. Delivery is therefore level-triggered on both edges: the
-    // latch aborts whatever registers next, and `onInterrupt` stays callable
-    // so a second press still reaches a controller registered after the first.
-    setAbortController: (controller) => {
-      abortController = controller;
-      if (isInterrupted) controller?.abort();
-    },
-    onInterrupt: () => {
-      isInterrupted = true;
-      abortController?.abort();
-    },
+    checkInterruption: () => controller.signal.aborted,
+    abortSignal: controller.signal,
+    onInterrupt: () => controller.abort(),
   };
 }

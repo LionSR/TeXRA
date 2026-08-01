@@ -6,7 +6,6 @@ const providerMocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
-  setTokenExpiry: vi.fn(),
   signOut: vi.fn(async () => {}),
 }));
 
@@ -26,7 +25,6 @@ vi.mock('@auth/SupabaseClient', () => ({
         signOut: providerMocks.signOut,
       },
     }),
-    setTokenExpiry: providerMocks.setTokenExpiry,
   },
 }));
 

@@ -109,6 +109,7 @@ describe('shared setup capabilities', () => {
       }),
       getStoredSessionState: async () => 'authenticated',
       getStoredAccountLabel: async () => null,
+      isTokenExpiringSoon: () => false,
       getLastRefreshFailure: () => null,
     });
     vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({

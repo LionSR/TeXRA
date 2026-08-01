@@ -1,5 +1,5 @@
 // Node imports
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -172,6 +172,20 @@ describe('workspace storage defaults', () => {
     await expect(pathExists(join(storagePath, 'marker.txt'))).resolves.toBe(
       true,
     );
+    await expect(readWorkspaceMarker(storagePath)).resolves.toMatchObject({
+      path: workspacePath,
+    });
+  });
+
+  it('recreates a storage root deleted underneath it, marker included', async () => {
+    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
+    const workspacePath = '/workspace/a';
+    const provider = new WorkspaceStorageProvider(root, workspacePath);
+    const storagePath = provider.getStoragePath();
+
+    await rm(storagePath, { recursive: true, force: true });
+
+    expect(provider.getStoragePath()).toBe(storagePath);
     await expect(readWorkspaceMarker(storagePath)).resolves.toMatchObject({
       path: workspacePath,
     });

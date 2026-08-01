@@ -10,7 +10,6 @@ import type { MainViewHandlerRegistry } from '@shared/schemas';
 // Local imports - main view
 import { instruction$, isPolishing$, isRecording$ } from '../mainViewState';
 import { setInstruction, showInformation } from '../mainViewActions';
-import { saveState } from '../persistence';
 
 // `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
 // owns only chat commands; see bannerSlice.ts for why (registry is now
@@ -21,7 +20,6 @@ export const chatHandlers = {
     if (message.text.trim()) {
       setInstruction(message.text);
       showInformation('Instruction text has been polished!');
-      saveState();
     }
   },
 
@@ -43,7 +41,6 @@ export const chatHandlers = {
     setInstruction(updated);
     isRecording$.set(false);
     showInformation('Instruction text transcribed!');
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: () => {

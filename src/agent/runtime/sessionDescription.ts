@@ -70,7 +70,14 @@ function buildUserPrompt(
   return parts.join('\n');
 }
 
-export function getSessionDescriptionInstruction(
+/**
+ * The instruction text shown to the user for a run: the display override when
+ * it carries content, otherwise the real instruction. Single owner of that
+ * derivation for both the stream-tab user message and the session description,
+ * so a blank display override can never surface as a blank label on one
+ * surface and the instruction on the other.
+ */
+export function getDisplayedInstruction(
   config: Pick<AgentConfig, 'displayInstruction' | 'instruction'>,
 ): string {
   return (
@@ -96,7 +103,7 @@ export async function generateSessionDescription(
   try {
     if (config.agentCategory !== AgentCategory.ToolUse) return;
 
-    const instruction = getSessionDescriptionInstruction(config);
+    const instruction = getDisplayedInstruction(config);
     if (!instruction) return;
 
     const agentEntry = getAgent(config.agent, AgentCategory.ToolUse);

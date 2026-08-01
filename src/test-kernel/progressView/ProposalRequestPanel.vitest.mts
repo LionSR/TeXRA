@@ -7,6 +7,7 @@ import { AgentCategory } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
 import {
@@ -57,18 +58,6 @@ function mountPanel(
   return mountComponent<ProposalRequestPanel>('proposal-request-panel', {
     permission,
   });
-}
-
-function recordPermissionActions(
-  element: ProposalRequestPanel,
-): Array<{ action: string }> {
-  const actions: Array<{ action: string }> = [];
-  element.addEventListener('permission-action', (event) => {
-    actions.push(
-      (event as CustomEvent<{ decision: { action: string } }>).detail.decision,
-    );
-  });
-  return actions;
 }
 
 /**

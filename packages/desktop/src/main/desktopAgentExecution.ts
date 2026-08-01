@@ -32,10 +32,7 @@ import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprov
 import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
-import {
-  buildStreamInfo,
-  streamMatchesCategoryFilter,
-} from '@controllers/progressView/backend/streamInfoUtils';
+import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
@@ -89,7 +86,6 @@ import {
   AgentCategory,
   INSTRUCTION_ACTION,
   SETTINGS_TAB,
-  type AgentCategoryFilter,
   type InstructionAction,
   type MainViewPersistedState,
   type ExecutionId,
@@ -196,7 +192,6 @@ export class DesktopProgressBridge {
    * switches and the pending-proposal lookup — the same host-agnostic
    * bookkeeping the extension uses, rather than a hand-rolled registry.
    */
-  private unsubscribe: () => void = () => undefined;
   private detachCompletedResult: () => void = () => undefined;
   private toolEditApprovals: ToolEditApprovalController | undefined;
   private hostInteractions!: ProgressHostInteractions;
@@ -426,12 +421,8 @@ export class DesktopProgressBridge {
     this.followUpController = this.createFollowUpController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
-    const backendSubscription = this.backend.setupEventListeners();
-    this.unsubscribe = () => backendSubscription.dispose();
-    if (this.disposed) {
-      this.unsubscribe();
-      return;
-    }
+    this.backend.setupEventListeners();
+    if (this.disposed) return;
     // Canonical state and restart repair are complete before any window-owned
     // adapter can receive a replay. Subscribe first because attachment
     // synchronously redispatches pending approvals and their visibility facts.
@@ -863,7 +854,6 @@ export class DesktopProgressBridge {
       commands: {
         lifecycle: {
           setActiveStream: (stream) => this.setActiveStream(stream),
-          setAgentFilter: (filter) => this.setAgentFilter(filter),
           deleteStream: (stream) => this.backend.deleteStream(stream),
           deleteAllStreams: () => this.backend.deleteAllStreams(),
           stopStream: (stream) => this.backend.stopStream(stream),
@@ -1084,7 +1074,6 @@ export class DesktopProgressBridge {
     this.detachHostInteractions();
     this.toolEditApprovals?.dispose();
     this.clearDesktopPresentationState();
-    this.unsubscribe();
     this.backend.dispose();
     this.workflowFileActions?.clearAllBackups();
   }
@@ -1148,11 +1137,7 @@ export class DesktopProgressBridge {
     if (!this.streamLogs.has(streamId)) {
       return;
     }
-    const previous = this.state.activeStream;
-    if (previous && previous !== streamId) {
-      this.state.releasePreviousActive(previous);
-    }
-    this.state.activeStream = streamId;
+    this.state.switchActiveStream(streamId);
     this.updateStreamMetadata();
     this.backend.webviewUpdater.setActiveStream(streamId);
     this.syncStreamContent(streamId);
@@ -1160,11 +1145,10 @@ export class DesktopProgressBridge {
 
   /**
    * Display label for a stream, the desktop counterpart of the extension's
-   * `getProgressStreamLabel`. Read with the `'all'` filter so a label is
-   * returned regardless of which category filter the board currently shows.
+   * `getProgressStreamLabel`.
    */
   getStreamLabel(streamId: StreamTabId): string | undefined {
-    return buildStreamInfo(this.state, streamId, 'all')?.label;
+    return buildStreamInfo(this.state, streamId).label;
   }
 
   /**
@@ -1172,12 +1156,6 @@ export class DesktopProgressBridge {
    * Mirrors the extension's `revealProgressStream` for the desktop Settings
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
    * run works the same way on both hosts.
-   *
-   * Resolves category from canonical stream metadata, not `getStreamState()`'s
-   * ephemeral session-only kind, so a goal-owned stream restored from
-   * `workspaceState` that hasn't emitted a live fact yet this session still
-   * matches the current filter instead of unconditionally resetting it to
-   * 'all' (#7851).
    */
   async revealStream(
     streamId: StreamTabId,
@@ -1185,17 +1163,8 @@ export class DesktopProgressBridge {
     if (!this.streamLogs.has(streamId)) {
       return 'missing';
     }
-    const filter = this.state.agentCategoryFilter;
-    if (!streamMatchesCategoryFilter(this.state, streamId, filter)) {
-      this.state.agentCategoryFilter = 'all';
-    }
     this.setActiveStream(streamId);
     return 'revealed';
-  }
-
-  private setAgentFilter(filter: AgentCategoryFilter): void {
-    this.state.agentCategoryFilter = filter;
-    this.syncStreamContent(this.updateStreamMetadata());
   }
 
   deleteStream(streamId: StreamTabId): Promise<void> {

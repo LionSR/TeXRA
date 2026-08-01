@@ -75,7 +75,7 @@ interface TestRetryServices {
   streamId: StreamTabId;
   interactions: SessionHostInteractions;
   logger: AgentTrace;
-  setAbortController: (ac: AbortController | null) => void;
+  abortSignal: AbortSignal;
   refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>;
   clientCredentialRoute?: ModelCredentialRoute;
 }
@@ -92,8 +92,8 @@ class ExposedRetryNode extends RetryableInvocationNode<
     return this.handleManualRetryPrompt(error);
   }
 
-  runWithAbort<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    return this.withAbortController(op);
+  runWithRelayRecovery<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    return this.invokeWithRelayRecovery(op);
   }
 
   fallbackFor(error: Error): unknown {
@@ -150,7 +150,7 @@ function createRetryNode(
     streamId,
     interactions: new SessionHostInteractions(),
     logger: noopTrace,
-    setAbortController: vi.fn(),
+    abortSignal: new AbortController().signal,
     refreshClient,
     clientCredentialRoute,
   });
@@ -249,7 +249,7 @@ async function captureModelRetry(
     setting: { temperature: 0 },
     config: { model: 'openai:test' },
     runScope: testRunScope(streamId, { session }),
-    setAbortController: vi.fn(),
+    abortSignal: new AbortController().signal,
     client,
     clientCredentialRoute: credentialRoute,
   } as never);
@@ -291,6 +291,7 @@ function createAuthTokenProvider(
     getSessionTokens: async () => null,
     getStoredSessionState: async () => 'none',
     getStoredAccountLabel: async () => null,
+    isTokenExpiringSoon: () => false,
     getLastRefreshFailure: () => null,
     ...overrides,
   };
@@ -373,7 +374,7 @@ describe('RetryState', () => {
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {
-    const node = new ExposedRetryNode();
+    const { node } = createRetryNode('retry-user-abort' as StreamTabId);
     const abort = new DOMException('Request aborted', 'AbortError');
 
     expect(node.shouldAutoRetry(abort)).toBe(false);
@@ -381,7 +382,7 @@ describe('RetryState', () => {
   });
 
   it('does not claim an unprompted retryable fallback was already logged', () => {
-    const node = new ExposedRetryNode();
+    const { node } = createRetryNode('retry-unprompted' as StreamTabId);
     const error = new OpenAIAPIError(
       503,
       { message: 'transient provider failure' },
@@ -444,7 +445,7 @@ describe('RetryState', () => {
         streamId: 'retry-delay' as StreamTabId,
         interactions: new SessionHostInteractions(),
         logger: noopTrace,
-        setAbortController: vi.fn(),
+        abortSignal: new AbortController().signal,
       });
       const retry = node._exec(undefined);
       const delayMs = RETRY_BACKOFF_SECONDS * 1000;
@@ -481,29 +482,25 @@ describe('RetryState', () => {
 
     vi.useFakeTimers();
     try {
-      const activeController: { current: AbortController | null } = {
-        current: null,
-      };
+      // The run owns one controller for the whole execution; interrupting it
+      // mid-backoff must abandon the pending retry instead of waking up to
+      // another attempt.
+      const runController = new AbortController();
       const node = new InterruptibleBackoffNode().setServices({
         config: { model: 'openai:test' },
         runScope: testRunScope('retry-interrupt' as StreamTabId),
         streamId: 'retry-interrupt' as StreamTabId,
         interactions: new SessionHostInteractions(),
         logger: noopTrace,
-        setAbortController: (controller) => {
-          activeController.current = controller;
-        },
+        abortSignal: runController.signal,
       });
       const retry = node._exec(undefined);
       await vi.advanceTimersByTimeAsync(0);
       expect(node.attempts).toBe(1);
 
-      activeController.current?.abort(
-        new DOMException('Run interrupted', 'AbortError'),
-      );
+      runController.abort(new DOMException('Run interrupted', 'AbortError'));
       await expect(retry).resolves.toEqual({ kind: 'cancelled' });
       expect(node.attempts).toBe(1);
-      expect(activeController.current).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -546,7 +543,9 @@ describe('RetryState', () => {
       .mockRejectedValueOnce(unauthorized)
       .mockResolvedValueOnce('recovered');
 
-    await expect(node.runWithAbort(operation)).resolves.toBe('recovered');
+    await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+      'recovered',
+    );
 
     const refreshSignal = refreshClient.mock.calls[0]?.[1];
     expect(refreshSignal).toBeInstanceOf(AbortSignal);
@@ -896,7 +895,7 @@ describe('RetryState', () => {
 
   it('keeps relay 401s out of route cooling and out of auto-retry', async () => {
     // Token refresh is single-flighted at the auth boundary and repaired by
-    // withAbortController's reactive recovery inside the same node attempt;
+    // invokeWithRelayRecovery's reactive recovery inside the same node attempt;
     // cooling the shared route on a 401 would only serialize healthy peers.
     const { classifyFailure } = await captureModelRetry(
       'https://api.example/v1',
@@ -1139,10 +1138,14 @@ describe('RetryState', () => {
           `retry-state-proactive-${route ?? 'unknown'}` as StreamTabId;
         const refreshClient = vi.fn(async () => undefined);
         const { node } = createRetryNode(streamId, refreshClient, route);
-        SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+        SupabaseClient.setAuthProvider(
+          createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
+        );
 
         const operation = vi.fn(async () => 'response');
-        await expect(node.runWithAbort(operation)).resolves.toBe('response');
+        await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+          'response',
+        );
 
         expect(operation).toHaveBeenCalledOnce();
         expect(refreshClient).not.toHaveBeenCalled();
@@ -1153,18 +1156,23 @@ describe('RetryState', () => {
       const streamId = 'retry-state-proactive-relay-rotation' as StreamTabId;
       const refreshClient = vi.fn(async () => undefined);
       const { node } = createRetryNode(streamId, refreshClient, 'relay');
-      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
+      let expiringSoon = true;
       const ensureFreshToken = vi.fn(async () => {
         // Simulate rotation: the refresh pushes the session expiry out.
-        SupabaseClient.setTokenExpiry(Date.now() + 3_600_000);
+        expiringSoon = false;
         return 'fresh-session-token';
       });
       SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({ ensureFreshToken }),
+        createAuthTokenProvider({
+          ensureFreshToken,
+          isTokenExpiringSoon: () => expiringSoon,
+        }),
       );
 
       const operation = vi.fn(async () => 'response');
-      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'response',
+      );
 
       expect(ensureFreshToken).toHaveBeenCalledOnce();
       expect(refreshClient).toHaveBeenCalledOnce();
@@ -1175,16 +1183,20 @@ describe('RetryState', () => {
       const streamId = 'retry-state-proactive-relay-stale' as StreamTabId;
       const refreshClient = vi.fn(async () => undefined);
       const { node } = createRetryNode(streamId, refreshClient, 'relay');
-      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
       // The provider answers with the stale token and leaves the expiry
       // clock inside the threshold, so no rotation is observed.
       const ensureFreshToken = vi.fn(async () => 'stale-session-token');
       SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({ ensureFreshToken }),
+        createAuthTokenProvider({
+          ensureFreshToken,
+          isTokenExpiringSoon: () => true,
+        }),
       );
 
       const operation = vi.fn(async () => 'response');
-      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'response',
+      );
 
       // No rebuild without rotation — the reactive 401 path remains the net.
       expect(ensureFreshToken).toHaveBeenCalledOnce();
@@ -1197,16 +1209,20 @@ describe('RetryState', () => {
         'retry-state-proactive-relay-null-refresh' as StreamTabId;
       const refreshClient = vi.fn(async () => undefined);
       const { node } = createRetryNode(streamId, refreshClient, 'relay');
-      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
       // Refresh failed or no session: ensureFreshToken resolves null and the
       // expiry clock stays inside the threshold, so no rotation is observed.
       const ensureFreshToken = vi.fn(async () => null);
       SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({ ensureFreshToken }),
+        createAuthTokenProvider({
+          ensureFreshToken,
+          isTokenExpiringSoon: () => true,
+        }),
       );
 
       const operation = vi.fn(async () => 'response');
-      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'response',
+      );
 
       // No rebuild when no fresh token materialized — the reactive 401 path
       // remains the net.
@@ -1219,14 +1235,15 @@ describe('RetryState', () => {
       const streamId = 'retry-state-proactive-relay-fresh' as StreamTabId;
       const refreshClient = vi.fn(async () => undefined);
       const { node } = createRetryNode(streamId, refreshClient, 'relay');
-      SupabaseClient.setTokenExpiry(Date.now() + 3_600_000);
       const ensureFreshToken = vi.fn(async () => 'session-token');
       SupabaseClient.setAuthProvider(
         createAuthTokenProvider({ ensureFreshToken }),
       );
 
       const operation = vi.fn(async () => 'response');
-      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'response',
+      );
 
       expect(ensureFreshToken).not.toHaveBeenCalled();
       expect(refreshClient).not.toHaveBeenCalled();
@@ -1238,14 +1255,18 @@ describe('RetryState', () => {
       const refreshClient = vi.fn(async () => undefined);
       const { node } = createRetryNode(streamId, refreshClient, 'relay');
       vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}fakeci123`);
-      SupabaseClient.setTokenExpiry(Date.now() + 60_000);
       const ensureFreshToken = vi.fn(async () => 'session-token');
       SupabaseClient.setAuthProvider(
-        createAuthTokenProvider({ ensureFreshToken }),
+        createAuthTokenProvider({
+          ensureFreshToken,
+          isTokenExpiringSoon: () => true,
+        }),
       );
 
       const operation = vi.fn(async () => 'response');
-      await expect(node.runWithAbort(operation)).resolves.toBe('response');
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'response',
+      );
 
       // The configured CI token satisfies the non-forced read cache-only: the
       // session is never consulted and the expiry clock stays stale, so the

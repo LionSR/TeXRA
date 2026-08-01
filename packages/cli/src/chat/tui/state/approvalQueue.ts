@@ -13,7 +13,7 @@
 // the committing work through the same structure — there is no second registry
 // to sweep and no staleness re-check at the call sites.
 
-import { signal, type Signal } from '@lit-labs/signals';
+import { computed, signal, type Signal } from '@lit-labs/signals';
 
 import type { ApprovalBypassKind as HostApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { StreamTabId } from '@shared/schemas';
@@ -109,20 +109,9 @@ export interface PendingApprovalSummary {
 }
 
 const CURRENT = signal<PendingApproval | undefined>(undefined);
-const STATUS = signal<ApprovalQueueStatus>({ depth: 0, kind: 'approval' });
-const PENDING_SUMMARIES = signal<readonly PendingApprovalSummary[]>([]);
 
 export const currentApproval = CURRENT as Signal.State<
   PendingApproval | undefined
->;
-export const approvalQueueStatus = STATUS as Signal.State<ApprovalQueueStatus>;
-/** Every pending approval's stream key and kind, in global FIFO order;
- *  stream-less payloads carry {@link ROOT_APPROVAL_STREAM_KEY}. Kept flat so
- *  callers that fold buckets together (e.g. root row + session-wide) can
- *  still order by first-to-present. Powers the session list's per-row
- *  "waiting on what" suffix. */
-export const pendingApprovalSummaries = PENDING_SUMMARIES as Signal.State<
-  readonly PendingApprovalSummary[]
 >;
 
 /**
@@ -152,7 +141,43 @@ interface ApprovalQueueItem {
   presented?: boolean;
 }
 
-const pendingItems: ApprovalQueueItem[] = [];
+/** The queue itself. Every mutation republishes a fresh array, so the
+ *  projections below are derived rather than mirrored: there is no second
+ *  write that can be forgotten or ordered wrongly. */
+const QUEUE = signal<readonly ApprovalQueueItem[]>([]);
+
+/** Entries the user can act on right now: a reservation is not a prompt
+ *  before it presents, and no longer one once it is decided. */
+const WAITING = computed(() =>
+  QUEUE.get().filter((item) => item.phase === 'pending'),
+);
+
+export const approvalQueueStatus: Signal.Computed<ApprovalQueueStatus> =
+  computed(() => {
+    const waiting = WAITING.get();
+    return {
+      depth: waiting.length,
+      kind:
+        waiting.length === 0
+          ? 'approval'
+          : approvalQueueStatusKind(waiting.map((item) => item.payload)),
+    };
+  });
+
+/** Every pending approval's stream key and kind, in global FIFO order;
+ *  stream-less payloads carry {@link ROOT_APPROVAL_STREAM_KEY}. Kept flat so
+ *  callers that fold buckets together (e.g. root row + session-wide) can
+ *  still order by first-to-present. Powers the session list's per-row
+ *  "waiting on what" suffix. */
+export const pendingApprovalSummaries: Signal.Computed<
+  readonly PendingApprovalSummary[]
+> = computed(() =>
+  WAITING.get().map((item) => ({
+    streamKey:
+      approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY,
+    kind: item.payload.kind,
+  })),
+);
 
 const INTERRUPT: ApprovalDecision = {
   accepted: false,
@@ -161,7 +186,7 @@ const INTERRUPT: ApprovalDecision = {
 
 /** The entry the modal shows: the first one waiting for a user decision. */
 function foregroundItem(): ApprovalQueueItem | undefined {
-  return pendingItems.find((item) => item.phase === 'pending');
+  return QUEUE.get().find((item) => item.phase === 'pending');
 }
 
 function presentForeground(): void {
@@ -193,12 +218,14 @@ function presentForeground(): void {
  * the next modal has not been presented yet, so a bulk cancellation cannot
  * briefly foreground an item that the same operation removes.
  */
-function updateQueue(mutate: () => void, settle?: () => void): void {
+function updateQueue(
+  mutate: () => readonly ApprovalQueueItem[],
+  settle?: () => void,
+): void {
   const previousForeground = foregroundItem();
-  mutate();
+  QUEUE.set(mutate());
   const foregroundChanged = previousForeground !== foregroundItem();
   if (foregroundChanged) CURRENT.set(undefined);
-  syncApprovalStatus();
   settle?.();
   if (foregroundChanged) presentForeground();
 }
@@ -215,7 +242,7 @@ function settleItems(
   decision: ApprovalDecision,
   options: { readonly cancelled?: boolean } = {},
 ): number {
-  const matched = pendingItems.filter(predicate);
+  const matched = QUEUE.get().filter(predicate);
   if (matched.length === 0) return 0;
   const dropped = new Set(
     options.cancelled === true
@@ -225,13 +252,10 @@ function settleItems(
 
   updateQueue(
     () => {
-      if (dropped.size > 0) {
-        const retained = pendingItems.filter((item) => !dropped.has(item));
-        pendingItems.splice(0, pendingItems.length, ...retained);
-      }
       for (const item of matched) {
         if (!dropped.has(item)) item.phase = 'committing';
       }
+      return QUEUE.get().filter((item) => !dropped.has(item));
     },
     () => {
       for (const item of matched) {
@@ -294,26 +318,6 @@ export function approvalPayloadStreamId(
   }
 }
 
-function syncApprovalStatus(): void {
-  // Only `pending` entries are requests the user can act on: a reservation is
-  // not a prompt before it presents, and no longer one once it is decided.
-  const waiting = pendingItems.filter((item) => item.phase === 'pending');
-  STATUS.set({
-    depth: waiting.length,
-    kind:
-      waiting.length === 0
-        ? 'approval'
-        : approvalQueueStatusKind(waiting.map((item) => item.payload)),
-  });
-  PENDING_SUMMARIES.set(
-    waiting.map((item) => ({
-      streamKey:
-        approvalPayloadStreamId(item.payload) ?? ROOT_APPROVAL_STREAM_KEY,
-      kind: item.payload.kind,
-    })),
-  );
-}
-
 /**
  * Stable-partition the queue so `streamId`'s pending items lead, then
  * re-project the head. Settling matches by item identity, so a decision made
@@ -327,7 +331,8 @@ export function promoteApprovalsForStream(
   streamId: StreamTabId,
   options: { readonly includeSessionWide?: boolean } = {},
 ): void {
-  if (pendingItems.length < 2) return;
+  const items = QUEUE.get();
+  if (items.length < 2) return;
   const matches = (item: ApprovalQueueItem): boolean => {
     const itemStreamId = approvalPayloadStreamId(item.payload);
     return (
@@ -335,17 +340,15 @@ export function promoteApprovalsForStream(
       (options.includeSessionWide === true && itemStreamId === undefined)
     );
   };
-  const promoted = pendingItems.filter(matches);
+  const promoted = items.filter(matches);
   if (promoted.length === 0) return;
-  const next = [...promoted, ...pendingItems.filter((item) => !matches(item))];
+  const next = [...promoted, ...items.filter((item) => !matches(item))];
   // Already a contiguous prefix (a head-only check would miss matching items
   // still parked behind other streams) — nothing to reorder.
-  if (next.every((item, index) => item === pendingItems[index])) return;
+  if (next.every((item, index) => item === items[index])) return;
   // The current projection's decide closure settles by item identity, so it
   // stays valid when the foreground entry keeps its place.
-  updateQueue(() => {
-    pendingItems.splice(0, pendingItems.length, ...next);
-  });
+  updateQueue(() => next);
 }
 
 export function enqueueApproval(
@@ -353,13 +356,15 @@ export function enqueueApproval(
   options: EnqueueApprovalOptions = {},
 ): Promise<ApprovalDecision> {
   return new Promise<ApprovalDecision>((resolve) => {
-    pendingItems.push({
-      payload,
-      resolve,
-      onPresent: options.onPresent,
-      phase: 'pending',
-    });
-    syncApprovalStatus();
+    QUEUE.set([
+      ...QUEUE.get(),
+      {
+        payload,
+        resolve,
+        onPresent: options.onPresent,
+        phase: 'pending',
+      },
+    ]);
     presentForeground();
   });
 }
@@ -405,31 +410,28 @@ export function reserveApproval(
     owner: options.owner,
     phase: 'preparing',
   };
-  pendingItems.push(item);
+  QUEUE.set([...QUEUE.get(), item]);
 
   return {
     decided,
     signal: preparation.signal,
     present: (presented) => {
-      if (item.phase !== 'preparing' || !pendingItems.includes(item)) return;
+      if (item.phase !== 'preparing' || !QUEUE.get().includes(item)) return;
       updateQueue(() => {
         item.payload = presented;
         item.phase = 'pending';
         // Enter the visible queue at its tail: the reservation held liveness,
         // not a place in line, so a request that only became showable now
         // cannot displace a modal the user is already answering.
-        pendingItems.splice(pendingItems.indexOf(item), 1);
-        pendingItems.push(item);
+        return [...QUEUE.get().filter((candidate) => candidate !== item), item];
       });
     },
     settle: (decision) => {
       settleItems((candidate) => candidate === item, decision);
     },
     release: () => {
-      if (!pendingItems.includes(item)) return;
-      updateQueue(() => {
-        pendingItems.splice(pendingItems.indexOf(item), 1);
-      });
+      if (!QUEUE.get().includes(item)) return;
+      updateQueue(() => QUEUE.get().filter((candidate) => candidate !== item));
     },
   };
 }

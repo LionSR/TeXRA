@@ -152,9 +152,15 @@ interface ToolUseFlowContext {
   switchModel(model: string): Promise<void>;
 }
 
-export type ToolUseFlowSetupCallback = (
-  context: ToolUseFlowContext,
-) => void | (() => void);
+/**
+ * Host wiring that is live only while the flow can accept an interrupt. The
+ * flow owns the pairing: every `attach` is followed by exactly one `detach`,
+ * including when `attach` itself throws after wiring part of the host up.
+ */
+export interface ToolUseFlowAttachment {
+  attach(context: ToolUseFlowContext): void;
+  detach(context: ToolUseFlowContext): void;
+}
 
 class ToolUsePersistedFlow<C> extends PersistedFlow<
   ToolUseRunShared,
@@ -176,7 +182,7 @@ const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   toolRegistry?: IToolRegistry,
-  onSetup?: ToolUseFlowSetupCallback,
+  attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, onInterrupt } = input;
   const runContext = useLaunchRunContext();
@@ -348,14 +354,15 @@ export async function runToolUseFlow<C = unknown>(
     input.onModelChanged?.(nextHandler, model);
   };
 
-  // A resume completes its one-shot handoff immediately after `onSetup`
-  // attaches the live context, before the flow is interruptible. An async
-  // cancellation racing in during the recovery read must not erase follow-ups
-  // appended to the now-live session after attachment --
-  // `flowContext.interrupt()` uses the queue-preserving variant for exactly
-  // this window, matching `preserveResumeRecord`'s finally guard.
-  // Cleared once the flow has passed both guards and moved into real work,
-  // so a later mid-run cancellation keeps the normal destructive clear.
+  // A resume completes its one-shot handoff immediately after the live context
+  // is attached, before the flow is interruptible. An async cancellation racing
+  // in during the recovery read must not erase follow-ups appended to the
+  // now-live session after attachment, so this window asks the lifecycle to
+  // preserve the queue, matching `preserveResumeRecord`'s finally guard.
+  // Cleared once the flow has passed both guards and moved into real work, so a
+  // later mid-run cancellation asks for the normal destructive clear. Whether
+  // that clear actually happens is the lifecycle's call: it alone knows whether
+  // this flow owns the queue or borrowed an outer consumer's.
   let inResumeStartupWindow = input.resume !== undefined;
 
   const flowContext: ToolUseFlowContext = {
@@ -371,14 +378,7 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       onInterrupt?.();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      if (
-        inResumeStartupWindow ||
-        (input.isSubagent === true && input.takePendingFollowUps !== undefined)
-      ) {
-        sessionLifecycle.interruptPreservingQueue();
-      } else {
-        sessionLifecycle.interrupt();
-      }
+      sessionLifecycle.interrupt(inResumeStartupWindow ? 'preserve' : 'clear');
     },
     requestImmediateCompaction(): void {
       services.modelHandler.requestCompaction();
@@ -396,7 +396,6 @@ export async function runToolUseFlow<C = unknown>(
   let response: string | undefined;
   let files: string[] | undefined;
   let totalCostUsd: number | undefined;
-  let teardownSetup: (() => void) | undefined;
   let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
   let preserveResumeRecord = false;
   let persistenceRecoveryPending = false;
@@ -419,6 +418,24 @@ export async function runToolUseFlow<C = unknown>(
     services.modelHandler,
   );
 
+  // The live host attachment, scoped to the windows where this flow can accept
+  // an interrupt. `live` flips before `attach` runs, so wiring that throws
+  // partway through is still detached by the finally below, and a detach can
+  // never fire against an attachment that was already taken down.
+  let live = false;
+  const liveAttachment = {
+    attach(): void {
+      if (live) return;
+      live = true;
+      attachment?.attach(flowContext);
+    },
+    detach(): void {
+      if (!live) return;
+      live = false;
+      attachment?.detach(flowContext);
+    },
+  };
+
   let shared: ToolUseRunShared = {
     messages: [],
     modelHandlerCompatibilityKey: compatibilityKey,
@@ -427,7 +444,7 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   try {
-    teardownSetup = onSetup?.(flowContext) ?? undefined;
+    liveAttachment.attach();
     attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
@@ -585,12 +602,9 @@ export async function runToolUseFlow<C = unknown>(
       // From this synchronous detach onward, sendFollowUp queues instead of
       // reporting `sent`; the immediately following drain therefore cannot
       // miss input in a gap between its empty check and final teardown.
-      teardownSetup?.();
-      teardownSetup = undefined;
+      liveAttachment.detach();
       resumedFollowUps = [...(input.takePendingFollowUps?.() ?? [])];
-      if (resumedFollowUps.length > 0) {
-        teardownSetup = onSetup?.(flowContext) ?? undefined;
-      }
+      if (resumedFollowUps.length > 0) liveAttachment.attach();
     } while (resumedFollowUps.length > 0);
 
     response =
@@ -651,8 +665,7 @@ export async function runToolUseFlow<C = unknown>(
     if (error !== startupInterruption) primaryFailure = { error };
   } finally {
     activePersistedFlow = undefined;
-    attemptTeardown('detaching the live flow', () => teardownSetup?.());
-    teardownSetup = undefined;
+    attemptTeardown('detaching the live flow', () => liveAttachment.detach());
     let preservationReason: string | undefined;
     if (preserveResumeRecord) {
       preservationReason =

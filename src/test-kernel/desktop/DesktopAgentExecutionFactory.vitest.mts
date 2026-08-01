@@ -17,6 +17,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { createModuleMocks } from '@test/support/moduleMocks';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
@@ -40,6 +41,7 @@ type SnapshotStore = import('@transcript').StreamSnapshotStore;
 
 type LegacyRow = Record<string, unknown> & { streamId: string };
 
+const mocks = createModuleMocks();
 const tempDirs: string[] = [];
 
 function makeLegacyRow(streamId: string): LegacyRow {
@@ -171,29 +173,29 @@ async function createExecution(options: {
   vi.resetModules();
   const { initPlatform } = await import('@platform/platform');
   initPlatform(options.platform ?? createFakePlatform());
-  vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
+  mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData: vi.fn(async () => null),
   }));
-  vi.doMock('@agent/runtime/executeAgent', () => ({
+  mocks.doMock('@agent/runtime/executeAgent', () => ({
     resumeToolUseFromResumeData: vi.fn(async () => {}),
   }));
-  vi.doMock('@agent/runtime/runAgent', () => ({
+  mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(async () => {}),
   }));
-  vi.doMock('@agent/storage/detectWaitingStreams', () => ({
+  mocks.doMock('@agent/storage/detectWaitingStreams', () => ({
     detectWaitingStreams:
       options.detectWaitingStreams ?? vi.fn(async () => new Set()),
   }));
   if (options.resolveTeamLaunch) {
-    vi.doMock('@common/teams/TeamPlan', async (importOriginal) => ({
+    mocks.doMock('@common/teams/TeamPlan', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@common/teams/TeamPlan')>()),
       resolveTeamLaunch: options.resolveTeamLaunch,
     }));
   }
   if (options.useRealStorage) {
-    vi.doUnmock('@common/storage/KVStore');
+    mocks.doUnmock('@common/storage/KVStore');
   } else {
-    vi.doMock('@common/storage/KVStore', () => ({
+    mocks.doMock('@common/storage/KVStore', () => ({
       KVStore: class {
         async read(): Promise<undefined> {
           return undefined;
@@ -217,15 +219,15 @@ async function createExecution(options: {
     }));
   }
   if (options.legacyCleanupWriteError) {
-    vi.doMock('write-file-atomic', () => ({
+    mocks.doMock('write-file-atomic', () => ({
       default: vi.fn(async () => {
         throw options.legacyCleanupWriteError;
       }),
     }));
   } else {
-    vi.doUnmock('write-file-atomic');
+    mocks.doUnmock('write-file-atomic');
   }
-  vi.doMock('@controllers/mainView/MainViewExecutionController', () => ({
+  mocks.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
     prepareMainViewTeamExecutionRequest: vi.fn(),
   }));
@@ -291,14 +293,6 @@ async function createExecution(options: {
 
 describe('createDesktopAgentExecution', () => {
   afterEach(async () => {
-    vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
-    vi.doUnmock('@agent/runtime/executeAgent');
-    vi.doUnmock('@agent/runtime/runAgent');
-    vi.doUnmock('@agent/storage/detectWaitingStreams');
-    vi.doUnmock('@common/storage/KVStore');
-    vi.doUnmock('@common/teams/TeamPlan');
-    vi.doUnmock('@controllers/mainView/MainViewExecutionController');
-    vi.doUnmock('write-file-atomic');
     vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
   });

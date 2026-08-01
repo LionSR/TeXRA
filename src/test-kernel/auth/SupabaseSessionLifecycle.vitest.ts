@@ -147,7 +147,6 @@ function createCoordinator(options?: {
   initialSession?: SupabaseSession;
   client?: Client;
   fetch?: typeof fetch;
-  onTokenExpiryChanged?: (expiresAt: number | null) => void;
 }): {
   coordinator: SupabaseSessionCoordinator;
   read: () => SupabaseSession | null;
@@ -162,7 +161,6 @@ function createCoordinator(options?: {
       storage,
       getClient: () => options?.client ?? createClient(),
       fetch: options?.fetch,
-      onTokenExpiryChanged: options?.onTokenExpiryChanged,
     }),
     read,
     getReadCount,
@@ -304,10 +302,7 @@ describe('SupabaseSession', () => {
 
   describe('SupabaseSessionCoordinator', () => {
     it('stores session data and exposes session tokens', async () => {
-      const expiries: Array<number | null> = [];
-      const { coordinator, read, getReadCount } = createCoordinator({
-        onTokenExpiryChanged: (expiresAt) => expiries.push(expiresAt),
-      });
+      const { coordinator, read, getReadCount } = createCoordinator();
       const session = makeSession();
 
       await coordinator.storeSession(session);
@@ -318,7 +313,46 @@ describe('SupabaseSession', () => {
         refreshToken: 'refresh-token',
       });
       assert.equal(getReadCount(), 1);
-      assert.deepEqual(expiries, [session.expiresAt]);
+      assert.equal(coordinator.isTokenExpiringSoon(), false);
+    });
+
+    it('reports no expiry pressure before any session is observed', () => {
+      const { coordinator } = createCoordinator({
+        initialSession: makeSession({ expiresAt: Date.now() + 30_000 }),
+      });
+
+      assert.equal(coordinator.isTokenExpiringSoon(), false);
+    });
+
+    it('answers expiry pressure from a session loaded cold', async () => {
+      const { coordinator } = createCoordinator({
+        initialSession: makeSession({ expiresAt: Date.now() + 30_000 }),
+      });
+
+      await coordinator.loadSession();
+
+      assert.equal(coordinator.isTokenExpiringSoon(), true);
+    });
+
+    it('drops expiry pressure once the session is cleared', async () => {
+      const { coordinator } = createCoordinator({
+        initialSession: makeSession({ expiresAt: Date.now() + 30_000 }),
+      });
+
+      await coordinator.loadSession();
+      await coordinator.clearSession();
+
+      assert.equal(coordinator.isTokenExpiringSoon(), false);
+    });
+
+    it('drops expiry pressure when a matched session is cleared', async () => {
+      const session = makeSession({ expiresAt: Date.now() + 30_000 });
+      const { coordinator } = createCoordinator({ initialSession: session });
+
+      await coordinator.loadSession();
+      assert.equal(await coordinator.clearSessionIfCurrent(session), true);
+
+      assert.equal(coordinator.isTokenExpiringSoon(), false);
     });
 
     it('reads storage once when ensuring a cached fresh token', async () => {

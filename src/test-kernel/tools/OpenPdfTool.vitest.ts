@@ -1,14 +1,15 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 // Third-party imports
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
+import type { OpenPdfRequest } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  OpenPdfTool,
-  setOpenPdfOpener,
-  type OpenPdfRequest,
-} from '@tools/OpenPdfTool';
+import { OpenPdfTool } from '@tools/OpenPdfTool';
 
 describe('OpenPdfTool', () => {
   setupPlatform({
@@ -23,18 +24,26 @@ describe('OpenPdfTool', () => {
     },
   });
 
-  beforeEach(() => {
-    setOpenPdfOpener(undefined);
+  let detachHostInteractions = (): void => {};
+
+  afterEach(() => {
+    detachHostInteractions();
+    detachHostInteractions = () => undefined;
   });
 
+  /** Attach a PDF viewer the way a host does: as a session capability. */
   function installOpener(): Mock<(request: OpenPdfRequest) => Promise<void>> {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
     openPdf.mockResolvedValue(undefined);
-    setOpenPdfOpener(openPdf);
+    detachHostInteractions();
+    detachHostInteractions = defaultSession().useHostInteractions({
+      openPdf,
+      cancel: () => undefined,
+    });
     return openPdf;
   }
 
-  it('reports that PDF opening is unavailable when no host callback is registered', async () => {
+  it('reports that PDF opening is unavailable when no host serves it', async () => {
     const tool = new OpenPdfTool();
 
     const result = await tool.call({ path: 'paper.tex' });

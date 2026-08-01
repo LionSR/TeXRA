@@ -7,18 +7,11 @@ import { z } from 'zod';
 
 import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
-import { AgentCategorySchema } from '../agent';
 import { StreamTabIdSchema } from '../identifiers';
 
 // ============================================================
 // Shared Field Schemas
 // ============================================================
-
-export const AgentCategoryFilterSchema = z.union([
-  z.literal('all'),
-  AgentCategorySchema,
-]);
-export type AgentCategoryFilter = z.infer<typeof AgentCategoryFilterSchema>;
 
 export const ProgressViewPlacementSchema = z.enum(['sidebar', 'editor']);
 export type ProgressViewPlacement = z.infer<typeof ProgressViewPlacementSchema>;

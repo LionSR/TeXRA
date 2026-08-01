@@ -130,15 +130,17 @@ function createStateStore(): Pick<StateStore, 'get' | 'update'> {
 }
 
 function createOAuthClient() {
-  type SignInInput = Parameters<
-    DesktopOAuthClient['auth']['signInWithOAuth']
-  >[0];
+  type SignInWithOAuth = DesktopOAuthClient['auth']['signInWithOAuth'];
+  type SignInInput = Parameters<SignInWithOAuth>[0];
+  type SignInResult = Awaited<ReturnType<SignInWithOAuth>>;
   return {
     auth: {
-      signInWithOAuth: vi.fn(async (_input: SignInInput) => ({
-        data: { url: 'https://auth.example.test/start' },
-        error: null,
-      })),
+      signInWithOAuth: vi.fn(
+        async (_input: SignInInput): Promise<SignInResult> => ({
+          data: { url: 'https://auth.example.test/start' },
+          error: null,
+        }),
+      ),
     },
   };
 }
@@ -190,6 +192,7 @@ function installAuthenticatedSupabaseProvider() {
     getSessionTokens,
     getStoredSessionState,
     getStoredAccountLabel: vi.fn(async () => null),
+    isTokenExpiringSoon: vi.fn(() => false),
     getLastRefreshFailure: vi.fn(() => null),
   });
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
@@ -923,6 +926,31 @@ describe('desktop Supabase auth', () => {
 
     await expect(second).resolves.toBe(true);
     expect(coordinator.storeSession).toHaveBeenCalledOnce();
+  });
+
+  it('settles the waiter when starting the sign-in fails', async () => {
+    const oauthClient = createOAuthClient();
+    oauthClient.auth.signInWithOAuth.mockResolvedValueOnce({
+      data: { url: null },
+      error: { message: 'provider unavailable' },
+    });
+    const auth = createTestAuth({
+      router: createDesktopProtocolCallbackRouter(),
+      coordinator: createCoordinator(),
+      oauthClient,
+    });
+
+    vi.useFakeTimers();
+    try {
+      await expect(
+        auth.signInAndWaitForSession(undefined, { timeoutMs: 60_000 }),
+      ).rejects.toThrow();
+      // The waiter and its timeout go with the failed attempt, so nothing is
+      // left to clear a later attempt's pending callback state.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('surfaces rejected routed callback processing failures', async () => {

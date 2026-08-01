@@ -40,7 +40,6 @@ import type { ProviderError, RetryErrorInfo } from '@shared/schemas/errors';
 import {
   ErrorLogDataSchema,
   RetryErrorInfoSchema,
-  toProviderErrorFromRetry,
   toRetryErrorInfo,
 } from '@shared/schemas/errors';
 
@@ -896,7 +895,7 @@ describe('provider error schemas', () => {
   });
 });
 
-describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
+describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
   const fullProviderError: ProviderError = {
     message: 'HTTP 429 Too Many Requests – rate limited',
     userRetryable: true,
@@ -925,8 +924,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
   };
 
   it('preserves statusCode, provider, and relay flags through the round-trip', () => {
-    const info = toRetryErrorInfo(fullProviderError);
-    const reconstructed = toProviderErrorFromRetry(info);
+    const reconstructed: ProviderError = toRetryErrorInfo(fullProviderError);
 
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('anthropic');
@@ -937,8 +935,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
   });
 
   it('preserves stream diagnostics and partial text through the round-trip', () => {
-    const info = toRetryErrorInfo(fullProviderError);
-    const reconstructed = toProviderErrorFromRetry(info);
+    const reconstructed: ProviderError = toRetryErrorInfo(fullProviderError);
 
     expect(reconstructed.streamDiagnostics?.eventsProcessed).toBe(15);
     expect(reconstructed.streamDiagnostics?.anthropicMessageId).toBe(
@@ -955,7 +952,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
       provider: 'openai',
     };
 
-    const reconstructed = toProviderErrorFromRetry(minimalInfo);
+    const reconstructed: ProviderError = minimalInfo;
 
     // isRelayError was not in the RetryErrorInfo — it should stay
     // undefined so normalizeProviderError won't cache a wrong verdict.
@@ -973,10 +970,10 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
     expect('rawErrorBody' in info).toBe(false);
   });
 
-  it('reconstructs a usable ProviderError from minimal retry info', () => {
+  it('serves as a usable ProviderError from minimal retry info', () => {
     // Simulates the common failure path: a model error surfaced through
-    // the retry state, written to shared.lastError, then reconstructed
-    // at the flow rethrow via toProviderErrorFromRetry.
+    // the retry state, written to shared.lastError, then attached as-is
+    // at the flow rethrow.
     const minimalInfo: RetryErrorInfo = {
       message: 'HTTP 500 Internal Server Error – upstream failure',
       userRetryable: true,
@@ -984,7 +981,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
       provider: 'anthropic',
     };
 
-    const reconstructed = toProviderErrorFromRetry(minimalInfo);
+    const reconstructed: ProviderError = minimalInfo;
 
     // Downstream error formatters need at least these two fields to
     // produce a useful error surface.
@@ -1010,7 +1007,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
       requestId: 'req_tooluse_123',
     };
 
-    const reconstructed = toProviderErrorFromRetry(toolUseFailureInfo);
+    const reconstructed: ProviderError = toolUseFailureInfo;
 
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('openai');
@@ -1032,7 +1029,7 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
       isRelayError: false,
     };
 
-    const reconstructed = toProviderErrorFromRetry(reflectionFailureInfo);
+    const reconstructed: ProviderError = reflectionFailureInfo;
 
     expect(reconstructed.statusCode).toBe(503);
     expect(reconstructed.provider).toBe('anthropic');
@@ -1043,8 +1040,8 @@ describe('toRetryErrorInfo / toProviderErrorFromRetry round-trip', () => {
 
 describe('attachProviderError end-to-end', () => {
   it('surfaces a cached ProviderError with statusCode and provider via normalizeProviderError', () => {
-    // Simulates what happens at the flow rethrow: toProviderErrorFromRetry
-    // reconstructs a shape, attachProviderError caches it, then
+    // Simulates what happens at the flow rethrow: the RetryErrorInfo is
+    // attached as-is, attachProviderError caches it, then
     // normalizeProviderError recovers it downstream.
     const retryInfo: RetryErrorInfo = {
       message: 'HTTP 429 Too Many Requests – rate limited',
@@ -1054,9 +1051,8 @@ describe('attachProviderError end-to-end', () => {
       isRelayError: true,
     };
 
-    const reconstructed = toProviderErrorFromRetry(retryInfo);
     const err = new Error(retryInfo.message);
-    attachProviderError(err, reconstructed);
+    attachProviderError(err, retryInfo);
 
     const recovered = normalizeProviderError(err);
 
@@ -1077,9 +1073,8 @@ describe('attachProviderError end-to-end', () => {
       requestId: 'req_wrapped_503',
     };
 
-    const reconstructed = toProviderErrorFromRetry(retryInfo);
     const cause = new Error(retryInfo.message);
-    attachProviderError(cause, reconstructed);
+    attachProviderError(cause, retryInfo);
     const wrapper = new Error('Tool-use flow failed', { cause });
 
     expect(getSdkErrorMessage(wrapper)).toBe(retryInfo.message);
@@ -1093,7 +1088,7 @@ describe('attachProviderError end-to-end', () => {
     expect(logData.requestId).toBe('req_wrapped_503');
     expect(logData.rawMessage).toBe('Tool-use flow failed');
     expect(logData.operation).toBe('execute orchestrator');
-    expect(normalizeProviderError(wrapper)).toBe(reconstructed);
+    expect(normalizeProviderError(wrapper)).toBe(retryInfo);
   });
 
   it('migrates legacy fields on a cached ProviderError instead of returning them unchanged', () => {

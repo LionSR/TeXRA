@@ -56,8 +56,6 @@ export function createHostAuthCoordinator(
     githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
     edgeFunctionTimeoutMs: DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
     log: init.log,
-    onTokenExpiryChanged: (expiresAt) =>
-      SupabaseClient.setTokenExpiry(expiresAt),
   });
   SupabaseClient.setAuthProvider(coordinator);
   return coordinator;

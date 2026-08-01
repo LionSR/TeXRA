@@ -2,8 +2,9 @@
  * User-action logic and shared mutators for the Main view.
  *
  * These functions operate on the module-scope signals in `mainViewState.ts`
- * and persist through `persistence.ts`. They are shared by the backend
- * message slices (`slices/`) and by `MainApp`'s DOM event handlers.
+ * and are shared by the backend message slices (`slices/`) and by `MainApp`'s
+ * DOM event handlers. None of them persist: `persistence.ts` watches the
+ * signals and owns every write.
  */
 
 // Local imports - shared IPC and helpers
@@ -61,7 +62,6 @@ import {
   workflowInstruction$,
   workingDirectory$,
 } from './mainViewState';
-import { saveState } from './persistence';
 import {
   MULTI_FILE_LIST_BY_KEY,
   MULTI_FILE_LISTS,
@@ -79,27 +79,11 @@ export function showInformation(text: string): void {
 // ---------------------------------------------------------------------------
 
 export function setInstruction(value: string): void {
-  instruction$.set(value);
   if (sessionType$.get() === SESSION_TYPES.WORKFLOW) {
     workflowInstruction$.set(value);
   } else {
     toolUseInstruction$.set(value);
   }
-}
-
-/** Stash instruction for the mode being left, restore for the mode being entered. */
-export function swapModeInstruction(from: SessionType, to: SessionType): void {
-  if (from === to) return;
-  if (from === SESSION_TYPES.WORKFLOW) {
-    workflowInstruction$.set(instruction$.get());
-  } else {
-    toolUseInstruction$.set(instruction$.get());
-  }
-  instruction$.set(
-    to === SESSION_TYPES.WORKFLOW
-      ? workflowInstruction$.get()
-      : toolUseInstruction$.get(),
-  );
 }
 
 export function refreshInstructionPlaceholder(): void {
@@ -169,13 +153,11 @@ export function refreshModelSelectionForActiveSession(): void {
 
 export function enterToolUseSession(): void {
   if (sessionType$.get() !== SESSION_TYPES.TOOL_USE) {
-    swapModeInstruction(sessionType$.get(), SESSION_TYPES.TOOL_USE);
     sessionType$.set(SESSION_TYPES.TOOL_USE);
     updateMultiFiles('outputFiles', []);
     refreshModelSelectionForActiveSession();
   }
   refreshInstructionPlaceholder();
-  saveState();
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +169,6 @@ export function updateMultiFiles(
   files: string[],
 ): void {
   multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
-  saveState();
 
   const { fileType, updateCommand } = MULTI_FILE_LIST_BY_KEY[listId];
   postMessage(updateCommand, { fileType, files });
@@ -200,7 +181,6 @@ export function updateCheckboxValue(id: string, checked: boolean): void {
     ...cv,
     [id]: checked,
   });
-  saveState();
 }
 
 export function removeFile(listId: keyof MultiFiles, file: string): void {
@@ -244,7 +224,6 @@ export function emptyFile(type: DocumentFileType | 'base' | 'edited'): void {
     ...sf,
     [type === 'base' ? 'baseFile' : 'editedFile']: '',
   });
-  saveState();
 }
 
 export function emptyFiles(type: MultipleDocumentFileType): void {
@@ -260,7 +239,6 @@ export function refreshEditedFiles(): void {
 
 export function setBaseFile(value: string): void {
   singleFiles$.set({ ...singleFiles$.get(), baseFile: value });
-  saveState();
   postMessage(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE, {
     baseFile: value,
   });
@@ -271,12 +249,10 @@ export function setEditedFile(value: string): void {
     ...singleFiles$.get(),
     editedFile: value,
   });
-  saveState();
 }
 
 export function setCommit(value: string): void {
   commit$.set(value);
-  saveState();
 }
 
 // ---------------------------------------------------------------------------
@@ -288,8 +264,8 @@ export function changeSessionType(value: string): void {
   const prev = sessionType$.get();
 
   // Workflows run a single workflow agent, so a team launch target cannot
-  // survive the transition — drop back to the agent launcher in the same
-  // save rather than leaving a hidden team selection behind.
+  // survive the transition — drop back to the agent launcher rather than
+  // leaving a hidden team selection behind.
   const resetTeamLauncher =
     parsed === SESSION_TYPES.WORKFLOW && launchTarget$.get() === 'team';
   if (resetTeamLauncher) {
@@ -299,19 +275,16 @@ export function changeSessionType(value: string): void {
   if (parsed === prev) {
     if (resetTeamLauncher) {
       refreshInstructionPlaceholder();
-      saveState();
     }
     return;
   }
 
-  swapModeInstruction(prev, parsed);
   sessionType$.set(parsed);
   refreshModelSelectionForActiveSession();
   refreshInstructionPlaceholder();
   if (parsed === SESSION_TYPES.TOOL_USE) {
     updateMultiFiles('outputFiles', []);
   }
-  saveState();
 }
 
 /**
@@ -334,20 +307,18 @@ export function changeLaunchTarget(value: LaunchTarget): void {
   } else {
     launchTarget$.set('agent');
     refreshInstructionPlaceholder();
-    saveState();
     announce('Agent launcher selected.');
   }
 }
 
 export function changeTeam(value: string): void {
   selectedTeamId$.set(value);
-  saveState();
 }
 
 /**
- * Reconcile a team ID against the latest catalog without persistence or
- * announcements, so callers control when the reconciled state is saved and
- * announced. Only absence from a non-empty snapshot proves
+ * Reconcile a team ID against the latest catalog without announcing, so
+ * callers control what the user is told. Only absence from a non-empty
+ * snapshot proves
  * deletion: every successful catalog contains the built-in presets, so empty
  * represents an incomplete or transient snapshot. Present-but-disabled teams
  * remain selected because their availability may recover.
@@ -368,7 +339,7 @@ function reconcileTeamSelection(): TeamSelectionResolution {
   return { status: 'fallback', label: fallback.label };
 }
 
-/** Validate and persist an active restored Team after a host catalog push. */
+/** Validate an active restored Team after a host catalog push. */
 export function validateTeamSelection(): void {
   if (launchTarget$.get() !== 'team') return;
   const resolution = reconcileTeamSelection();
@@ -382,7 +353,6 @@ export function validateTeamSelection(): void {
     announce('No runnable teams available. Agent launcher selected.');
   }
   refreshInstructionPlaceholder();
-  saveState();
 }
 
 export function changeAgent(sessionType: SessionType, value: string): void {
@@ -391,23 +361,19 @@ export function changeAgent(sessionType: SessionType, value: string): void {
   } else {
     toolUseAgent$.set(value);
   }
-  swapModeInstruction(sessionType$.get(), sessionType);
   sessionType$.set(sessionType);
   refreshModelSelectionForActiveSession();
   refreshInstructionPlaceholder();
-  saveState();
   postMessage(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER);
 }
 
 export function changeModel(value: string): void {
   model$.set(value);
-  saveState();
   postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
 }
 
 export function changeWorkingDirectory(value: string): void {
   workingDirectory$.set(value);
-  saveState();
 }
 
 // ---------------------------------------------------------------------------

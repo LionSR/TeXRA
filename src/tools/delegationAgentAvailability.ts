@@ -23,7 +23,7 @@ import {
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';

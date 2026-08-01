@@ -129,10 +129,7 @@ import {
   chatTuiCanStopVisibleRun,
   chatTuiIsResumableIdleOnExit,
   chatTuiRunPending,
-  clearTuiSessionRunState,
-  markChatTuiRunCompleted,
-  markChatTuiRunPending,
-  type TuiSession,
+  TuiSession,
 } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
 import type { SkillActivation } from './forms/SkillsListForm';
@@ -339,19 +336,22 @@ export async function runChat(
   const model = modelSelection.model;
   const version = await readCliVersion();
 
-  let activeApprovalPolicy = context.approvalPolicy;
+  // `sessionMeta` is the only store for the live approval policy: the status
+  // bar, the runtime context handed to each run, and `/approval` all read the
+  // same signal, so a mid-session change cannot be visible in one surface and
+  // stale in another.
+  const getApprovalPolicy = (): CliApprovalPolicy =>
+    sessionMetaSignal.get().approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
     apiMode: sessionMetaSignal.get().apiMode,
     get approvalPolicy(): CliApprovalPolicy {
-      return activeApprovalPolicy;
+      return getApprovalPolicy();
     },
     helperModel,
     quietLogs: true,
   });
-  const getApprovalPolicy = (): CliApprovalPolicy => activeApprovalPolicy;
   const setApprovalPolicy = (policy: CliApprovalPolicy): void => {
-    activeApprovalPolicy = policy;
     patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
@@ -383,7 +383,7 @@ export async function runChat(
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     apiMode,
-    approvalPolicy: activeApprovalPolicy,
+    approvalPolicy: context.approvalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
     teamName: initialResume
@@ -442,16 +442,7 @@ export async function runChat(
   disposers.push(subscribeStreamArtifacts(artifactSession.snapshots));
   disposers.push(subscribeStreamStatus());
 
-  const session: TuiSession = {
-    streamId: undefined,
-    interruptedStreamId: undefined,
-    executionId: undefined,
-    presentationHost: undefined,
-    runPromise: undefined,
-    runExitCode: CliExitCode.Success,
-    runCompleted: false,
-    stopRequested: false,
-  };
+  const session = new TuiSession();
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const pendingSkillActivations = new Map<string, string>();
@@ -552,7 +543,7 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     pendingSkillActivationClearEpoch += 1;
     pendingSkillActivations.clear();
-    clearTuiSessionRunState(session);
+    session.clearRunState();
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
@@ -624,7 +615,7 @@ export async function runChat(
         });
         await setCliHelperModel(selection.model);
         if (session.stopRequested) {
-          markChatTuiRunCompleted(session);
+          session.markRunCompleted();
           return;
         }
 
@@ -652,10 +643,10 @@ export async function runChat(
         session.runExitCode = session.stopRequested
           ? CliExitCode.Success
           : CliExitCode.AgentError;
-        markChatTuiRunCompleted(session);
+        session.markRunCompleted();
       }
     });
-    markChatTuiRunPending(session, pendingStart);
+    session.markRunPending(pendingStart);
     await pendingStart;
     return started;
   };

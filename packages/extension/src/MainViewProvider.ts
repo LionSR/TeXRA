@@ -54,8 +54,6 @@ export class MainViewProvider
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private agentWatcher: vscode.Disposable | undefined;
 
-  private static commandsRegistered = false;
-
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
 
@@ -92,24 +90,6 @@ export class MainViewProvider
     this.setupConfigurationWatcher();
     this.setupWorkspaceWatcher();
     this.setupAuthListener();
-    this.registerCommandHandlers();
-  }
-
-  private registerCommandHandlers() {
-    if (MainViewProvider.commandsRegistered) {
-      return;
-    }
-    MainViewProvider.commandsRegistered = true;
-
-    void vscode.commands.getCommands(true).then((commands) => {
-      if (!commands.includes('texra.getWebviewView')) {
-        this.context.subscriptions.push(
-          vscode.commands.registerCommand('texra.getWebviewView', () => {
-            return this.getMainModeView();
-          }),
-        );
-      }
-    });
   }
 
   private setupConfigurationWatcher() {
@@ -148,7 +128,7 @@ export class MainViewProvider
   }
 
   /** Returns the sidebar webview, but only when in main mode. */
-  private getMainModeView(): vscode.WebviewView | undefined {
+  public getMainModeView(): vscode.WebviewView | undefined {
     return getActiveSidebarView() === SIDEBAR_VIEWS.MAIN
       ? this.getWebviewView()
       : undefined;

@@ -2,7 +2,6 @@
 import {
   createStreamState,
   type AgentCategory,
-  type AgentCategoryFilter,
   type ContextStateData,
   type LogMessageData,
   type StreamState,
@@ -78,7 +77,6 @@ export interface ProgressState {
   activeStreamId: StreamTabId | null;
   /** Canonical stream storage — Map preserves insertion order for iteration. */
   streamById: Map<StreamTabId, StreamTabInfo>;
-  streamFilter: AgentCategoryFilter;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
   streamStates: Map<StreamTabId, StreamState>;
   /** Log messages per stream — separated so log appends don't trigger meta context updates */
@@ -154,7 +152,6 @@ export function createInitialState(): ProgressState {
   return {
     activeStreamId: null,
     streamById: new Map(),
-    streamFilter: 'all',
     streamStates: new Map(),
     streamLogs: new Map(),
     followupOptionsByStream: new Map(),

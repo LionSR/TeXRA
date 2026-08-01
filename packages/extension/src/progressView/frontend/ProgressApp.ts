@@ -25,7 +25,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 import { progressAppStyles } from './progressAppStyles';
 import {
   activeStreamId$,
-  appState,
   childStreamsByParent$,
   hasAnyStreams$,
   narrowLayout,
@@ -33,7 +32,7 @@ import {
   placement,
   resetProgressState,
   streamStates$,
-  tabStreams$,
+  topLevelStreams$,
 } from './progressState';
 
 // Local imports - event handlers
@@ -87,10 +86,6 @@ export class ProgressApp extends ProgressAppBase {
   constructor() {
     super();
     resetProgressState();
-    appState.set({
-      ...appState.get(),
-      streamFilter: 'all', // Filter UI removed — always show all streams.
-    });
   }
 
   override connectedCallback(): void {
@@ -166,7 +161,7 @@ export class ProgressApp extends ProgressAppBase {
                       slot="end"
                       .heading=${compactTabs ? '' : 'Sessions'}
                       .compact=${compactTabs}
-                      .streams=${tabStreams$.get()}
+                      .streams=${topLevelStreams$.get()}
                       .activeStreamId=${activeStreamId$.get()}
                       .streamStates=${streamStates$.get()}
                       .pendingApprovalStreamIds=${pendingApprovalIds$.get()}

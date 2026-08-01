@@ -1,12 +1,13 @@
-// Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
 
-// Local imports - tools
-import {
-  ReportReviewIssueTool,
-  setReportReviewIssueSink,
-  type ReportReviewIssueSink,
-} from '@tools/ReportReviewIssueTool';
+// Third-party imports
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Local imports
+import type { ReportReviewIssueSink } from '@agent/runtime/HostInteractions';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import { ReportReviewIssueTool } from '@tools/ReportReviewIssueTool';
 
 const REPORT = {
   file: 'src/x.ts',
@@ -16,17 +17,26 @@ const REPORT = {
   description: 'Off-by-one in bounds.',
 } as const;
 
+let detachHostInteractions = (): void => {};
+
+/** Attach a review sink the way a host does: as a session capability. */
+function useReviewSink(sink: ReportReviewIssueSink): void {
+  detachHostInteractions();
+  detachHostInteractions = defaultSession().useHostInteractions({
+    reportReviewIssue: sink,
+    cancel: () => undefined,
+  });
+}
+
 describe('ReportReviewIssueTool', () => {
-  beforeEach(() => {
-    setReportReviewIssueSink(() => ({
-      accepted: false,
-      reason: 'Agent review is not available in this host.',
-    }));
+  afterEach(() => {
+    detachHostInteractions();
+    detachHostInteractions = () => undefined;
   });
 
   it('hands the report to the sink and confirms acceptance', async () => {
     const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    setReportReviewIssueSink(sink);
+    useReviewSink(sink);
     const tool = new ReportReviewIssueTool();
 
     const result = await tool.call({
@@ -51,7 +61,7 @@ describe('ReportReviewIssueTool', () => {
 
   it('streams each finding to the sink immediately and unchanged', async () => {
     const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    setReportReviewIssueSink(sink);
+    useReviewSink(sink);
     const tool = new ReportReviewIssueTool();
     const first = { ...REPORT, endLine: 7 };
     const second = {
@@ -81,7 +91,7 @@ describe('ReportReviewIssueTool', () => {
 
   it('normalizes null optional fields to undefined for the sink', async () => {
     const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    setReportReviewIssueSink(sink);
+    useReviewSink(sink);
     const tool = new ReportReviewIssueTool();
 
     await tool.call({ ...REPORT, endLine: null, suggestion: null });
@@ -91,7 +101,7 @@ describe('ReportReviewIssueTool', () => {
     );
   });
 
-  it('surfaces the rejection reason when no review session is active', async () => {
+  it('reports that agent review is unavailable when no host serves it', async () => {
     const tool = new ReportReviewIssueTool();
 
     const result = await tool.call(REPORT);
@@ -102,9 +112,24 @@ describe('ReportReviewIssueTool', () => {
     });
   });
 
+  it('surfaces the sink rejection reason when a review session refuses it', async () => {
+    useReviewSink(() => ({
+      accepted: false,
+      reason: 'No agent review session is collecting issues.',
+    }));
+    const tool = new ReportReviewIssueTool();
+
+    const result = await tool.call(REPORT);
+
+    expect(result).toMatchObject({
+      summary: 'Review issue not accepted',
+      output: expect.stringContaining('No agent review session'),
+    });
+  });
+
   it('rejects invalid input before reaching the sink', async () => {
     const sink = vi.fn<ReportReviewIssueSink>(() => ({ accepted: true }));
-    setReportReviewIssueSink(sink);
+    useReviewSink(sink);
     const tool = new ReportReviewIssueTool();
 
     const result = await tool.call({ ...REPORT, severity: 'fatal' });

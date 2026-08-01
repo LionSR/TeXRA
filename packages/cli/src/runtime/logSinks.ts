@@ -152,18 +152,32 @@ class StderrTextSink implements LogSink {
 }
 
 interface NdjsonWritable {
-  readonly destroyed: boolean;
+  /**
+   * False once the target can no longer accept writes. The target owns this
+   * answer so the sink never has to ask whether it happens to be holding
+   * `process.stdout` and consult the module-level pipe-closure flag itself.
+   */
+  readonly usable: boolean;
   write(text: string): boolean;
   once(event: 'drain' | 'error' | 'close', listener: () => void): unknown;
   off(event: 'drain' | 'error' | 'close', listener: () => void): unknown;
 }
+
+const processStdoutTarget: NdjsonWritable = {
+  get usable(): boolean {
+    return !process.stdout.destroyed && !closed.stdout;
+  },
+  write: (text) => process.stdout.write(text),
+  once: (event, listener) => process.stdout.once(event, listener),
+  off: (event, listener) => process.stdout.off(event, listener),
+};
 
 export class NdjsonStdoutSink implements LogSink {
   private readonly queue: CliNdjsonRecord[] = [];
   private drainPromise: Promise<void> | undefined;
   private stdoutClosed = false;
 
-  constructor(private readonly stdout: NdjsonWritable = process.stdout) {}
+  constructor(private readonly stdout: NdjsonWritable = processStdoutTarget) {}
 
   write(record: LogRecord): void {
     this.writeRecord({ kind: 'log', ...record });
@@ -225,11 +239,7 @@ export class NdjsonStdoutSink implements LogSink {
   }
 
   private isClosed(): boolean {
-    return (
-      this.stdoutClosed ||
-      this.stdout.destroyed ||
-      (this.stdout === process.stdout && closed.stdout)
-    );
+    return this.stdoutClosed || !this.stdout.usable;
   }
 
   private closeQueue(): void {
@@ -238,7 +248,7 @@ export class NdjsonStdoutSink implements LogSink {
   }
 
   private waitForStdoutDrain(): Promise<boolean> {
-    if (this.stdout.destroyed) return Promise.resolve(false);
+    if (!this.stdout.usable) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
       let cleanup = (): void => undefined;
       const onDrain = (): void => {

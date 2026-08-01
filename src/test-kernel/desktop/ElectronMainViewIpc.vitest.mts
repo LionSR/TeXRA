@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared host bridge
 import {
@@ -19,9 +19,12 @@ import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+const mocks = createModuleMocks();
 
 interface TestDesktopShellActions {
   showRoute: ReturnType<typeof vi.fn>;
@@ -102,7 +105,7 @@ async function loadDesktopMainViewIpcModule(electron: {
   };
 }): Promise<MainViewIpcModule> {
   vi.resetModules();
-  vi.doMock('electron', () => electron);
+  mocks.doMock('electron', () => electron);
   return import(
     moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
   ) as Promise<MainViewIpcModule>;
@@ -253,13 +256,6 @@ async function createMainViewHarness(
 }
 
 describe('desktop main-view IPC', () => {
-  afterEach(() => {
-    vi.doUnmock('electron');
-    vi.doUnmock('@agent/index');
-    vi.doUnmock('@auth/SupabaseClient');
-    vi.doUnmock('@model/computeModelOptions');
-  });
-
   it('pushes theme and debug state over the fixed host bridge channel', async () => {
     let themeListener: (() => void) | undefined;
     const {
@@ -537,7 +533,7 @@ describe('desktop main-view IPC', () => {
     // `@agent/index` barrel (agent options plus the team-option loader's
     // catalog/refresh ports), so the barrel — not the agentRegistry leaf
     // module — is the mock boundary here.
-    vi.doMock('@agent/index', () => ({
+    mocks.doMock('@agent/index', () => ({
       computeAgentOptionsData: vi.fn(async () => ({
         workflow: [],
         toolUse: [],
@@ -546,12 +542,12 @@ describe('desktop main-view IPC', () => {
       getAgentsByCategory: vi.fn(() => []),
       refresh: vi.fn(async () => undefined),
     }));
-    vi.doMock('@auth/SupabaseClient', () => ({
+    mocks.doMock('@auth/SupabaseClient', () => ({
       SupabaseClient: {
         canAccessRemoteAgentCatalog: vi.fn(async () => false),
       },
     }));
-    vi.doMock('@model/computeModelOptions', () => ({
+    mocks.doMock('@model/computeModelOptions', () => ({
       // `label` is required by `ModelOptionDataSchema` (PickerOptionBaseSchema) —
       // `postToRenderer` now runs the SET_MODEL_OPTIONS payload through it
       // (dev/test only), so the stub must match the real shape.

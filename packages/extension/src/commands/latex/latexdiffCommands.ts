@@ -381,9 +381,9 @@ async function handleRunLatexdiff(
       },
     );
 
-    const { results, totalOperations } = outcome;
+    const { results } = outcome;
 
-    if (totalOperations === 0) {
+    if (results.length === 0) {
       vscode.window.showInformationMessage(
         'No LaTeX diff operations available for this run.',
       );
@@ -397,9 +397,9 @@ async function handleRunLatexdiff(
         CHANNEL,
         `All LaTeX diff operations failed (math markup: "${mathMarkup}")`,
       );
-    } else if (successCount < totalOperations) {
+    } else if (successCount < results.length) {
       vscode.window.showWarningMessage(
-        `${successCount} of ${totalOperations} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
+        `${successCount} of ${results.length} LaTeX diff operations completed successfully (math markup: "${mathMarkup}")`,
       );
     } else {
       vscode.window.showInformationMessage(

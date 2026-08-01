@@ -391,7 +391,8 @@ const AUTH_SUBCOMMANDS = {
   chatgpt: chatgptAuthCommand,
 } as const;
 
-export const AUTH_SUBCOMMAND_NAMES = Object.keys(AUTH_SUBCOMMANDS);
+export const AUTH_SUBCOMMAND_NAMES: readonly string[] =
+  Object.keys(AUTH_SUBCOMMANDS);
 
 export const authCommand = defineCommand({
   meta: {

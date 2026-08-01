@@ -5,7 +5,7 @@ import { toJSONSchema } from 'zod';
 import * as logger from '@logger/logUtils';
 
 // Type imports
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import type { LanguageModelToolDefinition } from '@platform/languageModel';
 
 // Local imports - shared

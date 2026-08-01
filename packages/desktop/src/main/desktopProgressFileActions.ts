@@ -167,7 +167,7 @@ export class DesktopProgressFileActions {
     runContext: DesktopLatexdiffRunContext,
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
-    if (!outcome || outcome.totalOperations === 0) {
+    if (!outcome || outcome.results.length === 0) {
       await this.ui.showInfoMessage(
         'No LaTeX diff operations available for this run.',
       );

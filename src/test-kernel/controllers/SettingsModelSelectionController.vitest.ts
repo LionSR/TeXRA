@@ -30,7 +30,7 @@ const resolveModelOptions = async (
 
 function createState(
   overrides: Partial<{
-    enabledModels: string[];
+    enabledModels: readonly string[];
     helperModel: string;
     reasoningLevelOverrides: Record<string, string>;
     preferShortModelNames: boolean;

@@ -11,7 +11,7 @@ export interface ProgressApiKeyRetryRequest {
   viaRelay?: boolean;
 }
 
-export interface ProgressApiKeyPreparationResult {
+interface ProgressApiKeyPreparationResult {
   proceeded: boolean;
   disabledIncludedModelAccess: boolean;
   disabledChatGptSubscription: boolean;
@@ -113,7 +113,7 @@ export class ProgressApiKeyRetryController {
     return this.hasAnyUsableKey(providersToCheck);
   }
 
-  async applyOwnApiKeyRouting(
+  private async applyOwnApiKeyRouting(
     request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
   ): Promise<ProgressApiKeyPreparationResult> {
     // Disable relay (included access) so the retry uses the user's own key,

@@ -100,7 +100,7 @@ async function executeDiffOperations(
     });
   }
 
-  return { results, totalOperations: results.length };
+  return { results };
 }
 
 export async function runLatexdiffFromMetadata(params: {
@@ -313,7 +313,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   }
 
   if (inputToOutputsMap.size === 0) {
-    return { results: [], totalOperations: 0 };
+    return { results: [] };
   }
 
   const operations: DiffOperation[] = [];

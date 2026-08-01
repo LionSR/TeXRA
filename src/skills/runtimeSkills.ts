@@ -7,7 +7,7 @@ import {
   type SourcedSkill,
 } from './loadSkills';
 
-const runtimeSkillSources: SkillSource[] = [];
+let runtimeSkillSources: readonly SkillSource[] = [];
 
 export interface RuntimeSkillCatalogResult {
   catalog: string;
@@ -17,12 +17,11 @@ export interface RuntimeSkillCatalogResult {
 export type { SkillLoadIssue } from './loadSkills';
 
 export function setRuntimeSkillSources(sources: readonly SkillSource[]): void {
-  runtimeSkillSources.length = 0;
-  runtimeSkillSources.push(...sources.map((source) => ({ ...source })));
+  runtimeSkillSources = [...sources];
 }
 
-export function listRuntimeSkillSources(): SkillSource[] {
-  return runtimeSkillSources.map((source) => ({ ...source }));
+export function listRuntimeSkillSources(): readonly SkillSource[] {
+  return runtimeSkillSources;
 }
 
 function sourceLabel(source: SkillSource): string {

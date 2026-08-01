@@ -114,7 +114,7 @@ describe('attachProgressBackendAppSignals', () => {
   it('marks running progress tasks cancelled on extension deactivation', () => {
     const backend = createBackend();
     const signals = new MemoryAppSignals();
-    track(backend.setupEventListeners());
+    backend.setupEventListeners();
     track(attachProgressBackendAppSignals(backend, signals));
     const running = 'appsignals:running' as StreamTabId;
     const complete = 'appsignals:complete' as StreamTabId;
@@ -135,7 +135,7 @@ describe('attachProgressBackendAppSignals', () => {
   it('detaches the app-signal listener cleanly', () => {
     const backend = createBackend();
     const signals = new MemoryAppSignals();
-    track(backend.setupEventListeners());
+    backend.setupEventListeners();
     const appSignalSubscription = track(
       attachProgressBackendAppSignals(backend, signals),
     );

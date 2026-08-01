@@ -165,7 +165,7 @@ type MediaAttachmentStateSnapshot = z.output<
 >;
 
 export class MediaAttachmentState {
-  public readonly files: FileLocation[] = [];
+  private readonly _files: FileLocation[] = [];
   private readonly pathSet = new Set<string>();
 
   static fromSnapshot(snapshot: unknown): MediaAttachmentState {
@@ -175,15 +175,23 @@ export class MediaAttachmentState {
     return state;
   }
 
-  toSnapshot(): MediaAttachmentStateSnapshot {
-    return { files: [...this.files] };
+  /**
+   * Attached media in insertion order. Read-only: `addMediaFiles` is the only
+   * way in, because it also maintains the path-deduplication set.
+   */
+  get files(): readonly FileLocation[] {
+    return this._files;
   }
 
-  addMediaFiles(locations: FileLocation[]): void {
+  toSnapshot(): MediaAttachmentStateSnapshot {
+    return { files: [...this._files] };
+  }
+
+  addMediaFiles(locations: readonly FileLocation[]): void {
     for (const location of locations) {
       if (!this.pathSet.has(location.absolutePath)) {
         this.pathSet.add(location.absolutePath);
-        this.files.push(location);
+        this._files.push(location);
       }
     }
   }

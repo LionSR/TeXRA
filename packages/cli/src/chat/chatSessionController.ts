@@ -56,17 +56,13 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { chatAgentSupportsDelegation } from './tui/commands/handlers/agentModelCommands';
 import { clearApprovals } from './tui/state/approvalQueue';
 import {
-  activeStreamId,
+  focusStream,
   rootStreamId,
   patchSessionMeta,
   patchStream,
 } from './tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
-  markChatTuiRunCompleted,
-  markChatTuiRunPending,
-  publishChatTuiRunState,
-  tryClaimRootRunSlot,
   type TuiSession,
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
@@ -469,7 +465,7 @@ export function createChatSessionController(
         // terminal toast, so this session-wide listener has no work after the
         // root finalizes and must not overlap a later root's listener.
         detachResultToastOnce();
-        markChatTuiRunCompleted(session);
+        session.markRunCompleted();
         if (
           rootExecutionId &&
           !executions.getHandle(rootExecutionId) &&
@@ -525,10 +521,9 @@ export function createChatSessionController(
                 );
               }
               session.streamId = resolvedStreamId;
-              publishChatTuiRunState(session);
               rootStreamId.set(resolvedStreamId);
               moveLocalTranscriptToStream(resolvedStreamId);
-              activeStreamId.set(resolvedStreamId);
+              focusStream(resolvedStreamId);
               if (session.stopRequested) interruptActiveRun();
             },
             onIdle: () => {
@@ -550,7 +545,7 @@ export function createChatSessionController(
       })
       .catch(reportRunFailure)
       .finally(finalize);
-    markChatTuiRunPending(session, runPromise, presentationHost);
+    session.markRunPending(runPromise, presentationHost);
   };
 
   // -----------------------------------------------------------------------
@@ -573,7 +568,7 @@ export function createChatSessionController(
       resolveRunPromise = resolve;
       rejectRunPromise = reject;
     });
-    if (!tryClaimRootRunSlot(session, claimedRunPromise)) {
+    if (!session.tryClaimRootRunSlot(claimedRunPromise)) {
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
       );
@@ -586,7 +581,7 @@ export function createChatSessionController(
       if (resolution.type !== 'toolUse') {
         restoreInterruptedRecovery(supersededRecovery);
         appendLocalErrorTranscript(explainNonResumable(resolution, id));
-        markChatTuiRunCompleted(session);
+        session.markRunCompleted();
         resolveRunPromise();
         return;
       }
@@ -595,7 +590,6 @@ export function createChatSessionController(
       followUpQueue.clear();
       session.streamId = resolution.streamId;
       session.executionId = resolution.executionId;
-      publishChatTuiRunState(session);
       rootStreamId.set(resolution.streamId);
 
       const { currentModel, sessionContext } = beginRunContext(
@@ -618,7 +612,7 @@ export function createChatSessionController(
         };
       });
       projectStreamTranscript(resolution.streamId);
-      activeStreamId.set(resolution.streamId);
+      focusStream(resolution.streamId);
 
       const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
@@ -663,7 +657,7 @@ export function createChatSessionController(
     } catch (error: unknown) {
       restoreInterruptedRecovery(supersededRecovery);
       reportRunFailure(error);
-      markChatTuiRunCompleted(session);
+      session.markRunCompleted();
       resolveRunPromise();
     }
   };
@@ -704,17 +698,12 @@ export function createChatSessionController(
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below — see tryClaimRootRunSlot and the matching comment
     // in resume().
-    if (
-      !tryClaimRootRunSlot(
-        session,
-        runPromise.then(() => undefined),
-      )
-    ) {
+    if (!session.tryClaimRootRunSlot(runPromise.then(() => undefined))) {
       return Promise.resolve(false);
     }
 
     const runResume = async (): Promise<boolean> => {
-      let finalize = (): void => markChatTuiRunCompleted(session);
+      let finalize = (): void => session.markRunCompleted();
       try {
         await snapshotStore.preload([streamId]);
         const executionId =
@@ -745,10 +734,13 @@ export function createChatSessionController(
         if (!parentStreamId) {
           rootStreamId.set(streamId);
         }
-        activeStreamId.set(streamId);
-        session.runCompleted = false;
+        // A follow-up wake may target a stream the user /clear-ed;
+        // resuming it un-retires it (patchStream drops the retired mark),
+        // matching the explicit resume path, or focusStream would refuse
+        // and the resumed run would stay invisible.
+        patchStream(streamId, (slice) => slice);
+        focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
-        publishChatTuiRunState(session);
 
         let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
           RUN_OUTCOME.COMPLETED;

@@ -58,9 +58,12 @@ export function registerCommands(
       },
     ),
     // Registered here rather than through the shared registry because the
-    // handler needs the `MainViewProvider` instance created just above.
+    // handlers need the `MainViewProvider` instance created just above.
     vscode.commands.registerCommand('texra.showMainView', () =>
       mainViewProvider.showInSidebar(),
+    ),
+    vscode.commands.registerCommand('texra.getWebviewView', () =>
+      mainViewProvider.getMainModeView(),
     ),
   );
 

@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import * as assert from 'node:assert';
 
 // Third-party imports
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -152,6 +152,66 @@ describe('TextEditorTool undo history lifecycle', () => {
         false,
       );
     } finally {
+      session.executions.untrack(EXECUTION_ID);
+    }
+  });
+
+  it('registers one completion listener per execution even after undo empties its history', async () => {
+    await installPlatform({ '/workspace/relisten.tex': 'one\n' });
+    const tool = new TextEditorTool();
+    const session = defaultSession();
+    const streamId = `stream:${EXECUTION_ID}` as StreamTabId;
+    const handle = new AgentExecutionHandle(
+      EXECUTION_ID,
+      streamId,
+      streamId,
+      'orchestrator',
+      'toolUse',
+    );
+    session.executions.track(handle);
+    const addListener = vi.spyOn(session.executions, 'addListener');
+
+    try {
+      const firstEdit = await callTextEditor(
+        tool,
+        {
+          command: 'str_replace',
+          path: 'relisten.tex',
+          old_str: 'one',
+          new_str: 'two',
+        },
+        { session },
+      );
+      assert.strictEqual(firstEdit.status, 'executed');
+
+      // Undo pops the only snapshot for the only edited file, leaving the
+      // execution with an empty snapshot set.
+      const undo = await callTextEditor(
+        tool,
+        { command: 'undo_edit', path: 'relisten.tex' },
+        { session },
+      );
+      assert.strictEqual(undo.status, 'executed');
+
+      const secondEdit = await callTextEditor(
+        tool,
+        {
+          command: 'str_replace',
+          path: 'relisten.tex',
+          old_str: 'one',
+          new_str: 'three',
+        },
+        { session },
+      );
+      assert.strictEqual(secondEdit.status, 'executed');
+
+      assert.strictEqual(
+        addListener.mock.calls.filter((call) => call[0] === EXECUTION_ID)
+          .length,
+        1,
+      );
+    } finally {
+      addListener.mockRestore();
       session.executions.untrack(EXECUTION_ID);
     }
   });

@@ -35,7 +35,6 @@ interface CiStartedState {
   reviews: TestDedupedResource<GhReview>;
   lastFailedCheckKeys: Set<string>;
   lastAnnotationKeys: Set<string>;
-  headSha: string | undefined;
   currentShaState: CurrentShaState | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
@@ -102,7 +101,6 @@ function createState(
     reviews: testDedupedResource(),
     lastFailedCheckKeys: new Set(),
     lastAnnotationKeys: new Set(),
-    headSha: SHA,
     currentShaState: makeCurrentShaState(SHA),
     state: 'open',
     merged: false,
@@ -196,7 +194,6 @@ describe('PRPollingSource CI-started events', () => {
     const events: string[] = [];
     const state = createState(events, {
       initialized: false,
-      headSha: undefined,
       currentShaState: undefined,
       state: undefined,
     });
@@ -236,7 +233,6 @@ describe('PRPollingSource CI-started events', () => {
     const { ghGet, source } = await createHarness();
     const events: string[] = [];
     const state = createState(events, {
-      headSha: OLD_SHA,
       currentShaState: makeCurrentShaState(OLD_SHA, { ciStarted: true }),
     });
 

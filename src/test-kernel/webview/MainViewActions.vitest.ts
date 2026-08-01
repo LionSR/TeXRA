@@ -22,15 +22,10 @@ import {
 
 const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
-  saveState: vi.fn(),
 }));
 
 vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
-}));
-
-vi.mock('@webview/frontend/persistence', () => ({
-  saveState: mocks.saveState,
 }));
 
 function selectFiles(inputFiles: string[], baseFile = '', editedFile = '') {
@@ -46,7 +41,6 @@ describe('main-view direct actions', () => {
   beforeEach(() => {
     resetMainViewState();
     mocks.postMessage.mockClear();
-    mocks.saveState.mockClear();
   });
 
   it('posts a single-file pack followed by its information message', () => {

@@ -45,7 +45,6 @@ function collectToolLogs(store: StreamLogStore): unknown[] {
 function runTurn(logger: AgentTrace) {
   return runStreamedTurn({
     prompt: 'Run lint',
-    childStreamId: streamId,
     logger,
     abortController: new AbortController(),
     model: 'claude-sonnet-4-6',

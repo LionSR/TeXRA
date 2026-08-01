@@ -18,6 +18,7 @@ import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
+  focusStream,
   getCliStateGeneration,
   patchStream,
   recordMissingOutputsReset,
@@ -67,7 +68,7 @@ function applySetActiveStream(payload: SetActiveStreamPayload): void {
     category: payload.agentCategory ?? s.category,
   }));
   if (payload.suppressViewSwitch !== true) {
-    activeStreamId.set(next);
+    focusStream(next);
   }
 }
 

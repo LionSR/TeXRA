@@ -97,7 +97,6 @@ import {
   refreshToolAvailability,
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
-import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -529,16 +528,6 @@ export async function activate(context: vscode.ExtensionContext) {
   registerFileDecorations(context);
 
   setLeanLanguageServices(leanVscodeIntegration);
-  setOpenPdfOpener(async ({ location, preserveFocus }) => {
-    await vscode.commands.executeCommand(
-      'vscode.open',
-      vscode.Uri.file(location.absolutePath),
-      {
-        viewColumn: vscode.ViewColumn.Beside,
-        preserveFocus,
-      } satisfies vscode.TextDocumentShowOptions,
-    );
-  });
   setSetupPlatform({
     host: 'extension',
     signIn: async () =>

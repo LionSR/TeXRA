@@ -237,18 +237,6 @@ function descriptorFromConfig(
 }
 
 /**
- * A stream's executionId, preferring the canonical `runDescriptor.executionId`
- * over the legacy top-level `executionId` field written before descriptors
- * existed. Both fields are set together on new writes (see `setTaskState`),
- * so this only matters for meta read from older on-disk data.
- */
-function executionIdFromMeta(
-  meta: StreamTabMeta | undefined,
-): ExecutionId | undefined {
-  return meta?.runDescriptor?.executionId ?? meta?.executionId;
-}
-
-/**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
  * (`records`) instead of 17 independently hand-synced parallel maps/sets (9
  * accumulator fields, `seeded`/`seedChain` seeding bookkeeping, 5 overlay
@@ -1556,8 +1544,10 @@ export class StreamSnapshotStore {
   }
 
   getExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    // executionId is validated to a real ExecutionId at the single disk-read
-    // entry (`readMeta`), so no cast/re-validation is needed here.
+    // `meta.executionId` is normalized to the canonical
+    // `runDescriptor.executionId` and validated at the single disk-read entry
+    // (`readMeta`), and every meta write sets both fields together, so no
+    // cast, re-validation, or descriptor fallback is needed here.
     return this.records.get(stream)?.meta?.executionId;
   }
 
@@ -1581,7 +1571,7 @@ export class StreamSnapshotStore {
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    return executionIdFromMeta(await readMeta(this.kv(stream)));
+    return (await readMeta(this.kv(stream)))?.executionId;
   }
 
   /**
@@ -1963,7 +1953,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     meta: StreamTabMeta,
   ): Promise<HydratedRunState> {
-    const executionId = executionIdFromMeta(meta);
+    const executionId = meta.executionId;
     let descriptor = meta.runDescriptor;
 
     if (executionId) {
@@ -2045,7 +2035,7 @@ export class StreamSnapshotStore {
     // stream was evicted during the await, that would resurrect a record for a
     // deleted stream and defeat `writeMergedSidecars`' eviction check (#8226);
     // an orphaned `record` is mutated harmlessly and never written.
-    const executionId = executionIdFromMeta(meta);
+    const executionId = meta?.executionId;
     if (!meta || record.runDescriptor?.executionId !== executionId) {
       record.runDescriptor = undefined;
       record.runConfig = undefined;

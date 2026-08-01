@@ -8,7 +8,7 @@ import {
   formatResumeUsage,
   type ResumeUsageStats,
 } from '@cli/chat/tui/state/resumeHint';
-import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import {
   buildChildStreamEntries,
@@ -19,27 +19,9 @@ function makeSlice(
   over: Partial<StreamSlice> & { streamId: string },
 ): StreamSlice {
   return {
-    category: undefined,
-    status: undefined,
-    runStartedAt: undefined,
-    description: undefined,
-    latestLine: undefined,
-    thinkingActive: false,
-    compactingActive: false,
-    usage: undefined,
-    cumulativeUsage: undefined,
-    conversation: undefined,
-    entries: [],
-    queuedFollowUpMessages: [],
-    todos: [],
-    plan: null,
-    bypass: NO_BYPASS,
+    ...emptySlice(over.streamId as StreamTabId),
     ...over,
     streamId: over.streamId as StreamTabId,
-    outputFilesByRound: over.outputFilesByRound ?? {},
-    missingOutputsByRound: over.missingOutputsByRound ?? {},
-    compileFailuresByRound: over.compileFailuresByRound ?? {},
-    taskGroups: over.taskGroups ?? [],
   };
 }
 

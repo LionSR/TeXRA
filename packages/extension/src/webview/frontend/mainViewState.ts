@@ -93,12 +93,22 @@ export const workflowAgent$ = trackedSignal(() => DEFAULT_STATE.workflowAgent);
 export const toolUseAgent$ = trackedSignal(() => DEFAULT_STATE.toolUseAgent);
 export const model$ = trackedSignal(() => DEFAULT_STATE.model);
 export const commit$ = trackedSignal(() => DEFAULT_STATE.commit);
-export const instruction$ = trackedSignal(() => DEFAULT_STATE.instruction);
 export const workflowInstruction$ = trackedSignal(
   () => DEFAULT_STATE.workflowInstruction,
 );
 export const toolUseInstruction$ = trackedSignal(
   () => DEFAULT_STATE.toolUseInstruction,
+);
+
+/**
+ * The draft of the active session mode. Derived, not stored: the per-mode
+ * drafts above are the only writable instruction state, so switching modes
+ * cannot leave the visible draft out of sync with the mode it belongs to.
+ */
+export const instruction$ = new Signal.Computed((): string =>
+  sessionType$.get() === SESSION_TYPES.WORKFLOW
+    ? workflowInstruction$.get()
+    : toolUseInstruction$.get(),
 );
 export const instructionPlaceholder$ = trackedSignal(
   () => ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],

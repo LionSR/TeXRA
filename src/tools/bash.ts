@@ -522,14 +522,22 @@ export class BashTool extends defineTool({
       }
     };
 
-    const deliverAndFinalize = async (
-      text: string,
+    let childFinalized = false;
+    const finalizeChild = async (
       finalizeOptions: Parameters<typeof childStream.finalize>[0],
     ): Promise<void> => {
       // The child is terminal before the continuation is submitted, so a
       // synchronously claimed parent recovery can never observe it as running.
       detachInterruptHandler();
       await childStream.finalize(finalizeOptions);
+      childFinalized = true;
+    };
+
+    const deliverAndFinalize = async (
+      text: string,
+      finalizeOptions: Parameters<typeof childStream.finalize>[0],
+    ): Promise<void> => {
+      await finalizeChild(finalizeOptions);
       try {
         const delivery = await deliverChildRunFollowUp({
           targetStreamId: parentStreamId,
@@ -607,6 +615,20 @@ export class BashTool extends defineTool({
         });
       } catch (err: unknown) {
         logDurabilityFailure('complete', err);
+        // Nothing else finalizes a background child, so an unexpected throw
+        // before the normal finalize would leave the stream RUNNING forever
+        // and its interrupt handler attached to a dead process.
+        if (!childFinalized) {
+          try {
+            await finalizeChild({
+              outcome: { kind: 'failed', error: err },
+              persistence: BACKGROUND_TERMINAL_PERSISTENCE,
+              autoClose: true,
+            });
+          } catch (finalizeError: unknown) {
+            logBackgroundFailure('finalize after failure', finalizeError);
+          }
+        }
       } finally {
         try {
           await releaseExecutionLeaseAfterArtifacts(runSession, executionId);

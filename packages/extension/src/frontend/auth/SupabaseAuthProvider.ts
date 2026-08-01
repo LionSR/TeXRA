@@ -177,10 +177,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return [];
     }
 
-    // Seed in-memory expiry cache unconditionally so pre-invocation checks
-    // work even if the getUser() validation below throws.
-    SupabaseClient.setTokenExpiry(session.expiresAt);
-
     try {
       if (Date.now() >= session.expiresAt) {
         const refreshed = await this.sessionCoordinator.refreshSession(session);

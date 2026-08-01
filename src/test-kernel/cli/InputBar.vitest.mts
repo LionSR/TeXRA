@@ -27,11 +27,7 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import {
-  FakeStdin,
-  FakeStdout,
-  loadInk,
-} from '@test/support/inkTestHarness.mts';
+import { loadInk, renderInteractive } from '@test/support/inkTestHarness.mts';
 import {
   createDeferred,
   waitForCondition as waitFor,
@@ -46,26 +42,6 @@ vi.mock('@cli/runtime/clipboardImage', () => clipboardMock);
 async function flushPromiseQueue(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
-}
-
-function renderInteractive(
-  ink: any,
-  node: any,
-): {
-  readonly instance: any;
-  readonly stdin: FakeStdin;
-  readonly stdout: FakeStdout;
-} {
-  const stdin = new FakeStdin();
-  const stdout = new FakeStdout();
-  const instance = ink.render(node, {
-    stdin,
-    stdout,
-    interactive: true,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
-  return { instance, stdin, stdout };
 }
 
 function fakeHistory(entries: readonly string[]): InputHistory {

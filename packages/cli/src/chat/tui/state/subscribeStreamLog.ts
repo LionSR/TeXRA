@@ -48,6 +48,7 @@ import {
 } from '../panes/transcriptEntries';
 import {
   activeStreamId,
+  focusStream,
   getCliStateGeneration,
   isCliStreamRetired,
   patchStream,
@@ -741,7 +742,7 @@ export function syncStreamLog(
     currentActiveStreamId === streamId;
   let releaseAfterSync = false;
 
-  patchStream(streamId, (slice) => {
+  patchStream(streamId, (slice, lifecycle) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const workflowOperationalOnly =
       slice.category === AgentCategory.Workflow &&
@@ -752,7 +753,7 @@ export function syncStreamLog(
         (!workflowOperationalOnly ||
           WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
     );
-    const streamFinal = isFinalTranscriptStatus(slice.status);
+    const streamFinal = isFinalTranscriptStatus(lifecycle.status);
     const logCandidates: TranscriptCandidate[] = [];
     const workflowLatestLineCandidates: TranscriptCandidate[] = [];
     for (const entry of allEntries) {
@@ -846,8 +847,8 @@ export function syncStreamLog(
         slice.latestLine);
     releaseAfterSync =
       !projectFullTranscript &&
-      slice.status !== undefined &&
-      !isActivePhase(slice.status);
+      lifecycle.status !== undefined &&
+      !isActivePhase(lifecycle.status);
 
     // A stream projected compactly keeps only its synthetic rows, which are
     // carried over untouched, so identity settles whether anything moved. The
@@ -884,7 +885,5 @@ export function syncStreamLog(
 
   // Surface stream as active if we don't already have one — handles bare
   // `texra chat` where setActiveStream is the first signal the runtime emits.
-  if (!activeStreamId.get()) {
-    activeStreamId.set(streamId);
-  }
+  focusStream(streamId, { onlyIfUnset: true });
 }

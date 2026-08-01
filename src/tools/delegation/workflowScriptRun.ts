@@ -98,6 +98,12 @@ export interface WorkflowAttemptCostTracker {
   /** Record one physical child attempt and return this tool invocation's live total. */
   record(invocation: WorkflowAttemptIdentity, costUsd: number): number;
   /**
+   * Live cost observed so far for one engine call index (every attempt of
+   * every key at that index), or `undefined` when that index has emitted no
+   * attempt yet. Feeds {@link WorkflowScriptRunWithProgressOptions.getCallCostUsd}.
+   */
+  costForCall(index: number): number | undefined;
+  /**
    * Return this tool invocation's final total. Replayed/recovered journal
    * entries with no physical-attempt callback contribute zero.
    */
@@ -116,6 +122,7 @@ export interface WorkflowAttemptCostTracker {
  */
 export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   const attemptsByIdentity = new Map<string, number[]>();
+  const costByCallIndex = new Map<number, number>();
   let observedTotalUsd = 0;
 
   return {
@@ -125,8 +132,13 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
       const attempts = attemptsByIdentity.get(identity) ?? [];
       attempts.push(costUsd);
       attemptsByIdentity.set(identity, attempts);
+      costByCallIndex.set(
+        invocation.index,
+        (costByCallIndex.get(invocation.index) ?? 0) + costUsd,
+      );
       return observedTotalUsd;
     },
+    costForCall: (index) => costByCallIndex.get(index),
     total: (finalJournal) => {
       const journalIdentities = new Set<string>();
       let totalUsd = 0;

@@ -33,13 +33,6 @@ export class ResponseChainState {
     return this.previousResponseId !== null;
   }
 
-  /** Raw anchor setter — used for manual resume and for clearing on error paths
-   *  that must NOT also reset the sent-messages / compacted bookkeeping (see
-   *  {@link invalidateChain} for the variant that does). */
-  setPreviousResponseId(id: string | null): void {
-    this.previousResponseId = id;
-  }
-
   getSentMessagesCount(): number {
     return this.sentMessages;
   }
@@ -64,10 +57,11 @@ export class ResponseChainState {
     this.openRouterSkipLogged = true;
   }
 
-  /** Reset all conversation bookkeeping for a new session. Does not touch the
-   *  chain anchor — callers that also want to drop it call
-   *  {@link setPreviousResponseId}(null) alongside this. */
-  resetConversationState(): void {
+  /** Reset every field for a new session: the chain anchor plus all
+   *  conversation bookkeeping. Unlike {@link invalidateChain}, the token
+   *  history goes too — a new session has no history to compact. */
+  resetChainForNewSession(): void {
+    this.previousResponseId = null;
     this.sentMessages = 0;
     this.cumulativeInputTokens = 0;
     this.isCompacted = false;
