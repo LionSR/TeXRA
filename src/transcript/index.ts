@@ -24,6 +24,7 @@ export type { TraceDocument } from './traceDocumentSchema';
 export {
   readCompletedRunConversation,
   readCompletedRunTodos,
+  seedResumedConversationSidecar,
 } from './completedRunArchive';
 export { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

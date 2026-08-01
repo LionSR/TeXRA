@@ -261,7 +261,6 @@ export async function runToolUseFlow<C = unknown>(
     toolRegistry: registry,
     finalTool,
     resumeShared: input.resume?.shared ?? null,
-    persistTodos: (todos) => kv.writeTodos(todos),
     getPendingStructuredOutput: () => pendingStructuredOutput,
     fileService: new TaskRunFileService(executionId),
   };
@@ -572,7 +571,6 @@ export async function runToolUseFlow<C = unknown>(
       // Note: the flow record is the resume SSOT and the transcript sidecar
       // owns completed-run display/export (#7246 Decision 1) — the old
       // per-step `conversation.json`/`todos.json` projections are gone.
-      // Live-run todos still persist event-driven via `persistTodos` above.
       pf.setProjection(async (s, store) => {
         const currentTouchedFiles = extractTouchedFiles(s.stateSlices);
         if (currentTouchedFiles.length) {

@@ -19,8 +19,14 @@ import {
   listExecutions,
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
-import { currentSession } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import {
+  AgentExecutionHandle,
+  type ExecutionHandle,
+} from '@agent/runtime/ExecutionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
@@ -162,6 +168,15 @@ const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
       summary: 'Read a workspace file edited by a tool-use run',
     },
   ];
+
+function getRunningTodos(
+  session: SessionHandle,
+  handle: ExecutionHandle,
+): TodoEntry[] {
+  return handle instanceof AgentExecutionHandle
+    ? session.snapshots.getWorkPlan(handle.childStreamId).todos
+    : [];
+}
 
 /** Renders the catalog as a bulleted `- <path> - <summary>` list. */
 const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
@@ -533,19 +548,21 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     options: ExecutionSummaryOptions = {},
   ): Promise<ToolResult> {
     // Check in-memory handle first (free) — running executions have everything we need
-    const handle = currentSession().executions.getHandle(executionId);
+    const session = currentSession();
+    const handle = session.executions.getHandle(executionId);
 
     if (handle) {
-      // Running execution: agent/status from handle, only fetch live data from KV
+      // Running execution: agent/status and task state are session-owned;
+      // fetch only the remaining durable details from execution storage.
       const store = getExecutionStore(executionId);
-      const [meta, children, todos, report] = await Promise.all([
+      const todos = getRunningTodos(session, handle);
+      const [meta, children, report] = await Promise.all([
         store.readMeta(),
         store.readChildren(),
-        store.readTodos(),
         store.readReport(),
       ]);
 
-      const info = currentSession().executions.getStatus(handle);
+      const info = session.executions.getStatus(handle);
       const lines = buildRunningSummaryLines(executionId, handle, info, meta);
 
       await this.appendSummaryTail(
@@ -738,16 +755,16 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
 
   /**
    * Same source of truth as `showSummary()`'s completed-run todos branch: a
-   * running execution's task list is read live from KV, but once the
-   * execution is finished this must route through `readCompletedRunTodos()`
-   * so this endpoint never disagrees with the summary about which tasks are
-   * still pending.
+   * running execution's task list is read from session snapshot state. Once
+   * the execution is finished this must route through
+   * `readCompletedRunTodos()` so this endpoint never disagrees with the
+   * summary about which tasks are still pending.
    */
   private async showTodos(executionId: ExecutionId): Promise<ToolResult> {
-    const handle = currentSession().executions.getHandle(executionId);
-    const store = getExecutionStore(executionId);
+    const session = currentSession();
+    const handle = session.executions.getHandle(executionId);
     const todos = handle
-      ? await store.readTodos()
+      ? getRunningTodos(session, handle)
       : (await readCompletedRunTodos(executionId)).todos;
 
     if (todos.length === 0) {

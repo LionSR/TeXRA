@@ -4,14 +4,16 @@
  * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
  * execution→stream mapping. The legacy `executions/{id}/conversation.json` /
  * `todos.json` KV projections are READ-ONLY fallbacks for runs recorded
- * before the sidecars existed (or written by builds that still project them)
- * — each fact keeps exactly ONE legacy read arm, here, tracked for D3
- * retirement in the #6981 ledger.
+ * before the sidecars existed. Each fact keeps exactly one legacy read arm,
+ * here, tracked for D3 retirement in the #6981 ledger.
  */
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
-import { stringifyConversationValue } from '@agent/storage/conversationFormat';
-import { KVStore } from '@common/storage/KVStore';
+import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import {
+  formatConversationMessage,
+  stringifyConversationValue,
+} from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -25,15 +27,15 @@ import {
   type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
-import { assertNever } from '@utils/core';
+import { ToolResultSchema } from '@shared/schemas/toolResult';
+import { assertNever, generateShortId, isObject } from '@utils/core';
 
 import {
   findPersistedStreamFallbacksForExecution,
   resolvePersistedStreamIdForExecution,
   type PersistedStreamIdResolution,
 } from './executionStreamResolver';
-import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
-import { StreamLogStore, STREAM_LOGS_DIR } from './StreamLogStore';
+import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
 type CompletedRunTodosSource = 'streamData' | 'legacyKV' | 'none';
@@ -51,13 +53,6 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
   };
 }
 
-/** Sidecar `workPlan.json` mtime (ms since epoch), or `undefined` if absent. */
-function sidecarModifiedAt(streamId: StreamTabId): Promise<number | undefined> {
-  return new KVStore(streamDataDir(streamId)).modifiedAt(
-    STREAM_DATA_KEYS.WORK_PLAN,
-  );
-}
-
 async function readLegacyTodos(
   executionId: ExecutionId,
 ): Promise<CompletedRunTodosReadResult> {
@@ -70,17 +65,8 @@ async function readLegacyTodos(
 
 /**
  * Read the archived task list for a completed run, preferring the durable
- * stream sidecar (`streamData/{stream}/workPlan.json`) but falling back to
- * `executions/{id}/todos.json` for runs recorded before sidecars existed —
- * or when the legacy write is demonstrably fresher than the sidecar (a final
- * `todo_write` can land before the snapshot store's asynchronous sidecar
- * write has flushed).
- *
- * Freshness detail: millisecond-resolution mtimes (the VS Code filesystem
- * adapter's granularity) can tie when both writes land in the same tick;
- * ties are broken toward the legacy write, since a genuinely later legacy
- * write is the more likely cause of a tie than a genuinely later sidecar
- * write racing to complete in the same millisecond.
+ * stream sidecar (`streamData/{stream}/workPlan.json`), with
+ * `executions/{id}/todos.json` as a read-only fallback for historical runs.
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
@@ -90,24 +76,18 @@ export async function readCompletedRunTodos(
     snapshotStore,
   });
 
-  if (!resolved) return readLegacyTodos(executionId);
-
-  const sidecarMtime = await sidecarModifiedAt(resolved.streamId);
-  if (sidecarMtime === undefined) {
-    return readLegacyTodos(executionId);
+  if (
+    resolved &&
+    (await snapshotStore.hasPersistedWorkPlan(resolved.streamId))
+  ) {
+    const snapshot = await snapshotStore.read(resolved.streamId);
+    return {
+      todos: snapshot.todos.map(todoItemToEntry),
+      source: 'streamData',
+      streamId: resolved.streamId,
+    };
   }
-
-  const legacyMtime = await getExecutionStore(executionId).todosModifiedAt();
-  if (legacyMtime !== undefined && legacyMtime >= sidecarMtime) {
-    return readLegacyTodos(executionId);
-  }
-
-  const snapshot = await snapshotStore.read(resolved.streamId);
-  return {
-    todos: snapshot.todos.map(todoItemToEntry),
-    source: 'streamData',
-    streamId: resolved.streamId,
-  };
+  return readLegacyTodos(executionId);
 }
 
 // ============================================================================
@@ -124,28 +104,26 @@ export interface CompletedRunConversationReadResult {
   readonly streamId?: StreamTabId;
 }
 
-/** `streamLogs/{stream}.json` mtime (ms since epoch), or `undefined` if absent. */
-function streamLogModifiedAt(
-  streamId: StreamTabId,
-): Promise<number | undefined> {
-  return new KVStore(STREAM_LOGS_DIR).modifiedAt(streamId);
-}
-
 /**
  * Deliberate non-goal (#7508): image blocks inside a tool result are not
- * reconstructed here. `ToolUseLog.output` only ever carries display text —
- * a local `ToolResult.output` is a plain string, and any image content a
- * tool_result block sends to the provider is built at message-construction
- * time from `ToolResult.files` (base64 attachment bytes), which never
- * reaches the transcript row. Unlike the web-fetch page-content case,
- * there's no existing size-capped/marker-only slot for this in the export
- * pipeline (`ExportNode`'s `tool-result` kind is `{text}` only), and
- * reconstructing one would mean threading attachment bytes through
- * `tool.end` just to summarize them — out of scope here.
+ * reconstructed here. `ToolUseLog.output` carries either historical display
+ * text or the attachment-stripped `ToolResult` fields; attachment bytes never
+ * reach the transcript row. Unlike the web-fetch page-content case, there's
+ * no existing size-capped/marker-only slot for this in the export pipeline
+ * (`ExportNode`'s `tool-result` kind is `{text}` only), and reconstructing one
+ * would mean threading attachment bytes through `tool.end` just to summarize
+ * them — out of scope here.
  */
 function toolResultText(tool: ToolUseLog): string | undefined {
   if (tool.error !== undefined) return tool.error;
   if (typeof tool.output === 'string') return tool.output;
+  if (isObject(tool.output)) {
+    const result = ToolResultSchema.safeParse({
+      ...tool.output,
+      status: tool.isError ? 'error' : 'executed',
+    });
+    if (result.success) return formatToolResultAsText(result.data);
+  }
   if (tool.output !== undefined) return stringifyConversationValue(tool.output);
   return tool.summary;
 }
@@ -164,12 +142,13 @@ function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text) return [];
   const parsed = UserMessagePayloadSchema.safeParse(entry.data);
   const attachments = parsed.success ? (parsed.data.attachments ?? []) : [];
+  const role = archivedConversationRole(entry, 'user');
   if (attachments.length === 0) {
-    return [{ role: 'user', content: entry.text }];
+    return [{ role, content: entry.text }];
   }
   return [
     {
-      role: 'user',
+      role,
       content: [
         { type: 'text', text: entry.text },
         ...attachments.map(mediaAttachmentKindToContentBlock),
@@ -180,7 +159,20 @@ function userMessageEntryToMessages(entry: StreamLogEntry): unknown[] {
 
 function modelResponseEntryToMessages(entry: StreamLogEntry): unknown[] {
   if (!entry.text?.trim()) return [];
-  return [{ role: 'assistant', content: [{ type: 'text', text: entry.text }] }];
+  return [
+    {
+      role: archivedConversationRole(entry, 'assistant'),
+      content: [{ type: 'text', text: entry.text }],
+    },
+  ];
+}
+
+function archivedConversationRole(
+  entry: StreamLogEntry,
+  fallback: string,
+): string {
+  const data = isObject(entry.data) ? entry.data : {};
+  return typeof data.archivedRole === 'string' ? data.archivedRole : fallback;
 }
 
 function thinkingEntryToMessages(entry: StreamLogEntry): unknown[] {
@@ -335,6 +327,56 @@ function streamLogEntriesToConversation(
   );
 }
 
+/**
+ * Import a pre-sidecar persisted conversation into an otherwise
+ * conversation-empty stream before a resumed reflection run appends new
+ * turns. This is the one legacy-to-canonical migration boundary: subsequent
+ * completed reads remain sidecar-first and never have to splice two histories.
+ */
+export async function seedResumedConversationSidecar(
+  streamLogStore: StreamLogStore,
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  messages: readonly unknown[],
+): Promise<boolean> {
+  if (messages.length === 0) return false;
+  await streamLogStore.ensureLoaded(streamId);
+  const existing = streamLogStore.get(streamId);
+  if (
+    existing &&
+    streamLogEntriesToConversation(existing.toJSON()).length > 0
+  ) {
+    return false;
+  }
+
+  const normalized = messages
+    .map((message) => formatConversationMessage(message))
+    .filter(({ content }) => content.length > 0);
+  if (normalized.length === 0) return false;
+
+  const writer = streamLogStore.acquireWriter(streamId, executionId);
+  try {
+    for (const { role, content } of normalized) {
+      writer.appendSettled({
+        id: generateShortId(),
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: 'info',
+        timestamp: Date.now(),
+        messageType:
+          role === 'assistant' || role === 'model'
+            ? MESSAGE_TYPES.MODEL_RESPONSE
+            : MESSAGE_TYPES.USER_MESSAGE,
+        text: content,
+        data: { archivedRole: role },
+        verbose: false,
+      });
+    }
+  } finally {
+    writer.close();
+  }
+  return true;
+}
+
 /** Reconstruct one stream's conversation; `[]` when the log is absent/empty. */
 async function conversationFromStream(
   streamLogStore: StreamLogStore,
@@ -390,13 +432,9 @@ async function readSidecarConversation(
  * messages, with the legacy `executions/{id}/conversation.json` projection
  * as the fallback arm.
  *
- * Arbitration protocol: the mtime comparison (ties toward legacy, same as
- * {@link readCompletedRunTodos}) decides the ORDER the two sources are
- * tried in — but **an empty result never wins**. A source that reads or
- * reconstructs empty (a present-but-empty legacy file, a resolver pick
- * whose log holds no conversation-shaped rows) falls through to the next
- * source, symmetrically in both directions, until one yields content or
- * all are empty.
+ * The sidecar is tried first. If it has no conversation-shaped rows, the
+ * reader falls back once to the historical projection. An empty source never
+ * wins over a source with content.
  */
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
@@ -429,22 +467,7 @@ export async function readCompletedRunConversation(
           )
         : null;
 
-  // Freshness decides order only. The resolver pick's streamLogs mtime
-  // stands in for "the sidecar's" — an absent log file orders legacy first
-  // (without even statting the legacy file), and the sidecar arm still gets
-  // its turn if legacy is empty.
-  const sidecarMtime = resolved
-    ? await streamLogModifiedAt(resolved.streamId)
-    : undefined;
-  let legacyFirst = true;
-  if (sidecarMtime !== undefined) {
-    const legacyMtime =
-      await getExecutionStore(executionId).conversationModifiedAt();
-    legacyFirst = legacyMtime !== undefined && legacyMtime >= sidecarMtime;
-  }
-
-  const arms = legacyFirst ? [tryLegacy, trySidecar] : [trySidecar, tryLegacy];
-  for (const arm of arms) {
+  for (const arm of [trySidecar, tryLegacy]) {
     const result = await arm();
     if (result) return result;
   }
