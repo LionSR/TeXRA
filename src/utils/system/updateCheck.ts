@@ -68,11 +68,15 @@ export async function runDailyUpdateCheck({
   }
 
   if (refreshed) {
-    const stamp = state.update(lastCheckedAtKey, nowMs);
     if (stampFailure === 'ignore') {
-      await Promise.resolve(stamp).catch(() => undefined);
+      try {
+        await state.update(lastCheckedAtKey, nowMs);
+      } catch {
+        // CLI throttle persistence is best-effort; a read-only state store
+        // must not invalidate an update result that was already accepted.
+      }
     } else {
-      await stamp;
+      await state.update(lastCheckedAtKey, nowMs);
     }
   }
 
@@ -109,7 +113,7 @@ export async function fetchJsonStringField({
     const body: unknown = await response.json();
     if (typeof body !== 'object' || body === null) return undefined;
     const value = (body as Record<string, unknown>)[field];
-    return typeof value === 'string' ? value : undefined;
+    return typeof value === 'string' && value !== '' ? value : undefined;
   } catch {
     // AbortError (timeout), TypeError (network), and SyntaxError (invalid JSON)
     // all make this best-effort update source unavailable for the current run.

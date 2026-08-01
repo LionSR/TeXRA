@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { isNewerSemverVersion } from '@utils/system/semverUpdateCheck';
-import { runDailyUpdateCheck } from '@utils/system/updateCheck';
+import {
+  fetchJsonStringField,
+  runDailyUpdateCheck,
+} from '@utils/system/updateCheck';
 
 describe('isNewerSemverVersion', () => {
   it('compares numerically across all components', () => {
@@ -107,5 +110,41 @@ describe('runDailyUpdateCheck', () => {
     await expect(runDailyUpdateCheck(options)).rejects.toThrow(
       'read-only state',
     );
+  });
+
+  it('ignores a synchronous throttle stamp failure when requested', async () => {
+    const state = new FakeStateStore();
+    vi.spyOn(state, 'update').mockImplementation(() => {
+      throw new Error('read-only state');
+    });
+
+    await expect(
+      runDailyUpdateCheck({
+        currentVersion: '1.0.0',
+        state,
+        lastCheckedAtKey,
+        fetchLatest: async () => ({ version: '1.0.0', refreshed: true }),
+        notify: () => {},
+        now: () => nowMs,
+        stampFailure: 'ignore',
+      }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('fetchJsonStringField', () => {
+  it('rejects an empty string field', async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({ version: '' }),
+    ) as unknown as typeof fetch;
+
+    await expect(
+      fetchJsonStringField({
+        url: 'https://example.test/latest',
+        field: 'version',
+        timeoutMs: 1000,
+        fetchImpl,
+      }),
+    ).resolves.toBeUndefined();
   });
 });
