@@ -78,8 +78,6 @@ type CycleFields = z.infer<typeof CycleFieldsSchema>;
  * stored in shared state.
  */
 interface CycleTransientFields {
-  /** Whether RetryState already emitted the canonical structured failure. */
-  failureLogEmitted?: boolean;
   /** System prompt for model (regenerated from agent prompt each cycle) */
   systemPrompt?: string;
   /** Raw response from model (type unknown, not serialized) */

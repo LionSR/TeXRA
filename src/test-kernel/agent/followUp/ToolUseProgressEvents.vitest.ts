@@ -195,7 +195,7 @@ describe('tool-use progress events', () => {
     }
   });
 
-  it('logs failed cycle outcomes as transcript errors', async () => {
+  it('logs outer cycle exceptions before storing the failed outcome', async () => {
     const workspaceState = AgentWorkspaceState.create();
     const prepRes = createPrepResult(workspaceState);
     const shared: Partial<ToolUseRunShared> = {};
@@ -204,26 +204,26 @@ describe('tool-use progress events', () => {
       logger: { error },
     } as unknown as ToolUseServices);
 
-    const transition = await node.post(shared as ToolUseRunShared, prepRes, {
-      outcome: 'failed',
-      lastError: {
-        message: 'Model claude-opus-4-7 not found',
-        userRetryable: false,
-      },
-      failureLogEmitted: false,
-    });
+    const failed = await node.execFallback(
+      prepRes,
+      new Error('Model claude-opus-4-7 not found'),
+    );
+    const transition = await node.post(
+      shared as ToolUseRunShared,
+      prepRes,
+      failed,
+    );
 
     expect(transition).toBe(FlowTransition.DEFAULT);
-    expect(shared.lastError).toEqual({
+    expect(shared.lastError).toMatchObject({
       message: 'Model claude-opus-4-7 not found',
-      userRetryable: false,
     });
     expect(error).toHaveBeenCalledWith('Model claude-opus-4-7 not found', {
       messageType: MESSAGE_TYPES.ERROR,
     });
   });
 
-  it('does not repeat a failed model request already logged by RetryState', async () => {
+  it('does not repeat an inner model failure at the outer cycle boundary', async () => {
     const prepRes = createPrepResult(AgentWorkspaceState.create());
     const shared: Partial<ToolUseRunShared> = {};
     const error = vi.fn();
@@ -238,7 +238,6 @@ describe('tool-use progress events', () => {
     await node.post(shared as ToolUseRunShared, prepRes, {
       outcome: 'failed',
       lastError,
-      failureLogEmitted: true,
     });
 
     expect(shared.lastError).toBe(lastError);
