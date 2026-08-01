@@ -160,8 +160,12 @@ export function allocateConversationBottomPanelRows({
   readonly sessionPanelRows: number;
   readonly todosPlanRows: number;
 } {
-  const childListRowCount = sessionCount;
-  // The persistent child list owns one blank separator row above its Select.
+  // Child sessions already have a compact count and navigation affordance in
+  // the status bar. Keep their rows collapsed until the user focuses the
+  // list; a large workflow must not take transcript space merely because it
+  // is running in the background.
+  const childListRowCount = childListFocused ? sessionCount : 0;
+  // The expanded child list owns one blank separator row above its Select.
   const sessionPanelContentRows =
     childListRowCount > 0 ? childListRowCount + 1 : 0;
   // The todos/plan panel likewise owns a separator row above its checklist.
