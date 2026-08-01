@@ -29,7 +29,11 @@ import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { formatFileView, formatLinesWithNumbers } from './formatting';
+import {
+  formatFileView,
+  formatLinesWithNumbers,
+  sliceLineRange,
+} from './formatting';
 import {
   assertWritable,
   resolveAndFormat,
@@ -473,10 +477,11 @@ export class TextEditorTool extends defineTool({
         sourceTool: 'text_editor:str_replace',
         afterWrite: this.undoHistoryAfterWrite(filePath),
         present: ({ appliedContent }) => {
-          const snippet = appliedContent
-            .split('\n')
-            .slice(startLine - 1, endLine)
-            .join('\n');
+          const snippet = sliceLineRange(
+            appliedContent.split('\n'),
+            startLine,
+            endLine,
+          ).join('\n');
           return {
             summary: `Updated ${displayPath}`,
             output:

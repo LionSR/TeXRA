@@ -18,9 +18,9 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { createTexraTempDir } from './desktopTempDir.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 type DesktopToolEditApprovalUi = Pick<

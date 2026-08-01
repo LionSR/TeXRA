@@ -169,6 +169,25 @@ export { debounce } from 'perfect-debounce';
 export { default as delay } from 'delay';
 
 /**
+ * Register an abort handler, firing it immediately if `signal` is already
+ * aborted (an `addEventListener` after the fact never fires on its own).
+ * Returns a disposer that detaches the listener; safe to call even after the
+ * handler already fired. No-ops when `signal` is undefined.
+ */
+export function onAbort(
+  signal: AbortSignal | undefined,
+  fn: () => void,
+): () => void {
+  if (!signal) return () => {};
+  if (signal.aborted) {
+    fn();
+    return () => {};
+  }
+  signal.addEventListener('abort', fn, { once: true });
+  return () => signal.removeEventListener('abort', fn);
+}
+
+/**
  * A trailing-edge timer batcher with a synchronous flush escape hatch —
  * perfect-debounce's `debounce()` only exposes `cancel()` (discard the
  * pending call), with no way to force the trailing call to run early. Several
