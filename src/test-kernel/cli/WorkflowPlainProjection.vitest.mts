@@ -71,8 +71,10 @@ function completeWorkflow(
   events.emit({
     scope: 'session',
     event: {
-      type: 'updateStreamStatus',
-      payload: { streamId, status },
+      type: 'status',
+      streamId,
+      phase: status,
+      cause: 'lifecycle',
     },
   });
 }

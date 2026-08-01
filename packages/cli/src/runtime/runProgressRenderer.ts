@@ -164,9 +164,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   private handleSessionFact(event: SessionFact): void {
     switch (event.type) {
-      case 'updateStreamStatus': {
-        const { status, streamId } = event.payload;
-        this.applyStatus(streamId, status);
+      case 'status': {
+        this.applyStatus(event.streamId, event.phase);
         return;
       }
       case 'updateStreamDescription':

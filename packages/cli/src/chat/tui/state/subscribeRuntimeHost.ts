@@ -290,7 +290,7 @@ export function attachTuiRunFactSubscription(
           return;
         case 'goalStateChanged':
         case 'inquiryThreadUpdated':
-        case 'updateStreamStatus':
+        case 'status':
           return;
         case 'clearMissingOutputs':
           applyClearMissingOutputs(fact.payload, missingOutputTargets);

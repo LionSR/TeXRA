@@ -33,6 +33,7 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
+import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 
 const streamId = 'stream:cli-session-projection' as StreamTabId;
 const executionId = 'execution:cli-session-projection' as ExecutionId;
@@ -65,13 +66,29 @@ function workflowConfig(
   };
 }
 
-function sessionFact<K extends SessionFact['type']>(
+function sessionFact<K extends PayloadSessionFact['type']>(
   type: K,
-  payload: Extract<SessionFact, { type: K }>['payload'],
+  payload: Extract<PayloadSessionFact, { type: K }>['payload'],
 ): SessionEvent {
   return {
     scope: 'session',
     event: { type, payload } as Extract<SessionFact, { type: K }>,
+  };
+}
+
+function statusFact(payload: RunStatusProjectionPayload): SessionEvent {
+  return {
+    scope: 'session',
+    event: {
+      type: 'status',
+      streamId: payload.streamId,
+      phase: payload.status,
+      cause: payload.cause,
+      ...(payload.previousStatus
+        ? { previousPhase: payload.previousStatus }
+        : {}),
+      ...(payload.substate ? { substate: payload.substate } : {}),
+    },
   };
 }
 
@@ -111,11 +128,16 @@ const PROGRESS_PROJECTION_CASES = {
     payload: { streamId },
   },
   updateStreamStatus: {
-    source: sessionFact('updateStreamStatus', {
+    source: statusFact({
       streamId,
       status: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
     }),
-    payload: { streamId, status: STREAM_PHASE.RUNNING },
+    payload: {
+      streamId,
+      status: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    },
   },
   addOutputFiles: {
     source: runEvent({
@@ -349,15 +371,9 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
 
 function emitSessionStatus(
   events: SessionEventHub,
-  payload: UpdateStreamStatusPayload,
+  payload: RunStatusProjectionPayload,
 ): void {
-  events.emit({
-    scope: 'session',
-    event: {
-      type: 'updateStreamStatus',
-      payload,
-    },
-  });
+  events.emit(statusFact(payload));
 }
 
 describe('attachCliSessionProgressProjection', () => {
@@ -434,7 +450,7 @@ describe('attachCliSessionProgressProjection', () => {
   it('ignores run-scope status trace events', () => {
     withProjection(({ events, writeRecord }) => {
       // `status` is no longer a projected run fact: `StreamStatusMachine` owns
-      // the single `updateStreamStatus` rail, so a stray run-scope status event
+      // the canonical session-fact rail, so a stray run-scope status event
       // must never reach the public NDJSON stream.
       events.emit({
         scope: 'run',
