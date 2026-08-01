@@ -11,19 +11,25 @@
 // docs instructed running. This gate turns that class of drift into a failed
 // commit instead of a wrong answer months later.
 //
-// Scope note: it checks that cited *paths* resolve. It cannot check that the
+// Scope note: it checks that backticked repo paths and local Markdown link
+// destinations resolve (the latter relative to their guidance file). It cannot
+// check that the
 // surrounding claim is still true — that still needs a human.
 //
 // Dependency-free (bare Node) so it runs without installing anything.
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The optional root argument keeps fixture tests hermetic without duplicating
+// the production path-prefix configuration.
+const repoRoot = process.argv[2]
+  ? resolve(process.argv[2])
+  : join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Files whose prose is read as instructions by an agent or contributor.
-const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md'];
+const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md', 'src/README.md'];
 const GUIDANCE_DIRS = ['.claude/skills', 'docs/dev'];
 
 // Dated point-in-time records, not standing instructions. They describe the
@@ -71,6 +77,12 @@ const PATH_PREFIXES = [
   'supabase/',
   '.github/',
   '.claude/',
+  // Both are cited from CLAUDE.md/AGENTS.md and both are shipped surfaces:
+  // skills/ is packaged into the client, prompts/agents/remote/ is the declared
+  // public home for the hosted agent YAMLs. Without these prefixes a stale
+  // citation to either tree rots silently.
+  'skills/',
+  'prompts/',
 ];
 
 // Generated or installed at build time, so absent in a clean checkout.
@@ -170,6 +182,108 @@ function escapeRegex(value) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function localMarkdownDestination(rawDestination) {
+  let destination = rawDestination.trim();
+  if (destination.startsWith('<')) {
+    const end = destination.indexOf('>');
+    if (end === -1) return null;
+    destination = destination.slice(1, end);
+  } else {
+    destination = destination.split(/\s+["'(]/u, 1)[0];
+  }
+  if (
+    !destination ||
+    destination.startsWith('#') ||
+    destination.startsWith('/') ||
+    /^[a-z][a-z0-9+.-]*:/iu.test(destination)
+  ) {
+    return null;
+  }
+  return destination;
+}
+
+function isEscaped(text, index) {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
+}
+
+function closingBracket(line, start) {
+  for (let i = start; i < line.length; i += 1) {
+    if (line[i] === ']' && !isEscaped(line, i)) return i;
+  }
+  return -1;
+}
+
+function closingParenthesis(line, start) {
+  let depth = 0;
+  for (let i = start; i < line.length; i += 1) {
+    if (isEscaped(line, i)) continue;
+    if (line[i] === '(') depth += 1;
+    else if (line[i] === ')' && depth > 0) depth -= 1;
+    else if (line[i] === ')') return i;
+  }
+  return -1;
+}
+
+function referenceLabel(value) {
+  return value.trim().replaceAll(/\s+/gu, ' ').toLowerCase();
+}
+
+function referenceDefinitions(lines) {
+  const definitions = new Map();
+  for (const line of lines) {
+    const match = /^\s{0,3}\[([^\]]+)\]:\s*(.+)$/u.exec(line);
+    if (!match) continue;
+    const destination = localMarkdownDestination(match[2]);
+    if (destination) definitions.set(referenceLabel(match[1]), destination);
+  }
+  return definitions;
+}
+
+/** Collect complete inline, full, collapsed, and shortcut links and images. */
+function relativeMarkdownLinks(line, definitions) {
+  if (/^\s{0,3}\[[^\]]+\]:/u.test(line)) return [];
+
+  const links = [];
+  for (let open = line.indexOf('['); open !== -1;) {
+    if (isEscaped(line, open)) {
+      open = line.indexOf('[', open + 1);
+      continue;
+    }
+    const close = closingBracket(line, open + 1);
+    if (close === -1) break;
+
+    const textLabel = line.slice(open + 1, close);
+    let next = close + 1;
+    let destination;
+    if (line[next] === '(') {
+      const end = closingParenthesis(line, next + 1);
+      if (end !== -1) {
+        destination = localMarkdownDestination(line.slice(next + 1, end));
+        next = end + 1;
+      }
+    } else if (line[next] === '[') {
+      const referenceEnd = closingBracket(line, next + 1);
+      if (referenceEnd !== -1) {
+        const explicitLabel = line.slice(next + 1, referenceEnd);
+        destination = definitions.get(
+          referenceLabel(explicitLabel || textLabel),
+        );
+        next = referenceEnd + 1;
+      }
+    } else {
+      destination = definitions.get(referenceLabel(textLabel));
+    }
+
+    if (destination) links.push(destination);
+    open = line.indexOf('[', Math.max(next, close + 1));
+  }
+  return links;
+}
+
 const targets = [
   ...GUIDANCE_FILES.filter((file) => existsSync(join(repoRoot, file))),
   ...GUIDANCE_DIRS.flatMap((dir) => markdownFilesIn(dir)),
@@ -181,9 +295,34 @@ for (const file of targets) {
   const body = stripFencedBlocks(readFileSync(join(repoRoot, file), 'utf8'));
   const lines = body.split('\n');
   const ignored = ignoredLines(lines);
+  const definitions = referenceDefinitions(lines);
 
   for (const [index, line] of lines.entries()) {
     if (ignored[index]) continue;
+
+    for (const destination of relativeMarkdownLinks(line, definitions)) {
+      const localDestination = destination.split(/[?#]/u, 1)[0];
+      let decodedDestination;
+      try {
+        decodedDestination = decodeURIComponent(localDestination);
+      } catch {
+        decodedDestination = localDestination;
+      }
+      const absolute = resolve(repoRoot, dirname(file), decodedDestination);
+      const repoRelative = relative(repoRoot, absolute).replaceAll('\\', '/');
+      if (
+        repoRelative === '..' ||
+        repoRelative.startsWith('../') ||
+        !existsSync(absolute)
+      ) {
+        failures.push({
+          file,
+          line: index + 1,
+          candidate: destination,
+          missing: [repoRelative],
+        });
+      }
+    }
 
     for (const [, token] of line.matchAll(/`([^`\n]+)`/g)) {
       // Trim a trailing `:12` line cite, then trailing sentence punctuation
