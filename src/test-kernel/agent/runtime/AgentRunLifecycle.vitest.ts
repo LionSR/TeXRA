@@ -1144,6 +1144,59 @@ describe('finalizeRunTerminal', () => {
     }
   });
 
+  it('flushes display artifacts before publishing and untracking', async () => {
+    const executionId = 'exec-finalize-artifact-order';
+    const streamId = 'stream-finalize-artifact-order' as StreamTabId;
+    const streamStatus = new StreamStatusMachine();
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'test-agent',
+      'toolUse',
+      noopTrace,
+    );
+    const untrack = vi.fn();
+    let releaseFlush: (() => void) | undefined;
+    const flushArtifacts = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFlush = resolve;
+        }),
+    );
+    let resultSettled = false;
+    void handle.result.then(() => {
+      resultSettled = true;
+    });
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      const finalization = finalizeRunTerminal({
+        handle,
+        executions: { untrack },
+        streamStatus,
+        outcome: RUN_OUTCOME.COMPLETED,
+        isSubagent: false,
+        trace: noopTrace,
+        persistence: { kind: 'skip' },
+        flushArtifacts,
+      });
+
+      await vi.waitFor(() => expect(flushArtifacts).toHaveBeenCalledOnce());
+      expect(resultSettled).toBe(false);
+      expect(untrack).not.toHaveBeenCalled();
+
+      releaseFlush?.();
+      await finalization;
+
+      expect(resultSettled).toBe(true);
+      expect(untrack).toHaveBeenCalledExactlyOnceWith(executionId);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   it('settles and untracks once while reporting terminal metadata failure', async () => {
     const executionId = 'exec-finalize-metadata-failure';
     const streamId = 'stream-finalize-metadata-failure' as StreamTabId;
