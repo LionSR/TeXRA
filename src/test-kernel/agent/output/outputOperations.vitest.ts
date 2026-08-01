@@ -38,7 +38,7 @@ describe('tryOperation', () => {
       loggedType,
     }) => {
       const warn = vi.fn();
-      const logger = spiedTrace({ warn });
+      const logger = spiedTrace({ warn }, { strict: true });
 
       const result = await tryOperation(
         async () => {
