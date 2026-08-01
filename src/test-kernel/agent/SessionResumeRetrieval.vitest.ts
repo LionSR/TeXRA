@@ -677,6 +677,51 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
+  it('preserves a missing structured-output failure when teardown also fails', async () => {
+    const executionId =
+      'abc-flow-structured-output-and-teardown-failure' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-structured-output-and-teardown-failure' as StreamTabId;
+    const snapshot = {
+      ...buildToolUseResumeData(executionId, streamId),
+      agentConfig: AgentConfigSchema.parse({
+        ...CONFIG,
+        outputSchema: {
+          type: 'object',
+          properties: { answer: { type: 'string' } },
+          required: ['answer'],
+        },
+      }),
+    };
+    const session = createTestSession();
+    const teardownFailure = new Error('flow detachment failed');
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.COMPLETE);
+    const sharedSpy = vi
+      .spyOn(PersistedFlow.prototype, 'getShared')
+      .mockResolvedValue(snapshot.shared);
+
+    try {
+      await expect(
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          () => () => {
+            throw teardownFailure;
+          },
+          session,
+        ),
+      ).rejects.toThrow(
+        'Structured-output run completed without calling submit_output.',
+      );
+    } finally {
+      runSpy.mockRestore();
+      sharedSpy.mockRestore();
+    }
+  });
+
   it.each([
     {
       name: 'invalid shared state',
