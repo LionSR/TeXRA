@@ -6,16 +6,13 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
-import {
-  buildFailedCycleOutcome,
-  type FailedCycleFields,
-  withModelClient,
-} from '@agent/core/flows/CycleServices';
+import { withModelClient } from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
-import type { AgentFileLocation } from '@shared/schemas';
+import { buildFailedRetryInfo } from '@common/errors';
+import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -36,7 +33,7 @@ interface CyclePrepInput {
 type CycleOutcome =
   | { outcome: 'completed'; endTurn: boolean }
   | { outcome: 'cancelled' }
-  | ({ outcome: 'failed'; error: Error } & FailedCycleFields);
+  | { outcome: 'failed'; lastError: RetryErrorInfo };
 
 export class ResponseCycleNode<C = unknown> extends Node<
   ReflectionFlowShared,
@@ -116,9 +113,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       if (cycleShared.lastError) {
         return {
           outcome: 'failed',
-          error: new Error(cycleShared.lastError.message),
           lastError: cycleShared.lastError,
-          failureLogEmitted: cycleShared.failureLogEmitted ?? false,
         };
       }
       // A round is `cancelled` only when the run was genuinely interrupted —
@@ -141,7 +136,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
       recordRound(prepRes.run, prepRes.round);
       await this.services.onRoundFinalized(prepRes.run);
       const err = ensureError(error);
-      return { outcome: 'failed', error: err, ...buildFailedCycleOutcome(err) };
+      const { lastError } = buildFailedRetryInfo(err);
+      this.services.logger.error(`Response cycle failed: ${err.message}`);
+      return { outcome: 'failed', lastError };
     } finally {
       if (cycleShared.contextWindowRecoveryRequestId !== undefined) {
         modelHandler.clearCompactionRequest(
@@ -155,7 +152,9 @@ export class ResponseCycleNode<C = unknown> extends Node<
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
-    return { outcome: 'failed', error, ...buildFailedCycleOutcome(error) };
+    const { lastError } = buildFailedRetryInfo(error);
+    this.services.logger.error(`Response cycle failed: ${error.message}`);
+    return { outcome: 'failed', lastError };
   }
 
   async post(
@@ -168,9 +167,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     shared.outputLocation = prepRes.outputLocation;
 
     if (execRes.outcome === 'failed') {
-      if (!execRes.failureLogEmitted) {
-        logger.error(`Response cycle failed: ${execRes.error.message}`);
-      }
+      // Inner invocation failures are logged by RetryState. Exceptions from
+      // this outer cycle are logged where catch/execFallback convert them.
       shared.lastError = execRes.lastError;
       shared.continueRounds = false;
       shared.endTurn = false;
