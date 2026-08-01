@@ -176,6 +176,46 @@ describe('execution listing normalization', () => {
     );
   });
 
+  it('uses the durable marker after a host restart', async () => {
+    const firstPlatform = platform();
+    const workspaceStateGet = vi.spyOn(firstPlatform.workspaceState, 'get');
+
+    expect(await listExecutions()).toEqual([]);
+    expect(workspaceStateGet).toHaveBeenCalled();
+    workspaceStateGet.mockClear();
+
+    // Reinitialize the host while preserving its durable filesystem and state.
+    // The process-local memo is discarded with the Platform instance, so only
+    // the on-disk marker can prevent another legacy workspace-state probe.
+    await installPlatform(
+      {},
+      {
+        fs: firstPlatform.fs,
+        storage: firstPlatform.storage,
+        workspace: firstPlatform.workspace,
+        workspaceState: firstPlatform.workspaceState,
+      },
+    );
+    clearStoreCache();
+
+    expect(await listExecutions()).toEqual([]);
+    expect(workspaceStateGet).not.toHaveBeenCalled();
+  });
+
+  it('retries migration after the durable marker cannot be written', async () => {
+    const workspaceStateGet = vi.spyOn(platform().workspaceState, 'get');
+    const writeAtomic = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(new Error('marker unavailable'));
+
+    expect(await listExecutions()).toEqual([]);
+    expect(workspaceStateGet).toHaveBeenCalledTimes(1);
+
+    expect(await listExecutions()).toEqual([]);
+    expect(workspaceStateGet).toHaveBeenCalledTimes(2);
+    expect(writeAtomic).toHaveBeenCalledTimes(2);
+  });
+
   it('retries the legacy index migration after an unreadable index.json', async () => {
     const indexPath = `${RUNS_STORAGE_DIR}/index.json`;
     await StorageFS.ensureDir(RUNS_STORAGE_DIR);
@@ -189,6 +229,30 @@ describe('execution listing normalization', () => {
         {
           id,
           timestamp: '2026-07-15T13:03:00.000Z',
+          agentConfig: config('assistant'),
+        },
+      ]),
+    );
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'agent' }),
+    ]);
+    expect(await StorageFS.exists(indexPath)).toBe(false);
+  });
+
+  it('retries the legacy index migration after an invalid legacy shape', async () => {
+    const indexPath = `${RUNS_STORAGE_DIR}/index.json`;
+    await StorageFS.ensureDir(RUNS_STORAGE_DIR);
+    await StorageFS.write(indexPath, JSON.stringify({ entries: [] }));
+    expect(await listExecutions()).toEqual([]);
+
+    const id = 'abc781' as ExecutionId;
+    await StorageFS.write(
+      indexPath,
+      JSON.stringify([
+        {
+          id,
+          timestamp: '2026-07-15T13:04:00.000Z',
           agentConfig: config('assistant'),
         },
       ]),

@@ -5,19 +5,14 @@
  * and reading per-execution KV data (meta.json, config.json). This replaces
  * the monolithic `index.json` maintained by AgentHistoryManager.
  *
- * On first access, migrates legacy data (index.json and workspace state)
- * into per-execution KV stores, then deletes the legacy sources.
+ * A storage-boundary migration handles legacy history before the scan.
  */
 
 import pMap from 'p-map';
 
-import {
-  type AgentConfig,
-  AgentConfigSchema,
-} from '@agent/core/definition/AgentConfig';
+import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { platform, type Platform } from '@platform/platform';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
@@ -30,10 +25,9 @@ import {
   inspectExecutionLease,
   runWithInactiveExecutionLease,
 } from './executionLease';
+import { migrateLegacyExecutionHistoryOnce } from './legacyExecutionHistoryMigration';
 
 const CHANNEL = 'ExecutionListing';
-const INDEX_PATH = `${RUNS_STORAGE_DIR}/index.json`;
-const LEGACY_HISTORY_KEY = 'texra.agentHistory';
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 const EXECUTION_STORAGE_CONCURRENCY = 32;
 
@@ -89,49 +83,6 @@ export function isUserVisibleExecution(
   return entry.kind === 'agent' && entry.parentExecutionId === undefined;
 }
 
-// ============================================================================
-// Legacy migration state
-// ============================================================================
-
-/**
- * In-flight or completed legacy migration per workspace path. The promise is
- * the memo, so concurrent listings share one migration instead of racing two
- * backfills over the same legacy entries. An incomplete or failed migration is
- * forgotten so the next listing retries it.
- *
- * The memo describes the storage the current platform exposes, so installing a
- * different platform drops it — a host that re-initializes its platform gets a
- * fresh migration decision rather than one made against the previous storage.
- */
-const migrationsByWorkspace = new Map<string | undefined, Promise<boolean>>();
-let migrationPlatform: Platform | undefined;
-
-function migrateOncePerWorkspace(
-  workspacePath: string | undefined,
-): Promise<boolean> {
-  const currentPlatform = platform();
-  if (currentPlatform !== migrationPlatform) {
-    migrationPlatform = currentPlatform;
-    migrationsByWorkspace.clear();
-  }
-
-  const inFlight = migrationsByWorkspace.get(workspacePath);
-  if (inFlight) return inFlight;
-
-  const migration = migrateIfNeeded().then(
-    (complete) => {
-      if (!complete) migrationsByWorkspace.delete(workspacePath);
-      return complete;
-    },
-    (error: unknown) => {
-      migrationsByWorkspace.delete(workspacePath);
-      throw error;
-    },
-  );
-  migrationsByWorkspace.set(workspacePath, migration);
-  return migration;
-}
-
 /**
  * Read a storage directory, returning an empty array if it doesn't exist.
  * Other I/O errors propagate.
@@ -168,7 +119,7 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
  * cannot observe another host's writes or metadata updates reliably.
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  await migrateOncePerWorkspace(WorkspaceFS.getPath());
+  await migrateLegacyExecutionHistoryOnce(WorkspaceFS.getPath());
 
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
@@ -330,150 +281,4 @@ export async function deleteAllExecutions(): Promise<DeleteAllExecutionsResult> 
         : [],
     ),
   };
-}
-
-// ============================================================================
-// Legacy migration (runs once on first listExecutions() call)
-// ============================================================================
-
-async function migrateIfNeeded(): Promise<boolean> {
-  const indexMigrated = await migrateIndexJson();
-  const workspaceStateMigrated = await migrateWorkspaceState();
-  return indexMigrated && workspaceStateMigrated;
-}
-
-/** Migrate entries from executions/index.json into per-execution KV. */
-async function migrateIndexJson(): Promise<boolean> {
-  let raw: unknown;
-  try {
-    raw = await StorageFS.readJson<unknown>(INDEX_PATH);
-  } catch (error) {
-    // Nothing to migrate only when the legacy file is genuinely absent. Any
-    // other read failure (unreadable, malformed JSON) leaves history behind,
-    // so report it and let the next listing retry.
-    if (isFileNotFoundError(error)) return true;
-    logger.warn(
-      CHANNEL,
-      `Failed to read legacy ${INDEX_PATH}: ${toErrorMessage(error)}`,
-    );
-    return false;
-  }
-
-  if (!Array.isArray(raw)) {
-    logger.warn(
-      CHANNEL,
-      `Legacy ${INDEX_PATH} is not an array; leaving it untouched.`,
-    );
-    return true;
-  }
-  if (raw.length === 0) return true;
-
-  if (!(await backfillEntries(raw))) return false;
-
-  try {
-    await StorageFS.delete(INDEX_PATH);
-    return true;
-  } catch (error) {
-    logger.warn(
-      CHANNEL,
-      `Failed to delete legacy ${INDEX_PATH}: ${toErrorMessage(error)}`,
-    );
-    return false;
-  }
-}
-
-/** Migrate entries from workspace state into per-execution KV. */
-async function migrateWorkspaceState(): Promise<boolean> {
-  const workspace = platform().workspace;
-  const paths = [
-    workspace.getWorkspacePath(),
-    ...(workspace.getLegacyWorkspacePaths?.() ?? []),
-  ];
-  const storageKeys = [
-    ...new Set(paths.map((path) => getWorkspaceStorageKey(path))),
-  ];
-
-  let migratedAll = true;
-  for (const storageKey of storageKeys) {
-    const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
-    if (!Array.isArray(legacy) || legacy.length === 0) continue;
-
-    if (!(await backfillEntries(legacy))) {
-      migratedAll = false;
-      continue;
-    }
-
-    try {
-      await platform().workspaceState.update(storageKey, []);
-    } catch (error) {
-      migratedAll = false;
-      logger.warn(
-        CHANNEL,
-        `Failed to clear workspace state key: ${toErrorMessage(error)}`,
-      );
-    }
-  }
-  return migratedAll;
-}
-
-function getWorkspaceStorageKey(workspacePath: string | undefined): string {
-  return workspacePath
-    ? `${LEGACY_HISTORY_KEY}.${workspacePath}`
-    : LEGACY_HISTORY_KEY;
-}
-
-/**
- * Backfill per-execution KV from legacy history entries.
- * Only writes if meta.json doesn't already exist (no overwriting).
- */
-async function backfillEntries(entries: unknown[]): Promise<boolean> {
-  const migrated = await pMap(
-    entries,
-    async (rawEntry) => {
-      if (!rawEntry || typeof rawEntry !== 'object') return true;
-
-      const candidate = rawEntry as {
-        id?: ExecutionId;
-        timestamp?: string;
-        agentConfig?: AgentConfig;
-        config?: AgentConfig; // Legacy field name
-        parentExecutionId?: ExecutionId;
-      };
-
-      const rawConfig = candidate.agentConfig ?? candidate.config;
-      if (!candidate.id || !candidate.timestamp || !rawConfig) return true;
-      const executionId = candidate.id;
-      const timestamp = candidate.timestamp;
-
-      let normalizedConfig: AgentConfig;
-      try {
-        normalizedConfig = AgentConfigSchema.parse(rawConfig);
-      } catch {
-        logger.warn(CHANNEL, `Skipping malformed legacy entry ${candidate.id}`);
-        return true;
-      }
-
-      const result = await runWithInactiveExecutionLease(
-        executionId,
-        async () => {
-          const store = getExecutionStore(executionId);
-          // Don't overwrite existing KV data.
-          if (await store.exists('meta')) return;
-          await Promise.all([
-            store.writeMeta({
-              timestamp,
-              parentExecutionId: candidate.parentExecutionId,
-            }),
-            store.writeConfig(normalizedConfig),
-          ]);
-        },
-      );
-      return result.status === 'performed';
-    },
-    {
-      concurrency: EXECUTION_STORAGE_CONCURRENCY,
-      stopOnError: false,
-    },
-  );
-  return migrated.every(Boolean);
 }
