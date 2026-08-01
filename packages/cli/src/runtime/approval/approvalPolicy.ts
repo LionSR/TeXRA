@@ -184,33 +184,17 @@ export function immediateDecision(
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }
 
-/** Retry requests caused by exhausted credentials or auth failures need user
- *  action (key swap, top-up, re-login). Interactive runs must still surface the
- *  retry panel so the user can switch to personal API keys; non-interactive
- *  and auto-approval modes should not burn the retry budget. */
-function isUnretryableRetryRequest(
-  event: CliDecisionApprovalEvent,
-  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
-): boolean {
-  if (event !== 'showRetryRequest') return false;
-  const details = (payload as RetryPermission).errorDetails;
-  if (!details) return false;
-  if (isCredentialExhausted(details)) return true;
-  if (details.statusCode === 401 || details.statusCode === 403) return true;
-  return false;
-}
-
 export function immediateDecisionForApproval(
   event: CliDecisionApprovalEvent,
-  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
+  _payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
-  if (isUnretryableRetryRequest(event, payload)) {
-    if (approvalPromptAllowed(context)) return undefined;
+  if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
     markApprovalDenied(context);
     return {
       accepted: false,
-      userMessage: 'Retry skipped: credential exhausted or unauthorized.',
+      userMessage:
+        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     };
   }
   return immediateDecision(context);

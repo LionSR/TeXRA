@@ -10,8 +10,12 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
+import { Node } from '@agent/node';
+import type {
+  HostInteractions,
+  HostRetryRequest,
+} from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
@@ -100,20 +104,34 @@ describe('immediateDecisionForApproval', () => {
     ).toBeUndefined();
   });
 
-  it('denies exhausted credential retries outside interactive ask mode', () => {
-    expect(
-      immediateDecisionForApproval(
-        'showRetryRequest',
-        credentialExhaustedRetry,
-        context({ approvalPolicy: 'yolo' }),
-      ),
-    ).toMatchObject({ accepted: false });
+  it.each([
+    { approvalPolicy: 'yolo' as const, mode: 'interactive' as const },
+    { approvalPolicy: 'never' as const, mode: 'interactive' as const },
+    { approvalPolicy: 'ask' as const, mode: 'headless' as const },
+  ])(
+    'denies retries without an interactive human in $approvalPolicy/$mode mode',
+    ({ approvalPolicy, mode }) => {
+      expect(
+        immediateDecisionForApproval(
+          'showRetryRequest',
+          credentialExhaustedRetry,
+          context({ approvalPolicy, mode }),
+        ),
+      ).toMatchObject({ accepted: false });
+    },
+  );
 
+  it('denies an ordinary transient retry in yolo mode', () => {
     expect(
       immediateDecisionForApproval(
         'showRetryRequest',
-        credentialExhaustedRetry,
-        context({ mode: 'headless' }),
+        {
+          requestId: 'transient-retry',
+          streamId: 'test-stream' as StreamTabId,
+          operation: 'Model request',
+          errorMessage: 'stream dropped before first token',
+        },
+        context({ approvalPolicy: 'yolo' }),
       ),
     ).toMatchObject({ accepted: false });
   });
@@ -285,12 +303,78 @@ describe('requestRetry classification (#7331)', () => {
     });
   });
 
+  it('denies (not approves) a transient retry under yolo policy', async () => {
+    const result = await createHeadlessCliHostInteractions(
+      context({ approvalPolicy: 'yolo' }),
+    ).requestRetry?.(retryRequest);
+
+    expect(result).toEqual({
+      action: 'deny',
+      reason:
+        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+    });
+  });
+
   it('cancels a retry the interactive user explicitly rejects', async () => {
     const result = await createHeadlessCliHostInteractions(
       context({ approvalPrompt: async () => 'n not now' }),
     ).requestRetry?.(retryRequest);
 
     expect(result).toEqual({ action: 'cancel' });
+  });
+});
+
+class PermanentlyFailingProviderNode extends Node {
+  providerCalls = 0;
+
+  constructor(
+    private readonly interactions: HostInteractions,
+    private readonly streamId: StreamTabId,
+  ) {
+    super(3, 0);
+  }
+
+  override async exec(): Promise<never> {
+    this.providerCalls += 1;
+    throw new Error('permanent provider failure');
+  }
+
+  override async retryPrompt(): Promise<boolean> {
+    const result = await this.interactions.requestRetry?.({
+      requestId: `retry-${this.streamId}`,
+      streamId: this.streamId,
+      operation: 'Model invocation',
+      errorMessage: 'permanent provider failure',
+    });
+    return result?.action === 'retry';
+  }
+}
+
+describe('bounded yolo retry batches (#9532)', () => {
+  it('stops root and delegated failures after one automatic batch', async () => {
+    // The CLI installs one policy adapter on the session; root and delegated
+    // streams therefore make retry decisions through this same interaction.
+    const interactions = createHeadlessCliHostInteractions(
+      context({ approvalPolicy: 'yolo' }),
+    );
+    const root = new PermanentlyFailingProviderNode(
+      interactions,
+      'root@deepseekT#retry' as StreamTabId,
+    );
+    const delegated = new PermanentlyFailingProviderNode(
+      interactions,
+      'review@deepseekT#retry' as StreamTabId,
+    );
+
+    await expect(root._exec(undefined)).rejects.toThrow(
+      'permanent provider failure',
+    );
+    await expect(delegated._exec(undefined)).rejects.toThrow(
+      'permanent provider failure',
+    );
+
+    expect(root.providerCalls).toBe(3);
+    expect(delegated.providerCalls).toBe(3);
   });
 });
 
