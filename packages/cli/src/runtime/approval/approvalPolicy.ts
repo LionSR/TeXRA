@@ -203,11 +203,13 @@ export function immediateDecisionForApproval(
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
-    if (isCredentialRetryRequest(event, payload)) markApprovalDenied(context);
+    const credentialRetry = isCredentialRetryRequest(event, payload);
+    if (credentialRetry) markApprovalDenied(context);
     return {
       accepted: false,
-      userMessage:
-        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
+      userMessage: credentialRetry
+        ? 'Retry skipped: credential exhausted or unauthorized.'
+        : 'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     };
   }
   return immediateDecision(context);
