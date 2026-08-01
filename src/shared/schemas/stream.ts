@@ -86,9 +86,8 @@ const ExecutionMetaBaseSchema = z.object({
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
   /**
-   * The transcript stream this execution's data lives under, once resolved.
-   * Decide-once-carry-as-data cache for the execution stream resolver: absent
-   * on executions whose stream wasn't resolved yet (or predate this field).
+   * The transcript stream this execution's data lives under. Current runs
+   * write it at registration; it may be absent on historical executions.
    */
   streamId: StreamTabIdSchema.optional(),
 });

@@ -107,9 +107,13 @@ export async function registerExecution(
   executionId: ExecutionId,
   config: AgentConfig,
   agentName: string,
-  parentExecutionId?: ExecutionId,
-  category?: string,
+  options: {
+    readonly streamId: StreamTabId;
+    readonly parentExecutionId?: ExecutionId;
+    readonly category?: string;
+  },
 ): Promise<void> {
+  const { streamId, parentExecutionId, category } = options;
   await acquireFreshExecutionLease(executionId);
   const runWithOwnership = captureOwnedExecutionLease(executionId);
   await runWithOwnership(async () => {
@@ -118,6 +122,7 @@ export async function registerExecution(
       const store = getExecutionStore(executionId);
       const meta = {
         timestamp,
+        streamId,
         parentExecutionId,
         ...(category ? { category } : {}),
       };
@@ -331,19 +336,14 @@ export async function writeSessionDescription(
   );
 }
 
-/**
- * Cache the resolved transcript stream for an execution, once
- * `resolvePersistedStreamIdForExecution` (`executionStreamResolver.ts`) has
- * actually decided it via its meta-scan, so later resolutions for the same
- * executionId can skip straight to this field instead of re-scanning.
- */
-export async function writeExecutionStreamId(
+/** Persist a confirmed stream identity for a pre-streamId execution record. */
+export async function writeLegacyExecutionStreamId(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<void> {
   await persistSupplementaryMetaFieldsBestEffort(
     executionId,
     { streamId },
-    'execution stream id',
+    'legacy execution stream id',
   );
 }
