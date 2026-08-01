@@ -166,9 +166,9 @@ export function ConversationRegion({
     staticTranscriptRows: staticTranscriptRows ?? 0,
   });
   // The subagent/todos panels live at the bottom of the same vertical column.
-  // Reserve only as many rows as the panels actually need. Unfocused panels
-  // use at most half the transcript, except for the one row needed to keep a
-  // multi-child list visible in a short terminal.
+  // Reserve only as many rows as the panels actually need. Child sessions stay
+  // behind the status-bar navigation affordance until the list has focus, so a
+  // background workflow cannot expand over the conversation by default.
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
