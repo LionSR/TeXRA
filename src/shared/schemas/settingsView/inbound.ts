@@ -280,12 +280,12 @@ const SetInlineCriticismEnabledMessageSchema = enabledFlag(
   CMD.SET_INLINE_CRITICISM_ENABLED,
 );
 
-// Generic catalog-driven state-setting write. One flat branch (single outer
-// discriminator on `command`)
-// carrying the canonical `STATE_SETTINGS` key and a loose value. Per-value
-// validation happens in the backend handler via the entry's own schema
-// (`stateSettingByKey(key).schema`), so the union stays a plain flat branch and
-// never grows a nested per-key discriminator (which would crash the dispatcher).
+// Generic catalog-driven scalar-setting write. One flat branch (single outer
+// discriminator on `command`) carries a canonical settings key and a loose
+// value. Per-value validation happens in the backend handler via the entry's
+// own schema (`settingsViewSettingByKey(key).schema`), so the union stays a
+// plain flat branch and never grows a nested per-key discriminator (which would
+// crash the dispatcher).
 const UpdateStateSettingMessageSchema = z.object({
   command: z.literal(CMD.UPDATE_STATE_SETTING),
   key: z.string().min(1),
