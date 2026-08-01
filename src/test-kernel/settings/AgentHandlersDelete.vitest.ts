@@ -69,7 +69,7 @@ vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
     getDirectory: vi.fn(),
   },
 }));
-vi.mock('@frontend/ui/errorHandlingUtils', () => ({
+vi.mock('@frontend/ui/dialogs', () => ({
   confirmModal: async (message: string, actionLabel: string) => {
     const choice = await mocks.showWarningMessage(
       message,
@@ -78,6 +78,8 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
     );
     return choice === actionLabel;
   },
+}));
+vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: vi.fn(),
   showLoggedMessage: vi.fn(),
 }));
