@@ -16,8 +16,6 @@ import type {
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { buildFailedRetryInfo } from '@common/errors';
-import type { RetryErrorInfo } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 
 /**
@@ -121,18 +119,4 @@ export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
   readonly session?: IToolUseSession;
   /** Callback when a queued follow-up is consumed (clears UI display). */
   readonly onFollowUpConsumed?: () => void;
-}
-
-/**
- * The retry/logging fields every cycle node's `{ outcome: 'failed', ... }`
- * result carries, alongside any node-specific failure context.
- */
-export interface FailedCycleFields {
-  readonly failureLogEmitted: boolean;
-  readonly lastError: RetryErrorInfo;
-}
-
-export function buildFailedCycleOutcome(error: unknown): FailedCycleFields {
-  const { lastError } = buildFailedRetryInfo(error);
-  return { failureLogEmitted: false, lastError };
 }
