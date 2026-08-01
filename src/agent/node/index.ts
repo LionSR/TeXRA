@@ -120,8 +120,9 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
     throw error;
   }
   /**
-   * Hook called when all auto-retries are exhausted.
-   * Return true to restart the auto-retry loop, false to proceed to execFallback.
+   * Hook called when the automatic retry batch is exhausted or declined.
+   * Return true to grant one additional attempt, false to proceed to execFallback.
+   * A failed additional attempt calls this hook again.
    *
    * Default implementation returns false (no manual retry).
    * Override this for manual retry prompts (e.g., showing UI to user).
@@ -177,49 +178,72 @@ class Node<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
     }
     const effectiveMaxRetries = Math.max(1, this.maxRetries);
 
+    // Track the last exec error so we can forward it to execFallback when
+    // the abort signal fires during the inter-retry delay (p-retry would
+    // otherwise rethrow signal.reason, discarding the original failure).
+    let lastExecError: Error | undefined;
+    let attemptThrew = false;
+    const runAttempts = async (retries: number): Promise<unknown> => {
+      attemptThrew = false;
+      return await pRetry(
+        async () => {
+          // Throw AbortError at each attempt start so p-retry surfaces it
+          // immediately (before any delay) and skips onFailedAttempt.
+          if (this.signal?.aborted)
+            throw new AbortError('Operation cancelled by user');
+          try {
+            return await this.exec(prepRes);
+          } catch (error) {
+            attemptThrew = true;
+            throw error;
+          }
+        },
+        {
+          retries,
+          minTimeout: this.wait * 1000,
+          factor: 1, // linear (fixed) delay to preserve existing behaviour
+          randomize: false, // explicit: default is false; no jitter on fixed delays
+          signal: this.signal, // aborts an attempt or inter-retry delay early
+          shouldRetry: ({ error }) => {
+            lastExecError = error;
+            if (this.signal?.aborted) return false;
+            return this.shouldAutoRetry(error);
+          },
+        },
+      );
+    };
+
+    let retryError: Error;
+    try {
+      return await runAttempts(effectiveMaxRetries - 1);
+    } catch (e) {
+      // User cancellation surfaces here as p-retry's aborted-delay rejection
+      // (signal.reason) or as the unwrapped error from our pre-attempt check
+      // (p-retry rethrows an AbortError's originalError, not the AbortError).
+      // Forward the recorded exec failure when one exists.
+      if (this.signal?.aborted) {
+        return await this.execFallback(prepRes, lastExecError ?? (e as Error));
+      }
+      retryError = e as Error;
+    }
+
     for (;;) {
-      // Track the last exec error so we can forward it to execFallback when
-      // the abort signal fires during the inter-retry delay (p-retry would
-      // otherwise rethrow signal.reason, discarding the original failure).
-      let lastExecError: Error | undefined;
+      const shouldRetry = await this.retryPrompt(prepRes, retryError);
+      if (!shouldRetry || this.signal?.aborted) {
+        return await this.execFallback(prepRes, retryError);
+      }
+
       try {
-        return await pRetry(
-          () => {
-            // Throw AbortError at each attempt start so p-retry surfaces it
-            // immediately (before any delay) and skips onFailedAttempt.
-            if (this.signal?.aborted)
-              throw new AbortError('Operation cancelled by user');
-            return this.exec(prepRes);
-          },
-          {
-            retries: effectiveMaxRetries - 1,
-            minTimeout: this.wait * 1000,
-            factor: 1, // linear (fixed) delay to preserve existing behaviour
-            randomize: false, // explicit: default is false; no jitter on fixed delays
-            signal: this.signal, // aborts the inter-retry delay early
-            shouldRetry: ({ error }) => {
-              lastExecError = error;
-              if (this.signal?.aborted) return false;
-              return this.shouldAutoRetry(error);
-            },
-          },
-        );
+        return await runAttempts(0);
       } catch (e) {
-        // User cancellation surfaces here as p-retry's aborted-delay rejection
-        // (signal.reason) or as the unwrapped error from our pre-attempt check
-        // (p-retry rethrows an AbortError's originalError, not the AbortError).
-        // Forward the recorded exec failure when one exists.
+        const approvedError = e as Error;
         if (this.signal?.aborted) {
           return await this.execFallback(
             prepRes,
-            lastExecError ?? (e as Error),
+            attemptThrew ? approvedError : retryError,
           );
         }
-        // No abort: auto-retries are exhausted or shouldAutoRetry declined.
-        // Offer the manual retry prompt before falling back.
-        const shouldRetry = await this.retryPrompt(prepRes, e as Error);
-        if (shouldRetry) continue;
-        return await this.execFallback(prepRes, e as Error);
+        retryError = approvedError;
       }
     }
   }
