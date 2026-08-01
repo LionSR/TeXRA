@@ -2,10 +2,10 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { withModelClient } from '@agent/core/flows/CycleServices';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 // Third-party imports
 import type { GoogleGenAI } from '@google/genai';
@@ -90,14 +90,15 @@ describe('Google client refresh', () => {
       });
       return replacement;
     };
-    const services = await withModelClient({}, handler);
+    const cell = testModelCell<GoogleGenAI>(handler);
+    await cell.getClient();
     const controller = new AbortController();
 
-    const refresh = services.refreshClient?.(undefined, controller.signal);
+    const rebind = cell.rebind(undefined, controller.signal);
     controller.abort(new Error('Retry preparation cancelled.'));
     finishRefresh?.();
 
-    await expect(refresh).rejects.toThrow('Retry preparation cancelled.');
-    expect(services.client).toBe(initial);
+    await expect(rebind).rejects.toThrow('Retry preparation cancelled.');
+    await expect(cell.getClient()).resolves.toBe(initial);
   });
 });

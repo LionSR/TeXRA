@@ -29,7 +29,7 @@ interface StreamScopedPayload {
 export interface SetActiveStreamPayload {
   streamId: StreamTabId | null;
   agentCategory?: AgentCategory;
-  /** Hint whether this is a remote agent (for UI display before TaskState is set) */
+  /** Hint whether this is a remote agent (for UI display before the run config arrives) */
   isRemote?: boolean;
   /**
    * When true, register the stream (state, logs, hints) but do NOT switch the

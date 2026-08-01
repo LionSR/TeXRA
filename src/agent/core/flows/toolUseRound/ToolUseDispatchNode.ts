@@ -609,7 +609,7 @@ export class ToolUseDispatchNode<C> extends Node<
     // For handlers that carry provider-side reasoning across multiple parallel
     // calls, batch all tool calls into a single message to preserve thought
     // signatures / reasoning_content.
-    const { modelHandler } = this.services;
+    const modelHandler = this.services.modelCell.handler;
     const shouldBatch =
       allResults.length > 1 &&
       modelHandler.requiresBatchedParallelToolResults &&
@@ -631,10 +631,11 @@ export class ToolUseDispatchNode<C> extends Node<
         );
       shared.messages.push(...followUpMsgs);
     } else {
+      const client = await this.services.modelCell.getClient();
       for (const [index, execResult] of allResults.entries()) {
         const { sanitizedResult, attachments } = execResult.extracted;
         const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(
-          this.services.client,
+          client,
           execResult.call,
           sanitizedResult,
           attachments,

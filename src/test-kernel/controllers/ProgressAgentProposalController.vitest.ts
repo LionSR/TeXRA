@@ -33,8 +33,8 @@ describe('ProgressAgentProposalController', () => {
     const resolved: unknown[] = [];
     const controller = new ProgressAgentProposalController({
       getPendingProposal: () => proposal,
-      restoreTaskState: async (taskState) => {
-        restored.push(taskState);
+      restoreRunConfig: async (config) => {
+        restored.push(config);
         return true;
       },
       settleProposal: (proposalId, result) => {
@@ -54,26 +54,18 @@ describe('ProgressAgentProposalController', () => {
       { proposalId: 'proposal-1', result: { action: 'setup' } },
     ]);
     assert.deepEqual(restored[0], {
-      agentConfig: {
-        agentCategory: AgentCategory.Workflow,
-        agent: 'proofreader',
-        model: 'gemini31p',
-        instruction: 'Check the paper.',
-        inputFiles: ['main.tex', 'appendix.tex'],
-        contextFiles: ['refs.bib'],
-        mediaFiles: [],
-        outputFiles: ['main.review.tex'],
-        toolConfig: DEFAULT_TOOL_CONFIG,
-        editedFile: null,
-        editedFiles: [],
-        memories: [],
-      },
-      activeFiles: {
-        input: true,
-        context: true,
-        media: false,
-        output: true,
-      },
+      agentCategory: AgentCategory.Workflow,
+      agent: 'proofreader',
+      model: 'gemini31p',
+      instruction: 'Check the paper.',
+      inputFiles: ['main.tex', 'appendix.tex'],
+      contextFiles: ['refs.bib'],
+      mediaFiles: [],
+      outputFiles: ['main.review.tex'],
+      toolConfig: DEFAULT_TOOL_CONFIG,
+      editedFile: null,
+      editedFiles: [],
+      memories: [],
     });
   });
 
@@ -81,7 +73,7 @@ describe('ProgressAgentProposalController', () => {
     let missingProposalId = '';
     const controller = new ProgressAgentProposalController({
       getPendingProposal: () => undefined,
-      restoreTaskState: async () => {
+      restoreRunConfig: async () => {
         throw new Error('restore should not run');
       },
       settleProposal: () => {
@@ -106,7 +98,7 @@ describe('ProgressAgentProposalController', () => {
     const resolved: unknown[] = [];
     const controller = new ProgressAgentProposalController({
       getPendingProposal: () => createWorkflowProposal(),
-      restoreTaskState: async () => false,
+      restoreRunConfig: async () => false,
       settleProposal: (proposalId, result) => {
         resolved.push({ proposalId, result });
       },
@@ -134,7 +126,7 @@ describe('ProgressAgentProposalController', () => {
     const resolved: unknown[] = [];
     const controller = new ProgressAgentProposalController({
       getPendingProposal: () => createWorkflowProposal(),
-      restoreTaskState: async () => {
+      restoreRunConfig: async () => {
         throw new Error('restore should not run');
       },
       settleProposal: (proposalId, result) => {
@@ -175,7 +167,7 @@ describe('ProgressAgentProposalController', () => {
     const resolved: { result: Record<string, unknown> }[] = [];
     const controller = new ProgressAgentProposalController({
       getPendingProposal: () => createWorkflowProposal(),
-      restoreTaskState: async () => {
+      restoreRunConfig: async () => {
         throw new Error('restore should not run');
       },
       settleProposal: (_proposalId, result) => {

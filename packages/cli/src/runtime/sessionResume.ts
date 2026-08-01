@@ -6,10 +6,9 @@
 // canonical shared state plus its resume identity. Only tool-use agents
 // resume this way — workflows are not continuable here.
 
-import { isToolUseTaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -43,8 +42,9 @@ export async function resolveCliResume(
   }
   if (!config) return { type: 'not-found' };
 
-  const taskState = agentConfigToTaskState(config);
-  if (!isToolUseTaskState(taskState)) return { type: 'workflow' };
+  if (config.agentCategory !== AgentCategory.ToolUse) {
+    return { type: 'workflow' };
+  }
 
   let resume: ToolUseResumeData | null;
   try {

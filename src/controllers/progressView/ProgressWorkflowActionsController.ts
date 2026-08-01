@@ -1,9 +1,6 @@
 // Local imports
-import {
-  isWorkflowTaskState,
-  type TaskState,
-  type WorkflowTaskState,
-} from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type {
   OutputFileInfo,
   RoundIndexed,
@@ -34,7 +31,7 @@ export interface WorkflowFileOperationRequest {
 }
 
 interface ProgressWorkflowActionsState {
-  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getRunConfig(stream: StreamTabId): AgentConfig | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
@@ -53,7 +50,7 @@ export class ProgressWorkflowActionsController {
   constructor(private readonly deps: ProgressWorkflowActionsControllerDeps) {}
 
   async diffStream(stream: StreamTabId): Promise<void> {
-    await this.withWorkflowTaskState(stream, async (taskState) => {
+    await this.withWorkflowConfig(stream, async (config) => {
       // Round keys are non-negative integers by construction (enforced by
       // the shared RoundKeySchema at every write into the snapshot store's
       // accumulator — see `@shared/schemas/roundIndexed.ts`), so this record
@@ -66,11 +63,11 @@ export class ProgressWorkflowActionsController {
         : undefined;
 
       await this.deps.runDiff({
-        agent: taskState.agentConfig.agent,
-        model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFiles[0] ?? '',
-        outputFiles: taskState.agentConfig.outputFiles,
-        outputFilesActive: taskState.activeFiles.output,
+        agent: config.agent,
+        model: config.model,
+        inputFile: config.inputFiles[0] ?? '',
+        outputFiles: config.outputFiles,
+        outputFilesActive: config.outputFiles.length > 0,
         streamId: stream,
         runId: this.deps.state.getExecutionId(stream),
         outputsByRound,
@@ -82,15 +79,15 @@ export class ProgressWorkflowActionsController {
     stream: StreamTabId,
     operation: WorkflowFileOperation,
   ): Promise<void> {
-    await this.withWorkflowTaskState(stream, async (taskState) => {
-      const outputFiles = this.resolveOutputFiles(stream, taskState);
+    await this.withWorkflowConfig(stream, async (config) => {
+      const outputFiles = this.resolveOutputFiles(stream, config);
       const executionId = this.deps.state.getExecutionId(stream);
 
       await this.deps.runFileOperation(operation, {
         streamId: stream,
-        agent: taskState.agentConfig.agent,
-        model: taskState.agentConfig.model,
-        inputFile: taskState.agentConfig.inputFiles[0] ?? '',
+        agent: config.agent,
+        model: config.model,
+        inputFile: config.inputFiles[0] ?? '',
         outputFiles,
         ...(executionId && { executionId }),
         skipProgressViewClear: true,
@@ -98,27 +95,23 @@ export class ProgressWorkflowActionsController {
     });
   }
 
-  private async withWorkflowTaskState(
+  private async withWorkflowConfig(
     stream: StreamTabId,
-    action: (taskState: WorkflowTaskState) => Promise<void>,
+    action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
-    const taskState = this.deps.state.getTaskState(stream);
-    if (!taskState || !isWorkflowTaskState(taskState)) return;
+    const config = this.deps.state.getRunConfig(stream);
+    if (!config || config.agentCategory !== AgentCategory.Workflow) return;
 
-    await action(taskState);
+    await action(config);
   }
 
   private resolveOutputFiles(
     stream: StreamTabId,
-    taskState: WorkflowTaskState,
+    config: AgentConfig,
   ): string[] {
     const generatedPaths = this.deps.state.getKnownWorkspaceOutputPaths(stream);
     return [
-      ...new Set(
-        [...taskState.agentConfig.outputFiles, ...generatedPaths].filter(
-          Boolean,
-        ),
-      ),
+      ...new Set([...config.outputFiles, ...generatedPaths].filter(Boolean)),
     ];
   }
 }

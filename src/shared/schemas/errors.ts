@@ -128,6 +128,16 @@ const ProviderErrorObjectSchema = z.object({
    *  for the pre-refactor combined boolean check. */
   exhaustionReason: ExhaustionReasonSchema.optional(),
   requestId: z.string().optional(),
+  /** True when the underlying failure was "no usable credential", detected via
+   *  the typed marker at its one throw site. Carried explicitly because the
+   *  retry-state flatten drops the Error object (and its Symbol metadata), and
+   *  the classifier is deliberately marker-only for this kind. */
+  missingApiKey: z.literal(true).optional(),
+  /** True when the failure was an internally-tagged context-window overflow.
+   *  Same rationale as `missingApiKey`: internal preflight throws carry the
+   *  verdict as a typed marker, and their messages match no provider prose
+   *  pattern, so the flatten must carry it explicitly. */
+  contextWindow: z.literal(true).optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
   /** Tail of text generated before a streaming failure. Present when the

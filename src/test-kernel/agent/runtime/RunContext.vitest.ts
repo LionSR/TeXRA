@@ -16,36 +16,39 @@ import { createRunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
+import { testModelCell } from '../modelCellTestUtils';
+
 describe('RunContext', () => {
-  it('reads the current model from a live provider', () => {
-    let currentModel: string | undefined = 'deepseekT';
+  it('reads the current model through the run model cell', () => {
     const runScope = createRunScope({
       streamId: 'live-model-stream' as StreamTabId,
       executionId: 'live-model-execution' as ExecutionId,
       agentName: 'test-agent',
       session: {} as SessionHandle,
     });
-    const context = createRunContext({
-      runScope,
-      modelSource: 'live',
-      model: 'fallback-model',
-      getModel: () => currentModel,
-    });
+    const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
+    const context = createRunContext({ runScope, modelCell });
 
     expect(Object.getOwnPropertyDescriptor(context, 'model')?.get).toBeTypeOf(
       'function',
     );
     expect(context.model).toBe('deepseekT');
 
-    currentModel = 'sonnet46T';
+    modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
     const resolved = withRunContext(context, () => useRunContext().model);
 
     expect(resolved).toBe('sonnet46T');
+  });
 
-    currentModel = undefined;
+  it('reads a bare context model from its one-shot cell', () => {
+    const context = createRunContext({
+      streamId: 'bare-model-stream' as StreamTabId,
+      modelCell: Object.freeze({ modelId: 'gpt54' }),
+    });
 
-    expect(context.model).toBe('fallback-model');
+    expect(context.kind).toBe('bare');
+    expect(context.model).toBe('gpt54');
   });
 
   it('preserves the exact run scope on launch contexts', () => {
@@ -58,8 +61,7 @@ describe('RunContext', () => {
     });
     const context = createRunContext({
       runScope,
-      modelSource: 'live',
-      getModel: () => 'deepseekT',
+      modelCell: Object.freeze({ modelId: 'deepseekT' }),
     });
 
     expect(Object.isFrozen(runScope)).toBe(true);

@@ -46,6 +46,25 @@ describe('terminalResultToast (SDK Step 7d PR 7)', () => {
     expect(unexpected).toEqual({ type: 'error', payload: { message: 'Boom' } });
   });
 
+  it('maps context-window to an error toast, defaulting to remediation copy', () => {
+    const withMessage = terminalResultToast(
+      result({
+        error: { kind: 'context-window', message: 'Conversation too long.' },
+      }),
+    );
+    expect(withMessage).toEqual({
+      type: 'error',
+      payload: { message: 'Conversation too long.' },
+    });
+
+    const withoutMessage = terminalResultToast(
+      result({ error: { kind: 'context-window' } }),
+    );
+    if (withoutMessage?.type !== 'error') throw new Error('expected error');
+    expect(withoutMessage.payload.message).toContain('context window');
+    expect(withoutMessage.payload.message).toContain('reduce attached files');
+  });
+
   it('shows no toast for subagent runs, aborts, or success', () => {
     expect(
       terminalResultToast(

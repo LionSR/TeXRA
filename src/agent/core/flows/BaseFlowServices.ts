@@ -1,7 +1,4 @@
 import type { AgentTrace } from '@agent/trace';
-import type { IModelHandler } from '@agent/types/IModelHandler';
-import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   AgentPrompt,
@@ -9,6 +6,7 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
+import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { RunScope } from '@agent/runtime/RunScope';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
@@ -19,7 +17,11 @@ export type RoundFinalizedCallback = (
 export interface AgentCore<C = unknown> {
   /** Run identity and owning session; the same frozen object the ambient `RunContext` carries. */
   readonly runScope: RunScope;
-  modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>;
+  /**
+   * The run's live model handler and model id. Shared by reference with the
+   * launch context, so a mid-run switch is visible here without a mirror.
+   */
+  readonly modelCell: ModelCell<C>;
   config: AgentConfig;
   setting: AgentSetting;
   prompt: AgentPrompt;

@@ -1,11 +1,14 @@
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDiskFullError } from './errorPredicates';
-import { isUserAbort } from './sdkErrorUtils';
+import {
+  hasMissingApiKeyErrorMarker,
+  isContextWindowError,
+  isUserAbort,
+} from './sdkErrorUtils';
 
 export type AgentErrorKind =
-  'abort' | 'disk-full' | 'missing-api-key' | 'unexpected';
+  'abort' | 'context-window' | 'disk-full' | 'missing-api-key' | 'unexpected';
 
 /**
  * Canonical outcome of a run terminated by a thrown error, per error kind.
@@ -15,20 +18,25 @@ export type AgentErrorKind =
 export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
   {
     abort: RUN_OUTCOME.CANCELLED,
+    'context-window': RUN_OUTCOME.FAILED,
     'disk-full': RUN_OUTCOME.FAILED,
     'missing-api-key': RUN_OUTCOME.FAILED,
     unexpected: RUN_OUTCOME.FAILED,
   };
 
-/** Classify agent execution errors for consistent runtime notification policy. */
+/**
+ * Classify agent execution errors for consistent runtime notification policy.
+ *
+ * Every kind is decided by a typed signal — an SDK/abort predicate, an errno,
+ * or a `Symbol.for` marker attached at the throw site. Only
+ * `isContextWindowError` still consults message text, and only for the
+ * third-party providers whose SDKs expose no error code for the overflow.
+ */
 export function classifyAgentError(err: unknown): AgentErrorKind {
   if (isUserAbort(err)) return 'abort';
   if (isDiskFullError(err)) return 'disk-full';
-
-  const msg = toErrorMessage(err);
-  if (msg.includes('Missing API key') || msg.includes('No API key found')) {
-    return 'missing-api-key';
-  }
+  if (hasMissingApiKeyErrorMarker(err)) return 'missing-api-key';
+  if (isContextWindowError(err)) return 'context-window';
 
   return 'unexpected';
 }

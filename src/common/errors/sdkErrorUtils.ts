@@ -20,6 +20,8 @@ export {
   attachProviderError,
   attachContextWindowError,
   hasContextWindowErrorMarker,
+  attachMissingApiKeyError,
+  hasMissingApiKeyErrorMarker,
 } from './sdkError/errorMetadata';
 
 export { handleStreamingFailure } from './sdkError/streamFailure';

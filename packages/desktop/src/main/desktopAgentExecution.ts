@@ -6,11 +6,11 @@ import type { AgentTrace } from '@agent/trace';
 import { computeAgentOptionsData, getAgent } from '@agent/index';
 import { createChannelTrace } from '@agent/trace';
 import type { SessionStores } from '@agent/storage';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import type { TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
@@ -481,7 +481,7 @@ export class DesktopProgressBridge {
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
       state: {
-        getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+        getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
         getExecutionId: (stream) => this.getStreamExecutionId(stream),
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getKnownWorkspaceOutputPaths: (stream) =>
@@ -543,7 +543,7 @@ export class DesktopProgressBridge {
         getAgent(agent, AgentCategory.ToolUse)?.category,
       loadModelOptions: () => computeModelOptionsData(),
       state: {
-        getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+        getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
         getCompileFailures: (stream) =>
           this.state.snapshots.getCompileFailures(stream),
@@ -611,16 +611,14 @@ export class DesktopProgressBridge {
         await this.options.host.showInfoMessage(plan.message);
         return;
       case 'restoreState': {
-        const restored = this.restoreTaskState(plan.taskState);
+        const restored = this.restoreRunConfig(plan.config);
         if (!restored) {
           await this.options.host.showErrorMessage('Failed to restore state');
           return;
         }
         if (!plan.executeImmediately) return;
 
-        const validated = validateExecutionRequest({
-          config: plan.taskState.agentConfig,
-        });
+        const validated = validateExecutionRequest({ config: plan.config });
         if (!validated.valid) {
           this.logger.error('Invalid desktop follow-up execution request', {
             data: validated.issue,
@@ -764,7 +762,7 @@ export class DesktopProgressBridge {
     return new ProgressViewHost({
       run: {
         state: {
-          getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+          getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
           getExecutionId: (stream) => this.getStreamExecutionId(stream),
         },
         executeAgent: (request) => {
@@ -820,7 +818,7 @@ export class DesktopProgressBridge {
       agentProposal: {
         getPendingProposal: (proposalId) =>
           this.backend.approvalHandlers.proposal.get(proposalId),
-        restoreTaskState: async (taskState) => this.restoreTaskState(taskState),
+        restoreRunConfig: async (config) => this.restoreRunConfig(config),
         settleProposal: (proposalId, result) => {
           const resolved = this.hostInteractions.submitProposalDecision(
             proposalId,
@@ -930,9 +928,9 @@ export class DesktopProgressBridge {
         },
       },
       session: this.session,
-      getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
-      restoreTaskState: async (taskState) => {
-        const restored = this.restoreTaskState(taskState);
+      getRunConfig: (stream) => this.state.snapshots.getRunConfig(stream),
+      restoreRunConfig: async (config) => {
+        const restored = this.restoreRunConfig(config);
         if (!restored) {
           await this.options.host.showErrorMessage('Failed to restore state');
         }
@@ -1247,10 +1245,10 @@ export class DesktopProgressBridge {
     stream: StreamTabId,
     editedFile: string,
   ): DesktopLatexdiffWorkspaceScan | undefined {
-    const taskState = this.state.snapshots.getTaskState(stream);
-    if (!taskState) return undefined;
+    const config = this.state.snapshots.getRunConfig(stream);
+    if (!config) return undefined;
 
-    const { agent, model, inputFiles, outputFiles } = taskState.agentConfig;
+    const { agent, model, inputFiles, outputFiles } = config;
     const inputFile = inputFiles.at(0) ?? editedFile;
     // Thread the run's output files so multi-document runs resolved via the
     // run-dir / workspace scan diff every output, not just the primary input.
@@ -1317,16 +1315,16 @@ export class DesktopProgressBridge {
   }
 
   /**
-   * Restore a task's setup into the main view: builds the host-neutral
+   * Restore a run's setup into the main view: builds the host-neutral
    * persisted-state snapshot and routes the renderer there. Shared by the
-   * in-session "restore this proposal" flow (`agentProposal.restoreTaskState`
+   * in-session "restore this proposal" flow (`agentProposal.restoreRunConfig`
    * above) and desktop history's "Setup" action (settings IPC), which mirrors
    * the extension's `texra.restoreState` command.
    */
-  restoreTaskState(taskState: TaskState): boolean {
+  restoreRunConfig(config: AgentConfig): boolean {
     let state: MainViewPersistedState;
     try {
-      state = buildMainViewState(taskState);
+      state = buildMainViewState(config);
     } catch (error) {
       this.logger.error('Failed to build main-view state for restore', {
         data: toLogData(error),

@@ -4,6 +4,7 @@ import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { testRunScope, withTestRunContext } from './progressTestUtils';
+import { testModelCell } from './modelCellTestUtils';
 
 function toolNames(tools: readonly { name: string }[] | undefined): string[] {
   return tools?.map((tool) => tool.name) ?? [];
@@ -16,12 +17,14 @@ function responseServices({
 }) {
   return {
     toolRegistry: getDefaultToolRegistry(),
-    modelHandler: {
+    modelCell: testModelCell({
       config: { provider: 'openai', fullName: 'test-model' },
+      getClient: async () => ({}),
+      getCredentialRouteForClient: () => undefined,
       getWireRouteKey: () => 'openai:test-route',
       getModelRetryRouteKey: () => 'openai:test-route:model',
       capabilities: { supportsFunctionCalling },
-    },
+    }),
     setting: {
       tools: [
         { name: 'bash' },
@@ -94,17 +97,18 @@ describe('response cycle tool visibility', () => {
       },
     });
     node.setServices({
-      client: {},
       config: {},
       logger: { debug: vi.fn(), warn: vi.fn() },
-      modelHandler: {
+      modelCell: testModelCell({
         config: { provider: 'openai', fullName: 'test-model' },
         createResponse,
+        getClient: async () => ({}),
+        getCredentialRouteForClient: () => undefined,
         getWireRouteKey: () => 'openai:test-route',
         getModelRetryRouteKey: () => 'openai:test-route:model',
         isBackgroundModeActive: () => false,
         setOutputStreaming: vi.fn(),
-      },
+      }),
       runScope: testRunScope('response-cycle-invocation'),
       interactions: { emit: vi.fn() },
       abortSignal: new AbortController().signal,

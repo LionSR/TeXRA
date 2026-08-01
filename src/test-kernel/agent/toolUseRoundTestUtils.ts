@@ -22,7 +22,6 @@ export function baseRoundServices(
     runScope: testRunScope(streamId),
     abortSignal: new AbortController().signal,
     checkInterruption: () => false,
-    client: {},
     config: { agent: 'test-agent', model: 'test-model' },
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
@@ -57,6 +56,8 @@ export function roundModelHandler(overrides: Record<string, unknown>) {
       webSearchResults: [],
     }),
     extractToolUse: () => [],
+    getClient: vi.fn(async () => ({})),
+    getCredentialRouteForClient: () => undefined,
     getWireRouteKey: () => 'openai:test-route',
     getModelRetryRouteKey: () => 'openai:test-route:model',
     getStreamingConfig: () => false,

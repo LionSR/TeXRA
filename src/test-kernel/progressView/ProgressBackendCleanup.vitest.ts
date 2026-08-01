@@ -46,7 +46,7 @@ import {
   createIsolatedRecordingBackend,
   createPersistentRecordingBackend,
   executionDeleter,
-  toolUseTaskState,
+  toolUseConfig,
   writeExecutionConfig,
 } from './progressBackendHarness';
 
@@ -59,9 +59,9 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);
@@ -92,9 +92,9 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);
@@ -104,8 +104,8 @@ describe('ProgressBackend', () => {
 
       expect(backend.state.streamLogs.has(stream)).toBe(true);
       expect(backend.state.snapshots.getExecutionId(stream)).toBe(executionId);
-      expect(backend.state.snapshots.getTaskState(stream)).toEqual(
-        toolUseTaskState('search', 'deepseekproT'),
+      expect(backend.state.snapshots.getRunConfig(stream)).toEqual(
+        toolUseConfig('search', 'deepseekproT'),
       );
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
     } finally {
@@ -127,9 +127,9 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);
@@ -138,7 +138,7 @@ describe('ProgressBackend', () => {
       await expect(backend.state.clearStream(stream)).resolves.toBe('deleted');
 
       expect(backend.state.streamLogs.has(stream)).toBe(false);
-      expect(backend.state.snapshots.getTaskState(stream)).toBeUndefined();
+      expect(backend.state.snapshots.getRunConfig(stream)).toBeUndefined();
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
     } finally {
       deleteExecutionSpy.mockRestore();
@@ -157,9 +157,9 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);
@@ -184,9 +184,9 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);
@@ -273,9 +273,9 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);
@@ -311,19 +311,19 @@ describe('ProgressBackend', () => {
     backend.state.streamLogs.ensureStream(failedStream);
     backend.state.streamLogs.ensureStream(incompleteStream);
     backend.state.streamLogs.ensureStream(deletedStream);
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       failedStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       failedExecution,
     );
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       incompleteStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       incompleteExecution,
     );
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       deletedStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       deletedExecution,
     );
     const deleteExecutionSpy = vi
@@ -360,9 +360,9 @@ describe('ProgressBackend', () => {
     const executionId = 'b69660' as ExecutionId;
     const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(stream);
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       stream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
     await writeExecutionConfig(executionId);
@@ -392,14 +392,14 @@ describe('ProgressBackend', () => {
     const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(failedStream);
     backend.state.streamLogs.ensureStream(deletedStream);
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       failedStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       deletedStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
     await writeExecutionConfig(executionId);
@@ -500,9 +500,9 @@ describe('ProgressBackend', () => {
     try {
       const seed = new StreamSnapshotStore();
       await seed.load([orphanStream]);
-      seed.setTaskState(
+      seed.setRunConfig(
         orphanStream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         orphanExecution,
       );
       await writeExecutionConfig(orphanExecution);
@@ -540,9 +540,9 @@ describe('ProgressBackend', () => {
     const executionId = 'c69660' as ExecutionId;
     const seed = new StreamSnapshotStore();
     await seed.load([]);
-    seed.setTaskState(
+    seed.setRunConfig(
       stream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
     await writeExecutionConfig(executionId);
@@ -572,9 +572,9 @@ describe('ProgressBackend', () => {
     const stream = 'tool@deepseek#c69661' as StreamTabId;
     const executionId = 'c69661' as ExecutionId;
     const { backend, session } = createIsolatedRecordingBackend();
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       stream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
     await writeExecutionConfig(executionId);
@@ -619,14 +619,14 @@ describe('ProgressBackend', () => {
     const sweptExecution = 'e6966e' as ExecutionId;
     const seed = new StreamSnapshotStore();
     await seed.load([failingStream, sweptStream]);
-    seed.setTaskState(
+    seed.setRunConfig(
       failingStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       failingExecution,
     );
-    seed.setTaskState(
+    seed.setRunConfig(
       sweptStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       sweptExecution,
     );
     await writeExecutionConfig(failingExecution);
@@ -678,14 +678,14 @@ describe('ProgressBackend', () => {
     const sweptExecution = 'a6966a' as ExecutionId;
     const seed = new StreamSnapshotStore();
     await seed.load([failingStream, sweptStream]);
-    seed.setTaskState(
+    seed.setRunConfig(
       failingStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       failingExecution,
     );
-    seed.setTaskState(
+    seed.setRunConfig(
       sweptStream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       sweptExecution,
     );
     await writeExecutionConfig(failingExecution);
@@ -737,9 +737,9 @@ describe('ProgressBackend', () => {
 
     try {
       first.backend.state.streamLogs.ensureStream(stream);
-      first.backend.state.snapshots.setTaskState(
+      first.backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         executionId,
       );
       await writeExecutionConfig(executionId);

@@ -50,18 +50,18 @@ export function tryResumeFromResumeData(
           return undefined;
         }
         const executionId = progressState.snapshots.getExecutionId(id);
-        const taskState = progressState.snapshots.getTaskState(id);
+        const runConfig = progressState.snapshots.getRunConfig(id);
         if (!executionId) {
           logger.warn(`No execution ID found for stream: ${id}`);
           return undefined;
         }
-        if (!taskState) {
-          logger.warn(`No task state found for stream: ${id}`);
+        if (!runConfig) {
+          logger.warn(`No run config found for stream: ${id}`);
           return undefined;
         }
         const parentStreamId = progressState.snapshots.getParentStreamId(id);
         return {
-          runState: taskState,
+          runState: runConfig,
           executionId,
           ...(parentStreamId !== undefined && { parentStreamId }),
         };

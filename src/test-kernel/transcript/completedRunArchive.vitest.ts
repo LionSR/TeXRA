@@ -13,8 +13,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import {
   LOG_LEVELS,
@@ -39,9 +41,11 @@ import {
 
 const tempDirs: string[] = [];
 
-function taskState(agent: string, model = 'deepseekproT'): TaskState {
-  return TaskStateSchema.parse({
-    agentConfig: { agent, model, agentCategory: AgentCategory.ToolUse },
+function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent,
+    model,
+    agentCategory: AgentCategory.ToolUse,
   });
 }
 
@@ -68,7 +72,7 @@ async function writeSidecarFixture(
   streamId: StreamTabId,
 ): Promise<void> {
   const snapshots = new StreamSnapshotStore();
-  snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+  snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
   snapshots.setTodos(streamId, [
     { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
   ]);
@@ -278,7 +282,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
     snapshots.setTodos(streamId, []);
     await snapshots.flush();
     await getExecutionStore(executionId).write('todos', [
@@ -321,7 +325,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0dd4440dd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0dd4440dd444' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();
@@ -365,7 +369,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0ee5550ee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();
@@ -447,8 +451,8 @@ describe('completedRunArchive facade', () => {
     const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
 
     const snapshots = new StreamSnapshotStore();
-    snapshots.setTaskState(emptyStream, taskState('bash'), executionId);
-    snapshots.setTaskState(fullStream, taskState('orchestrator'), executionId);
+    snapshots.setRunConfig(emptyStream, runConfig('bash'), executionId);
+    snapshots.setRunConfig(fullStream, runConfig('orchestrator'), executionId);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();
@@ -487,7 +491,7 @@ describe('completedRunArchive facade', () => {
     const streamId = 'orchestrator@deepseekproT#eee555eee555' as StreamTabId;
 
     const snapshots = new StreamSnapshotStore();
-    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();

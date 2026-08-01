@@ -84,6 +84,9 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
         isSubagent: false,
       });
       expect(results[0].error).toBeUndefined();
+      // One disposal owner for the run's model handler: the cell closes
+      // whichever handler is live when the run ends.
+      expect(ctx.modelCell.handler.dispose).toHaveBeenCalledTimes(1);
     } finally {
       clearStreamStatusForTest(streamStatus, ctx.runScope.streamId);
     }

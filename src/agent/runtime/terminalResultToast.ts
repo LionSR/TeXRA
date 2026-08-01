@@ -70,6 +70,19 @@ export function terminalResultToast(
           showSuppress: false,
         },
       };
+    case 'context-window':
+      // The classifier's message already carries the remediation when the run
+      // took the terminal-overflow branch; the default covers the rarer
+      // provider-reported overflow that arrives without one.
+      return {
+        type: 'error',
+        payload: {
+          message:
+            error.message ??
+            'Conversation exceeds the model context window. Start a new ' +
+              'session, or reduce attached files and tool output.',
+        },
+      };
     case 'disk-full':
       return {
         type: 'error',

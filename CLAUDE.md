@@ -34,9 +34,18 @@ apps over it. Path aliases (`@agent/*`, `@platform/*`, …) are declared in
 
 Things the tree won't tell you:
 
-- **There is no `@texra/core` package.** Hosts import shared core through the
-  repo-root path aliases, until a future SDK surface is enforced with a build
-  and import-boundary lint gate.
+- **The SDK surface is `packages/agent` (`@texra-ai/agent`) — built, fenced, not
+  published.** There is no `@texra/core` package (deleted by #7099). Hosts still
+  reach shared core through the repo-root path aliases, but that surface is
+  **frozen, not open**: `eslint.config.mjs` forbids production `src/**` and
+  `packages/agent/src/**` from importing host layers, and the ratchets in
+  `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
+  (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
+  included), `shared-schemas-deep-import`, `host-agent-mock`, and
+  `architecture-edges`. The invariant to hold is "never widen a baseline"; the
+  open work is the Tier-1 public manifest and shrinking the frozen lists, not
+  another lint rule. npm publication is deliberately held until a named external
+  consumer exists.
 - **`src/utils/` is for code shared by extension host _and_ webviews.** Helpers
   specific to one side belong in `frontend/` or `common/` instead.
 - **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals

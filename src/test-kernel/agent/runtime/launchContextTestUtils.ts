@@ -19,6 +19,8 @@ import {
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
 
+import { testModelCell } from '../modelCellTestUtils';
+
 /** The zero-priced OpenAI model every runtime fixture bills against. */
 export const testModelInfo = {
   capabilities: {
@@ -43,6 +45,8 @@ interface TestLaunchContextInit {
   /** Session owning the run; defaults to the ambient default session. */
   session?: SessionHandle;
   agent?: string;
+  /** Run category; defaults to tool-use. */
+  category?: AgentCategory;
   /** Trace the run publishes through; defaults to the silent trace. */
   logger?: AgentLaunchContext['logger'];
 }
@@ -56,16 +60,15 @@ export function createTestLaunchContext({
   streamId,
   session = defaultSession(),
   agent = 'assistant',
+  category = AgentCategory.ToolUse,
   logger = noopTrace,
 }: TestLaunchContextInit): AgentLaunchContext {
   const config = AgentConfigSchema.parse({
     agent,
     model: 'test-model',
-    agentCategory: AgentCategory.ToolUse,
+    agentCategory: category,
   });
-  const setting = AgentSettingSchema.parse({
-    agentCategory: AgentCategory.ToolUse,
-  });
+  const setting = AgentSettingSchema.parse({ agentCategory: category });
   const storageKey = executionId as StorageKey;
 
   return {
@@ -88,9 +91,7 @@ export function createTestLaunchContext({
       { logger, storageKey, streamId },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
-    modelHandler: {
-      dispose: vi.fn(),
-    } as unknown as AgentLaunchContext['modelHandler'],
+    modelCell: testModelCell({ dispose: vi.fn() }, config.model),
     disposeTrace: vi.fn(),
   };
 }

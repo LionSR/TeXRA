@@ -20,7 +20,8 @@ export class MediaExtractionNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
-    const { config, fileService, modelHandler } = this.services;
+    const { config, fileService } = this.services;
+    const modelHandler = this.services.modelCell.handler;
     const { currentRound, roundOutputs } = shared;
 
     // shared.workspaceSnapshot was produced by this same flow's own
@@ -47,8 +48,8 @@ export class MediaExtractionNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
-    const { modelHandler, latexMediaManager, config, fileService } =
-      this.services;
+    const modelHandler = this.services.modelCell.handler;
+    const { latexMediaManager, config, fileService } = this.services;
 
     if (
       !modelHandler.capabilities.supportsVision ||
@@ -109,7 +110,7 @@ export class MediaExtractionNode<C = unknown> extends Node<
     try {
       if (mediaFiles?.length && shared.context) {
         attachmentKinds =
-          await this.services.modelHandler.addMediaToUserMessage(
+          await this.services.modelCell.handler.addMediaToUserMessage(
             shared.context.messages,
             mediaFiles,
           );

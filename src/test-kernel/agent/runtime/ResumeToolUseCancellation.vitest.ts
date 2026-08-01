@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
-  getToolUseFlowErrorResult: vi.fn(() => undefined as unknown),
   acquireResumedExecutionLease: vi.fn(),
   renewOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
@@ -60,7 +59,6 @@ vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
 }));
 
 vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
-  getToolUseFlowErrorResult: mocks.getToolUseFlowErrorResult,
   runToolUseFlow: mocks.runToolUseFlow,
 }));
 
@@ -69,7 +67,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
-import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import {
@@ -92,7 +89,7 @@ interface TestFlowContext {
 }
 
 interface ModelSwitchingFlowInput {
-  onModelChanged?: (
+  onModelChanged: (
     modelHandler: {
       capabilities: Record<string, unknown>;
       config: Record<string, unknown>;
@@ -119,6 +116,10 @@ function buildResumeContext(
       },
     },
     config: { agent: 'test-agent', model: 'test-model' },
+    userVarChannels: {
+      input: Object.freeze({ MODEL: 'test-model' }),
+      transient: { MODEL: 'test-model' },
+    },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn(), ...usageMonitor },
   } as unknown as AgentLaunchContext;
@@ -366,13 +367,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     ]);
   });
 
-  it('reports a mid-run model switch to the usage monitor', async () => {
+  it('mirrors a mid-run model switch onto every launch-context view', async () => {
     const executionId = 'e9421-model' as ExecutionId;
     const streamId = 'stream-9421-model' as StreamTabId;
     const setModelInfo = vi.fn();
-    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-      buildResumeContext(executionId, streamId, { setModelInfo }),
-    );
+    const ctx = buildResumeContext(executionId, streamId, { setModelInfo });
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
     mocks.hasPersistedParent.mockResolvedValueOnce(false);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
       async (
@@ -382,7 +382,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
     mocks.runToolUseFlow.mockImplementationOnce(
       async (input: ModelSwitchingFlowInput) => {
-        input.onModelChanged?.(
+        input.onModelChanged(
           {
             capabilities: { supportsVision: true },
             config: { provider: 'anthropic' },
@@ -401,12 +401,19 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       capabilities: { supportsVision: true },
       config: { provider: 'anthropic' },
     });
+    // The flow's ModelCell is the live model; these mirrors would otherwise
+    // keep reporting the model the run started with.
+    expect(ctx.config.model).toBe('next-model');
+    expect(ctx.userVarChannels.transient.MODEL).toBe('next-model');
   });
 
-  it('wraps a failed resumed flow so the partial result reaches the lifecycle', async () => {
+  it('carries a failed resumed flow result, error included, to the lifecycle', async () => {
     const executionId = 'e9421-error' as ExecutionId;
     const streamId = 'stream-9421-error' as StreamTabId;
-    const cause = new Error('provider failed mid-resume');
+    const flowError = {
+      message: 'provider failed mid-resume',
+      userRetryable: true,
+    };
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(
       buildResumeContext(executionId, streamId, { setModelInfo: vi.fn() }),
     );
@@ -417,26 +424,25 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         run: (liveHandle: unknown) => Promise<unknown>,
       ) => run(noopFlowHandle()),
     );
-    mocks.runToolUseFlow.mockRejectedValueOnce(cause);
-    mocks.getToolUseFlowErrorResult.mockReturnValueOnce({
+    mocks.runToolUseFlow.mockResolvedValueOnce({
       outcome: RUN_OUTCOME.FAILED,
       response: 'partial answer',
       totalCostUsd: 0.25,
+      error: flowError,
     });
 
-    const error = await resumeToolUseFromResumeData(
+    const result = await resumeToolUseFromResumeData(
       createToolUseResumeData({ executionId, streamId }),
-    ).catch((err: unknown) => err);
+    );
 
-    expect(error).toBeInstanceOf(AgentFlowError);
-    expect((error as AgentFlowError).cause).toBe(cause);
-    expect((error as AgentFlowError).result).toMatchObject({
+    expect(result).toMatchObject({
       category: 'toolUse',
       outcome: RUN_OUTCOME.FAILED,
       response: 'partial answer',
       totalCostUsd: 0.25,
       executionId,
       streamId,
+      error: flowError,
     });
   });
 });

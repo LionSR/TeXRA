@@ -6,10 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import {
-  AgentExecutionHandle,
-  type LiveToolUseFlowContext,
-} from '@agent/runtime/ExecutionHandle';
+import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
@@ -21,6 +18,7 @@ import {
   clearAllStreamStatusesForTest,
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -66,13 +64,11 @@ describe('tool-use follow-up progress events', () => {
     readonly executionId?: string;
     readonly session?: SessionHandle;
   }): void {
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      stream,
-      stream,
-      'search',
-      'toolUse',
-    );
+      parentStreamId: stream,
+      agent: 'search',
+    });
     handle.attachToolUseFlow({
       ...(session ? { ownerSession: session } : {}),
       session: { appendFollowUp },
@@ -359,13 +355,12 @@ describe('tool-use follow-up progress events', () => {
     const parentStreamId = 'stream:terminal-parent' as StreamTabId;
     const childStreamId = 'stream:terminal-parent-child' as StreamTabId;
     const executionId = 'exec-terminal-parent-child';
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
       parentStreamId,
       childStreamId,
-      'critic',
-      'toolUse',
-    );
+      agent: 'critic',
+    });
 
     seedStreamStatusForTest(
       defaultSession().status,

@@ -45,6 +45,7 @@ import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
+import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('AgentLaunchContext', () => {
@@ -94,9 +95,11 @@ describe('AgentLaunchContext', () => {
       agentName: 'chat',
       session,
     });
+    const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
     const ctx = {
       runScope,
       logger: noopTrace,
+      modelCell,
       config: {
         agent: runScope.agentName,
         model: 'deepseekT',
@@ -122,7 +125,9 @@ describe('AgentLaunchContext', () => {
         expect(context.runtimeUnavailableTools).toEqual(['inquiry']);
         expect(context.stopAfterCycle).toBe(true);
 
-        ctx.config.model = 'sonnet46T';
+        // The cell is the run's live model, so a swap alone moves the run
+        // context; the `AgentConfig.model` mirror does not drive it.
+        modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
         expect(useRunContext().model).toBe('sonnet46T');
       },

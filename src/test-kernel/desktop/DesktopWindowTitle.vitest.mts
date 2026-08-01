@@ -5,8 +5,6 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   getDesktopSessionActivity,
@@ -16,16 +14,15 @@ import {
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { formatSessionTitle } from '@shared/sessionTitle';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 function createAgentHandle(id: string, streamId: StreamTabId) {
-  return new AgentExecutionHandle(
-    id,
-    streamId,
-    streamId,
-    'test-agent',
-    AgentCategory.ToolUse,
-  );
+  return testExecutionHandle({
+    executionId: id,
+    parentStreamId: streamId,
+    agent: 'test-agent',
+  });
 }
 
 function createWindow(initialTitle: string) {

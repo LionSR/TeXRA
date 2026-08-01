@@ -184,15 +184,15 @@ describe('formatPhaseStageLabel', () => {
 
 describe('stream status display labels', () => {
   const wordingCases: Array<[StreamStatusLabelStyle, string, string]> = [
-    ['cli', STREAM_STATUS.INITIALIZING, 'starting\u2026'],
-    ['cli', STREAM_STATUS.WAITING, 'idle'],
-    ['cliCompact', STREAM_STATUS.INITIALIZING, 'starting'],
-    ['cliCompact', STREAM_STATUS.WAITING, 'idle'],
-    ['progressHeader', STREAM_STATUS.WAITING, 'Waiting for follow-up'],
-    ['progressHeader', STREAM_STATUS.INITIALIZING, 'Initializing'],
+    ['cli', STREAM_PHASE.WAITING, 'idle'],
+    ['cliCompact', STREAM_PHASE.WAITING, 'idle'],
+    ['progressHeader', STREAM_PHASE.WAITING, 'Waiting for follow-up'],
     ['cliCompact', STREAM_PHASE.COMPLETED, 'completed'],
     ['progressHeader', STREAM_PHASE.COMPLETED, 'Completed'],
-    ['cliCompact', STREAM_STATUS.STOPPED, 'stopped'],
+    ['cliCompact', STREAM_PHASE.CANCELLED, 'stopped'],
+    ['progressHeader', STREAM_PHASE.CANCELLED, 'Stopped'],
+    ['cli', STREAM_STATUS.READY, 'ready'],
+    ['progressHeader', STREAM_STATUS.READY, 'Ready'],
   ];
 
   it.each(wordingCases)(
@@ -202,21 +202,39 @@ describe('stream status display labels', () => {
     },
   );
 
+  const substateWordingCases: Array<[StreamStatusLabelStyle, string]> = [
+    ['cli', 'starting\u2026'],
+    ['cliCompact', 'starting'],
+    ['progressHeader', 'Initializing'],
+  ];
+
+  it.each(substateWordingCases)(
+    'preserves %s STARTING wording: "%s"',
+    (style, label) => {
+      expect(
+        formatStreamStatusLabel(STREAM_PHASE.RUNNING, {
+          style,
+          substate: STREAM_SUBSTATE.STARTING,
+        }),
+      ).toBe(label);
+    },
+  );
+
   it.each(['cli', 'cliCompact'] as const)(
     'labels a child stream WAITING distinctly from the root idle wording (%s)',
     (style) => {
       expect(
-        formatStreamStatusLabel(STREAM_STATUS.WAITING, {
+        formatStreamStatusLabel(STREAM_PHASE.WAITING, {
           style,
           isChildStream: true,
         }),
       ).toBe('waiting for you');
       // Unset (or false) isChildStream keeps the root's plain "idle" wording.
-      expect(formatStreamStatusLabel(STREAM_STATUS.WAITING, { style })).toBe(
+      expect(formatStreamStatusLabel(STREAM_PHASE.WAITING, { style })).toBe(
         'idle',
       );
       expect(
-        formatStreamStatusLabel(STREAM_STATUS.WAITING, {
+        formatStreamStatusLabel(STREAM_PHASE.WAITING, {
           style,
           isChildStream: false,
         }),
@@ -273,17 +291,34 @@ describe('stream status display labels', () => {
   });
 
   it.each([
-    [STREAM_STATUS.INITIALIZING, STREAM_SUBSTATE.STARTING, 'is-starting'],
-    [STREAM_STATUS.RESUMING, STREAM_SUBSTATE.RESUMING, 'is-resuming'],
-    [STREAM_STATUS.STOPPED, STREAM_PHASE.COMPLETED, 'is-completed'],
-    [STREAM_STATUS.ERROR, STREAM_PHASE.FAILED, 'is-failed'],
-    [STREAM_STATUS.WAITING, STREAM_PHASE.WAITING, 'is-waiting'],
+    [STREAM_PHASE.RUNNING, STREAM_PHASE.RUNNING, 'is-running'],
+    [STREAM_PHASE.COMPLETED, STREAM_PHASE.COMPLETED, 'is-completed'],
+    [STREAM_PHASE.CANCELLED, STREAM_PHASE.CANCELLED, 'is-cancelled'],
+    [STREAM_PHASE.FAILED, STREAM_PHASE.FAILED, 'is-failed'],
+    [STREAM_PHASE.WAITING, STREAM_PHASE.WAITING, 'is-waiting'],
     [STREAM_STATUS.READY, 'ready', 'is-ready'],
   ] as const)(
-    'maps legacy %s to display key %s and class %s',
+    'maps lifecycle status %s to display key %s and class %s',
     (status, key, className) => {
       expect(streamStatusDisplayKey(status)).toBe(key);
       expect(streamStatusIndicatorClass(status)).toBe(className);
     },
   );
+
+  // The retired 7-value StreamStatus vocabulary no longer has a display
+  // branch (v0.41 cut): no live producer emits it, and both permanent read
+  // boundaries — StreamLogStore.parsePersistedEntries and the trace-viewer's
+  // file import — normalize to StreamPhase before a renderer sees it. An
+  // unnormalized legacy value now falls through as an unknown status: the raw
+  // string is shown rather than a silently wrong canonical label.
+  it.each([
+    STREAM_STATUS.INITIALIZING,
+    STREAM_STATUS.RESUMING,
+    STREAM_STATUS.STOPPED,
+    STREAM_STATUS.ERROR,
+  ] as const)('treats retired legacy status %s as unknown', (status) => {
+    expect(streamStatusDisplayKey(status)).toBeUndefined();
+    expect(streamStatusIndicatorClass(status)).toBeUndefined();
+    expect(formatStreamStatusLabel(status)).toBe(status);
+  });
 });
