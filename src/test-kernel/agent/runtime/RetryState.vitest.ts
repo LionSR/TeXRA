@@ -309,7 +309,7 @@ describe('RetryState', () => {
     SupabaseClient.resetForTests();
   });
 
-  it('records whether a failed invocation already emitted its canonical error', () => {
+  it('records a failed invocation without logging bookkeeping', () => {
     const state: BaseCycleFields = {
       messages: [],
       shouldStop: false,
@@ -321,7 +321,6 @@ describe('RetryState', () => {
         kind: 'failed',
         message: 'HTTP 503 Service Unavailable',
         userRetryable: true,
-        failureLogEmitted: true,
       },
       state,
       { logger: noopTrace, operationName: 'Model request' },
@@ -332,25 +331,34 @@ describe('RetryState', () => {
       message: 'HTTP 503 Service Unavailable',
       userRetryable: true,
     });
-    expect(state.failureLogEmitted).toBe(true);
   });
 
-  it('leaves an empty model response available for the outer error logger', () => {
+  it('logs an empty model response at the invocation boundary', () => {
     const state: BaseCycleFields = {
       messages: [],
       shouldStop: false,
       endTurn: true,
     };
+    const error = vi.fn();
+    const logger = { ...noopTrace, error } as AgentTrace;
 
     const result = handleInvocationResult(
       { kind: 'success', response: undefined },
       state,
-      { logger: noopTrace, operationName: 'Model request' },
+      { logger, operationName: 'Model request' },
     );
 
     expect(result).toBeNull();
     expect(state.lastError?.message).toContain('Model response was empty');
-    expect(state.failureLogEmitted).toBe(false);
+    expect(error).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledWith(
+      'Model request failed',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining('Model response was empty'),
+        }),
+      }),
+    );
   });
 
   it('falls back to the canonical retry count and delay when settings are unset', () => {
@@ -386,7 +394,6 @@ describe('RetryState', () => {
       kind: 'failed',
       message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
       userRetryable: true,
-      failureLogEmitted: false,
     });
   });
 
@@ -1109,7 +1116,6 @@ describe('RetryState', () => {
       expect(node.fallbackFor(error)).toMatchObject({
         kind: 'failed',
         message: 'stream dropped before first token',
-        failureLogEmitted: true,
       });
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);

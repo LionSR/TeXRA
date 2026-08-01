@@ -8,7 +8,6 @@ const flowState = vi.hoisted(() => ({
   endTurn: false,
   lastError: undefined as
     { message: string; userRetryable: boolean } | undefined,
-  failureLogEmitted: false,
   contextWindowRecoveryAttempted: false,
   contextWindowRecoveryRequestId: undefined as number | undefined,
 }));
@@ -23,14 +22,12 @@ vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
       shouldStop: boolean;
       endTurn: boolean;
       lastError?: { message: string; userRetryable: boolean };
-      failureLogEmitted?: boolean;
       contextWindowRecoveryAttempted?: boolean;
       contextWindowRecoveryRequestId?: number;
     }) {
       shared.shouldStop = flowState.shouldStop;
       shared.endTurn = flowState.endTurn;
       shared.lastError = flowState.lastError;
-      shared.failureLogEmitted = flowState.failureLogEmitted;
       shared.contextWindowRecoveryAttempted =
         flowState.contextWindowRecoveryAttempted;
       shared.contextWindowRecoveryRequestId =
@@ -87,7 +84,6 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.shouldStop = false;
     flowState.endTurn = false;
     flowState.lastError = undefined;
-    flowState.failureLogEmitted = false;
     flowState.contextWindowRecoveryAttempted = false;
     flowState.contextWindowRecoveryRequestId = undefined;
   });
@@ -165,13 +161,12 @@ describe('ResponseCycleNode outcome classification', () => {
     expect(clearCompactionRequest).toHaveBeenCalledWith(7);
   });
 
-  it('does not repeat a model failure already logged by RetryState', async () => {
+  it('propagates an inner model failure without logging it again', async () => {
     flowState.shouldStop = true;
     flowState.lastError = {
       message: 'HTTP 503 Service Unavailable',
       userRetryable: true,
     };
-    flowState.failureLogEmitted = true;
     const logger = { error: vi.fn(), debug: vi.fn() };
     const node = makeNode({ checkInterruption: () => false, logger });
     const shared = reflectionFlowShared();
@@ -182,13 +177,12 @@ describe('ResponseCycleNode outcome classification', () => {
 
     expect(result).toMatchObject({
       outcome: 'failed',
-      failureLogEmitted: true,
     });
     expect(shared.lastError).toBe(flowState.lastError);
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('logs a model failure not emitted by the inner retry boundary', async () => {
+  it('does not infer logging ownership from the error contents', async () => {
     flowState.shouldStop = true;
     flowState.lastError = {
       message: 'Model response was empty',
@@ -202,8 +196,22 @@ describe('ResponseCycleNode outcome classification', () => {
     const result = await node.exec(prep);
     await node.post(shared, prep, result);
 
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('logs an outer cycle exception where it becomes structured state', async () => {
+    const logger = { error: vi.fn(), debug: vi.fn() };
+    const node = makeNode({ checkInterruption: () => false, logger });
+    const shared = reflectionFlowShared();
+    const prep = await node.prep(shared);
+
+    const result = await node.execFallback(prep, new Error('cycle failed'));
+    await node.post(shared, prep, result);
+
+    expect(shared.lastError?.message).toBe('cycle failed');
+    expect(logger.error).toHaveBeenCalledOnce();
     expect(logger.error).toHaveBeenCalledWith(
-      'Response cycle failed: Model response was empty',
+      'Response cycle failed: cycle failed',
     );
   });
 });
