@@ -11,6 +11,7 @@ const EXTERNAL_SECOND = '/external/second';
 
 const mocks = vi.hoisted(() => ({
   getAllLocal: vi.fn<() => Promise<unknown[]>>(),
+  liveWatcherDirectories: new Set<string>(),
   watchedDirectories: [] as string[],
   /** Directory listings keyed by fsPath, standing in for the disk. */
   tree: new Map<string, [string, number][]>(),
@@ -47,6 +48,7 @@ vi.mock('vscode', () => ({
     },
     createFileSystemWatcher: (pattern: { base: { fsPath: string } }) => {
       mocks.watchedDirectories.push(pattern.base.fsPath);
+      mocks.liveWatcherDirectories.add(pattern.base.fsPath);
       return {
         onDidCreate: (handler: (uri: { fsPath: string }) => void) => {
           mocks.createHandlers.set(pattern.base.fsPath, handler);
@@ -54,7 +56,9 @@ vi.mock('vscode', () => ({
         },
         onDidChange: () => ({ dispose: () => {} }),
         onDidDelete: () => ({ dispose: () => {} }),
-        dispose: () => {},
+        dispose: () => {
+          mocks.liveWatcherDirectories.delete(pattern.base.fsPath);
+        },
       };
     },
   },
@@ -138,6 +142,7 @@ describe('agent directory watcher rebuilds', () => {
   beforeEach(() => {
     subscription?.dispose();
     subscription = undefined;
+    mocks.liveWatcherDirectories.clear();
     mocks.watchedDirectories.length = 0;
     mocks.tree.clear();
     mocks.heldReads.clear();
@@ -214,6 +219,30 @@ describe('agent directory watcher rebuilds', () => {
     expect(refreshSettled).toBe(true);
     await refreshed;
     expect(mocks.watchedDirectories).toEqual([]);
+  });
+
+  it('disposes watchers built after the last subscription is removed', async () => {
+    const scan = pDefer<void>();
+    mocks.getAllLocal.mockResolvedValue([
+      { directory: EXTERNAL_FIRST, source: 'custom' },
+    ]);
+    mocks.tree.set(EXTERNAL_FIRST, []);
+    mocks.heldReads.set(EXTERNAL_FIRST, scan);
+
+    subscription = agentDirectories.watchAgentDirectories({
+      onEvent: () => {},
+    });
+    await vi.waitFor(() => {
+      expect(mocks.heldReads.has(EXTERNAL_FIRST)).toBe(false);
+    });
+
+    subscription.dispose();
+    subscription = undefined;
+    scan.resolve();
+    await settle();
+
+    expect(mocks.watchedDirectories).toEqual([EXTERNAL_FIRST]);
+    expect(mocks.liveWatcherDirectories.size).toBe(0);
   });
 
   it('rebuilds for a subdirectory created after the running rebuild listed its parent', async () => {

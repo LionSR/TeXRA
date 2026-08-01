@@ -198,6 +198,9 @@ class AgentDirectoryManager {
       }
 
       await this.buildAgentWatchers(directories);
+      if (this.watcherSubscriptions.size === 0) {
+        this.disposeAgentWatchers();
+      }
     });
   }
 
