@@ -38,8 +38,6 @@ export interface ResponseCycleServices<
  * interface by adding `run` and `workspace` before running the round.
  */
 export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
-  /** Report assistant text produced by this model round. */
-  readonly onRoundResponse?: (response: string) => void;
   /** Terminal tool available for the optional provider-native final turn. */
   readonly finalTool?: FinalTool;
   /** Session for injecting queued user messages after tool dispatch. */

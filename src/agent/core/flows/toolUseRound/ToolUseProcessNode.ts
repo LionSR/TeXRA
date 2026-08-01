@@ -180,7 +180,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    if (execRes.text) this.services.onRoundResponse?.(execRes.text);
+    if (execRes.text) shared.latestAssistantText = execRes.text;
 
     // `finalTool` selects only the request whose response is being processed.
     // Keep the separate attempted bit so a malformed/ignored forced response

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import {
   AgentCategory,
   AgentPromptSchema,
@@ -32,6 +32,7 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
+import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
   runToolUseFlow,
@@ -159,8 +160,20 @@ function createTaggedModelCell(
   return testModelCell(handler, modelId);
 }
 
+function testToolCall(name: string, input: unknown): SdkToolCall {
+  return {
+    provider: 'deepseek',
+    callId: `call-${name}`,
+    name,
+    input,
+    raw: {} as never,
+  };
+}
+
 interface TestModelTurn {
-  readonly text: string;
+  readonly text?: string;
+  readonly error?: Error;
+  readonly toolCalls?: SdkToolCall[];
   readonly updatedMessages?: Array<Record<string, unknown>>;
 }
 
@@ -180,16 +193,40 @@ function responseModelHandler(
     createResponse: vi.fn(async () => {
       const turn = pendingTurns.shift();
       if (!turn) throw new Error('Unexpected model invocation');
+      if (turn.error) throw turn.error;
       return {
-        response: { text: turn.text },
+        response: { text: turn.text ?? '', toolCalls: turn.toolCalls ?? [] },
         updatedMessages: turn.updatedMessages,
       };
     }),
-    extractResponse: (response: unknown) => ({
-      text: (response as { text: string }).text,
-      usage: null,
-      stopReason: 'stop',
-    }),
+    extractResponse: (response: unknown) => {
+      const { text, toolCalls } = response as {
+        text: string;
+        toolCalls: SdkToolCall[];
+      };
+      return {
+        text,
+        usage: null,
+        stopReason: toolCalls.length ? 'tool_use' : 'stop',
+      };
+    },
+    extractToolUse: (response: unknown) =>
+      (response as { toolCalls: SdkToolCall[] }).toolCalls,
+    createToolUseFollowUpMessages: async (
+      _client: unknown,
+      call: SdkToolCall,
+      result: unknown,
+      _attachments: unknown,
+      _workspace: AgentWorkspaceState,
+      assistantText?: string,
+    ) => [
+      ...(assistantText ? [{ role: 'assistant', content: assistantText }] : []),
+      {
+        role: 'tool',
+        tool_call_id: call.callId,
+        content: JSON.stringify(result),
+      },
+    ],
     ...overrides,
   });
 }
@@ -252,7 +289,9 @@ async function runPersistedFlow(
   options: {
     readonly isSubagent?: boolean;
     readonly stopAfterCycle?: boolean;
+    readonly config?: AgentConfig;
     readonly modelHandler?: Record<string, unknown>;
+    readonly tools?: readonly ITool[];
     readonly drainedFollowUps?: RunToolUseFlowInput['drainedFollowUps'];
     readonly onIdle?: () => void;
     readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
@@ -261,7 +300,7 @@ async function runPersistedFlow(
     ) => void;
   } = {},
 ): Promise<RunToolUseFlowResult> {
-  const config = resume?.agentConfig ?? CONFIG;
+  const config = options.config ?? resume?.agentConfig ?? CONFIG;
   const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
     input: Object.freeze({ MODEL: config.model }),
     transient: {},
@@ -311,6 +350,7 @@ async function runPersistedFlow(
           ...(resume !== undefined && { resume }),
           drainedFollowUps: options.drainedFollowUps,
           isSubagent: options.isSubagent ?? true,
+          tools: options.tools,
           onIdle: options.onIdle,
           takePendingFollowUps: options.takePendingFollowUps,
           onFlowRecordDisposition: options.onFlowRecordDisposition,
@@ -742,6 +782,130 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           'Provider stream failed after partial output',
         ),
       },
+    });
+  });
+
+  it('scrubs persisted assembly text before an answerless resumed cycle fails', async () => {
+    const executionId = 'abc-flow-stale-assembly-response' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-stale-assembly-response' as StreamTabId;
+    const baseResume = buildResponseResumeData(executionId, streamId, 'A');
+    const shared = {
+      ...baseResume.shared,
+      stateSlices: {
+        ...baseResume.shared.stateSlices,
+        workspaceSnapshot: {
+          ...baseResume.shared.stateSlices.workspaceSnapshot,
+          assembly: { lastResponse: 'A', accumulatedOutput: 'A' },
+        },
+      },
+    };
+    const resume: ToolUseResumeData = {
+      ...baseResume,
+      shared,
+      sourceShared: structuredClone(shared),
+    };
+    await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
+    const providerError = Object.assign(
+      new Error('Answerless provider failure'),
+      {
+        status: 401,
+      },
+    );
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      resume,
+      undefined,
+      undefined,
+      {
+        modelHandler: responseModelHandler([{ error: providerError }]),
+        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+      },
+    );
+
+    expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
+    expect(result.response).toBeUndefined();
+  });
+
+  it('returns explanatory text accompanying submit_output', async () => {
+    const executionId = 'abc-flow-terminal-tool-response' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-terminal-tool-response' as StreamTabId;
+    const config = AgentConfigSchema.parse({
+      ...CONFIG,
+      outputSchema: {
+        type: 'object',
+        properties: { answer: { type: 'string' } },
+        required: ['answer'],
+      },
+    });
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      undefined,
+      undefined,
+      undefined,
+      {
+        config,
+        isSubagent: false,
+        stopAfterCycle: true,
+        modelHandler: responseModelHandler([
+          {
+            text: 'Here is the structured result.',
+            toolCalls: [testToolCall('submit_output', { answer: 'done' })],
+          },
+        ]),
+      },
+    );
+
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.COMPLETED,
+      response: 'Here is the structured result.',
+      structured: { answer: 'done' },
+    });
+  });
+
+  it('retains tool-round text when a later model round fails', async () => {
+    const executionId = 'abc-flow-tool-text-later-failure' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-tool-text-later-failure' as StreamTabId;
+    const providerError = Object.assign(new Error('Later provider failure'), {
+      status: 401,
+    });
+    const probeTool: ITool = {
+      definition: {
+        name: 'probe',
+        description: 'Probe once',
+        parameters: {},
+      },
+      call: vi.fn(async () => ({ status: 'executed' as const, output: 'ok' })),
+    };
+
+    const result = await runPersistedFlow(
+      executionId,
+      streamId,
+      undefined,
+      undefined,
+      undefined,
+      {
+        modelHandler: responseModelHandler([
+          {
+            text: 'I checked the tool.',
+            toolCalls: [testToolCall('probe', {})],
+          },
+          { error: providerError },
+        ]),
+        tools: [probeTool],
+      },
+    );
+
+    expect(result).toMatchObject({
+      outcome: RUN_OUTCOME.FAILED,
+      response: 'I checked the tool.',
+      error: { message: expect.stringContaining('Later provider failure') },
     });
   });
 

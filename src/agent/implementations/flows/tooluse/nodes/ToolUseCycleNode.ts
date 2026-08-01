@@ -24,10 +24,14 @@ import {
 import type { ToolUseServices } from '../ToolUseServices';
 
 type ToolUseCycleOutcome =
-  | { outcome: 'completed'; messages: ProviderMessage[] }
+  | {
+      outcome: 'completed';
+      messages: ProviderMessage[];
+      response?: string;
+    }
   | { outcome: 'skipped' }
-  | { outcome: 'cancelled' }
-  | { outcome: 'failed'; lastError: RetryErrorInfo };
+  | { outcome: 'cancelled'; response?: string }
+  | { outcome: 'failed'; lastError: RetryErrorInfo; response?: string };
 
 export class ToolUseCycleNode<C> extends Node<
   ToolUseRunShared,
@@ -68,6 +72,12 @@ export class ToolUseCycleNode<C> extends Node<
       return { outcome: 'skipped' };
     }
 
+    // A cycle is one user turn. Scrub any assembly strings accepted from a
+    // persisted snapshot before model work starts, but never between this
+    // cycle's tool rounds where they carry continuation state.
+    prepRes.workspaceState.assembly.lastResponse = '';
+    prepRes.workspaceState.assembly.accumulatedOutput = '';
+
     const finalTool =
       modelHandler.supportsForcedToolChoice &&
       this.services.setting.tools.length === 1 &&
@@ -98,7 +108,6 @@ export class ToolUseCycleNode<C> extends Node<
       ...this.services,
       run: prepRes.runState,
       workspace: prepRes.workspaceState,
-      onRoundResponse: this.services.onCycleResponse,
     });
 
     const { onProgress } = this.services;
@@ -137,12 +146,32 @@ export class ToolUseCycleNode<C> extends Node<
         return {
           outcome: 'failed',
           lastError,
+          response: roundShared.latestAssistantText,
         };
       }
       if (roundOutcome === RUN_OUTCOME.CANCELLED) {
-        return { outcome: 'cancelled' };
+        return {
+          outcome: 'cancelled',
+          response: roundShared.latestAssistantText,
+        };
       }
-      return { outcome: 'completed', messages: roundShared.messages };
+      return {
+        outcome: 'completed',
+        messages: roundShared.messages,
+        response: roundShared.latestAssistantText,
+      };
+    } catch (error) {
+      // A later round can fail after an earlier tool round produced text. Carry
+      // that structurally tracked text into execFallback unless the failing
+      // round already left a newer partial response in assembly.
+      if (
+        !prepRes.workspaceState.assembly.lastResponse &&
+        roundShared.latestAssistantText
+      ) {
+        prepRes.workspaceState.assembly.lastResponse =
+          roundShared.latestAssistantText;
+      }
+      throw error;
     } finally {
       roundStage.end(roundOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
@@ -181,8 +210,14 @@ export class ToolUseCycleNode<C> extends Node<
       workspaceSnapshot,
       userChannels: prepRes.userChannels,
     };
-    const cycleResponse = prepRes.workspaceState.assembly.lastResponse;
+    const cycleResponse =
+      execRes.outcome === 'skipped'
+        ? undefined
+        : (execRes.response ?? prepRes.workspaceState.assembly.lastResponse);
     shared.lastResponse = cycleResponse || shared.lastResponse;
+    if (cycleResponse) {
+      this.services.onCycleResponse?.(cycleResponse);
+    }
 
     if (execRes.outcome === 'completed') {
       const { interactions } = prepRes.workspaceState;
