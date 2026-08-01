@@ -1,15 +1,7 @@
 import { getExecutionStore } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
-import {
-  type ExecutionStatus,
-  RUN_OUTCOME,
-  type RunOutcome,
-  STREAM_PHASE,
-} from '@shared/schemas';
-import {
-  legacyEndGroupStatusForOutcome,
-  runOutcomeToExecutionStatus,
-} from '@shared/streams/streamStatus';
+import { RUN_OUTCOME, type RunOutcome, STREAM_PHASE } from '@shared/schemas';
+import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
@@ -26,16 +18,6 @@ interface CliRunResultMetadata {
 }
 
 type CliRunResultFor<T extends ExecuteAgentResult> = T & CliRunResultMetadata;
-
-// Announced during v0.39; keep through v0.40 and remove in v0.41.
-type PublishedCliRunResultFor<T extends ExecuteAgentResult> = T & {
-  /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
-  status: ExecutionStatus;
-  /** @deprecated Use `outcome`; this is a frozen 2-value projection for JSON-output compatibility. */
-  endGroupStatus: 'error' | 'stopped';
-  /** @deprecated Use `outcome`; this is a frozen projection for JSON-output compatibility. */
-  terminalStatus: ExecutionStatus;
-} & CliRunResultMetadata;
 
 export type CliRunResult = ExecuteAgentResult extends infer T
   ? T extends ExecuteAgentResult
@@ -55,30 +37,6 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
     result.response?.trim() ||
     `${runOutcomeToExecutionStatus(result.outcome)}\nExecution: ${result.executionId}`
   );
-}
-
-/** Add legacy status fields through the v0.40 compatibility window. */
-export function serializeCliRunResult<T extends ExecuteAgentResult>(
-  result: CliRunResultFor<T>,
-): T extends ExecuteAgentResult ? PublishedCliRunResultFor<T> : never {
-  const {
-    workingDirectory,
-    runDirectory,
-    copiedOutput,
-    copiedOutputs,
-    ...executionResult
-  } = result;
-  const terminalStatus = runOutcomeToExecutionStatus(result.outcome);
-  return {
-    ...executionResult,
-    status: terminalStatus,
-    endGroupStatus: legacyEndGroupStatusForOutcome(result.outcome),
-    terminalStatus,
-    ...(Object.hasOwn(result, 'workingDirectory') ? { workingDirectory } : {}),
-    ...(Object.hasOwn(result, 'runDirectory') ? { runDirectory } : {}),
-    ...(Object.hasOwn(result, 'copiedOutput') ? { copiedOutput } : {}),
-    ...(Object.hasOwn(result, 'copiedOutputs') ? { copiedOutputs } : {}),
-  } as T extends ExecuteAgentResult ? PublishedCliRunResultFor<T> : never;
 }
 
 /** Map a run outcome to the CLI process exit code, treating an

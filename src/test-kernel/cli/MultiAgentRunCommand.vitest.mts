@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
@@ -277,9 +277,6 @@ describe('CLI multi-agent run command', () => {
       streamId: 'stream-team',
       outcome: RUN_OUTCOME.COMPLETED,
       response: 'The proof is correct.',
-      status: EXECUTION_STATUS.COMPLETED,
-      endGroupStatus: 'stopped',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
       workingDirectory: '/tmp/project',
     });
     expect(Object.keys(emission?.json.result ?? {})).toEqual([
@@ -288,9 +285,6 @@ describe('CLI multi-agent run command', () => {
       'streamId',
       'outcome',
       'response',
-      'status',
-      'endGroupStatus',
-      'terminalStatus',
       'workingDirectory',
     ]);
     expect(emission?.ndjson).toEqual({
