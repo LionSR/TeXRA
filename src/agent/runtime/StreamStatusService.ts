@@ -102,7 +102,7 @@ export class StreamStatusMachine {
       this.transition(
         stream,
         rollbackPhase,
-        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        STREAM_TRANSITION_CAUSE.RESERVATION_ROLLBACK,
         options,
       )
     ) {
