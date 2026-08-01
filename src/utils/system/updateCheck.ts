@@ -111,6 +111,8 @@ export async function fetchJsonStringField({
     const value = (body as Record<string, unknown>)[field];
     return typeof value === 'string' ? value : undefined;
   } catch {
+    // AbortError (timeout), TypeError (network), and SyntaxError (invalid JSON)
+    // all make this best-effort update source unavailable for the current run.
     return undefined;
   }
 }
