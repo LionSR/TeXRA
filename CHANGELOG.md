@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Agent failures retain their partial result** — the original error is now
+  reported together with any partial response and affected files.
 - **Long-running sessions use less memory after recovering interrupted runs** —
   transcript history loaded only to repair stale run state is released again
   after the repair is saved, instead of remaining in memory for the rest of

@@ -34,6 +34,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
+  getToolUseFlowErrorResult,
   runToolUseFlow,
   type RunToolUseFlowResult,
   type RunToolUseFlowInput,
@@ -584,6 +585,140 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         deleteSpy.mockRestore();
         session.followUps.terminalize(streamId);
       }
+    }
+  });
+
+  it('preserves the structured flow error when teardown also fails', async () => {
+    const executionId = 'abc-flow-primary-and-teardown-failure' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-primary-and-teardown-failure' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const session = createTestSession();
+    const teardownFailure = new Error('flow detachment failed');
+    const failedShared = {
+      ...snapshot.shared,
+      lastError: {
+        message: 'provider failed after partial output',
+        userRetryable: true,
+      },
+      lastResponse: 'partial assistant response',
+    };
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.COMPLETE);
+    const sharedSpy = vi
+      .spyOn(PersistedFlow.prototype, 'getShared')
+      .mockResolvedValue(failedShared);
+    const releaseSpy = vi.spyOn(session.followUps, 'release');
+    const errorLogSpy = vi
+      .spyOn(noopTrace, 'error')
+      .mockImplementation(() => {});
+
+    try {
+      let caught: unknown;
+      try {
+        await runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          () => () => {
+            throw teardownFailure;
+          },
+          session,
+        );
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).not.toBe(teardownFailure);
+      expect(getToolUseFlowErrorResult(caught)).toMatchObject({
+        outcome: RUN_OUTCOME.FAILED,
+        lastResponse: 'partial assistant response',
+      });
+      expect(releaseSpy).toHaveBeenCalled();
+      expect(errorLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('detaching the live flow'),
+        expect.any(Object),
+      );
+    } finally {
+      runSpy.mockRestore();
+      sharedSpy.mockRestore();
+      releaseSpy.mockRestore();
+      errorLogSpy.mockRestore();
+    }
+  });
+
+  it('surfaces the first teardown failure after an otherwise successful exit', async () => {
+    const executionId = 'abc-flow-teardown-failure' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-flow-teardown-failure' as StreamTabId;
+    const snapshot = buildToolUseResumeData(executionId, streamId);
+    const session = createTestSession();
+    const teardownFailure = new Error('flow detachment failed');
+    const releaseSpy = vi.spyOn(session.followUps, 'release');
+
+    try {
+      await expect(
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          (context) => {
+            context.interrupt();
+            return () => {
+              throw teardownFailure;
+            };
+          },
+          session,
+        ),
+      ).rejects.toBe(teardownFailure);
+      expect(releaseSpy).toHaveBeenCalled();
+    } finally {
+      releaseSpy.mockRestore();
+    }
+  });
+
+  it('preserves a missing structured-output failure when teardown also fails', async () => {
+    const executionId =
+      'abc-flow-structured-output-and-teardown-failure' as ExecutionId;
+    const streamId =
+      'chat@gpt54#abc-flow-structured-output-and-teardown-failure' as StreamTabId;
+    const snapshot = {
+      ...buildToolUseResumeData(executionId, streamId),
+      agentConfig: AgentConfigSchema.parse({
+        ...CONFIG,
+        outputSchema: {
+          type: 'object',
+          properties: { answer: { type: 'string' } },
+          required: ['answer'],
+        },
+      }),
+    };
+    const session = createTestSession();
+    const teardownFailure = new Error('flow detachment failed');
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.COMPLETE);
+    const sharedSpy = vi
+      .spyOn(PersistedFlow.prototype, 'getShared')
+      .mockResolvedValue(snapshot.shared);
+
+    try {
+      await expect(
+        runPersistedFlow(
+          executionId,
+          streamId,
+          snapshot,
+          () => () => {
+            throw teardownFailure;
+          },
+          session,
+        ),
+      ).rejects.toThrow(
+        'Structured-output run completed without calling submit_output.',
+      );
+    } finally {
+      runSpy.mockRestore();
+      sharedSpy.mockRestore();
     }
   });
 
