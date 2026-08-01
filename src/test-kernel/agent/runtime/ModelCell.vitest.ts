@@ -152,4 +152,36 @@ describe('ModelCell', () => {
     expect(refreshClient).toHaveBeenCalledWith('personal');
     await expect(cell.getClient()).resolves.toBe(replacement);
   });
+
+  it('discards a build retired by a mid-flight swap', async () => {
+    const oldClient = { id: 'old' };
+    const newClient = { id: 'new' };
+    let releaseOldBuild!: () => void;
+    const oldHandler = {
+      dispose: vi.fn(),
+      getClient: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseOldBuild = () => resolve(oldClient);
+          }),
+      ),
+    } as unknown as RunModelHandler<{ id: string }>;
+    const newHandler = {
+      dispose: vi.fn(),
+      getClient: vi.fn(async () => newClient),
+    } as unknown as RunModelHandler<{ id: string }>;
+    const cell = new ModelCell(oldHandler, 'deepseekT');
+
+    // Build starts on the old handler, then an idle model switch lands
+    // before it settles.
+    const pending = cell.getClient();
+    cell.swap(newHandler, 'sonnet46T');
+    releaseOldBuild();
+    // The stranded caller still gets the client its attempt asked for...
+    await expect(pending).resolves.toBe(oldClient);
+    // ...but the cell must not pair the retired handler's client with the
+    // replacement: the next read builds from the live handler.
+    await expect(cell.getClient()).resolves.toBe(newClient);
+    expect(cell.handler).toBe(newHandler);
+  });
 });

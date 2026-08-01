@@ -17,6 +17,7 @@ import {
   normalizeProviderError,
 } from '@common/errors';
 import {
+  attachContextWindowError,
   attachMissingApiKeyError,
   attachProviderError,
 } from '@common/errors/sdkErrorUtils';
@@ -289,12 +290,17 @@ export async function finalizeRunTerminal(
  * `undefined` when it was, keeping `normalizeProviderError` from reading a
  * wrong relay verdict off the retry-state shape.
  */
+/** Failures finalizeFailedRun already logged, published, and wrapped; the
+ *  outer catch rethrows these untouched instead of finalizing them again. */
+const finalizedRunFailures = new WeakSet<Error>();
+
 function toFlowFailureError(error: RetryErrorInfo): Error {
   const failure = new Error(error.message);
   attachProviderError(failure, error);
-  // The classifier is marker-only for this kind; the flatten carried the
-  // verdict as a field, so restore the marker on the rebuilt Error.
+  // The classifiers for these kinds read Error markers; the flatten carried
+  // the verdicts as fields, so restore the markers on the rebuilt Error.
   if (error.missingApiKey) attachMissingApiKeyError(failure);
+  if (error.contextWindow) attachContextWindowError(failure);
   return failure;
 }
 
@@ -595,7 +601,9 @@ export async function runFlowWithLifecycle(
       );
     }
 
-    throw new AgentError(errorMsg, { cause: err });
+    const finalizedFailure = new AgentError(errorMsg, { cause: err });
+    finalizedRunFailures.add(finalizedFailure);
+    throw finalizedFailure;
   };
   try {
     // Publish run identity/config before the RUNNING transition so progress
@@ -712,6 +720,9 @@ export async function runFlowWithLifecycle(
     logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
     return withResolvedOutcome(result, resolvedOutcome);
   } catch (err) {
+    // A carried failure already went through finalizeFailedRun on the return
+    // path above; its AgentError must not be logged and classified twice.
+    if (err instanceof Error && finalizedRunFailures.has(err)) throw err;
     return await finalizeFailedRun(err, undefined);
   } finally {
     if (!keepLeaseWatcher) stopWatchingLease();

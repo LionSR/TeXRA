@@ -44,6 +44,10 @@ export class ModelCell<C = unknown> {
    */
   #current: { readonly client: C } | undefined;
   #building: Promise<C> | undefined;
+  /** The handler a pending #building belongs to, so a build retired by a
+   *  mid-flight swap can neither publish its client nor clear a successor's
+   *  registration. */
+  #buildingFor: RunModelHandler<C> | undefined;
 
   constructor(handler: RunModelHandler<C>, modelId: string) {
     this.#handler = handler;
@@ -68,17 +72,28 @@ export class ModelCell<C = unknown> {
   /** The provider client for the live handler, built on first read. */
   async getClient(): Promise<C> {
     if (this.#current) return this.#current.client;
-    this.#building ??= this.#buildClient();
+    if (!this.#building) {
+      this.#buildingFor = this.#handler;
+      this.#building = this.#buildClient(this.#handler);
+    }
     return this.#building;
   }
 
-  async #buildClient(): Promise<C> {
+  async #buildClient(builtFor: RunModelHandler<C>): Promise<C> {
     try {
-      const client = await this.#handler.getClient();
-      this.#current = { client };
+      const client = await builtFor.getClient();
+      // A swap may have retired builtFor while its build was in flight; the
+      // caller that started the build still gets its client, but the cell
+      // must not pair it with the replacement handler.
+      if (this.#handler === builtFor) {
+        this.#current = { client };
+      }
       return client;
     } finally {
-      this.#building = undefined;
+      if (this.#buildingFor === builtFor) {
+        this.#building = undefined;
+        this.#buildingFor = undefined;
+      }
     }
   }
 
@@ -96,10 +111,15 @@ export class ModelCell<C = unknown> {
     signal?: AbortSignal,
   ): Promise<void> {
     signal?.throwIfAborted();
-    const replacement = await this.#handler.refreshClient(selection);
+    const rebindFor = this.#handler;
+    const replacement = await rebindFor.refreshClient(selection);
     signal?.throwIfAborted();
+    // Same retirement guard as #buildClient: a swap that landed while the
+    // refresh was in flight owns the cell now.
+    if (this.#handler !== rebindFor) return;
     this.#current = { client: replacement };
     this.#building = undefined;
+    this.#buildingFor = undefined;
   }
 
   /** Adopt a new pair and dispose the handler it replaces. */
@@ -111,6 +131,7 @@ export class ModelCell<C = unknown> {
     // one from the handler now live.
     this.#current = undefined;
     this.#building = undefined;
+    this.#buildingFor = undefined;
     if (retired !== handler) retired.dispose();
   }
 
