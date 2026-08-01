@@ -84,10 +84,13 @@ not applied.
 
 Unchanged in substance from `-07-30`; all still present:
 
-1. **Tool registry still closed.** `IToolRegistry = { get, has }`
-   (`ToolTypes.ts:41-44`), no public `register`; tools hard-coded in
-   `createDefaultTools()`. An embedder cannot add a tool. Correctly last on LoC,
-   first on foundation.
+1. **Shared tool registry mutation is still closed, but per-run injection is public.**
+   `IToolRegistry = { get, has }` (`ToolTypes.ts:41-44`) exposes no `register`, and
+   built-ins remain hard-coded in `createDefaultTools()`. However, an embedder can
+   add tools for a run through `RunAgentInput.tools` (`packages/agent/src/index.ts:60`),
+   which `runAgent` forwards at `:275` and the tool-use flow overlays onto the
+   registry. The remaining question is only whether a process-wide mutable registry
+   is needed; it is not a missing foundation capability.
 2. **Product types still leak into the runtime launch path.** `RunAgentOptions.preferHelperModel`
    (`runAgent.ts:54,82`); `AgentFlowResult.compileFailures` (`AgentFlowResult.ts:34,139`);
    TeXRA-domain `AgentEvent` arms (`updateCompileFailures`, `updateMissingOutputs`,
@@ -101,9 +104,10 @@ Unchanged in substance from `-07-30`; all still present:
    handler**, not trimming the `Pick`. See §New-13 for the model-handler deep-dive's
    port-inversion proposal and why it is design-judgment, not mechanical.
 4. **NS-1 host→core public surface.** Hosts still reach `@agent/*` deep specifiers
-   frozen by the #7684 **R-b freeze ratchet** (`config/ratchets/host-agent-import-baseline.json`);
-   no Tier-1 manifest yet, and — see §New-12 — the north-star **R-a forbidding
-   rule** is still not in place.
+   frozen by the #7684 **R-b freeze ratchet**
+   (`config/ratchets/host-agent-import-baseline.json`), and there is no Tier-1
+   manifest yet. The north-star **R-a host-layer fence is already in place** in
+   `eslint.config.mjs:532-549`; see the corrected status in §New-12.
 
 ## Deep-dive findings — reconciled against the standing record
 
@@ -143,7 +147,7 @@ here.
 - **[TRACKED] §New-4 — `createRunScope` single-caller freeze wrapper.** Re-verified:
   `RunScope.ts:24` has one production caller (`AgentLaunchContext.ts`); the two
   other hits are test utils. Textbook inline candidate per CLAUDE.md's own
-  "single-caller extractions are banned" guardrail; the `RunScope` *interface*
+  "single-caller extractions are banned" guardrail; the `RunScope` _interface_
   (10 importers) stays.
 - **[TRACKED] §New-6 — `AgentFlowResult → AgentFinalResult` field rename +
   `projectToolUseFinalTextFields` SSOT bridge.** Re-verified present
@@ -160,7 +164,7 @@ here.
   they can't drift), which the model-handler deep-dive independently rated a good
   pattern to keep.
 - **[TRACKED] §New-9 — one stream-status transition emitted four ways.** Re-verified:
-  `StreamStatusService.emitStatus` still fans a single transition to the `status`
+  `StreamStatusService.publishStatus` still fans a single transition to the `status`
   `AgentEvent` trace, the `updateStreamStatus` `SessionFact` (`:308`), and the
   direct `statusListeners` set (`:312`). The logging deep-dive independently
   re-derived this as the one place the run/session channel separation is not clean.
@@ -189,30 +193,29 @@ here.
 
 ### New this pass — recorded for maintainer re-derivation
 
-- **[NEW] §New-12 — the "import-boundary lint gate" the docs promise is half-built;
-  reconcile the claim.** CLAUDE.md/AGENTS.md (`AGENTS.md:91-92`) say hosts import
-  core through path aliases "until a future SDK surface is enforced with a build and
-  import-boundary lint gate." Two honest corrections at HEAD: (1) **the build
-  already ships** — `packages/agent` is the published `@texra-ai/agent` v0.40.0
-  ("Embeddable TeXRA agent runtime") with a real build pipeline
-  (`packages/agent/scripts/{build,bundle,rewrite-declaration-aliases,validate-artifacts}.mjs`);
-  the "no `@texra/core` yet" framing is stale for the *build*. (2) The **gate is
-  partial**: the #7684 **R-b freeze ratchet** exists
-  (`config/ratchets/host-agent-import-baseline.json` — pins each host's distinct
-  `@agent/*` deep-import specifier count, "freezes the surface a future SDK barrel
-  would be seeded from"), but the north-star **R-a forbidding rule** (forbid
-  `src/**` except `src/test-kernel/**` from importing the host ports — north-star
-  `:108`) is **not** in place. So the accurate status is "R-b freeze landed, R-a
-  fence not yet," which the runtime deep-dive's "the gate does not exist" overstated.
-  This is the single highest-leverage *additive* piece for durable SDK readiness and
-  is the north-star's own gated Step 0 — not a refactor, a new lint rule.
+- **[NEW] §New-12 — the build and both import-boundary fences exist; npm publication
+  does not. Reconcile the claim.** CLAUDE.md/AGENTS.md (`AGENTS.md:91-92`) say hosts
+  import core through path aliases "until a future SDK surface is enforced with a
+  build and import-boundary lint gate." At HEAD, `packages/agent` is a locally
+  build-ready `@texra-ai/agent` v0.40.0 package with build, bundle,
+  declaration-rewrite, and artifact-validation scripts
+  (`packages/agent/scripts/{build,bundle,rewrite-declaration-aliases,validate-artifacts}.mjs`).
+  It is **not published to npm**: `.github/workflows/release.yml:153-158` explicitly
+  marks the publish job "NOT PUBLISHED YET" and disables it with `false &&`. The
+  lint gate is also more complete than the initial deep-dive reported: the #7684
+  **R-b freeze ratchet** exists in
+  `config/ratchets/host-agent-import-baseline.json`, and the north-star **R-a
+  host-layer fence** exists in `eslint.config.mjs:532-549`, applying
+  `no-restricted-imports` to production `src/**` and `packages/agent/src/**` while
+  excluding `src/test-kernel/**`. The remaining boundary work is the Tier-1 public
+  manifest and reduction of frozen host deep imports, not another R-a rule.
 - **[NEW] §New-13 — `IModelHandler` port ownership is inverted for external
   authorship (strategic, design-judgment — do not treat as mechanical).** The model
-  handler deep-dive's sharpest surface observation: the port is a `Pick` *projection*
+  handler deep-dive's sharpest surface observation: the port is a `Pick` _projection_
   of the 1986-line concrete base (`IModelHandler.ts:35-42`), so the base is the
   source of truth and the interface derives from it. This is exactly what prevents
   drift (standing §9 item 3) and must not be "fixed" by trimming the `Pick`. But for
-  a genuinely *external* provider author, the direction is backwards: they cannot
+  a genuinely _external_ provider author, the direction is backwards: they cannot
   implement a hand-authored contract; they must satisfy a slice of a large class. A
   true extractable provider SDK would invert ownership (author `IModelHandler` as the
   SoT, base `implements` it) — a strategic reshape with 3 consumer sites
@@ -245,7 +248,7 @@ here.
   stays. Small, recorded.
 - **[NEW] §New-16 — `.catch('unknown')` on accounting-adjacent provider label.
   (S.)** `UsageMonitor.ts:273` does `UsageProviderSchema.catch('unknown').parse(...)`
-  on a value that feeds `UsageLogService.log` (billing). Provider is a *label*, not
+  on a value that feeds `UsageLogService.log` (billing). Provider is a _label_, not
   the metered quantity, so risk is low — but it is a Zod `.catch` on data flowing to
   accounting, exactly the class the schema guardrail says to scrutinize. Flag and
   confirm intent; likely fine, but should be a loud `warn`-and-default rather than a
@@ -253,28 +256,25 @@ here.
 - **[NEW] §New-17 — small model-handler tidy-ups (S each, recorded).**
   (a) `withReasoningOverride` (`ModelFactory.ts:154`) is a genuine single-production-
   caller wrapper (one call at `:360`) — inline candidate per the "single-caller
-  extractions are banned" guardrail; the *other* `ModelFactory` wrappers are
-  multi-caller and stay. (b) `createBatchedToolUseFollowUpMessages` is implemented on
-  **6** concrete handlers (openai, openrouter, google×3, vscodelm) and **0** on the
-  base; promoting it to the base with a default (wrap the single-call
-  `createToolUseFollowUpMessages`, exactly as `GoogleModelHandlerBase.ts:270-287`
-  already does) would delete the port's one hand-authored `&{}` extension
-  (`IModelHandler.ts:103`) and the `ToolUseDispatchNode.ts:664` feature-probe, keeping
-  the `requiresBatchedParallelToolResults` gate. (c) `config`/`capabilities` are
-  `public` mutable on the base (`ModelHandler.ts:212-213`) and picked into the port,
-  with `ModelFactory.ts:168` mutating `capabilities.reasoningEffort` post-construction
-  — an SDK boundary would expose these read-only and fold the reasoning override into
-  construction (pairs with (a)).
-- **[NEW] §New-18 — two projectors re-derive the same run facts. (M; consolidation
-  candidate.)** `StreamSnapshotStore.attachSessionEvents` (durable sidecar) and
-  `ProgressFactApplier` (live webview state) both consume the same
-  `updateTodos/updatePlan/addOutputFiles/updateMissingOutputs/updateCompileFailures/usage`
-  allowlist and accumulate near-identical state, each maintaining its own switch
-  against the hand-maintained `RUN_FACT_EVENT_TYPES` array (`events.ts:374-387`). The
-  persist-vs-live split is legitimate, but the dispatch logic is duplicated. A typed
-  dispatch map keyed off the union (making an omitted arm a compile error) would fix
-  both the duplication and the §New-14 class of silent-drop at once. Recorded as a
-  consolidation target, not a drive-by.
+  extractions are banned" guardrail; the _other_ `ModelFactory` wrappers are
+  multi-caller and stay. (b) `config`/`capabilities` are `public` mutable on the base
+  (`ModelHandler.ts:212-213`) and picked into the port, with `ModelFactory.ts:168`
+  mutating `capabilities.reasoningEffort` post-construction — an SDK boundary would
+  expose these read-only and fold the reasoning override into construction (pairs
+  with (a)). The optional `createBatchedToolUseFollowUpMessages` extension stays:
+  its batched signature has no provider-client argument, whereas the base
+  `createToolUseFollowUpMessages` requires one, and `GoogleModelHandlerBase` correctly
+  delegates single-call handling to its provider-specific batched primitive rather
+  than providing the reverse generic adapter.
+- **[NEW] §New-18 — the progress path already shares one snapshot owner; narrow the
+  finding to §New-14.** `ProgressViewState` receives `session.snapshots` directly
+  (`ProgressViewState.ts:159-179`), and `ProgressFactApplier` reads from that same
+  `StreamSnapshotStore`; the store remains the sole snapshot owner and updater, so
+  the progress layer does not maintain a second accumulated copy. Its run-fact
+  dispatch is already an exhaustive `RunFactHandlers` map
+  (`ProgressFactApplier.ts:85-92,123-180`), not a duplicate switch. Therefore there
+  is no projector-consolidation target here. The actionable exhaustiveness gap is
+  only the remaining switch in `StreamSnapshotStore` described by §New-14.
 
 ## Subagent boundaries (task item 4) — the seams already exist, re-affirmed
 
@@ -282,11 +282,14 @@ Unchanged from `-07-30`; the flows/subagent deep-dive independently re-derived t
 same conclusion: SDK-readiness here is an **exposure** problem, not a build problem.
 The seams, at HEAD:
 
-1. **`ChildRunStrategy<TTurn>` is THE subagent seam (split point #1).** One
-   host-agnostic driver `startChildRunLoop` (`childRunLoop.ts`) runs four concrete
-   strategies (native subagent, codex CLI, claude CLI, workflow-script). A future
-   external-agent SDK is a new `ChildRunStrategy` passed to the same loop — publish
-   `ChildRunStrategy` + `startChildRunLoop` + `ChildRunPorts`.
+1. **`ChildRunStrategy<TTurn>` is the internal subagent reuse seam (split point
+   #1), not yet a publishable external contract.** One driver `startChildRunLoop`
+   (`childRunLoop.ts`) runs four concrete strategies (native subagent, codex CLI,
+   claude CLI, workflow-script), but it also requires an owned execution lease and
+   `currentSession()`, exposes internal child/execution/stream/result-metadata types,
+   and directly invokes TeXRA persistence and parent-delivery helpers. An external
+   SDK must first extract those dependencies behind public ports; exporting
+   `ChildRunStrategy` + `startChildRunLoop` alone would not make the loop usable.
 2. **`nativeSubagentStrategy` is the "run a TeXRA agent as a subagent" adapter
    (split point #2)** — `launch` wraps `executeAgent`, `runTurn` wraps
    `resumeToolUseFromResumeData`. This is why `executeAgent`'s low production-caller
@@ -295,9 +298,9 @@ The seams, at HEAD:
    runtime deep-dive independently confirmed the two-production-caller count and the
    "not a second public door" reading.
 3. **Lineage/detach seam (split point #3):** `registerExecution(…, parentExecutionId)`
-   + `executionRegistry` child-activation tracking +
-   `detachActiveChildren`/`interruptActiveChildren`, with `detachSubagentsOnStop()`
-   one clean policy read.
+   - `executionRegistry` child-activation tracking +
+     `detachActiveChildren`/`interruptActiveChildren`, with `detachSubagentsOnStop()`
+     one clean policy read.
 4. **Core-level boundary:** `runToolUseFlow({ isSubagent })` + `ToolUseWaitNode`
    suspends the persisted flow at `FlowTransition.WAITING`; the tool call is the right
    SDK granularity for a nested agent.
@@ -316,10 +319,12 @@ The seams, at HEAD:
    must replace this in-process handoff with IPC/RPC; the current design does not (and
    need not yet) abstract it. Flag it so the seam is not assumed free.
 
-Recommended sequencing (unchanged): land the north-star **R-a fence** (§New-12) →
-stabilize `ChildRunStrategy` as the public subagent contract → expose the
-helper-model one-shots as a headless sub-task API → give `agentCreator` a
-non-interactive UI port → leave the intra-run flow seams in-process.
+Recommended sequencing: define the Tier-1 public manifest and reduce the frozen host
+deep-import surface (§New-12) → extract the child-run loop's session, lease,
+persistence, and parent-delivery dependencies behind public ports → stabilize the
+resulting external subagent contract → expose the helper-model one-shots as a
+headless sub-task API → give `agentCreator` a non-interactive UI port → leave the
+intra-run flow seams in-process.
 
 ## Notable strengths (unchanged, re-affirmed)
 
@@ -331,7 +336,7 @@ non-interactive UI port → leave the intra-run flow seams in-process.
   readiness story.
 - `createResponse`/`extractResponse` Template Method (`ModelHandler.ts`) is textbook
   — the one clean provider contract to keep as the SDK core; the 16 abstract members
-  are a reasonable "implement a new provider" surface (documenting them as *the*
+  are a reasonable "implement a new provider" surface (documenting them as _the_
   provider contract is a cheap surface win).
 - `IModelHandler = Pick<ModelHandler>` prevents port drift by construction; all 43
   members are called through it. The problem is width (flow-layer demand) and
@@ -349,7 +354,7 @@ non-interactive UI port → leave the intra-run flow seams in-process.
 - `logUtils` staying **off** the `Platform` object is defensible — channel output is
   a host-injected redacting text sink, a different concern from the structured
   `Platform` ports, and `log` facts already ride the `AgentEvent` stream (`type:'log'`).
-  The runtime/logging deep-dives agree this is the sharpest SDK-shape *question*, not
+  The runtime/logging deep-dives agree this is the sharpest SDK-shape _question_, not
   a redundancy to delete.
 
 ## No change lands (by design this pass)
@@ -358,14 +363,13 @@ Consistent with every unattended checkpoint since `-07-22`, and reinforced by
 `-07-30`'s live-authorized census finding the "already-do" subset empty of clean
 mechanical wins. Even the smallest candidates this pass could see —
 §New-17(a) (`withReasoningOverride` inline), §New-15 (trace log-level), §New-14 (the
-one defect) — are **not applied**: each wants an out-of-pass reviewer, and §New-14 in
-particular is a `default:`-branch reshape that should sequence with §New-18's typed
-dispatch map rather than be spot-patched. `MapToolRegistry` re-checked and still
+one defect) — are **not applied**: each wants an out-of-pass reviewer. §New-14 is
+now deliberately narrow: make the intentional `goalPaused` no-op explicit and add a
+`never` assertion to the remaining `StreamSnapshotStore` switch. `MapToolRegistry` re-checked and still
 `Map | Record` — **do not re-attempt the narrowing without a deliberate
-compatibility boundary for `Map` inputs.** The genuinely safe next steps remain the
-*additive* ones the subagent-boundaries and §New-12 sections name (land the R-a
-fence; publish `ChildRunStrategy`; expose the helper-model one-shots) — capability
-added without touching the tested invariants above.
+compatibility boundary for `Map` inputs.** The genuinely safe next steps remain additive or boundary-first: define the Tier-1
+manifest, extract the child-run loop's internal dependencies behind public ports,
+and expose the helper-model one-shots without touching the tested invariants above.
 
 ## Coverage gaps (honest scope of this pass)
 
@@ -377,11 +381,10 @@ added without touching the tested invariants above.
   HEAD: the 43-member `Pick`, 0 vscode/packages imports, 0 cycle-schema parses,
   `MapToolRegistry` shape, the ceiling leaks, §New-8/§New-9 presence, the
   `createChannelTrace` 27-non-test count, the §New-14 `default: return` fall-through
-  (read directly), the §New-17 single-caller/base-absence/mutable-field claims, and
-  the §New-12 build-ships/R-b-ratchet-exists/R-a-absent status. §New-13/§New-18 are
-  design-judgment framings, cited to file:line but not re-derived exhaustively.
+  (read directly), the §New-17 single-caller/mutable-field claims, the §New-12
+  build-ready-but-unpublished/R-b-and-R-a-landed status, and the shared snapshot
+  ownership correction in §New-18. §New-13 is a design-judgment framing, cited to
+  file:line but not re-derived exhaustively.
 - This checkpoint lives under `docs/proposals/` (internal, excluded from the
   texra.ai publish allowlist) — not a root-level doc, so it does not touch the
   `docs-root-boundary` gate.
-</content>
-</invoke>
