@@ -870,7 +870,15 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       }
       return {
         status: 'executed',
-        output: '(No conversation history available)',
+        output: formatConversation([], {
+          totalMessages: 0,
+          metadata: [
+            'Source: none',
+            'Stream: none',
+            'Returned message interval: [0, 0)',
+            'Next offset: none',
+          ],
+        }),
       };
     }
 
