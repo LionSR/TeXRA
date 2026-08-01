@@ -18,9 +18,7 @@
       "@agent/*": ["src/agent/*.ts", "src/agent/*/index.ts"],
       "@hosts/*": ["src/hosts/*.ts", "src/hosts/*/index.ts"],
       "@utils/*": ["src/utils/*.ts", "src/utils/*/index.ts"],
-      "@logger": ["src/logger/index.ts"],
       "@logger/*": ["src/logger/*.ts", "src/logger/*/index.ts"],
-      "@telemetry": ["src/telemetry/index.ts"],
       "@telemetry/*": ["src/telemetry/*.ts", "src/telemetry/*/index.ts"],
       "@transcript": ["src/transcript/index.ts"],
       "@transcript/*": ["src/transcript/*.ts", "src/transcript/*/index.ts"],
@@ -34,7 +32,6 @@
       ],
       "@replacement/*": ["src/replacement/*.ts", "src/replacement/*/index.ts"],
       "@tools/*": ["src/tools/*.ts", "src/tools/*/index.ts"],
-      "@types/*": ["src/types/*.ts", "src/types/*/index.ts"],
       "@eventBus/*": ["src/eventBus/*.ts", "src/eventBus/*/index.ts"],
       "@auth/*": ["src/auth/*.ts", "src/auth/*/index.ts"],
       "@platform/*": ["src/platform/*.ts", "src/platform/*/index.ts"]
