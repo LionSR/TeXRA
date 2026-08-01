@@ -6,7 +6,12 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { describe, it, vi } from 'vitest';
-import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  type ModelConfig,
+  ModelProvider,
+  ReasoningEffort,
+} from 'llm-zoo';
 import { APIUserAbortError, OpenAIError } from 'openai';
 
 // Local imports
@@ -409,6 +414,21 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       { effort?: string; mode?: string } | undefined;
     assert.equal(reasoning?.mode, 'pro');
     assert.equal(reasoning?.effort, 'medium');
+  });
+
+  it('requests priority processing for the gpt56fast registry entry', async () => {
+    assert.equal(MODEL_CONFIGS.gpt56fast.serviceTier, 'fast');
+    const handler = createHandler(MODEL_CONFIGS.gpt56fast);
+    const { client, requests } = createCapturingClient('resp-fast-tier');
+
+    await handler.createResponse({
+      client,
+      messages: createMessages(1),
+      temperature: 0,
+    });
+
+    assert.equal(requests[0]?.model, 'gpt-5.6-sol');
+    assert.equal(requests[0]?.service_tier, 'priority');
   });
 
   it('sends max effort when the model declares max as its native ceiling', async () => {
