@@ -86,6 +86,49 @@ export function deriveDesktopPaths(rootPaths) {
   return { ...rootPaths };
 }
 
+// Aliases that the declaration-only agent build cannot resolve because its
+// include is intentionally limited to packages/agent/src and root src/types.
+export const BUILD_EXCLUDED_ALIASES = [
+  'vscode-jsonrpc/node',
+  '@common/state',
+  '@common/state/*',
+  '@common/webview',
+  '@common/webview/*',
+  '@webview/*',
+  '@frontend/*',
+  '@commands/*',
+  '@resources/*',
+  '@progressView/*',
+  '@settingsView/*',
+  '@extensionSchemas/*',
+  'turndown-plugin-gfm',
+  'data-uri-to-buffer',
+  '@openrouter/sdk',
+  '@openrouter/sdk/models',
+  '@openrouter/sdk/models/errors',
+  '@controllers/*',
+  '@test/*',
+  '@cli/*',
+  '@desktop/*',
+];
+
+/** Derives the declaration-only agent build map from the root aliases. */
+export function deriveBuildPaths(rootPaths) {
+  return Object.fromEntries(
+    Object.entries(rootPaths)
+      .filter(([key]) => !BUILD_EXCLUDED_ALIASES.includes(key))
+      .map(([key, values]) => [
+        key,
+        key.endsWith('/*')
+          ? values.flatMap((value) => {
+              const prefix = value.slice(0, -1);
+              return [`${prefix}*.ts`, `${prefix}*/index.ts`];
+            })
+          : values.map((value) => `${value}/index.ts`),
+      ]),
+  );
+}
+
 export function loadAliasEntries(rootDir) {
   const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
 
