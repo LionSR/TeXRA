@@ -11,7 +11,6 @@ import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import {
   ProgressViewState,
   type ActiveStreamId,
-  type StreamBadgeSnapshot,
   type StreamExecutionState,
 } from '@controllers/progressView/backend/state/ProgressViewState';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
@@ -611,19 +610,33 @@ export class ProgressFactApplier {
    * so hosts can list it. A retained row is only ever created from an entry
    * that was already in OUR roster and is absent from `next`, so a first
    * roster can never mark anything finished.
+   *
+   * `next` decides roster membership and identity only. A row we already track
+   * keeps the phase `recordChildPhase` wrote, so the status-machine fact stays
+   * the sole writer of `status` and a roster stamped before a later transition
+   * cannot regress a resolved row. A row entering the roster (first sighting,
+   * or a retained child going live again) has no recorded phase to keep, so it
+   * takes the one stamped at emission.
    */
   public updateChildRoster(
     parentStreamId: StreamTabId,
     next: StreamExecutionState['subagents'],
   ): void {
-    let nextBadges: StreamBadgeSnapshot | null = null;
-
     this.state.updateStreamState(parentStreamId, (prev) => {
       const previous = prev.subagents;
-      const vanishedIds = diffActiveChildren(
-        previous.filter((child) => child.finishedAt === undefined),
-        next,
+      const liveBefore = previous.filter(
+        (child) => child.finishedAt === undefined,
       );
+      const recordedPhases = new Map(
+        liveBefore.map((child) => [child.executionId, child.status]),
+      );
+      const live = next.map((child) => {
+        const recorded = recordedPhases.get(child.executionId);
+        return recorded === undefined || recorded === child.status
+          ? child
+          : { ...child, status: recorded };
+      });
+      const vanishedIds = diffActiveChildren(liveBefore, next);
       const finishedAt = Date.now();
       const nextIds = new Set(next.map((child) => child.executionId));
       // Previously-retained rows first (already in ascending `finishedAt`
@@ -639,17 +652,18 @@ export class ProgressFactApplier {
           .filter((child) => vanishedIds.has(child.executionId))
           .map((child) => ({ ...child, finishedAt })),
       ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
-      const updatedState = { ...prev, subagents: [...next, ...retained] };
-      nextBadges = this.state.projectChildRosters(updatedState);
-      return updatedState;
+      return { ...prev, subagents: [...live, ...retained] };
     });
 
+    const updated = this.state.getStreamState(parentStreamId);
     if (
       this.webviewUpdater.isAvailable() &&
       parentStreamId === this.state.activeStream &&
-      nextBadges
+      updated
     ) {
-      this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
+      this.webviewUpdater.updateStreamBadges(parentStreamId, {
+        subagents: updated.subagents,
+      });
     }
   }
 
@@ -751,7 +765,7 @@ export class ProgressFactApplier {
       conversationProgress: state.conversationProgress,
       roundStage: state.roundStage ?? null,
       phaseStage: state.phaseStage ?? null,
-      badges: this.state.projectChildRosters(state),
+      badges: { subagents: state.subagents },
       parentStreamId: this.state.snapshots.getParentStreamId(stream) ?? null,
     };
   }
@@ -764,6 +778,11 @@ export class ProgressFactApplier {
     _previousStatus?: StreamPhase,
     substate?: StreamSubstate,
   ): Promise<void> {
+    // Land the status-machine phase in the parent rosters before this handler
+    // can suspend, so rows are written in fact order and a slow active-phase
+    // rehydrate can never overwrite a later phase.
+    const rosterParents = this.state.recordChildPhase(streamId, status);
+
     // Active phases keep the full log resident for runtime writes. Inactive,
     // unfocused streams release heavy entries and rehydrate on demand.
     const requiresPersistentRehydrate =
@@ -784,46 +803,16 @@ export class ProgressFactApplier {
       ? this.handleRunningTransition(streamId)
       : undefined;
 
-    // Keep the roster's fallback status current before the status-machine
-    // entry can be cleared by child cleanup. Projection still overlays from
-    // the machine while it exists; this cached value preserves the terminal
-    // outcome for later structural syncs after cleanup.
-    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
-    let parentState = parentStreamId
-      ? this.state.getStreamState(parentStreamId)
-      : undefined;
-    if (
-      parentStreamId &&
-      parentState?.subagents.some(
-        (child) =>
-          child.kind === 'subagent' && child.childStreamId === streamId,
-      )
-    ) {
-      parentState = {
-        ...parentState,
-        subagents: parentState.subagents.map((child) =>
-          child.kind === 'subagent' && child.childStreamId === streamId
-            ? { ...child, status }
-            : child,
-        ),
-      };
-      const updatedParentState = parentState;
-      this.state.updateStreamState(parentStreamId, () => updatedParentState);
-    }
-
     if (!this.webviewUpdater.isAvailable()) return;
 
-    // A child's roster drop can land BEFORE its terminal status. Re-push the
-    // active parent's badges from the canonical projection when it catches up.
-    if (
-      parentStreamId &&
-      parentStreamId === this.state.activeStream &&
-      parentState
-    ) {
-      this.webviewUpdater.updateStreamBadges(
-        parentStreamId,
-        this.state.projectChildRosters(parentState),
-      );
+    // Push the rows just written whenever the parent holding them is on screen.
+    for (const parent of rosterParents) {
+      if (parent !== this.state.activeStream) continue;
+      const parentState = this.state.getStreamState(parent);
+      if (!parentState) continue;
+      this.webviewUpdater.updateStreamBadges(parent, {
+        subagents: parentState.subagents,
+      });
     }
 
     const isNewStream = !this.state.streamLogs.has(streamId);

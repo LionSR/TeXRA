@@ -937,6 +937,227 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('keeps a same-execution model switch that arrives during async hydration', async () => {
+    await installPlatform();
+    const executionId = 'abc123' as ExecutionId;
+    const persisted = toolUseTaskState('search', 'deepseekproT');
+    const switched = toolUseTaskState('search', 'kimi26T');
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+    });
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await getExecutionStore(executionId).writeConfig(persisted.agentConfig);
+
+    const store = new StreamSnapshotStore();
+    // A model switch rewrites the execution config and re-emits `run.config`
+    // for the SAME execution, so the identity check cannot tell the two apart:
+    // the live event wins because the seed only fills what it did not receive.
+    const wasModelSwitchInjected = injectDuringExecutionConfigHydration(
+      executionId,
+      () => store.setTaskState(STREAM, switched, executionId),
+    );
+
+    await store.load([STREAM]);
+
+    expect(wasModelSwitchInjected).toHaveBeenCalledOnce();
+    expect(store.getRunConfig(STREAM)?.model).toBe('kimi26T');
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
+  });
+
+  it('does not re-derive the run.start descriptor when a seed re-reads disk meta', async () => {
+    await installPlatform();
+    const executionId = 'abc123' as ExecutionId;
+    const taskState = toolUseTaskState('worker-agent');
+    const workflowDescriptor = buildRunDescriptor({
+      streamId: STREAM,
+      executionId,
+      agent: 'workflow-script',
+      category: AgentCategory.Workflow,
+      kind: 'workflowScript',
+    });
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+
+    const store = new StreamSnapshotStore();
+    store.setRunDescriptor(workflowDescriptor);
+    store.setTaskState(STREAM, taskState, executionId);
+    await store.flush();
+
+    // Disk meta drops back to the pre-descriptor shape for the same execution.
+    // Re-seeding may read it, but may not synthesize a competing identity from
+    // the execution config over the one run.start emitted.
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+    });
+    await store.load([STREAM]);
+
+    expect(store.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
+  });
+
+  it('adopts run identity from disk when meta names a different execution', async () => {
+    await installPlatform();
+    const liveExecutionId = 'abc123' as ExecutionId;
+    const foreignExecutionId = 'def456' as ExecutionId;
+    const foreignTaskState = toolUseTaskState('foreign-search');
+
+    const store = new StreamSnapshotStore();
+    store.setTaskState(
+      STREAM,
+      toolUseTaskState('live-search'),
+      liveExecutionId,
+    );
+    await store.flush();
+
+    await StorageFS.ensureDir(resolveRunStoragePath(foreignExecutionId));
+    await getExecutionStore(foreignExecutionId).writeConfig(
+      foreignTaskState.agentConfig,
+    );
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId: foreignExecutionId,
+    });
+    await store.load([STREAM]);
+
+    expect(store.getExecutionId(STREAM)).toBe(foreignExecutionId);
+    expect(store.getTaskState(STREAM)).toEqual(foreignTaskState);
+    expect(store.getRunDescriptor(STREAM)).toMatchObject({
+      executionId: foreignExecutionId,
+      agent: 'foreign-search',
+    });
+  });
+
+  it('refreshes the run config from disk when another host switched the model', async () => {
+    await installPlatform();
+    const executionId = 'abc123' as ExecutionId;
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+    });
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await getExecutionStore(executionId).writeConfig(
+      toolUseTaskState('search', 'deepseekproT').agentConfig,
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getRunConfig(STREAM)?.model).toBe('deepseekproT');
+
+    // The model switch runs in another host: it rewrites the execution config
+    // for the SAME execution and this store never sees the `run.config` event.
+    await getExecutionStore(executionId).writeConfig(
+      toolUseTaskState('search', 'kimi26T').agentConfig,
+    );
+    await store.load([STREAM]);
+
+    expect(store.getRunConfig(STREAM)?.model).toBe('kimi26T');
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
+  });
+
+  it('replaces a legacy run config once meta names a real execution', async () => {
+    await installPlatform();
+    const legacyTaskState = toolUseTaskState('legacy-search');
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      taskState: legacyTaskState,
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getTaskState(STREAM)).toEqual(legacyTaskState);
+    expect(store.getRunDescriptor(STREAM)).toBeUndefined();
+
+    // A legacy config carries no descriptor, so the handoff cannot be detected
+    // from the descriptor half alone: the pair still has to move together.
+    const executionId = 'def456' as ExecutionId;
+    const handoffTaskState = toolUseTaskState('handoff-search');
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await getExecutionStore(executionId).writeConfig(
+      handoffTaskState.agentConfig,
+    );
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+    });
+    await store.load([STREAM]);
+
+    expect(store.getTaskState(STREAM)).toEqual(handoffTaskState);
+    expect(store.getRunDescriptor(STREAM)).toMatchObject({
+      executionId,
+      agent: 'handoff-search',
+    });
+  });
+
+  it('drops run identity when disk meta no longer names an execution', async () => {
+    await installPlatform();
+    const executionId = 'abc123' as ExecutionId;
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+    });
+    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+    await getExecutionStore(executionId).writeConfig(
+      toolUseTaskState().agentConfig,
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getRunDescriptor(STREAM)).toMatchObject({ executionId });
+
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      description: 'Detached tab',
+    });
+    await store.load([STREAM]);
+
+    expect(store.getRunDescriptor(STREAM)).toBeUndefined();
+    expect(store.getRunConfig(STREAM)).toBeUndefined();
+    expect(store.getExecutionId(STREAM)).toBeUndefined();
+    expect(store.getDescription(STREAM)).toBe('Detached tab');
+  });
+
+  it('does not attach the seeded run config to a run.start that lands during hydration', async () => {
+    await installPlatform();
+    const oldExecutionId = 'abc123' as ExecutionId;
+    const newExecutionId = 'def456' as ExecutionId;
+    const oldTaskState = toolUseTaskState('old-search');
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId: oldExecutionId,
+    });
+    await StorageFS.ensureDir(resolveRunStoragePath(oldExecutionId));
+    await getExecutionStore(oldExecutionId).writeConfig(
+      oldTaskState.agentConfig,
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getTaskState(STREAM)).toEqual(oldTaskState);
+
+    const newDescriptor = buildRunDescriptor({
+      streamId: STREAM,
+      executionId: newExecutionId,
+      agent: 'workflow-script',
+      category: AgentCategory.Workflow,
+      kind: 'workflowScript',
+    });
+    // `run.start` for the next execution lands while the seed is still reading
+    // the previous one's config, which belongs to neither the new identity nor
+    // this stream any more.
+    const wasRunStartInjected = injectDuringExecutionConfigHydration(
+      oldExecutionId,
+      () => store.setRunDescriptor(newDescriptor),
+    );
+    await store.load([STREAM]);
+
+    expect(wasRunStartInjected).toHaveBeenCalledOnce();
+    expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
+    expect(store.getRunConfig(STREAM)).toBeUndefined();
+    expect(store.getTaskState(STREAM)).toBeUndefined();
+  });
+
   it('persists a late reset and round patch that arrive during async hydration', async () => {
     await installPlatform();
     const dir = streamDataDir(STREAM);

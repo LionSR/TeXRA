@@ -27,6 +27,7 @@ import {
   type ExecutionId,
   type PhaseStage,
   type RoundStage,
+  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -451,27 +452,39 @@ export class ProgressViewState {
   }
 
   /**
-   * Project a stream's child roster for the wire. `streamStatus` — not the
-   * roster row — owns a subagent's phase: a child's roster drop can arrive
-   * BEFORE its terminal status (the cancel path untracks the handle, then
-   * transitions the stream), so the status stamped into a retained row at drop
-   * time can read `running` forever. Resolve it here, at the one boundary every
-   * roster-carrying payload passes through — badges, the tab-switch content
-   * sync, and the structural `UPDATE_STREAMS` / `UPDATE_STREAM_METADATA`
-   * rebuild alike — so no send path can ship the stale stamped value.
+   * Carry a child stream's phase into every roster row that tracks it, and
+   * return the parents whose rosters changed. `streamStatus` owns a subagent's
+   * phase and this is the single write that lands it in a roster, so every send
+   * path ships stored data. Rows are keyed by their own `childStreamId` rather
+   * than by the parent-link snapshot: a child's roster drop can arrive BEFORE
+   * its terminal phase (the cancel path untracks the handle, then transitions
+   * the stream), and a detached child loses the parent link entirely while its
+   * retained row lives on under the former parent.
    */
-  projectChildRosters(state: StreamExecutionState): StreamBadgeSnapshot {
-    return {
-      subagents: state.subagents.map((child) =>
-        child.kind === 'subagent'
-          ? {
-              ...child,
-              status:
-                this.streamStatus.get(child.childStreamId) ?? child.status,
-            }
-          : child,
-      ),
-    };
+  recordChildPhase(
+    childStreamId: StreamTabId,
+    phase: StreamPhase,
+  ): StreamTabId[] {
+    const changedParents: StreamTabId[] = [];
+    for (const [parent, state] of this._streamStates) {
+      const tracksChild = state.subagents.some(
+        (child) =>
+          child.kind === 'subagent' &&
+          child.childStreamId === childStreamId &&
+          child.status !== phase,
+      );
+      if (!tracksChild) continue;
+      this._streamStates.set(parent, {
+        ...state,
+        subagents: state.subagents.map((child) =>
+          child.kind === 'subagent' && child.childStreamId === childStreamId
+            ? { ...child, status: phase }
+            : child,
+        ),
+      });
+      changedParents.push(parent);
+    }
+    return changedParents;
   }
 
   // -- Lifecycle --------------------------------------------------------------

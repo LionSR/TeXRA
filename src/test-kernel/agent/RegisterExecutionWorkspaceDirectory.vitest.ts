@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
-import * as logger from '@logger/logUtils';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -27,7 +26,6 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
 import {
   finalizeExecution,
   registerExecution,
-  synchronizeAgentResultOutcome,
   writeTerminalStatus,
 } from '@agent/storage/executionLifecycle';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
@@ -156,40 +154,6 @@ describe('execution lifecycle', () => {
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });
 
-  it('aligns an interim result after a suspended run terminates between turns', async () => {
-    const executionId = 'suspended-terminal-result' as ExecutionId;
-    mocks.readMeta.mockResolvedValue(
-      executionMeta({
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-        outcome: RUN_OUTCOME.CANCELLED,
-      }),
-    );
-    mocks.readResultMeta.mockResolvedValue(
-      resultMeta(RUN_OUTCOME.COMPLETED, 'Interim result.'),
-    );
-
-    await synchronizeAgentResultOutcome(executionId, RUN_OUTCOME.CANCELLED);
-
-    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-      resultMeta(RUN_OUTCOME.CANCELLED, 'Interim result.'),
-    );
-  });
-
-  it('does not change the result outcome when execution metadata is missing', async () => {
-    mocks.readResultMeta.mockResolvedValue(
-      resultMeta('completed', 'Finished.'),
-    );
-
-    await synchronizeAgentResultOutcome(
-      'missing-terminal-meta' as ExecutionId,
-      RUN_OUTCOME.CANCELLED,
-    );
-
-    expect(mocks.writeMeta).not.toHaveBeenCalled();
-    expect(mocks.readResultMeta).not.toHaveBeenCalled();
-    expect(mocks.writeResultMeta).not.toHaveBeenCalled();
-  });
-
   it('rejects when terminal metadata cannot be written', async () => {
     mocks.readMeta.mockResolvedValue(
       executionMeta({
@@ -312,32 +276,5 @@ describe('execution lifecycle', () => {
       }),
     );
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
-  });
-
-  it('warns when the persisted result outcome cannot be reconciled', async () => {
-    const executionId = 'result-sync-failed' as ExecutionId;
-    const error = new Error('result disk full');
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    mocks.readMeta.mockResolvedValue(
-      executionMeta({ outcome: RUN_OUTCOME.CANCELLED }),
-    );
-    mocks.readResultMeta.mockResolvedValue(
-      resultMeta('completed', 'Interim result.'),
-    );
-    mocks.writeResultMeta.mockRejectedValueOnce(error);
-
-    try {
-      await synchronizeAgentResultOutcome(executionId, RUN_OUTCOME.CANCELLED);
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        'ExecutionLifecycle',
-        expect.stringContaining(
-          `Failed to synchronize result outcome for ${executionId}`,
-        ),
-        { data: error },
-      );
-    } finally {
-      warnSpy.mockRestore();
-    }
   });
 });

@@ -29,6 +29,7 @@ import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
+  applyExecutionOutcome,
   parsePersistedResultMeta,
   ResultMetaSchema,
   type ResultMeta,
@@ -292,21 +293,26 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {
-    const raw = await this.read(KEYS.RESULT_META);
+    const [raw, meta] = await Promise.all([
+      this.read(KEYS.RESULT_META),
+      this.readMeta(),
+    ]);
     if (raw == null) return null;
 
     const canonical = ResultMetaSchema.safeParse(raw);
-    if (canonical.success) return canonical.data;
+    if (canonical.success) {
+      return applyExecutionOutcome(canonical.data, meta?.outcome);
+    }
 
-    const [meta, config] = await Promise.all([
-      this.readMeta(),
-      this.readConfig(),
-    ]);
+    const config = await this.readConfig();
     try {
-      return parsePersistedResultMeta(raw, {
-        category: config?.agentCategory,
-        outcome: meta?.outcome,
-      });
+      return applyExecutionOutcome(
+        parsePersistedResultMeta(raw, {
+          category: config?.agentCategory,
+          outcome: meta?.outcome,
+        }),
+        meta?.outcome,
+      );
     } catch (error) {
       logger.warn(
         CHANNEL,

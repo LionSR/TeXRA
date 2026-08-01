@@ -2,11 +2,7 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  finalizeExecution,
-  getExecutionStore,
-  registerExecution,
-} from '@agent/storage';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 import {
   captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
@@ -21,6 +17,7 @@ import {
   getCurrentToolContexts,
   type ToolCallContext,
 } from '@agent/followUp/ToolFileInteractionContext';
+import type { RunTerminalPersistence } from '@agent/runtime/AgentRunLifecycle';
 import type { ExecutionInterruptHandler } from '@agent/runtime/ExecutionHandle';
 import {
   getRunContextExecutionId,
@@ -38,10 +35,6 @@ import {
 } from '@shared/toolUse';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import {
-  deriveRunOutcome,
-  projectRunOutcome,
-} from '@shared/streams/streamStatus';
 import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import {
@@ -82,6 +75,18 @@ const SHELL_BACKGROUNDING_PATTERN =
 const SHELL_BACKGROUNDING_MESSAGE =
   'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
   'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
+
+/**
+ * A background command's durable terminal state is written by the shared
+ * finalizer, from the outcome the stream phase resolved. Deriving it here from
+ * the process exit alone would record ERROR for a command the user killed:
+ * the kill lands CANCELLED on the phase and only then does the process exit
+ * non-zero. There is no flow to resume, so the record is always dropped.
+ */
+const BACKGROUND_TERMINAL_PERSISTENCE: RunTerminalPersistence = {
+  kind: 'finalize',
+  flowRecord: 'delete',
+};
 
 interface BoundedOutputCapture {
   append(chunk: string): void;
@@ -509,22 +514,7 @@ export class BashTool extends defineTool({
       logBackgroundFailure(action, err);
     };
 
-    const finalizeAndReport = async (
-      success: boolean,
-      msg: string,
-    ): Promise<void> => {
-      try {
-        const finalization = await finalizeExecution({
-          executionId,
-          terminalStatus: projectRunOutcome(
-            deriveRunOutcome({ failed: !success, cancelled: false }),
-          ).executionStatus,
-          flowRecord: 'delete',
-        });
-        if (finalization.status === 'failed') throw finalization.error;
-      } catch (err: unknown) {
-        logDurabilityFailure('finalize execution', err);
-      }
+    const persistReport = async (msg: string): Promise<void> => {
       try {
         await getExecutionStore(executionId).writeReport(msg);
       } catch (err: unknown) {
@@ -595,11 +585,12 @@ export class BashTool extends defineTool({
           } catch (err: unknown) {
             logDurabilityFailure('persist result metadata', err);
           }
-          await finalizeAndReport(result.success, msg);
+          await persistReport(msg);
 
           await deliverAndFinalize(msg, {
             wallTimeMs,
             outcome: error ? { kind: 'failed', error } : { kind: 'completed' },
+            persistence: BACKGROUND_TERMINAL_PERSISTENCE,
             autoClose: true,
           });
           return;
@@ -607,10 +598,11 @@ export class BashTool extends defineTool({
 
         const { error } = outcome;
         const msg = formatBashError(executionId, command, error);
-        await finalizeAndReport(false, msg);
+        await persistReport(msg);
 
         await deliverAndFinalize(msg, {
           outcome: { kind: 'failed', error },
+          persistence: BACKGROUND_TERMINAL_PERSISTENCE,
           autoClose: true,
         });
       } catch (err: unknown) {

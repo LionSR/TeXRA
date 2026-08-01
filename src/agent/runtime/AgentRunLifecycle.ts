@@ -27,6 +27,7 @@ import {
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   getFirstRunDone,
   setFirstRunDone,
@@ -70,6 +71,17 @@ export interface RunFlowLifecycleOptions {
 
 type FlowRecordDisposition = FinalizeExecutionInput['flowRecord'];
 
+/**
+ * Flow-record retention: a fixed disposition, or the caller's policy keyed on
+ * the terminal outcome {@link finalizeRunTerminal} resolves. Keying it on the
+ * caller's own report instead would derive the record's fate from a different
+ * owner than the outcome it is persisted beside — a genuinely failed run kept
+ * resumable, or a cancelled one stripped of the record every other cancel path
+ * preserves.
+ */
+type FlowRecordRetention =
+  FlowRecordDisposition | ((outcome: RunOutcome) => FlowRecordDisposition);
+
 /** Private control channel through which a flow reports its retention policy. */
 export interface FlowLifecycleControl {
   setFlowRecordDisposition(disposition: FlowRecordDisposition): void;
@@ -79,7 +91,7 @@ export type RunTerminalPersistence =
   | { readonly kind: 'skip' }
   | {
       readonly kind: 'finalize';
-      readonly flowRecord: FinalizeExecutionInput['flowRecord'];
+      readonly flowRecord: FlowRecordRetention;
     };
 
 export interface FinalizeRunTerminalParams {
@@ -89,9 +101,16 @@ export interface FinalizeRunTerminalParams {
   readonly executions: Pick<ExecutionRegistry, 'untrack'>;
   /** Status machine owning this run's stream phase; terminalized last. */
   readonly streamStatus: StreamStatusMachine;
-  /** The run's canonical terminal fact; every write below is a projection of it. */
+  /**
+   * The exiting run's own report. The stream phase owns the terminal fact, so
+   * this stands only while that phase is still non-terminal — see
+   * {@link finalizeRunTerminal}.
+   */
   readonly outcome: RunOutcome;
-  /** Classified error facts carried on the terminal `result` event. */
+  /**
+   * Classified error facts carried on the terminal `result` event, dropped
+   * when the stream phase resolves a different outcome than `outcome`.
+   */
   readonly error?: ResultEvent['error'];
   /** Run usage totals riding the terminal `result` event, when known. */
   readonly usage?: ResultEvent['usage'];
@@ -110,9 +129,11 @@ export interface FinalizeRunTerminalParams {
   /**
    * Delivery hook (subagent onError) run after the result settles and before
    * untrack, so the parent still sees this child as active while the
-   * delivery routes. Guarded: a throwing hook cannot abort finalization.
+   * delivery routes. Receives the resolved outcome so the payload the parent
+   * gets reports the same terminal fact as the persisted history and the
+   * `result` event. Guarded: a throwing hook cannot abort finalization.
    */
-  readonly deliver?: () => void | Promise<void>;
+  readonly deliver?: (outcome: RunOutcome) => void | Promise<void>;
 }
 
 export interface FinalizeRunTerminalResult {
@@ -123,36 +144,44 @@ export interface FinalizeRunTerminalResult {
 /**
  * The single owner of terminal run choreography, shared by the run lifecycle
  * arms below, the agent-CLI session loop, and child stream tabs
- * (`finalizeChildStream`): waiting-cleanup clear, outcome projection to
- * persisted history, transcript stage end, the terminal `result` event
- * (emit + settle), the delivery hook, then registry untrack + terminal stream
- * phase — in that order. Exactly-once per handle: the claim below flips
- * synchronously in the same tick as the check, so a second call (e.g. the
- * lifecycle catch arm after the success arm already finalized, a concurrent
- * finalize racing across this function's await points, or a finalize after a
- * `terminateWaitingHandle` already settled the handle) no-ops structurally.
+ * (`finalizeChildStream`): outcome projection to persisted history, transcript
+ * stage end, the terminal `result` event (emit + settle), the delivery hook,
+ * then registry untrack + terminal stream phase — in that order. Exactly-once
+ * per handle: the claim below flips synchronously in the same tick as the
+ * check, so a second call (e.g. the lifecycle catch arm after the success arm
+ * already finalized, or a concurrent finalize racing across this function's
+ * await points) no-ops structurally. A stop of a suspended run claims the same
+ * gate (`AgentExecutionHandle.beginSuspendedTermination`), so a kill landing
+ * mid-finalize cannot publish a second, contradictory outcome either.
  */
 export async function finalizeRunTerminal(
   params: FinalizeRunTerminalParams,
 ): Promise<FinalizeRunTerminalResult | undefined> {
-  const { handle, outcome } = params;
+  const { handle } = params;
   if (!handle.claimTerminalFinalize()) return undefined;
-  // This run is terminating, not suspending: drop any waiting-cleanup
-  // registered on this handle before teardown detaches the interrupt handler —
-  // otherwise ExecutionRegistry.terminate() could mistake this handle for a
-  // suspended one in the window between interrupt-handler detach and untrack.
-  // Defensive: this function's own WAITING branch never reaches
-  // finalizeRunTerminal on the same call (it returns early), so there is no
-  // live registration to clear in the common case — this guards a future
-  // caller that registers one outside that branch.
-  handle.clearWaitingCleanup();
+  // The stream phase is the single owner of a run's terminal outcome, so
+  // `params.outcome` is the exiting run's report rather than the verdict. A
+  // stop that already landed CANCELLED outranks a child whose process then
+  // exits non-zero; a turn that already published FAILED outranks a stop that
+  // arrived after it. Resolving once here is what lets every projection below
+  // (persisted history, stage end, result event, terminal phase) read one
+  // value, so no caller has to cross-check the phase for itself.
+  const observedPhase = params.streamStatus.get(handle.childStreamId);
+  const outcome = isTerminalOutcomePhase(observedPhase)
+    ? observedPhase
+    : params.outcome;
+  // Error facts the run classified for an outcome that did not happen are not
+  // facts about this run.
+  const error = outcome === params.outcome ? params.error : undefined;
   let terminalStatusPersisted = false;
   if (params.persistence.kind === 'finalize') {
+    const { flowRecord } = params.persistence;
     const persisted = await persistTerminalExecution({
       executionId: handle.executionId,
       agentName: handle.agentName,
       outcome,
-      flowRecord: params.persistence.flowRecord,
+      flowRecord:
+        typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
       logger,
       failedMessage: 'Failed to finalize durable execution state',
       rejectedMessage: 'Execution finalizer rejected unexpectedly',
@@ -181,14 +210,14 @@ export async function finalizeRunTerminal(
     agentName: handle.agentName,
     category: handle.category,
     isSubagent: params.isSubagent,
-    ...(params.error ? { error: params.error } : {}),
+    ...(error ? { error } : {}),
     ...(params.usage ? { usage: params.usage } : {}),
   };
   params.trace?.emit(event);
   handle.settleResult(event);
   if (params.deliver) {
     try {
-      await params.deliver();
+      await params.deliver(outcome);
     } catch (deliveryError) {
       logger.warn('Terminal delivery hook failed', {
         data: { agentIdentifier: handle.agentName, error: deliveryError },
@@ -200,6 +229,10 @@ export async function finalizeRunTerminal(
   // escape past an already-settled result.
   try {
     params.executions.untrack(handle.executionId);
+    // Refused only when the phase turned terminal after the resolution above,
+    // i.e. a stop that landed across this function's own awaits. The phase
+    // keeps its own value; the divergence from the published result is real
+    // and must stay loud.
     if (
       !params.streamStatus.transitionToTerminal(handle.childStreamId, outcome, {
         trace: handle.trace,
@@ -239,6 +272,70 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
     return;
   }
   logger.warn('Failed to transition run to RUNNING', {
+    data: {
+      agentIdentifier: ctx.config.agent,
+      streamId,
+    },
+  });
+}
+
+/**
+ * The run's own flow result, relabelled with the outcome finalization resolved.
+ *
+ * A flow reports the exit it saw; the stream phase decides the run's terminal
+ * fact. Everything the parent receives — the delivered payload and the returned
+ * result — has to carry that same verdict, or an orchestrator formats a failure
+ * for a run whose durable record says cancelled.
+ */
+function withResolvedOutcome(
+  result: AgentFlowResult,
+  outcome: RunOutcome,
+): AgentFlowResult {
+  if (result.outcome === outcome) return result;
+  return { ...result, outcome };
+}
+
+/**
+ * Claim the stream for a run a stop reached before it could start.
+ *
+ * The stop's own USER_STOP transition is refused while the stream still carries
+ * a previous run's terminal phase (`canTransitionStreamPhase` requires an
+ * in-flight `from`), and this run skips the RUNNING claim so the stop it is
+ * carrying survives. Without this write the stream would keep the earlier run's
+ * COMPLETED/FAILED, and `finalizeRunTerminal` — which reads the phase as the
+ * owner of the terminal outcome — would publish and persist that stale verdict
+ * for an execution that never ran a turn. Resuming first mirrors the explicit
+ * RUNNING choreography `transitionToTerminal` uses to leave WAITING.
+ *
+ * A phase that already reads CANCELLED needs no write — whether this run's own
+ * stop wrote it or a previous run left it, it is the outcome this run is headed
+ * for — and rewriting it would publish a RUNNING blip for a run that never ran.
+ * A non-terminal phase needs none either: the run's own report stands while the
+ * phase carries nothing to inherit.
+ */
+function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
+  const { streamId, session } = ctx.runScope;
+  const streamStatus = session.status;
+  const phase = streamStatus.get(streamId);
+  if (phase === STREAM_PHASE.CANCELLED || !isTerminalOutcomePhase(phase)) {
+    return;
+  }
+  const options = { trace: ctx.logger };
+  const recorded =
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.RUNNING,
+      'resume',
+      options,
+    ) &&
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.CANCELLED,
+      'user-stop',
+      options,
+    );
+  if (recorded) return;
+  logger.warn('Failed to record a stop that landed before run start', {
     data: {
       agentIdentifier: ctx.config.agent,
       streamId,
@@ -345,7 +442,7 @@ export async function runFlowWithLifecycle(
   const finalizeTerminal = (arm: {
     outcome: RunOutcome;
     error?: ResultEvent['error'];
-    deliver?: () => void | Promise<void>;
+    deliver?: (outcome: RunOutcome) => void | Promise<void>;
   }): Promise<FinalizeRunTerminalResult | undefined> =>
     finalizeRunTerminal({
       handle,
@@ -360,10 +457,13 @@ export async function runFlowWithLifecycle(
         : {
             kind: 'finalize',
             // Tool-use flows report the exact recovery decision through the
-            // private lifecycle control. Other flows retain the historical policy.
+            // private lifecycle control. Other flows retain the historical
+            // policy, read against the outcome finalization resolves rather
+            // than this arm's report.
             flowRecord:
               flowRecordDisposition ??
-              (arm.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
+              ((resolved) =>
+                resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
           },
       ...arm,
     });
@@ -372,10 +472,16 @@ export async function runFlowWithLifecycle(
     // backends can create the initial StreamExecutionState with the real
     // category when the transition-owned run-start side effects fire.
     emitRunStart(ctx);
-    // The lifecycle owns every stream-status transition: RUNNING here,
+    // The lifecycle owns every stream-status transition: the start claim here,
     // terminal states in the success/error arms below. Runners must not
-    // set stream status themselves.
-    if (!handle.hasPendingInterrupt) transitionRunStart(ctx);
+    // set stream status themselves. Either branch leaves the stream carrying
+    // this run's own phase, which is what makes the terminal phase a verdict
+    // about this run rather than whatever the last one left behind.
+    if (handle.hasPendingInterrupt) {
+      transitionStopBeforeRunStart(ctx);
+    } else {
+      transitionRunStart(ctx);
+    }
     let result: AgentRuntimeFlowResult;
     try {
       result = await runner(handle, lifecycleControl);
@@ -387,12 +493,12 @@ export async function runFlowWithLifecycle(
       logger.debug(`Task suspended with outcome: ${result.outcome}`);
       // The handle stays tracked (correct for resume) but the live tool-use
       // session and its interrupt handler are already gone by the time
-      // this returns (runToolUseFlow's finally). Register a fallback so a
-      // stop/kill during the suspended window still tears this down instead
-      // of ExecutionRegistry.terminate() finding no interrupt target and
-      // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
+      // this returns (runToolUseFlow's finally). Parking the handle is the
+      // one place this run is recorded as suspended, and carries the teardown
+      // a stop/kill runs instead of the absent interrupt target — see
+      // AgentRunLifecycle/ExecutionRegistry issue #7287.
       const parentStageId = ctx.parentStage.id;
-      handle.registerWaitingCleanup(async () => {
+      handle.suspend(async () => {
         session.followUps.terminalize(streamId);
         if (handle.executionLeaseLost) return;
         // Close this turn's "Run: ..." transcript group so a killed suspended
@@ -519,22 +625,30 @@ export async function runFlowWithLifecycle(
     // Terminal-error toasts are not emitted here: hosts present them from the
     // `result` event via `session.onResult` + `terminalResultToast` (the
     // single decision point), keeping the run-lifecycle out of host UI.
-    await finalizeTerminal({
+    const finalized = await finalizeTerminal({
       outcome,
       error,
       deliver:
         subagentResult && options?.onError
-          ? () => options.onError?.(err, subagentResult)
+          ? (resolved) =>
+              options.onError?.(
+                err,
+                withResolvedOutcome(subagentResult, resolved),
+              )
           : undefined,
     });
+    // The finalizer resolved this run's terminal fact; the exits below report
+    // the same one it published. It returns nothing only when the success arm
+    // already finalized, and then this arm's report is all this exit knows.
+    const resolvedOutcome = finalized?.event.outcome ?? outcome;
 
     if (subagentResult) {
-      return subagentResult;
+      return withResolvedOutcome(subagentResult, resolvedOutcome);
     }
     if (kind === 'abort') {
       return buildTerminalFlowResult(
         category,
-        outcome,
+        resolvedOutcome,
         executionId,
         streamId,
         ctx.attachedMemoryMisses,

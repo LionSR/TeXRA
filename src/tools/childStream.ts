@@ -13,7 +13,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
+import { STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
 import type { ExecutionId, RunKind, StreamTabId } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
@@ -36,11 +36,9 @@ interface CreateChildStreamOptions {
 }
 
 /**
- * How the child stream's own caller believes its run ended. `finalize` still
- * cross-checks the execution registry for an already-CANCELLED status (an
- * explicit stop/kill can land between the caller deciding this and the call
- * landing here), so `cancelled` always wins regardless of what the registry
- * later confirms.
+ * What the child observed about its own exit. It is a report, not a verdict:
+ * the stream phase owns the terminal outcome, so an explicit stop/kill that
+ * already landed CANCELLED outranks the non-zero exit it caused.
  */
 export type ChildStreamOutcome =
   | { kind: 'completed' }
@@ -176,8 +174,9 @@ export function createChildStream(
     return {
       childStreamId,
       logger: runTrace.trace,
-      // Mid-run status updates are intentionally best-effort. Explicit stops and
-      // stale handles are ignored by the registry; finalize owns terminal status.
+      // Reports, not writes: the status machine's transition table decides
+      // which of these lands, so a stale handle or a stream a stop already
+      // cancelled simply keeps the phase it has.
       waitForInput: () => {
         session.executions.updateAgentExecutionStatus(
           handle,
@@ -263,10 +262,10 @@ interface FinalizeChildStreamArgs {
 }
 
 /**
- * Finalize a child stream tab: presentation logging plus the child-specific
- * outcome derivation, then the shared terminal finalizer (settle, untrack,
- * terminal stream phase) and the autoClose emit. Child streams never traverse
- * the run lifecycle, so this is their only settle point.
+ * Finalize a child stream tab: presentation logging plus the child's report of
+ * its own exit, then the shared terminal finalizer (settle, untrack, terminal
+ * stream phase) and the autoClose emit. Child streams never traverse the run
+ * lifecycle, so this is their only settle point.
  */
 async function finalizeChildStream(
   args: FinalizeChildStreamArgs,
@@ -296,25 +295,17 @@ async function finalizeChildStream(
     });
   }
 
-  // The terminal outcome the child finishes with — the single derivation for
-  // everything the shared finalizer projects. Explicit user stops win: the
-  // registry may already show CANCELLED (stop/kill transitioned it) for a
-  // child whose own exit reported a failure (e.g. a killed bash process exits
-  // non-zero), and long-lived child loops finalize after an interrupt. Clean
-  // exits project to `completed` so the tab clears.
-  const stopped =
-    outcomeOption.kind === 'cancelled' ||
-    session.executions.getStatus(handle).status === STREAM_PHASE.CANCELLED;
+  // What the child saw, projected into the shared vocabulary. The stream phase
+  // decides which of this and an already-landed stop is the run's terminal
+  // fact; that resolution lives in `finalizeRunTerminal`.
   const outcome = deriveRunOutcome({
-    failed: !stopped && outcomeOption.kind === 'failed',
-    cancelled: stopped,
+    failed: outcomeOption.kind === 'failed',
+    cancelled: outcomeOption.kind === 'cancelled',
   });
   const error =
-    outcome === RUN_OUTCOME.FAILED
+    outcomeOption.kind === 'failed'
       ? {
-          kind: classifyAgentError(
-            outcomeOption.kind === 'failed' ? outcomeOption.error : undefined,
-          ),
+          kind: classifyAgentError(outcomeOption.error),
           message: errorMessage ?? 'Child stream failed',
         }
       : undefined;

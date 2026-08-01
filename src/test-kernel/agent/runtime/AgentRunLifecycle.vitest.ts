@@ -12,9 +12,13 @@ import {
   inspectExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import {
+  StreamStatusMachine,
+  type StreamStatusChange,
+} from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
+  type AgentRunHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -71,7 +75,6 @@ const storageMocks = vi.hoisted(() => ({
       flowRecord: input.flowRecord === 'delete' ? 'deleted' : 'preserved',
     }),
   ),
-  synchronizeAgentResultOutcome: vi.fn().mockResolvedValue(undefined),
 }));
 
 const channelTraceMocks = vi.hoisted(() => ({
@@ -80,7 +83,6 @@ const channelTraceMocks = vi.hoisted(() => ({
 
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
-  synchronizeAgentResultOutcome: storageMocks.synchronizeAgentResultOutcome,
 }));
 
 vi.mock('@agent/trace', async (importOriginal) => {
@@ -148,21 +150,12 @@ function waitingResult(
 /**
  * Returns the suspended handle for a run that reported WAITING.
  *
- * `terminateWaitingHandle` requires the stream to have genuinely reached
- * WAITING (belt-and-suspenders confirmation the handle is really parked, not
- * mid-flight; see #7324 review discussion). The fake runners below return the
- * WAITING outcome directly without driving the real `transitionToWaiting()`,
- * so the phase is seeded explicitly here.
+ * The fake runners below return the WAITING outcome without driving the real
+ * `transitionToWaiting()`, so the stream phase never reaches WAITING here —
+ * which is the point: the handle's own suspension is what makes a stop tear
+ * the run down, so no phase seeding is needed to reach that path.
  */
-function takeWaitingHandle(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): AgentExecutionHandle {
-  seedStreamStatusForTest(
-    defaultSession().status,
-    streamId,
-    STREAM_STATUS.WAITING,
-  );
+function takeWaitingHandle(executionId: ExecutionId): AgentExecutionHandle {
   const handle = defaultSession().executions.getHandle(executionId);
   expect(handle).toBeInstanceOf(AgentExecutionHandle);
   if (!(handle instanceof AgentExecutionHandle)) {
@@ -488,33 +481,46 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('clears a pre-registered waiting-cleanup when the run completes without suspending', async () => {
+  it('does not let a stop abandon a run that completes without suspending', async () => {
+    // The window a stop could once fall into: the run has returned, its live
+    // interrupt context is detached, and its own finalize is parked at the
+    // persist await with the handle still tracked. Only the WAITING branch
+    // parks a handle, so there is no suspension for the stop to find and
+    // nothing the exit has to remember to clear.
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
-      'lifecycle-stale-waiting-cleanup',
+      'lifecycle-completed-not-suspended',
     );
-    const staleCleanup = vi.fn();
-    let captured: AgentExecutionHandle | undefined;
+    storageMocks.finalizeExecution.mockClear();
+    let releasePersist: (() => void) | undefined;
+    storageMocks.finalizeExecution.mockImplementationOnce(
+      async () =>
+        new Promise((resolve) => {
+          releasePersist = () =>
+            resolve({
+              status: 'durable',
+              terminalStatusPersisted: true,
+              flowRecord: 'deleted',
+            });
+        }),
+    );
 
     try {
-      // Simulate a waiting-cleanup registered on this handle by some
-      // caller, then the run completing normally without ever suspending.
-      const result = await runFlowWithLifecycle(
+      const running = runFlowWithLifecycle(
         ctx,
         async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
-        {
-          isSubagent: true,
-          onRun: (handle) => {
-            captured = handle as AgentExecutionHandle;
-            handle.registerWaitingCleanup(staleCleanup);
-          },
-        },
+        { isSubagent: true },
       );
+      await vi.waitFor(() => expect(releasePersist).toBeDefined());
 
+      expect(defaultSession().executions.kill(executionId)).toBe(false);
+
+      releasePersist?.();
+      const result = await running;
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      // The stale registration must be gone: nothing ran it, and a
-      // terminate() racing into the teardown window must not find it.
-      expect(staleCleanup).not.toHaveBeenCalled();
-      expect(captured?.runWaitingCleanup()).toBe(false);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+      expect(
+        defaultSession().executions.getHandle(executionId),
+      ).toBeUndefined();
     } finally {
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
@@ -603,6 +609,149 @@ describe('runFlowWithLifecycle', () => {
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
   });
 
+  // The stream is reused across runs, so a run that never claims it inherits
+  // whatever the last one left. A stop landing in the track()-to-start window
+  // is refused by the phase table while that leftover is terminal, so without
+  // the start-time claim this run would adopt the previous run's COMPLETED as
+  // its own verdict and drop its abort facts.
+  it('does not adopt a previous run terminal phase when a stop lands before start', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-stale-phase-early-stop',
+    );
+    storageMocks.finalizeExecution.mockClear();
+    let terminalResult: AgentRunHandle['result'] | undefined;
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.COMPLETED);
+
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async (handle) => {
+          expect(handle.hasPendingInterrupt).toBe(true);
+          throw new DOMException('Request aborted', 'AbortError');
+        },
+        {
+          onRun: (handle) => {
+            terminalResult = handle.result;
+            expect(defaultSession().executions.kill(executionId)).toBe(true);
+          },
+        },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith(
+        expect.objectContaining({
+          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          flowRecord: 'preserve',
+        }),
+      );
+      await expect(terminalResult).resolves.toMatchObject({
+        outcome: RUN_OUTCOME.CANCELLED,
+        error: { kind: 'abort' },
+      });
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  // The claim above is a repair for an inherited phase, not a second start: a
+  // stop that already reads CANCELLED on the stream is this run's outcome too,
+  // so a run that never ran must not publish a RUNNING blip on the way out.
+  it('publishes no RUNNING blip when the stop that beat run start already cancelled the stream', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-early-stop-no-blip',
+    );
+    const changes: StreamStatusChange[] = [];
+    const detachStatus = streamStatus.onDidChange((change) => {
+      if (change.streamId === streamId) changes.push(change);
+    });
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => {
+          throw new DOMException('Request aborted', 'AbortError');
+        },
+        {
+          onRun: () => {
+            expect(defaultSession().executions.kill(executionId)).toBe(true);
+          },
+        },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(changes.map((change) => change.status)).toEqual([
+        STREAM_PHASE.CANCELLED,
+      ]);
+    } finally {
+      detachStatus();
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  // Outcome and flow-record disposition are one decision: a run the phase says
+  // was interrupted keeps the record that makes it resumable, even when its own
+  // report reached completion first.
+  it('keeps the flow record of a stopped run whose report says completed', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-stop-during-completion',
+    );
+    storageMocks.finalizeExecution.mockClear();
+
+    try {
+      const result = await runFlowWithLifecycle(ctx, async () => {
+        expect(defaultSession().executions.kill(executionId)).toBe(true);
+        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          flowRecord: 'preserve',
+        }),
+      );
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  // The parent's delivery is a projection of the same terminal fact as the
+  // persisted history, so a stopped child never arrives formatted as a failure.
+  it('delivers a stopped subagent as cancelled when its flow reports a failure', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-subagent-stop-then-failure',
+    );
+    const onError = vi.fn();
+    storageMocks.finalizeExecution.mockClear();
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => {
+          expect(defaultSession().executions.kill(executionId)).toBe(true);
+          throw new Error('child exited with code 143');
+        },
+        { isSubagent: true, onError },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith(
+        expect.objectContaining({
+          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        }),
+      );
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0][1]).toEqual(result);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   it('lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)', async () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-subagent-waiting-kill',
@@ -632,7 +781,7 @@ describe('runFlowWithLifecycle', () => {
       // as its trace channel.
       const traceEmit = vi.spyOn(noopTrace, 'emit');
 
-      const waitingHandle = takeWaitingHandle(executionId, streamId);
+      const waitingHandle = takeWaitingHandle(executionId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
@@ -641,7 +790,7 @@ describe('runFlowWithLifecycle', () => {
       // see runToolUseFlow.ts). Before the fix, `executions.kill()`
       // found no interrupt target for a suspended handle and silently
       // no-opped, leaving the handle stuck registered forever. It must now
-      // fall back to the waiting-cleanup registered above and actually tear
+      // fall back to the teardown the WAITING branch parked and actually tear
       // the execution down.
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await waitingHandle.result;
@@ -730,7 +879,7 @@ describe('runFlowWithLifecycle', () => {
         { isSubagent: true },
       );
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      const waitingHandle = takeWaitingHandle(executionId, streamId);
+      const waitingHandle = takeWaitingHandle(executionId);
 
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await writerLoadStarted;
@@ -1051,6 +1200,111 @@ describe('finalizeRunTerminal', () => {
           },
         },
       );
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  // The stream phase is the single owner of a run's terminal outcome. A
+  // stop/kill transitions the phase behind the run's back, and the run it
+  // killed then reports its own non-zero exit as a failure — so the phase, not
+  // the report, has to decide, and no caller may cross-check it for itself.
+  it('resolves the terminal outcome from an already-cancelled stream phase', async () => {
+    const executionId = 'exec-finalize-stopped';
+    const streamId = 'stream-finalize-stopped' as StreamTabId;
+    const streamStatus = new StreamStatusMachine();
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'test-agent',
+      'toolUse',
+      noopTrace,
+    );
+    const untrack = vi.fn();
+    const stage = { end: vi.fn() };
+    storageMocks.finalizeExecution.mockClear();
+    channelTraceMocks.warn.mockClear();
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.CANCELLED);
+
+      const finalized = await finalizeRunTerminal({
+        handle,
+        executions: { untrack },
+        streamStatus,
+        outcome: RUN_OUTCOME.FAILED,
+        error: { kind: 'unexpected', message: 'exited with code 143' },
+        isSubagent: false,
+        stage,
+        trace: noopTrace,
+        persistence: { kind: 'finalize', flowRecord: 'delete' },
+      });
+
+      expect(finalized?.event).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.CANCELLED,
+        executionId,
+        streamId,
+      });
+      // Error facts classified for a failure that the phase says never
+      // happened must not ride the cancelled result.
+      expect(finalized?.event.error).toBeUndefined();
+      await expect(handle.result).resolves.toBe(finalized?.event);
+      expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith(
+        expect.objectContaining({
+          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        }),
+      );
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+      // The resolution is what keeps the terminal transition from being
+      // refused, so nothing is left to warn about.
+      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  // The same ownership rule in the other direction: a phase that already
+  // published FAILED is a terminal fact a later stop cannot rewrite, so a
+  // caller reporting `cancelled` does not get to relabel it.
+  it('keeps an already-failed stream phase over a later cancelled report', async () => {
+    const executionId = 'exec-finalize-failed-then-stopped';
+    const streamId = 'stream-finalize-failed-then-stopped' as StreamTabId;
+    const streamStatus = new StreamStatusMachine();
+    const handle = new AgentExecutionHandle(
+      executionId,
+      streamId,
+      streamId,
+      'test-agent',
+      'toolUse',
+      noopTrace,
+    );
+    const untrack = vi.fn();
+    channelTraceMocks.warn.mockClear();
+
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.FAILED);
+
+      const finalized = await finalizeRunTerminal({
+        handle,
+        executions: { untrack },
+        streamStatus,
+        outcome: RUN_OUTCOME.CANCELLED,
+        isSubagent: false,
+        trace: noopTrace,
+        persistence: { kind: 'skip' },
+      });
+
+      expect(finalized?.event).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+        executionId,
+        streamId,
+      });
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }

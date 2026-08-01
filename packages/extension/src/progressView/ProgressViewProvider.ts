@@ -9,9 +9,9 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
+  getActiveSidebarView,
   getSharedLocalResourceRoots,
   SIDEBAR_VIEWS,
-  setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
@@ -75,7 +75,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private _panelJustDisposed = false;
   private readonly logger: AgentTrace;
 
-  private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
   private readonly detachHostInteractions: () => void;
 
@@ -226,12 +225,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   // --- Wiring from extension.ts ---
 
-  public setSidebarWebviewGetter(
-    getter: () => vscode.Webview | undefined,
-  ): void {
-    this._sidebarWebviewGetter = getter;
-  }
-
   public setMainViewProvider(mvp: MainViewProvider): void {
     this._mainViewProvider = mvp;
   }
@@ -369,10 +362,10 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     if (this._activePlacement === 'editor') {
       return this._panelView?.visible === true;
     }
-    // Sidebar mode: visible only when MainViewProvider is in progress mode
+    // Sidebar mode: visible only while the sidebar shows progress content
     return (
-      this._mainViewProvider?.getActiveMode() === 'progress' &&
-      this._mainViewProvider.getWebviewView()?.visible === true
+      getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS &&
+      this._mainViewProvider?.getWebviewView()?.visible === true
     );
   }
 
@@ -443,16 +436,12 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this._panelJustDisposed = false;
     this._activePlacement = 'sidebar';
 
-    if (this._mainViewProvider) {
-      // Focus first to ensure VS Code resolves the webview before switching content.
-      // Without this, switchMode no-ops on first use (view not yet created).
-      if (!options?.inPlace) {
-        await vscode.commands.executeCommand('texra.mainView.focus');
-      }
-      await this._mainViewProvider.switchMode('progress');
-    } else {
-      await setActiveSidebarView(SIDEBAR_VIEWS.PROGRESS);
+    // Focus first to ensure VS Code resolves the webview before switching content.
+    // Without this, switchMode no-ops on first use (view not yet created).
+    if (!options?.inPlace) {
+      await vscode.commands.executeCommand('texra.mainView.focus');
     }
+    this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.PROGRESS);
 
     if (this.isActivePlacementReady()) {
       this.syncFullView();
@@ -486,7 +475,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     if (this._panelView) {
       const placementChanged = this._activePlacement !== 'editor';
       this._activePlacement = 'editor';
-      await this.restoreSidebarToLauncher();
+      this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.MAIN);
       this.revealEditorPanel();
       this.syncFullView();
       if (placementChanged) await this.replayPendingPrompts();
@@ -523,7 +512,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     );
 
     this._activePlacement = 'editor';
-    await this.restoreSidebarToLauncher();
+    this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.MAIN);
   }
 
   public async popBackToSidebar(): Promise<void> {
@@ -535,14 +524,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this.disposePanelResources(true);
     this.backend.dispose();
     super.dispose();
-  }
-
-  private async restoreSidebarToLauncher(): Promise<void> {
-    if (this._mainViewProvider) {
-      await this._mainViewProvider.switchMode('main');
-    } else {
-      await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-    }
   }
 
   private isActivePlacementReady(): boolean {
@@ -557,9 +538,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     }
     // Only return the sidebar webview when it's actually showing progress content.
     // Otherwise progress messages would be routed to the launcher webview.
-    if (this._mainViewProvider?.getActiveMode() !== 'progress')
-      return undefined;
-    return this._sidebarWebviewGetter?.();
+    if (getActiveSidebarView() !== SIDEBAR_VIEWS.PROGRESS) return undefined;
+    return this._mainViewProvider?.getWebviewView()?.webview;
   }
 
   private async sendToActiveProgressWebview(
