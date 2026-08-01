@@ -337,7 +337,6 @@ conversationView.setAttribute('data-desktop-view', 'progress');
 // Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
 // PRD § 7.D requires mounting <stream-tabs> directly (not inside <progress-app>).
 const railTabs = document.createElement('stream-tabs') as StreamTabs;
-railTabs.presentation = 'orchestration';
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');

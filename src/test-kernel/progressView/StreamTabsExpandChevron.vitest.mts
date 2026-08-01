@@ -83,17 +83,7 @@ describe('stream-tab expand chevron', () => {
     expect(ariaLabel).toContain('unlabeled-stream');
   });
 
-  it('omits the session footer in the orchestration presentation', async () => {
-    const tabs = await mountTabs({
-      presentation: 'orchestration',
-      streams: [makeStream('session')],
-    });
-
-    expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeNull();
-    expect(tabs.shadowRoot?.querySelector('stream-tab')).toBeTruthy();
-  });
-
-  it('renders no session footer in the progress presentation either', async () => {
+  it('renders no session footer', async () => {
     const tabs = await mountTabs({ streams: [makeStream('session')] });
 
     expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeNull();
