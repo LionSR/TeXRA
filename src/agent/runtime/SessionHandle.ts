@@ -88,7 +88,7 @@ interface ArtifactFlushBatch {
 
 interface WaitingRepairProbe {
   readonly executionId: string;
-  readonly statusGeneration: object;
+  readonly statusGeneration: object | undefined;
   readonly result: Promise<boolean>;
 }
 
@@ -330,7 +330,7 @@ export class SessionHandle {
     if (phase === STREAM_PHASE.WAITING) return true;
     if (isInFlightPhase(phase)) return false;
 
-    if (!executionId || !statusGeneration) return false;
+    if (!executionId) return false;
 
     const probe: WaitingRepairProbe = {
       executionId,
@@ -350,7 +350,7 @@ export class SessionHandle {
   private async probeWaitingRepair(
     streamId: StreamTabId,
     executionId: string,
-    statusGeneration: object,
+    statusGeneration: object | undefined,
   ): Promise<boolean> {
     const resumability = await deriveResumability(executionId);
     if (!resumability.resumable) return false;
