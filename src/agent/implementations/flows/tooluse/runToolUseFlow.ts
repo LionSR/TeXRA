@@ -52,7 +52,6 @@ import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
 import {
-  findLastAssistantText,
   extractTouchedFiles,
   migrateSharedState,
   ToolUseRunSharedCanonicalSchema,
@@ -228,6 +227,7 @@ export async function runToolUseFlow<C = unknown>(
       ? input.config.outputSchema
       : undefined;
   let pendingStructuredOutput: ToolUseRunShared['structured'];
+  let response: string | undefined;
   let finalTool: ToolUseServices<C>['finalTool'];
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
@@ -250,6 +250,9 @@ export async function runToolUseFlow<C = unknown>(
     finalTool,
     resumeShared: input.resume?.shared ?? null,
     getPendingStructuredOutput: () => pendingStructuredOutput,
+    onCycleResponse: (cycleResponse) => {
+      response = cycleResponse;
+    },
     fileService: new TaskRunFileService(executionId),
   };
   let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
@@ -379,7 +382,6 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
-  let response: string | undefined;
   let files: string[] | undefined;
   let totalCostUsd: number | undefined;
   let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
@@ -589,12 +591,6 @@ export async function runToolUseFlow<C = unknown>(
       if (resumedFollowUps.length > 0) liveAttachment.attach();
     } while (resumedFollowUps.length > 0);
 
-    response =
-      findLastAssistantText(shared.messages, (m) =>
-        services.modelCell.handler.extractAssistantText(m),
-      ) ||
-      shared.lastResponse ||
-      undefined;
     totalCostUsd =
       shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost;
     const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);

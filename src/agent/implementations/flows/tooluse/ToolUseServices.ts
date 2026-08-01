@@ -20,6 +20,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Read the run-local terminal result so the cycle can persist it atomically. */
   readonly getPendingStructuredOutput?: () => ToolUseRunShared['structured'];
+  /** Report assistant text produced by a non-skipped cycle in this invocation. */
+  readonly onCycleResponse?: (response: string) => void;
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
   /**

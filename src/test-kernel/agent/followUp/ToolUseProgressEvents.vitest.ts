@@ -244,6 +244,40 @@ describe('tool-use progress events', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('reports partial assistant text from a failed non-skipped cycle', async () => {
+    const workspaceState = AgentWorkspaceState.create();
+    workspaceState.assembly.lastResponse = 'same response';
+    const prepRes = createPrepResult(workspaceState, false);
+    const shared = { lastResponse: 'same response' } as ToolUseRunShared;
+    const onCycleResponse = vi.fn();
+    const node = new ToolUseCycleNode().setServices({
+      onCycleResponse,
+    } as unknown as ToolUseServices);
+
+    await node.post(shared, prepRes, {
+      outcome: 'failed',
+      lastError: { message: 'stream failed', userRetryable: true },
+    });
+
+    expect(onCycleResponse).toHaveBeenCalledWith('same response');
+    expect(shared.lastResponse).toBe('same response');
+  });
+
+  it('does not report restored assembly text from a skipped prepare cycle', async () => {
+    const workspaceState = AgentWorkspaceState.create();
+    workspaceState.assembly.lastResponse = 'historical response';
+    const prepRes = createPrepResult(workspaceState, true);
+    const shared = {} as ToolUseRunShared;
+    const onCycleResponse = vi.fn();
+    const node = new ToolUseCycleNode().setServices({
+      onCycleResponse,
+    } as unknown as ToolUseServices);
+
+    await node.post(shared, prepRes, { outcome: 'skipped' });
+
+    expect(onCycleResponse).not.toHaveBeenCalled();
+  });
+
   it('persists a completed cycle structured result in shared state', async () => {
     const prepRes = createPrepResult(AgentWorkspaceState.create());
     const shared: Partial<ToolUseRunShared> = {};
