@@ -16,7 +16,7 @@ updated: 2026-08-01
 > package fence. The proposed frozen `RunDescriptor` injection model,
 > `ModelCell`, `PendingRequests`, `RetryPolicy`, `RetryGate`, and `HostUiBus` are
 > retired and must not be implemented from this record. The later
-> [ModelCell ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell)
+> [narrow ModelCell ownership ruling][modelcell-ownership-ruling]
 > governs only the current primitive on `main`; it does not revive this proposal
 > or make its other retired designs authoritative. The `RunDescriptor` name
 > on `main` denotes the unrelated persisted stream schema introduced in [#7164].
@@ -34,6 +34,7 @@ updated: 2026-08-01
 [#7624]: https://github.com/LionSR/TeXRA/pull/7624
 [#7914]: https://github.com/LionSR/TeXRA/pull/7914
 [#8322]: https://github.com/LionSR/TeXRA/pull/8322
+[modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md
 
 Decided by an adversarial design pass (3 designs x 2 lenses, 2026-06-29). This is
 the **published boundary** of the gold-standard runtime core

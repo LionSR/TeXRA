@@ -15,7 +15,7 @@ updated: 2026-08-01
 > centralized baselines in [#7914] and [#8322]. The proposed frozen
 > `RunDescriptor` injection model, `ModelCell`, `PendingRequests`, `RetryPolicy`,
 > `RetryGate`, and `HostUiBus` are retired and must not be implemented from this
-> record. The later [ModelCell ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell)
+> record. The later [narrow ModelCell ownership ruling][modelcell-ownership-ruling]
 > supersedes only this prohibition's claim that no `ModelCell` exists on `main`;
 > it does not revive this PRD. The `RunDescriptor` name on `main` denotes the
 > unrelated persisted stream schema introduced in [#7164].
@@ -34,6 +34,7 @@ updated: 2026-08-01
 [#7624]: https://github.com/LionSR/TeXRA/pull/7624
 [#7914]: https://github.com/LionSR/TeXRA/pull/7914
 [#8322]: https://github.com/LionSR/TeXRA/pull/8322
+[modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md
 
 Decided by an adversarial design pass (4 designs x 3 lenses x 4 phases,
 2026-06-29). This is the gold-standard target for TeXRA's agent runtime core: the

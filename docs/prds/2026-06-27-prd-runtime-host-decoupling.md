@@ -16,7 +16,7 @@ updated: 2026-08-01
 > frozen `RunDescriptor` injection model, `ModelCell`, `PendingRequests`,
 > `RetryPolicy`, `RetryGate`, and `HostUiBus` are retired and must not be
 > implemented from this record. The later
-> [ModelCell ruling](../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell)
+> [narrow ModelCell ownership ruling][modelcell-ownership-ruling]
 > governs only the current primitive on `main`; it does not revive this proposal
 > or make its other retired designs authoritative. The `RunDescriptor` name on
 > `main` denotes the
@@ -32,6 +32,7 @@ updated: 2026-08-01
 [#7624]: https://github.com/LionSR/TeXRA/pull/7624
 [#7914]: https://github.com/LionSR/TeXRA/pull/7914
 [#8322]: https://github.com/LionSR/TeXRA/pull/8322
+[modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md
 
 ## Overview
 
