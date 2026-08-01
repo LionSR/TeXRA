@@ -138,9 +138,11 @@ approve its `PendingRequests`, `RetryPolicy`, `RetryGate`, `HostUiBus`, stage
 sequence, or concept-count claims. Those passages remain historical.
 
 **Implementation evidence.** The accepted behavior is defined by
-`src/agent/runtime/ModelCell.ts`, `AgentLaunchContext.ts`,
-`AgentRunLifecycle.ts`, `SessionResumeRetrieval.ts`, `executeAgent.ts`, and the
-model-switch path in
+`src/agent/runtime/ModelCell.ts`,
+`src/agent/runtime/AgentLaunchContext.ts`,
+`src/agent/runtime/AgentRunLifecycle.ts`,
+`src/agent/runtime/SessionResumeRetrieval.ts`,
+`src/agent/runtime/executeAgent.ts`, and the model-switch path in
 `src/agent/implementations/flows/tooluse/runToolUseFlow.ts`.
 
 **Test evidence.** The focused coverage is in
