@@ -4,14 +4,55 @@ import { describe, it, afterEach, vi } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
+import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
+import type OpenAI from 'openai';
 
 class UnsupportedBackgroundHandler extends ModelHandlerOpenAIResponse {
   protected override backgroundModeSupported = false;
+}
+
+class ProfileDisabledBackgroundHandler extends ModelHandlerOpenAIResponse {
+  protected override getActiveProviderCapabilities() {
+    return resolveProviderCapabilities({
+      model: { ...this.config, codexSubscription: true },
+      useOpenRouter: false,
+    });
+  }
+}
+
+async function captureBackgroundModeDebug(
+  handler: ModelHandlerOpenAIResponse,
+): Promise<string[]> {
+  const messages: string[] = [];
+  handler.setLogger({
+    ...noopTrace,
+    debug: (message) => messages.push(message),
+  });
+  handler.setAgentCategory(AgentCategory.Workflow);
+  handler.getStreamingConfig = () => false;
+
+  await handler.createResponse({
+    client: {
+      responses: {
+        create: async () => ({
+          id: 'response-1',
+          output: [],
+          output_text: 'ok',
+          status: 'completed',
+        }),
+      },
+    } as unknown as OpenAI,
+    messages: [{ role: 'user', content: 'test' }],
+    temperature: 0,
+  });
+
+  return messages;
 }
 
 function createOpenAIConfig(name: string): ModelConfig {
@@ -85,6 +126,38 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
 
     assert.equal(handler.isBackgroundModeActive(), false);
     assert.equal(handler.getStreamingConfig(), true);
+  });
+
+  it('identifies handler support as the reason background mode is inactive', async () => {
+    const messages = await captureBackgroundModeDebug(
+      new UnsupportedBackgroundHandler(createOpenAIConfig('gpt-5')),
+    );
+
+    assert.ok(
+      messages.some((message) =>
+        message.includes('this handler does not support background execution'),
+      ),
+    );
+  });
+
+  it('identifies provider policy as the reason background mode is inactive', async () => {
+    const messages = await captureBackgroundModeDebug(
+      new ProfileDisabledBackgroundHandler(createOpenAIConfig('gpt-5')),
+    );
+
+    assert.ok(
+      messages.some((message) =>
+        message.includes(
+          'active provider profile disables background execution',
+        ),
+      ),
+    );
+    assert.equal(
+      messages.some((message) =>
+        message.includes('this handler does not support background execution'),
+      ),
+      false,
+    );
   });
 
   it('runs the Codex fallback (subscription off) path through the shared background toggle', () => {
