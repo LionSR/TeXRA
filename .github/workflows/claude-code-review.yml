@@ -168,3 +168,15 @@ jobs:
                 body: '⏳ Claude quota exhausted or rate limit reached. Add the `re-review` label to retry the review.\n\n(If this persists, please check the [Claude Code action logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}))'
               });
             }
+
+      - name: Fail when Claude review did not complete
+        if: |
+          steps.claude-switch.outputs.skip != 'true' &&
+          steps.provider-token.outputs.skip != 'true' &&
+          steps.trusted-provider-wrapper.outputs.available == 'true' &&
+          steps.claude-review.outcome != 'success'
+        env:
+          CLAUDE_REVIEW_OUTCOME: ${{ steps.claude-review.outcome }}
+        run: |
+          echo "::error::Claude code review did not complete (outcome: $CLAUDE_REVIEW_OUTCOME)."
+          exit 1
