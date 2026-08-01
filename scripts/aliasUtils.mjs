@@ -7,8 +7,10 @@
  * root source of truth and its check mode rejects drift.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { globSync } from 'glob';
 import { resolve } from 'node:path';
+import ts from 'typescript';
 
 export function loadAliases(rootDir) {
   const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
@@ -149,44 +151,19 @@ export function loadAliasEntries(rootDir) {
 }
 
 function readTsconfig(tsconfigPath) {
-  const tsconfigText = readFileSync(tsconfigPath, 'utf8');
-  return JSON.parse(stripJsonComments(tsconfigText));
+  return parseJsonc(readFileSync(tsconfigPath, 'utf8'));
 }
 
-function stripJsonComments(text) {
-  let result = '';
-  let i = 0;
-  let inString = false;
-
-  while (i < text.length) {
-    const char = text[i];
-    const next = text[i + 1];
-
-    if (char === '"' && (i === 0 || text[i - 1] !== '\\')) {
-      inString = !inString;
-      result += char;
-      i++;
-      continue;
-    }
-
-    if (!inString) {
-      if (char === '/' && next === '/') {
-        while (i < text.length && text[i] !== '\n') i++;
-        continue;
-      }
-
-      if (char === '/' && next === '*') {
-        i += 2;
-        while (i < text.length - 1 && !(text[i] === '*' && text[i + 1] === '/'))
-          i++;
-        i += 2;
-        continue;
-      }
-    }
-
-    result += char;
-    i++;
+export function parseJsonc(text) {
+  const { config, error } = ts.parseConfigFileTextToJson('tsconfig.json', text);
+  if (error) {
+    throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
   }
+  return config;
+}
 
-  return result.replace(/,(\s*[}\]])/g, '$1');
+export function pathTargetExists(rootDir, target) {
+  return target.includes('*')
+    ? globSync(target, { cwd: rootDir, nodir: false }).length > 0
+    : existsSync(resolve(rootDir, target));
 }
