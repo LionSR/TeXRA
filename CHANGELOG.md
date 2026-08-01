@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Failed agent starts no longer look like successful runs** — when a new
+  launch cannot start on a previously completed task, the status update is now
+  identified as a rollback rather than a fresh completion.
 - **Agent failures retain their partial result** — the original error is now
   reported together with any partial response and affected files.
 - **Long-running sessions use less memory after recovering interrupted runs** —
