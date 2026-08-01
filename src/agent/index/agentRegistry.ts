@@ -2,8 +2,6 @@
 
 import * as path from 'node:path';
 
-import PQueue from 'p-queue';
-
 import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
@@ -19,7 +17,7 @@ import type {
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
   agentMatchesIdentifier,
-  agentKey as createKey,
+  agentKey,
   agentKeyOf,
   agentName,
 } from '@shared/schemas/agent';
@@ -46,10 +44,7 @@ import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
 
-// Re-exports kept stable for external consumers.
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
-export { extractToolNames } from './agentYamlScanner';
-export { createKey };
 
 /** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
 const LEGACY_BUILTIN_PREFIX = 'builtIn:';
@@ -98,12 +93,28 @@ function migrateLegacySourceKeys(): void {
 /** The cache. Just a Map. */
 const cache = new Map<string, AgentEntry>();
 
-/** Initialization state */
-let initialized = false;
-let initPromise: Promise<void> | null = null;
-let cacheIncludesRemote = false;
-const refreshQueue = new PQueue({ concurrency: 1 });
-let registryEpoch = 0;
+/**
+ * What the cache currently holds, or `undefined` before any load published one.
+ * Only a load that reaches its publish barrier assigns it, so a failed load
+ * leaves the previous catalog described exactly as it still is.
+ */
+let catalog: { readonly includesRemote: boolean } | undefined;
+
+/**
+ * The load producing the next catalog. Every load chains on it, so the registry
+ * has one serialization point instead of a promise plus a queue. Nothing on the
+ * load path may await a load of its own: that await would wait on the chain it
+ * is running inside. Fire-and-forget re-entry (the sign-out invalidation) is
+ * fine — it queues behind the running load.
+ */
+let inFlight: Promise<void> | undefined;
+
+/**
+ * Advanced by {@link refresh} only. A load carries the epoch it was requested
+ * at and publishes nothing once a refresh has moved past it, so a post-sign-in
+ * rebuild can never be overwritten by the signed-out load it raced.
+ */
+let epoch = 0;
 
 export interface LoadAgentsOptions {
   /** Include remote agent metadata that requires auth/network access. */
@@ -116,40 +127,33 @@ export interface LoadAgentsOptions {
 
 /**
  * Load all agents into cache. Call once at activation.
- * Thread-safe: concurrent calls share the same promise.
+ * Concurrent calls join the in-flight load and re-check what it published, so
+ * only one scan runs.
  */
 export async function loadAgents(
   options: LoadAgentsOptions = {},
 ): Promise<void> {
   const includeRemote = options.includeRemote ?? true;
+  if (inFlight) await inFlight;
+  if (catalog && (!includeRemote || catalog.includesRemote)) return;
+  await startLoad(includeRemote, epoch);
+}
 
-  if (initPromise) {
-    await initPromise;
-  }
-
-  if (initialized && (!includeRemote || cacheIncludesRemote)) {
-    return;
-  }
-
-  const previousInitialized = initialized;
-  const previousCacheIncludesRemote = cacheIncludesRemote;
-  const loadEpoch = registryEpoch;
-  initPromise = doLoad(includeRemote, loadEpoch)
-    .then((published) => {
-      if (!published) return;
-      initialized = true;
-      cacheIncludesRemote = includeRemote;
-    })
-    .catch((error: unknown) => {
-      initialized = previousInitialized;
-      cacheIncludesRemote = previousCacheIncludesRemote;
-      throw error;
+/** Rebuild the cache after every older load has settled. */
+function startLoad(includeRemote: boolean, loadEpoch: number): Promise<void> {
+  const previous = inFlight?.catch(() => undefined) ?? Promise.resolve();
+  const load: Promise<void> = previous
+    .then(async () => {
+      if (loadEpoch !== epoch) return;
+      if (await doLoad(includeRemote, loadEpoch)) {
+        catalog = { includesRemote: includeRemote };
+      }
     })
     .finally(() => {
-      initPromise = null;
+      if (inFlight === load) inFlight = undefined;
     });
-
-  return initPromise;
+  inFlight = load;
+  return load;
 }
 
 /**
@@ -165,8 +169,8 @@ export async function loadAgents(
 export function registerInlineAgents(definitions: readonly unknown[]): void {
   const toolUseOverrides = getToolUseOverrides();
   for (const entry of defineInlineAgents(definitions)) {
-    applyToolUseOverride(entry, toolUseOverrides);
-    cache.set(agentKeyOf(entry), entry);
+    const published = applyToolUseOverride(entry, toolUseOverrides);
+    cache.set(agentKeyOf(published), published);
   }
 }
 
@@ -223,12 +227,12 @@ async function doLoad(
   // Apply category overrides from config
   const toolUseOverrides = getToolUseOverrides();
 
-  if (loadEpoch !== registryEpoch) return false;
+  if (loadEpoch !== epoch) return false;
 
   cache.clear();
   for (const entry of allEntries) {
-    applyToolUseOverride(entry, toolUseOverrides);
-    cache.set(agentKeyOf(entry), entry);
+    const published = applyToolUseOverride(entry, toolUseOverrides);
+    cache.set(agentKeyOf(published), published);
   }
 
   // Migrate legacy agent names (chat → assistant) in persisted visibility
@@ -252,14 +256,19 @@ function getToolUseOverrides(): Set<string> {
   );
 }
 
+/**
+ * Project a config-level tool-use override onto an entry. Pure: an overridden
+ * entry is returned as a new value, so publishing into the cache never mutates
+ * the definition a source (inline registration, directory scan, remote catalog)
+ * still owns.
+ */
 function applyToolUseOverride(
   entry: AgentEntry,
   toolUseOverrides: ReadonlySet<string>,
-): void {
-  if (toolUseOverrides.has(entry.name)) {
-    entry.category = AgentCategory.ToolUse;
-    entry.rounds = undefined;
-  }
+): AgentEntry {
+  if (!toolUseOverrides.has(entry.name)) return entry;
+  const { rounds: _rounds, ...rest } = entry;
+  return { ...rest, category: AgentCategory.ToolUse };
 }
 
 /**
@@ -345,7 +354,7 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     const oldName = path.basename(entry.path, '.yaml');
     if (!oldName || oldName === entry.name) continue;
 
-    const oldKey = createKey(entry.source, oldName);
+    const oldKey = agentKey(entry.source, oldName);
     if (!currentKeys.has(oldKey)) {
       recordRenameTarget(qualified, oldKey, agentKeyOf(entry));
     }
@@ -416,7 +425,7 @@ export function getAgent(
       ? TOOL_USE_LOOKUP_PRIORITY
       : LOOKUP_PRIORITY;
   for (const source of priority) {
-    const entry = cache.get(createKey(source, identifier));
+    const entry = cache.get(agentKey(source, identifier));
     if (entry) return entry;
   }
 
@@ -519,33 +528,25 @@ export function getAgentsBySource(source: AgentSource): AgentEntry[] {
  * loaded" must check this first — an empty cache looks identical otherwise.
  */
 export function isAgentRegistryReady(): boolean {
-  return initialized;
+  return catalog !== undefined;
 }
 
 /**
- * Refresh the cache after every older load has settled, then force a new load.
- * This prevents a post-sign-in refresh from joining an in-flight signed-out
- * remote request and incorrectly treating that stale request as authoritative.
+ * Force a new load after every older one has settled, superseding any load
+ * still queued from before. The cache keeps serving the catalog it already
+ * published until the new one lands, including when the refresh fails.
  */
 export function refresh(options: LoadAgentsOptions = {}): Promise<void> {
-  const refreshEpoch = ++registryEpoch;
-  // `add` widens to `T | void` to cover abort via signal/timeout; we pass
-  // neither, so the task always runs and resolves with `void`.
-  return refreshQueue.add(async () => {
-    if (refreshEpoch !== registryEpoch) return;
-    if (initPromise) await initPromise.catch(() => undefined);
-    if (refreshEpoch !== registryEpoch) return;
-    initialized = false;
-    cacheIncludesRemote = false;
-    await loadAgents(options);
-  }) as Promise<void>;
+  return startLoad(options.includeRemote ?? true, ++epoch);
 }
 
 function removeRemoteEntries(): void {
   for (const [key, entry] of cache) {
     if (entry.source === 'remote') cache.delete(key);
   }
-  cacheIncludesRemote = false;
+  // The cache no longer holds remote definitions, so the published description
+  // of it must not claim otherwise even if the rebuild below never lands.
+  if (catalog) catalog = { includesRemote: false };
 }
 
 /** Remove remote definitions immediately, then rebuild the local catalog. */
@@ -773,7 +774,7 @@ export function resolveAgentForLaunch(
   source?: AgentSource | null,
 ): ResolvedAgent | undefined {
   const entry =
-    (source ? getAgent(createKey(source, agentName(identifier))) : undefined) ??
+    (source ? getAgent(agentKey(source, agentName(identifier))) : undefined) ??
     getVisibleAgent(category, identifier) ??
     getCategoryAgent(category, identifier);
   return entry ? toResolvedAgent(entry) : undefined;

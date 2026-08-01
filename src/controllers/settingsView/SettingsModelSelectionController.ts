@@ -28,8 +28,8 @@ import {
 import { byName } from '@utils/core';
 
 export interface SettingsModelSelectionState {
-  getEnabledModels(): string[] | undefined;
-  setEnabledModels(models: string[]): Promise<void>;
+  getEnabledModels(): readonly string[] | undefined;
+  setEnabledModels(models: readonly string[]): Promise<void>;
   getHelperModel(): string | undefined;
   setHelperModel(model: string): Promise<void>;
   getReasoningLevelOverrides(): Record<string, string> | undefined;
@@ -75,7 +75,7 @@ export class SettingsModelSelectionController {
     this.modelSources = new Set(deps.modelSources ?? MODEL_SOURCE_ORDER);
   }
 
-  getVisibleModels(): string[] {
+  getVisibleModels(): readonly string[] {
     // Normalize at the single read boundary: an empty persisted list (e.g. the
     // user disabled every model) falls back to defaults so downstream consumers
     // — including the helper-model dropdown — never see an empty model set.
@@ -99,7 +99,7 @@ export class SettingsModelSelectionController {
   }): Promise<void> {
     const current = this.getVisibleModels();
 
-    let updated: string[];
+    let updated: readonly string[];
     if (!input.enabled) {
       updated = current.filter((modelName) => modelName !== input.modelName);
     } else if (current.includes(input.modelName)) {

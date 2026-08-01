@@ -66,7 +66,8 @@ interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
   logger: AgentTrace;
   readonly runScope: RunScope;
-  setAbortController: (ac: AbortController | null) => void;
+  /** The run's cancellation signal; see `BaseFlowContextInit.abortSignal`. */
+  readonly abortSignal: AbortSignal;
   refreshClient?: RefreshModelClient;
   readonly clientCredentialRoute?: ModelCredentialRoute;
 }
@@ -171,8 +172,8 @@ export abstract class RetryableInvocationNode<
     }
   }
 
-  /** Wraps operation with AbortController management and relay token refresh. */
-  protected async withAbortController<T>(
+  /** Runs the operation under the run signal, with relay token refresh. */
+  protected async invokeWithRelayRecovery<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     if (this._persistent401Error) {
@@ -180,14 +181,7 @@ export abstract class RetryableInvocationNode<
     }
 
     const services = this.services;
-    let ownedController: AbortController | undefined;
-    let signal = this.signal;
-    if (!signal) {
-      ownedController = new AbortController();
-      signal = ownedController.signal;
-      this.signal = signal;
-      services.setAbortController(ownedController);
-    }
+    const signal = services.abortSignal;
 
     // Proactive relay token refresh before the request. Only relay-route
     // clients present a relay session token, so only they consult the expiry
@@ -231,11 +225,6 @@ export abstract class RetryableInvocationNode<
         return this.attemptRelay401Recovery(err, operation, signal);
       }
       throw err;
-    } finally {
-      if (ownedController) {
-        services.setAbortController(null);
-        this.signal = undefined;
-      }
     }
   }
 
@@ -271,22 +260,11 @@ export abstract class RetryableInvocationNode<
     // implicate a shared route. For classified route failures it overlaps the
     // gate's cooling interval, so the gate waits only for any remaining time.
     this.wait = config.backoffMs / 1000;
-    const controller = new AbortController();
-    controller.signal.addEventListener(
-      'abort',
-      () => {
-        this._userCancelled = true;
-      },
-      { once: true },
-    );
-    this.signal = controller.signal;
-    this.services.setAbortController(controller);
-    try {
-      return await super._exec(prepRes);
-    } finally {
-      this.services.setAbortController(null);
-      this.signal = undefined;
-    }
+    // The run's one interrupt controller drives the retry loop's abort
+    // handling; an interrupt is read back off the same signal in
+    // `getFallbackResult`, so there is nothing to register or clear here.
+    this.signal = this.services.abortSignal;
+    return await super._exec(prepRes);
   }
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
@@ -404,7 +382,11 @@ export abstract class RetryableInvocationNode<
   protected getFallbackResult(
     error: Error,
   ): { kind: 'cancelled' } | ({ kind: 'failed' } & RetryErrorInfo) {
-    if (this._userCancelled || isUserAbort(error)) {
+    if (
+      this._userCancelled ||
+      this.services.abortSignal.aborted ||
+      isUserAbort(error)
+    ) {
       return { kind: 'cancelled' };
     }
 

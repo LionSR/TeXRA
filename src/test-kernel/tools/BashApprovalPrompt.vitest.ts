@@ -2,13 +2,17 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import pDefer from 'p-defer';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import type { BashSettlement } from '@agent/runtime/HostInteractions';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { BashPermissionSchema, type StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   prepareBashApprovalPrompt,
+  requestBashApproval,
   setBashApprovalSessionBypass,
 } from '@tools/approval/bashApproval';
 
@@ -62,5 +66,47 @@ describe('prepareBashApprovalPrompt', () => {
         session,
       ).allowBypass,
     ).toBe(true);
+  });
+});
+
+describe('requestBashApproval queueing', () => {
+  it('auto-approves a queued request once the stream is bypassed while it waits', async () => {
+    const session = createTestSession();
+    const streamId = sid('s:bash-queued-bypass');
+    const firstPrompted = pDefer<void>();
+    const firstAnswer = pDefer<BashSettlement>();
+    let prompts = 0;
+
+    session.useHostInteractions({
+      requestBashApproval: () => {
+        prompts += 1;
+        firstPrompted.resolve();
+        return firstAnswer.promise;
+      },
+      cancel: () => undefined,
+    });
+
+    const request = (command: string) =>
+      withRunContext(createRunContext({ streamId, session }), () =>
+        requestBashApproval({ command }),
+      );
+
+    try {
+      const first = request('echo first');
+      const second = request('echo second');
+      await firstPrompted.promise;
+      expect(prompts).toBe(1);
+
+      // The user answers the first prompt with "approve and stop asking";
+      // the second must honor that instead of prompting again.
+      setBashApprovalSessionBypass(streamId, true, { silent: true, session });
+      firstAnswer.resolve({ action: 'approve' });
+
+      expect(await first).toEqual({ action: 'approve' });
+      expect(await second).toEqual({ action: 'approve' });
+      expect(prompts).toBe(1);
+    } finally {
+      session.dispose();
+    }
   });
 });

@@ -110,16 +110,18 @@ class ExecutionFileHistory {
     return this.byExecution.get(executionId)?.get(filePath)?.at(-1);
   }
 
-  /** Pop the most recent snapshot, pruning the file/execution entry once empty. */
+  /**
+   * Pop the most recent snapshot, pruning the file entry once empty. The
+   * execution entry stays until `clearExecution`, so `hasExecution` reports
+   * "already observed" for the whole execution and the completion listener is
+   * registered exactly once.
+   */
   popLast(executionId: string, filePath: string): void {
     const files = this.byExecution.get(executionId);
     const history = files?.get(filePath);
     if (!files || !history) return;
     history.pop();
-    if (history.length === 0) {
-      files.delete(filePath);
-      if (files.size === 0) this.byExecution.delete(executionId);
-    }
+    if (history.length === 0) files.delete(filePath);
   }
 
   clearExecution(executionId: string): void {
@@ -195,7 +197,6 @@ export class TextEditorTool extends defineTool({
 
   // Undo snapshots owned by the execution that created them.
   private readonly fileHistory = new ExecutionFileHistory();
-  private readonly observedExecutions = new Set<string>();
 
   /**
    * Cap on retained full-file snapshots per execution and file.
@@ -637,17 +638,15 @@ export class TextEditorTool extends defineTool({
     executionId: string,
     context: RunContext | undefined,
   ): void {
-    if (!executionId || this.observedExecutions.has(executionId)) return;
+    if (!executionId) return;
 
     const registry = getRunContextSession(context)?.executions;
     if (!registry?.getHandle(executionId)) return;
 
-    this.observedExecutions.add(executionId);
     // The registry releases persistent listeners after this terminal callback.
     registry.addListener(executionId, (handle) => {
       if (handle) return;
       this.fileHistory.clearExecution(executionId);
-      this.observedExecutions.delete(executionId);
     });
   }
 

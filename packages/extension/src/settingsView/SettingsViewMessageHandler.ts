@@ -89,7 +89,6 @@ import {
 import {
   getLastCheckResults,
   refreshToolAvailability,
-  refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { StorageFS, WorkspaceFS } from '@utils/files';
@@ -214,7 +213,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
     this.handlerRegistry = this.createHandlerRegistry();
 
-    // Lifetime == extension; appSignals is process-global so no dispose needed.
     const refreshSubscriptions = () =>
       void this.withActiveWebview((w) =>
         this.githubHandlers.sendPRSubscriptions(w),
@@ -227,18 +225,26 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       'issueSubscriptionsChanged',
       'issueSubscriptionBindingsChanged',
     ] as const) {
-      appSignals.on(signal, refreshSubscriptions);
+      context.subscriptions.push({
+        dispose: appSignals.on(signal, refreshSubscriptions),
+      });
     }
-    appSignals.on('toolAvailabilityChanged', () => {
-      void this.withActiveWebview((w) =>
-        this.sendToolDashboardData(w, { skipChecks: true }),
-      );
-    });
-    appSignals.on('languageModelsChanged', () => {
-      void this.withActiveWebview((webview) =>
-        this.sendModelSelectionData(webview),
-      );
-    });
+    context.subscriptions.push(
+      {
+        dispose: appSignals.on('toolAvailabilityChanged', () => {
+          void this.withActiveWebview((w) =>
+            this.sendToolDashboardData(w, { skipChecks: true }),
+          );
+        }),
+      },
+      {
+        dispose: appSignals.on('languageModelsChanged', () => {
+          void this.withActiveWebview((webview) =>
+            this.sendModelSelectionData(webview),
+          );
+        }),
+      },
+    );
     const unsubscribeGoals = subscribeGoalStateChanges(defaultSession(), () => {
       void this.withActiveWebview((w) => this.sendGoalList(w));
     });
@@ -507,7 +513,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         recheckStatus: () => refreshToolAvailability(),
         toggle: async (toolId, enabled) => {
           await setToolEnabled(toolId, enabled);
-          refreshDisabledToolCache();
           await this.withActiveWebview((w) =>
             this.sendToolDashboardData(w, { skipChecks: true }),
           );

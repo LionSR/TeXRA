@@ -170,9 +170,14 @@ function synchronizeSettledPhase(
 ): void {
   const current = streamStatus.get(streamId);
   if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
-  // The machine owns the WAITING -> RUNNING(resume) -> terminal(lifecycle)
-  // escalation; only the in-flight-phase guard above is repair-specific.
-  streamStatus.transitionToTerminal(streamId, outcome, statusEmitOptions);
+  // The machine owns the WAITING -> RUNNING(resume) -> terminal escalation;
+  // only the in-flight-phase guard above is repair-specific.
+  streamStatus.transitionToTerminal(
+    streamId,
+    outcome,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    statusEmitOptions,
+  );
 }
 
 /** Repair one stream back to WAITING, logging the outcome. */
@@ -195,39 +200,6 @@ function repairToWaiting(
   }
   logger?.warn(`Failed to repair stream ${streamId} to WAITING after restart`);
   return false;
-}
-
-function transitionToFailedForRestart(
-  streamStatus: StreamStatusMachine,
-  streamId: StreamTabId,
-  currentStatus: StreamPhase | undefined,
-  statusEmitOptions: StreamStatusEmitOptions | undefined,
-): boolean {
-  if (
-    streamStatus.transition(
-      streamId,
-      STREAM_PHASE.FAILED,
-      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      statusEmitOptions,
-    )
-  ) {
-    return true;
-  }
-  if (currentStatus !== STREAM_PHASE.WAITING) return false;
-  return (
-    streamStatus.transition(
-      streamId,
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.RESUME,
-      statusEmitOptions,
-    ) &&
-    streamStatus.transition(
-      streamId,
-      STREAM_PHASE.FAILED,
-      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      statusEmitOptions,
-    )
-  );
 }
 
 async function writeFailedTerminalStatuses(
@@ -442,10 +414,10 @@ async function repairRestartedStream(
       waitingStreams.push(streamId);
     }
   } else if (
-    transitionToFailedForRestart(
-      options.streamStatus,
+    options.streamStatus.transitionToTerminal(
       streamId,
-      currentStatus,
+      STREAM_PHASE.FAILED,
+      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
       options.statusEmitOptions,
     )
   ) {

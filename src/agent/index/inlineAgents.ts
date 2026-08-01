@@ -70,11 +70,14 @@ export function defineInlineAgents(
   return validated.map((inline) => clonePlainContainers(inline.entry));
 }
 
-/** Registry entries for every currently registered inline definition. */
+/**
+ * Registry entries for every currently registered inline definition.
+ *
+ * Each is a fresh copy: a published entry is reachable through `getAgent`, and
+ * a consumer that mutates its `tools`/`defaultOutputFiles` array must not
+ * corrupt the stored definition those arrays came from (Fix #1/#8).
+ */
 export function inlineAgentEntries(): AgentEntry[] {
-  // Return a fresh copy of every entry: `doLoad` mutates `entry.category` and
-  // `entry.rounds` for tool-use overrides, and those mutations must not
-  // permanently corrupt the stored definition (Fix #1/#8).
   return [...inlineAgents.values()].map((inline) =>
     clonePlainContainers(inline.entry),
   );

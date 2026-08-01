@@ -16,6 +16,7 @@ import {
   validateTeamSelection,
 } from '@webview/frontend/mainViewActions';
 import { catalogHandlers } from '@webview/frontend/slices/catalogSlice';
+import { sessionHandlers } from '@webview/frontend/slices/sessionSlice';
 import {
   instruction$,
   launchTarget$,
@@ -35,15 +36,10 @@ import { teamOption } from './mainViewTestUtils';
 
 const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
-  saveState: vi.fn(),
 }));
 
 vi.mock('@shared/hostBridge', () => ({
   postMessage: mocks.postMessage,
-}));
-
-vi.mock('@webview/frontend/persistence', () => ({
-  saveState: mocks.saveState,
 }));
 
 function setTeamOptions(optionsData: TeamOptionData[]): void {
@@ -76,7 +72,6 @@ describe('main-view launch target', () => {
   beforeEach(() => {
     resetMainViewState();
     mocks.postMessage.mockClear();
-    mocks.saveState.mockClear();
   });
 
   describe('persistence defaults', () => {
@@ -103,7 +98,6 @@ describe('main-view launch target', () => {
     it('switches workflow to interactive team mode atomically, stashing the workflow draft', async () => {
       sessionType$.set('workflow');
       workflowInstruction$.set('workflow draft');
-      instruction$.set('workflow draft');
       toolUseInstruction$.set('interactive draft');
 
       changeLaunchTarget('team');
@@ -111,20 +105,18 @@ describe('main-view launch target', () => {
 
       expect(launchTarget$.get()).toBe('team');
       expect(sessionType$.get()).toBe('toolUse');
-      // Draft preservation through the shared swap path: the workflow draft is
-      // stashed and the interactive draft becomes active in the same save.
+      // Draft preservation: the workflow draft stays put and the interactive
+      // draft becomes the active one.
       expect(workflowInstruction$.get()).toBe('workflow draft');
       expect(instruction$.get()).toBe('interactive draft');
       expect(statusAnnouncement$.get()).toBe(
         'Team launcher selected. Interactive mode.',
       );
-      expect(mocks.saveState).toHaveBeenCalled();
     });
 
     it('keeps the interactive draft when selecting Team from an interactive session', async () => {
       sessionType$.set('toolUse');
       toolUseInstruction$.set('interactive draft');
-      instruction$.set('interactive draft');
 
       changeLaunchTarget('team');
       await flushAnnouncements();
@@ -153,7 +145,6 @@ describe('main-view launch target', () => {
       expect(statusAnnouncement$.get()).toBe(
         'Team launcher selected. Interactive mode.',
       );
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
     it('replaces a stale team when entering Team after the catalog arrived', () => {
@@ -165,7 +156,6 @@ describe('main-view launch target', () => {
 
       expect(launchTarget$.get()).toBe('team');
       expect(selectedTeamId$.get()).toBe('physicist');
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
     it('preserves a selected disabled team when entering Team', () => {
@@ -180,7 +170,6 @@ describe('main-view launch target', () => {
 
       expect(launchTarget$.get()).toBe('team');
       expect(selectedTeamId$.get()).toBe('broken');
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
     it('rejects Team when a non-empty catalog has no runnable fallback', async () => {
@@ -195,13 +184,11 @@ describe('main-view launch target', () => {
       expect(statusAnnouncement$.get()).toBe(
         'No runnable teams available. Agent launcher selected.',
       );
-      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
     it('leaves the session interactive when switching Team back to Agent', async () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
-      instruction$.set('team draft');
       toolUseInstruction$.set('team draft');
 
       changeLaunchTarget('agent');
@@ -211,24 +198,21 @@ describe('main-view launch target', () => {
       expect(sessionType$.get()).toBe('toolUse');
       expect(instruction$.get()).toBe('team draft');
       expect(statusAnnouncement$.get()).toBe('Agent launcher selected.');
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
     it('is a no-op when the target is already active', () => {
       changeLaunchTarget('agent');
 
-      expect(mocks.saveState).not.toHaveBeenCalled();
       expect(mocks.postMessage).not.toHaveBeenCalled();
     });
   });
 
   describe('changeSessionType team interplay', () => {
-    it('drops the team launcher in the same save when switching to Workflow', async () => {
+    it('drops the team launcher when switching to Workflow', async () => {
       sessionType$.set('toolUse');
       launchTarget$.set('team');
       selectedTeamId$.set('physicist');
       toolUseInstruction$.set('interactive draft');
-      instruction$.set('interactive draft');
       workflowInstruction$.set('workflow draft');
 
       changeSessionType('workflow');
@@ -236,16 +220,13 @@ describe('main-view launch target', () => {
 
       expect(sessionType$.get()).toBe('workflow');
       expect(launchTarget$.get()).toBe('agent');
-      // Team runs are interactive-only: the swapModeInstruction path still
-      // stashes the interactive draft and restores the workflow draft.
+      // Team runs are interactive-only: the interactive draft survives the
+      // switch and the workflow draft becomes the active one.
       expect(toolUseInstruction$.get()).toBe('interactive draft');
       expect(instruction$.get()).toBe('workflow draft');
       expect(statusAnnouncement$.get()).toBe(
         'Workflow uses a single workflow agent.',
       );
-      // Atomicity: the launch-target reset and the session swap persist in one
-      // save, so no intermediate state can be restored after a reload.
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
     it('keeps the agent launcher when switching session types without a team selection', () => {
@@ -258,12 +239,39 @@ describe('main-view launch target', () => {
     });
   });
 
+  describe('per-mode instruction drafts', () => {
+    it('follows the active session mode without a stash step', () => {
+      sessionType$.set('workflow');
+      workflowInstruction$.set('workflow draft');
+      toolUseInstruction$.set('interactive draft');
+
+      expect(instruction$.get()).toBe('workflow draft');
+
+      // The host-pushed agent selection switches mode without touching the
+      // drafts: `instruction$` is derived, so both survive the round trip.
+      sessionHandlers[MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]({
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
+        sessionType: 'toolUse',
+        agentId: 'coder',
+      });
+
+      expect(sessionType$.get()).toBe('toolUse');
+      expect(toolUseAgent$.get()).toBe('coder');
+      expect(instruction$.get()).toBe('interactive draft');
+      expect(workflowInstruction$.get()).toBe('workflow draft');
+
+      changeSessionType('workflow');
+
+      expect(instruction$.get()).toBe('workflow draft');
+      expect(toolUseInstruction$.get()).toBe('interactive draft');
+    });
+  });
+
   describe('changeTeam', () => {
-    it('persists the selected team id', () => {
+    it('records the selected team id', () => {
       changeTeam('physicist');
 
       expect(selectedTeamId$.get()).toBe('physicist');
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
   });
 
@@ -275,11 +283,9 @@ describe('main-view launch target', () => {
       expect(workingDirectory$.get()).toBe('/workspace/paper');
 
       changeWorkingDirectory('/workspace/figures');
-      mocks.saveState.mockClear();
       setWorkspaceRoots(OPEN_ROOTS);
 
       expect(workingDirectory$.get()).toBe('/workspace/figures');
-      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
     it('falls back when the persisted root is no longer open', () => {
@@ -288,7 +294,6 @@ describe('main-view launch target', () => {
       setWorkspaceRoots(OPEN_ROOTS);
 
       expect(workingDirectory$.get()).toBe('/workspace/paper');
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
   });
 
@@ -299,7 +304,6 @@ describe('main-view launch target', () => {
       validateTeamSelection();
 
       expect(selectedTeamId$.get()).toBe('physicist');
-      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
     it('keeps an enabled restored team', () => {
@@ -314,8 +318,6 @@ describe('main-view launch target', () => {
 
       expect(selectedTeamId$.get()).toBe('physicist');
       expect(launchTarget$.get()).toBe('team');
-      // Nothing changed, so nothing is persisted.
-      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
     it('falls back to the first non-disabled option with an announcement when the restored team vanished', async () => {
@@ -335,7 +337,6 @@ describe('main-view launch target', () => {
       expect(statusAnnouncement$.get()).toBe(
         'Selected team is no longer available. Switched to "physicist".',
       );
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
 
     it('keeps a present-but-disabled team without rewriting the persisted selection', async () => {
@@ -354,7 +355,6 @@ describe('main-view launch target', () => {
       // silently stealing the user's persisted selection.
       expect(selectedTeamId$.get()).toBe('broken');
       expect(launchTarget$.get()).toBe('team');
-      expect(mocks.saveState).not.toHaveBeenCalled();
       expect(statusAnnouncement$.get()).toBe('');
     });
 
@@ -367,7 +367,6 @@ describe('main-view launch target', () => {
 
       expect(selectedTeamId$.get()).toBe('broken');
       expect(launchTarget$.get()).toBe('team');
-      expect(mocks.saveState).not.toHaveBeenCalled();
     });
 
     it('drops to the agent launcher with an announcement when the vanished team has no runnable fallback', async () => {
@@ -383,7 +382,6 @@ describe('main-view launch target', () => {
       expect(statusAnnouncement$.get()).toBe(
         'No runnable teams available. Agent launcher selected.',
       );
-      expect(mocks.saveState).toHaveBeenCalledOnce();
     });
   });
 
@@ -427,13 +425,11 @@ describe('main-view launch target', () => {
 
       expect(launchTarget$.get()).toBe('team');
       expect(selectedTeamId$.get()).toBe('physicist');
-      expect(mocks.saveState).not.toHaveBeenCalled();
 
       setTeamOptions([teamOption('physicist'), teamOption('lean-project')]);
 
       expect(launchTarget$.get()).toBe('team');
       expect(selectedTeamId$.get()).toBe('physicist');
-      expect(mocks.saveState).not.toHaveBeenCalled();
     });
   });
 

@@ -163,7 +163,7 @@ import {
   chatTuiCanStartRootRun,
   chatTuiIsResumableIdleOnExit,
   chatTuiSigintAction,
-  type TuiSession,
+  TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import {
   RUN_OUTCOME,
@@ -173,6 +173,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { StreamSnapshotStore } from '@transcript';
 
@@ -180,18 +181,31 @@ import { StreamSnapshotStore } from '@transcript';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeSession(overrides: Partial<TuiSession> = {}): TuiSession {
-  return {
-    streamId: undefined,
-    interruptedStreamId: undefined,
-    executionId: undefined,
-    presentationHost: undefined,
-    runPromise: undefined,
-    runExitCode: CliExitCode.Success,
-    runCompleted: false,
-    stopRequested: false,
-    ...overrides,
-  };
+/**
+ * Session fixture in the states the controller is exercised from. The
+ * run-claim triple is owned by {@link TuiSession}, so a fixture reaches a
+ * pending or completed claim through the same transitions production uses.
+ */
+interface SessionFixture {
+  readonly streamId?: StreamTabId;
+  readonly interruptedStreamId?: StreamTabId;
+  readonly executionId?: string;
+  readonly presentationHost?: CliRuntimeHost;
+  readonly runPromise?: Promise<void>;
+  readonly runCompleted?: boolean;
+  readonly stopRequested?: boolean;
+}
+
+function makeSession(overrides: SessionFixture = {}): TuiSession {
+  const session = new TuiSession();
+  if (overrides.runPromise) session.markRunPending(overrides.runPromise);
+  if (overrides.runCompleted) session.markRunCompleted();
+  if (overrides.streamId) session.streamId = overrides.streamId;
+  session.interruptedStreamId = overrides.interruptedStreamId;
+  session.executionId = overrides.executionId;
+  session.presentationHost = overrides.presentationHost;
+  session.stopRequested = overrides.stopRequested ?? false;
+  return session;
 }
 
 function makeSessionContext(): CliContext {
@@ -289,6 +303,32 @@ function makeAutoResumeData() {
 }
 
 /**
+ * Installs what `defaultSession()` answers with. Every surface is a stub the
+ * controller can call; a test that asserts through a real runtime object swaps
+ * just that surface in. `defaultSession` is a bare mock, so the override map is
+ * untyped here exactly as the returned session is.
+ */
+function installSession(overrides: Record<string, unknown> = {}): void {
+  mocks.defaultSession.mockReturnValue({
+    useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
+    interactions: { cancel: mocks.cancelInteractions },
+    events: { emit: mocks.sessionEventEmit },
+    followUps: { restore: mocks.followUpEnqueue },
+    approvals: { registerStreamParent: vi.fn() },
+    status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
+    executions: {
+      stopAgentStream: mocks.stopAgentStream,
+      getActiveIds: mocks.getActiveExecutionIds,
+      getHandle: mocks.getExecutionHandle,
+      addRegistrationListener: mocks.addExecutionRegistrationListener,
+      addChildActivationListener: mocks.addChildActivationListener,
+    },
+    transcripts: { ensureLoaded: vi.fn(async () => undefined) },
+    ...overrides,
+  });
+}
+
+/**
  * Installs a session whose interaction, event, status, and execution surfaces
  * are the real runtime objects rather than per-mock stubs.
  */
@@ -302,16 +342,13 @@ function installOwnerSession(): {
   const status = new StreamStatusMachine();
   const executions = new ExecutionRegistry({ events, streamStatus: status });
   const interactions = new SessionHostInteractions();
-  mocks.defaultSession.mockReturnValue({
+  installSession({
     useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
       interactions.use(adapter),
     interactions,
     events,
-    followUps: { restore: mocks.followUpEnqueue },
-    approvals: { registerStreamParent: vi.fn() },
     status,
     executions,
-    transcripts: { ensureLoaded: vi.fn(async () => undefined) },
   });
   return { events, status, executions, interactions };
 }
@@ -402,11 +439,13 @@ describe('CLI terminal outcome resolution', () => {
   });
 
   it('prefers the persisted post-shutdown outcome', async () => {
-    mocks.getExecutionStore.mockReturnValue({
-      readMeta: vi.fn().mockResolvedValue({
-        outcome: RUN_OUTCOME.CANCELLED,
+    mocks.getExecutionStore.mockReturnValue(
+      createFakeKv(undefined, {
+        readMeta: vi.fn().mockResolvedValue({
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
       }),
-    });
+    );
 
     await expect(
       readCliRunOutcome({
@@ -420,9 +459,11 @@ describe('CLI terminal outcome resolution', () => {
 
   it('reports an outcome read failure and retains the completed run', async () => {
     const reportReadFailure = vi.fn();
-    mocks.getExecutionStore.mockReturnValue({
-      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
-    });
+    mocks.getExecutionStore.mockReturnValue(
+      createFakeKv(undefined, {
+        readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
+      }),
+    );
 
     await expect(
       readCliRunOutcome(
@@ -521,21 +562,7 @@ describe('createChatSessionController', () => {
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.attachTuiRunFactSubscription.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
-    mocks.defaultSession.mockReturnValue({
-      useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
-      interactions: { cancel: mocks.cancelInteractions },
-      events: { emit: mocks.sessionEventEmit },
-      followUps: { restore: mocks.followUpEnqueue },
-      status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
-      executions: {
-        stopAgentStream: mocks.stopAgentStream,
-        getActiveIds: mocks.getActiveExecutionIds,
-        getHandle: mocks.getExecutionHandle,
-        addRegistrationListener: mocks.addExecutionRegistrationListener,
-        addChildActivationListener: mocks.addChildActivationListener,
-      },
-      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
-    });
+    installSession();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
     mocks.resumeQueuedToolUseFromResumeData.mockImplementation(
       async (...args: unknown[]) => {
@@ -614,12 +641,11 @@ describe('createChatSessionController', () => {
     expect(ctrl.canStartRootRun()).toBe(true);
 
     // Simulate a pending run
-    session.runPromise = new Promise(() => {});
-    session.runCompleted = false;
+    session.markRunPending(new Promise(() => {}));
     expect(ctrl.canStartRootRun()).toBe(false);
 
     // Complete the run
-    session.runCompleted = true;
+    session.markRunCompleted();
     expect(ctrl.canStartRootRun()).toBe(true);
   });
 
@@ -1286,9 +1312,7 @@ describe('createChatSessionController', () => {
     // out instead of silently starting `resumeToolUseFromResumeData()` once the
     // awaits finish.
     const ensureLoaded = pDefer<void>();
-    const base = mocks.defaultSession();
-    mocks.defaultSession.mockReturnValue({
-      ...base,
+    installSession({
       transcripts: { ensureLoaded: () => ensureLoaded.promise },
     });
 
@@ -1542,7 +1566,7 @@ describe('createChatSessionController', () => {
     expect(admission.kind).toBe('accepted');
     expect(mocks.resolveAndResumeStream).not.toHaveBeenCalled();
 
-    session.runCompleted = true;
+    session.markRunCompleted();
     teardown.resolve();
     if (admission.kind !== 'accepted') return;
     await expect(admission.completion).resolves.toBe(true);
@@ -1570,7 +1594,7 @@ describe('createChatSessionController', () => {
     if (first.kind !== 'accepted' || second.kind !== 'accepted') return;
     expect(second.completion).toBe(first.completion);
 
-    session.runCompleted = true;
+    session.markRunCompleted();
     teardown.resolve();
     await expect(first.completion).resolves.toBe(true);
     expect(mocks.resolveAndResumeStream).toHaveBeenCalledOnce();

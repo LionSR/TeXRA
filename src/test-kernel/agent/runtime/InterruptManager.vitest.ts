@@ -5,58 +5,41 @@ import { describe, expect, it } from 'vitest';
 import { createInterruptCallbacks } from '@agent/runtime/InterruptManager';
 
 describe('createInterruptCallbacks', () => {
-  it('aborts the controller registered while the run is live', () => {
+  it('reports a live run as not interrupted', () => {
     const callbacks = createInterruptCallbacks();
-    const controller = new AbortController();
 
-    callbacks.setAbortController(controller);
+    expect(callbacks.abortSignal.aborted).toBe(false);
+    expect(callbacks.checkInterruption()).toBe(false);
+  });
+
+  it('aborts the run signal, and reports it through checkInterruption', () => {
+    const callbacks = createInterruptCallbacks();
+
     callbacks.onInterrupt?.();
 
-    expect(controller.signal.aborted).toBe(true);
+    expect(callbacks.abortSignal.aborted).toBe(true);
     expect(callbacks.checkInterruption()).toBe(true);
   });
 
-  it('aborts the next controller when the interrupt landed on an empty slot', () => {
+  it('delivers the interrupt to work that only starts afterwards', () => {
     const callbacks = createInterruptCallbacks();
 
-    // Nodes null the slot in their `finally`, so the interrupt can arrive
-    // between one node releasing it and the next registering.
-    callbacks.setAbortController(null);
+    // Nodes used to register and release their own controllers, so an
+    // interrupt could land while no controller was registered. The run signal
+    // has no such gap: work starting later reads it already aborted.
     callbacks.onInterrupt?.();
 
-    const controller = new AbortController();
-    callbacks.setAbortController(controller);
-
-    expect(controller.signal.aborted).toBe(true);
+    expect(callbacks.abortSignal.aborted).toBe(true);
+    expect(AbortSignal.any([callbacks.abortSignal]).aborted).toBe(true);
   });
 
-  it('still reaches a controller registered after a second interrupt', () => {
+  it('stays interrupted when the user interrupts again', () => {
     const callbacks = createInterruptCallbacks();
 
-    const first = new AbortController();
-    callbacks.setAbortController(first);
     callbacks.onInterrupt?.();
-    callbacks.setAbortController(null);
-
-    const second = new AbortController();
-    callbacks.onInterrupt?.();
-    callbacks.setAbortController(second);
-
-    expect(first.signal.aborted).toBe(true);
-    expect(second.signal.aborted).toBe(true);
-  });
-
-  it('aborts a controller registered after the latch without a further interrupt', () => {
-    const callbacks = createInterruptCallbacks();
     callbacks.onInterrupt?.();
 
-    const first = new AbortController();
-    callbacks.setAbortController(first);
-    callbacks.setAbortController(null);
-    const second = new AbortController();
-    callbacks.setAbortController(second);
-
-    expect(first.signal.aborted).toBe(true);
-    expect(second.signal.aborted).toBe(true);
+    expect(callbacks.abortSignal.aborted).toBe(true);
+    expect(callbacks.checkInterruption()).toBe(true);
   });
 });

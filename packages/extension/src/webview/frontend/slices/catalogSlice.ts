@@ -28,7 +28,6 @@ import {
   refreshModelSelectionForActiveSession,
   validateTeamSelection,
 } from '../mainViewActions';
-import { saveState } from '../persistence';
 
 /**
  * Exact value match first, then plain-name match (source changes and
@@ -128,7 +127,7 @@ export const catalogHandlers = {
     teamOptions$.set(message.optionsData);
     // Only now that the resolved options have arrived can a restored team
     // selection be checked — the initially empty async list is not proof
-    // the team vanished. Validates + persists inside.
+    // the team vanished.
     validateTeamSelection();
   },
 
@@ -139,6 +138,5 @@ export const catalogHandlers = {
       return;
     }
     workingDirectory$.set(message.optionsData.at(0)?.value ?? '');
-    saveState();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

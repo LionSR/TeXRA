@@ -456,6 +456,30 @@ describe('session.interactions immediate capabilities', () => {
     expect(secondEmit).not.toHaveBeenCalled();
     session.dispose();
   });
+
+  it('caps the unattached replay queue by dropping the oldest notices', async () => {
+    const session = createTestSession();
+    const QUEUED = 300; // past the 256 cap
+    for (let n = 0; n < QUEUED; n += 1) {
+      session.interactions.showInfoMessage(`notice-${n}`, {
+        replayWhenAttached: true,
+      });
+    }
+
+    const messages: string[] = [];
+    session.useHostInteractions({
+      showInfoMessage: (message) => {
+        messages.push(message);
+      },
+      cancel: vi.fn(),
+    });
+    await Promise.resolve();
+
+    expect(messages).toHaveLength(256);
+    expect(messages.at(0)).toBe(`notice-${QUEUED - 256}`);
+    expect(messages.at(-1)).toBe(`notice-${QUEUED - 1}`);
+    session.dispose();
+  });
 });
 
 describe('session.interactions request bookkeeping (coordinator fold)', () => {

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createKey: vi.fn(() => 'custom:my-agent'),
   deleteFile: vi.fn(async () => undefined),
   getAgent: vi.fn(() => ({ path: '/custom/my-agent.yaml' })),
   planDeleteCustomAgent: vi.fn(() => ({
@@ -24,7 +23,6 @@ vi.mock('vscode', () => ({
 }));
 
 vi.mock('@agent/index', () => ({
-  createKey: mocks.createKey,
   getAgent: mocks.getAgent,
   loadAgents: vi.fn(),
   refresh: vi.fn(),

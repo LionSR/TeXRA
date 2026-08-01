@@ -346,16 +346,17 @@ describe('ProgressApiKeyRetryController', () => {
     assert.deepEqual(harness.prompts, []);
     assert.deepEqual(harness.includedAccessValues, []);
 
-    const result = await harness.controller.applyOwnApiKeyRouting({
-      provider: 'anthropic',
-      exhaustionReason: 'copilot-subscription',
-    });
-    assert.deepEqual(result, {
-      proceeded: true,
-      disabledIncludedModelAccess: true,
-      disabledChatGptSubscription: false,
-    });
+    const started = await harness.controller.runCopilotFallbackWithRouting(
+      { provider: 'anthropic', exhaustionReason: 'copilot-subscription' },
+      async () => true,
+    );
+
+    assert.equal(started, true);
+    // Included access is disabled for the fallback and, because it started,
+    // left disabled; the ChatGPT preference is untouched and nothing is
+    // retried in place.
     assert.deepEqual(harness.includedAccessValues, [false]);
+    assert.deepEqual(harness.chatGptSubscriptionValues, []);
     assert.deepEqual(harness.retries, []);
   });
 

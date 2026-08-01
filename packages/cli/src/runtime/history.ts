@@ -1,6 +1,8 @@
 import { cp, readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import pMap from 'p-map';
+
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -36,6 +38,8 @@ import {
   listGeneratedFiles,
   mergeHistoryFiles,
 } from './history/generatedFiles';
+
+const HISTORY_ENTRY_CONCURRENCY = 8;
 
 export interface CliHistoryEntry {
   readonly id: ExecutionId;
@@ -127,11 +131,12 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   const entries = await listExecutions();
-  const history: CliHistoryEntry[] = [];
-  for (const entry of entries.filter(isUserVisibleExecution)) {
-    history.push(await toCliHistoryEntry(entry));
-  }
-  return history;
+  // Every row costs a resumability probe plus an optional resume-data read.
+  // One at a time makes a long history crawl; all at once opens one file
+  // handle burst per run, so keep it bounded. `pMap` preserves input order.
+  return pMap(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
+    concurrency: HISTORY_ENTRY_CONCURRENCY,
+  });
 }
 
 export async function readCliHistoryDetails(

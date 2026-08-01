@@ -309,7 +309,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       async (
         input: InterruptibleFlowInput,
         _registry: unknown,
-        onSetup: (flowContext: TestFlowContext) => void | (() => void),
+        attachment: {
+          attach: (flowContext: TestFlowContext) => void;
+          detach: (flowContext: TestFlowContext) => void;
+        },
       ) => {
         expect(input.tools).toBe(tools);
         const flowContext: TestFlowContext = {
@@ -319,10 +322,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
             input.onInterrupt?.();
           },
         };
-        const teardown = onSetup(flowContext);
+        attachment.attach(flowContext);
         input.takePendingFollowUps?.();
         if (!input.checkInterruption()) mocks.invokeModelOrTool();
-        teardown?.();
+        attachment.detach(flowContext);
         return {
           outcome: input.checkInterruption()
             ? RUN_OUTCOME.CANCELLED

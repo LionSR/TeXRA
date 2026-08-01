@@ -2,10 +2,8 @@
 import { z } from 'zod';
 
 // Internal imports
-import {
-  REVIEW_SEVERITIES,
-  type ReviewIssueReport,
-} from '@agent/review/reviewIssues';
+import { REVIEW_SEVERITIES } from '@agent/review/reviewIssues';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import * as logger from '@logger/logUtils';
 import { type ToolResult, ToolError } from '@shared/schemas/toolResult';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -15,27 +13,6 @@ import { defineTool } from './core/define';
 import { normalizeStructuredOutputSchema } from './structuredOutput';
 
 const CHANNEL = 'ReportReviewIssueTool';
-
-/**
- * Sink injected by the extension host. Returns `accepted: false` with a
- * reason when no agent review session is collecting issues (or the report
- * is rejected), so the tool can surface that to the agent.
- */
-export type ReportReviewIssueSink = (report: ReviewIssueReport) => {
-  accepted: boolean;
-  reason?: string;
-};
-
-let sink: ReportReviewIssueSink = () => ({
-  accepted: false,
-  reason: 'Agent review is not available in this host.',
-});
-
-export function setReportReviewIssueSink(
-  provider: ReportReviewIssueSink,
-): void {
-  sink = provider;
-}
 
 const ReportReviewIssueInputSchema = z.strictObject({
   file: z
@@ -80,6 +57,15 @@ export class ReportReviewIssueTool extends defineTool({
   schema: NormalizedReportReviewIssueSchema.zodSchema,
 }) {
   protected async execute(input: ReportReviewIssueInput): Promise<ToolResult> {
+    const sink = currentSession().interactions.reportReviewIssue;
+    if (!sink) {
+      return {
+        status: 'executed',
+        summary: 'Review issue not accepted',
+        output: 'Agent review is not available in this host.',
+      };
+    }
+
     try {
       const result = sink({
         file: input.file,

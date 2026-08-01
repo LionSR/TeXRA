@@ -311,7 +311,28 @@ export function modelHandlerCompatibilityKey(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
-  return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey;
+  return providerHandlerRoute(config.provider)?.compatibilityKey;
+}
+
+/**
+ * Guarded route-table read. The table is exhaustive over `ModelProvider`, so a
+ * miss means a provider string from outside the enum (stale registry entry or
+ * persisted config). Report it here instead of crashing on the property
+ * access; both callers turn the missing route into a named failure — the model
+ * switch reports it as a reason, handler creation throws it.
+ */
+function providerHandlerRoute(
+  provider: ModelProvider,
+): ProviderHandlerRoute | undefined {
+  const route = PROVIDER_HANDLER_ROUTES[provider];
+  if (!route) {
+    logger.warn(
+      CHANNEL,
+      `No model handler route is registered for provider ${provider}`,
+    );
+    return undefined;
+  }
+  return route;
 }
 
 export function activeModelHandlerCompatibilityKey(
@@ -635,7 +656,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
     default: {
       // Direct provider handler. The key is the provider's registered route key.
       assertGoogleInteractionsRoutable(config, useOpenRouter);
-      const route = PROVIDER_HANDLER_ROUTES[config.provider];
+      const route = providerHandlerRoute(config.provider);
       if (!route) {
         throw new Error(`Unsupported model provider: ${config.provider}`);
       }

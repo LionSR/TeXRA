@@ -5,7 +5,7 @@ import { parse as shellParse } from 'shell-quote';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliToolList,
   formatCliToolMissingInstallCommandMessage,
@@ -206,12 +206,7 @@ async function authTool(context: CliContext, id: string): Promise<number> {
   });
   if (!guide.command || context.outputFormat !== 'text')
     return CliExitCode.Success;
-  try {
-    return await shellRun(guide.command);
-  } catch (error) {
-    writeErrorStderr(error);
-    return CliExitCode.AgentError;
-  }
+  return shellRun(guide.command);
 }
 
 const toolsListCommand = defineCliCommand({
@@ -248,12 +243,14 @@ const toolsInstallCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     installTool(context, ctx.args.id, ctx.args.run === true),
+  catchExitCode: CliExitCode.AgentError,
 });
 
 const toolsAuthCommand = defineCliCommand({
   meta: { name: 'auth', description: 'Run or show auth help for a tool' },
   args: TOOL_ID_ARGS,
   run: (context, ctx) => authTool(context, ctx.args.id),
+  catchExitCode: CliExitCode.AgentError,
 });
 
 export const toolsCommand = defineCommand({

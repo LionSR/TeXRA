@@ -216,75 +216,23 @@ export class TaskGroupList extends LitElement {
       }
     }
 
-    // Group tree, message classification, and timeline are only used by the
-    // non-terminal render path — skip them when terminal mode is active.
-    if (this.terminal) return;
-
-    // If terminal just switched off, caches weren't maintained while it was on —
-    // do a full rebuild so the non-terminal render has accurate data.
-    if (changedProperties.get('terminal') === true) {
-      this.index.rebuildTree(this.groups, this.messages);
-      this.index.rebuildTimeline();
+    const renderWindowsStale = this.index.apply({
+      terminal: this.terminal,
+      wasTerminal: changedProperties.get('terminal') === true,
+      groups: this.groups,
+      previousGroups: changedProperties.get('groups') as
+        TaskGroup[] | undefined,
+      groupsChanged,
+      messages: this.messages,
+      previousMessages: changedProperties.get('messages') as
+        LogMessageData[] | undefined,
+      messagesChanged,
+      deltaIndices: this.canUseUpdatedMessageIndices()
+        ? (this.updatedMessageIndices ?? [])
+        : null,
+    });
+    if (renderWindowsStale) {
       this.resetRenderWindows();
-      return;
-    }
-
-    const prevGroups = changedProperties.get('groups') as
-      TaskGroup[] | undefined;
-    const patchedGroupMetadata =
-      groupsChanged && prevGroups
-        ? this.index.patchGroupMetadataIfShapeStable(prevGroups, this.groups)
-        : false;
-
-    const prevMessages = changedProperties.get('messages') as
-      LogMessageData[] | undefined;
-    const prevCount = prevMessages?.length ?? 0;
-    const deltaIndices = this.canUseUpdatedMessageIndices()
-      ? (this.updatedMessageIndices ?? [])
-      : null;
-
-    if (groupsChanged && !patchedGroupMetadata) {
-      this.index.rebuildTree(this.groups, this.messages);
-    } else if (messagesChanged) {
-      if (this.messages.length === prevCount && prevMessages) {
-        this.index.updateCachedMessageRefs(
-          this.messages,
-          prevMessages,
-          deltaIndices,
-        );
-      } else if (this.messages.length > prevCount) {
-        this.index.appendNewMessages(this.messages, prevCount);
-        // A LOG_DELTA batch may also contain updates to existing entries
-        // (e.g. tool status → completed) alongside the appended entries.
-        if (prevMessages) {
-          this.index.updateCachedMessageRefs(
-            this.messages,
-            prevMessages,
-            deltaIndices,
-            prevCount,
-          );
-        }
-      } else {
-        this.index.rebuildTree(this.groups, this.messages);
-        this.resetRenderWindows();
-      }
-    }
-
-    // Recompute the interleaved timeline incrementally when possible so the
-    // earliest ungrouped message (the user's original instruction) stays at
-    // the top for both tool-use and workflow streams.
-    if (groupsChanged || messagesChanged) {
-      if (
-        (groupsChanged && !patchedGroupMetadata) ||
-        this.messages.length < prevCount
-      ) {
-        this.index.rebuildTimeline();
-      } else if (messagesChanged && this.messages.length > prevCount) {
-        this.index.appendToTimeline(this.messages, prevCount);
-        this.index.updateTimelineMessageRefs(this.messages, deltaIndices);
-      } else if (messagesChanged) {
-        this.index.updateTimelineMessageRefs(this.messages, deltaIndices);
-      }
     }
   }
 

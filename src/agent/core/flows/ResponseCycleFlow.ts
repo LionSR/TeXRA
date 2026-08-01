@@ -22,7 +22,7 @@ import {
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
 import { AbsoluteFS } from '@utils/files';

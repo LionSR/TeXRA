@@ -5,7 +5,7 @@ import {
   numericFocusTargetForActiveStream,
   resolveChildListTarget,
 } from '@cli/chat/tui/state/childControls';
-import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   groupWorkflowPhaseEntries,
   streamTreeEntries,
@@ -19,29 +19,7 @@ const child = 'child' as StreamTabId;
 const leaf = 'leaf' as StreamTabId;
 
 function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
-  return {
-    streamId: root,
-    category: undefined,
-    status: undefined,
-    runStartedAt: undefined,
-    description: undefined,
-    latestLine: undefined,
-    thinkingActive: false,
-    compactingActive: false,
-    usage: undefined,
-    cumulativeUsage: undefined,
-    conversation: undefined,
-    entries: [],
-    queuedFollowUpMessages: [],
-    todos: [],
-    plan: null,
-    bypass: NO_BYPASS,
-    ...overrides,
-    outputFilesByRound: overrides.outputFilesByRound ?? {},
-    missingOutputsByRound: overrides.missingOutputsByRound ?? {},
-    compileFailuresByRound: overrides.compileFailuresByRound ?? {},
-    taskGroups: overrides.taskGroups ?? [],
-  };
+  return { ...emptySlice(root), ...overrides };
 }
 
 describe('CLI child controls', () => {

@@ -18,7 +18,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { platform } from '@platform/platform';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -314,13 +314,17 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       ) {
         throw new Error(IMAGE_INPUT_ONLY_ERROR);
       }
-      if (!media.binary_data) {
-        throw new Error(`Missing binary image data for ${media.file_name}.`);
+      if (!media.data) {
+        throw new Error(`Missing image data for ${media.file_name}.`);
       }
+      // Decoded here rather than alongside the base64 payload on the entry:
+      // this is the only consumer of raw bytes, so keeping both forms on every
+      // entry would double the memory held for media the other handlers send
+      // as base64.
       return [
         {
           kind: 'data' as const,
-          data: media.binary_data,
+          data: Buffer.from(media.data, 'base64'),
           mimeType: media.media_type,
         },
       ];

@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 // Local imports
-import { createKey, getAgent } from '@agent/index';
+import { getAgent } from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import type {
   computeAgentOptionsData,
@@ -24,6 +24,7 @@ import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/S
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { agentKey } from '@shared/schemas';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   buildAgentModePresetsMessage,
@@ -403,7 +404,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     agentName: string;
     agentSource: AgentSource;
   }): Promise<void> {
-    const entry = getAgent(createKey(data.agentSource, data.agentName));
+    const entry = getAgent(agentKey(data.agentSource, data.agentName));
     if (!entry?.path) {
       await this.notifications.showErrorMessage(
         `Agent not found or has no file: ${data.agentName}`,
@@ -455,7 +456,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   private async deleteCustomAgent(data: { agentName: string }): Promise<void> {
-    const entry = getAgent(createKey('custom', data.agentName));
+    const entry = getAgent(agentKey('custom', data.agentName));
     if (!entry?.path) {
       await this.notifications.showErrorMessage(
         `Custom agent not found: ${data.agentName}`,

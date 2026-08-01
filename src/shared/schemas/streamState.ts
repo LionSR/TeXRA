@@ -16,7 +16,7 @@ import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
-import { RunUsageMapSchema, TokenUsageStatsSchema } from './usage';
+import { RunUsageMapSchema } from './usage';
 
 // Active Child Info — discriminated by `kind` rather than by which array the
 // entry came from (`subagents` vs `processes`) or by guessing from which
@@ -186,11 +186,10 @@ const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
   // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateDataSchema.optional(),
-  // Per-run usage for accumulation; sessionUsage is derived as their sum.
-  // Both stream kinds carry it so resume accumulates across the original and
-  // resumed runs.
+  // Per-run usage, the only stored usage state: the session total is summed
+  // at the render site. Both stream kinds carry it so resume accumulates
+  // across the original and resumed runs.
   runUsage: RunUsageMapSchema.prefault({}),
-  sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)

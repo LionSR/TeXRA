@@ -33,7 +33,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import type { ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
@@ -332,13 +332,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     });
 
   /**
-   * Id of the background interaction currently being polled, so an abort handler
-   * can cancel it. Cleared in the poll loop's `finally` and in invalidateChain.
-   * Mirrors ModelHandlerOpenAIResponse.pendingBackgroundResponseId.
-   */
-  private pendingBackgroundInteractionId: string | null = null;
-
-  /**
    * Set true after the model rejects `background:true` (HTTP 400 "does not
    * support background interactions"). Sticky for the instance: once a model
    * proves it cannot run background, the handler falls back to the streaming /
@@ -348,10 +341,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
    * this runtime fallback is the model gate.
    */
   private backgroundUnsupported = false;
-
-  private clearPendingBackgroundInteraction(): void {
-    this.pendingBackgroundInteractionId = null;
-  }
 
   // ===========================================================================
   // STATEFUL chaining state (store:true + previous_interaction_id)
@@ -371,9 +360,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   /** Number of Steps already sent to the server (anchors the delta slice). */
   private sentStepCount = 0;
 
-  /** Result of an in-call compaction, surfaced as {@link CreateResponseResult.updatedMessages}. */
-  private compactionResult?: { compactedMessages: Step[] };
-
   /** Last-known input token count, used for the compaction trigger (tool-use mode). */
   private lastKnownInputTokens = 0;
 
@@ -389,7 +375,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   private invalidateChain(): void {
     this.chainedInteractionId = null;
     this.sentStepCount = 0;
-    this.clearPendingBackgroundInteraction();
   }
 
   // ===========================================================================
@@ -1173,8 +1158,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       throw new Error('Messages array cannot be empty.');
     }
 
-    // Clear any stale compaction result from a previous attempt (clean retry).
-    this.compactionResult = undefined;
+    // Result of an in-call compaction, surfaced as
+    // CreateResponseResult.updatedMessages. Scoped to this attempt: a retry
+    // re-enters with a fresh binding, so no stale value can leak across
+    // attempts (maybeCompactByInputTokens owns cross-attempt reuse).
+    let updatedMessages: Step[] | undefined;
 
     const stateful = this.serverStateEnabled();
     const generationConfig = this.buildGenerationConfig(endTag);
@@ -1227,12 +1215,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
             ),
         );
       if (didCompact) {
-        this.compactionResult = { compactedMessages };
+        updatedMessages = compactedMessages;
         this.invalidateChain();
       }
     }
 
-    const updatedMessages = this.compactionResult?.compactedMessages;
     const base = updatedMessages ?? messages;
 
     // First request OR post-compaction OR stateless ⇒ full resend with no chain.
@@ -1487,87 +1474,80 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       return initial;
     }
 
-    this.pendingBackgroundInteractionId = interactionId;
-    try {
-      let pollStats: BackgroundPollStats | undefined;
-      const polled = await this.backgroundPoller.poll({
-        initialResponse: initial,
-        retrieve: async (id, sig) => {
-          const opts = sig
-            ? this.interactionsRequestOptions(sig)
-            : requestOptions;
-          try {
-            return await client.interactions.get(
-              id,
-              ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
-              opts,
-            );
-          } catch (err) {
-            // Tag and rethrow — a user-abort surfaces as-is; a transient poll
-            // error (5xx/429/network) re-enters createResponse via PocketFlow's
-            // retry layer with a fresh submit (orphaned job ages out; no resume
-            // path in v0).
-            this.sdkErrorTagger(err, this.config.provider);
-            throw err;
-          }
-        },
-        extractId: (r) => r.id,
-        extractStatus: (r) => r.status ?? 'unknown',
-        signal,
-        resourceLabel: 'interaction',
-        providerLabel: 'Google Interactions',
-        onAbort: () => {
-          // Fire-and-forget cancel; do NOT await inside the listener.
-          void this.cancelBackgroundInteraction(client, interactionId);
-        },
-        formatTimeoutError: ({ responseId, maxDurationMs }) =>
-          `Google Interactions background interaction ${responseId} exceeded ` +
-          `maximum polling duration of ${maxDurationMs} ms. Cancel it with ` +
-          `client.interactions.cancel("${responseId}").`,
-        extraFinishData: (interaction) => ({
-          usage: interaction.usage ?? undefined,
-        }),
-        onFinished: (_interaction, stats) => {
-          pollStats = stats;
-        },
-      });
+    let pollStats: BackgroundPollStats | undefined;
 
-      // `completed` and `requires_action` are both serviceable terminals: the
-      // latter carries function_call steps, so return it (don't throw) and let the
-      // cycle service the tools, mirroring the streaming/non-streaming paths and
-      // finalizeChain's chain-safe handling. Workflow agents normally carry no
-      // tools, but the gate (isWorkflowMode) is not a hard guarantee, so handle it
-      // rather than crash a run that does emit a call.
-      if (
-        polled.status === 'completed' ||
-        polled.status === 'requires_action'
-      ) {
-        return polled;
-      }
+    const polled = await this.backgroundPoller.poll({
+      initialResponse: initial,
+      retrieve: async (id, sig) => {
+        const opts = sig
+          ? this.interactionsRequestOptions(sig)
+          : requestOptions;
+        try {
+          return await client.interactions.get(
+            id,
+            ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
+            opts,
+          );
+        } catch (err) {
+          // Tag and rethrow — a user-abort surfaces as-is; a transient poll
+          // error (5xx/429/network) re-enters createResponse via PocketFlow's
+          // retry layer with a fresh submit (orphaned job ages out; no resume
+          // path in v0).
+          this.sdkErrorTagger(err, this.config.provider);
+          throw err;
+        }
+      },
+      extractId: (r) => r.id,
+      extractStatus: (r) => r.status ?? 'unknown',
+      signal,
+      resourceLabel: 'interaction',
+      providerLabel: 'Google Interactions',
+      onAbort: () => {
+        // Fire-and-forget cancel; do NOT await inside the listener.
+        void this.cancelBackgroundInteraction(client, interactionId);
+      },
+      formatTimeoutError: ({ responseId, maxDurationMs }) =>
+        `Google Interactions background interaction ${responseId} exceeded ` +
+        `maximum polling duration of ${maxDurationMs} ms. Cancel it with ` +
+        `client.interactions.cancel("${responseId}").`,
+      extraFinishData: (interaction) => ({
+        usage: interaction.usage ?? undefined,
+      }),
+      onFinished: (_interaction, stats) => {
+        pollStats = stats;
+      },
+    });
 
-      // Terminal failure: failed / cancelled / incomplete / budget_exceeded —
-      // treated uniformly as a thrown, tagged error.
-      const status = polled.status ?? 'unknown';
-      this.logger.error(
-        'Background interaction ended with a non-completed status.',
-        {
-          data: {
-            interactionId,
-            status,
-            pollCount: pollStats?.pollCount,
-            elapsedMs: pollStats?.elapsedMs,
-          },
-        },
-      );
-      const err = new Error(
-        `Google Interactions background interaction ${interactionId} ended with ` +
-          `status "${status}".`,
-      );
-      this.sdkErrorTagger(err, this.config.provider);
-      throw err;
-    } finally {
-      this.clearPendingBackgroundInteraction();
+    // `completed` and `requires_action` are both serviceable terminals: the
+    // latter carries function_call steps, so return it (don't throw) and let the
+    // cycle service the tools, mirroring the streaming/non-streaming paths and
+    // finalizeChain's chain-safe handling. Workflow agents normally carry no
+    // tools, but the gate (isWorkflowMode) is not a hard guarantee, so handle it
+    // rather than crash a run that does emit a call.
+    if (polled.status === 'completed' || polled.status === 'requires_action') {
+      return polled;
     }
+
+    // Terminal failure: failed / cancelled / incomplete / budget_exceeded —
+    // treated uniformly as a thrown, tagged error.
+    const status = polled.status ?? 'unknown';
+    this.logger.error(
+      'Background interaction ended with a non-completed status.',
+      {
+        data: {
+          interactionId,
+          status,
+          pollCount: pollStats?.pollCount,
+          elapsedMs: pollStats?.elapsedMs,
+        },
+      },
+    );
+    const err = new Error(
+      `Google Interactions background interaction ${interactionId} ended with ` +
+        `status "${status}".`,
+    );
+    this.sdkErrorTagger(err, this.config.provider);
+    throw err;
   }
 
   /** Cancel the in-flight background interaction (best-effort; swallow errors). */

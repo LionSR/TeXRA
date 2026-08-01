@@ -163,7 +163,6 @@ export function replayTrace(trace: TraceDocument): void {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [streamTabInfo],
     activeStream: trace.streamId,
-    agentFilter: 'all',
     streamStates: {
       [trace.streamId]: {
         status: toStreamLifecycleStatus(trace),

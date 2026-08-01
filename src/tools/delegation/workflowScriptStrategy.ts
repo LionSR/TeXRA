@@ -158,19 +158,13 @@ export function createWorkflowScriptStrategy(
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
       const attemptCost = createWorkflowAttemptCostTracker();
-      const callCostsByIndex = new Map<number, number>();
       // Live grandchild execution id → engine call index, maintained by the
       // runner's child-active hook. The identity bridge that lets an
       // execution-id-keyed host action reach the engine's index-keyed control.
       const liveCallIndexByChild = new Map<ExecutionId, number>();
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
-          const cost = totalCostUsd ?? 0;
-          ports.recordCost(attemptCost.record(invocation, cost));
-          callCostsByIndex.set(
-            invocation.index,
-            (callCostsByIndex.get(invocation.index) ?? 0) + cost,
-          );
+          ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
         },
         onChildActive: (grandchildExecutionId, invocation, active) => {
           if (active) {
@@ -196,7 +190,7 @@ export function createWorkflowScriptStrategy(
           runAgent,
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
-          getCallCostUsd: (index) => callCostsByIndex.get(index),
+          getCallCostUsd: (index) => attemptCost.costForCall(index),
           onActivity: runLog.add,
           onEvent: summary.onEvent,
           onControl: (control) => {

@@ -52,7 +52,6 @@ export interface SupabaseSessionCoordinatorOptions {
   edgeFunctionTimeoutMs: number;
   fetch?: typeof fetch;
   log?: SupabaseSessionLog;
-  onTokenExpiryChanged?: (expiresAt: number | null) => void;
 }
 
 interface StableSessionSnapshot {
@@ -72,6 +71,14 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private lastRefreshFailure: SessionRefreshFailure | null = null;
   private readonly sessionMutex = new Mutex();
 
+  /**
+   * Expiry (ms since epoch) of the session this coordinator last read or
+   * wrote, or null when the last observation was "no session". Every storage
+   * read and write updates it, so a session loaded cold at startup answers
+   * {@link isTokenExpiringSoon} without any host seeding it.
+   */
+  private tokenExpiresAt: number | null = null;
+
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {}
 
   async whenReady(): Promise<void> {
@@ -79,22 +86,40 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   async loadSession(): Promise<SupabaseSession | null> {
-    return parseStoredSupabaseSession(await this.options.storage.get(), {
-      logSource: 'SupabaseSession',
-      warn: this.options.log?.warn,
-    });
+    const versionBeforeLoad = this.sessionMutationVersion;
+    const session = parseStoredSupabaseSession(
+      await this.options.storage.get(),
+      { logSource: 'SupabaseSession', warn: this.options.log?.warn },
+    );
+    // A mutation that committed during the read owns the newer expiry; this
+    // read observed the superseded session and must not overwrite it.
+    if (versionBeforeLoad === this.sessionMutationVersion) {
+      this.tokenExpiresAt = session?.expiresAt ?? null;
+    }
+    return session;
   }
 
   async storeSession(session: SupabaseSession): Promise<void> {
     await this.runSessionMutation(session, () =>
       this.options.storage.store(JSON.stringify(session)),
     );
-    this.options.onTokenExpiryChanged?.(session.expiresAt);
   }
 
   async clearSession(): Promise<void> {
     await this.runSessionMutation(null, () => this.options.storage.delete());
-    this.options.onTokenExpiryChanged?.(null);
+  }
+
+  /**
+   * Whether the last observed session expires within the configured refresh
+   * threshold. Synchronous in-memory check for the model-invocation path.
+   */
+  isTokenExpiringSoon(): boolean {
+    if (this.tokenExpiresAt === null) {
+      return false;
+    }
+    return (
+      this.tokenExpiresAt - Date.now() < this.options.tokenRefreshThresholdMs
+    );
   }
 
   /**
@@ -120,12 +145,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       await this.options.storage.delete();
       this.lastStoredSession = null;
       this.lastStoredSessionVersion = mutationVersion;
+      this.tokenExpiresAt = null;
       cleared = true;
     });
 
-    if (cleared) {
-      this.options.onTokenExpiryChanged?.(null);
-    }
     return cleared;
   }
 
@@ -393,6 +416,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       await operation();
       this.lastStoredSession = session;
       this.lastStoredSessionVersion = mutationVersion;
+      this.tokenExpiresAt = session?.expiresAt ?? null;
     });
   }
 

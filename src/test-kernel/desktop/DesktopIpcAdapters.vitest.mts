@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
 import {
@@ -11,9 +11,12 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - test support
 import { loadSourceModule } from './loadSourceModule.mjs';
+
+const mocks = createModuleMocks();
 
 type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
 type DesktopShellActionFactoryOptions = Parameters<
@@ -135,10 +138,6 @@ function expectLastFunnelState(
 }
 
 describe('desktop IPC adapters', () => {
-  afterEach(() => {
-    vi.doUnmock('electron');
-  });
-
   it('keeps theme and debug state in the view-state adapter', async () => {
     let themeListener: (() => void) | undefined;
     const nativeTheme = {
@@ -150,7 +149,7 @@ describe('desktop IPC adapters', () => {
       off: vi.fn(),
     };
     vi.resetModules();
-    vi.doMock('electron', () => ({ nativeTheme }));
+    mocks.doMock('electron', () => ({ nativeTheme }));
     const { createDesktopViewStateIpc } = await loadSourceModule(
       '@desktop/main/desktopViewStateIpc',
     );

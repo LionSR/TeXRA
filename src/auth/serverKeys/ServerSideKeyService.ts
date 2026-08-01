@@ -61,6 +61,31 @@ interface AccessStatus {
   userTier: UserTier | null;
 }
 
+/**
+ * Everything one completed access fetch decided. These facts commit and clear
+ * as a unit: a tier without its access decision, or a decision without the
+ * authentication provenance that qualifies it, is a state the cache gates read
+ * wrong. `null` means no fetch has committed since the last cache clear.
+ */
+interface AccessSnapshot {
+  /** Whether relay access was granted. */
+  readonly granted: boolean;
+  readonly userTier: UserTier | null;
+  /**
+   * Whether the fetch carried a relay auth token. An anonymous fetch (dead
+   * session refresh at the time) must not satisfy a later check via the cache:
+   * the tier config it produced has no user blocks, so we fall through and
+   * refetch, picking up a now-valid token.
+   */
+  readonly authenticated: boolean;
+  /**
+   * When the snapshot committed, or null when the result is immediately
+   * retryable (an authenticated transport or config failure) and so must never
+   * satisfy a cache window.
+   */
+  readonly cachedAt: number | null;
+}
+
 export interface ClearServerSideKeyCachesOptions {
   /**
    * Reset the per-session quota auto-switch guard. Use this only when the
@@ -83,22 +108,19 @@ export interface ClearServerSideKeyCachesOptions {
  * 1. Call async methods first to prime caches: canUseServerSideKeys()
  * 2. Then use sync methods for fast checks: isProviderOnServer(), canUseModelSync()
  *
- * Sync methods return false if caches aren't primed - use isCachePrimed() to check.
+ * Sync methods return false until an access fetch has committed a snapshot.
  */
 export class ServerSideKeyService {
-  // Access cache
-  private accessResult = false;
-  private accessTimestamp = 0;
-  private accessFetchPromise: Promise<boolean> | null = null;
-  private userTier: UserTier | null = null;
+  /** The committed access decision, or null when no fetch has committed. */
+  private access: AccessSnapshot | null = null;
 
   /**
-   * Whether the last access fetch carried a relay auth token. An anonymous
-   * fetch (dead session refresh at the time) must not satisfy a later check
-   * via the cache: the tier config it produced has no user blocks, so we fall
-   * through and refetch, picking up a now-valid token.
+   * The in-flight or most recently completed access fetch. Deliberately
+   * outside {@link AccessSnapshot}: it is installed synchronously so
+   * overlapping callers join one fetch, well before that fetch has a decision
+   * to commit.
    */
-  private lastFetchAuthenticated = false;
+  private accessFetchPromise: Promise<boolean> | null = null;
 
   /**
    * Sentry token that changes each time a new access-fetch promise is
@@ -107,9 +129,6 @@ export class ServerSideKeyService {
    * later overlapping call has superseded it.
    */
   private _activeFetchToken: object | null = null;
-
-  // Cache state tracking
-  private _isCachePrimed = false;
 
   /**
    * One-shot guard so the auto-flip on quota exhaustion runs at most
@@ -142,11 +161,11 @@ export class ServerSideKeyService {
   }
 
   private hasFullAccess(): boolean {
-    return this.userTier === ULTRA_TIER;
+    return this.access?.userTier === ULTRA_TIER;
   }
 
   getUserTier(): UserTier | null {
-    return this.userTier;
+    return this.access?.userTier ?? null;
   }
 
   getUseIncludedModelAccess(): boolean {
@@ -199,17 +218,12 @@ export class ServerSideKeyService {
     }
   }
 
-  isCachePrimed(): boolean {
-    return this._isCachePrimed;
-  }
-
   clearAllCaches(options: ClearServerSideKeyCachesOptions = {}): void {
-    this._isCachePrimed = false;
-    this.accessResult = false;
-    this.accessTimestamp = 0;
+    // The access decision is always dropped whole. `preserveTierCache` speaks
+    // only for the separately owned TierService cache, so a quota auto-switch
+    // can keep its spending-status explanation after the decision is gone.
+    this.access = null;
     this.accessFetchPromise = null;
-    this.userTier = null;
-    this.lastFetchAuthenticated = false;
     this._activeFetchToken = null;
     if (options.resetQuotaFlip) {
       this.quotaFlipApplied = false;
@@ -223,9 +237,11 @@ export class ServerSideKeyService {
   }
 
   private isAccessCacheValid(): boolean {
+    const cachedAt = this.access?.cachedAt ?? null;
     return (
       this.accessFetchPromise !== null &&
-      Date.now() - this.accessTimestamp < SERVER_SIDE_CACHE_TTL_MS
+      cachedAt !== null &&
+      Date.now() - cachedAt < SERVER_SIDE_CACHE_TTL_MS
     );
   }
 
@@ -263,10 +279,13 @@ export class ServerSideKeyService {
       return false;
     }
 
+    const cached = this.access;
+
     // Authenticated cache: full TTL, plus the access/tier-config gate.
     if (
       this.isAccessCacheValid() &&
-      this.lastFetchAuthenticated &&
+      cached !== null &&
+      cached.authenticated &&
       (this.hasFullAccess() || this.tierService.getConfigSync() !== null)
     ) {
       return this.accessFetchPromise!;
@@ -278,16 +297,17 @@ export class ServerSideKeyService {
     // A short negative-cache keeps the retry storm bounded while still
     // picking up a re-sign-in promptly.
     //
-    // The backoff only applies to denied anonymous fetches (!accessResult).
-    // A granted anonymous fetch (hasAccess && providers available) means
-    // the only missing piece is the relay auth token, which may be
-    // available on the next attempt — those are allowed to retry.
+    // The backoff only applies to denied anonymous fetches. A granted
+    // anonymous fetch (hasAccess && providers available) means the only
+    // missing piece is the relay auth token, which may be available on the
+    // next attempt — those are allowed to retry.
     if (
       this.accessFetchPromise !== null &&
-      this.accessTimestamp > 0 &&
-      !this.lastFetchAuthenticated &&
-      !this.accessResult &&
-      Date.now() - this.accessTimestamp < ANONYMOUS_FETCH_BACKOFF_MS
+      cached !== null &&
+      cached.cachedAt !== null &&
+      !cached.authenticated &&
+      !cached.granted &&
+      Date.now() - cached.cachedAt < ANONYMOUS_FETCH_BACKOFF_MS
     ) {
       return this.accessFetchPromise;
     }
@@ -330,15 +350,16 @@ export class ServerSideKeyService {
       // the canonical tier, access decision, or authentication metadata.
       const isLatest = this._activeFetchToken === fetchToken;
       if (isLatest) {
-        this.accessResult = accessGranted;
-        this.userTier = accessStatus.userTier;
-        this.lastFetchAuthenticated = thisFetchAuthenticated;
-        // Successful results use the normal TTL. Anonymous denials use the
-        // intentional short backoff. An authenticated transport/config
-        // failure remains immediately retryable.
-        this.accessTimestamp =
-          accessGranted || !thisFetchAuthenticated ? Date.now() : 0;
-        this._isCachePrimed = accessGranted;
+        this.access = {
+          granted: accessGranted,
+          userTier: accessStatus.userTier,
+          authenticated: thisFetchAuthenticated,
+          // Successful results use the normal TTL. Anonymous denials use the
+          // intentional short backoff. An authenticated transport/config
+          // failure remains immediately retryable, so it caches no timestamp.
+          cachedAt:
+            accessGranted || !thisFetchAuthenticated ? Date.now() : null,
+        };
       }
 
       if (!isLatest) return accessGranted;
@@ -381,16 +402,17 @@ export class ServerSideKeyService {
   }
 
   canUseModelSync(modelName: string): boolean {
-    if (!this.userTier) return false;
+    const userTier = this.access?.userTier;
+    if (!userTier) return false;
     if (this.hasFullAccess()) return true;
-    return this.tierService.isModelAvailable(this.userTier, modelName);
+    return this.tierService.isModelAvailable(userTier, modelName);
   }
 
   shouldUseServerSideKeysSync(provider: string, modelName?: string): boolean {
     if (
       !this.useIncludedModelAccess ||
       !this.isProviderOnServer(provider) ||
-      !this.accessResult
+      this.access?.granted !== true
     ) {
       return false;
     }
@@ -398,10 +420,11 @@ export class ServerSideKeyService {
   }
 
   getAccessDescription(): string {
-    if (!this.userTier) {
+    const userTier = this.access?.userTier;
+    if (!userTier) {
       return 'No included model access';
     }
-    return this.tierService.getAccessDescription(this.userTier);
+    return this.tierService.getAccessDescription(userTier);
   }
 
   getAccessExpirationDate(): Date | null {

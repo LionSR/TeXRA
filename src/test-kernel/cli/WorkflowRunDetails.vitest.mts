@@ -6,6 +6,7 @@ import {
   activeStreamId,
   patchStream,
   resetCliState,
+  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
@@ -192,7 +193,6 @@ describe('workflowRunDetailLines', () => {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       category: AgentCategory.Workflow,
-      status: STREAM_PHASE.RUNNING,
       taskGroups: [
         {
           id: 'r0',
@@ -214,6 +214,10 @@ describe('workflowRunDetailLines', () => {
         },
       ],
     }));
+    setStreamStatusInCliState({
+      streamId: STREAM_ID,
+      status: STREAM_PHASE.RUNNING,
+    });
     activeStreamId.set(STREAM_ID);
 
     const { ink, React } = await loadInk();

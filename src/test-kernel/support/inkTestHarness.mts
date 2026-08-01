@@ -50,6 +50,57 @@ export class FakeStdout extends EventEmitter {
   }
 }
 
+/** Ink's render instance, narrowed to what the test kernel drives. `ink` is a
+ *  `packages/cli` dependency that repo-root type resolution does not see, so
+ *  the module handle itself stays untyped. `repaint` comes from the workspace
+ *  Ink patch (`patches/ink@7.1.0.patch`), not upstream Ink. */
+interface InkInstance {
+  unmount(): void;
+  rerender(node: any): void;
+  repaint(options?: {
+    readonly clearScrollback?: boolean;
+    readonly emitLayout?: boolean;
+    readonly preserveStatic?: boolean;
+  }): void;
+  waitUntilExit(): Promise<void>;
+}
+
+export interface InkRenderHandles {
+  readonly instance: InkInstance;
+  readonly stdin: FakeStdin;
+  readonly stdout: FakeStdout;
+}
+
+/** Mount an Ink tree on fake TTYs the test can drive, and return the handles
+ *  for assertions and cleanup. The only `ink.render` call site in the test
+ *  kernel: the option bag (raw mode, Ctrl-C handling, console patching) is what
+ *  the per-suite copies used to drift on. Pass `stdin`/`stdout` when the test
+ *  instruments the streams before the mount. */
+export function renderInteractive(
+  ink: any,
+  node: any,
+  options: {
+    readonly columns?: number;
+    readonly rows?: number;
+    readonly debug?: boolean;
+    readonly stdin?: FakeStdin;
+    readonly stdout?: FakeStdout;
+  } = {},
+): InkRenderHandles {
+  const stdin = options.stdin ?? new FakeStdin();
+  const stdout =
+    options.stdout ?? new FakeStdout(options.columns, options.rows);
+  const instance = ink.render(node, {
+    stdin,
+    stdout,
+    debug: options.debug ?? false,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  }) as InkInstance;
+  return { instance, stdin, stdout };
+}
+
 /** Render against an explicit terminal size and return handles for assertions
  *  and cleanup. Use this for components that read `useWindowSize()`:
  *  `renderToString(..., { columns })` sizes Yoga but leaves that hook reading
@@ -60,18 +111,13 @@ export function renderWithTerminalSize(
   columns: number,
   rows = 24,
   options: { readonly debug?: boolean } = {},
-): { readonly instance: any; readonly stdout: FakeStdout } {
-  const stdout = new FakeStdout(columns, rows);
-  const instance = ink.render(node, {
+): InkRenderHandles {
+  return renderInteractive(ink, node, {
+    debug: options.debug ?? false,
     // Debug renders may still mount useInput; let its raw-mode setup succeed.
     stdin: new FakeStdin(options.debug ?? false),
-    stdout,
-    debug: options.debug ?? false,
-    interactive: true,
-    exitOnCtrlC: false,
-    patchConsole: false,
+    stdout: new FakeStdout(columns, rows),
   });
-  return { instance, stdout };
 }
 
 /** Render at an explicit terminal size, wait for the frame under test, and

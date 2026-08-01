@@ -22,7 +22,6 @@ import {
   singleFiles$,
 } from '../mainViewState';
 import { showInformation, updateMultiFiles } from '../mainViewActions';
-import { saveState } from '../persistence';
 import {
   MULTI_FILE_LIST_BY_SET_COMMAND,
   MULTI_FILE_LISTS,
@@ -47,7 +46,6 @@ function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
   if (!list) return;
 
   multiFiles$.set({ ...multiFiles$.get(), [list.key]: files });
-  saveState();
 }
 
 // File-local (not exported): narrows a `CurrentFileType` to `DocumentFileType`
@@ -78,7 +76,6 @@ export const documentHandlers = {
     if (currentValue && !files.includes(currentValue)) {
       singleFiles$.set({ ...singleFiles$.get(), editedFile: '' });
     }
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.SET_BASE_FILE]: (message) => {
@@ -91,8 +88,6 @@ export const documentHandlers = {
     ) {
       singleFiles$.set({ ...singleFiles$.get(), baseFile: '' });
     }
-
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (message) => {
@@ -100,7 +95,6 @@ export const documentHandlers = {
       ...singleFiles$.get(),
       editedFile: message.filePath,
     });
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: handleSetMultipleFiles,
@@ -117,7 +111,6 @@ export const documentHandlers = {
       ...mf,
       mediaFiles: [...existing, file],
     });
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS]: (message) => {
@@ -141,7 +134,6 @@ export const documentHandlers = {
     } else if (!currentCommit || !hasCommitValue(currentCommit)) {
       commit$.set('HEAD');
     }
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.SET_CURRENT_FILE]: (message) => {
@@ -170,7 +162,6 @@ export const documentHandlers = {
       return;
     }
     singleFiles$.set({ ...sf, [key]: filePath });
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT]: (message) => {
@@ -187,7 +178,6 @@ export const documentHandlers = {
       });
     }
     commit$.set(commitHash);
-    saveState();
   },
 
   [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (message) => {
@@ -198,6 +188,5 @@ export const documentHandlers = {
     const filesToAdd = message.files ?? [];
     const merged = unique([...mf[listId], ...filesToAdd]);
     multiFiles$.set({ ...mf, [listId]: merged });
-    saveState();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

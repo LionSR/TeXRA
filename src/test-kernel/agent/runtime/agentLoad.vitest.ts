@@ -17,6 +17,7 @@ import {
   resolveAgentForLaunch,
   type ResolvedAgent,
 } from '@agent/index';
+import { isAgentRegistryReady } from '@agent/index/agentRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   loadAgentSettingAndPrompts,
@@ -565,5 +566,86 @@ describe('inline agent definitions', () => {
     assert.strictEqual(getAgent('inline:scratchpad')?.path, '');
     // ...and the bare name prefers the definition the embedder supplied.
     assert.strictEqual(getAgent('scratchpad')?.source, 'inline');
+  });
+});
+
+describe('agent registry load state', () => {
+  let agentDir = '';
+
+  async function installDirectories(
+    directories: AgentDirectoriesPort,
+  ): Promise<void> {
+    await installPlatform(
+      {},
+      { fs: nodeFilesystem, agentDirectories: directories },
+    );
+  }
+
+  function countingDirectories(counter: {
+    scans: number;
+  }): AgentDirectoriesPort {
+    return {
+      custom: async () => {
+        counter.scans += 1;
+        return agentDir;
+      },
+      builtIn: async () => agentDir,
+      builtInToolUse: async () => agentDir,
+    };
+  }
+
+  beforeAll(async () => {
+    agentDir = await mkdtemp(path.join(tmpdir(), 'texra-load-state-'));
+    await writeFile(
+      path.join(agentDir, 'stateProbe.yaml'),
+      [
+        'name: stateProbe',
+        'description: Probe agent for load-state tests.',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  tools: []',
+        'prompts:',
+        '  systemPrompt: Probe.',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('runs a single scan for loads that start together', async () => {
+    const counter = { scans: 0 };
+    await installDirectories(countingDirectories(counter));
+    await refresh({ includeRemote: false });
+    counter.scans = 0;
+
+    await Promise.all([
+      loadAgents({ includeRemote: true }),
+      loadAgents({ includeRemote: true }),
+    ]);
+
+    assert.strictEqual(counter.scans, 1);
+    assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
+  });
+
+  it('keeps serving the published catalog when a refresh fails', async () => {
+    const counter = { scans: 0 };
+    await installDirectories(countingDirectories(counter));
+    await refresh({ includeRemote: false });
+    assert.strictEqual(isAgentRegistryReady(), true);
+
+    const scanFailure = new Error('agent directory unavailable');
+    await installDirectories({
+      custom: async () => {
+        throw scanFailure;
+      },
+      builtIn: async () => agentDir,
+      builtInToolUse: async () => agentDir,
+    });
+
+    await assert.rejects(refresh({ includeRemote: false }), scanFailure);
+
+    // A failed rebuild leaves the previously published catalog in place, so
+    // readiness must keep describing what the cache still holds.
+    assert.strictEqual(isAgentRegistryReady(), true);
+    assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
   });
 });

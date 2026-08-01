@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared host bridge
 import {
@@ -7,9 +7,12 @@ import {
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '@desktop/hostBridgeChannels';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
+import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+
+const mocks = createModuleMocks();
 
 interface HostBridgeModule {
   installElectronHostBridge(options: {
@@ -56,17 +59,13 @@ async function loadMainHostBridgeModule(ipcMain: {
   ): void;
 }): Promise<MainHostBridgeModule> {
   vi.resetModules();
-  vi.doMock('electron', () => ({ ipcMain }));
+  mocks.doMock('electron', () => ({ ipcMain }));
   return import(
     moduleFileUrl(desktopSourcePath('main', 'hostBridge.ts'))
   ) as Promise<MainHostBridgeModule>;
 }
 
 describe('desktop Electron host bridge', () => {
-  afterEach(() => {
-    vi.doUnmock('electron');
-  });
-
   it('exposes only the shared synchronous host bridge surface', async () => {
     const { installElectronHostBridge } = await loadHostBridgeModule();
     const sends: Array<{ channel: string; message: unknown }> = [];
