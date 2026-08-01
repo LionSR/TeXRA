@@ -10,9 +10,6 @@
  * proves conversation display, chat export, and todos all read through the
  * facade.
  */
-import { readdir, utimes } from 'node:fs/promises';
-import * as path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
@@ -35,6 +32,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import {
   readCompletedRunConversation,
   readCompletedRunTodos,
+  seedResumedConversationSidecar,
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
@@ -142,23 +140,6 @@ async function writeSidecarFixture(
     }),
   );
   await logs.flush();
-}
-
-/** Locate a file under `dir` by name (recursive), for mtime manipulation. */
-async function findFile(dir: string, name: string): Promise<string> {
-  const entries = await readdir(dir, { withFileTypes: true, recursive: true });
-  const match = entries.find((entry) => entry.isFile() && entry.name === name);
-  if (!match) throw new Error(`Fixture file not found: ${name}`);
-  return path.join(match.parentPath, match.name);
-}
-
-async function setMtime(filePath: string, epochMs: number): Promise<void> {
-  await utimes(filePath, new Date(epochMs), new Date(epochMs));
-}
-
-/** The legacy `conversation.json` projection under the active temp storage. */
-function legacyConversationPath(): Promise<string> {
-  return findFile(tempDirs.at(-1)!, 'conversation.json');
 }
 
 describe('completedRunArchive facade', () => {
@@ -273,11 +254,11 @@ describe('completedRunArchive facade', () => {
   it('falls back to the legacy KV projections when no sidecar exists', async () => {
     const executionId = 'bbb222bbb222' as ExecutionId;
     const store = getExecutionStore(executionId);
-    await store.writeConversation([
+    await store.write('conversation', [
       { role: 'user', content: 'Legacy question' },
       { role: 'assistant', content: 'Legacy answer' },
     ]);
-    await store.writeTodos([{ content: 'Legacy todo', status: 'pending' }]);
+    await store.write('todos', [{ content: 'Legacy todo', status: 'pending' }]);
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult.source).toBe('legacyKV');
@@ -293,6 +274,22 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
+  it('treats a present empty work plan as authoritative over stale legacy todos', async () => {
+    const executionId = '0aa2220aa222' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    snapshots.setTodos(streamId, []);
+    await snapshots.flush();
+    await getExecutionStore(executionId).write('todos', [
+      { content: 'Stale legacy todo', status: 'pending' },
+    ]);
+
+    const result = await readCompletedRunTodos(executionId);
+
+    expect(result).toEqual({ todos: [], source: 'streamData', streamId });
+  });
+
   it('reports none when neither the sidecar nor the legacy projection has data', async () => {
     const executionId = 'ccc333ccc333' as ExecutionId;
 
@@ -303,56 +300,139 @@ describe('completedRunArchive facade', () => {
     expect(todosResult).toEqual({ todos: [], source: 'none' });
   });
 
-  it('prefers a demonstrably fresher legacy conversation write over the sidecar', async () => {
+  it('prefers the sidecar when a legacy conversation projection also exists', async () => {
     const executionId = 'ddd444ddd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
-    await getExecutionStore(executionId).writeConversation([
-      { role: 'assistant', content: 'Fresher legacy write' },
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'assistant', content: 'Legacy projection' },
     ]);
 
-    const storageDir = tempDirs.at(-1)!;
-    const legacyPath = await legacyConversationPath();
-    const sidecarPath = await findFile(
-      path.dirname(await findFile(storageDir, 'workPlan.json')),
-      'meta.json',
-    );
-    // streamLogs/{stream}.json lives beside the streamData dir; find it by
-    // its encoded name under the streamLogs directory.
-    const streamLogsDir = path.join(
-      path.dirname(path.dirname(path.dirname(sidecarPath))),
-      'streamLogs',
-    );
-    const [streamLogFile] = await readdir(streamLogsDir);
-    const streamLogPath = path.join(streamLogsDir, streamLogFile);
+    const result = await readCompletedRunConversation(executionId);
+    expect(result.source).toBe('streamLog');
+    expect(result.streamId).toBe(streamId);
+    expect(result.conversation).not.toContainEqual({
+      role: 'assistant',
+      content: 'Legacy projection',
+    });
+  });
 
-    // Legacy write is strictly fresher than the sidecar -> legacy wins.
-    await setMtime(streamLogPath, Date.now() - 60_000);
-    await setMtime(legacyPath, Date.now());
+  it('seeds a resumed legacy conversation into an empty transcript once', async () => {
+    const executionId = '0dd4440dd444' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0dd4440dd444' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    await snapshots.flush();
 
-    const fresher = await readCompletedRunConversation(executionId);
-    expect(fresher.source).toBe('legacyKV');
-    expect(fresher.conversation).toEqual([
-      { role: 'assistant', content: 'Fresher legacy write' },
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(streamId);
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Resuming...' }),
+    );
+    const messages = [
+      { role: 'system', content: 'Follow the proof protocol.' },
+      { role: 'user', content: 'Prove the legacy lemma.' },
+      { role: 'assistant', content: 'Here is the legacy proof.' },
+    ];
+
+    await expect(
+      seedResumedConversationSidecar(logs, streamId, executionId, messages),
+    ).resolves.toBe(true);
+    await expect(
+      seedResumedConversationSidecar(logs, streamId, executionId, [
+        { role: 'assistant', content: 'Duplicate seed' },
+      ]),
+    ).resolves.toBe(false);
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId,
+      conversation: [
+        { role: 'system', content: 'Follow the proof protocol.' },
+        { role: 'user', content: 'Prove the legacy lemma.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Here is the legacy proof.' }],
+        },
+      ],
+    });
+  });
+
+  it('reconstructs structured successful and failed tool results as model-facing text', async () => {
+    const executionId = '0ee5550ee555' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setTaskState(streamId, taskState('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(streamId);
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.TOOL_USE, {
+        data: {
+          toolName: 'write_file',
+          input: { path: 'proof.tex' },
+          output: { output: 'File written.' },
+          status: 'completed',
+        },
+      }),
+    );
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.TOOL_USE, {
+        data: {
+          toolName: 'read_file',
+          input: { path: 'missing.tex' },
+          output: { error: 'File not found.' },
+          isError: true,
+          status: 'failed',
+        },
+      }),
+    );
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result.conversation).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            name: 'write_file',
+            input: { path: 'proof.tex' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: 'File written.' }],
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            name: 'read_file',
+            input: { path: 'missing.tex' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', content: 'File not found.' }],
+      },
     ]);
-
-    // Sidecar strictly fresher -> sidecar wins.
-    await setMtime(legacyPath, Date.now() - 120_000);
-    await setMtime(streamLogPath, Date.now());
-    const sidecarWins = await readCompletedRunConversation(executionId);
-    expect(sidecarWins.source).toBe('streamLog');
   });
 
   it('never lets an empty-but-present legacy file beat a full sidecar (non-empty rule)', async () => {
     const executionId = 'fff666fff666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
-    // Present but EMPTY legacy projection with an mtime after the stream
-    // log — under pure mtime arbitration this would win and hide the full
-    // transcript. The non-empty rule orders legacy first but falls through.
-    await getExecutionStore(executionId).writeConversation([]);
-    const legacyPath = await legacyConversationPath();
-    await setMtime(legacyPath, Date.now() + 60_000);
+    await getExecutionStore(executionId).write('conversation', []);
 
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('streamLog');
@@ -418,13 +498,11 @@ describe('completedRunArchive facade', () => {
     );
     await logs.flush();
 
-    await getExecutionStore(executionId).writeConversation([
+    await getExecutionStore(executionId).write('conversation', [
       { role: 'user', content: 'Pre-sidecar conversation' },
     ]);
-    // The sidecar exists and is fresher, but reconstructs to zero messages —
-    // the facade must not report an empty conversation over real legacy data.
-    const legacyPath = await legacyConversationPath();
-    await setMtime(legacyPath, Date.now() - 60_000);
+    // The sidecar exists but reconstructs to zero messages, so the historical
+    // read fallback remains available.
 
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('legacyKV');

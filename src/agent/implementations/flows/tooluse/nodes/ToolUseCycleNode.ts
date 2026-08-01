@@ -1,5 +1,3 @@
-import PQueue from 'p-queue';
-
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
@@ -104,25 +102,10 @@ export class ToolUseCycleNode<C> extends Node<
       ),
     );
 
-    const { onProgress, persistTodos } = this.services;
-    const todoPersistQueue = new PQueue({ concurrency: 1 });
+    const { onProgress } = this.services;
     prepRes.workspaceState.workPlan.setOnUpdate({
       onTodosUpdate: (todos) => {
         emitRunFact(this.services.logger, 'updateTodos', { streamId, todos });
-        if (persistTodos) {
-          void todoPersistQueue.add(async () => {
-            try {
-              await persistTodos(todos);
-            } catch (err: unknown) {
-              // Best-effort todo persistence — log so swallowed write
-              // failures are diagnosable without disrupting the update
-              // stream.
-              this.services.logger.debug('Failed to persist todos', {
-                data: err,
-              });
-            }
-          });
-        }
         onProgress?.({ kind: 'todos', todos });
       },
       onPlanUpdate: (plan) => {
@@ -168,9 +151,6 @@ export class ToolUseCycleNode<C> extends Node<
           roundShared.currentUserInstruction;
       }
       prepRes.workspaceState.workPlan.clearOnUpdate();
-      // Drain in-flight persist writes before returning so they don't
-      // race with the projection's writeTodos after this node completes.
-      await todoPersistQueue.onIdle();
     }
   }
 

@@ -796,6 +796,8 @@ export function startChildRunLoop<TTurn>(
                     }
                   : undefined,
               isSubagent: true,
+              flushArtifacts: () =>
+                runSession.flushArtifacts(handle.executionId),
               persistence: {
                 kind: 'finalize',
                 // Keyed on the outcome the finalizer resolves, not this loop's
