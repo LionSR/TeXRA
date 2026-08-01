@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: npm-format
         name: prettier staged files
-        entry: corepack pnpm exec prettier --check --ignore-unknown
+        entry: corepack pnpm exec prettier --check --ignore-unknown --no-error-on-unmatched-pattern
         language: system
       # Forbid a stray internal doc at the docs root from being published to
       # texra.ai. The boundary lives in docs/.vitepress/publicDocs.js; this
