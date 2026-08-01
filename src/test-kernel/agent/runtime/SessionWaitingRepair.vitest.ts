@@ -250,6 +250,49 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     );
   });
 
+  it('starts a distinct probe for a replacement execution', async () => {
+    seedCancelled();
+    let releaseOriginal: (() => void) | undefined;
+    let releaseReplacement: (() => void) | undefined;
+    resumabilityMocks.deriveResumability.mockImplementation(
+      (requestedId: string) =>
+        new Promise((resolve) => {
+          const release = () =>
+            resolve({ resumable: true, cause: 'interrupted-with-flow' });
+          if (requestedId === executionId) releaseOriginal = release;
+          else releaseReplacement = release;
+        }),
+    );
+
+    const original = session.repairWaitingIfResumable(streamId);
+    const replacementExecutionId = `d${executionId.slice(1)}` as ExecutionId;
+    session.snapshots.setRunDescriptor(
+      buildRunDescriptor({
+        streamId,
+        executionId: replacementExecutionId,
+        agent: 'assistant',
+        category: AgentCategory.ToolUse,
+        kind: 'agent',
+      }),
+    );
+    const replacement = session.repairWaitingIfResumable(streamId);
+
+    expect(resumabilityMocks.deriveResumability).toHaveBeenNthCalledWith(
+      1,
+      executionId,
+    );
+    expect(resumabilityMocks.deriveResumability).toHaveBeenNthCalledWith(
+      2,
+      replacementExecutionId,
+    );
+
+    releaseReplacement?.();
+    await expect(replacement).resolves.toBe(true);
+    releaseOriginal?.();
+    await expect(original).resolves.toBe(false);
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
+  });
+
   it('does not repair a recreated terminal generation', async () => {
     seedCancelled();
     let release: (() => void) | undefined;
