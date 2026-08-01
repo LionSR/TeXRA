@@ -56,4 +56,17 @@ describe('RestoreRunConfigInputSchema', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('rejects blank and unrelated objects before applying config defaults', () => {
+    expect(RestoreRunConfigInputSchema.safeParse({}).success).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ agentConfig: {} }).success,
+    ).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ unrelated: true }).success,
+    ).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ agent: undefined }).success,
+    ).toBe(false);
+  });
 });
