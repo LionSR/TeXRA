@@ -12,6 +12,7 @@ vi.mock('@shared/hostBridge', () => ({
 // Local imports - component and schema types
 import type { ToolsTab } from '@settingsView/frontend/tabs/ToolsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -105,8 +106,8 @@ describe('tools-tab availability summary', () => {
     );
 
     expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
-      { enabled: false },
+      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      { key: AGENT_SKILLS_CONFIG_KEY, value: false },
     );
   });
 

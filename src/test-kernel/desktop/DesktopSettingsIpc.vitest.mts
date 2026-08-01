@@ -8,6 +8,7 @@ import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
@@ -304,7 +305,7 @@ describe('desktop settings IPC', () => {
         value: 'Desktop TeXRA',
       }),
     ).toBe(true);
-    await Promise.resolve();
+    await flushAsyncWork();
 
     expect(workspaceState.get(WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
       'Desktop TeXRA',
@@ -321,7 +322,7 @@ describe('desktop settings IPC', () => {
         value: false,
       }),
     ).toBe(true);
-    await Promise.resolve();
+    await flushAsyncWork();
     expect(workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
     expect(getGitAuthorEnv()).toEqual({});
 
@@ -332,7 +333,7 @@ describe('desktop settings IPC', () => {
         value: true,
       }),
     ).toBe(true);
-    await Promise.resolve();
+    await flushAsyncWork();
     expect(workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT)).toBe(
       true,
     );
@@ -539,17 +540,19 @@ describe('desktop settings IPC', () => {
     const baseController = createStubDesktopToolingSettingsController();
     const toggle = vi.fn(async () => undefined);
     const runInstallCommand = vi.fn(async () => undefined);
-    const setConfigValue = vi.fn(async () => undefined);
+    const postLatexConfigValues = vi.fn();
     const toolingSettingsController =
       createStubDesktopToolingSettingsController({
         toolsActions: { ...baseController.toolsActions, toggle },
         latexActions: {
           ...baseController.latexActions,
           runInstallCommand,
-          setConfigValue,
         },
+        postLatexConfigValues,
       });
-    const { settings } = createSettingsFixture({ toolingSettingsController });
+    const { settings, workspaceState } = createSettingsFixture({
+      toolingSettingsController,
+    });
 
     expect(
       settings.handleMessage({
@@ -566,8 +569,8 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE,
-        field: 'latexFormatter',
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.LATEX_FORMATTER,
         value: 'none',
       }),
     ).toBe(true);
@@ -577,10 +580,21 @@ describe('desktop settings IPC', () => {
     expect(runInstallCommand).toHaveBeenCalledWith(
       'brew install --cask mactex-no-gui',
     );
-    expect(setConfigValue).toHaveBeenCalledWith({
-      field: 'latexFormatter',
-      value: 'none',
-    });
+    expect(workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe('none');
+    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.LATEX_FORMATTER,
+        value: null,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+    expect(
+      workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
+    ).toBeUndefined();
+    expect(postLatexConfigValues).toHaveBeenCalledTimes(2);
   });
 
   it('delegates profile and ChatGPT commands to the credential controller', async () => {
@@ -787,8 +801,9 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED,
-        enabled: false,
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: BASH_APPROVAL_CONFIG_KEY,
+        value: false,
       }),
     ).toBe(true);
     await flushAsyncWork();
@@ -821,8 +836,9 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
-        enabled: false,
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: AGENT_SKILLS_CONFIG_KEY,
+        value: false,
       }),
     ).toBe(true);
     await flushAsyncWork();

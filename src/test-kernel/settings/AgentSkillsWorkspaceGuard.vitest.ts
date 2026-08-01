@@ -3,26 +3,17 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
-  setAgentSkillsEnabled: vi.fn(),
   showLoggedInfoMessage: vi.fn(),
+  writeSetting: vi.fn(),
 }));
 
-vi.mock(
-  '@shared/settingsView/handlers/agentSkillsHandlers',
-  async (original) => {
-    const actual =
-      await original<
-        typeof import('@shared/settingsView/handlers/agentSkillsHandlers')
-      >();
-    return {
-      ...actual,
-      setAgentSkillsEnabled: mocks.setAgentSkillsEnabled,
-    };
-  },
-);
+vi.mock('@shared/config/settingsAccess', async (original) => {
+  const actual =
+    await original<typeof import('@shared/config/settingsAccess')>();
+  return { ...actual, writeSetting: mocks.writeSetting };
+});
 
 vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
   const actual =
@@ -35,29 +26,20 @@ vi.mock('@frontend/ui/errorHandlingUtils', async (original) => {
 
 // Local imports
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: undefined });
 
 type AgentSkillsHarness = {
-  handleSetAgentSkillsEnabled(enabled: boolean): Promise<void>;
-  sendAgentSkillsSettings: ReturnType<typeof vi.fn>;
-  withActiveWebview: (
-    fn: (webview: vscode.Webview) => Promise<void> | void,
-  ) => Promise<void>;
+  updateStateSetting(key: string, value: unknown): Promise<void>;
+  postStateSettingSnapshot: ReturnType<typeof vi.fn>;
 };
 
 function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
-  Reflect.set(handler, 'sendAgentSkillsSettings', vi.fn());
-  Reflect.set(
-    handler,
-    'withActiveWebview',
-    async (fn: (webview: vscode.Webview) => Promise<void> | void) => {
-      await fn({} as vscode.Webview);
-    },
-  );
+  Reflect.set(handler, 'postStateSettingSnapshot', vi.fn());
   return handler as AgentSkillsHarness;
 }
 
@@ -69,13 +51,15 @@ describe('agent skills workspace guard', () => {
   it('restores the switch without writing in an empty VS Code window', async () => {
     const handler = createHarness();
 
-    await handler.handleSetAgentSkillsEnabled(false);
+    await handler.updateStateSetting(AGENT_SKILLS_CONFIG_KEY, false);
 
-    expect(mocks.setAgentSkillsEnabled).not.toHaveBeenCalled();
+    expect(mocks.writeSetting).not.toHaveBeenCalled();
     expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
       'SettingsViewMessageHandler',
-      'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',
+      'This is a per-workspace setting. Open a workspace folder before changing it.',
     );
-    expect(handler.sendAgentSkillsSettings).toHaveBeenCalledOnce();
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
+      'agent-skills',
+    );
   });
 });

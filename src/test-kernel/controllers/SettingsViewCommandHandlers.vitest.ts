@@ -65,10 +65,6 @@ function createActions(): SettingsViewCommandActions {
       setPreferShortModelNames: action(),
       requestAccess: action(),
     },
-    orchestration: {
-      setAllowOrchestratorKill: action(),
-      setDetachSubagentsOnStop: action(),
-    },
     agentSelection: {
       setEnabled: action(),
       setAllEnabled: action(),
@@ -99,12 +95,6 @@ function createActions(): SettingsViewCommandActions {
       signOut: action(),
       setPreferSubscription: action(),
     },
-    approval: {
-      setBashApprovalEnabled: action(),
-    },
-    agentSkills: {
-      setEnabled: action(),
-    },
     stateSettings: {
       update: action(),
     },
@@ -119,7 +109,6 @@ function createActions(): SettingsViewCommandActions {
       applySettings: action(),
       installLatexWorkshop: action(),
       runInstallCommand: action(),
-      setConfigValue: action(),
     },
     inlineCriticism: {
       getEnabled: action(),
@@ -201,12 +190,6 @@ describe('createSettingsViewCommandHandlers', () => {
       toolId: 'latex',
       kind: 'install',
     });
-
-    assertSupported(registry.setAgentSkillsEnabled)({
-      command: SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
-      enabled: false,
-    });
-    expect(actions.agentSkills.setEnabled).toHaveBeenCalledWith(false);
 
     assertSupported(registry.requestModelAccess)({
       command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,

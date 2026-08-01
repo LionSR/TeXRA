@@ -1,81 +1,47 @@
 // Shared routing decision for the generic `UPDATE_STATE_SETTING` command.
 //
-// The extension and desktop hosts each own the actual persist + rebroadcast per
-// family (git-author vs external-agent), but the decision of *whether* and *as
-// which family* to write a given {key, value} is identical and drift-prone.
-// This resolver owns that decision once so the two hosts can't diverge on the
-// subtle rules:
+// The extension and desktop hosts share persistence through settingsAccess and
+// own only the post-write side effects for each outbound snapshot. This
+// resolver owns the subtle boundary rules once:
 //   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
-//     parsing `undefined` would resolve to the default and silently reset the
-//     setting — this command has no clear-to-default semantics), and
-//   - only the git-author, external-agent, and scalar tool-safety categories
-//     are routable; any other catalog category is ignored rather than
-//     mis-persisted or refreshing the wrong UI.
+//     parsing `undefined` would silently write a default),
+//   - null explicitly resets a setting while an omitted value remains a no-op,
+//   - only catalog rows tagged for a settings-view snapshot are writable.
 
-import { stateSettingByKey } from '@shared/schemas/stateSettings';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
+import type { SettingsViewStateSettingEntry } from '@shared/schemas/stateSettings';
 
 /**
- * A validated, classified state-setting write, or `null` when the message must
- * be ignored (value-less, unknown key, schema-rejected value, or a catalog
- * category this settings view does not own). `git` values stay `unknown`
- * (boolean or string); `agent` values are the string/enum the six external-agent
- * settings all use.
+ * A validated state-setting write/reset, or `null` when the message must be
+ * ignored (value-less, unknown key, schema-rejected value, or a catalog row
+ * this settings view does not own).
  */
-type StateSettingWrite =
+export type StateSettingWrite =
   | {
-      readonly family: 'git';
-      readonly key: WorkspaceStateKey;
+      readonly kind: 'write';
+      readonly entry: SettingsViewStateSettingEntry;
       readonly value: unknown;
     }
   | {
-      readonly family: 'agent';
-      readonly key: WorkspaceStateKey;
-      readonly value: string;
-    }
-  | {
-      readonly family: 'tool-safety';
-      readonly key: WorkspaceStateKey;
-      readonly value: boolean;
+      readonly kind: 'reset';
+      readonly entry: SettingsViewStateSettingEntry;
     }
   | null;
 
 /**
- * Validate a `{key, value}` write against the `STATE_SETTINGS` catalog and
- * classify it into the owning family, or return `null` to ignore it. Hosts
- * dispatch the returned family to their own updater; this function performs no
- * I/O.
+ * Validate a `{key, value}` write against the unified settings-view catalog and
+ * identify its rebroadcast owner, or return `null` to ignore it. This function
+ * performs no I/O.
  */
 export function resolveStateSettingWrite(
   key: string,
   value: unknown,
 ): StateSettingWrite {
   if (value === undefined) return null;
-  const entry = stateSettingByKey(key);
-  if (!entry) return null;
+  const entry = settingsViewSettingByKey(key);
+  if (!entry?.settingsViewSnapshot) return null;
+  if (value === null) return { kind: 'reset', entry };
   const parsed = entry.schema.safeParse(value);
   if (!parsed.success) return null;
-  switch (entry.category) {
-    case 'git':
-      return {
-        family: 'git',
-        key: key as WorkspaceStateKey,
-        value: parsed.data,
-      };
-    case 'ai-agents':
-      return {
-        family: 'agent',
-        key: key as WorkspaceStateKey,
-        value: parsed.data as string,
-      };
-    case 'tools':
-      if (key !== WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED) return null;
-      return {
-        family: 'tool-safety',
-        key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-        value: parsed.data as boolean,
-      };
-    default:
-      return null;
-  }
+  return { kind: 'write', entry, value: parsed.data };
 }

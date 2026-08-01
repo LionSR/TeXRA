@@ -329,8 +329,6 @@ export const SETTINGS_VIEW_CMD = {
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
   RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
   // Multi-Agent commands
-  SET_ALLOW_ORCHESTRATOR_KILL: 'setAllowOrchestratorKill',
-  SET_DETACH_SUBAGENTS_ON_STOP: 'setDetachSubagentsOnStop',
   APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
   SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
   DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
@@ -339,12 +337,8 @@ export const SETTINGS_VIEW_CMD = {
   // replacing the former per-setting SET_* commands. The backend looks the key up
   // in the catalog, validates the value against its schema, and rebroadcasts the
   // owning family (see stateSettings.ts / settingsAccess.ts). Modeled on the
-  // existing SET_LATEX_CONFIG_VALUE precedent.
+  // the former per-setting command pattern.
   UPDATE_STATE_SETTING: 'updateStateSetting',
-  // Approval settings commands
-  SET_BASH_APPROVAL_ENABLED: 'setBashApprovalEnabled',
-  // Agent prompt context
-  SET_AGENT_SKILLS_ENABLED: 'setAgentSkillsEnabled',
   // Tool dashboard commands
   OPEN_TOOL_INSTALL_URL: 'openToolInstallUrl',
   INSTALL_TOOL_EXTENSION: 'installToolExtension',
@@ -370,8 +364,6 @@ export const SETTINGS_VIEW_CMD = {
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
-  // LaTeX/compile/diff config (storage-backed, migrated from VS Code config)
-  SET_LATEX_CONFIG_VALUE: 'setLatexConfigValue',
   // Experimental settings
   GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
   SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
