@@ -51,10 +51,14 @@ interface ManualRetryPromptResult {
   clientPrepared?: boolean;
 }
 
-/** success: model response | failed: retries exhausted | cancelled: user cancelled | skipped: shouldStop was true */
+/**
+ * Invocation result after retry handling. A `failed` result has already
+ * emitted its canonical error at this boundary; outer cycles only propagate
+ * its structured `RetryErrorInfo`.
+ */
 export type InvocationResult<TSuccess> =
   | ({ kind: 'success' } & TSuccess)
-  | ({ kind: 'failed'; failureLogEmitted: boolean } & RetryErrorInfo)
+  | ({ kind: 'failed' } & RetryErrorInfo)
   | { kind: 'cancelled' }
   | { kind: 'skipped' };
 
@@ -100,7 +104,6 @@ export abstract class RetryableInvocationNode<
   protected _userCancelled = false;
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;
-  protected _failureLogEmitted = false;
   protected _retryBackoffMs: number;
 
   constructor() {
@@ -116,7 +119,6 @@ export abstract class RetryableInvocationNode<
     cloned._userCancelled = false;
     cloned._hasAttemptedTokenRefresh = false;
     cloned._persistent401Error = null;
-    cloned._failureLogEmitted = false;
     return cloned;
   }
 
@@ -255,7 +257,6 @@ export abstract class RetryableInvocationNode<
   }
 
   async _exec(prepRes: unknown): Promise<unknown> {
-    this._failureLogEmitted = false;
     this._userCancelled = false;
     const config = getNodeRetryConfig();
     let maxRetries = config.maxRetries;
@@ -298,7 +299,6 @@ export abstract class RetryableInvocationNode<
     }
 
     if (result.shouldRetry) {
-      this._failureLogEmitted = false;
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
       // Always refresh the client on manual retry. The user may have
@@ -333,7 +333,6 @@ export abstract class RetryableInvocationNode<
     }
 
     logErrorData(logger, `${operationName} failed`, formatted);
-    this._failureLogEmitted = true;
 
     streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
       trace: logger,
@@ -404,9 +403,7 @@ export abstract class RetryableInvocationNode<
 
   protected getFallbackResult(
     error: Error,
-  ):
-    | { kind: 'cancelled' }
-    | ({ kind: 'failed'; failureLogEmitted: boolean } & RetryErrorInfo) {
+  ): { kind: 'cancelled' } | ({ kind: 'failed' } & RetryErrorInfo) {
     if (this._userCancelled || isUserAbort(error)) {
       return { kind: 'cancelled' };
     }
@@ -418,11 +415,9 @@ export abstract class RetryableInvocationNode<
         `${this.getOperationName()} failed (no retry available)`,
         formatted,
       );
-      this._failureLogEmitted = true;
     }
     return {
       kind: 'failed',
-      failureLogEmitted: this._failureLogEmitted,
       ...toRetryErrorInfo(formatted),
     };
   }
@@ -443,7 +438,6 @@ export function handleInvocationResult<T extends { response: unknown }>(
     shouldStop: boolean;
     endTurn: boolean;
     lastError?: RetryErrorInfo;
-    failureLogEmitted?: boolean;
   },
   options: InvocationResultHandlerOptions,
 ): (T & { kind: 'success' }) | null {
@@ -454,12 +448,8 @@ export function handleInvocationResult<T extends { response: unknown }>(
     return null;
   }
 
-  function stop(
-    lastError: RetryErrorInfo | undefined,
-    failureLogEmitted = false,
-  ): null {
+  function stop(lastError: RetryErrorInfo | undefined): null {
     state.lastError = lastError;
-    state.failureLogEmitted = failureLogEmitted;
     state.shouldStop = true;
     state.endTurn = false;
     return null;
@@ -470,19 +460,19 @@ export function handleInvocationResult<T extends { response: unknown }>(
   }
 
   if (result.kind === 'failed') {
-    const { kind: _, failureLogEmitted, ...errorInfo } = result;
-    return stop(errorInfo, failureLogEmitted);
+    const { kind: _, ...errorInfo } = result;
+    return stop(errorInfo);
   }
 
   if (!result.response) {
-    logger.warn(EMPTY_RESPONSE_ERROR_MESSAGE);
-    return stop({
+    const errorInfo = {
       message: EMPTY_RESPONSE_ERROR_MESSAGE,
       userRetryable: false,
-    });
+    };
+    logErrorData(logger, `${operationName} failed`, errorInfo);
+    return stop(errorInfo);
   }
 
   state.lastError = undefined;
-  state.failureLogEmitted = undefined;
   return result;
 }
