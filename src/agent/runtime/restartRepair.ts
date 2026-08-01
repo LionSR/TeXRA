@@ -134,8 +134,9 @@ function repairCandidates(
 }
 
 type ExecutionSettlement =
-  | { readonly settled: false }
-  | { readonly settled: true; readonly outcome: RunOutcome };
+  | { readonly kind: 'unsettled' }
+  | { readonly kind: 'unmappable-terminal' }
+  | { readonly kind: 'settled'; readonly outcome: RunOutcome };
 
 /**
  * Revalidate terminal metadata while holding the execution lease.
@@ -150,18 +151,21 @@ async function readExecutionSettlement(
 ): Promise<ExecutionSettlement> {
   const meta = await getExecutionStore(executionId).readMetaStrict();
   if (!meta || (meta.terminalStatus == null && meta.outcome == null)) {
-    return { settled: false };
+    return { kind: 'unsettled' };
+  }
+  if (meta.outcome == null) {
+    return { kind: 'unmappable-terminal' };
   }
   if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
     return {
-      settled: true,
-      outcome: meta.outcome ?? RUN_OUTCOME.FAILED,
+      kind: 'settled',
+      outcome: meta.outcome,
     };
   }
   const resumability = await deriveResumability(executionId);
   return resumability.resumable
-    ? { settled: false }
-    : { settled: true, outcome: RUN_OUTCOME.CANCELLED };
+    ? { kind: 'unsettled' }
+    : { kind: 'settled', outcome: RUN_OUTCOME.CANCELLED };
 }
 
 function synchronizeSettledPhase(
@@ -334,7 +338,10 @@ export async function repairRestartedStreams(
           if (options.signal?.aborted) {
             return { kind: 'cancelled' as const };
           }
-          if (settlement.settled) {
+          if (settlement.kind === 'unmappable-terminal') {
+            return { kind: 'protected-terminal' as const };
+          }
+          if (settlement.kind === 'settled') {
             synchronizeSettledPhase(
               options.streamStatus,
               streamId,
@@ -381,6 +388,12 @@ export async function repairRestartedStreams(
         continue;
       }
       if (repaired.value.kind === 'cancelled') break;
+      if (repaired.value.kind === 'protected-terminal') {
+        options.logger?.debug(
+          `Skipped restart repair for execution ${executionId} with an unknown legacy terminal status`,
+        );
+        continue;
+      }
       if (repaired.value.kind === 'settled') {
         options.logger?.debug(
           `Skipped restart repair for terminal execution ${executionId}`,
