@@ -31,15 +31,21 @@ export const RestoreRunConfigInputSchema = z.preprocess(
       : input,
   z
     .unknown()
-    .refine(
-      (input) =>
-        typeof input === 'object' &&
-        input !== null &&
-        !Array.isArray(input) &&
-        (('agent' in input && input.agent !== undefined) ||
-          ('model' in input && input.model !== undefined)),
-      'A restored run configuration must identify an agent or model.',
-    )
+    .refine((input) => {
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        return false;
+      }
+      const identities = [
+        'agent' in input ? input.agent : undefined,
+        'model' in input ? input.model : undefined,
+      ].filter((value) => value !== undefined);
+      return (
+        identities.length > 0 &&
+        identities.every(
+          (value) => typeof value === 'string' && value.trim().length > 0,
+        )
+      );
+    }, 'A restored run configuration must identify a non-empty agent or model.')
     .pipe(AgentConfigSchema),
 );
 

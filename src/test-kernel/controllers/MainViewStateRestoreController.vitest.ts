@@ -68,5 +68,18 @@ describe('RestoreRunConfigInputSchema', () => {
     expect(
       RestoreRunConfigInputSchema.safeParse({ agent: undefined }).success,
     ).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ agent: '', model: '' }).success,
+    ).toBe(false);
+    expect(
+      RestoreRunConfigInputSchema.safeParse({ agent: '', model: 'sonnet46T' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('applies the documented default when one identity field is omitted', () => {
+    expect(RestoreRunConfigInputSchema.parse({ agent: 'correct' }).agent).toBe(
+      'correct',
+    );
   });
 });
