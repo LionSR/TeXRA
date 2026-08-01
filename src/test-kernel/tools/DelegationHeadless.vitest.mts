@@ -223,8 +223,8 @@ function mockWaitingChildOnce(
       return {
         category: 'toolUse',
         outcome: STREAM_PHASE.WAITING,
-        lastResponse: 'The proof is correct.',
-        touchedFiles: [],
+        response: 'The proof is correct.',
+        files: [],
         executionId,
         streamId: CHILD_STREAM_ID,
         ...(options.memoryMisses ? { memoryMisses: options.memoryMisses } : {}),
@@ -362,8 +362,8 @@ describe('headless delegation', () => {
       outcome: 'completed',
       executionId: 'child-exec',
       streamId: 'child-stream',
-      lastResponse: 'The proof is correct.',
-      touchedFiles: [],
+      response: 'The proof is correct.',
+      files: [],
     });
   });
 
@@ -470,7 +470,7 @@ describe('headless delegation', () => {
         outcome: 'failed',
         executionId: IN_BAND_LOGICAL_EXECUTION_ID,
         streamId: 'child-stream',
-        lastResponse: 'Partial review.',
+        response: 'Partial review.',
         totalCostUsd: 0.61,
       }),
     );
@@ -500,7 +500,7 @@ describe('headless delegation', () => {
       outcome: STREAM_PHASE.WAITING,
       executionId: IN_BAND_LOGICAL_EXECUTION_ID,
       streamId: 'child-stream',
-      lastResponse: 'Waiting for clarification.',
+      response: 'Waiting for clarification.',
       totalCostUsd: 0.73,
     });
 
@@ -801,7 +801,7 @@ describe('headless delegation', () => {
         outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
-        touchedFiles: [42],
+        files: [42],
       } as never),
     );
 
@@ -821,7 +821,7 @@ describe('headless delegation', () => {
       outcome: 'completed',
       executionId: 'child-exec',
       streamId: 'child-stream',
-      touchedFiles: [42],
+      files: [42],
     });
 
     await expect(runInBand(delegationOptions())).rejects.toThrow();
