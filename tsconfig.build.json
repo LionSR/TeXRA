@@ -23,7 +23,6 @@
       "@transcript": ["src/transcript/index.ts"],
       "@transcript/*": ["src/transcript/*.ts", "src/transcript/*/index.ts"],
       "@latex/*": ["src/latex/*.ts", "src/latex/*/index.ts"],
-      "@model": ["src/model/index.ts"],
       "@model/*": ["src/model/*.ts", "src/model/*/index.ts"],
       "@skills/*": ["src/skills/*.ts", "src/skills/*/index.ts"],
       "@housekeeping": ["src/housekeeping/index.ts"],
