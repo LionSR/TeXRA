@@ -2,10 +2,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatError } from '@common/errors';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
-  createSettingsViewCommandHandlers,
-  type SettingsViewCommandActions,
-} from '@controllers/settingsView/SettingsViewCommandHandlers';
-import {
   GITHUB_TOKEN_CREATE_URL,
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
@@ -21,6 +17,7 @@ import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSet
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
+  type SettingsViewInboundHandlerRegistry,
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
@@ -373,78 +370,63 @@ export function createDesktopSettingsIpc(
     await postGitHubSubscriptions();
   }
 
-  const settingsActions: SettingsViewCommandActions = {
+  const settingsHandlers: SettingsViewInboundHandlerRegistry = {
     // WEBVIEW_READY is intercepted in handleMessage below, before reaching
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
-    lifecycle: {
-      webviewReady: () => {},
-      // VS Code-only surfaces with no desktop equivalent.
-      openVscodeSettings: unsupported(
-        'No VS Code settings in the desktop app.',
-      ),
-    },
-    memory: {
-      getData: () => settingsHost.sendMemoryData(),
-      getPreview: (storagePath) =>
-        settingsHost.sendMemoryPreview({ storagePath }, { onError }),
-      openFile: (data) => openMemoryFile(data),
-      openFolder: () => openMemoryFolder(),
-      delete: (data) => settingsHost.deleteMemory(data),
-      setEnabled: (enabled) => settingsHost.setMemoryEnabled(enabled),
-      pin: (storagePath) => settingsHost.setMemoryPinned(storagePath, true),
-      unpin: (storagePath) => settingsHost.setMemoryPinned(storagePath, false),
-    },
-    history: options.historySettingsController.actions,
-    profile: options.credentialSettingsController.profileActions,
-    modelSelection: {
-      setEnabled: (modelName, enabled) =>
-        updateModelEnabled({ modelName, enabled }),
-      setHelperModel: (modelName) => settingsHost.setHelperModel(modelName),
-      setReasoningLevel: (modelName, level) =>
-        settingsHost.setReasoningLevel({ modelName, level }),
-      setPreferShortModelNames: (enabled) =>
-        settingsHost.setPreferShortModelNames(enabled),
-      requestAccess: unsupported('Copilot models require VS Code.'),
-    },
-    agentSelection: options.agentSettingsController.actions,
+    webviewReady: () => {},
+    // VS Code-only surfaces with no desktop equivalent.
+    openVscodeSettings: unsupported('No VS Code settings in the desktop app.'),
+    getMemoryData: () => settingsHost.sendMemoryData(),
+    getMemoryPreview: (message) =>
+      settingsHost.sendMemoryPreview(message, { onError }),
+    openMemoryFile: (message) => openMemoryFile(message),
+    openMemoryFolder: () => openMemoryFolder(),
+    deleteMemory: (message) => settingsHost.deleteMemory(message),
+    setMemoryEnabled: (message) =>
+      settingsHost.setMemoryEnabled(message.enabled),
+    pinMemory: (message) =>
+      settingsHost.setMemoryPinned(message.storagePath, true),
+    unpinMemory: (message) =>
+      settingsHost.setMemoryPinned(message.storagePath, false),
+    ...options.historySettingsController.handlers,
+    ...options.credentialSettingsController.profileHandlers,
+    setModelEnabled: (message) => updateModelEnabled(message),
+    setPolishModel: (message) => settingsHost.setHelperModel(message.modelName),
+    setModelReasoningLevel: (message) =>
+      settingsHost.setReasoningLevel(message),
+    setPreferShortModelNames: (message) =>
+      settingsHost.setPreferShortModelNames(message.enabled),
+    requestModelAccess: unsupported('Copilot models require VS Code.'),
+    ...options.agentSettingsController.handlers,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
     // secret prompt, the browser hand-off, and the stream reveal differ here.
-    githubSubscriptions: {
-      getTokenStatus: () => postGitHubTokenStatus(),
-      setToken: () => setGitHubToken(),
-      removeToken: () => removeGitHubToken(),
-      openTokenUrl: () => openGitHubTokenUrl(),
-      getSubscriptions: () => postGitHubSubscriptions(),
-      unsubscribe: (data) => unsubscribeGitHub(data),
-      openSubscriptionStream: (data) => revealStream(data.streamId),
-    },
-    chatGpt: options.credentialSettingsController.chatGptActions,
-    stateSettings: {
-      update: (key, value) => updateStateSetting(key, value),
-    },
-    tools: options.toolingSettingsController.toolsActions,
-    latex: options.toolingSettingsController.latexActions,
+    getGitHubTokenStatus: () => postGitHubTokenStatus(),
+    setGitHubToken: () => setGitHubToken(),
+    removeGitHubToken: () => removeGitHubToken(),
+    openGitHubTokenUrl: () => openGitHubTokenUrl(),
+    getPRSubscriptions: () => postGitHubSubscriptions(),
+    unsubscribePR: (message) => unsubscribeGitHub(message),
+    openPRSubscriptionStream: (message) => revealStream(message.streamId),
+    ...options.credentialSettingsController.chatGptHandlers,
+    updateStateSetting: (message) =>
+      updateStateSetting(message.key, message.value),
+    ...options.toolingSettingsController.toolHandlers,
+    ...options.toolingSettingsController.latexHandlers,
     // Inline criticism renders `\criticize{...}` annotations as editor
     // squiggles and Problems-panel entries. Both are VS Code editor surfaces
     // with no desktop counterpart, so this stays host-specific rather than
     // "not yet ported".
-    inlineCriticism: {
-      getEnabled: unsupported(
-        'Inline criticism needs the VS Code editor and Problems panel.',
-      ),
-      setEnabled: unsupported(
-        'Inline criticism needs the VS Code editor and Problems panel.',
-      ),
-    },
-    goals: {
-      getList: postGoalList,
-      revealStream: (streamId) => revealStream(streamId),
-    },
+    getInlineCriticismEnabled: unsupported(
+      'Inline criticism needs the VS Code editor and Problems panel.',
+    ),
+    setInlineCriticismEnabled: unsupported(
+      'Inline criticism needs the VS Code editor and Problems panel.',
+    ),
+    getGoalList: postGoalList,
+    revealGoalStream: (message) => revealStream(message.streamId),
   };
-
-  const settingsHandlers = createSettingsViewCommandHandlers(settingsActions);
 
   return {
     refreshAuthDependentData,

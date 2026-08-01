@@ -201,10 +201,10 @@ describe('desktop settings IPC', () => {
 
   it('delegates agent-selection commands to the required controller', async () => {
     const baseController = createStubDesktopAgentSettingsController();
-    const setEnabled = vi.fn(async () => undefined);
+    const setAgentEnabled = vi.fn(async () => undefined);
     const agentSettingsController = {
       ...baseController,
-      actions: { ...baseController.actions, setEnabled },
+      handlers: { ...baseController.handlers, setAgentEnabled },
     };
     const { settings } = createSettingsFixture({ agentSettingsController });
 
@@ -219,10 +219,11 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(setEnabled).toHaveBeenCalledWith({
+    expect(setAgentEnabled).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
       category: 'workflow',
-      source: 'custom',
-      name: 'proofreader',
+      agentSource: 'custom',
+      agentName: 'proofreader',
       enabled: false,
     });
   });
@@ -232,7 +233,7 @@ describe('desktop settings IPC', () => {
     const rerunAgent = vi.fn(async () => undefined);
     const historySettingsController = {
       ...baseController,
-      actions: { ...baseController.actions, rerunAgent },
+      handlers: { ...baseController.handlers, rerunAgent },
     };
     const { settings } = createSettingsFixture({
       historySettingsController,
@@ -523,14 +524,14 @@ describe('desktop settings IPC', () => {
 
   it('delegates Tools and LaTeX commands to the required controller', async () => {
     const baseController = createStubDesktopToolingSettingsController();
-    const toggle = vi.fn(async () => undefined);
+    const toggleTool = vi.fn(async () => undefined);
     const runInstallCommand = vi.fn(async () => undefined);
     const postLatexConfigValues = vi.fn();
     const toolingSettingsController =
       createStubDesktopToolingSettingsController({
-        toolsActions: { ...baseController.toolsActions, toggle },
-        latexActions: {
-          ...baseController.latexActions,
+        toolHandlers: { ...baseController.toolHandlers, toggleTool },
+        latexHandlers: {
+          ...baseController.latexHandlers,
           runInstallCommand,
         },
         postLatexConfigValues,
@@ -561,10 +562,15 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(toggle).toHaveBeenCalledWith('zotero', false);
-    expect(runInstallCommand).toHaveBeenCalledWith(
-      'brew install --cask mactex-no-gui',
-    );
+    expect(toggleTool).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+      toolId: 'zotero',
+      enabled: false,
+    });
+    expect(runInstallCommand).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+      installCommand: 'brew install --cask mactex-no-gui',
+    });
     expect(workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe('none');
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
 
@@ -594,15 +600,15 @@ describe('desktop settings IPC', () => {
     const stub = createStubDesktopCredentialSettingsController(state);
     const credentialSettingsController =
       createStubDesktopCredentialSettingsController(state, {
-        profileActions: {
-          ...stub.profileActions,
+        profileHandlers: {
+          ...stub.profileHandlers,
           signIn,
           signOut,
           setProviderKey,
         },
-        chatGptActions: {
-          ...stub.chatGptActions,
-          setPreferSubscription,
+        chatGptHandlers: {
+          ...stub.chatGptHandlers,
+          setChatGptPreferSubscription: setPreferSubscription,
         },
       });
     const { settings } = createSettingsFixture({
@@ -633,8 +639,15 @@ describe('desktop settings IPC', () => {
 
     expect(signIn).toHaveBeenCalledOnce();
     expect(signOut).toHaveBeenCalledOnce();
-    expect(setProviderKey).toHaveBeenCalledWith('google', 'sk-test');
-    expect(setPreferSubscription).toHaveBeenCalledWith(true);
+    expect(setProviderKey).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+      provider: 'google',
+      apiKey: 'sk-test',
+    });
+    expect(setPreferSubscription).toHaveBeenCalledWith({
+      command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+      enabled: true,
+    });
   });
 
   it('persists model settings through global state', async () => {

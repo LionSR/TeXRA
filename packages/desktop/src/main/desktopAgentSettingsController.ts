@@ -22,9 +22,13 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { agentKey } from '@shared/schemas';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  agentKey,
+  type SettingsMessageFor,
+  type SettingsViewInboundHandlerRegistry,
+  type SettingsViewInboundMessage,
+} from '@shared/schemas';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
   buildAgentModePresetsMessage,
@@ -36,6 +40,26 @@ import { AbsoluteFS } from '@utils/files';
 import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+
+type AgentCommand = SettingsViewInboundMessage['command'];
+type AgentMessage<C extends AgentCommand> = SettingsMessageFor<C>;
+type DesktopAgentHandlers = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED
+  | typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER
+  | typeof SETTINGS_VIEW_COMMANDS.CREATE_AGENT
+  | typeof SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT
+  | typeof SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT
+  | typeof SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE
+  | typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT
+  | typeof SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR
+  | typeof SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR
+  | typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
+  | typeof SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET
+  | typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET
+>;
 
 export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   readonly registry: {
@@ -92,14 +116,14 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
 }
 
 export interface DesktopAgentSettingsController {
-  readonly actions: SettingsViewCommandActions['agentSelection'];
+  readonly handlers: DesktopAgentHandlers;
   postStartupData(): Promise<void>;
   refreshCatalogData(): Promise<void>;
 }
 
 /** Owns the desktop settings agent catalog, directory, and roster behavior. */
 export class DefaultDesktopAgentSettingsController implements DesktopAgentSettingsController {
-  readonly actions: SettingsViewCommandActions['agentSelection'];
+  readonly handlers: DesktopAgentHandlers;
 
   private readonly catalogController;
   private readonly directoryController;
@@ -150,21 +174,21 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.catalogController = controllers.catalog;
     this.directoryController = controllers.directory;
     this.visibilityController = controllers.visibility;
-    this.actions = {
-      setEnabled: (input) => this.updateAgentEnabled(input),
-      setAllEnabled: (input) => this.updateAllAgentsEnabled(input),
-      openYaml: (input) => this.openAgentYaml(input),
-      openFolder: () => this.openAgentFolder(),
-      create: (input) => this.createAgent(input),
-      customize: (input) => this.customizeAgent(input),
-      deleteCustom: (input) => this.deleteCustomAgent(input),
-      revealFile: (input) => this.revealAgentFile(input),
-      viewRemotePrompt: (input) => this.viewRemoteAgentPrompt(input),
-      setCustomDir: () => this.setCustomAgentDir(),
-      resetCustomDir: () => this.resetCustomAgentDir(),
-      applyModePreset: (presetId) => this.applyAgentModePreset(presetId),
-      saveModePreset: () => this.saveAgentModePreset(),
-      deleteModePreset: (presetId) => this.deleteAgentModePreset(presetId),
+    this.handlers = {
+      setAgentEnabled: (message) => this.updateAgentEnabled(message),
+      setAllAgentsEnabled: (message) => this.updateAllAgentsEnabled(message),
+      openAgentYaml: (message) => this.openAgentYaml(message),
+      openAgentFolder: () => this.openAgentFolder(),
+      createAgent: (message) => this.createAgent(message),
+      customizeAgent: (message) => this.customizeAgent(message),
+      deleteCustomAgent: (message) => this.deleteCustomAgent(message),
+      revealAgentFile: (message) => this.revealAgentFile(message),
+      viewRemoteAgentPrompt: (message) => this.viewRemoteAgentPrompt(message),
+      setCustomAgentDir: () => this.setCustomAgentDir(),
+      resetCustomAgentDir: () => this.resetCustomAgentDir(),
+      applyAgentModePreset: (message) => this.applyAgentModePreset(message),
+      saveAgentModePreset: () => this.saveAgentModePreset(),
+      deleteAgentModePreset: (message) => this.deleteAgentModePreset(message),
     };
   }
 
@@ -244,22 +268,22 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     );
   }
 
-  private async updateAgentEnabled(input: {
-    category: AgentCategory;
-    source: AgentSource;
-    name: string;
-    enabled: boolean;
-  }): Promise<void> {
-    await this.visibilityController.setAgentEnabled(input);
+  private async updateAgentEnabled(
+    message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
+  ): Promise<void> {
+    await this.visibilityController.setAgentEnabled({
+      category: message.category,
+      source: message.agentSource,
+      name: message.agentName,
+      enabled: message.enabled,
+    });
     await this.refreshCatalogData();
   }
 
-  private async updateAllAgentsEnabled(input: {
-    category: AgentCategory;
-    source: AgentSource;
-    enabled: boolean;
-  }): Promise<void> {
-    await this.visibilityController.setAllAgentsEnabled(input);
+  private async updateAllAgentsEnabled(
+    message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED>,
+  ): Promise<void> {
+    await this.visibilityController.setAllAgentsEnabled(message);
     await this.refreshCatalogData();
   }
 
@@ -297,16 +321,18 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     ]);
   }
 
-  private async openAgentYaml(input: {
-    source: AgentSource;
-    name: string;
-  }): Promise<void> {
-    const result = this.directoryController.planOpenAgentYaml(input);
+  private async openAgentYaml(
+    message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML>,
+  ): Promise<void> {
+    const result = this.directoryController.planOpenAgentYaml({
+      source: message.agentSource,
+      name: message.agentName,
+    });
     if (!result.ok) {
       await this.notifications.showErrorMessage(
         result.reason === 'missingAgent'
-          ? `Agent not found: ${input.name}`
-          : `No configuration file found for agent: ${input.name}`,
+          ? `Agent not found: ${message.agentName}`
+          : `No configuration file found for agent: ${message.agentName}`,
       );
       return;
     }
@@ -330,10 +356,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * agent-creator flow. Only the template path is wired here; AI creation needs
    * the creator flow's own UI, which this host does not present yet.
    */
-  private async createAgent(data: {
-    category: AgentCategory;
-    mode: 'ai' | 'template';
-  }): Promise<void> {
+  private async createAgent(
+    data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.CREATE_AGENT>,
+  ): Promise<void> {
     if (data.mode !== 'template') {
       await this.notifications.showErrorMessage(
         'Creating an agent with AI is not available in the desktop app yet. Choose "From template" instead.',
@@ -400,10 +425,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   /** Copy a bundled agent into the custom directory so it can be edited. */
-  private async customizeAgent(data: {
-    agentName: string;
-    agentSource: AgentSource;
-  }): Promise<void> {
+  private async customizeAgent(
+    data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT>,
+  ): Promise<void> {
     const entry = getAgent(agentKey(data.agentSource, data.agentName));
     if (!entry?.path) {
       await this.notifications.showErrorMessage(
@@ -455,7 +479,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     }
   }
 
-  private async deleteCustomAgent(data: { agentName: string }): Promise<void> {
+  private async deleteCustomAgent(
+    data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT>,
+  ): Promise<void> {
     const entry = getAgent(agentKey('custom', data.agentName));
     if (!entry?.path) {
       await this.notifications.showErrorMessage(
@@ -500,9 +526,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
    * the desktop has no editor surface, so the config is written to a temporary
    * file and opened with the OS handler.
    */
-  private async viewRemoteAgentPrompt(data: {
-    agentName: string;
-  }): Promise<void> {
+  private async viewRemoteAgentPrompt(
+    data: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT>,
+  ): Promise<void> {
     try {
       const result = await this.remotePromptController.getPromptConfig(
         data.agentName,
@@ -525,21 +551,28 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     }
   }
 
-  private async revealAgentFile(input: {
-    source: AgentSource;
-    name: string;
-  }): Promise<void> {
-    const result = this.directoryController.planRevealAgentFile(input);
+  private async revealAgentFile(
+    message: AgentMessage<typeof SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE>,
+  ): Promise<void> {
+    const result = this.directoryController.planRevealAgentFile({
+      source: message.agentSource,
+      name: message.agentName,
+    });
     if (!result.ok) {
       await this.notifications.showErrorMessage(
-        `Agent not found or has no file: ${input.name}`,
+        `Agent not found or has no file: ${message.agentName}`,
       );
       return;
     }
     await this.directory.revealPath(result.path);
   }
 
-  private async applyAgentModePreset(presetId: string): Promise<void> {
+  private async applyAgentModePreset(
+    message: AgentMessage<
+      typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
+    >,
+  ): Promise<void> {
+    const { presetId } = message;
     const result = await applyTeamRosterWithPreflight(presetId, {
       catalog: this.catalogController,
       loadLocalCatalog: () =>
@@ -596,7 +629,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     await this.notifications.showInfoMessage(`Saved team "${preset.name}"`);
   }
 
-  private async deleteAgentModePreset(presetId: string): Promise<void> {
+  private async deleteAgentModePreset(
+    message: AgentMessage<
+      typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET
+    >,
+  ): Promise<void> {
+    const { presetId } = message;
     const target = this.catalogController.getCustomPreset(presetId);
     if (!target) {
       await this.notifications.showErrorMessage(
