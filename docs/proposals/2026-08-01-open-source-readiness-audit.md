@@ -2,9 +2,11 @@
 
 > **Supersedes in part [`2026-07-29-open-source-readiness.md`](./2026-07-29-open-source-readiness.md)** for history-rewrite, vendored-source, and telemetry-opt-out conclusions. Other conclusions in the older audit remain live.
 
-Synthesis of eleven parallel audits plus an adversarial verification pass, against
-`10ffd138365eab7fc0a03be40d2b33337a794267`. Every claim below carries a file path; refuted
-claims are collected in §6 so they do not get re-litigated.
+Synthesis of eleven parallel audits plus an adversarial verification pass. The original evidence
+was collected against `10ffd138365eab7fc0a03be40d2b33337a794267`; landed-status and current-path
+claims were reconciled for this PR against latest `main` at PR #9539's merge commit
+`37dd55eebe740a8c33f56db9cd1e238eb8ab8204`. Every claim below carries a file path or symbol;
+refuted claims are collected in §6 so they do not get re-litigated.
 
 ---
 
@@ -76,19 +78,19 @@ must also pass.
 | **Fix**         | Restore the upstream header + gemini's MIT text in both `.sty` files, add an `acknowledgments.md` entry, and fold into the same NOTICE file as B2. Do the same provenance check on `template_poster.tex` and `template_slide.tex` (unaudited).                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Effort**      | Hours.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-### B4 — the trusted-automation checkout still persists a repository credential; token scope is unverified
+### B4 — workflow hardening landed; token scope remains externally unverified
 
-Most code mitigations identified in the original finding have landed on the advanced branch. One
-checkout flag remains, plus an external scope verification.
+PR #9535 (commit `f685f96863`) landed every in-repo mitigation identified in the original finding.
+Only administrator-side token-scope verification remains.
 
-|                               |                                                                                                                                                                                                                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Landed: primary checkout**  | `.github/workflows/claude.yml:55-63` now sets `persist-credentials: false` on the checkout that receives `env.GH_TOKEN`.                                                                                                                                                             |
-| **Landed: issue-origin gate** | Mention-driven runs remain available for maintainer replies on outside issues, but `claude.yml:133-141` forwards issue title/body only when the issue author's association is trusted. The gate is on untrusted data rather than incorrectly suppressing the whole job.              |
-| **Landed: tool narrowing**    | The `claude-interactive` preset no longer grants unrestricted `Bash(node *)`; it permits only `Bash(node scripts/*)` plus named npm/pnpm commands.                                                                                                                                   |
-| **Remaining code action**     | The trusted-automation checkout at `claude.yml:65-70` still relies on checkout's default credential persistence. Set `persist-credentials: false` there as well; the checked-out prompt and tool map are read-only inputs and need no git credential.                                |
-| **Scope caveat**              | `BOT_PAT` scope is still inferred rather than verified. Confirm whether it is present, fine-grained, and repository-scoped. If the workflow falls back to `GITHUB_TOKEN`, document that narrower repository/job scope instead of attributing multi-repository reach to the fallback. |
-| **Effort**                    | One workflow line plus an administrator-side token-scope check.                                                                                                                                                                                                                      |
+|                                 |                                                                                                                                                                                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Landed: primary checkout**    | The primary `actions/checkout` step in `.github/workflows/claude.yml` sets `persist-credentials: false` on the checkout that receives `env.GH_TOKEN`.                                                                                                                                |
+| **Landed: automation checkout** | The `.trusted-actions` checkout also sets `persist-credentials: false`; its prompt and tool-map inputs need no git credential.                                                                                                                                                       |
+| **Landed: trusted-author gate** | Mention-driven runs remain available for maintainer replies, while the job condition requires trusted author association for the triggering author and the issue or PR author before issue title/body can reach the action.                                                          |
+| **Landed: narrowed Node tools** | The `claude-interactive` preset in `.github/automation/allowed-tools.json` no longer grants unrestricted `Bash(node *)`; it permits `Bash(node scripts/*)` plus named npm/pnpm commands.                                                                                             |
+| **External scope caveat**       | `BOT_PAT` scope is still inferred rather than verified. Confirm whether it is present, fine-grained, and repository-scoped. If the workflow falls back to `GITHUB_TOKEN`, document that narrower repository/job scope instead of attributing multi-repository reach to the fallback. |
+| **Remaining effort**            | Administrator-side token-scope verification only; no code action remains from this finding.                                                                                                                                                                                          |
 
 ### B5 — An outside contributor holds copyright in a substantial merged commit, with no CLA or DCO
 
@@ -307,7 +309,9 @@ occurrences total. Fold in:
   permissive" and never names CC-BY-4.0. An in-app credit in settings/about is the cleaner fix.
 - **`patches/openai@6.46.0.patch`** — Apache-2.0 NOTICE propagation. (The §4(b) "modified files"
   concern is largely satisfied already: a version-named patch file in `patches/` is a more legible
-  change record than a header comment. `patches/ink@7.1.0.patch` is MIT, same treatment.)
+  change record than a header comment. The current `patches/ink@7.1.1.patch` is MIT, same
+  treatment. The earlier audit snapshot's 7.1.0 filename was superseded when the resolved Ink
+  version changed.)
 - **`skills/`** — `ls -a skills/` returns exactly the 14 directories that
   `docs/guide/open-source.md:145-153,171-177` enumerate as the contents of
   `texra-ai/texra-scientific-skills` and `texra-ai/texra-lean-skills`, with **no** LICENSE, README,
@@ -363,9 +367,9 @@ packages/desktop/tests/` → zero. `knip.json:36` lists `tests/**` as an entry b
   through `:201`. The package is 510 source lines (`src/index.ts` 301, `node.ts` 160,
   `schemas.ts` 49) against **70** runtime dependencies, `private` unset,
   `publishConfig.access: 'public'`, version-bumped every release, `registry.npmjs.org` → 404, no
-  README. The checkpoint archive has already been cleaned up: there are **zero**
-  `*agent-sdk-readiness-checkpoint.md` files under `docs/proposals/`, and all **21** now live under
-  `docs/dev/audits/`. Five core agent-SDK planning documents remain among the 53 proposal Markdown
+  README. PR #9537 archived the checkpoint series: there are **zero**
+  `*agent-sdk-readiness-checkpoint.md` files under `docs/proposals/`, and all **21** live under
+  `docs/dev/audits/`. Five core agent-SDK planning documents remain among the 54 proposal Markdown
   files. Pick: ship the package, mark `"private": true` and delete the dead job, or add a README
   saying it is pre-release. Consolidating or indexing the 21 archived checkpoints is optional
   follow-up; relocation is complete.
@@ -601,10 +605,9 @@ Effort is maintainer-hours unless noted. **‖** marks work that parallelizes.
    Awesome + patched-openai entries; provenance headers in `src/agent/node/index.ts` and both
    `.sty` files; add the file to `verify-extension-package-invariants.mjs:42` and
    `electron-builder.yml`. — 4h
-7. **Finish CI hardening** (B4): the primary non-persisting checkout, issue-origin data gate,
-   and Node-tool narrowing have landed. Add `persist-credentials: false` only to the remaining
-   trusted-automation checkout, verify `BOT_PAT` scope, and document the narrower `GITHUB_TOKEN`
-   fallback. — 30m + administrator verification
+7. **Verify automation-token scope** (B4): PR #9535 landed both non-persisting checkout flags,
+   the trusted-author gate, and Node-tool narrowing. Verify `BOT_PAT` scope and document the
+   narrower `GITHUB_TOKEN` fallback. — administrator verification
 
 ### Phase 2 — Pre-flip cleanup. All parallelizable.
 

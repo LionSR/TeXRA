@@ -3,7 +3,7 @@
 > **Superseded in part by [`2026-08-01-open-source-readiness-audit.md`](./2026-08-01-open-source-readiness-audit.md).**
 > That audit disproves three conclusions below: that no history rewrite is
 > required (confidential third-party peer-review correspondence is reachable
-> from ~153 of 208 tags under `agents/prl/`), that there is no vendored
+> from 154 of 208 tags under `agents/prl/`), that there is no vendored
 > third-party source, and the telemetry-opt-out status. The licensing and
 > product sections here remain current.
 

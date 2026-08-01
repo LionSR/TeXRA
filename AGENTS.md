@@ -114,11 +114,11 @@ frozen deep-import lists, not another lint rule.
   - `frontend/files/` - File lister and discovery utilities
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
-- `src/common/` holds backend-only helpers (errors, files, parsing, storage, constants). Import them through the `@common/*` alias for clarity.
+- `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (state managers, webview base classes):
   - `packages/extension/src/common/state/` - State managers including `pendingStateManager`
   - `packages/extension/src/common/webview/` - Base classes (`BaseViewContentProvider`, `BaseViewMessageHandler`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly five modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/boundedIdSet`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those five, and anything they import, must not reach for Node built-ins. The remaining ~50 files are host-side only.
+- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: as of this writing exactly five modules are reachable from `webview/frontend/`, `progressView/frontend/` and `settingsView/frontend/` — `@utils/core`, `@utils/core/boundedIdSet`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`. Those five, and anything they import, must not reach for Node built-ins. There are 56 TypeScript modules under `src/utils/` in the current tree; the other 51 are not browser-reachable today and must not be assumed browser-safe.
 
   Do not read this as "everything in `utils/` is shared with the webviews" — it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the five browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `delay`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`); re-exports string primitives from `utils/text/stringUtils` for browser-safe barrel access
@@ -148,7 +148,7 @@ frozen deep-import lists, not another lint rule.
 - **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
 - **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
   - `@common/errors` — classification and surfacing: `classifyAgentError`, the SDK-error inspection under `sdkError/`, `errorPredicates`, `errorFormatUtils`. Reach for this when the _kind_ of failure changes what happens next.
-  - `@utils/errors/errorMessage` — the three `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`. This is the most-imported leaf module in the repo (~199 sites) and is browser-safe, which `@common/errors` is not required to be.
+  - `@utils/errors/errorMessage` — the three `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`. This is the most-imported leaf module in the repo (~203 sites) and is browser-safe, which `@common/errors` is not required to be.
 
   An earlier version of this line named `@common/errors` as the only error path, which is why the distinction is spelled out here.
 

@@ -11,16 +11,22 @@
 // docs instructed running. This gate turns that class of drift into a failed
 // commit instead of a wrong answer months later.
 //
-// Scope note: it checks that cited *paths* resolve. It cannot check that the
+// Scope note: it checks that backticked repo paths and local Markdown link
+// destinations resolve (the latter relative to their guidance file). It cannot
+// check that the
 // surrounding claim is still true — that still needs a human.
 //
 // Dependency-free (bare Node) so it runs without installing anything.
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The optional root argument keeps fixture tests hermetic without duplicating
+// the production path-prefix configuration.
+const repoRoot = process.argv[2]
+  ? resolve(process.argv[2])
+  : join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Files whose prose is read as instructions by an agent or contributor.
 const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md', 'src/README.md'];
@@ -176,6 +182,29 @@ function escapeRegex(value) {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Collect local Markdown link destinations, excluding URLs and page anchors. */
+function relativeMarkdownLinks(line) {
+  const links = [];
+  for (const [, rawDestination] of line.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)) {
+    let destination = rawDestination.trim();
+    if (destination.startsWith('<') && destination.endsWith('>')) {
+      destination = destination.slice(1, -1);
+    } else {
+      destination = destination.split(/\s+["']/u, 1)[0];
+    }
+    if (
+      !destination ||
+      destination.startsWith('#') ||
+      destination.startsWith('/') ||
+      /^[a-z][a-z0-9+.-]*:/iu.test(destination)
+    ) {
+      continue;
+    }
+    links.push(destination);
+  }
+  return links;
+}
+
 const targets = [
   ...GUIDANCE_FILES.filter((file) => existsSync(join(repoRoot, file))),
   ...GUIDANCE_DIRS.flatMap((dir) => markdownFilesIn(dir)),
@@ -190,6 +219,30 @@ for (const file of targets) {
 
   for (const [index, line] of lines.entries()) {
     if (ignored[index]) continue;
+
+    for (const destination of relativeMarkdownLinks(line)) {
+      const localDestination = destination.split(/[?#]/u, 1)[0];
+      let decodedDestination;
+      try {
+        decodedDestination = decodeURIComponent(localDestination);
+      } catch {
+        decodedDestination = localDestination;
+      }
+      const absolute = resolve(repoRoot, dirname(file), decodedDestination);
+      const repoRelative = relative(repoRoot, absolute).replaceAll('\\', '/');
+      if (
+        repoRelative === '..' ||
+        repoRelative.startsWith('../') ||
+        !existsSync(absolute)
+      ) {
+        failures.push({
+          file,
+          line: index + 1,
+          candidate: destination,
+          missing: [repoRelative],
+        });
+      }
+    }
 
     for (const [, token] of line.matchAll(/`([^`\n]+)`/g)) {
       // Trim a trailing `:12` line cite, then trailing sentence punctuation

@@ -1,9 +1,10 @@
-# `src/` — host-agnostic core
+# `src/` — host-agnostic code and tests
 
-Everything here is shared by all three hosts: the VS Code extension
-(`packages/extension`), the Electron desktop app (`packages/desktop`), and the
-terminal CLI (`packages/cli`). Host-specific wiring lives in those packages, not
-here.
+This directory contains host-agnostic code consumed by one or more of the VS Code
+extension (`packages/extension`), Electron desktop app (`packages/desktop`), and
+terminal CLI (`packages/cli`), plus host-neutral tests under `src/test-kernel/`.
+A module does not need to be used by every host to belong here. Host-specific
+wiring lives in the package that owns that host.
 
 There is no `@texra/core` package. Hosts reach this code through the path
 aliases declared in `tsconfig.json` (`@agent/*`, `@platform/*`, `@shared/*`, …).
@@ -32,7 +33,7 @@ Use the alias, not a long relative chain.
 | `src/eventBus/`     | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                       |
 | `src/hosts/`        | UI host descriptors shared across the three hosts                                                                                                                                                        |
 | `src/types/`        | Ambient module declarations for untyped third-party packages                                                                                                                                             |
-| `src/test-kernel/`  | The test suite. 848 files, ~57% of `src/` by line count — it dominates a directory listing but ships in nothing                                                                                          |
+| `src/test-kernel/`  | The test suite. 869 tracked files, ~57% of `src/` by line count — it dominates a directory listing but ships in nothing                                                                                  |
 
 ## Two axes that decide where code goes
 
