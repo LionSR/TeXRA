@@ -453,11 +453,18 @@ export function clearApprovalsForOwner(owner: object): number {
   });
 }
 
-export function clearRetryApprovalsForStream(streamId: string): void {
-  clearApprovalsWhere(
-    (payload) =>
-      payload.kind === 'retry' && payload.payload.streamId === streamId,
+/** Replace a retry only within the host attachment that owns it. */
+export function clearRetryApprovalsForStream(
+  streamId: string,
+  owner: object,
+): void {
+  settleItems(
+    (item) =>
+      item.owner === owner &&
+      item.payload.kind === 'retry' &&
+      item.payload.payload.streamId === streamId,
     INTERRUPT,
+    { cancelled: true },
   );
 }
 

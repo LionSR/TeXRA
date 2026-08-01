@@ -213,7 +213,7 @@ describe('agent directory watcher rebuilds', () => {
 
     expect(refreshSettled).toBe(true);
     await refreshed;
-    expect(mocks.watchedDirectories).toEqual(['/agents/builtin']);
+    expect(mocks.watchedDirectories).toEqual([]);
   });
 
   it('rebuilds for a subdirectory created after the running rebuild listed its parent', async () => {

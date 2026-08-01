@@ -1308,6 +1308,45 @@ describe('TUI retry approvals', () => {
     await waitForApproval('retry', { errorMessage: 'second retry' });
   });
 
+  it('does not replace a retry owned by another host on the same stream', async () => {
+    mocks.hasUsableApiKey.mockResolvedValue(false);
+
+    const older = tui();
+    const newer = tui();
+    const olderResult = older.interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'shared-stream',
+        provider: 'openai',
+        message: 'older host retry',
+      }),
+    );
+    await waitForApproval('retry', { errorMessage: 'older host retry' });
+
+    const newerResult = newer.interactions.requestRetry?.(
+      relayRetry({
+        streamId: 'shared-stream',
+        provider: 'openai',
+        message: 'newer host retry',
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(pendingApprovalSummaries.get()).toHaveLength(2);
+    });
+    expect(currentApproval.get()?.payload).toMatchObject({
+      kind: 'retry',
+      payload: { errorMessage: 'older host retry' },
+    });
+
+    older.dispose();
+    await expect(olderResult).resolves.toEqual({ action: 'cancel' });
+    await waitForApproval('retry', { errorMessage: 'newer host retry' });
+    decideRetry({ accepted: true });
+    await expect(newerResult).resolves.toEqual({
+      action: 'retry',
+      feedback: undefined,
+    });
+  });
+
   it('detaches one host without settling the live host retry', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);
 

@@ -188,6 +188,9 @@ class AgentDirectoryManager {
       }
 
       const directories = await this.getAllLocal();
+      if (this.watcherSubscriptions.size === 0) {
+        return;
+      }
       const cached = this.watcherDirectories;
       this.watcherDirectories = directories;
       if (cached && this.sameDirectories(cached, directories)) {
