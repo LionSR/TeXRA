@@ -95,4 +95,32 @@ describe('texra.sendFollowUp waiting repair admission', () => {
     expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
     expect(defaultSession().status.get(STREAM)).toBe(STREAM_PHASE.WAITING);
   });
+
+  it('does not let a stale rejected probe block an active flow', async () => {
+    const failure = new Error('resumability read failed');
+    let rejectProbe: ((error: Error) => void) | undefined;
+    mocks.deriveResumability.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectProbe = reject;
+        }),
+    );
+    mocks.submitFollowUp.mockResolvedValue({ status: 'sent' });
+
+    const first = mocks.handler?.({ stream: STREAM, text: 'first' });
+    const firstRejection = expect(first).rejects.toBe(failure);
+    defaultSession().status.transition(STREAM, STREAM_PHASE.RUNNING, 'resume');
+
+    await expect(
+      mocks.handler?.({ stream: STREAM, text: 'second' }),
+    ).resolves.toBeUndefined();
+    expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
+    expect(mocks.submitFollowUp).toHaveBeenCalledWith(STREAM, {
+      text: 'second',
+      mediaFiles: undefined,
+    });
+
+    rejectProbe?.(failure);
+    await firstRejection;
+  });
 });

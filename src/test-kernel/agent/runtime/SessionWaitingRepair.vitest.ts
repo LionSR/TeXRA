@@ -160,14 +160,12 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     resumabilityMocks.deriveResumability.mockRejectedValueOnce(failure);
 
     const first = session.repairWaitingIfResumable(streamId);
-    session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     const second = session.repairWaitingIfResumable(streamId);
 
     await expect(first).rejects.toBe(failure);
     await expect(second).rejects.toBe(failure);
     expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
 
-    session.status.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
     resumabilityMocks.deriveResumability.mockResolvedValue({
       resumable: true,
       cause: 'interrupted-with-flow',
@@ -178,7 +176,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(2);
   });
 
-  it('shares a stale false verdict after resume starts during the probe', async () => {
+  it('does not join a stale probe after resume starts', async () => {
     seedCancelled();
     let release: (() => void) | undefined;
     resumabilityMocks.deriveResumability.mockImplementation(
@@ -192,11 +190,13 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     const first = session.repairWaitingIfResumable(streamId);
     session.status.transition(streamId, STREAM_PHASE.RUNNING, 'resume');
     const second = session.repairWaitingIfResumable(streamId);
-    release?.();
 
-    await expect(Promise.all([first, second])).resolves.toEqual([false, false]);
+    await expect(second).resolves.toBe(false);
     expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+
+    release?.();
+    await expect(first).resolves.toBe(false);
   });
 
   it('does not recreate a stream cleared during the probe', async () => {
