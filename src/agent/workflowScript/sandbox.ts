@@ -17,6 +17,7 @@ import {
 import { z } from 'zod';
 
 // Local imports - utilities
+import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - workflow scripts
@@ -351,8 +352,7 @@ export async function runScriptInSandbox(
   }
   const pendingHostPromises = new Set<QuickJSDeferredPromise>();
   const timeout = setTimeout(markTimedOut, options.timeoutMs);
-  options.signal?.addEventListener('abort', markAborted, { once: true });
-  if (options.signal?.aborted) markAborted();
+  const detachAbort = onAbort(options.signal, markAborted);
 
   try {
     installHostBridge(
@@ -438,7 +438,7 @@ export async function runScriptInSandbox(
   } finally {
     active = false;
     clearTimeout(timeout);
-    options.signal?.removeEventListener('abort', markAborted);
+    detachAbort();
     wake();
     try {
       for (const deferred of pendingHostPromises) deferred.dispose();

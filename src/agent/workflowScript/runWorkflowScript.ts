@@ -9,7 +9,7 @@ import {
   type WorkflowScriptFiles,
 } from '@shared/schemas/workflowScriptFiles';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
-import { isNonEmptyString } from '@utils/core';
+import { isNonEmptyString, onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
@@ -535,8 +535,7 @@ export async function runWorkflowScript(
       // Link this call to the run: any run-level abort cascades to it, so a
       // runner watching invocation.signal still stops on timeout/cap.
       const cascade = () => callController.abort(runAbort.signal.reason);
-      if (runAbort.signal.aborted) cascade();
-      else runAbort.signal.addEventListener('abort', cascade, { once: true });
+      const detachCascade = onAbort(runAbort.signal, cascade);
       callControllers.set(index, callController);
       if (!startEmitted) {
         startEmitted = true;
@@ -597,7 +596,7 @@ export async function runWorkflowScript(
       } catch (error) {
         attemptError = { error };
       } finally {
-        runAbort.signal.removeEventListener('abort', cascade);
+        detachCascade();
         if (callControllers.get(index) === callController) {
           callControllers.delete(index);
         }
@@ -666,8 +665,7 @@ export async function runWorkflowScript(
   const files = WorkflowScriptFilesSchema.parse(options.files ?? {});
   const filesJson = stableStringify(files);
   const abortFromParent = () => runAbort.abort(options.signal?.reason);
-  options.signal?.addEventListener('abort', abortFromParent, { once: true });
-  if (options.signal?.aborted) abortFromParent();
+  const detachAbortFromParent = onAbort(options.signal, abortFromParent);
 
   let result: unknown;
   let scriptFailure: { readonly error: unknown } | undefined;
@@ -719,7 +717,7 @@ export async function runWorkflowScript(
   } catch (error) {
     scriptFailure = { error };
   } finally {
-    options.signal?.removeEventListener('abort', abortFromParent);
+    detachAbortFromParent();
     // Abort unconditionally once the sandbox returns. This stops in-flight
     // work the script abandoned and makes agentPrimitive reject any late call.
     cleanupAbortStarted = !runAbort.signal.aborted;
