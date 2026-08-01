@@ -312,11 +312,13 @@ async function requestProposalInteraction(
 
 /**
  * The queue entry is this retry's liveness: reserving it replaces whatever
- * retry the stream had (its pre-modal lookup, its modal, or the credential
- * switch it had already started), and holding it until `release` means a later
- * cancel reaches the commit as well. Nothing here re-checks whether the
- * request is still current — a settled entry ignores `present` and `settle`,
- * and its abort signal stops the work in flight.
+ * retry the same host owned for the stream (its pre-modal lookup, its modal, or
+ * the credential switch it had already started), and holding it until
+ * `release` means a later cancel reaches the commit as well. Another host may
+ * temporarily overlap during attachment handoff, so its reservation remains
+ * isolated. Nothing here re-checks whether the request is still current — a
+ * settled entry ignores `present` and `settle`, and its abort signal stops the
+ * work in flight.
  */
 async function requestRetryInteraction(
   request: HostRetryRequest,
@@ -324,7 +326,7 @@ async function requestRetryInteraction(
   attachment: { readonly owner: object; readonly commitQueue: PQueue },
   options: HostRetryInteractionOptions | undefined,
 ): Promise<RetryResult> {
-  clearRetryApprovalsForStream(request.streamId);
+  clearRetryApprovalsForStream(request.streamId, attachment.owner);
   const reservation = reserveApproval(
     { kind: 'retry', payload: request },
     { onPresent: announceApproval, owner: attachment.owner },
