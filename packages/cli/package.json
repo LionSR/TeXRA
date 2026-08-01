@@ -69,6 +69,7 @@
     "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
     "cli-table3": "^0.6.5",
+    "cli-truncate": "^6.1.1",
     "diff": "^9.0.0",
     "esbuild": "^0.28.1",
     "ink": "^7.1.0",

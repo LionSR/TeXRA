@@ -684,6 +684,9 @@ importers:
       cli-table3:
         specifier: ^0.6.5
         version: 0.6.5
+      cli-truncate:
+        specifier: ^6.1.1
+        version: 6.1.1
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -3513,6 +3516,10 @@ packages:
 
   cli-truncate@6.0.0:
     resolution: {integrity: sha512-3+YKIUFsohD9MIoOFPFBldjAlnfCmCDcqe6aYGFqlDTRKg80p4wg35L+j83QQ63iOlKRccEkbn8IuM++HsgEjA==}
+    engines: {node: '>=22'}
+
+  cli-truncate@6.1.1:
+    resolution: {integrity: sha512-06p9vyLahLa4zkGcgsGxU6iEkSOiuI4fhCH6Emhe2lPAcoUv73n72DnODsnHA+5wwXGnV0n9M9/qOQJSjYhFhw==}
     engines: {node: '>=22'}
 
   clipboard-image@0.1.0:
@@ -9250,6 +9257,11 @@ snapshots:
       '@colors/colors': 1.5.0
 
   cli-truncate@6.0.0:
+    dependencies:
+      slice-ansi: 9.0.0
+      string-width: 8.2.2
+
+  cli-truncate@6.1.1:
     dependencies:
       slice-ansi: 9.0.0
       string-width: 8.2.2
