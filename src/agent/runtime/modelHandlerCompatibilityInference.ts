@@ -115,6 +115,10 @@ function stringValue(value: unknown): string | undefined {
 function currentModelFromRawSharedState(
   shared: Record<string, unknown>,
 ): string | undefined {
+  const modelId = stringValue(shared.modelId);
+  if (modelId) return modelId;
+  // Records written before `modelId` carry the model only in `MODEL`, and this
+  // reader runs on raw bytes that never passed the migration boundary.
   const userChannels = asRecord(asRecord(shared.stateSlices)?.userChannels);
   if (!userChannels) return undefined;
   return (

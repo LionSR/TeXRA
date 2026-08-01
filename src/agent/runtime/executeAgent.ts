@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { logConversationProgress } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  getToolUseFlowErrorResult,
   runToolUseFlow,
   type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse/runToolUseFlow';
@@ -27,7 +26,7 @@ import {
   captureOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
-import { AgentError, getSdkErrorMessage } from '@common/errors';
+import { AgentError } from '@common/errors';
 import {
   type RequestEnsureProgressViewPayload,
   type StreamTabId,
@@ -51,7 +50,6 @@ import {
   type RunFlowLifecycleOptions,
 } from './AgentRunLifecycle';
 import {
-  AgentFlowError,
   buildOptionalFlowResultFields,
   isWaitingFlowResult,
   type AgentRuntimeFlowResult,
@@ -87,6 +85,7 @@ function buildToolUseFlowResult(
     ...(result.structured !== undefined
       ? { structured: result.structured }
       : {}),
+    ...(result.error ? { error: result.error } : {}),
     ...buildOptionalFlowResultFields(memoryMisses, result.totalCostUsd),
   };
 }
@@ -141,8 +140,9 @@ type ToolUseLaunchVariant =
 /**
  * Run the tool-use flow for a single agent execution, fresh or resumed.
  *
- * Owns all tool-use-specific wiring: progress counters, follow-up queuing,
- * model-change side effects, and error wrapping into `AgentFlowError`.
+ * Owns all tool-use-specific wiring: progress counters, follow-up queuing, and
+ * model-change side effects. A failed run arrives as a FAILED result carrying
+ * its structured error, so there is nothing to unwrap here.
  * The callers (`executeAgent`, `resumeToolUseFromResumeData`) own lifecycle and
  * stream-status; this function owns only what is specific to the ToolUse
  * category.
@@ -164,79 +164,65 @@ async function launchToolUseRun(
   variant: ToolUseLaunchVariant,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
-  try {
-    const result = await runToolUseFlow(
-      {
-        ...ctx,
-        ...createInterruptCallbacks(),
-        onRoundFinalized: createUsageRecordingCallback(ctx),
-        setting: shared.setting,
-        isSubagent: shared.isSubagent,
-        tools: shared.tools,
-        onProgress: (update) => {
-          if (update.kind === 'overview') {
-            logConversationProgress(ctx.logger, {
-              toolCallCount: update.toolCallCount,
-            });
-          }
-          shared.onProgress?.(update);
-        },
-        onFollowUpConsumed: wrapOnFollowUpConsumed(
-          ctx,
-          shared.onFollowUpConsumed,
-        ),
-        onFlowRecordDisposition: (disposition) =>
-          lifecycle.setFlowRecordDisposition(disposition),
-        onModelChanged: (modelHandler) => {
-          // The tool-use flow already wrote services.config.model
-          // (=== ctx.config.model, same object), so the live model is updated
-          // before this fires; only the usage side-effect is left to do here.
-          ctx.usageMonitor.setModelInfo({
-            capabilities: modelHandler.capabilities,
-            config: modelHandler.config,
+  const result = await runToolUseFlow(
+    {
+      ...ctx,
+      ...createInterruptCallbacks(),
+      onRoundFinalized: createUsageRecordingCallback(ctx),
+      setting: shared.setting,
+      isSubagent: shared.isSubagent,
+      tools: shared.tools,
+      onProgress: (update) => {
+        if (update.kind === 'overview') {
+          logConversationProgress(ctx.logger, {
+            toolCallCount: update.toolCallCount,
           });
-        },
-        ...(variant.kind === 'fresh'
-          ? { onIdle: variant.onIdle }
-          : {
-              resume: variant.resume,
-              drainedFollowUps: variant.drainedFollowUps,
-              takePendingFollowUps: variant.takePendingFollowUps,
-            }),
+        }
+        shared.onProgress?.(update);
       },
-      undefined,
-      {
-        attach: (flowContext) => {
-          handle.attachToolUseFlow(flowContext);
-          if (
-            variant.kind === 'resume' &&
-            variant.isCancellationRequested?.()
-          ) {
-            variant.onCancellationAtFlowAttachment?.();
-            flowContext.interrupt();
-          }
-        },
-        detach: (flowContext) => handle.detachToolUseFlow(flowContext),
+      onFollowUpConsumed: wrapOnFollowUpConsumed(
+        ctx,
+        shared.onFollowUpConsumed,
+      ),
+      onFlowRecordDisposition: (disposition) =>
+        lifecycle.setFlowRecordDisposition(disposition),
+      onModelChanged: (modelHandler, model) => {
+        // The flow swapped its ModelCell, which is the live model. Every
+        // launch-context view of it is mirrored here, in one place, so none of
+        // them keeps reporting the model the run started with.
+        ctx.config.model = model;
+        ctx.userVarChannels.transient.MODEL = model;
+        ctx.usageMonitor.setModelInfo({
+          capabilities: modelHandler.capabilities,
+          config: modelHandler.config,
+        });
       },
-    );
-    return buildToolUseFlowResult(
-      result,
-      runExecutionId,
-      runStreamId,
-      ctx.attachedMemoryMisses,
-    );
-  } catch (err) {
-    const failedResult = getToolUseFlowErrorResult(err);
-    if (!failedResult) throw err;
-    const result = buildToolUseFlowResult(
-      failedResult,
-      runExecutionId,
-      runStreamId,
-      ctx.attachedMemoryMisses,
-    );
-    if (isWaitingFlowResult(result)) throw err;
-    throw new AgentFlowError(getSdkErrorMessage(err), result, { cause: err });
-  }
+      ...(variant.kind === 'fresh'
+        ? { onIdle: variant.onIdle }
+        : {
+            resume: variant.resume,
+            drainedFollowUps: variant.drainedFollowUps,
+            takePendingFollowUps: variant.takePendingFollowUps,
+          }),
+    },
+    undefined,
+    {
+      attach: (flowContext) => {
+        handle.attachToolUseFlow(flowContext);
+        if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
+          variant.onCancellationAtFlowAttachment?.();
+          flowContext.interrupt();
+        }
+      },
+      detach: (flowContext) => handle.detachToolUseFlow(flowContext),
+    },
+  );
+  return buildToolUseFlowResult(
+    result,
+    runExecutionId,
+    runStreamId,
+    ctx.attachedMemoryMisses,
+  );
 }
 
 /**
@@ -302,6 +288,7 @@ async function runReflectionAgent(
     compileFailures: roundOutputsToCompileFailureSummaries(result.roundOutputs),
     executionId: runExecutionId,
     streamId: runStreamId,
+    ...(result.error ? { error: result.error } : {}),
     ...buildOptionalFlowResultFields(
       ctx.attachedMemoryMisses,
       result.totalCostUsd,

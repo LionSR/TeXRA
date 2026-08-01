@@ -67,6 +67,7 @@ import {
 } from '../agent/progressTestUtils';
 
 // Third-party imports
+import { testModelCell } from '../agent/modelCellTestUtils';
 import type OpenAI from 'openai';
 
 const testModelConfig: ModelConfig = {
@@ -165,7 +166,7 @@ function roundServices(opts: {
 }): ToolUseRoundServices<OpenAI> {
   return {
     runScope: testRunScope(opts.streamId),
-    modelHandler: new BashMockHandler(testModelConfig),
+    modelCell: testModelCell(new BashMockHandler(testModelConfig)),
     config: testModelConfig as any,
     setting: {
       agentCategory: AgentCategory.ToolUse,
@@ -181,7 +182,6 @@ function roundServices(opts: {
     } satisfies AgentPrompt,
     userVarChannels: { input: {}, transient: {} },
     logger: opts.logger,
-    client: {} as OpenAI,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,
     abortSignal: opts.abortSignal ?? new AbortController().signal,

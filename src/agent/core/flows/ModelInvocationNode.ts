@@ -28,7 +28,6 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
-import type { ModelClientServices } from './CycleServices';
 
 const RELAY_USER_REQUEST_GATE_ROUTE = 'relay:user-request-gate';
 
@@ -61,20 +60,18 @@ export interface ModelInvocationConfig<TShared, TServices> {
 
 /**
  * Only the services this node and its `RetryableInvocationNode` base class
- * actually read: the model handler, logger, setting (temperature/tools),
- * config (for `saveCycleDebug`'s log context), the run scope (retry gate and
- * debug-log identity), the run's abort signal, plus the
- * live model client. Picking
- * from `AgentCore`/`BaseFlowContextInit` instead of requiring the literal
- * type keeps every existing caller, which passes the full services bag,
- * satisfying this narrower shape structurally.
+ * actually read: the model cell (handler and live provider client), logger,
+ * setting (temperature/tools), config (for `saveCycleDebug`'s log context),
+ * the run scope (retry gate and debug-log identity), and the run's abort
+ * signal. Picking from `AgentCore`/`BaseFlowContextInit` instead of requiring
+ * the literal type keeps every existing caller, which passes the full services
+ * bag, satisfying this narrower shape structurally.
  */
 type InvocationServices = Pick<
   AgentCore,
-  'modelHandler' | 'logger' | 'setting' | 'config' | 'runScope'
+  'modelCell' | 'logger' | 'setting' | 'config' | 'runScope'
 > &
-  Pick<BaseFlowContextInit, 'abortSignal'> &
-  ModelClientServices;
+  Pick<BaseFlowContextInit, 'abortSignal'>;
 
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,
@@ -95,7 +92,7 @@ export class ModelInvocationNode<
   protected override isBackgroundModeActive(): boolean {
     return (
       this._config.backgroundModeAware === true &&
-      this.services.modelHandler.isBackgroundModeActive()
+      this.services.modelCell.handler.isBackgroundModeActive()
     );
   }
 
@@ -116,19 +113,21 @@ export class ModelInvocationNode<
     }
 
     const services = this.services;
-    services.modelHandler.setOutputStreaming(this._config.streaming);
+    const modelHandler = services.modelCell.handler;
+    modelHandler.setOutputStreaming(this._config.streaming);
 
     return this.invokeWithRelayRecovery(async (signal) => {
-      const wireRoute = services.modelHandler.getWireRouteKey(services.client);
-      const modelRetryRoute = services.modelHandler.getModelRetryRouteKey(
-        services.client,
-      );
+      // Read per attempt: a retry that rebound the credential must run on the
+      // replacement client, not the one the failed attempt used.
+      const client = await services.modelCell.getClient();
+      const wireRoute = modelHandler.getWireRouteKey(client);
+      const modelRetryRoute = modelHandler.getModelRetryRouteKey(client);
       const gate = services.runScope.session.modelRetries;
-      const usesRelay = services.clientCredentialRoute === 'relay';
+      const usesRelay = services.modelCell.route === 'relay';
       const invoke = async () => {
         const start = Date.now();
-        const result = await services.modelHandler.createResponse({
-          client: services.client,
+        const result = await modelHandler.createResponse({
+          client,
           messages: prepRes.messages,
           temperature: services.setting.temperature,
           systemPrompt: prepRes.systemPrompt,
@@ -218,7 +217,7 @@ export class ModelInvocationNode<
         const context = this._config.getPostCompactionContext(this.services);
         if (context) {
           shared.messages =
-            await this.services.modelHandler.createUserFollowUpMessages(
+            await this.services.modelCell.handler.createUserFollowUpMessages(
               shared.messages,
               context,
             );

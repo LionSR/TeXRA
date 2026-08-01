@@ -10,8 +10,9 @@ import {
   defaultSession,
   killAllSessionBackgroundProcesses,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
@@ -30,13 +31,11 @@ function trackAgent(
   executionId: string,
   streamId: StreamTabId,
 ): AgentExecutionHandle {
-  const handle = new AgentExecutionHandle(
+  const handle = testExecutionHandle({
     executionId,
-    streamId,
-    streamId,
-    'orchestrator',
-    'toolUse',
-  );
+    parentStreamId: streamId,
+    agent: 'orchestrator',
+  });
   session.executions.track(handle);
   return handle;
 }

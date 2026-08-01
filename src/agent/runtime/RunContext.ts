@@ -4,10 +4,14 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
 import type { SessionHostInteractions } from './HostInteractions';
+import type { ModelCell } from './ModelCell';
 import type { SessionHandle } from './SessionHandle';
 
 interface RunContextCommon {
-  /** Current model short name for this run (e.g. "opus46T"). */
+  /**
+   * Current model short name for this run (e.g. "opus46T"), read through the
+   * run's model cell so a mid-run swap is visible to every reader.
+   */
   readonly model?: string;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
@@ -41,35 +45,33 @@ interface BareRunContext extends RunContextCommon {
 export type RunContext = LaunchRunContext | BareRunContext;
 
 // ---------------------------------------------------------------------------
-// CreateRunContextOptions — the input side.  Uses a discriminated union so
-// the model source is explicit: either a live getter (launch path) or a
-// static string (manual / test path).
+// CreateRunContextOptions — the input side.  `runScope` discriminates: launch
+// contexts carry the run's scope, bare contexts name their run fields directly.
 // ---------------------------------------------------------------------------
 
 interface CreateRunContextCommon {
+  /**
+   * The run's model channel, held as a pointer rather than copied: a launch
+   * context passes the run's live {@link ModelCell}, a manually built one
+   * passes a frozen one-shot cell.
+   */
+  modelCell?: Pick<ModelCell, 'modelId'>;
   approvalPromptsUnavailable?: boolean;
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
 }
 
 interface CreateBareRunContextOptions extends CreateRunContextCommon {
+  runScope?: undefined;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   agentName?: string;
   workingDirectory?: string;
   session?: SessionHandle;
-  /** Discriminator — static model string (manual / test contexts). */
-  modelSource?: 'static';
-  model?: string;
 }
 
 export interface CreateLaunchRunContextOptions extends CreateRunContextCommon {
   runScope: RunScope;
-  /** Discriminator — live model provider (launch contexts). */
-  modelSource: 'live';
-  getModel: () => string | undefined;
-  /** Static fallback used when getModel() returns undefined. */
-  model?: string;
 }
 
 export type CreateRunContextOptions =
@@ -99,22 +101,22 @@ function commonRunContextFields<T extends CreateRunContextCommon>(
 }
 
 /**
- * Build a run context from caller-facing model-source options.
+ * Build a run context.
  *
- * The input discriminator describes how the model value is read:
- * `modelSource: 'live'` produces a `launch` context with full run identity and
- * a live model getter, while the default `static` path produces a `bare`
- * context for tests and one-shot tool environments.
+ * A `runScope` produces a `launch` context with full run identity; without one
+ * the result is a `bare` context for tests and one-shot tool environments.
+ * Both read `model` off the supplied cell, so the model a reader sees is the
+ * one the cell holds at read time.
  */
 export function createRunContext(options: CreateRunContextOptions): RunContext {
-  if (options.modelSource === 'live') {
-    const { getModel, model, runScope } = options;
+  const { modelCell } = options;
+  if (options.runScope) {
     return Object.freeze({
       kind: 'launch',
       ...commonRunContextFields(options),
-      runScope,
+      runScope: options.runScope,
       get model() {
-        return getModel() ?? model;
+        return modelCell?.modelId;
       },
     });
   }
@@ -127,7 +129,9 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     session: options.session,
-    model: options.model,
+    get model() {
+      return modelCell?.modelId;
+    },
   } satisfies BareRunContext);
 }
 

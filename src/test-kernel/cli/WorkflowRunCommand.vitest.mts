@@ -438,6 +438,9 @@ describe('CLI workflow run command', () => {
         runDirectory: '/tmp/runs/exec-output',
         copiedOutput: path.join(root, 'polished.tex'),
       });
+      // The v0.41 cut removed the three deprecated status projections, so the
+      // emitted object is the run result plus its filesystem metadata, in the
+      // order `resolveWorkflowOutput` builds it.
       expect(Object.keys(emission?.json ?? {})).toEqual([
         'category',
         'executionId',

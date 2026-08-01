@@ -7,11 +7,7 @@ import { describe, it } from 'vitest';
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  isToolUseTaskState,
-  isWorkflowTaskState,
-  TaskStateSchema,
-} from '@agent/core/state/TaskState';
+import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 describe('agentConfigToTaskState', () => {
@@ -31,11 +27,8 @@ describe('agentConfigToTaskState', () => {
 
     const taskState = agentConfigToTaskState(config);
 
-    if (!isWorkflowTaskState(taskState)) {
-      assert.fail('Expected a workflow task state');
-    }
     assert.equal(taskState.agentConfig, config);
-    assert.deepEqual(taskState.activeFiles, {
+    assert.deepEqual('activeFiles' in taskState && taskState.activeFiles, {
       input: true,
       context: false,
       media: true,
@@ -54,9 +47,6 @@ describe('agentConfigToTaskState', () => {
 
     const taskState = agentConfigToTaskState(config);
 
-    if (!isToolUseTaskState(taskState)) {
-      assert.fail('Expected a tool-use task state');
-    }
     assert.equal(taskState.agentConfig, config);
     assert.deepEqual(taskState, { agentConfig: config });
   });
@@ -86,12 +76,9 @@ describe('agentConfigToTaskState', () => {
         input: true,
       },
     });
-    if (!isWorkflowTaskState(taskState)) {
-      assert.fail('Expected a workflow task state');
-    }
     assert.equal(taskState.agentConfig.agentCategory, AgentCategory.Workflow);
     assert.deepEqual(taskState.agentConfig.inputFiles, ['main.tex']);
-    assert.deepEqual(taskState.activeFiles, {
+    assert.deepEqual('activeFiles' in taskState && taskState.activeFiles, {
       input: true,
       context: false,
       media: false,

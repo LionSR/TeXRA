@@ -214,10 +214,10 @@ type ContinuationNodeResult = SkippableNodeResult<{
 export function responseCycleToolsForModel<C>(
   services: Pick<
     ResponseCycleServices<C>,
-    'modelHandler' | 'setting' | 'toolRegistry'
+    'modelCell' | 'setting' | 'toolRegistry'
   >,
 ): ToolDefinition[] | undefined {
-  if (!services.modelHandler.capabilities.supportsFunctionCalling) {
+  if (!services.modelCell.handler.capabilities.supportsFunctionCalling) {
     return undefined;
   }
   const runContext = useLaunchRunContext();
@@ -349,7 +349,8 @@ class ResponseProcessNode<C> extends BaseNode<
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
-    const { round, workspace, logger, modelHandler } = this.services;
+    const { round, workspace, logger } = this.services;
+    const modelHandler = this.services.modelCell.handler;
 
     if (execRes.kind === 'skipped') {
       shared.endTurn = false;
@@ -504,7 +505,8 @@ class ResponseContinuationNode<C> extends BaseNode<
   }
 
   async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
-    const { round, run, modelHandler, setting } = this.services;
+    const { round, run, setting } = this.services;
+    const modelHandler = this.services.modelCell.handler;
 
     if (prepRes.kind === 'skipped') {
       return { kind: 'skipped' };
@@ -558,8 +560,8 @@ class ResponseContinuationNode<C> extends BaseNode<
     _prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const { round, workspace, logger, modelHandler, setting, config } =
-      this.services;
+    const { round, workspace, logger, setting, config } = this.services;
+    const modelHandler = this.services.modelCell.handler;
 
     if (execRes.kind === 'skipped') {
       shared.endTurn = false;

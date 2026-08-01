@@ -87,8 +87,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   // Snapshot accessors reused across the controller-wiring methods below;
   // each controller only needs a subset of these.
-  private readonly getTaskState = (stream: StreamTabId) =>
-    this.provider.state.snapshots.getTaskState(stream);
+  private readonly getRunConfig = (stream: StreamTabId) =>
+    this.provider.state.snapshots.getRunConfig(stream);
   private readonly getExecutionId = (stream: StreamTabId) =>
     this.provider.state.snapshots.getExecutionId(stream);
   private readonly getOutputFiles = (stream: StreamTabId) =>
@@ -189,9 +189,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
       },
       session: defaultSession(),
-      getTaskState: this.getTaskState,
-      restoreTaskState: async (taskState) => {
-        await this.runViewCommand('texra.restoreState', [taskState]);
+      getRunConfig: this.getRunConfig,
+      restoreRunConfig: async (config) => {
+        await this.runViewCommand('texra.restoreState', [config]);
       },
       applyFollowUpPlan: async (plan) => {
         await this.applyFollowUpPlan(plan);
@@ -377,7 +377,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return new ProgressViewHost({
       run: {
         state: {
-          getTaskState: this.getTaskState,
+          getRunConfig: this.getRunConfig,
           getExecutionId: this.getExecutionId,
         },
         executeAgent: async (request) => {
@@ -393,12 +393,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           getExecutionId: this.getExecutionId,
           getOutputFiles: this.getOutputFiles,
           getAgentModel: (stream) => {
-            const taskState = this.getTaskState(stream);
-            return taskState
-              ? {
-                  agent: taskState.agentConfig.agent,
-                  model: taskState.agentConfig.model,
-                }
+            const config = this.getRunConfig(stream);
+            return config
+              ? { agent: config.agent, model: config.model }
               : undefined;
           },
         },
@@ -465,10 +462,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       agentProposal: {
         getPendingProposal: (proposalId) =>
           this.provider.getPendingAgentProposal(proposalId),
-        restoreTaskState: async (taskState) => {
+        restoreRunConfig: async (config) => {
           return (
             (await this.runViewCommand<boolean>('texra.restoreState', [
-              taskState,
+              config,
             ])) === true
           );
         },
@@ -568,7 +565,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
       state: {
-        getTaskState: this.getTaskState,
+        getRunConfig: this.getRunConfig,
         getExecutionId: this.getExecutionId,
         getOutputFiles: this.getOutputFiles,
         getKnownWorkspaceOutputPaths: (stream) =>
@@ -621,7 +618,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return modelOptions;
       },
       state: {
-        getTaskState: this.getTaskState,
+        getRunConfig: this.getRunConfig,
         getOutputFiles: this.getOutputFiles,
         getCompileFailures: (stream) =>
           this.provider.state.snapshots.getCompileFailures(stream),
@@ -745,8 +742,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       }
     }
 
-    const taskState = this.getTaskState(data.stream);
-    if (!taskState) {
+    const config = this.getRunConfig(data.stream);
+    if (!config) {
       await this.host.info(
         'The original run configuration is no longer available. Choose the direct model and start the agent again.',
       );
@@ -766,10 +763,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             return false;
           }
           return this.executeValidatedUntilStarted({
-            config: {
-              ...taskState.agentConfig,
-              model: fallback.model,
-            },
+            config: { ...config, model: fallback.model },
           });
         },
       );
@@ -899,7 +893,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return;
       case 'restoreState':
         await this.runViewCommand('texra.restoreState', [
-          plan.taskState,
+          plan.config,
           plan.executeImmediately,
         ]);
         return;

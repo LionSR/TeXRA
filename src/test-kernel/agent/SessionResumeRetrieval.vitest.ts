@@ -34,7 +34,6 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import {
-  getToolUseFlowErrorResult,
   runToolUseFlow,
   type RunToolUseFlowResult,
   type RunToolUseFlowInput,
@@ -45,7 +44,6 @@ import {
   ToolUseRunSharedCanonicalSchema,
   type StateSlicesSnapshot,
 } from '@agent/implementations/flows/tooluse/nodes/types';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -54,6 +52,8 @@ import {
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+import { testModelCell } from './modelCellTestUtils';
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
@@ -117,7 +117,7 @@ async function retrieveToolUseResume(
   const resume = await retrieveSessionResumeData(
     streamId,
     executionId,
-    agentConfigToTaskState(config),
+    config,
     options,
   );
   expect(resume?.type).toBe('toolUse');
@@ -144,15 +144,16 @@ function defaultStateSlices(
   };
 }
 
-function createTaggedModelHandler(
+function createTaggedModelCell(
   compatibilityKey: ModelHandlerCompatibilityKey,
-): RunToolUseFlowInput['modelHandler'] {
+  modelId: string,
+): RunToolUseFlowInput['modelCell'] {
   const handler = { extractAssistantText: () => undefined };
   // ModelFactory installs this non-enumerable tag on every active handler.
   Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
     value: compatibilityKey,
   });
-  return handler as unknown as RunToolUseFlowInput['modelHandler'];
+  return testModelCell(handler, modelId);
 }
 
 function buildToolUseResumeData(
@@ -201,11 +202,11 @@ async function runPersistedFlow(
     agentName: config.agent,
     session,
   });
-  const context = createRunContext({
-    modelSource: 'live',
-    getModel: () => config.model,
-    runScope,
-  });
+  const modelCell = createTaggedModelCell(
+    ACTIVE_COMPATIBILITY_KEY,
+    config.model,
+  );
+  const context = createRunContext({ runScope, modelCell });
   let interrupted = false;
   const hostAttachment = attachment && {
     attach: (flowContext: ToolUseSetupContext): void =>
@@ -224,7 +225,8 @@ async function runPersistedFlow(
           prompt: TOOL_USE_PROMPT,
           logger: noopTrace,
           userVarChannels,
-          modelHandler: createTaggedModelHandler(ACTIVE_COMPATIBILITY_KEY),
+          modelCell,
+          onModelChanged: () => {},
           checkInterruption: () => interrupted,
           onInterrupt: () => {
             interrupted = true;
@@ -289,9 +291,57 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('uses the persisted current model while preserving the original stream id', async () => {
+  it('derives a missing model id from the legacy MODEL variable', () => {
+    const result = migrateSharedState({
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { modelId: 'gpt55' },
+      // The derivation is a migration: the record must be rewritten with it.
+      migrated: true,
+    });
+  });
+
+  it('keeps a persisted model id over the MODEL variable', () => {
+    const result = migrateSharedState({
+      messages: [],
+      modelId: 'gpt55',
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt54' }),
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { modelId: 'gpt55' },
+      migrated: false,
+    });
+  });
+
+  it('uses the persisted model id while preserving the original stream id', async () => {
     const executionId = 'abc123' as ExecutionId;
     const streamId = 'chat@gpt54#abc123' as StreamTabId;
+    await writeFlowRecord(executionId, {
+      messages: [],
+      modelId: 'gpt55',
+      shouldSkipCycle: false,
+      // A stale MODEL projection must not win over the persisted model id.
+      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt54' }),
+    });
+
+    const resume = await retrieveToolUseResume(streamId, executionId);
+
+    expect(resume.streamId).toBe(streamId);
+    expect(resume.shared.modelId).toBe('gpt55');
+    expect(resume.agentConfig.model).toBe('gpt55');
+  });
+
+  it('lifts the legacy MODEL variable into the model id at the boundary', async () => {
+    const executionId = 'abc123-legacy-model' as ExecutionId;
+    const streamId = 'chat@gpt54#abc123-legacy-model' as StreamTabId;
     await writeFlowRecord(executionId, {
       messages: [],
       shouldSkipCycle: false,
@@ -300,8 +350,27 @@ describe('retrieveSessionResumeData', () => {
 
     const resume = await retrieveToolUseResume(streamId, executionId);
 
-    expect(resume.streamId).toBe(streamId);
+    expect(resume.shared.modelId).toBe('gpt55');
     expect(resume.agentConfig.model).toBe('gpt55');
+  });
+
+  it('falls back to the launch model when nothing persisted a model', async () => {
+    const executionId = 'abc123-no-model' as ExecutionId;
+    const streamId = 'chat@gpt54#abc123-no-model' as StreamTabId;
+    await writeFlowRecord(executionId, {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: {
+        runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+        workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+        userChannels: { input: Object.freeze({}), transient: {} },
+      },
+    });
+
+    const resume = await retrieveToolUseResume(streamId, executionId);
+
+    expect(resume.shared.modelId).toBeUndefined();
+    expect(resume.agentConfig.model).toBe(CONFIG.model);
   });
 
   it('preserves a recovered parent stream id in tool-use snapshots', async () => {
@@ -413,11 +482,7 @@ describe('retrieveSessionResumeData', () => {
 
     try {
       await expect(
-        retrieveSessionResumeData(
-          streamId,
-          executionId,
-          agentConfigToTaskState(CONFIG),
-        ),
+        retrieveSessionResumeData(streamId, executionId, CONFIG),
       ).rejects.toThrow(
         `Failed to retrieve tool-use resume data for stream: ${streamId}`,
       );
@@ -441,11 +506,7 @@ describe('retrieveSessionResumeData', () => {
     });
 
     await expect(
-      retrieveSessionResumeData(
-        streamId,
-        executionId,
-        agentConfigToTaskState(CONFIG),
-      ),
+      retrieveSessionResumeData(streamId, executionId, CONFIG),
     ).rejects.toThrow(
       `Failed to retrieve tool-use resume data for stream: ${streamId}`,
     );
@@ -468,7 +529,7 @@ describe('retrieveSessionResumeData', () => {
     const resume = await retrieveSessionResumeData(
       streamId,
       executionId,
-      agentConfigToTaskState(GOOGLE_WORKFLOW_CONFIG),
+      GOOGLE_WORKFLOW_CONFIG,
     );
 
     expect(resume?.type).toBe('workflow');
@@ -493,7 +554,7 @@ describe('retrieveSessionResumeData', () => {
     const resume = await retrieveSessionResumeData(
       streamId,
       executionId,
-      agentConfigToTaskState(GOOGLE_WORKFLOW_CONFIG),
+      GOOGLE_WORKFLOW_CONFIG,
     );
 
     expect(resume?.type).toBe('workflow');
@@ -651,27 +712,24 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       .mockImplementation(() => {});
 
     try {
-      let caught: unknown;
-      try {
-        await runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          {
-            detach: () => {
-              throw teardownFailure;
-            },
+      // The run's own failure outranks the teardown failure: it is carried
+      // out on the result rather than replaced by the thrown teardown error.
+      const result = await runPersistedFlow(
+        executionId,
+        streamId,
+        snapshot,
+        {
+          detach: () => {
+            throw teardownFailure;
           },
-          session,
-        );
-      } catch (error) {
-        caught = error;
-      }
+        },
+        session,
+      );
 
-      expect(caught).not.toBe(teardownFailure);
-      expect(getToolUseFlowErrorResult(caught)).toMatchObject({
+      expect(result).toMatchObject({
         outcome: RUN_OUTCOME.FAILED,
         response: 'partial assistant response',
+        error: failedShared.lastError,
       });
       expect(releaseSpy).toHaveBeenCalled();
       expect(errorLogSpy).toHaveBeenCalledWith(
@@ -1244,6 +1302,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     expect(healedRecord?.shared).toMatchObject({
       messages: resume.shared.messages,
+      // Derived from the legacy MODEL variable and persisted by the self-heal.
+      modelId: 'gpt54',
       modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
       stateSlices: resume.shared.stateSlices,
       systemPrompt: 'You are a helpful assistant.',
@@ -1262,6 +1322,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       executionId,
       {
         messages: [{ role: 'user', content: 'Continue.' }],
+        modelId: 'gpt54',
         modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
         shouldSkipCycle: false,
         stateSlices: defaultStateSlices(),
@@ -1375,6 +1436,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const healedShared = ToolUseRunSharedCanonicalSchema.parse(
         healedRecord?.shared,
       );
+      expect(healedShared.modelId).toBe('gpt54');
       expect(healedShared.stateSlices).not.toBeNull();
       if (!healedShared.stateSlices) return;
       const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(

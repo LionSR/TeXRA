@@ -5,6 +5,8 @@ import {
   ActiveChildInfoSchema,
   ContextManagementDataSchema,
   OutputXmlSummarySchema,
+  STREAM_PHASE,
+  STREAM_STATUS,
 } from '@shared/schemas';
 
 // Minimal NormalizedUsage fixture: all required fields, no optionals.
@@ -194,5 +196,31 @@ describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
     });
 
     expect(result).toMatchObject({ kind: 'process' });
+  });
+
+  // `status` has no legacy migration on purpose. The child roster is liveness
+  // state: `assembleSnapshot` never writes `subagents`, and every hydrate
+  // clamps it to `[]`, so no on-disk roster carries the retired 7-value
+  // `StreamStatus` vocabulary. The v0.41 cut dropped the speculative union
+  // member that mapped it; the field now takes `StreamPhase` only.
+  it('accepts a StreamPhase status', () => {
+    const result = ActiveChildInfoSchema.parse({
+      ...legacyBase,
+      kind: 'subagent',
+      childStreamId: 'stream-1',
+      status: STREAM_PHASE.RUNNING,
+    });
+
+    expect(result).toMatchObject({ status: STREAM_PHASE.RUNNING });
+  });
+
+  it('rejects a retired StreamStatus value rather than folding it', () => {
+    expect(() =>
+      ActiveChildInfoSchema.parse({
+        ...legacyBase,
+        kind: 'process',
+        status: STREAM_STATUS.INITIALIZING,
+      }),
+    ).toThrow();
   });
 });

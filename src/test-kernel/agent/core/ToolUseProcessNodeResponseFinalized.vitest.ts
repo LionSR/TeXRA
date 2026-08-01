@@ -10,6 +10,7 @@ import { ToolUseProcessNode } from '@agent/core/flows/toolUseRound/ToolUseProces
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseRoundServices<unknown>> = {},
@@ -23,12 +24,12 @@ function buildServices(
       resetReasoning: vi.fn(),
     },
     onRoundFinalized: vi.fn(),
-    modelHandler: {
+    modelCell: testModelCell({
       createAssistantMessageFromResponse: vi.fn(() => ({
         role: 'assistant',
         content: 'assistant message',
       })),
-    },
+    }),
     logger: {
       debug: vi.fn(),
       info: vi.fn(),

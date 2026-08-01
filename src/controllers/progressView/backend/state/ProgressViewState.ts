@@ -151,7 +151,7 @@ export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
   readonly streamLogs: StreamLogStore;
   /** Single owner of all per-stream sidecar state (output files, usage, todos,
-   * plan, taskState/executionId/parent/description + meta queries). */
+   * plan, runConfig/executionId/parent/description + meta queries). */
   readonly snapshots: StreamSnapshotStore;
   /** Atomic lifecycle owner across streamLogs, streamData, and executions. */
   readonly stores: SessionStores;
@@ -323,31 +323,36 @@ export class ProgressViewState {
     const patch: Partial<StoredStreamMetadata> = {};
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
-      const descriptor = this.snapshots.getRunDescriptor(stream);
-      const identityName = descriptor?.agent ?? config.agent;
-      const runKind =
-        descriptor?.kind ??
-        (isProcessAgent(config.agent) ? 'process' : 'agent');
-      patch.agentCategory = descriptor?.category ?? config.agentCategory;
+      // The descriptor is the run's identity, taken whole: a stream whose meta
+      // predates descriptors has none, and then the config answers for all
+      // three fields rather than each one falling back on its own, which is
+      // what kept a descriptor's agent from being paired with the config's
+      // category. Every descriptor carries its kind, so nothing re-derives it.
+      const identity = this.snapshots.getRunDescriptor(stream) ?? {
+        agent: config.agent,
+        category: config.agentCategory,
+        kind: isProcessAgent(config.agent) ? 'process' : 'agent',
+      };
+      patch.agentCategory = identity.category;
       const workingDirectory = config.workingDirectory ?? undefined;
-      if (runKind === 'workflowScript') {
+      if (identity.kind === 'workflowScript') {
         patch.run = {
           kind: 'workflowScript',
-          workflowName: identityName,
+          workflowName: identity.agent,
           instruction: config.instruction,
           workingDirectory,
         };
-      } else if (runKind === 'process') {
+      } else if (identity.kind === 'process') {
         patch.run = {
           kind: 'process',
-          agent: identityName,
+          agent: identity.agent,
           instruction: config.instruction,
           workingDirectory,
         };
       } else {
         patch.run = {
           kind: 'agent',
-          agent: identityName,
+          agent: identity.agent,
           inputFile: config.inputFiles?.at(0),
           model: config.model,
           instruction: config.instruction,

@@ -152,17 +152,41 @@ const ORCHESTRATION_PRELUDE = `
 `;
 
 /**
- * Thrown when the whole run must stop (agent-call cap exceeded, wall-clock
- * timeout abort). The realm-side agent() primitive recognizes it by name and
- * rethrows instead of converting it to null; parallel() then propagates that
- * rejected call through Promise.all. Detected by name, not instanceof — the
- * error crosses the sandbox realm boundary as a realm-local copy carrying
- * only name/message.
+ * What stopped the run. `settlement-cleanup` is the abort the engine raises
+ * itself once the sandbox has settled, and `timeout` mirrors a wall clock the
+ * sandbox already reports with a more precise error; both leave the script
+ * outcome authoritative. Every other kind is a fault the run must report.
+ */
+type WorkflowAbortKind =
+  | 'cap'
+  | 'checkpoint'
+  | 'contract'
+  | 'runner'
+  | 'settlement-cleanup'
+  | 'timeout';
+
+/**
+ * Thrown when the whole run must stop, and the reason every run-level abort
+ * carries. The realm-side agent() primitive recognizes it by name and rethrows
+ * instead of converting it to null; parallel() then propagates that rejected
+ * call through Promise.all.
+ *
+ * `kind` is host-only. The error crosses the sandbox realm boundary as a
+ * realm-local copy carrying just name and message, so anything classifying an
+ * error that may have crossed uses the name (isWorkflowAbort) and only reads
+ * `kind` off a reason this host minted. Errors a host runner mints to surface
+ * its own fatal condition take the default `runner` kind.
  */
 export class WorkflowRunAbortError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
+  readonly kind: WorkflowAbortKind;
+
+  constructor(
+    message: string,
+    options?: ErrorOptions & { readonly kind?: WorkflowAbortKind },
+  ) {
     super(message, options);
     this.name = 'WorkflowRunAbortError';
+    this.kind = options?.kind ?? 'runner';
   }
 }
 
@@ -170,10 +194,23 @@ function isWorkflowAbort(error: unknown): boolean {
   // Name check, not instanceof: abort errors re-enter host code as
   // realm-local Error copies whose prototype chain is the sandbox's.
   return (
-    error instanceof WorkflowRunAbortError ||
-    (typeof error === 'object' &&
-      error !== null &&
-      (error as { name?: unknown }).name === 'WorkflowRunAbortError')
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'WorkflowRunAbortError'
+  );
+}
+
+/**
+ * Whether an abort reason is the run's own outcome. A parent abort keeps the
+ * caller's reason and the sandbox rethrows it, a timeout reaches the caller as
+ * the sandbox's timeout error, and a settlement cleanup follows a script that
+ * already settled, so those three leave the sandbox outcome in place.
+ */
+function isRunFatalAbort(reason: unknown): reason is WorkflowRunAbortError {
+  return (
+    reason instanceof WorkflowRunAbortError &&
+    reason.kind !== 'timeout' &&
+    reason.kind !== 'settlement-cleanup'
   );
 }
 
@@ -231,11 +268,6 @@ export async function runWorkflowScript(
   const plannedTasksById = new Map(plannedTasks.map((task) => [task.id, task]));
   const issuedPlannedTaskIds = new Set<string>();
   let currentPhase: string | undefined;
-  let fatalRunError: WorkflowRunAbortError | undefined;
-  // Set only when sandbox settlement itself initiates the run abort. Sibling
-  // rejections caused by this cleanup must not replace the script error that
-  // triggered settlement; independent timeout/cap/checkpoint aborts stay fatal.
-  let cleanupAbortStarted = false;
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
@@ -272,13 +304,16 @@ export async function runWorkflowScript(
     emit({ type: 'plan', tasks: plannedTasks });
   }
 
-  const rememberFatalRunError = (error: unknown): WorkflowRunAbortError => {
-    fatalRunError ??=
-      error instanceof WorkflowRunAbortError
-        ? error
-        : new WorkflowRunAbortError(toErrorMessage(error));
-    runAbort.abort();
-    return fatalRunError;
+  // The run's abort reason is its fault register: AbortController keeps the
+  // first reason, so the earliest fault wins over every abort that cascades
+  // from it and the run reports that reason rather than a copy of it. A
+  // cleanup, timeout, or parent reason is not a fault, so a fault raised
+  // afterwards (only reachable while abandoned calls drain) still reports
+  // itself.
+  const failRun = (fault: WorkflowRunAbortError): WorkflowRunAbortError => {
+    runAbort.abort(fault);
+    const { reason } = runAbort.signal;
+    return isRunFatalAbort(reason) ? reason : fault;
   };
 
   const recordJournalEntry = async (
@@ -289,8 +324,12 @@ export async function runWorkflowScript(
       await onJournalEntry?.(entry);
     } catch (error) {
       const message = `Failed to persist workflow journal entry ${entry.index}: ${toErrorMessage(error)}`;
-      const fatal = rememberFatalRunError(new WorkflowRunAbortError(message));
-      throw fatal;
+      throw failRun(
+        new WorkflowRunAbortError(message, {
+          kind: 'checkpoint',
+          cause: error,
+        }),
+      );
     }
   };
 
@@ -298,13 +337,9 @@ export async function runWorkflowScript(
     prompt: unknown,
     rawOptions?: unknown,
   ): Promise<string | undefined> {
-    if (runAbort.signal.aborted) {
-      throw rememberFatalRunError(
-        new WorkflowRunAbortError(
-          'Workflow run aborted (timeout or call cap); no new agent() calls may start.',
-        ),
-      );
-    }
+    // No new call may start once the run has stopped; the reason that stopped
+    // it is what this call reports.
+    runAbort.signal.throwIfAborted();
     if (!isNonEmptyString(prompt)) {
       throw new Error(
         'agent(prompt, options?) requires a non-empty string prompt.',
@@ -314,8 +349,11 @@ export async function runWorkflowScript(
     try {
       callOptions = normalizeAgentOptions(rawOptions);
     } catch (error) {
-      throw rememberFatalRunError(
-        new WorkflowRunAbortError(toErrorMessage(error), { cause: error }),
+      throw failRun(
+        new WorkflowRunAbortError(toErrorMessage(error), {
+          kind: 'contract',
+          cause: error,
+        }),
       );
     }
     const index = callCounter;
@@ -324,17 +362,19 @@ export async function runWorkflowScript(
     let plannedTask: WorkflowScriptTask | undefined;
     if (hasTaskPlan) {
       if (!callOptions.id) {
-        throw rememberFatalRunError(
+        throw failRun(
           new WorkflowRunAbortError(
             'Every agent() call must reference a task from meta.tasks with a non-empty "id" option.',
+            { kind: 'contract' },
           ),
         );
       }
       plannedTask = plannedTasksById.get(callOptions.id);
       if (!plannedTask) {
-        throw rememberFatalRunError(
+        throw failRun(
           new WorkflowRunAbortError(
             `agent() references undeclared task id "${callOptions.id}".`,
+            { kind: 'contract' },
           ),
         );
       }
@@ -344,9 +384,10 @@ export async function runWorkflowScript(
         (callOptions.phase !== undefined &&
           callOptions.phase !== plannedTask.phase)
       ) {
-        throw rememberFatalRunError(
+        throw failRun(
           new WorkflowRunAbortError(
             `Task "${callOptions.id}" must use the label and phase declared in meta.tasks.`,
+            { kind: 'contract' },
           ),
         );
       }
@@ -365,9 +406,10 @@ export async function runWorkflowScript(
       (callOptions.contextFiles?.length ?? 0) > 0 ||
       (callOptions.mediaFiles?.length ?? 0) > 0;
     if (hasFileDependencies && fingerprintAgentDependencies === undefined) {
-      throw rememberFatalRunError(
+      throw failRun(
         new WorkflowRunAbortError(
           'The workflow host must fingerprint agent() file dependencies before they can be resumed safely.',
+          { kind: 'runner' },
         ),
       );
     }
@@ -377,16 +419,17 @@ export async function runWorkflowScript(
         if (!isNonEmptyString(fingerprint)) {
           throw new WorkflowRunAbortError(
             'The workflow host returned no fingerprint for agent() file dependencies.',
+            { kind: 'runner' },
           );
         }
         return fingerprint;
       } catch (error) {
-        throw rememberFatalRunError(
+        throw failRun(
           error instanceof WorkflowRunAbortError
             ? error
             : new WorkflowRunAbortError(
                 `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
-                { cause: error },
+                { kind: 'runner', cause: error },
               ),
         );
       }
@@ -403,9 +446,10 @@ export async function runWorkflowScript(
     const progressId = plannedTask?.id ?? `call-${index}`;
     if (plannedTask) {
       if (issuedPlannedTaskIds.has(progressId)) {
-        throw rememberFatalRunError(
+        throw failRun(
           new WorkflowRunAbortError(
             `Workflow task "${progressId}" may be issued only once per run.`,
+            { kind: 'contract' },
           ),
         );
       }
@@ -418,9 +462,10 @@ export async function runWorkflowScript(
       ...phaseContextFor(callOptions.phase),
     };
     if (issuedCallKeys.has(key)) {
-      throw rememberFatalRunError(
+      throw failRun(
         new WorkflowRunAbortError(
           'Repeated agent() calls with the same prompt and execution options require distinct non-empty "id" options for restart-safe identity.',
+          { kind: 'contract' },
         ),
       );
     }
@@ -438,9 +483,10 @@ export async function runWorkflowScript(
         refreshedFingerprint,
       );
       if (issuedCallKeys.has(refreshedKey)) {
-        throw rememberFatalRunError(
+        throw failRun(
           new WorkflowRunAbortError(
             'A changed agent() file dependency now conflicts with another call identity; rerun the workflow from its saved script.',
+            { kind: 'contract' },
           ),
         );
       }
@@ -535,9 +581,10 @@ export async function runWorkflowScript(
         // Abort first so in-flight siblings stop consuming quota. Retried
         // attempts consume the same cap as first attempts; cached calls never
         // enter this loop.
-        const fatal = rememberFatalRunError(
+        const fatal = failRun(
           new WorkflowRunAbortError(
             `Workflow exceeded the ${maxAgentCalls} live agent-call cap (runaway-loop backstop; journal replays are free).`,
+            { kind: 'cap' },
           ),
         );
         emitFailedEnd(fatal, startEmitted ? attemptMetadata() : undefined);
@@ -559,18 +606,11 @@ export async function runWorkflowScript(
       let attemptError: { readonly error: unknown } | undefined;
       try {
         result = await (queue.add(() => {
-          // Re-check after waiting for a slot: a timeout/cap abort while this
-          // call was queued must not launch fresh model work.
-          if (runAbort.signal.aborted) {
-            if (cleanupAbortStarted) {
-              runAbort.signal.throwIfAborted();
-            }
-            throw rememberFatalRunError(
-              new WorkflowRunAbortError(
-                'Workflow run aborted while this agent() call was queued.',
-              ),
-            );
-          }
+          // Re-check after waiting for a slot: an abort while this call was
+          // queued must not launch fresh model work. The reason that stopped
+          // the run is what this attempt reports, so a cleanup abort stays a
+          // soft per-call failure while a fault still stops the run.
+          runAbort.signal.throwIfAborted();
           callController.signal.throwIfAborted();
           const launch = () =>
             runAgent({
@@ -633,9 +673,24 @@ export async function runWorkflowScript(
 
       if (attemptError) {
         // A runner may surface the run abort (its signal cascades from
-        // runAbort); that must stop the workflow, not degrade into a null.
-        if (isWorkflowAbort(attemptError.error) && !cleanupAbortStarted) {
-          const fatal = rememberFatalRunError(attemptError.error);
+        // runAbort) or mint its own; that must stop the workflow, not degrade
+        // into a null. The error may be a realm-local copy, so it is
+        // classified by name; only the run's own reason carries a kind, and a
+        // cleanup reason means the script already settled with an outcome this
+        // rejection must not replace.
+        const { reason } = runAbort.signal;
+        const cancelledByCleanup =
+          reason instanceof WorkflowRunAbortError &&
+          reason.kind === 'settlement-cleanup';
+        if (isWorkflowAbort(attemptError.error) && !cancelledByCleanup) {
+          const fatal = failRun(
+            attemptError.error instanceof WorkflowRunAbortError
+              ? attemptError.error
+              : new WorkflowRunAbortError(toErrorMessage(attemptError.error), {
+                  kind: 'runner',
+                  cause: attemptError.error,
+                }),
+          );
           emitFailedEnd(fatal, attemptMetadata());
           throw fatal;
         }
@@ -681,6 +736,9 @@ export async function runWorkflowScript(
 
   let result: unknown;
   let scriptFailure: { readonly error: unknown } | undefined;
+  // The fault an abandoned call raised while draining, after the cleanup abort
+  // had already fixed the run's abort reason.
+  let drainFault: WorkflowRunAbortError | undefined;
   try {
     result = await runScriptInSandbox(
       body,
@@ -723,7 +781,15 @@ export async function runWorkflowScript(
         timeoutMs,
         filename: `${meta.name}.workflow.js`,
         signal: options.signal,
-        onTimeout: () => runAbort.abort(),
+        // The sandbox reports the timeout to the caller with the precise
+        // error; this reason only tells in-flight calls why they stopped.
+        onTimeout: () =>
+          runAbort.abort(
+            new WorkflowRunAbortError(
+              `Workflow run aborted: the script exceeded its ${timeoutMs}ms wall clock.`,
+              { kind: 'timeout' },
+            ),
+          ),
       },
     );
   } catch (error) {
@@ -732,8 +798,14 @@ export async function runWorkflowScript(
     detachAbortFromParent();
     // Abort unconditionally once the sandbox returns. This stops in-flight
     // work the script abandoned and makes agentPrimitive reject any late call.
-    cleanupAbortStarted = !runAbort.signal.aborted;
-    runAbort.abort();
+    // A fault that already aborted the run keeps its reason: the controller
+    // holds the first one.
+    runAbort.abort(
+      new WorkflowRunAbortError(
+        'Workflow script settled; agent() calls it left in flight were cancelled.',
+        { kind: 'settlement-cleanup' },
+      ),
+    );
     if (pendingAgentCalls.size > 0) {
       // The script finished (or threw) with agent() calls still in flight
       // that it never awaited: wait for settlement so the returned journal
@@ -742,17 +814,29 @@ export async function runWorkflowScript(
       // past its timeout by more than the grace period; stragglers beyond
       // it are orphaned (their journal entries may be lost, which resume
       // treats as a retry).
-      await pTimeout(Promise.allSettled([...pendingAgentCalls]), {
-        milliseconds: DRAIN_GRACE_MS,
-        fallback: () => undefined,
-      });
+      const drained = await pTimeout(
+        Promise.allSettled([...pendingAgentCalls]),
+        { milliseconds: DRAIN_GRACE_MS, fallback: () => [] },
+      );
+      // A draining call can still hit a run-level fault, typically a
+      // checkpoint write that fails after the script settled. Its rejection
+      // is that fault, so read it here instead of mirroring it into run state.
+      for (const outcome of drained) {
+        if (outcome.status === 'rejected' && isRunFatalAbort(outcome.reason)) {
+          drainFault = outcome.reason;
+          break;
+        }
+      }
     }
   }
 
   // Guest code may catch an agent() rejection, and an abandoned call can
   // reject while the final drain is running. Checkpoint failure is a run-level
-  // invariant, so inspect it only after every bounded cleanup opportunity.
-  if (fatalRunError) throw fatalRunError;
+  // invariant, so a fault outranks the script outcome, and the earliest fault
+  // outranks the ones that cascade from it.
+  const abortReason: unknown = runAbort.signal.reason;
+  if (isRunFatalAbort(abortReason)) throw abortReason;
+  if (drainFault) throw drainFault;
   if (scriptFailure) throw scriptFailure.error;
 
   return {

@@ -40,6 +40,7 @@ import {
   AgentExecutionHandle,
   isChildExecution,
 } from './ExecutionHandle';
+import { ExecutionInteractionOwnership } from './executionInteractionOwnership';
 import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
@@ -107,6 +108,12 @@ export type ManualCompactionRequestResult =
  * instead of free module state.
  */
 export class ExecutionRegistry {
+  /**
+   * Which host-interaction generation owns each live execution. Session-wide so
+   * generations of one host hand ownership over without inheriting each
+   * other's runs; the CLI chat controller is its only writer.
+   */
+  readonly interactionOwnership = new ExecutionInteractionOwnership(this);
   private readonly handles = new Map<string, ExecutionHandle>();
   private disposed = false;
   private readonly changeCallbacks = new Map<string, Array<() => void>>();

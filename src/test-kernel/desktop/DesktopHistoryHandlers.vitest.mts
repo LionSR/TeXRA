@@ -58,7 +58,7 @@ type DesktopHistoryDependencies = ConstructorParameters<
 >[0];
 type DesktopHistoryCapabilities = Pick<
   DesktopHistoryOptions,
-  'resourcesPath' | 'runExecution' | 'restoreTaskState'
+  'resourcesPath' | 'runExecution' | 'restoreRunConfig'
 >;
 type DesktopHistoryActionOverrides = Partial<
   Omit<DesktopHistoryDependencies, keyof DesktopHistoryCapabilities>
@@ -292,10 +292,10 @@ describe('DesktopHistoryHandlers', () => {
   it("restores a history item's setup into the main view", async () => {
     await writeHistoryConfig();
     const showErrorMessage = vi.fn();
-    const restoreTaskState = vi.fn(async () => true);
+    const restoreRunConfig = vi.fn(async () => true);
     const actions = createHistoryHandlers({
       showErrorMessage,
-      history: { restoreTaskState },
+      history: { restoreRunConfig },
     });
 
     await assertSupported(actions.restoreAgent)({
@@ -304,9 +304,7 @@ describe('DesktopHistoryHandlers', () => {
     });
 
     expect(showErrorMessage).not.toHaveBeenCalled();
-    expect(restoreTaskState).toHaveBeenCalledWith({
-      agentConfig: HISTORY_CONFIG,
-    });
+    expect(restoreRunConfig).toHaveBeenCalledWith(HISTORY_CONFIG);
   });
 
   it('reports missing history items for rerun and restore instead of dropping them', async () => {
@@ -334,13 +332,13 @@ describe('DesktopHistoryHandlers', () => {
     );
   });
 
-  it('reports when restoring the task state fails', async () => {
+  it('reports when restoring the run config fails', async () => {
     await writeHistoryConfig();
     const showErrorMessage = vi.fn();
-    const restoreTaskState = vi.fn(async () => false);
+    const restoreRunConfig = vi.fn(async () => false);
     const actions = createHistoryHandlers({
       showErrorMessage,
-      history: { restoreTaskState },
+      history: { restoreRunConfig },
     });
 
     await assertSupported(actions.restoreAgent)({
@@ -348,9 +346,7 @@ describe('DesktopHistoryHandlers', () => {
       historyId: HISTORY_ID,
     });
 
-    expect(restoreTaskState).toHaveBeenCalledWith({
-      agentConfig: HISTORY_CONFIG,
-    });
+    expect(restoreRunConfig).toHaveBeenCalledWith(HISTORY_CONFIG);
     expect(showErrorMessage).toHaveBeenCalledWith(
       'Failed to restore configuration',
     );

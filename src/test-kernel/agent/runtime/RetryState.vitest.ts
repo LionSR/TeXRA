@@ -28,11 +28,15 @@ import {
   type HostRetryRequest,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
+import type { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
+import type {
+  ModelCredentialRoute,
+  ModelCredentialSelection,
+} from '@agent/types/ModelHandlerContracts';
 import {
   RELAY_CI_TOKEN_PREFIX,
   RELAY_TOKEN_ENV_VAR,
@@ -65,9 +69,16 @@ import {
   sessionWithInteractions,
   testRunScope,
 } from '../progressTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 /** Mirrors the RETRY_BACKOFF_MS implementation constant in RetryState.ts. */
 const RETRY_BACKOFF_SECONDS = 1;
+
+/** The rebind seam the retry node drives, stubbed per scenario. */
+type TestRebind = (
+  selection?: ModelCredentialSelection,
+  signal?: AbortSignal,
+) => Promise<void>;
 
 interface TestRetryServices {
   config: { model: string };
@@ -76,8 +87,15 @@ interface TestRetryServices {
   interactions: SessionHostInteractions;
   logger: AgentTrace;
   abortSignal: AbortSignal;
-  refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>;
-  clientCredentialRoute?: ModelCredentialRoute;
+  modelCell: Pick<ModelCell, 'getClient' | 'rebind' | 'route'>;
+}
+
+/** The client seam a retry node reads; scenarios stub the parts they drive. */
+function testRetryModelCell(
+  rebind: TestRebind = async () => undefined,
+  route?: ModelCredentialRoute,
+): TestRetryServices['modelCell'] {
+  return { getClient: async () => ({}), rebind, route };
 }
 
 class ExposedRetryNode extends RetryableInvocationNode<
@@ -130,8 +148,8 @@ interface RetryNodeKit {
 
 function createRetryNode(
   streamId: StreamTabId,
-  refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>,
-  clientCredentialRoute?: ModelCredentialRoute,
+  rebind: TestRebind = async () => undefined,
+  route?: ModelCredentialRoute,
   // The node reads its session from `services.runScope`, so a test driving a
   // real session's host interactions must hand that same session in here.
   sessionOverride?: SessionHandle,
@@ -151,8 +169,7 @@ function createRetryNode(
     interactions: new SessionHostInteractions(),
     logger: noopTrace,
     abortSignal: new AbortController().signal,
-    refreshClient,
-    clientCredentialRoute,
+    modelCell: testRetryModelCell(rebind, route),
   });
   return { node, session, streamStatus, requestRetry };
 }
@@ -163,8 +180,6 @@ async function withRetryRunContext<T>(
   fn: () => T | Promise<T>,
 ): Promise<T> {
   const context = createRunContext({
-    modelSource: 'live',
-    getModel: () => undefined,
     runScope: createRunScope({
       streamId,
       executionId: `${streamId}-execution` as ExecutionId,
@@ -181,9 +196,9 @@ function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
     streaming: false,
     storeResponse: vi.fn(),
   }).setServices({
-    modelHandler: {
+    modelCell: testModelCell({
       isBackgroundModeActive: () => false,
-    },
+    }),
     logger: noopTrace,
   } as never);
 }
@@ -223,7 +238,7 @@ async function captureModelRetry(
     streaming: false,
     storeResponse: vi.fn(),
   }).setServices({
-    modelHandler: {
+    modelCell: testModelCell({
       config: { provider: 'openai', fullName: model },
       createResponse: async () => ({ response: 'ok' }),
       // Mirrors ModelHandler.getWireRouteKey; the node treats it as opaque.
@@ -244,14 +259,14 @@ async function captureModelRetry(
         ]),
       isBackgroundModeActive: () => false,
       setOutputStreaming: () => {},
-    },
+      getClient: async () => client,
+      getCredentialRouteForClient: () => credentialRoute,
+    }),
     logger: noopTrace,
     setting: { temperature: 0 },
     config: { model: 'openai:test' },
     runScope: testRunScope(streamId, { session }),
     abortSignal: new AbortController().signal,
-    client,
-    clientCredentialRoute: credentialRoute,
   } as never);
 
   try {
@@ -446,6 +461,7 @@ describe('RetryState', () => {
         interactions: new SessionHostInteractions(),
         logger: noopTrace,
         abortSignal: new AbortController().signal,
+        modelCell: testRetryModelCell(),
       });
       const retry = node._exec(undefined);
       const delayMs = RETRY_BACKOFF_SECONDS * 1000;
@@ -493,6 +509,7 @@ describe('RetryState', () => {
         interactions: new SessionHostInteractions(),
         logger: noopTrace,
         abortSignal: runController.signal,
+        modelCell: testRetryModelCell(),
       });
       const retry = node._exec(undefined);
       await vi.advanceTimersByTimeAsync(0);
@@ -530,10 +547,10 @@ describe('RetryState', () => {
 
   it('passes the active abort signal to relay recovery client refresh', async () => {
     const streamId = 'retry-relay-refresh-abort' as StreamTabId;
-    const refreshClient = vi.fn(
+    const rebind = vi.fn(
       async (_selection?: unknown, _signal?: AbortSignal) => undefined,
     );
-    const { node } = createRetryNode(streamId, refreshClient, 'relay');
+    const { node } = createRetryNode(streamId, rebind, 'relay');
     SupabaseClient.setAuthProvider(createAuthTokenProvider());
     const unauthorized = Object.assign(new Error('relay token expired'), {
       status: 401,
@@ -547,7 +564,7 @@ describe('RetryState', () => {
       'recovered',
     );
 
-    const refreshSignal = refreshClient.mock.calls[0]?.[1];
+    const refreshSignal = rebind.mock.calls[0]?.[1];
     expect(refreshSignal).toBeInstanceOf(AbortSignal);
     expect(refreshSignal?.aborted).toBe(false);
   });
@@ -993,7 +1010,9 @@ describe('RetryState', () => {
           operation: 'Model request',
           model: 'copilot:sonnet46',
         }),
-        undefined,
+        // Every run carries a model cell, so the host is always offered the
+        // credential-selecting retry preparation.
+        expect.objectContaining({ prepareRetry: expect.any(Function) }),
       );
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
@@ -1002,10 +1021,10 @@ describe('RetryState', () => {
 
   it('lets the host prepare a replacement client without refreshing it twice', async () => {
     const streamId = 'retry-state-prepared-client' as StreamTabId;
-    const refreshClient = vi.fn(async () => undefined);
+    const rebind = vi.fn(async () => undefined);
     const { node, session, streamStatus, requestRetry } = createRetryNode(
       streamId,
-      refreshClient,
+      rebind,
     );
     requestRetry.mockImplementationOnce(async (_request, options) => {
       await options?.prepareRetry?.('configured');
@@ -1022,7 +1041,7 @@ describe('RetryState', () => {
         ),
       ).resolves.toBe(true);
 
-      expect(refreshClient).toHaveBeenCalledOnce();
+      expect(rebind).toHaveBeenCalledOnce();
       expect(node.persistent401Guards()).toEqual({
         error: null,
         tokenRefreshAttempted: false,
@@ -1136,8 +1155,8 @@ describe('RetryState', () => {
       async (route) => {
         const streamId =
           `retry-state-proactive-${route ?? 'unknown'}` as StreamTabId;
-        const refreshClient = vi.fn(async () => undefined);
-        const { node } = createRetryNode(streamId, refreshClient, route);
+        const rebind = vi.fn(async () => undefined);
+        const { node } = createRetryNode(streamId, rebind, route);
         SupabaseClient.setAuthProvider(
           createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
         );
@@ -1148,14 +1167,14 @@ describe('RetryState', () => {
         );
 
         expect(operation).toHaveBeenCalledOnce();
-        expect(refreshClient).not.toHaveBeenCalled();
+        expect(rebind).not.toHaveBeenCalled();
       },
     );
 
     it('rebuilds the relay client once when the session token rotates', async () => {
       const streamId = 'retry-state-proactive-relay-rotation' as StreamTabId;
-      const refreshClient = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      const rebind = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, rebind, 'relay');
       let expiringSoon = true;
       const ensureFreshToken = vi.fn(async () => {
         // Simulate rotation: the refresh pushes the session expiry out.
@@ -1175,14 +1194,14 @@ describe('RetryState', () => {
       );
 
       expect(ensureFreshToken).toHaveBeenCalledOnce();
-      expect(refreshClient).toHaveBeenCalledOnce();
+      expect(rebind).toHaveBeenCalledOnce();
       expect(operation).toHaveBeenCalledOnce();
     });
 
     it('skips the relay client rebuild when the token did not rotate', async () => {
       const streamId = 'retry-state-proactive-relay-stale' as StreamTabId;
-      const refreshClient = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      const rebind = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, rebind, 'relay');
       // The provider answers with the stale token and leaves the expiry
       // clock inside the threshold, so no rotation is observed.
       const ensureFreshToken = vi.fn(async () => 'stale-session-token');
@@ -1200,15 +1219,15 @@ describe('RetryState', () => {
 
       // No rebuild without rotation — the reactive 401 path remains the net.
       expect(ensureFreshToken).toHaveBeenCalledOnce();
-      expect(refreshClient).not.toHaveBeenCalled();
+      expect(rebind).not.toHaveBeenCalled();
       expect(operation).toHaveBeenCalledOnce();
     });
 
     it('skips the relay client rebuild when the session refresh returns null', async () => {
       const streamId =
         'retry-state-proactive-relay-null-refresh' as StreamTabId;
-      const refreshClient = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      const rebind = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, rebind, 'relay');
       // Refresh failed or no session: ensureFreshToken resolves null and the
       // expiry clock stays inside the threshold, so no rotation is observed.
       const ensureFreshToken = vi.fn(async () => null);
@@ -1227,14 +1246,14 @@ describe('RetryState', () => {
       // No rebuild when no fresh token materialized — the reactive 401 path
       // remains the net.
       expect(ensureFreshToken).toHaveBeenCalledOnce();
-      expect(refreshClient).not.toHaveBeenCalled();
+      expect(rebind).not.toHaveBeenCalled();
       expect(operation).toHaveBeenCalledOnce();
     });
 
     it('does no auth work for a relay client whose token is fresh', async () => {
       const streamId = 'retry-state-proactive-relay-fresh' as StreamTabId;
-      const refreshClient = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      const rebind = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, rebind, 'relay');
       const ensureFreshToken = vi.fn(async () => 'session-token');
       SupabaseClient.setAuthProvider(
         createAuthTokenProvider({ ensureFreshToken }),
@@ -1246,14 +1265,14 @@ describe('RetryState', () => {
       );
 
       expect(ensureFreshToken).not.toHaveBeenCalled();
-      expect(refreshClient).not.toHaveBeenCalled();
+      expect(rebind).not.toHaveBeenCalled();
       expect(operation).toHaveBeenCalledOnce();
     });
 
     it('makes no auth or rebuild calls for a CI-token relay client', async () => {
       const streamId = 'retry-state-proactive-relay-ci-token' as StreamTabId;
-      const refreshClient = vi.fn(async () => undefined);
-      const { node } = createRetryNode(streamId, refreshClient, 'relay');
+      const rebind = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, rebind, 'relay');
       vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}fakeci123`);
       const ensureFreshToken = vi.fn(async () => 'session-token');
       SupabaseClient.setAuthProvider(
@@ -1272,7 +1291,7 @@ describe('RetryState', () => {
       // session is never consulted and the expiry clock stays stale, so the
       // rebuild is skipped too.
       expect(ensureFreshToken).not.toHaveBeenCalled();
-      expect(refreshClient).not.toHaveBeenCalled();
+      expect(rebind).not.toHaveBeenCalled();
       expect(operation).toHaveBeenCalledOnce();
     });
   });

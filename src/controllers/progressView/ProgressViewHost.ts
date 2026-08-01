@@ -1,9 +1,7 @@
 // Local imports
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-import {
-  isWorkflowTaskState,
-  type TaskState,
-} from '@agent/core/state/TaskState';
 import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -46,7 +44,7 @@ interface ProgressViewHostCommandOptions {
 }
 
 interface ProgressViewRunState {
-  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getRunConfig(stream: StreamTabId): AgentConfig | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
 }
 
@@ -65,17 +63,17 @@ async function resumeStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
 ): Promise<void> {
-  const taskState = dependencies.state.getTaskState(stream);
-  if (!taskState) return;
+  const config = dependencies.state.getRunConfig(stream);
+  if (!config) return;
 
-  if (!isWorkflowTaskState(taskState)) {
+  if (config.agentCategory !== AgentCategory.Workflow) {
     await platform().agentResume.tryResumeStream(stream);
     return;
   }
 
   const executionId = dependencies.state.getExecutionId(stream);
   await dependencies.executeAgent({
-    config: taskState.agentConfig,
+    config,
     ...(executionId && { executionId }),
   });
 }
@@ -84,10 +82,10 @@ async function runNewStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
 ): Promise<void> {
-  const taskState = dependencies.state.getTaskState(stream);
-  if (!taskState) return;
+  const config = dependencies.state.getRunConfig(stream);
+  if (!config) return;
 
-  await dependencies.executeAgent({ config: taskState.agentConfig });
+  await dependencies.executeAgent({ config });
 }
 
 export interface ProgressViewHostOptions {
