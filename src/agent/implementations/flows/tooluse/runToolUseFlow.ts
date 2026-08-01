@@ -403,7 +403,7 @@ export async function runToolUseFlow<C = unknown>(
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
   let earlyResult: RunToolUseFlowResult | undefined;
-  const startupInterruption = Symbol('startup interruption');
+  const startupInterruption = new Error('Tool-use startup interrupted.');
   const teardownFailures: Array<{
     readonly operation: string;
     readonly error: unknown;
@@ -640,6 +640,15 @@ export async function runToolUseFlow<C = unknown>(
       });
       throwFlowLastError(err, shared.lastError);
     }
+    if (
+      outputSchema !== undefined &&
+      outcome === RUN_OUTCOME.COMPLETED &&
+      shared.structured === undefined
+    ) {
+      throw new Error(
+        'Structured-output run completed without calling submit_output.',
+      );
+    }
   } catch (error) {
     if (error !== startupInterruption) primaryFailure = { error };
   } finally {
@@ -720,16 +729,6 @@ export async function runToolUseFlow<C = unknown>(
     throw firstTeardownFailure.error;
   }
   if (earlyResult) return earlyResult;
-
-  if (
-    outputSchema !== undefined &&
-    outcome === RUN_OUTCOME.COMPLETED &&
-    shared.structured === undefined
-  ) {
-    throw new Error(
-      'Structured-output run completed without calling submit_output.',
-    );
-  }
 
   return {
     outcome,
