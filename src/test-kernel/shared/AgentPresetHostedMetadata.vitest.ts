@@ -43,6 +43,32 @@ describe('parseAgentModePresets icon degradation', () => {
     toolUseAgents: ['assistant'],
   });
 
+  it('treats an absent custom-preset value as an empty list', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(parseAgentModePresets(undefined)).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns when the custom-preset value is malformed', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(parseAgentModePresets('not-an-array')).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('not an array'));
+  });
+
+  it('warns about a malformed record without dropping valid siblings', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const presets = parseAgentModePresets([
+      customPreset('rocket'),
+      { id: 'incomplete' },
+    ]);
+
+    expect(presets.map((preset) => preset.id)).toEqual(['custom-1']);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('index 1'));
+  });
+
   it('keeps a preset whose icon is unknown, degrading to bookmark loudly', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 

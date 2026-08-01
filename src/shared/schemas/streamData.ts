@@ -137,8 +137,8 @@ const numericUsageParsingShape = Object.fromEntries(
 const TokenUsageStatsParsingBaseSchema = z
   .object({
     ...numericUsageParsingShape,
-    viaChatGptSubscription: z.boolean().catch(false).prefault(false),
-    usageRoute: UsageRouteSchema.optional().catch(undefined),
+    viaChatGptSubscription: z.boolean().prefault(false),
+    usageRoute: UsageRouteSchema.optional(),
     // The numeric fields are derived from `TokenUsageStatsBaseSchema.shape` above;
     // TypeScript cannot recover the required keys through `Object.fromEntries`.
   })
