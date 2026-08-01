@@ -22,10 +22,10 @@
   "license": "MIT",
   "description": "Documentation for TeXRA - an AI theorist for VS Code and the terminal",
   "devDependencies": {
-    "@awesome.me/webawesome": "^3.6.0",
-    "@fortawesome/free-solid-svg-icons": "^7.2.0",
-    "mermaid": "^11.6.0",
-    "vitepress": "^2.0.0-alpha.15",
+    "@awesome.me/webawesome": "^3.11.0",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "mermaid": "^11.16.0",
+    "vitepress": "^2.0.0-alpha.18",
     "vitepress-plugin-mermaid": "^2.0.17"
   },
   "type": "module"
