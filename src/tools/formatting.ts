@@ -9,7 +9,7 @@ export const ViewRangeSchema = z
   });
 
 /** Maximum lines returned in a single file view before truncation. */
-export const READ_FILE_MAX_LINES = 2000;
+const READ_FILE_MAX_LINES = 2000;
 
 /** Default width for line number padding */
 const LINE_NUMBER_WIDTH = 6;
