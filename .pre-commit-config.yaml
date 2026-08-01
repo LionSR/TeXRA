@@ -2,11 +2,9 @@ repos:
   - repo: local
     hooks:
       - id: npm-format
-        name: npm run format
-        entry: npm
-        args: ['run', 'format']
+        name: prettier staged files
+        entry: corepack pnpm exec prettier --check --ignore-unknown
         language: system
-        pass_filenames: false
       # Forbid a stray internal doc at the docs root from being published to
       # texra.ai. The boundary lives in docs/.vitepress/publicDocs.js; this
       # dependency-free Node gate fails the commit if a root-level doc/dir is
