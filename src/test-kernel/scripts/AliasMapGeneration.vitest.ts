@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 type TsconfigPaths = Record<string, string[]>;
 
 interface AliasUtilsModule {
+  deriveBuildPaths(rootPaths: TsconfigPaths): TsconfigPaths;
   deriveDesktopPaths(rootPaths: TsconfigPaths): TsconfigPaths;
   deriveExtensionPaths(rootPaths: TsconfigPaths): TsconfigPaths;
   EXTENSION_EXCLUDED_ALIASES: readonly string[];
@@ -17,6 +18,7 @@ interface AliasUtilsModule {
 
 const rootDir = fileURLToPath(new URL('../../../', import.meta.url));
 const {
+  deriveBuildPaths,
   deriveDesktopPaths,
   deriveExtensionPaths,
   EXTENSION_EXCLUDED_ALIASES,
@@ -81,6 +83,16 @@ describe('generated tsconfig paths match the committed copies', () => {
   // `npm run check:tsconfig-paths`; this test gives the same signal in the
   // normal `npm test` loop).
   const rootPaths = loadRootPaths(rootDir);
+
+  it('tsconfig.build.json paths derive from the root map', () => {
+    const committed = JSON.parse(
+      readFileSync(resolve(rootDir, 'tsconfig.build.json'), 'utf8'),
+    );
+
+    expect(committed.compilerOptions.paths).toEqual(
+      deriveBuildPaths(rootPaths),
+    );
+  });
 
   it('packages/extension/tsconfig.json paths derive from the root map', () => {
     const committed = JSON.parse(
