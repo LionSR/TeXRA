@@ -10,6 +10,7 @@ import {
   isProviderErrorAutoRetryable,
   isUnauthorizedProviderError,
   isUserAbort,
+  hasContextWindowErrorMarker,
   hasMissingApiKeyErrorMarker,
 } from '@common/errors/sdkErrorUtils';
 import { includedModelAccess } from '@model/includedModelAccess';
@@ -399,10 +400,11 @@ export abstract class RetryableInvocationNode<
     return {
       kind: 'failed',
       ...toRetryErrorInfo(formatted),
-      // The marker rides the Error, not the formatted record; stamp it here
-      // so the flow-exit classifier can still see it (fix for the carried
-      // error exit, where toFlowFailureError rebuilds a bare Error).
+      // The markers ride the Error, not the formatted record; stamp them here
+      // so the flow-exit classifier can still see them (the carried-error
+      // exit rebuilds a bare Error in toFlowFailureError).
       ...(hasMissingApiKeyErrorMarker(error) ? { missingApiKey: true } : {}),
+      ...(hasContextWindowErrorMarker(error) ? { contextWindow: true } : {}),
     };
   }
 }
