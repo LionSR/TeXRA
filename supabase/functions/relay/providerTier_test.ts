@@ -217,6 +217,31 @@ Deno.test('gates relay providers by tier at the route boundary', async () => {
   });
 });
 
+Deno.test('preserves OpenAI priority service tier requests', async () => {
+  await withTestEnvironment(async () => {
+    const response = await app.request('/relay/openai/v1/responses', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer Ultra-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL_CONFIGS.gpt56fast.fullName,
+        service_tier: 'priority',
+        input: 'hello',
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(upstreamRequests.length, 1);
+    assert.deepEqual(await upstreamRequests[0]?.json(), {
+      model: 'gpt-5.6-sol',
+      service_tier: 'priority',
+      input: 'hello',
+    });
+  });
+});
+
 Deno.test(
   'excludes Ultra-only provider models from lower-tier config',
   async () => {
