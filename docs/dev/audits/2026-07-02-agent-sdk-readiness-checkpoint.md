@@ -5,9 +5,9 @@
 > not current workspace layout.
 
 **Status:** Verification checkpoint, not a new audit. Read alongside the canonical
-[`2026-05-30-agent-sdk-readiness.md`](./2026-05-30-agent-sdk-readiness.md), the detailed
-[`../dev/audits/2026-05-29-agent-sdk-readiness-audit.md`](../dev/audits/2026-05-29-agent-sdk-readiness-audit.md), the
-[`2026-06-24-agent-sdk-readiness-delta.md`](./2026-06-24-agent-sdk-readiness-delta.md)
+[`2026-05-30-agent-sdk-readiness.md`](../../proposals/2026-05-30-agent-sdk-readiness.md), the detailed
+[`./2026-05-29-agent-sdk-readiness-audit.md`](./2026-05-29-agent-sdk-readiness-audit.md), the
+[`2026-06-24-agent-sdk-readiness-delta.md`](../../proposals/2026-06-24-agent-sdk-readiness-delta.md)
 addendum, and the `-2026-06-25` / `-2026-06-26` / `-2026-06-30` /
 [`-2026-07-01`](./2026-07-01-agent-sdk-readiness-checkpoint.md) checkpoints.
 

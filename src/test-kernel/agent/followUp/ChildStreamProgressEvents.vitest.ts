@@ -19,7 +19,7 @@ import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegation
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
+} from '@test/support/streamStatusTestUtils';
 import { launchAgentCliSession } from '@tools/agentCliShared';
 import {
   createChildStream,
