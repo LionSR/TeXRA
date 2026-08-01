@@ -16,9 +16,10 @@ import {
 // ============================================================================
 //
 // `RunOutcome` is the canonical terminal fact, decided once at the run
-// lifecycle boundary. The declarative tables below are the ONLY places the
-// derivation rule and the legacy-vocabulary projections are defined — flows
-// and hosts must not hand-roll their own mappings.
+// lifecycle boundary. The derivation rule and persisted execution-status
+// projection below are the only production mappings — flows and hosts must
+// not hand-roll their own. Legacy transcript/stream values are accepted and
+// normalized only at their parse-side compatibility boundaries.
 
 /**
  * The single facts → outcome derivation rule, shared by every flow exit.
@@ -39,11 +40,12 @@ export interface RunOutcomeProjection {
 }
 
 /**
- * Projection table: one row per outcome, one injective legacy vocabulary.
+ * Projection table: one row per outcome for persisted execution status.
  *
- * `executionStatus` is the only injective projection — persisted history keeps
- * all three outcomes apart. The non-injective legacy transcript/stream shapes
- * are derived by helpers below so the completed/cancelled fold has one source.
+ * `executionStatus` keeps all three outcomes distinct when writing the
+ * `ExecutionMeta.terminalStatus` compatibility field. Retired transcript and
+ * stream vocabularies are not projected here: permanent parse-side readers
+ * accept those legacy values and normalize them to canonical current values.
  *
  * The `Record` key type keeps the table compile-time exhaustive; read it
  * through {@link projectRunOutcome} so an out-of-vocabulary value (stale
@@ -77,24 +79,6 @@ export function runOutcomeToExecutionStatus(
   outcome: RunOutcome,
 ): ExecutionStatus {
   return projectRunOutcome(outcome).executionStatus;
-}
-
-/**
- * The frozen 2-value `EndGroupStatus` fold, kept for the one external
- * contract that still publishes it: the CLI headless JSON's deprecated
- * `endGroupStatus` field (`packages/cli/src/runtime/terminalStatus.ts`),
- * whose removal is dated in the #6981 ledger (v0.41 / 2026-08-04, whichever
- * is later). No transcript writer calls this any more — every `GROUP_END`
- * producer emits the literal `RunOutcome` (#8087 / §8.2).
- *
- * `cancelled` folds to `'stopped'` alongside `completed` because that is what
- * the frozen field has always published; the distinction lives on `outcome`,
- * which is what consumers were told to migrate to.
- */
-export function legacyEndGroupStatusForOutcome(
-  outcome: RunOutcome,
-): 'error' | 'stopped' {
-  return outcome === RUN_OUTCOME.FAILED ? 'error' : 'stopped';
 }
 
 // ============================================================================
