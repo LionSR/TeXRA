@@ -25,7 +25,10 @@ When updating CHANGELOG.md:
    `python -m pip install pre-commit`, then run `pre-commit install`. The
    formatting hook rewrites supported staged files; if it changes a file,
    review the diff and stage only the intended hunks before retrying. For a
-   partially staged file, use `git add -p` so unrelated unstaged edits stay out.
+   partially staged file, use `git add -p` so unrelated unstaged edits stay
+   out. If the retry aborts again with nothing new to stage, the rewrite
+   conflicted with your unstaged edits and pre-commit discarded it -- commit
+   or stash those edits separately first, then retry.
 3. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
