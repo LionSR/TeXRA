@@ -125,13 +125,14 @@ export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
 
 /**
  * The retry/logging fields every cycle node's `{ outcome: 'failed', ... }`
- * result carries, regardless of whether that node identifies the failure
- * with an `error` or a `message` field.
+ * result carries, alongside any node-specific failure context.
  */
-export function buildFailedCycleOutcome(error: unknown): {
-  failureLogEmitted: false;
-  userRetryable: boolean;
-  lastError: RetryErrorInfo;
-} {
-  return { failureLogEmitted: false, ...buildFailedRetryInfo(error) };
+export interface FailedCycleFields {
+  readonly failureLogEmitted: boolean;
+  readonly lastError: RetryErrorInfo;
+}
+
+export function buildFailedCycleOutcome(error: unknown): FailedCycleFields {
+  const { lastError } = buildFailedRetryInfo(error);
+  return { failureLogEmitted: false, lastError };
 }

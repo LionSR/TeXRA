@@ -206,8 +206,10 @@ describe('tool-use progress events', () => {
 
     const transition = await node.post(shared as ToolUseRunShared, prepRes, {
       outcome: 'failed',
-      message: 'Model claude-opus-4-7 not found',
-      userRetryable: false,
+      lastError: {
+        message: 'Model claude-opus-4-7 not found',
+        userRetryable: false,
+      },
       failureLogEmitted: false,
     });
 
@@ -235,8 +237,6 @@ describe('tool-use progress events', () => {
     };
     await node.post(shared as ToolUseRunShared, prepRes, {
       outcome: 'failed',
-      message: lastError.message,
-      userRetryable: lastError.userRetryable,
       lastError,
       failureLogEmitted: true,
     });
