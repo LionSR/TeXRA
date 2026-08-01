@@ -42,7 +42,7 @@ import {
   createRecordingBackend,
   emitActiveStream,
   emitRunConfig,
-  toolUseTaskState,
+  toolUseConfig,
   track,
 } from './progressBackendHarness';
 
@@ -111,7 +111,7 @@ describe('ProgressBackend', () => {
       target,
       streamId,
       'c40001' as ExecutionId,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
     );
 
     expect(backend.state.getStreamMetadata(streamId).run).toMatchObject({

@@ -17,7 +17,6 @@
       "@agent/runtime/agentShutdown",
       "@agent/runtime/detachSubagentsOnStop",
       "@agent/runtime/executeAgent",
-      "@agent/runtime/ExecutionHandle",
       "@agent/runtime/executionRegistry",
       "@agent/runtime/HostInteractions",
       "@agent/runtime/resolveAndResumeStream",
@@ -39,7 +38,6 @@
     "desktop": [
       "@agent/core/definition/AgentConfig",
       "@agent/core/state/executionRequests",
-      "@agent/core/state/TaskState",
       "@agent/followUp/ToolUseFollowUp",
       "@agent/index",
       "@agent/index/agentRegistry",
@@ -62,14 +60,12 @@
       "@agent/storage",
       "@agent/storage/detectWaitingStreams",
       "@agent/templates/agentTemplateRenderer",
-      "@agent/trace",
-      "@agent/utils/agentConfigToTaskState"
+      "@agent/trace"
     ],
     "extension": [
       "@agent/core/definition/AgentConfig",
       "@agent/core/definition/AgentDataclass",
       "@agent/core/state/executionRequests",
-      "@agent/core/state/TaskState",
       "@agent/features",
       "@agent/followUp/ToolUseFollowUp",
       "@agent/goal/promptLoader",

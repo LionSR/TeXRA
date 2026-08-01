@@ -23,8 +23,6 @@ import {
   migrateSharedState,
   type PreparedShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
-import { currentModelFromUserChannels } from '@agent/implementations/flows/tooluse/modelSwitchState';
-import type { TaskState } from '@agent/core/state/TaskState';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
 import {
@@ -104,7 +102,7 @@ const WorkflowFlowRecordStateSchema = z
  *
  * @param streamId - Stream tab ID used for logging and resume identity
  * @param executionId - The execution ID for the stream
- * @param state - Current run config, or legacy TaskState compatibility input
+ * @param agentConfig - The run config for the execution
  * @returns The resume data, or `null` when there is no resumable session
  *   (missing/invalid flow record). Throws when retrieval fails unexpectedly
  *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
@@ -113,11 +111,9 @@ const WorkflowFlowRecordStateSchema = z
 export async function retrieveSessionResumeData(
   streamId: StreamTabId,
   executionId: ExecutionId,
-  state: AgentConfig | TaskState,
+  agentConfig: AgentConfig,
   options: SessionResumeRetrievalOptions = {},
 ): Promise<SessionResumeData | null> {
-  const agentConfig = 'agentConfig' in state ? state.agentConfig : state;
-
   if (agentConfig.agentCategory === AgentCategory.ToolUse) {
     return retrieveToolUseResumeData(
       streamId,
@@ -180,9 +176,7 @@ async function retrieveToolUseResumeData(
 
     const currentConfig = {
       ...agentConfig,
-      model:
-        currentModelFromUserChannels(stateSlices.userChannels) ??
-        agentConfig.model,
+      model: migrationResult.data.modelId ?? agentConfig.model,
     };
     const modelHandlerCompatibilityKey =
       migrationResult.data.modelHandlerCompatibilityKey ??

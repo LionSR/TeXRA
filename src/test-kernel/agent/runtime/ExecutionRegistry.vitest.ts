@@ -9,9 +9,9 @@ import {
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
+import type {
   AgentExecutionHandle,
-  type LiveToolUseFlowContext,
+  LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
@@ -30,6 +30,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { projectRunOutcome } from '@shared/streams/streamStatus';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
@@ -85,14 +86,14 @@ function createHandle(
     leaseScope?: OwnedExecutionLeaseScope;
   } = {},
 ): AgentExecutionHandle {
-  const handle = new AgentExecutionHandle(
+  const handle = testExecutionHandle({
     executionId,
     parentStreamId,
     childStreamId,
-    overrides.agentName ?? 'test-subagent',
-    overrides.category ?? AgentCategory.ToolUse,
-    overrides.trace,
-  );
+    agent: overrides.agentName ?? 'test-subagent',
+    category: overrides.category,
+    trace: overrides.trace,
+  });
   handle.attachExecutionLeaseScope(
     overrides.leaseScope ?? ((operation) => operation()),
   );

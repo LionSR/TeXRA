@@ -24,6 +24,7 @@ import { delay } from '@utils/core';
 
 // Local file imports
 import { withTestRunContext } from './progressTestUtils';
+import { testModelCell } from './modelCellTestUtils';
 
 interface DispatchProbe {
   events: string[];
@@ -91,10 +92,11 @@ function dispatchHarness(opts: HarnessOptions) {
     toolRegistry: new MapToolRegistry(opts.tools),
     abortSignal: opts.abortSignal ?? new AbortController().signal,
     onRoundFinalized: () => {},
-    modelHandler: {
+    modelCell: testModelCell({
       requiresBatchedParallelToolResults: false,
       createToolUseFollowUpMessages: async () => [],
-    },
+      getClient: async () => ({}),
+    }),
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
   } as unknown as ToolUseRoundServices<unknown>;

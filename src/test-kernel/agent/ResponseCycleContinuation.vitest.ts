@@ -14,6 +14,7 @@ import {
   type ProviderStopReason,
 } from '@agent/types/StopReasonTypes';
 import type { AgentFileLocation } from '@shared/schemas';
+import { testModelCell } from './modelCellTestUtils';
 
 const outputLocation: AgentFileLocation = {
   kind: 'workspace',
@@ -74,12 +75,12 @@ async function processEmptyResponse(stopReason: ProviderStopReason) {
       debug: vi.fn(),
       info: vi.fn(),
     },
-    modelHandler: {
+    modelCell: testModelCell({
       processThinkingBlock: vi.fn(() => null),
       getStreamingConfig: vi.fn(() => false),
       extractResponse: vi.fn(() => ({ text: '', usage: {}, stopReason })),
       normalizeUsage: vi.fn(() => undefined),
-    },
+    }),
   } as unknown as ResponseCycleServices<unknown>;
   const node = getProcessNode().setServices(services);
   const prepResult = await node.prep(shared);
@@ -106,13 +107,13 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
     config: {},
     workspace: {},
     logger: { info: vi.fn(), warn: vi.fn() },
-    modelHandler: {
+    modelCell: testModelCell({
       supportsManualCompaction,
       checkStopConditions,
       shouldContinue,
       requestCompaction,
       addContinueMessage,
-    },
+    }),
   } as unknown as ResponseCycleServices<unknown>;
 
   return {
@@ -233,7 +234,7 @@ describe('response cycle continuation phases', () => {
         debug: vi.fn(),
         info: vi.fn(),
       },
-      modelHandler: {
+      modelCell: testModelCell({
         processThinkingBlock: vi.fn(() => null),
         getStreamingConfig: vi.fn(() => false),
         extractResponse: vi.fn(() => ({
@@ -242,7 +243,7 @@ describe('response cycle continuation phases', () => {
           stopReason: ANTHROPIC_STOP.END_TURN,
         })),
         normalizeUsage: vi.fn(() => undefined),
-      },
+      }),
     } as unknown as ResponseCycleServices<unknown>;
     const node = getProcessNode().setServices(services);
 

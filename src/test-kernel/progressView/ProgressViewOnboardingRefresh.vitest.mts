@@ -17,7 +17,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { FakePromptHost } from '../support/FakeHosts';
 import {
   createOutputFile,
-  createWorkflowTaskState,
+  createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
 
 // Third-party imports
@@ -81,7 +81,7 @@ function executeValidatedUntilStarted(
 
 function createProgressViewProvider(): ProgressViewProviderFake {
   const snapshots = {
-    getTaskState: vi.fn(),
+    getRunConfig: vi.fn(),
     getExecutionId: vi.fn(),
     getOutputFiles: vi.fn(() => new Map()),
     getKnownFilePaths: vi.fn(() => new Set()),
@@ -398,12 +398,9 @@ describe('progress-view onboarding refresh wiring', () => {
 
   it('routes workflow toolbar actions through extension capabilities', async () => {
     const provider = createProgressViewProvider();
-    const taskState = createWorkflowTaskState(
-      { outputFiles: ['declared.tex'] },
-      { output: false },
-    );
+    const runConfig = createWorkflowConfig({ outputFiles: ['declared.tex'] });
     const output = createOutputFile();
-    vi.mocked(provider.state.snapshots.getTaskState).mockReturnValue(taskState);
+    vi.mocked(provider.state.snapshots.getRunConfig).mockReturnValue(runConfig);
     vi.mocked(provider.state.snapshots.getExecutionId).mockReturnValue(
       'exec-123',
     );
@@ -438,7 +435,7 @@ describe('progress-view onboarding refresh wiring', () => {
           model: 'gemini31p',
           inputFile: 'input.tex',
           outputFiles: ['declared.tex'],
-          outputFilesActive: false,
+          outputFilesActive: true,
           streamId: 'stream-a',
           runId: 'exec-123',
           outputsByRound: { 1: [output] },

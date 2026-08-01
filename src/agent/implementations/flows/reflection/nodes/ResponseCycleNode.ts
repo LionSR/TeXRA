@@ -6,7 +6,6 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { withModelClient } from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
@@ -73,7 +72,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     const { context } = prepRes;
 
     const [outputAlreadyComplete, initializedMessages] =
-      await this.services.modelHandler.initializeOutputAndPrefill(
+      await this.services.modelCell.handler.initializeOutputAndPrefill(
         this.services.config,
         this.services.setting,
         context.messages,
@@ -92,22 +91,20 @@ export class ResponseCycleNode<C = unknown> extends Node<
       shouldStop: false,
       outputExists: false,
     };
-    const { modelHandler } = this.services;
+    const modelHandler = this.services.modelCell.handler;
 
     try {
       const flow = createResponseCycleFlow<C>();
-      flow.setServices(
-        await withModelClient(
-          {
-            ...this.services,
-            toolRegistry: getDefaultToolRegistry(),
-            round: prepRes.round,
-            run: prepRes.run,
-            workspace: prepRes.workspace,
-          },
-          modelHandler,
-        ),
-      );
+      // The spread copies the model cell by reference, so the cycle's nodes
+      // read the handler and provider client the run is live on rather than a
+      // copy taken when the cycle started.
+      flow.setServices({
+        ...this.services,
+        toolRegistry: getDefaultToolRegistry(),
+        round: prepRes.round,
+        run: prepRes.run,
+        workspace: prepRes.workspace,
+      });
       await flow.run(cycleShared);
 
       if (cycleShared.lastError) {

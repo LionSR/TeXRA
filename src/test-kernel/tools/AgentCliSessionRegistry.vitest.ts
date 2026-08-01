@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 describe('AgentCliSessionRegistry', () => {
@@ -224,22 +224,20 @@ describe('AgentCliSessionRegistry', () => {
     const interruptA = vi.fn();
     const interruptB = vi.fn();
 
-    const handleA = new AgentExecutionHandle(
-      'execution-a',
-      'parent-a' as StreamTabId,
-      'child-a' as StreamTabId,
-      'codex',
-      'toolUse',
-    );
+    const handleA = testExecutionHandle({
+      executionId: 'execution-a',
+      parentStreamId: 'parent-a' as StreamTabId,
+      childStreamId: 'child-a' as StreamTabId,
+      agent: 'codex',
+    });
     handleA.attachInterruptHandler({ interrupt: interruptA });
     ownerA.track(handleA);
-    const handleB = new AgentExecutionHandle(
-      'execution-b',
-      'parent-b' as StreamTabId,
-      'child-b' as StreamTabId,
-      'claude',
-      'toolUse',
-    );
+    const handleB = testExecutionHandle({
+      executionId: 'execution-b',
+      parentStreamId: 'parent-b' as StreamTabId,
+      childStreamId: 'child-b' as StreamTabId,
+      agent: 'claude',
+    });
     handleB.attachInterruptHandler({ interrupt: interruptB });
     ownerB.track(handleB);
 

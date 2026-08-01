@@ -29,7 +29,8 @@ export class PrepareContextNode<C = unknown> extends Node<
   }
 
   async exec(prepRes: PrepInput): Promise<RoundContext> {
-    const { promptBuilder, modelHandler, logger } = this.services;
+    const { promptBuilder, logger } = this.services;
+    const modelHandler = this.services.modelCell.handler;
     const { currentRound, conversation, compileFailureContext } = prepRes;
 
     const stateRound = ConversationRoundStateSnapshotSchema.parse({

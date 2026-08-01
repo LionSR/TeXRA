@@ -13,6 +13,7 @@ import type { ProviderMessage } from '@agent/types/ProviderMessage';
 // Local file imports
 import { withTestRunContext } from '../progressTestUtils';
 import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 describe('ToolUseRoundFlow queued follow-ups', () => {
   it('attaches media from follow-ups queued at round start', async () => {
@@ -27,16 +28,18 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const services = {
       ...baseRoundServices('ToolUseRoundFollowUpMedia'),
-      modelHandler: {
+      modelCell: testModelCell({
         addMediaToUserMessage,
         capabilities: { supportsVision: true },
         config: { provider: 'openai', fullName: 'test-model' },
         createResponse: vi.fn(async () => ({ response: null })),
         createUserFollowUpMessages,
+        getClient: async () => ({}),
+        getCredentialRouteForClient: () => undefined,
         getWireRouteKey: () => 'openai:test-route',
         getModelRetryRouteKey: () => 'openai:test-route:model',
         setOutputStreaming: vi.fn(),
-      },
+      }),
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({
@@ -156,28 +159,33 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const services = {
       ...baseRoundServices('ToolUseRoundBlankToolResult'),
-      modelHandler: roundModelHandler({
-        createResponse,
-        createToolUseFollowUpMessages,
-        createUserFollowUpMessages,
-        extractResponse: (response: { text?: string; toolCall?: boolean }) => ({
-          text: response.text ?? '',
-          usage: null,
-          stopReason: response.toolCall ? 'tool_calls' : 'stop',
+      modelCell: testModelCell(
+        roundModelHandler({
+          createResponse,
+          createToolUseFollowUpMessages,
+          createUserFollowUpMessages,
+          extractResponse: (response: {
+            text?: string;
+            toolCall?: boolean;
+          }) => ({
+            text: response.text ?? '',
+            usage: null,
+            stopReason: response.toolCall ? 'tool_calls' : 'stop',
+          }),
+          extractToolUse: (response: { toolCall?: boolean }) =>
+            response.toolCall
+              ? [
+                  {
+                    callId: 'again-1',
+                    input: {},
+                    name: 'again',
+                    provider: 'test',
+                    raw: {},
+                  },
+                ]
+              : [],
         }),
-        extractToolUse: (response: { toolCall?: boolean }) =>
-          response.toolCall
-            ? [
-                {
-                  callId: 'again-1',
-                  input: {},
-                  name: 'again',
-                  provider: 'test',
-                  raw: {},
-                },
-              ]
-            : [],
-      }),
+      ),
       session: {
         hasQueuedFollowUp: () => false,
       },
@@ -303,15 +311,17 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
 
     const services = {
       ...baseRoundServices('ToolUseRoundSystemPrompt'),
-      modelHandler: roundModelHandler({
-        createResponse,
-        extractResponse: (response: { text?: string }) => ({
-          text: response.text ?? '',
-          usage: null,
-          stopReason: 'stop',
+      modelCell: testModelCell(
+        roundModelHandler({
+          createResponse,
+          extractResponse: (response: { text?: string }) => ({
+            text: response.text ?? '',
+            usage: null,
+            stopReason: 'stop',
+          }),
+          requiresPerCallSystemPrompt,
         }),
-        requiresPerCallSystemPrompt,
-      }),
+      ),
       session: { hasQueuedFollowUp: () => false },
       setting: { temperature: 0, tools: [] },
       toolRegistry: new MapToolRegistry({}),

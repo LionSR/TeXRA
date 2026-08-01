@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AttachedMemoryMissSchema } from '@agent/types/AttachedMemory';
 import {
   ExecutionIdSchema,
+  RetryErrorInfoSchema,
   RunOutcomeSchema,
   STREAM_PHASE,
   StreamTabIdSchema,
@@ -25,6 +26,14 @@ const AgentFlowMetaSchema = z.object({
    * usage totals without branching on the subagent flow.
    */
   totalCostUsd: z.number().nonnegative().optional(),
+  /**
+   * The structured provider error of a run that ended FAILED. This is the one
+   * carrier for a failure that still has a result: a flow reports its failure
+   * on the result it returns rather than through an exception subclass, and
+   * `runFlowWithLifecycle` reads it to classify, log, and publish the terminal
+   * error facts. Absent on every non-failed outcome.
+   */
+  error: RetryErrorInfoSchema.optional(),
 });
 
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
@@ -55,10 +64,16 @@ const AgentFlowResultSchema = z.discriminatedUnion('category', [
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
 
-const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
-  category: z.literal('toolUse'),
-  outcome: z.literal(STREAM_PHASE.WAITING),
-}).extend(ToolUseFlowResultSchema.pick({ response: true, files: true }).shape);
+// A suspension is not a terminal fact, so it can never carry a failure: a flow
+// that recorded an error ends the run instead of parking it.
+const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.omit({
+  error: true,
+})
+  .extend({
+    category: z.literal('toolUse'),
+    outcome: z.literal(STREAM_PHASE.WAITING),
+  })
+  .extend(ToolUseFlowResultSchema.pick({ response: true, files: true }).shape);
 
 export type WaitingToolUseFlowResult = z.infer<
   typeof WaitingToolUseFlowResultSchema
@@ -76,23 +91,6 @@ export function isWaitingFlowResult(
     candidate.category === 'toolUse' &&
     candidate.outcome === STREAM_PHASE.WAITING
   );
-}
-
-export class AgentFlowError extends Error {
-  constructor(
-    message: string,
-    readonly result: AgentFlowResult,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'AgentFlowError';
-  }
-}
-
-export function getAgentFlowErrorResult(
-  error: unknown,
-): AgentFlowResult | undefined {
-  return error instanceof AgentFlowError ? error.result : undefined;
 }
 
 /** The discriminant of {@link AgentFlowResult}: which flow produced the result. */

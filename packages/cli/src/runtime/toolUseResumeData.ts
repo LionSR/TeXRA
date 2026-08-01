@@ -1,12 +1,11 @@
 import { createChannelTrace } from '@agent/trace';
-import { isToolUseTaskState } from '@agent/core/state/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from '@agent/runtime/SessionResumeRetrieval';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -16,13 +15,12 @@ export async function readCliToolUseResumeData(
   id: ExecutionId,
   config: AgentConfig,
 ): Promise<ToolUseResumeData | null> {
-  const taskState = agentConfigToTaskState(config);
-  if (!isToolUseTaskState(taskState)) return null;
+  if (config.agentCategory !== AgentCategory.ToolUse) return null;
 
   const streamId = getStreamTabId(config.agent, config.model, {
     executionId: id,
   });
-  const resume = await retrieveSessionResumeData(streamId, id, taskState);
+  const resume = await retrieveSessionResumeData(streamId, id, config);
   if (resume?.type !== 'toolUse') return null;
   return resume;
 }

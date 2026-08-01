@@ -131,7 +131,7 @@ export class ProgressFactApplier {
         );
       }
     },
-    'run.config': (_streamId, event) => this.handleSetTaskState(event.streamId),
+    'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),
     updateTodos: (_streamId, event) => this.handleUpdateTodos(event),
     updatePlan: (_streamId, event) => this.handleUpdatePlan(event),
     addOutputFiles: (_streamId, event) => this.handleAddOutputFiles(event),
@@ -465,11 +465,11 @@ export class ProgressFactApplier {
     });
   }
 
-  private handleSetTaskState(streamId: StreamTabId): void {
+  private handleRunConfig(streamId: StreamTabId): void {
     this.state.refreshStreamMetadataFromSnapshot(streamId);
 
     if (this.webviewUpdater.isAvailable()) {
-      // setTaskState may change agentConfig (agent name, model, label), which
+      // A run config may change agent name, model, or label, which
       // the frontend tabs display even for background subagents. Patch only
       // the affected stream instead of rebuilding all historical stream tabs.
       this.webviewUpdater.updateStreamMetadata(
@@ -607,6 +607,19 @@ export class ProgressFactApplier {
     }
   }
 
+  /**
+   * Cancel every still-running stream because the app itself is going away.
+   *
+   * Ruled a KEPT app-lifecycle fact, not a run-lifecycle write: the only
+   * caller is the extension's `extensionDeactivating` signal
+   * (`attachProgressBackendAppSignals`), which fires when no run can report its
+   * own outcome any more. It is not an owner of any run's terminal fact —
+   * `runFlowWithLifecycle` and `repairRestartedStreams` remain the only writers
+   * for runs that end on their own or are found stale after a restart. Because
+   * it goes through the same `StreamStatusMachine`, the transition table
+   * refuses anything a run already terminalized, so relocating it into the
+   * runtime buys nothing.
+   */
   public markAllRunningTasksAsCancelled(): void {
     for (const [stream, status] of this.state.streamStatus.entries()) {
       if (status === STREAM_PHASE.RUNNING) {

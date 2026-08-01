@@ -16,10 +16,6 @@ import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
-  TaskStateSchema,
-  type WorkflowTaskState,
-} from '@agent/core/state/TaskState';
-import {
   AgentConfigSchema,
   WorkflowAgentConfigSchema,
   type AgentConfig,
@@ -29,6 +25,7 @@ import type { AgentResumePort } from '@platform/interfaces';
 import {
   AgentCategory,
   LOG_LEVELS,
+  RUN_DESCRIPTOR_SCHEMA_VERSION,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -592,31 +589,23 @@ function appendRunningGroup(
   });
 }
 
-function workflowTaskState(): WorkflowTaskState {
-  return {
-    agentConfig: WorkflowAgentConfigSchema.parse({
-      agent: 'proofreader',
-      model: 'deepseekproT',
-      agentCategory: AgentCategory.Workflow,
-      toolConfig: DEFAULT_TOOL_CONFIG,
-    }),
-    activeFiles: {
-      input: false,
-      context: false,
-      media: false,
-      output: false,
-    },
-  };
+function workflowConfig(): AgentConfig {
+  return WorkflowAgentConfigSchema.parse({
+    agent: 'proofreader',
+    model: 'deepseekproT',
+    agentCategory: AgentCategory.Workflow,
+    toolConfig: DEFAULT_TOOL_CONFIG,
+  });
 }
 
 function expectWorkflowResume(
   runAgent: ReturnType<typeof vi.fn>,
-  taskState: ReturnType<typeof workflowTaskState>,
+  config: AgentConfig,
   executionId: string,
 ): void {
   expect(runAgent).toHaveBeenCalledWith(
     {
-      config: expect.objectContaining(taskState.agentConfig),
+      config: expect.objectContaining(config),
       executionId,
     },
     expect.objectContaining({
@@ -658,14 +647,14 @@ function emitRunConfigFact(
   payload: {
     streamId: StreamTabId;
     executionId: ExecutionId;
-    taskState: { agentConfig: unknown };
+    config: unknown;
   },
 ): void {
   emitRunEvent(bridge, payload.streamId, {
     type: 'run.config',
     streamId: payload.streamId,
     executionId: payload.executionId,
-    config: payload.taskState.agentConfig as AgentConfig,
+    config: payload.config as AgentConfig,
   });
 }
 
@@ -1139,9 +1128,9 @@ describe('DesktopProgressBridge', () => {
         appendRunningGroup(store, crashedStream);
       },
       configureProgressSnapshotStore: (store) => {
-        const taskState = TaskStateSchema.parse(workflowTaskState());
-        store.setTaskState(waitingStream, taskState, 'abc123');
-        store.setTaskState(crashedStream, taskState, 'def456');
+        const config = workflowConfig();
+        store.setRunConfig(waitingStream, config, 'abc123');
+        store.setRunConfig(crashedStream, config, 'def456');
       },
       detectWaitingStreams,
     });
@@ -1175,7 +1164,7 @@ describe('DesktopProgressBridge', () => {
         state: { snapshots: ProgressSnapshotStore };
       }
     ).state.snapshots;
-    const taskState = workflowTaskState();
+    const runConfig = workflowConfig();
 
     appendRunningGroup(
       first.streamLogs as unknown as StreamLogStore,
@@ -1185,9 +1174,9 @@ describe('DesktopProgressBridge', () => {
       first.streamLogs as unknown as StreamLogStore,
       orphanedStream,
     );
-    firstSnapshots.setTaskState(waitingStream, taskState, executionId);
+    firstSnapshots.setRunConfig(waitingStream, runConfig, executionId);
     const { getExecutionStore } = await import('@agent/storage');
-    await getExecutionStore(executionId).writeConfig(taskState.agentConfig);
+    await getExecutionStore(executionId).writeConfig(runConfig);
     await firstSnapshots.flush();
     await firstSession.flushArtifacts();
     first.dispose();
@@ -1258,11 +1247,7 @@ describe('DesktopProgressBridge', () => {
         appendRunningGroup(store, mappedStream);
       },
       configureProgressSnapshotStore: (store) => {
-        store.setTaskState(
-          mappedStream,
-          TaskStateSchema.parse(workflowTaskState()),
-          executionId,
-        );
+        store.setRunConfig(mappedStream, workflowConfig(), executionId);
       },
       detectWaitingStreams,
     });
@@ -1294,7 +1279,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { runAgent, showErrorMessage });
 
     bridge.fileActions.host.startExecution({
-      config: workflowTaskState().agentConfig,
+      config: workflowConfig(),
     });
 
     await vi.waitFor(() =>
@@ -1334,7 +1319,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { runAgent, showErrorMessage });
 
     bridge.fileActions.host.startExecution({
-      config: workflowTaskState().agentConfig,
+      config: workflowConfig(),
     });
 
     await vi.waitFor(() =>
@@ -1368,7 +1353,7 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { runAgent, showErrorMessage });
 
     bridge.fileActions.host.startExecution({
-      config: workflowTaskState().agentConfig,
+      config: workflowConfig(),
     });
 
     await vi.waitFor(() =>
@@ -1434,11 +1419,7 @@ describe('DesktopProgressBridge', () => {
       canonicalStreamIds: [streamId],
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
-        store.setTaskState(
-          streamId,
-          TaskStateSchema.parse(workflowTaskState()),
-          executionId,
-        );
+        store.setRunConfig(streamId, workflowConfig(), executionId);
       },
       detectWaitingStreams,
     });
@@ -1463,11 +1444,20 @@ describe('DesktopProgressBridge', () => {
           await import('@agent/runtime/ExecutionHandle');
         session.executions.track(
           new AgentExecutionHandle(
-            'abcdef' as ExecutionId,
+            {
+              schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+              streamId: 'bash#attachment-order-child' as StreamTabId,
+              executionId: 'abcdef' as ExecutionId,
+              agent: 'bash',
+              category: AgentCategory.ToolUse,
+              kind: 'process',
+              configRef: {
+                kind: 'executionConfig',
+                executionId: 'abcdef',
+                path: 'executions/abcdef/config.json',
+              },
+            },
             streamId,
-            'bash#attachment-order-child' as StreamTabId,
-            'bash',
-            AgentCategory.ToolUse,
           ),
         );
 
@@ -1618,20 +1608,17 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const streamId = 'persisted-tool-use-stream' as StreamTabId;
     const executionId = 'f00d123' as ExecutionId;
-    const taskState = TaskStateSchema.parse({
-      ...workflowTaskState(),
-      agentConfig: {
-        ...SEARCH_TOOL_USE_AGENT_CONFIG,
-        toolConfig: DEFAULT_TOOL_CONFIG,
-      },
+    const runConfig = AgentConfigSchema.parse({
+      ...SEARCH_TOOL_USE_AGENT_CONFIG,
+      toolConfig: DEFAULT_TOOL_CONFIG,
     });
     const bridge = await createBridge(messages, {
       canonicalStreamIds: [streamId],
       kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, taskState.agentConfig],
+        [`executions/${executionId}/config`, runConfig],
       ]),
       configureProgressSnapshotStore: (store) => {
-        store.setTaskState(streamId, taskState, executionId);
+        store.setRunConfig(streamId, runConfig, executionId);
       },
     });
 
@@ -1829,12 +1816,12 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('does not resume a stream deleted in this desktop session', async () => {
-    const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
+    const runConfig = SEARCH_TOOL_USE_AGENT_CONFIG;
     const retrieveSessionResumeData = vi.fn(async () =>
       createToolUseResumeData({
         executionId: 'ec1001' as ExecutionId,
         streamId: 'stream-1' as StreamTabId,
-        agentConfig: taskState.agentConfig,
+        agentConfig: runConfig,
       }),
     );
     const bridge = await createBridge([], {
@@ -1842,15 +1829,15 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
     });
 
-    const runConfig = {
+    const runConfigFact = {
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1001' as ExecutionId,
-      taskState,
+      config: runConfig,
     };
-    emitRunConfigFact(bridge, runConfig);
+    emitRunConfigFact(bridge, runConfigFact);
 
     await bridge.deleteStream('stream-1');
-    emitRunConfigFact(bridge, runConfig);
+    emitRunConfigFact(bridge, runConfigFact);
     await expect(tryResumeStream('stream-1')).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -2043,10 +2030,10 @@ describe('DesktopProgressBridge', () => {
 
   it('resumes workflow streams from persisted meta', async () => {
     const executionId = 'abc123';
-    const taskState = workflowTaskState();
+    const runConfig = workflowConfig();
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'workflow',
-      agentConfig: taskState.agentConfig,
+      agentConfig: runConfig,
       executionId,
     }));
     const runAgent = vi.fn(async () => {});
@@ -2054,7 +2041,17 @@ describe('DesktopProgressBridge', () => {
       key === 'meta'
         ? {
             executionId,
-            taskState,
+            // Legacy sidecar shape: the retired TaskState wrapper, still read
+            // by the snapshot store's disk-read shim.
+            taskState: {
+              agentConfig: runConfig,
+              activeFiles: {
+                input: false,
+                context: false,
+                media: false,
+                output: false,
+              },
+            },
             description: 'Persisted workflow',
           }
         : undefined,
@@ -2072,24 +2069,24 @@ describe('DesktopProgressBridge', () => {
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
         executionId,
-        expect.objectContaining(taskState.agentConfig),
+        expect.objectContaining(runConfig),
         { parentStreamId: undefined },
       );
-      expectWorkflowResume(runAgent, taskState, executionId);
+      expectWorkflowResume(runAgent, runConfig, executionId);
     } finally {
       bridgeStatus(bridge).clearStream('stream-1');
     }
   });
 
   it('runs a fresh stream through the shared workflow-actions controller', async () => {
-    const taskState = workflowTaskState();
+    const runConfig = workflowConfig();
     const runAgent = vi.fn(async () => {});
     const bridge = await createBridge([], { runAgent });
 
     emitRunConfigFact(bridge, {
       streamId: 'stream-new',
       executionId: 'exec-new',
-      taskState,
+      config: runConfig,
     });
 
     const runNew = assertSupported(
@@ -2103,7 +2100,7 @@ describe('DesktopProgressBridge', () => {
 
     // Fresh run: the existing execution id is dropped (no resume reuse).
     expect(runAgent).toHaveBeenCalledWith(
-      { config: expect.objectContaining(taskState.agentConfig) },
+      { config: expect.objectContaining(runConfig) },
       expect.objectContaining({
         session: expect.objectContaining({
           interactions: expect.objectContaining({ emit: expect.any(Function) }),
@@ -2115,10 +2112,10 @@ describe('DesktopProgressBridge', () => {
   it('resumes canonical streams using sidecar execution ids', async () => {
     const executionId = 'abc123';
     const streamId = 'stream-1' as StreamTabId;
-    const taskState = workflowTaskState();
+    const runConfig = workflowConfig();
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'workflow',
-      agentConfig: taskState.agentConfig,
+      agentConfig: runConfig,
       executionId,
     }));
     const runAgent = vi.fn(async () => {});
@@ -2128,32 +2125,26 @@ describe('DesktopProgressBridge', () => {
       runAgent,
       canonicalStreamIds: [streamId],
       kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, taskState.agentConfig],
+        [`executions/${executionId}/config`, runConfig],
       ]),
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
-        store.setTaskState(
-          streamId,
-          TaskStateSchema.parse(taskState),
-          executionId,
-        );
+        store.setRunConfig(streamId, runConfig, executionId);
         store.setDescription(streamId, 'Persisted workflow');
       },
     });
 
     try {
       expect(snapshots?.getExecutionId(streamId)).toBe(executionId);
-      expect(snapshots?.getRunConfig(streamId)).toMatchObject(
-        taskState.agentConfig,
-      );
+      expect(snapshots?.getRunConfig(streamId)).toMatchObject(runConfig);
       await expect(tryResumeStream(streamId)).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         streamId,
         executionId,
-        expect.objectContaining(taskState.agentConfig),
+        expect.objectContaining(runConfig),
         { parentStreamId: undefined },
       );
-      expectWorkflowResume(runAgent, taskState, executionId);
+      expectWorkflowResume(runAgent, runConfig, executionId);
     } finally {
       bridgeStatus(bridge).clearStream('stream-1');
     }
@@ -2192,13 +2183,13 @@ describe('DesktopProgressBridge', () => {
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
     });
-    const taskState = { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG };
+    const runConfig = SEARCH_TOOL_USE_AGENT_CONFIG;
 
     try {
       emitRunConfigFact(bridge, {
         streamId: 'stream-1',
         executionId: 'ec1001' as ExecutionId,
-        taskState,
+        config: runConfig,
       });
       emitSessionFact(bridge, 'setParentStream', {
         childStreamId: 'stream-1',
@@ -2210,7 +2201,7 @@ describe('DesktopProgressBridge', () => {
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
         'ec1001',
-        taskState.agentConfig,
+        runConfig,
         { parentStreamId },
       );
       expect(resumeToolUseFromResumeData).toHaveBeenCalledWith(
@@ -2264,7 +2255,7 @@ describe('DesktopProgressBridge', () => {
       emitRunConfigFact(bridge, {
         streamId: 'stream-1',
         executionId: 'ec1001' as ExecutionId,
-        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+        config: SEARCH_TOOL_USE_AGENT_CONFIG,
       });
       seedBridgeFollowUp(bridge, 'stream-1' as StreamTabId, 'queued follow-up');
 
@@ -2321,7 +2312,7 @@ describe('DesktopProgressBridge', () => {
       emitRunConfigFact(bridge, {
         streamId: 'stream-1',
         executionId: 'ec1001' as ExecutionId,
-        taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+        config: SEARCH_TOOL_USE_AGENT_CONFIG,
       });
 
       const firstResume = tryResumeStream('stream-1');
@@ -2401,7 +2392,7 @@ describe('DesktopProgressBridge', () => {
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1002' as ExecutionId,
-      taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
+      config: SEARCH_TOOL_USE_AGENT_CONFIG,
     });
     await settleProgressEvents();
     messages.length = 0;
@@ -2449,17 +2440,15 @@ describe('DesktopProgressBridge', () => {
 
     // inputFiles must be string[]; a non-array value makes
     // MainViewPersistedStateSchema.parse() inside buildMainViewState throw,
-    // so restoreTaskState() returns false and the handler must surface it
+    // so restoreRunConfig() returns false and the handler must surface it
     // instead of silently doing nothing (unlike the extension's
     // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1003' as ExecutionId,
-      taskState: {
-        agentConfig: {
-          ...SEARCH_TOOL_USE_AGENT_CONFIG,
-          inputFiles: 12345,
-        },
+      config: {
+        ...SEARCH_TOOL_USE_AGENT_CONFIG,
+        inputFiles: 12345,
       },
     });
     await settleProgressEvents();
@@ -2559,16 +2548,12 @@ describe('DesktopProgressBridge', () => {
       const disposeResumeHandler = processResumeOwner.attach({
         session: processSession,
       });
-      const taskState = workflowTaskState();
-      progressSnapshotStore.setTaskState(
+      progressSnapshotStore.setRunConfig(
         streamId,
-        TaskStateSchema.parse({
-          ...taskState,
-          agentConfig: {
-            ...taskState.agentConfig,
-            agent: agentName,
-            agentCategory: category,
-          },
+        AgentConfigSchema.parse({
+          ...workflowConfig(),
+          agent: agentName,
+          agentCategory: category,
         }),
         executionId,
       );
@@ -2611,15 +2596,25 @@ describe('DesktopProgressBridge', () => {
         } = {},
       ) => {
         const nextTrace = makeFakeTrace();
+        const nextExecutionId = options.executionId ?? executionId;
         const nextHandle = new AgentExecutionHandle(
-          options.executionId ?? executionId,
+          {
+            schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+            streamId: options.childStreamId ?? streamId,
+            executionId: nextExecutionId,
+            agent: options.agentName ?? agentName,
+            category: options.category ?? category,
+            kind: 'agent',
+            configRef: {
+              kind: 'executionConfig',
+              executionId: nextExecutionId,
+              path: `executions/${nextExecutionId}/config.json`,
+            },
+          },
           options.parentStreamId ?? streamId,
-          options.childStreamId ?? streamId,
-          options.agentName ?? agentName,
-          options.category ?? category,
           nextTrace as unknown as ConstructorParameters<
             typeof AgentExecutionHandle
-          >[5],
+          >[2],
         );
         processSession.attachRunTrace(
           nextTrace as unknown as AgentTrace,

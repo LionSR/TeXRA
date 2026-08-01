@@ -17,10 +17,11 @@ describe('tool-use model switch state helpers', () => {
     ).toBe('gpt55');
   });
 
-  it('updates the persisted transient model without rewriting input variables', () => {
+  it('writes the model id and reprojects MODEL without rewriting input variables', () => {
     const input = Object.freeze({ MODEL: 'gpt54' });
     const shared = {
       messages: [],
+      modelId: 'gpt54',
       shouldSkipCycle: false,
       stateSlices: {
         runStateSnapshot: {},
@@ -32,11 +33,15 @@ describe('tool-use model switch state helpers', () => {
     const updated = setToolUseSharedModel(shared, 'gpt55');
 
     expect(updated).toBe(true);
+    expect(shared.modelId).toBe('gpt55');
     expect(shared.stateSlices?.userChannels.input).toBe(input);
     expect(shared.stateSlices?.userChannels.transient.MODEL).toBe('gpt55');
   });
 
   it('returns false when the flow has not reached resumable state', () => {
-    expect(setToolUseSharedModel(toolUseRunShared(), 'gpt55')).toBe(false);
+    const shared = toolUseRunShared();
+
+    expect(setToolUseSharedModel(shared, 'gpt55')).toBe(false);
+    expect(shared.modelId).toBeUndefined();
   });
 });

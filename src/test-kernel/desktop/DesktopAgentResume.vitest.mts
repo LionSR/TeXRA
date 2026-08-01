@@ -72,7 +72,7 @@ function attachResultPresenter(session: SessionHandle): {
 
 function createSnapshots(): StreamSnapshotStore {
   const snapshots = new StreamSnapshotStore();
-  snapshots.setTaskState(stream, { agentConfig: config }, executionId);
+  snapshots.setRunConfig(stream, config, executionId);
   return snapshots;
 }
 

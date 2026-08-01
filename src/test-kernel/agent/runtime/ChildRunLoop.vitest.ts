@@ -67,7 +67,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -77,6 +77,7 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import { createChildStream } from '@tools/childStream';
 import {
@@ -104,14 +105,13 @@ function trackChildHandle(
   childStreamId: StreamTabId,
   status: StreamPhase = STREAM_PHASE.RUNNING,
 ): AgentExecutionHandle {
-  const handle = new AgentExecutionHandle(
+  const handle = testExecutionHandle({
     executionId,
     parentStreamId,
     childStreamId,
-    'fake',
-    'toolUse',
-    { emit: vi.fn() } as never,
-  );
+    agent: 'fake',
+    trace: { emit: vi.fn() } as never,
+  });
   session.executions.trackAgentExecution(handle, { status });
   trackedExecutionIds.add(executionId);
   return handle;
