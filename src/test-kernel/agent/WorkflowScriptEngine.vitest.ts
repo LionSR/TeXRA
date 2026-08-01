@@ -5,6 +5,7 @@ import {
   runWorkflowScript,
   WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
+  WorkflowRunAbortError,
   WorkflowScriptParseError,
   type WorkflowAgentInvocation,
   type WorkflowScriptControl,
@@ -1760,6 +1761,121 @@ return 'incorrect success'`,
       name: 'WorkflowRunAbortError',
       message: 'durable manifest unavailable',
     });
+  });
+
+  it('gives the script a name-only copy of a host-minted abort reason', async () => {
+    // An abort reason crosses the sandbox boundary as name and message only,
+    // so its host-side `kind` never reaches the script and script-side code
+    // can only ever be classified structurally, by name.
+    const logs: string[] = [];
+    const run = runScript(
+      `
+try {
+  await agent('over-cap')
+} catch (error) {
+  log(JSON.stringify({
+    name: error.name,
+    message: error.message,
+    kind: error.kind ?? null,
+    realmLocal: error instanceof Error,
+  }))
+}
+return 'suppressed'`,
+      {
+        maxAgentCalls: 0,
+        onEvent: (event) => {
+          if (event.type === 'log') logs.push(event.message);
+        },
+      },
+    );
+    const fault = await run.catch((error: unknown) => error);
+
+    expect(fault).toBeInstanceOf(WorkflowRunAbortError);
+    expect(fault).toMatchObject({ kind: 'cap' });
+    expect(JSON.parse(logs[0] ?? 'null')).toEqual({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining('agent-call cap'),
+      kind: null,
+      realmLocal: true,
+    });
+  });
+
+  it('promotes an abort surfaced by name to a typed run fault', async () => {
+    // Runner-minted aborts and realm copies are not instances, so the name is
+    // what classifies them; the run then reports its own typed reason.
+    const surfaced = new Error('durable manifest unavailable');
+    surfaced.name = 'WorkflowRunAbortError';
+    expect(surfaced).not.toBeInstanceOf(WorkflowRunAbortError);
+
+    const fault = await runScript(`return await agent('x')`, {
+      runAgent: () => Promise.reject(surfaced),
+    }).catch((error: unknown) => error);
+
+    expect(fault).toBeInstanceOf(WorkflowRunAbortError);
+    expect(fault).toMatchObject({
+      kind: 'runner',
+      message: 'durable manifest unavailable',
+      cause: surfaced,
+    });
+  });
+
+  it('cancels calls the script abandoned with a settlement-cleanup reason', async () => {
+    let cancelReason: unknown;
+    const run = await runScript(
+      `
+agent('abandoned')
+return 'done'`,
+      {
+        runAgent: (invocation: WorkflowAgentInvocation) =>
+          new Promise<string>((resolve) => {
+            invocation.signal.addEventListener(
+              'abort',
+              () => {
+                cancelReason = invocation.signal.reason;
+                resolve('cancelled');
+              },
+              { once: true },
+            );
+          }),
+      },
+    );
+
+    // The cleanup cancellation is not a fault: the script outcome stands.
+    expect(run.result).toBe('done');
+    expect(cancelReason).toBeInstanceOf(WorkflowRunAbortError);
+    expect(cancelReason).toMatchObject({ kind: 'settlement-cleanup' });
+  });
+
+  it('reports the timeout, not the queued call the timeout cancelled', async () => {
+    const events: WorkflowScriptEvent[] = [];
+    await expect(
+      runScript(
+        `
+return await parallel([() => agent('running'), () => agent('queued')])`,
+        {
+          concurrency: 1,
+          timeoutMs: 40,
+          runAgent: async (invocation: WorkflowAgentInvocation) => {
+            await delay(200);
+            return invocation.prompt;
+          },
+          onEvent: (event) => events.push(event),
+        },
+      ),
+    ).rejects.toThrow(/timed out/);
+    // The call that reached its queue slot after the timeout fails with the
+    // reason that stopped the run, and that reason does not outrank the
+    // sandbox's timeout error.
+    expect(
+      events.filter(
+        (event) => event.type === 'agent:end' && event.outcome === 'failed',
+      ),
+    ).toContainEqual(
+      expect.objectContaining({
+        label: 'queued',
+        error: expect.stringContaining('wall clock'),
+      }),
+    );
   });
 
   it('aborts guest execution and the active child from a parent signal', async () => {

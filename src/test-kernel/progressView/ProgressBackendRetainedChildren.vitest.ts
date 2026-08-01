@@ -9,7 +9,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import {
   AgentCategory,
@@ -20,6 +19,7 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 
 import {
   createIsolatedRecordingBackend,
@@ -281,13 +281,13 @@ describe('retained finished children', () => {
     seedParent(backend);
     const executionId = 'c0ffee01' as ExecutionId;
     const childStreamId = 'restamped-stream' as StreamTabId;
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      PARENT,
+      parentStreamId: PARENT,
       childStreamId,
-      'agent-restamped',
-      AgentCategory.ToolUse,
-    );
+      agent: 'agent-restamped',
+      category: AgentCategory.ToolUse,
+    });
     session.executions.trackAgentExecution(handle, {
       status: STREAM_PHASE.RUNNING,
     });

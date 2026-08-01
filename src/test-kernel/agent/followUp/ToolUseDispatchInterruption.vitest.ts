@@ -13,6 +13,7 @@ import type { ProviderMessage } from '@agent/types/ProviderMessage';
 // Local file imports
 import { withTestRunContext } from '../progressTestUtils';
 import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 type FunctionCallMessage = { type: string; call_id: string };
 
@@ -52,63 +53,65 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
     ...baseRoundServices('ToolUseDispatchInterruption'),
     abortSignal: controller.signal,
     checkInterruption: () => controller.signal.aborted,
-    modelHandler: roundModelHandler({
-      createResponse,
-      createToolUseFollowUpMessages: vi.fn(
-        async (
-          _client: unknown,
-          call: { callId: string; name: string },
-          result: unknown,
-        ) =>
-          [
-            {
-              type: 'function_call',
-              call_id: call.callId,
-              name: call.name,
-              arguments: '{}',
-            },
-            {
-              type: 'function_call_output',
-              call_id: call.callId,
-              output: JSON.stringify(result),
-            },
-          ] as ProviderMessage[],
-      ),
-      createUserFollowUpMessages: vi.fn(),
-      extractResponse: (response: { toolCalls?: boolean }) => ({
-        text: '',
-        usage: null,
-        stopReason: response.toolCalls ? 'tool_calls' : 'stop',
+    modelCell: testModelCell(
+      roundModelHandler({
+        createResponse,
+        createToolUseFollowUpMessages: vi.fn(
+          async (
+            _client: unknown,
+            call: { callId: string; name: string },
+            result: unknown,
+          ) =>
+            [
+              {
+                type: 'function_call',
+                call_id: call.callId,
+                name: call.name,
+                arguments: '{}',
+              },
+              {
+                type: 'function_call_output',
+                call_id: call.callId,
+                output: JSON.stringify(result),
+              },
+            ] as ProviderMessage[],
+        ),
+        createUserFollowUpMessages: vi.fn(),
+        extractResponse: (response: { toolCalls?: boolean }) => ({
+          text: '',
+          usage: null,
+          stopReason: response.toolCalls ? 'tool_calls' : 'stop',
+        }),
+        extractToolUse: (response: { toolCalls?: boolean }) => {
+          if (abortOn === 'tool-call-extraction') abort();
+          return response.toolCalls
+            ? [
+                {
+                  callId: 'call-a',
+                  input: {},
+                  name: 'toolA',
+                  provider: 'test',
+                  raw: {},
+                },
+                {
+                  callId: 'call-b',
+                  input: {},
+                  name: 'toolB',
+                  provider: 'test',
+                  raw: {},
+                },
+                {
+                  callId: 'call-c',
+                  input: {},
+                  name: 'toolC',
+                  provider: 'test',
+                  raw: {},
+                },
+              ]
+            : [];
+        },
       }),
-      extractToolUse: (response: { toolCalls?: boolean }) => {
-        if (abortOn === 'tool-call-extraction') abort();
-        return response.toolCalls
-          ? [
-              {
-                callId: 'call-a',
-                input: {},
-                name: 'toolA',
-                provider: 'test',
-                raw: {},
-              },
-              {
-                callId: 'call-b',
-                input: {},
-                name: 'toolB',
-                provider: 'test',
-                raw: {},
-              },
-              {
-                callId: 'call-c',
-                input: {},
-                name: 'toolC',
-                provider: 'test',
-                raw: {},
-              },
-            ]
-          : [];
-      },
-    }),
+    ),
     session: {
       hasQueuedFollowUp: () => false,
     },

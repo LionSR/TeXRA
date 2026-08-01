@@ -24,6 +24,8 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
+import { testModelCell } from './modelCellTestUtils';
+
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'test-model',
@@ -57,11 +59,6 @@ describe('run-scoped tool overlay', () => {
       agentName: 'chat',
       session,
     });
-    const context = createRunContext({
-      modelSource: 'live',
-      getModel: () => CONFIG.model,
-      runScope,
-    });
     const warn = vi.fn<typeof noopTrace.warn>();
     const logger = { ...noopTrace, warn };
     const observedTools: { name: string; forceFunctionCall?: boolean }[][] = [];
@@ -90,33 +87,40 @@ describe('run-scoped tool overlay', () => {
         observedTools.push(options.tools ?? []);
         throw stopAfterObservation;
       },
-    } as unknown as RunToolUseFlowInput['modelHandler'];
+    };
+    const modelCell = testModelCell(modelHandler, CONFIG.model);
+    // The run context reads the same cell the flow drives, as a launch does.
+    const context = createRunContext({ runScope, modelCell });
 
     try {
-      await expect(
-        withRunContext(context, () =>
-          runToolUseFlow(
-            {
-              config: CONFIG,
-              runScope,
-              setting: AgentToolUseSettingSchema.parse({}),
-              prompt: AgentPromptSchema.parse({}),
-              logger,
-              userVarChannels: {
-                input: Object.freeze({ MODEL: CONFIG.model }),
-                transient: {},
-              },
-              modelHandler,
-              checkInterruption: () => false,
-              abortSignal: new AbortController().signal,
-              onRoundFinalized: () => {},
-              isSubagent: true,
-              tools: [tool('first'), tool('second')],
+      // The model error is recorded as the run's `lastError`, so the flow
+      // reports FAILED with it on the result instead of throwing.
+      const result = await withRunContext(context, () =>
+        runToolUseFlow(
+          {
+            config: CONFIG,
+            runScope,
+            setting: AgentToolUseSettingSchema.parse({}),
+            prompt: AgentPromptSchema.parse({}),
+            logger,
+            userVarChannels: {
+              input: Object.freeze({ MODEL: CONFIG.model }),
+              transient: {},
             },
-            new MapToolRegistry({ first: tool('first') }),
-          ),
+            modelCell,
+            onModelChanged: () => {},
+            checkInterruption: () => false,
+            abortSignal: new AbortController().signal,
+            onRoundFinalized: () => {},
+            isSubagent: true,
+            tools: [tool('first'), tool('second')],
+          },
+          new MapToolRegistry({ first: tool('first') }),
         ),
-      ).rejects.toThrow('Tool list observed');
+      );
+
+      expect(result.outcome).toBe('failed');
+      expect(result.error?.message).toContain('Tool list observed');
 
       expect(observedTools[0]?.map(({ name }) => name)).toEqual([
         'first',

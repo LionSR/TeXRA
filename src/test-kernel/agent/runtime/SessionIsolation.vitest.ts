@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   RUN_OUTCOME,
   type ExecutionId,
@@ -17,6 +16,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -58,13 +58,11 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     const streamId = 'stream:iso-interrupt' as StreamTabId;
     const interrupt = vi.fn();
     try {
-      const handle = new AgentExecutionHandle(
+      const handle = testExecutionHandle({
         executionId,
-        streamId,
-        streamId,
-        'assistant',
-        'toolUse',
-      );
+        parentStreamId: streamId,
+        agent: 'assistant',
+      });
       handle.attachInterruptHandler({ interrupt });
       sessionB.executions.track(handle);
 

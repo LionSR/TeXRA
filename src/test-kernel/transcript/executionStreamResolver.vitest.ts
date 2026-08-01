@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -52,9 +51,11 @@ async function appendLogEntry(
   await logStore.flush();
 }
 
-function taskState(agent: string, model = 'deepseekproT'): TaskState {
-  return TaskStateSchema.parse({
-    agentConfig: { agent, model, agentCategory: AgentCategory.ToolUse },
+function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent,
+    model,
+    agentCategory: AgentCategory.ToolUse,
   });
 }
 
@@ -77,7 +78,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const streamId = 'orchestrator@deepseekproT#abc111' as StreamTabId;
 
     const store = new StreamSnapshotStore();
-    store.setTaskState(streamId, taskState('orchestrator'), executionId);
+    store.setRunConfig(streamId, runConfig('orchestrator'), executionId);
     await store.flush();
 
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
@@ -95,9 +96,9 @@ describe('resolvePersistedStreamIdForExecution', () => {
       const seedStore = new StreamSnapshotStore();
       for (let i = 0; i < streamCount; i++) {
         const idHex = i.toString(16).padStart(2, '0');
-        seedStore.setTaskState(
+        seedStore.setRunConfig(
           `agent${i}@model#abcd${idHex}` as StreamTabId,
-          taskState('agent'),
+          runConfig('agent'),
           `abcd${idHex}` as ExecutionId,
         );
       }
@@ -157,7 +158,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
 
     const store = new StreamSnapshotStore();
-    store.setTaskState(streamId, taskState('orchestrator'), executionId);
+    store.setRunConfig(streamId, runConfig('orchestrator'), executionId);
     await store.flush();
 
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
@@ -174,12 +175,12 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const firstStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
     const secondStream = 'zBashTool@tool#abc777' as StreamTabId;
     const snapshotWriter = new StreamSnapshotStore();
-    snapshotWriter.setTaskState(
+    snapshotWriter.setRunConfig(
       firstStream,
-      taskState('orchestrator'),
+      runConfig('orchestrator'),
       executionId,
     );
-    snapshotWriter.setTaskState(secondStream, taskState('bash'), executionId);
+    snapshotWriter.setRunConfig(secondStream, runConfig('bash'), executionId);
     snapshotWriter.setTodos(secondStream, [TODO]);
     await snapshotWriter.flush();
 
@@ -198,12 +199,12 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const workPlanStream = 'aOrchestrator@deepseekproT#abc888' as StreamTabId;
     const logStream = 'zBashTool@tool#abc888' as StreamTabId;
     const snapshotWriter = new StreamSnapshotStore();
-    snapshotWriter.setTaskState(
+    snapshotWriter.setRunConfig(
       workPlanStream,
-      taskState('orchestrator'),
+      runConfig('orchestrator'),
       executionId,
     );
-    snapshotWriter.setTaskState(logStream, taskState('bash'), executionId);
+    snapshotWriter.setRunConfig(logStream, runConfig('bash'), executionId);
     snapshotWriter.setTodos(workPlanStream, [TODO]);
     await snapshotWriter.flush();
 

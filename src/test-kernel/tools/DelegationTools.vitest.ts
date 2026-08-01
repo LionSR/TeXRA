@@ -34,9 +34,10 @@ vi.mock('@tools/childRunDelivery', () => ({
 }));
 
 // Local imports
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import {
   DelegateAgentTool,
   rejectOversizedBibAttachments,
@@ -126,14 +127,14 @@ describe('DelegateAgentTool resume ownership', () => {
   const childStreamId = 'child-stream' as StreamTabId;
 
   function makeHandle(): AgentExecutionHandle {
-    return new AgentExecutionHandle(
+    return testExecutionHandle({
       executionId,
       parentStreamId,
       childStreamId,
-      'review',
-      AgentCategory.ToolUse,
-      { emit: vi.fn() } as never,
-    );
+      agent: 'review',
+      category: AgentCategory.ToolUse,
+      trace: { emit: vi.fn() } as never,
+    });
   }
 
   beforeEach(() => {

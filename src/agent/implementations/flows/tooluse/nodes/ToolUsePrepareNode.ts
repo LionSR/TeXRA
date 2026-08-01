@@ -110,7 +110,7 @@ export class ToolUsePrepareNode<C> extends Node<
     // accurate (nothing was actually inserted).
     let messages: ProviderMessage[];
     try {
-      messages = await this.services.modelHandler.initializeMessages(
+      messages = await this.services.modelCell.handler.initializeMessages(
         userPrefix,
         userRequest,
         mediaFiles,
@@ -121,7 +121,9 @@ export class ToolUsePrepareNode<C> extends Node<
         logUserMessage(
           logger,
           this.services.initialUserMessageForTranscript,
-          this.services.modelHandler.consumeInsertedAttachmentKinds('initial'),
+          this.services.modelCell.handler.consumeInsertedAttachmentKinds(
+            'initial',
+          ),
         );
       }
     }

@@ -12,6 +12,7 @@ import {
 } from '@agent/runtime/ModelFactory';
 import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
+import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
@@ -36,7 +37,7 @@ import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
-import type { SubagentProgressUpdate } from '@shared/schemas';
+import type { RetryErrorInfo, SubagentProgressUpdate } from '@shared/schemas';
 import { RUN_OUTCOME, STREAM_PHASE, type RunOutcome } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -58,12 +59,8 @@ import {
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
-import {
-  currentModelFromUserChannels,
-  setToolUseSharedModel,
-} from './modelSwitchState';
+import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
-import { throwFlowLastError } from '../flowLastError';
 import type { ToolUseServices } from './ToolUseServices';
 
 export interface RunToolUseFlowInput<
@@ -91,11 +88,13 @@ export interface RunToolUseFlowInput<
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: (lastResponse: string | undefined) => void;
-  /** Fires after a running tool-use chat changes its model. */
-  onModelChanged?: (
-    modelHandler: ToolUseServices['modelHandler'],
-    model: string,
-  ) => void;
+  /**
+   * Fires after a running tool-use chat changes its model. The launch context
+   * owns every mirror of the live model (`AgentConfig.model`, the `MODEL` user
+   * variable, usage accounting), so this is required: without it those
+   * mirrors would silently keep reporting the model the run started with.
+   */
+  onModelChanged: (modelHandler: RunModelHandler<C>, model: string) => void;
   /** Runtime feature registry for auto-injected tools. */
   toolInjections?: ToolInjectionRegistry;
   /** Caller-supplied tools available only to this run. */
@@ -121,29 +120,18 @@ export interface RunToolUseFlowResult {
    * run's config carried an `outputSchema` and the model called the tool.
    */
   structured?: unknown;
-}
-
-class ToolUseFlowError extends Error {
-  constructor(
-    message: string,
-    readonly result: RunToolUseFlowResult,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'ToolUseFlowError';
-  }
-}
-
-export function getToolUseFlowErrorResult(
-  error: unknown,
-): RunToolUseFlowResult | undefined {
-  return error instanceof ToolUseFlowError ? error.result : undefined;
+  /**
+   * The structured provider error behind a FAILED outcome. The run reports its
+   * failure here rather than by throwing, so the partial response, touched
+   * files, and cost it did produce travel with it.
+   */
+  error?: RetryErrorInfo;
 }
 
 interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
   readonly session: ToolUseSessionLifecycle;
-  readonly modelHandler: ToolUseServices['modelHandler'];
+  readonly modelHandler: RunModelHandler;
   readonly interactions: SessionHostInteractions;
   readonly model: string;
   interrupt(): void;
@@ -264,7 +252,6 @@ export async function runToolUseFlow<C = unknown>(
     getPendingStructuredOutput: () => pendingStructuredOutput,
     fileService: new TaskRunFileService(executionId),
   };
-  const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
   let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
 
   const persistModelSwitch = async (model: string): Promise<void> => {
@@ -279,12 +266,14 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   const modelSwitchDisabledReason = (model: string): string | undefined => {
-    if (services.config.model === model) return undefined;
+    if (services.modelCell.modelId === model) return undefined;
 
     const nextConfig = getRuntimeModelConfig(model);
     if (!nextConfig) return `Model ${model} is not registered`;
 
-    const activeKey = activeModelHandlerCompatibilityKey(services.modelHandler);
+    const activeKey = activeModelHandlerCompatibilityKey(
+      services.modelCell.handler,
+    );
     if (!activeKey) {
       // Non-factory handlers still reach switchModel's constructor-reference
       // check. Keep the UI permissive rather than guessing their format here.
@@ -302,7 +291,7 @@ export async function runToolUseFlow<C = unknown>(
     if (!nextConfig) {
       throw new Error(`Model ${model} is not registered`);
     }
-    if (services.config.model === model) return;
+    if (services.modelCell.modelId === model) return;
 
     const disabledReason = modelSwitchDisabledReason(model);
     if (disabledReason) {
@@ -313,18 +302,27 @@ export async function runToolUseFlow<C = unknown>(
       );
     }
 
-    const previousHandler = services.modelHandler;
     const nextHandler = (await createModelHandler(
       nextConfig,
       setting.agentCategory,
       services.runScope.session.responseTextProcessing,
-    )) as ToolUseServices<C>['modelHandler'];
-    if (!modelHandlersShareConversationFormat(previousHandler, nextHandler)) {
+    )) as RunModelHandler<C>;
+    if (
+      !modelHandlersShareConversationFormat(
+        services.modelCell.handler,
+        nextHandler,
+      )
+    ) {
       nextHandler.dispose();
       throw new Error(MODEL_SWITCH_DIFFERENT_FORMAT_ERROR);
     }
+    // Both persistence writes land before the live swap, so a failed write
+    // leaves the run on the model it is already using instead of a model no
+    // resume would reconstruct.
+    const nextAgentConfig = { ...services.config, model };
     try {
       await persistModelSwitch(model);
+      await kv.writeConfig(nextAgentConfig);
     } catch (error) {
       nextHandler.dispose();
       throw error;
@@ -332,25 +330,14 @@ export async function runToolUseFlow<C = unknown>(
     nextHandler.setAgentCategory(setting.agentCategory);
     nextHandler.setLogger(logger);
 
-    const nextAgentConfig = { ...services.config, model };
-    await kv.writeConfig(nextAgentConfig);
-
-    services.modelHandler = nextHandler;
-    services.config.model = model;
-    services.userVarChannels.transient.MODEL = model;
-
-    switchedHandlers.add(nextHandler);
-    if (previousHandler !== input.modelHandler) {
-      previousHandler.dispose();
-      switchedHandlers.delete(previousHandler);
-    }
+    services.modelCell.swap(nextHandler, model);
+    input.onModelChanged(nextHandler, model);
     logger.emit({
       type: 'run.config',
       streamId,
       executionId,
-      config: services.config,
+      config: nextAgentConfig,
     });
-    input.onModelChanged?.(nextHandler, model);
   };
 
   // A resume completes its one-shot handoff immediately after the live context
@@ -368,11 +355,11 @@ export async function runToolUseFlow<C = unknown>(
     ownerSession: runSession,
     session: sessionLifecycle,
     get modelHandler() {
-      return services.modelHandler;
+      return services.modelCell.handler;
     },
     interactions: runSession.interactions,
     get model() {
-      return services.config.model;
+      return services.modelCell.modelId;
     },
     interrupt(): void {
       onInterrupt?.();
@@ -380,7 +367,7 @@ export async function runToolUseFlow<C = unknown>(
       sessionLifecycle.interrupt(inResumeStartupWindow ? 'preserve' : 'clear');
     },
     requestImmediateCompaction(): void {
-      services.modelHandler.requestCompaction();
+      services.modelCell.handler.requestCompaction();
       if (!sessionLifecycle.hasQueuedFollowUp()) {
         sessionLifecycle.appendSyntheticFollowUp(
           IMMEDIATE_COMPACTION_FOLLOW_UP,
@@ -414,7 +401,7 @@ export async function runToolUseFlow<C = unknown>(
     }
   };
   const compatibilityKey = activeModelHandlerCompatibilityKey(
-    services.modelHandler,
+    services.modelCell.handler,
   );
 
   // The live host attachment, scoped to the windows where this flow can accept
@@ -437,6 +424,7 @@ export async function runToolUseFlow<C = unknown>(
 
   let shared: ToolUseRunShared = {
     messages: [],
+    modelId: services.modelCell.modelId,
     modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,
     stateSlices: null,
@@ -506,11 +494,7 @@ export async function runToolUseFlow<C = unknown>(
       // a stale legacy shape.
       let migratedData = migrationResult.data;
       let shouldWriteShared = migrationResult.migrated;
-      const sharedModel = migratedData.stateSlices
-        ? (currentModelFromUserChannels(
-            migratedData.stateSlices.userChannels,
-          ) ?? services.config.model)
-        : services.config.model;
+      const sharedModel = migratedData.modelId ?? services.modelCell.modelId;
       const backfillCompatibilityKey =
         migratedData.modelHandlerCompatibilityKey ??
         inferAndLogPersistedModelHandlerCompatibilityKey(
@@ -607,7 +591,7 @@ export async function runToolUseFlow<C = unknown>(
 
     response =
       findLastAssistantText(shared.messages, (m) =>
-        services.modelHandler.extractAssistantText(m),
+        services.modelCell.handler.extractAssistantText(m),
       ) ||
       shared.lastResponse ||
       undefined;
@@ -620,7 +604,11 @@ export async function runToolUseFlow<C = unknown>(
     // suspending a subagent cycle (see its doc comment) — no further gating
     // needed here; the wait node's own `isSubagent`/`stopAfterCycle` check is
     // the single source of truth for whether a suspension is legitimate.
-    if (finalAction === FlowTransition.WAITING) {
+    // A recorded `lastError` still outranks it: a run that failed is terminal,
+    // and reporting it as suspended would park a failure instead of surfacing
+    // it (the wait node stops rather than suspends after an error, so this is
+    // a guard on the ordering, not a live branch).
+    if (finalAction === FlowTransition.WAITING && !shared.lastError) {
       outcome = STREAM_PHASE.WAITING;
     } else {
       const cancelled =
@@ -638,17 +626,6 @@ export async function runToolUseFlow<C = unknown>(
       if (outcome === RUN_OUTCOME.CANCELLED) {
         await activePersistedFlow?.prepareForFollowUp(shared);
       }
-    }
-    if (shared.lastError) {
-      // Re-throw so runFlowWithLifecycle logs the error and shows
-      // the user notification, while preserving terminal run accounting.
-      const err = new ToolUseFlowError(shared.lastError.message, {
-        outcome,
-        response,
-        files,
-        totalCostUsd,
-      });
-      throwFlowLastError(err, shared.lastError);
     }
     if (
       outputSchema !== undefined &&
@@ -704,17 +681,18 @@ export async function runToolUseFlow<C = unknown>(
           : 'terminal',
       ),
     );
-    attemptTeardown('cancelling host interactions', () =>
-      runSession.interactions.cancel({ streamId, cause: 'Run ended.' }),
-    );
-    for (const handler of switchedHandlers) {
-      attemptTeardown('disposing a switched model handler', () =>
-        handler.dispose(),
-      );
-    }
+    // Pending host interactions are cancelled by `runFlowWithLifecycle`'s
+    // finally, which runs after this one — the same order this flow used when
+    // it cancelled them itself, so a queue release still happens first.
   }
 
-  if (primaryFailure) {
+  // A failure the run already holds — thrown out of the flow, or recorded in
+  // `lastError` and carried on the result — outranks a teardown failure. Both
+  // cases report every teardown problem to the log and let the run's own error
+  // reach the caller; only an otherwise successful exit surfaces a teardown
+  // failure as the run's failure.
+  const carriedError = shared.lastError;
+  if (primaryFailure || carriedError) {
     for (const failure of teardownFailures) {
       logSdkError(
         logger,
@@ -722,20 +700,20 @@ export async function runToolUseFlow<C = unknown>(
         failure.error,
       );
     }
-    throw primaryFailure.error;
-  }
-
-  const [firstTeardownFailure, ...additionalTeardownFailures] =
-    teardownFailures;
-  for (const failure of additionalTeardownFailures) {
-    logSdkError(
-      logger,
-      `Tool-use teardown failed while ${failure.operation}`,
-      failure.error,
-    );
-  }
-  if (firstTeardownFailure) {
-    throw firstTeardownFailure.error;
+    if (primaryFailure) throw primaryFailure.error;
+  } else {
+    const [firstTeardownFailure, ...additionalTeardownFailures] =
+      teardownFailures;
+    for (const failure of additionalTeardownFailures) {
+      logSdkError(
+        logger,
+        `Tool-use teardown failed while ${failure.operation}`,
+        failure.error,
+      );
+    }
+    if (firstTeardownFailure) {
+      throw firstTeardownFailure.error;
+    }
   }
   if (earlyResult) return earlyResult;
 
@@ -745,5 +723,6 @@ export async function runToolUseFlow<C = unknown>(
     files,
     totalCostUsd,
     structured: shared.structured,
+    ...(carriedError ? { error: carriedError } : {}),
   };
 }

@@ -8,9 +8,7 @@ import {
   STREAM_STATUS,
   StreamLifecycleStatusSchema,
   StreamPhaseSchema,
-  StreamStatusSchema,
   StreamSubstateSchema,
-  streamStatusToPhase,
 } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
@@ -30,17 +28,12 @@ const ActiveChildInfoBaseSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
   /**
-   * Current execution phase. Persisted rosters written before the
-   * `StreamPhase` cutover carry the retired 7-value `StreamStatus` vocabulary
-   * instead; the legacy union member below maps those to their `StreamPhase`
-   * equivalent on read.
+   * Current execution phase. The roster is liveness state: it is rebuilt from
+   * live handles on every load and never persisted (`StreamSnapshot` clamps
+   * `subagents` to `[]` on hydrate, and `assembleSnapshot` never writes it),
+   * so there is no legacy on-disk vocabulary to normalize here.
    */
-  status: z
-    .union([
-      StreamPhaseSchema,
-      StreamStatusSchema.transform(streamStatusToPhase),
-    ])
-    .optional(),
+  status: StreamPhaseSchema.optional(),
   /** Epoch milliseconds when the child execution began. */
   startedAt: z.int().positive().optional(),
   /**

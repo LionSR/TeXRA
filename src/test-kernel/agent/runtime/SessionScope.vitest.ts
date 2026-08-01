@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { cleanupAllApprovals } from '@tools/approval';
 import { createRunTrace, StreamLogStore } from '@transcript';
@@ -170,13 +170,12 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
       // A child run is tracked in the explicit process session, as desktop
       // composition does instead of using the module default.
       processSession.executions.track(
-        new AgentExecutionHandle(
-          'exec:fu-child',
-          parentStream,
-          'stream:fu-child' as StreamTabId,
-          'orchestrator',
-          'toolUse',
-        ),
+        testExecutionHandle({
+          executionId: 'exec:fu-child',
+          parentStreamId: parentStream,
+          childStreamId: 'stream:fu-child' as StreamTabId,
+          agent: 'orchestrator',
+        }),
       );
 
       // A host-path caller (outside any run ALS, like the desktop IPC handler)

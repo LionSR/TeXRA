@@ -10,7 +10,6 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import {
   AgentCategory,
@@ -40,7 +39,7 @@ import {
   emitRunConfig,
   emitRunEvent,
   emitStreamDescription,
-  toolUseTaskState,
+  toolUseConfig,
   track,
 } from './progressBackendHarness';
 
@@ -212,7 +211,7 @@ describe('ProgressBackend', () => {
       target,
       'child' as StreamTabId,
       'c41111' as ExecutionId,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
     );
 
     await vi.waitFor(() =>
@@ -391,13 +390,13 @@ describe('ProgressBackend', () => {
       first,
       firstStream,
       firstExecution,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
     );
     emitRunConfig(
       second,
       secondStream,
       secondExecution,
-      toolUseTaskState('revise', 'gpt-4o'),
+      toolUseConfig('revise', 'gpt-4o'),
     );
     first.session.status.transition(
       firstStream,
@@ -907,9 +906,9 @@ describe('ProgressBackend', () => {
     // Simulate persistence receiving run.config before progress state sees
     // the RUNNING transition. The transition boundary must refresh the
     // durable category before replacing stale execution state.
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       stream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       'abc123' as ExecutionId,
     );
     backend.state.getOrCreateStreamState(stream, AgentCategory.Workflow);
@@ -991,9 +990,9 @@ describe('ProgressBackend', () => {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
       backend.state.switchActiveStream(stream);
-      backend.state.snapshots.setTaskState(
+      backend.state.snapshots.setRunConfig(
         stream,
-        toolUseTaskState('search', 'deepseekproT'),
+        toolUseConfig('search', 'deepseekproT'),
         'abc123' as ExecutionId,
       );
       backend.state.updateStreamMetadata(stream, {
@@ -1090,9 +1089,9 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.Workflow,
       isRemote: true,
     });
-    backend.state.snapshots.setTaskState(
+    backend.state.snapshots.setRunConfig(
       stream,
-      toolUseTaskState('search', 'deepseekproT'),
+      toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
     backend.state.refreshStreamMetadataFromSnapshot(stream);
@@ -1154,15 +1153,12 @@ describe('ProgressBackend', () => {
       target,
       stream,
       executionId,
-      agentConfigToTaskState(
-        AgentConfigSchema.parse({
-          agent: 'generic',
-          model: 'gpt-5.6-sol',
-          agentCategory: AgentCategory.Workflow,
-          instruction:
-            "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
-        }),
-      ),
+      AgentConfigSchema.parse({
+        agent: 'generic',
+        model: 'gpt-5.6-sol',
+        agentCategory: AgentCategory.Workflow,
+        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+      }),
     );
 
     await vi.waitFor(() =>

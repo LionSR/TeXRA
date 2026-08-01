@@ -141,8 +141,8 @@ function createSecondTierActions(
         requestManualCompaction: vi.fn(),
       },
     },
-    getTaskState: vi.fn(),
-    restoreTaskState: vi.fn(),
+    getRunConfig: vi.fn(),
+    restoreRunConfig: vi.fn(),
     applyFollowUpPlan: vi.fn(),
     applyPolishResult: vi.fn(),
     onPolishError: vi.fn(),
@@ -935,10 +935,10 @@ describe('createProgressViewSecondTierHandlers', () => {
 
   it('leaves restore failure reporting to the host callback', async () => {
     const failure = new Error('restore failed');
-    const taskState = {};
+    const runConfig = {};
     const actions = createSecondTierActions({
-      getTaskState: vi.fn().mockReturnValue(taskState),
-      restoreTaskState: vi.fn().mockRejectedValue(failure),
+      getRunConfig: vi.fn().mockReturnValue(runConfig),
+      restoreRunConfig: vi.fn().mockRejectedValue(failure),
     });
     const handlers = createProgressViewSecondTierHandlers(actions);
 
@@ -948,7 +948,7 @@ describe('createProgressViewSecondTierHandlers', () => {
         stream: 'stream-1',
       }),
     ).rejects.toBe(failure);
-    expect(actions.restoreTaskState).toHaveBeenCalledWith(taskState);
+    expect(actions.restoreRunConfig).toHaveBeenCalledWith(runConfig);
   });
 
   it('notifies compaction through the execution owner session', async () => {
@@ -981,7 +981,7 @@ describe('createProgressViewSecondTierHandlers', () => {
     const polishFailure = new Error('polish failed');
     const reportingFailure = new Error('reporting failed');
     const actions = createSecondTierActions({
-      getTaskState: vi.fn().mockReturnValue({}),
+      getRunConfig: vi.fn().mockReturnValue({}),
       followUpPolish: {
         polishFollowUp: vi.fn().mockRejectedValue(polishFailure),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],
@@ -1006,7 +1006,7 @@ describe('createProgressViewSecondTierHandlers', () => {
     const order: string[] = [];
     const polishResult = { kind: 'skipped' };
     const actions = createSecondTierActions({
-      getTaskState: vi.fn().mockReturnValue({}),
+      getRunConfig: vi.fn().mockReturnValue({}),
       followUpPolish: {
         polishFollowUp: vi.fn(async () => {
           order.push('polish');
@@ -1040,7 +1040,7 @@ describe('createProgressViewSecondTierHandlers', () => {
   it('polishes without a progress reporter when the host has none', async () => {
     const polishResult = { kind: 'skipped' };
     const actions = createSecondTierActions({
-      getTaskState: vi.fn().mockReturnValue({}),
+      getRunConfig: vi.fn().mockReturnValue({}),
       followUpPolish: {
         polishFollowUp: vi.fn().mockResolvedValue(polishResult),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],

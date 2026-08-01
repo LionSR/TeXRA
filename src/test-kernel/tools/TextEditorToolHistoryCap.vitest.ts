@@ -8,13 +8,13 @@ import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { TextEditorTool } from '@tools/TextEditorTool';
 import { cleanupAllApprovals } from '@tools/approval';
@@ -116,13 +116,11 @@ describe('TextEditorTool undo history lifecycle', () => {
     const tool = new TextEditorTool();
     const session = defaultSession();
     const streamId = `stream:${EXECUTION_ID}` as StreamTabId;
-    const handle = new AgentExecutionHandle(
-      EXECUTION_ID,
-      streamId,
-      streamId,
-      'orchestrator',
-      'toolUse',
-    );
+    const handle = testExecutionHandle({
+      executionId: EXECUTION_ID,
+      parentStreamId: streamId,
+      agent: 'orchestrator',
+    });
     session.executions.track(handle);
 
     try {
@@ -161,13 +159,11 @@ describe('TextEditorTool undo history lifecycle', () => {
     const tool = new TextEditorTool();
     const session = defaultSession();
     const streamId = `stream:${EXECUTION_ID}` as StreamTabId;
-    const handle = new AgentExecutionHandle(
-      EXECUTION_ID,
-      streamId,
-      streamId,
-      'orchestrator',
-      'toolUse',
-    );
+    const handle = testExecutionHandle({
+      executionId: EXECUTION_ID,
+      parentStreamId: streamId,
+      agent: 'orchestrator',
+    });
     session.executions.track(handle);
     const addListener = vi.spyOn(session.executions, 'addListener');
 

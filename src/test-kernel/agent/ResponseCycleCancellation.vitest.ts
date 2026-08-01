@@ -36,15 +36,12 @@ vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
   }),
 }));
 
-vi.mock('@agent/core/flows/CycleServices', () => ({
-  withModelClient: async (services: unknown) => services,
-}));
-
 // Local imports
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import type { AgentFileLocation } from '@shared/schemas';
 import { reflectionFlowShared } from './progressTestUtils';
+import { testModelCell } from './modelCellTestUtils';
 
 const outputLocation: AgentFileLocation = {
   kind: 'workspace',
@@ -63,10 +60,10 @@ function makeNode(options: {
   return new ResponseCycleNode().setServices({
     getOutputFileLocation: async () => outputLocation,
     checkInterruption: options.checkInterruption,
-    modelHandler: {
+    modelCell: testModelCell({
       initializeOutputAndPrefill: async () => [false, []],
       clearCompactionRequest: options.clearCompactionRequest ?? vi.fn(),
-    },
+    }),
     config: {},
     setting: {},
     logger: options.logger ?? { error: vi.fn(), debug: vi.fn() },

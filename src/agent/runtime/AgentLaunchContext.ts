@@ -29,6 +29,7 @@ import {
   createModelHandler,
   createModelHandlerForCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
+import { ModelCell } from '@agent/runtime/ModelCell';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
@@ -125,15 +126,13 @@ export async function withExecutionRunContext<T>(
   // per-run flags (e.g. `stopAfterCycle`, `approvalPromptsUnavailable`,
   // `runtimeUnavailableTools`) live in one place and are never silently
   // dropped. Run identity (`streamId`/`executionId`/`agentName`/
-  // `workingDirectory`) travels via `ctx.runScope` unchanged; only
-  // `AgentConfig.model` is renamed here, to `RunContext.model`, reading through
-  // `getModel` so tools observe model switches applied to
-  // `AgentLaunchContext.config.model` during an interactive session.
+  // `workingDirectory`) travels via `ctx.runScope` unchanged, and the model
+  // via the run's `ModelCell`, so tools observe a mid-session model switch
+  // without depending on the `AgentConfig.model` mirror.
   return await withRunContext(
     createRunContext({
       runScope: ctx.runScope,
-      modelSource: 'live' as const,
-      getModel: () => ctx.config.model,
+      modelCell: ctx.modelCell,
       ...options,
     }),
     fn,
@@ -306,6 +305,7 @@ async function assembleAgentLaunchContext(
           session.responseTextProcessing,
         ),
   );
+  const modelCell = new ModelCell(modelHandler, config.model);
 
   const transcriptWriter = await session.transcripts.loadAndAcquireWriter(
     streamId,
@@ -432,7 +432,7 @@ async function assembleAgentLaunchContext(
     config,
     setting,
     prompt,
-    modelHandler,
+    modelCell,
     logger: agentLogger,
     parentStage,
     storageKey,

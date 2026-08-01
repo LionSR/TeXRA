@@ -3,11 +3,12 @@ import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { withModelClient } from '@agent/core/flows/CycleServices';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 // Third-party imports
 import type { GoogleGenAI } from '@google/genai';
@@ -16,14 +17,14 @@ interface TestClient {
   readonly route: 'configured' | 'personal';
 }
 
-function handler(
+function cellFor(
   initial: TestClient,
   refreshClient: IModelHandler['refreshClient'],
-): IModelHandler {
-  return {
+): ModelCell<TestClient> {
+  return testModelCell<TestClient>({
     getClient: vi.fn(async () => initial),
     refreshClient,
-  } as unknown as IModelHandler;
+  });
 }
 
 class CredentialRouteProbe extends ModelHandlerGoogleGenAI {
@@ -48,67 +49,66 @@ describe('model client route publication', () => {
     const initial = { route: 'configured' } as const;
     const candidate = { route: 'personal' } as const;
     const construction = pDefer<TestClient>();
-    const modelHandler = handler(
+    const cell = cellFor(
       initial,
       vi.fn(async () => await construction.promise),
     );
-    const services = await withModelClient({}, modelHandler);
+    await cell.getClient();
 
-    const refresh = services.refreshClient?.('personal');
-    expect(services.client).toBe(initial);
+    const rebind = cell.rebind('personal');
+    await expect(cell.getClient()).resolves.toBe(initial);
 
     construction.resolve(candidate);
-    await refresh;
-    expect(services.client).toBe(candidate);
+    await rebind;
+    await expect(cell.getClient()).resolves.toBe(candidate);
   });
 
   it('leaves the previous route intact when candidate construction fails', async () => {
     const initial = { route: 'configured' } as const;
-    const modelHandler = handler(
+    const cell = cellFor(
       initial,
       vi.fn(async () => {
         throw new Error('candidate failed');
       }),
     );
-    const services = await withModelClient({}, modelHandler);
+    await cell.getClient();
 
-    await expect(services.refreshClient?.('personal')).rejects.toThrow(
-      'candidate failed',
-    );
-    expect(services.client).toBe(initial);
+    await expect(cell.rebind('personal')).rejects.toThrow('candidate failed');
+    await expect(cell.getClient()).resolves.toBe(initial);
   });
 
   it('does not construct a candidate when cancellation already won', async () => {
     const initial = { route: 'configured' } as const;
     const refreshClient = vi.fn(async () => ({ route: 'personal' }) as const);
-    const services = await withModelClient({}, handler(initial, refreshClient));
+    const cell = cellFor(initial, refreshClient);
+    await cell.getClient();
     const controller = new AbortController();
     controller.abort(new Error('cancelled before construction'));
 
-    await expect(
-      services.refreshClient?.('personal', controller.signal),
-    ).rejects.toThrow('cancelled before construction');
+    await expect(cell.rebind('personal', controller.signal)).rejects.toThrow(
+      'cancelled before construction',
+    );
     expect(refreshClient).not.toHaveBeenCalled();
-    expect(services.client).toBe(initial);
+    await expect(cell.getClient()).resolves.toBe(initial);
   });
 
   it('does not publish a candidate when cancellation wins after construction', async () => {
     const initial = { route: 'configured' } as const;
     const controller = new AbortController();
     const candidate = { route: 'personal' } as const;
-    const modelHandler = handler(
+    const cell = cellFor(
       initial,
       vi.fn(async () => {
         controller.abort(new Error('cancelled after construction'));
         return candidate;
       }),
     );
-    const services = await withModelClient({}, modelHandler);
+    await cell.getClient();
 
-    await expect(
-      services.refreshClient?.('personal', controller.signal),
-    ).rejects.toThrow('cancelled after construction');
-    expect(services.client).toBe(initial);
+    await expect(cell.rebind('personal', controller.signal)).rejects.toThrow(
+      'cancelled after construction',
+    );
+    await expect(cell.getClient()).resolves.toBe(initial);
   });
 
   it('reflects the current client route and rebinds after refresh swaps the client', async () => {
@@ -118,20 +118,20 @@ describe('model client route publication', () => {
       [initial, 'relay'],
       [candidate, 'api-key'],
     ]);
-    const modelHandler = {
+    const cell = testModelCell<TestClient>({
       getClient: vi.fn(async () => initial),
       refreshClient: vi.fn(async () => candidate),
       getCredentialRouteForClient: vi.fn((client: TestClient) =>
         routes.get(client),
       ),
-    } as unknown as IModelHandler;
-    const services = await withModelClient({}, modelHandler);
+    });
 
-    expect(services.clientCredentialRoute).toBe('relay');
+    await cell.getClient();
+    expect(cell.route).toBe('relay');
 
-    await services.refreshClient?.('personal');
-    expect(services.client).toBe(candidate);
-    expect(services.clientCredentialRoute).toBe('api-key');
+    await cell.rebind('personal');
+    await expect(cell.getClient()).resolves.toBe(candidate);
+    expect(cell.route).toBe('api-key');
   });
 
   it('publishes stable wire-route keys without retaining the secret', () => {

@@ -11,8 +11,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
@@ -21,6 +20,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 import {
@@ -104,7 +104,7 @@ function parentRunContext(
   return createRunContext({
     streamId: PARENT_STREAM_ID,
     executionId: 'parent-exec',
-    model: 'deepseekT',
+    modelCell: { modelId: 'deepseekT' },
     session: defaultSession(),
     ...overrides,
   });
@@ -209,13 +209,12 @@ function mockWaitingChildOnce(
 ): void {
   mocks.executeAgent.mockImplementationOnce(
     async (_config, executionId: string, runOptions) => {
-      const handle = new AgentExecutionHandle(
+      const handle = testExecutionHandle({
         executionId,
-        PARENT_STREAM_ID,
-        CHILD_STREAM_ID,
-        'review',
-        'toolUse',
-      );
+        parentStreamId: PARENT_STREAM_ID,
+        childStreamId: CHILD_STREAM_ID,
+        agent: 'review',
+      });
       defaultSession().executions.track(handle);
       runOptions.onStreamResolved?.(CHILD_STREAM_ID);
       runOptions.onRun?.(handle);
@@ -465,18 +464,20 @@ describe('headless delegation', () => {
     );
   });
 
-  it('records a thrown AgentFlowError cost once for durable in-band execution', async () => {
+  it('records a failed child cost once for durable in-band execution', async () => {
     const onCost = vi.fn();
-    mocks.executeAgent.mockRejectedValueOnce(
-      new AgentFlowError('review model failed', {
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      const failed = {
         category: 'toolUse',
         outcome: 'failed',
         executionId: IN_BAND_LOGICAL_EXECUTION_ID,
         streamId: 'child-stream',
         response: 'Partial review.',
         totalCostUsd: 0.61,
-      }),
-    );
+      };
+      await options.onRunError?.(new Error('review model failed'), failed);
+      return failed;
+    });
 
     await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
       'review model failed',
@@ -801,15 +802,17 @@ describe('headless delegation', () => {
   });
 
   it('preserves the child failure when its failure result cannot be constructed', async () => {
-    mocks.executeAgent.mockRejectedValueOnce(
-      new AgentFlowError('review model failed', {
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      const failed = {
         category: 'toolUse',
         outcome: 'failed',
         executionId: 'child-exec',
         streamId: 'child-stream',
         files: [42],
-      } as never),
-    );
+      } as never;
+      await options.onRunError?.(new Error('review model failed'), failed);
+      return failed;
+    });
 
     const run = runInBand(delegationOptions());
 
@@ -1022,36 +1025,9 @@ describe('headless delegation', () => {
     );
     expect(recordSubagentCost).toHaveBeenCalledTimes(1);
     expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
-  });
-
-  it('rolls up thrown child error results during one-shot runs', async () => {
-    const recordSubagentCost = vi.fn();
-    mocks.executeAgent.mockRejectedValueOnce(
-      new AgentFlowError('review model failed', {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: 'child-exec',
-        streamId: 'child-stream',
-        totalCostUsd: 0.57,
-      }),
-    );
-
-    const result = await withToolFileInteractionContext(
-      { tracker: {} as never, hooks: { recordSubagentCost } },
-      () =>
-        withRunContext(parentRunContext({ stopAfterCycle: true }), () =>
-          callDelegateReview(),
-        ),
-    );
-
-    expect(result.summary).toBe("Subagent 'review' failed");
-    expect(result.status).toBe('error');
-    expect(result.error).toBe('review model failed');
-    expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-    expect(recordSubagentCost).toHaveBeenCalledWith(0.57);
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        result: expect.objectContaining({ cost: 0.57, outcome: 'failed' }),
+        result: expect.objectContaining({ cost: 0.42, outcome: 'failed' }),
       }),
     );
   });

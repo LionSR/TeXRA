@@ -18,15 +18,16 @@ import {
   type AgentRunHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
   runFlowWithLifecycle,
 } from '@agent/runtime/AgentRunLifecycle';
 import {
-  AgentFlowError,
   type ToolUseFlowResult,
   type WaitingToolUseFlowResult,
+  type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { platform } from '@platform/platform';
@@ -47,6 +48,7 @@ import {
   executionLeasePath,
   writeForeignLease,
 } from '@test/support/executionLeaseFixtures';
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   clearStreamStatusForTest,
@@ -108,6 +110,7 @@ let lifecycleFixtureCounter = 0;
 function lifecycleFixture(
   slug: string,
   agent = 'test-agent',
+  category: AgentCategory = AgentCategory.ToolUse,
 ): {
   executionId: ExecutionId;
   streamId: StreamTabId;
@@ -121,7 +124,7 @@ function lifecycleFixture(
     executionId,
     streamId,
     streamStatus: defaultSession().status,
-    ctx: createTestLaunchContext({ executionId, streamId, agent }),
+    ctx: createTestLaunchContext({ executionId, streamId, agent, category }),
   };
 }
 
@@ -131,6 +134,21 @@ function toolUseResult(
   outcome: RunOutcome,
 ): ToolUseFlowResult {
   return { category: 'toolUse', outcome, executionId, streamId };
+}
+
+function workflowResult(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  outcome: RunOutcome,
+): WorkflowFlowResult {
+  return {
+    category: 'workflow',
+    outcome,
+    executionId,
+    streamId,
+    outputs: [],
+    compileFailures: [],
+  };
 }
 
 function waitingResult(
@@ -188,6 +206,41 @@ describe('runFlowWithLifecycle', () => {
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       clearStreamStatusForTest(streamStatus, streamId);
       vi.useRealTimers();
+    }
+  });
+
+  // The run's category reaches the handle and the terminal `result` through
+  // the one descriptor the lifecycle builds, so a workflow run reports
+  // `workflow` on both without either side re-deriving the string.
+  it('reports the config agent category on the handle and terminal result', async () => {
+    await initLifecycleTestPlatform(true);
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-workflow-category',
+      'polish',
+      AgentCategory.Workflow,
+    );
+    let terminalResult: AgentRunHandle['result'] | undefined;
+
+    try {
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () =>
+          workflowResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        {
+          onRun: (handle) => {
+            expect(handle.category).toBe('workflow');
+            terminalResult = handle.result;
+          },
+        },
+      );
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      await expect(terminalResult).resolves.toMatchObject({
+        category: 'workflow',
+        agentName: 'polish',
+      });
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
     }
   });
 
@@ -1031,6 +1084,7 @@ describe('runFlowWithLifecycle', () => {
       executionId,
       streamId,
       totalCostUsd: 0.73,
+      error: { message: 'subagent failed', userRetryable: false },
     };
     const onError = vi.fn();
 
@@ -1039,20 +1093,110 @@ describe('runFlowWithLifecycle', () => {
 
       const result = await runFlowWithLifecycle(
         ctx,
-        async () => {
-          throw new AgentFlowError('subagent failed', carriedResult);
+        async () => carriedResult,
+        {
+          isSubagent: true,
+          onError,
         },
-        { isSubagent: true, onError },
       );
 
       expect(result).toEqual(carriedResult);
       expect(onError).toHaveBeenCalledWith(
-        expect.any(AgentFlowError),
+        expect.objectContaining({ message: 'subagent failed' }),
         carriedResult,
       );
     } finally {
       defaultSession().executions.untrack(executionId);
       clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('publishes the structured error facts a flow carried out on its result', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'lifecycle-carried-flow-error',
+    );
+    const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+    const emit = vi.spyOn(ctx.logger, 'emit');
+    storageMocks.finalizeExecution.mockClear();
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse' as const,
+          outcome: RUN_OUTCOME.FAILED,
+          executionId,
+          streamId,
+          response: 'partial answer',
+          error: {
+            message: 'provider exploded',
+            userRetryable: true,
+            statusCode: 503,
+          },
+        })),
+      ).rejects.toThrow('provider exploded');
+
+      // A carried failure is exactly as loud as a thrown one: same terminal
+      // status, same stage outcome, same classified error on the result event.
+      expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        executionId,
+        terminalStatus: EXECUTION_STATUS.ERROR,
+        flowRecord: 'preserve',
+      });
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          error: expect.objectContaining({
+            kind: 'unexpected',
+            statusCode: 503,
+            userRetryable: true,
+          }),
+        }),
+      );
+    } finally {
+      emit.mockRestore();
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
+  it('classifies a carried missing-api-key failure through the flattened flag', async () => {
+    const { executionId, streamId, ctx } = lifecycleFixture(
+      'lifecycle-carried-missing-key',
+    );
+    const emit = vi.spyOn(ctx.logger, 'emit');
+    storageMocks.finalizeExecution.mockClear();
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse' as const,
+          outcome: RUN_OUTCOME.FAILED,
+          executionId,
+          streamId,
+          response: '',
+          // The retry-state flatten drops the Error and its Symbol marker;
+          // the carried flag is what keeps the kind reachable at this exit.
+          error: {
+            message: 'Missing OpenRouter API key.',
+            userRetryable: false,
+            missingApiKey: true as const,
+          },
+        })),
+      ).rejects.toThrow('Missing OpenRouter API key.');
+
+      expect(emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          error: expect.objectContaining({ kind: 'missing-api-key' }),
+        }),
+      );
+    } finally {
+      emit.mockRestore();
+      defaultSession().executions.untrack(executionId);
     }
   });
 });
@@ -1067,14 +1211,12 @@ describe('finalizeRunTerminal', () => {
     const executionId = 'exec-finalize-race';
     const streamId = 'stream-finalize-race' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      streamId,
-      streamId,
-      'test-agent',
-      'toolUse',
-      noopTrace,
-    );
+      parentStreamId: streamId,
+      agent: 'test-agent',
+      trace: noopTrace,
+    });
     const untrack = vi.fn();
     const traceEmit = vi.spyOn(noopTrace, 'emit');
     storageMocks.finalizeExecution.mockClear();
@@ -1144,14 +1286,12 @@ describe('finalizeRunTerminal', () => {
     const executionId = 'exec-finalize-artifact-order';
     const streamId = 'stream-finalize-artifact-order' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      streamId,
-      streamId,
-      'test-agent',
-      'toolUse',
-      noopTrace,
-    );
+      parentStreamId: streamId,
+      agent: 'test-agent',
+      trace: noopTrace,
+    });
     const untrack = vi.fn();
     let releaseFlush: (() => void) | undefined;
     const flushArtifacts = vi.fn(
@@ -1197,14 +1337,12 @@ describe('finalizeRunTerminal', () => {
     const executionId = 'exec-finalize-metadata-failure';
     const streamId = 'stream-finalize-metadata-failure' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      streamId,
-      streamId,
-      'test-agent',
-      'toolUse',
-      noopTrace,
-    );
+      parentStreamId: streamId,
+      agent: 'test-agent',
+      trace: noopTrace,
+    });
     const untrack = vi.fn();
     const durabilityError = new Error('metadata disk write failed');
     storageMocks.finalizeExecution.mockResolvedValueOnce({
@@ -1264,14 +1402,12 @@ describe('finalizeRunTerminal', () => {
     const executionId = 'exec-finalize-stopped';
     const streamId = 'stream-finalize-stopped' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      streamId,
-      streamId,
-      'test-agent',
-      'toolUse',
-      noopTrace,
-    );
+      parentStreamId: streamId,
+      agent: 'test-agent',
+      trace: noopTrace,
+    });
     const untrack = vi.fn();
     const stage = { end: vi.fn() };
     storageMocks.finalizeExecution.mockClear();
@@ -1324,14 +1460,12 @@ describe('finalizeRunTerminal', () => {
     const executionId = 'exec-finalize-failed-then-stopped';
     const streamId = 'stream-finalize-failed-then-stopped' as StreamTabId;
     const streamStatus = new StreamStatusMachine();
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
-      streamId,
-      streamId,
-      'test-agent',
-      'toolUse',
-      noopTrace,
-    );
+      parentStreamId: streamId,
+      agent: 'test-agent',
+      trace: noopTrace,
+    });
     const untrack = vi.fn();
     channelTraceMocks.warn.mockClear();
 

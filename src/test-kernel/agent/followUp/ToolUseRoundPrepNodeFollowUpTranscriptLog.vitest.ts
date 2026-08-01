@@ -6,6 +6,7 @@ import { ToolUseRoundPrepNode } from '@agent/core/flows/toolUseRound/ToolUseRoun
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import { testRunScope, withTestRunContext } from '../progressTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseRoundServices<unknown>> = {},
@@ -16,11 +17,11 @@ function buildServices(
     config: { model: 'deepseekT', agent: 'chat' } as never,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     onRoundFinalized: () => {},
-    modelHandler: {
+    modelCell: testModelCell({
       createUserFollowUpMessages: vi.fn(async (messages) => messages),
       addMediaToUserMessage: vi.fn(async () => []),
       capabilities: {},
-    } as never,
+    }) as never,
     fileService: { createLocation: vi.fn() } as never,
     toolRegistry: {} as never,
     ...overrides,
@@ -42,7 +43,7 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
     // asked for — otherwise that turn's transcript row silently vanishes.
     const services = buildServices();
     (
-      services.modelHandler.createUserFollowUpMessages as ReturnType<
+      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
         typeof vi.fn
       >
     ).mockRejectedValue(new Error('follow-up append failed'));
@@ -100,7 +101,7 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
   it('does not log synthetic follow-ups', async () => {
     const services = buildServices();
     (
-      services.modelHandler.createUserFollowUpMessages as ReturnType<
+      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
         typeof vi.fn
       >
     ).mockRejectedValue(new Error('boom'));

@@ -13,6 +13,7 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
+import { classifyAgentError } from '@common/errors';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -232,5 +233,26 @@ describe('ModelHandler.getApiKey resolution', () => {
     assert.equal(configured.route, 'relay');
     assert.equal(configured.apiKey, 'relay-token');
     assert.equal(canUseServerSideKeys.mock.calls.length, 1);
+  });
+
+  it('tags its missing-key throw so the run classifies it without reading the message', async () => {
+    // fetchApiKeyOrThrow is the one producer of the missing-credential fact.
+    // `classifyAgentError` reads the marker it attaches, so the per-provider
+    // wording above is free to change without silently reclassifying the run
+    // as `unexpected` (which is what the deleted substring predicates did to
+    // the OpenRouter variant, whose wording they never matched).
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
+    stubServerSideKeyService();
+    const handler = new ExposedKeyHandler(
+      buildTestModelConfig(API_KEY_TEST_CONFIG),
+    );
+
+    const error = await handler.exposeResolveClientCredential().then(
+      () => undefined,
+      (caught: unknown) => caught,
+    );
+
+    assert.match(String(error), /Missing OpenRouter API key/);
+    assert.equal(classifyAgentError(error), 'missing-api-key');
   });
 });

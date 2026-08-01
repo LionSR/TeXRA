@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isProcessAgent } from '@shared/streams/agentKind';
+
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
@@ -14,21 +16,37 @@ const RunConfigReferenceSchema = z.strictObject({
   path: z.string(),
 });
 
-export const RunDescriptorSchema = z.strictObject({
+const RunDescriptorSchema = z.strictObject({
   schemaVersion: z.literal(RUN_DESCRIPTOR_SCHEMA_VERSION),
   streamId: StreamTabIdSchema,
   executionId: ExecutionIdSchema,
   agent: z.string().min(1),
   category: AgentCategorySchema,
-  /**
-   * What owns the stream. Optional only for descriptors written before this
-   * field existed; every new descriptor supplies it explicitly.
-   */
-  kind: RunKindSchema.optional(),
+  /** What owns the stream: an agent run, an OS process, or a workflow script. */
+  kind: RunKindSchema,
   configRef: RunConfigReferenceSchema,
 });
 
 export type RunDescriptor = z.infer<typeof RunDescriptorSchema>;
+
+/**
+ * Disk shape of a persisted descriptor: the canonical one, or one written
+ * before `kind` existed (#9119) completed here. Legacy descriptors gain the
+ * kind their readers used to re-derive for themselves, so a descriptor that
+ * reaches any consumer always carries its full identity. `workflowScript` is
+ * unreachable by construction: that kind and this field shipped together, so a
+ * descriptor without it predates workflow-script streams being distinguished at
+ * all, which is exactly what the old consumer-side derivation assumed.
+ */
+export const PersistedRunDescriptorSchema = z.union([
+  RunDescriptorSchema,
+  RunDescriptorSchema.omit({ kind: true }).transform(
+    (legacy): RunDescriptor => ({
+      ...legacy,
+      kind: isProcessAgent(legacy.agent) ? 'process' : 'agent',
+    }),
+  ),
+]);
 
 export function buildRunDescriptor(input: {
   streamId: z.infer<typeof StreamTabIdSchema>;

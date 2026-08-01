@@ -15,10 +15,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import {
-  AgentExecutionHandle,
-  type ExecutionHandle,
-} from '@agent/runtime/ExecutionHandle';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
@@ -197,8 +193,6 @@ export function createChatSessionController(
   const runtimeSession = defaultSession();
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
-  const executionInteractionOwners = new Map<string, object>();
-  const streamInteractionOwners = new Map<StreamTabId, object>();
 
   // Run facts belong to the TUI session, not to any one root turn. A stopped
   // root may leave detached children running, and those children must keep
@@ -319,6 +313,9 @@ export function createChatSessionController(
   // immediately. Host interactions remain attached until every execution that
   // inherited this runtime host settles, so detached children retain a visible,
   // answerable approval path without keeping the completed root turn pending.
+  // The runtime owns that "still inherited" fact (see
+  // `ExecutionRegistry.interactionOwnership`); this host only claims its root
+  // run and reacts to the release.
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
@@ -327,9 +324,6 @@ export function createChatSessionController(
     readonly ownExecution: (executionId: ExecutionId) => void;
     readonly finalize: () => void;
   } => {
-    const interactionOwner = {};
-    const ownedExecutionIds = new Set<string>();
-    const pendingActivationIds = new Set<string>();
     const presentationHost = createCliRuntimeHost(sessionContext);
     const detachHostInteractions = runtimeSession.useHostInteractions(
       createTuiHostInteractions(presentationHost, sessionContext),
@@ -344,121 +338,22 @@ export function createChatSessionController(
       resultToastAttached = false;
       detachResultToast();
     };
-    let released = false;
-    let rootFinalized = false;
-    let rootExecutionId: ExecutionId | undefined;
-    const executions = runtimeSession.executions;
-    const releaseIfUnused = (): void => {
-      if (
-        rootFinalized &&
-        ownedExecutionIds.size === 0 &&
-        pendingActivationIds.size === 0
-      ) {
-        releaseHost();
-      }
-    };
-    const observeExecution = (
-      executionId: string,
-      handle: ExecutionHandle | undefined,
-    ): void => {
-      if (!handle) {
-        if (executionInteractionOwners.get(executionId) === interactionOwner) {
-          executionInteractionOwners.delete(executionId);
-          ownedExecutionIds.delete(executionId);
+    const ownership = runtimeSession.executions.interactionOwnership.open(
+      (): void => {
+        detachResultToastOnce();
+        detachHostInteractions();
+        if (session.presentationHost === presentationHost) {
+          session.presentationHost = undefined;
         }
-        releaseIfUnused();
-        return;
-      }
-      const ownsExecution =
-        executionInteractionOwners.get(executionId) === interactionOwner;
-      const ownsParent =
-        streamInteractionOwners.get(handle.parentStreamId) === interactionOwner;
-      if (!ownsExecution && !ownsParent) {
-        ownedExecutionIds.delete(executionId);
-        releaseIfUnused();
-        return;
-      }
-      executionInteractionOwners.set(executionId, interactionOwner);
-      ownedExecutionIds.add(executionId);
-      if (handle instanceof AgentExecutionHandle) {
-        streamInteractionOwners.set(handle.childStreamId, interactionOwner);
-      }
-    };
-    const detachExecutionListener =
-      executions.addRegistrationListener(observeExecution);
-    const detachChildActivationListener = executions.addChildActivationListener(
-      (activation, active) => {
-        if (active) {
-          if (
-            streamInteractionOwners.get(activation.parentStreamId) !==
-            interactionOwner
-          ) {
-            return;
-          }
-          pendingActivationIds.add(activation.executionId);
-          executionInteractionOwners.set(
-            activation.executionId,
-            interactionOwner,
-          );
-          streamInteractionOwners.set(
-            activation.childStreamId,
-            interactionOwner,
-          );
-          return;
-        }
-
-        pendingActivationIds.delete(activation.executionId);
-        if (
-          !executions.getHandle(activation.executionId) &&
-          executionInteractionOwners.get(activation.executionId) ===
-            interactionOwner
-        ) {
-          executionInteractionOwners.delete(activation.executionId);
-          if (
-            streamInteractionOwners.get(activation.childStreamId) ===
-            interactionOwner
-          ) {
-            streamInteractionOwners.delete(activation.childStreamId);
-          }
-        }
-        releaseIfUnused();
+        void presentationHost.close();
       },
     );
-    const deleteOwnedEntries = <K>(map: Map<K, object>): void => {
-      for (const [key, owner] of map) {
-        if (owner === interactionOwner) map.delete(key);
-      }
-    };
-    const releaseHost = (): void => {
-      if (released) return;
-      released = true;
-      detachExecutionListener();
-      detachChildActivationListener();
-      deleteOwnedEntries(executionInteractionOwners);
-      deleteOwnedEntries(streamInteractionOwners);
-      detachResultToastOnce();
-      detachHostInteractions();
-      if (session.presentationHost === presentationHost) {
-        session.presentationHost = undefined;
-      }
-      void presentationHost.close();
-    };
-    disposers.push(releaseHost);
+    disposers.push(() => ownership.release());
 
-    const releaseHostWhenUnused = (): void => {
-      rootFinalized = true;
-      releaseIfUnused();
-    };
     return {
       presentationHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
-      ownExecution: (executionId): void => {
-        rootExecutionId = executionId;
-        executionInteractionOwners.set(executionId, interactionOwner);
-        ownedExecutionIds.add(executionId);
-        const handle = executions.getHandle(executionId);
-        if (handle) observeExecution(executionId, handle);
-      },
+      ownExecution: (executionId): void => ownership.claim(executionId),
       finalize: (): void => {
         // The root terminal result is published before its run promise
         // settles. Children retain `isSubagent: true` and never produce a
@@ -466,15 +361,7 @@ export function createChatSessionController(
         // root finalizes and must not overlap a later root's listener.
         detachResultToastOnce();
         session.markRunCompleted();
-        if (
-          rootExecutionId &&
-          !executions.getHandle(rootExecutionId) &&
-          executionInteractionOwners.get(rootExecutionId) === interactionOwner
-        ) {
-          executionInteractionOwners.delete(rootExecutionId);
-          ownedExecutionIds.delete(rootExecutionId);
-        }
-        releaseHostWhenUnused();
+        ownership.finish();
       },
     };
   };

@@ -1,5 +1,5 @@
 // Local imports
-import type { TaskState } from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
@@ -317,16 +317,16 @@ export interface ProgressViewSecondTierActions {
   };
   /** Session handle (for manual compaction). */
   readonly session: SessionHandle;
-  /** Look up a stream's task state from persisted snapshots. */
-  readonly getTaskState: (stream: StreamTabId) => TaskState | undefined;
+  /** Look up a stream's run config from persisted snapshots. */
+  readonly getRunConfig: (stream: StreamTabId) => AgentConfig | undefined;
   /**
-   * Restore task state from a completed run into the main view (the extension
+   * Restore the run config of a completed run into the main view (the extension
    * routes through `texra.restoreState`; the desktop calls
    * `buildMainViewState` / `prepareMainViewExecutionLaunch` directly).
    * The host owns any failure reporting because the extension command and
    * desktop state builder have different error paths.
    */
-  readonly restoreTaskState: (taskState: TaskState) => Promise<void>;
+  readonly restoreRunConfig: (config: AgentConfig) => Promise<void>;
   /** Resolve a follow-up plan (plan kinds map to host-specific execution). */
   readonly applyFollowUpPlan: (plan: ProgressFollowUpPlan) => Promise<void>;
   /** Render a polish result (update renderer + show host messages). */
@@ -454,9 +454,9 @@ export function createProgressViewSecondTierHandlers(
 
     // ── State restore ──
     [CMD.RESTORE_STATE]: async (data) => {
-      const taskState = deps.getTaskState(data.stream);
-      if (!taskState) return;
-      await deps.restoreTaskState(taskState);
+      const config = deps.getRunConfig(data.stream);
+      if (!config) return;
+      await deps.restoreRunConfig(config);
     },
 
     // ── Manual compaction ──
@@ -496,14 +496,14 @@ export function createProgressViewSecondTierHandlers(
 
     // ── Follow-up polish ──
     [CMD.POLISH_FOLLOW_UP]: async (data) => {
-      const taskState = deps.getTaskState(data.stream);
-      if (!taskState) return;
+      const config = deps.getRunConfig(data.stream);
+      if (!config) return;
       try {
         deps.onPolishProgress?.('Sending to AI for polishing...');
         const result = await deps.followUpPolish.polishFollowUp({
           stream: data.stream,
           text: data.text,
-          taskState,
+          runConfig: config,
         });
         deps.onPolishProgress?.('Applying changes...');
         await deps.applyPolishResult(result);

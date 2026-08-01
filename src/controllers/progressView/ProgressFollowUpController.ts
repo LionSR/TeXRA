@@ -5,11 +5,6 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
-import {
-  isWorkflowTaskState,
-  type TaskState,
-  type WorkflowTaskState,
-} from '@agent/core/state/TaskState';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import { decideRunModel } from '@model/runModelDecision';
 import type {
@@ -43,7 +38,7 @@ export interface ProgressFollowUpControllerDeps {
 }
 
 export interface ProgressFollowUpState {
-  getTaskState(stream: StreamTabId): TaskState | undefined;
+  getRunConfig(stream: StreamTabId): AgentConfig | undefined;
   getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo>;
   getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure>;
   getExecutionId(stream: StreamTabId): string | undefined;
@@ -63,7 +58,7 @@ export type ProgressFollowUpPlan =
   | { kind: 'info'; message: string }
   | {
       kind: 'restoreState';
-      taskState: TaskState;
+      config: AgentConfig;
       executeImmediately: boolean;
     }
   // Produced only by planCompileFixer (latexFixer). The progress view opts every
@@ -73,7 +68,7 @@ export type ProgressFollowUpPlan =
 
 export interface ToolUseFollowUpInput {
   streamId: StreamTabId;
-  taskState: TaskState | undefined;
+  runConfig: AgentConfig | undefined;
   outputFiles: OutputFileInfo[];
   agent: string;
   model: string;
@@ -85,7 +80,7 @@ export interface ToolUseFollowUpInput {
 
 export interface CompileFixerInput {
   streamId: StreamTabId;
-  taskState: TaskState | undefined;
+  runConfig: AgentConfig | undefined;
   compileFailures: CompileFailure[];
   runOutputs: RoundIndexed<OutputFileInfo>;
   modelOptions: readonly ProgressFollowUpModelOption[];
@@ -94,8 +89,15 @@ export interface CompileFixerInput {
 
 export type StreamToolUseFollowUpInput = Omit<
   ToolUseFollowUpInput,
-  'taskState' | 'outputFiles' | 'modelOptions' | 'executionId'
+  'runConfig' | 'outputFiles' | 'modelOptions' | 'executionId'
 >;
+
+/** Both follow-up planners are workflow-only; tool-use runs have no plan. */
+function asWorkflowConfig(
+  config: AgentConfig | undefined,
+): AgentConfig | undefined {
+  return config?.agentCategory === AgentCategory.Workflow ? config : undefined;
+}
 
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
@@ -110,7 +112,7 @@ export class ProgressFollowUpController {
 
     return this.planToolUseFollowUp({
       ...input,
-      taskState: this.deps.state.getTaskState(input.streamId),
+      runConfig: this.deps.state.getRunConfig(input.streamId),
       outputFiles,
       modelOptions,
       executionId: this.deps.state.getExecutionId(input.streamId),
@@ -127,7 +129,7 @@ export class ProgressFollowUpController {
 
     return this.planCompileFixer({
       streamId,
-      taskState: this.deps.state.getTaskState(streamId),
+      runConfig: this.deps.state.getRunConfig(streamId),
       compileFailures,
       runOutputs: this.deps.state.getOutputFiles(streamId),
       modelOptions,
@@ -136,7 +138,8 @@ export class ProgressFollowUpController {
   }
 
   planToolUseFollowUp(input: ToolUseFollowUpInput): ProgressFollowUpPlan {
-    if (!input.taskState || !isWorkflowTaskState(input.taskState)) {
+    const workflowConfig = asWorkflowConfig(input.runConfig);
+    if (!workflowConfig) {
       return {
         kind: 'warning',
         message:
@@ -166,7 +169,7 @@ export class ProgressFollowUpController {
     }
 
     const agentConfig = ToolUseAgentConfigSchema.parse({
-      ...input.taskState.agentConfig,
+      ...workflowConfig,
       agent: input.agent,
       model: input.model,
       agentCategory: AgentCategory.ToolUse,
@@ -182,7 +185,7 @@ export class ProgressFollowUpController {
 
     return {
       kind: 'restoreState',
-      taskState: { agentConfig },
+      config: agentConfig,
       executeImmediately: input.executeImmediately,
     };
   }
@@ -190,7 +193,8 @@ export class ProgressFollowUpController {
   async planCompileFixer(
     input: CompileFixerInput,
   ): Promise<ProgressFollowUpPlan> {
-    if (!input.taskState || !isWorkflowTaskState(input.taskState)) {
+    const workflowConfig = asWorkflowConfig(input.runConfig);
+    if (!workflowConfig) {
       return {
         kind: 'warning',
         message:
@@ -205,7 +209,7 @@ export class ProgressFollowUpController {
       };
     }
 
-    const model = this.selectWorkflowModel(input.taskState, input.modelOptions);
+    const model = this.selectWorkflowModel(workflowConfig, input.modelOptions);
     if (!model) {
       return {
         kind: 'warning',
@@ -214,7 +218,7 @@ export class ProgressFollowUpController {
     }
 
     const targets = await this.compileFixerTargets(
-      input.taskState.agentConfig,
+      workflowConfig,
       input.compileFailures,
       input.runOutputs,
     );
@@ -231,7 +235,7 @@ export class ProgressFollowUpController {
       kind: 'execute',
       request: {
         config: this.buildCompileFixerConfig(
-          input.taskState.agentConfig,
+          workflowConfig,
           model,
           editableFiles,
           this.buildCompileFixerQuestion(
@@ -254,13 +258,13 @@ export class ProgressFollowUpController {
   }
 
   private selectWorkflowModel(
-    taskState: WorkflowTaskState,
+    workflowConfig: AgentConfig,
     modelOptions: readonly ProgressFollowUpModelOption[],
   ): string | null {
     const decision = decideRunModel(
       [
         {
-          model: taskState.agentConfig.model,
+          model: workflowConfig.model,
           reason: 'agent-config',
           fallbackMode: 'silent',
         },
