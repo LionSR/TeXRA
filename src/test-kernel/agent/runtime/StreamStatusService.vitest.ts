@@ -299,7 +299,7 @@ describe('StreamStatusMachine', () => {
         streamId,
         status: STREAM_PHASE.CANCELLED,
         previousStatus: STREAM_PHASE.RUNNING,
-        cause: 'lifecycle',
+        cause: 'reservation-rollback',
       },
     ]);
   });
@@ -326,7 +326,7 @@ describe('StreamStatusMachine', () => {
       streamId,
       status: STREAM_PHASE.COMPLETED,
       previousStatus: STREAM_PHASE.RUNNING,
-      cause: 'lifecycle',
+      cause: 'reservation-rollback',
     });
   });
 
