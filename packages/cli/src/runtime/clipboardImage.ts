@@ -12,14 +12,15 @@
 // code is duplicated.
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
-import { platform as osPlatform, tmpdir } from 'node:os';
+import { readFile, rm, stat } from 'node:fs/promises';
+import { platform as osPlatform } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { isFileNotFoundError } from '@common/errors';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
+import { createTexraTempDir } from '@utils/files/tempDir';
 
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
@@ -128,7 +129,7 @@ export async function attachClipboardImage(): Promise<ClipboardAttachResult> {
     return { ok: false, reason: `Image paste is not supported on ${plat}.` };
   }
 
-  const dir = await mkdtemp(join(tmpdir(), 'texra-clip-'));
+  const dir = await createTexraTempDir('texra-clip-');
   const tmpFile = join(dir, 'clipboard.png');
   try {
     let read: ClipboardRead;

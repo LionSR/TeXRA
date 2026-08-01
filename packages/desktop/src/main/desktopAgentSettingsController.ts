@@ -1,5 +1,3 @@
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 // Local imports
@@ -34,6 +32,7 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { AbsoluteFS } from '@utils/files';
+import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -513,7 +512,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       }
 
       const target = path.join(
-        await mkdtemp(path.join(tmpdir(), 'texra-agent-prompt-')),
+        await createTexraTempDir('texra-agent-prompt-'),
         `${data.agentName}.yaml`,
       );
       await AbsoluteFS.write(target, result.config);

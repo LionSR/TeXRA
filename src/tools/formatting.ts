@@ -15,6 +15,21 @@ export const READ_FILE_MAX_LINES = 2000;
 const LINE_NUMBER_WIDTH = 6;
 
 /**
+ * Slice an array using a 1-based inclusive `[start, end]` line range, clamped
+ * to the array bounds. Canonical semantics shared by every tool that slices
+ * file/output lines by view range (read_file, text_editor, executions).
+ */
+export function sliceLineRange<T>(
+  lines: readonly T[],
+  start: number,
+  end: number,
+): T[] {
+  const from = Math.max(start - 1, 0);
+  const to = Math.max(Math.min(end, lines.length), from);
+  return lines.slice(from, to);
+}
+
+/**
  * Format lines with line numbers for display in tool output.
  * @param lines - Array of lines to format
  * @param startingLine - 1-based line number for the first line (default: 1)
@@ -77,10 +92,10 @@ export function formatFileView({
   const rangeProvided = viewRange != null;
   const startLine = Math.max(viewRange?.[0] ?? 1, 1);
   const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
-  const rangeSize = Math.max(endLine - startLine + 1, 0);
+  const fullRange = sliceLineRange(lines, startLine, endLine);
+  const rangeSize = fullRange.length;
   const truncated = rangeSize > maxLines;
-  const sliceEnd = startLine - 1 + Math.min(rangeSize, maxLines);
-  const visibleLines = lines.slice(startLine - 1, sliceEnd);
+  const visibleLines = truncated ? fullRange.slice(0, maxLines) : fullRange;
   const visibleCount = visibleLines.length;
 
   // -- output ---------------------------------------------------------------

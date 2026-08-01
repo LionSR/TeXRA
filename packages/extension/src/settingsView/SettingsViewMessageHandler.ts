@@ -792,21 +792,32 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
+  /**
+   * Refuse to write a per-workspace setting when no folder is open (VS Code
+   * throws on a Workspace-target write in that case) and re-send the
+   * persisted settings so the webview's optimistically-toggled control snaps
+   * back to the actual, unwritten value. Returns true if the write was
+   * blocked.
+   */
+  private async guardWorkspaceRequired(
+    message: string,
+    resend: () => Promise<void>,
+  ): Promise<boolean> {
+    if (WorkspaceFS.getPath()) return false;
+    void showLoggedInfoMessage(this.channel, message);
+    await resend();
+    return true;
+  }
+
   private async handleSetApprovalEnabled(enabled: boolean): Promise<void> {
     // Bash approval is a per-workspace, security-adjacent setting (see
-    // BASH_APPROVAL_CONFIG_TARGET / issue #7085). VS Code throws when
-    // writing a Workspace-target setting with no folder open, so refuse the
-    // write up front rather than let that throw surface -- this is an
-    // expected, non-error condition (no folder open yet), so inform rather
-    // than alarm. Re-send the persisted settings afterwards so the webview's
-    // (optimistically-toggled) switch snaps back to the actual, unwritten
-    // value instead of drifting from it.
-    if (!WorkspaceFS.getPath()) {
-      void showLoggedInfoMessage(
-        this.channel,
+    // BASH_APPROVAL_CONFIG_TARGET / issue #7085).
+    if (
+      await this.guardWorkspaceRequired(
         'Bash approval is a per-workspace setting. Open a workspace folder before changing it.',
-      );
-      await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+        () => this.withActiveWebview((w) => this.sendApprovalSettings(w)),
+      )
+    ) {
       return;
     }
     await setBashApprovalEnabledShared(
@@ -830,12 +841,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleSetAgentSkillsEnabled(enabled: boolean): Promise<void> {
-    if (!WorkspaceFS.getPath()) {
-      void showLoggedInfoMessage(
-        this.channel,
+    if (
+      await this.guardWorkspaceRequired(
         'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',
-      );
-      await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
+        () => this.withActiveWebview((w) => this.sendAgentSkillsSettings(w)),
+      )
+    ) {
       return;
     }
     await setAgentSkillsEnabled(platform().config, enabled);

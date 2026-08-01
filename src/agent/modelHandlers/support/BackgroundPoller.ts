@@ -1,7 +1,7 @@
 // Local imports - utils
 import type { AgentTrace } from '@agent/trace';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
-import { delay } from '@utils/core';
+import { delay, onAbort as registerAbortHandler } from '@utils/core';
 
 export interface BackgroundPollStats {
   readonly responseId: string;
@@ -188,8 +188,7 @@ export class BackgroundPoller<TResponse> {
         }
       }
     };
-    signal?.addEventListener('abort', abortHandler, { once: true });
-    if (signal?.aborted) abortHandler();
+    const detachAbortHandler = registerAbortHandler(signal, abortHandler);
 
     try {
       while (isPending(current)) {
@@ -277,7 +276,7 @@ export class BackgroundPoller<TResponse> {
 
       return current;
     } finally {
-      signal?.removeEventListener('abort', abortHandler);
+      detachAbortHandler();
     }
   }
 }

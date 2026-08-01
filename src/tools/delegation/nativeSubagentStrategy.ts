@@ -55,11 +55,12 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-
 import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
 } from '@tools/subagentResults';
+import { onAbort, unique } from '@utils/core';
+
 import {
   buildSubagentResult,
   formatBuiltSubagentDelivery,
@@ -112,29 +113,12 @@ function bindAbortSignals(
   signals: readonly (AbortSignal | undefined)[],
   handle: AgentRunHandle,
 ): () => void {
-  const uniqueSignals = new Set(
+  const uniqueSignals = unique(
     signals.filter((signal): signal is AbortSignal => signal !== undefined),
   );
-  let interrupted = false;
-  const interrupt = (): void => {
-    if (interrupted) return;
-    interrupted = true;
-    handle.interrupt();
-  };
-  for (const signal of uniqueSignals) {
-    if (signal.aborted) {
-      interrupt();
-      return () => {};
-    }
-  }
-  for (const signal of uniqueSignals) {
-    signal.addEventListener('abort', interrupt, { once: true });
-  }
-  return () => {
-    for (const signal of uniqueSignals) {
-      signal.removeEventListener('abort', interrupt);
-    }
-  };
+  if (uniqueSignals.length === 0) return () => {};
+  const combined = AbortSignal.any(uniqueSignals);
+  return onAbort(combined, () => handle.interrupt());
 }
 
 export function createNativeSubagentStrategy(

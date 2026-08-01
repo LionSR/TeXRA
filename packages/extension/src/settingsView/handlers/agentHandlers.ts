@@ -28,7 +28,10 @@ import type { SettingsAgentCatalogController } from '@controllers/settingsView/S
 import { renderAgentTemplateFromBundle } from '@frontend/agents/agentTemplateBundle';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  confirmModal,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
@@ -290,13 +293,11 @@ export class AgentHandlers {
 
         // Avoid overwriting an existing custom copy with user edits
         if (await AbsoluteFS.exists(targetPath)) {
-          const overwrite = 'Overwrite';
-          const choice = await vscode.window.showWarningMessage(
+          const confirmed = await confirmModal(
             `A custom copy already exists: ${path.basename(targetPath)}`,
-            { modal: true },
-            overwrite,
+            'Overwrite',
           );
-          if (choice !== overwrite) return;
+          if (!confirmed) return;
         }
 
         await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
@@ -349,13 +350,11 @@ export class AgentHandlers {
             return;
           }
 
-          const deleteChoice = 'Delete';
-          const confirmed = await vscode.window.showWarningMessage(
+          const confirmed = await confirmModal(
             `Delete "${data.agentName}"? This cannot be undone.`,
-            { modal: true },
-            deleteChoice,
+            'Delete',
           );
-          if (confirmed !== deleteChoice) return;
+          if (!confirmed) return;
 
           await AbsoluteFS.delete(result.plan.path, { recursive: false });
 
@@ -526,12 +525,11 @@ export class AgentHandlers {
         const target = this.catalogController.getCustomPreset(data.presetId);
         if (!target) return;
 
-        const confirm = await vscode.window.showWarningMessage(
+        const confirmed = await confirmModal(
           `Delete team "${target.name}"?`,
-          { modal: true },
           'Delete',
         );
-        if (confirm !== 'Delete') return;
+        if (!confirmed) return;
 
         await this.catalogController.deleteCustomPreset(data.presetId);
 
