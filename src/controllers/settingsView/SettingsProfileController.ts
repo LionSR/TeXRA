@@ -45,19 +45,6 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
   },
 ];
 
-function acceptsReliabilityValue(
-  setting: Pick<SettingsReliabilitySetting, 'min' | 'max' | 'step' | 'schema'>,
-  value: SettingsProfileConfigValue,
-): value is number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return false;
-  if (setting.schema) {
-    return setting.schema.safeParse(value).success;
-  }
-  if (setting.min !== undefined && value < setting.min) return false;
-  if (setting.max !== undefined && value > setting.max) return false;
-  return setting.step === undefined || Number.isInteger(value / setting.step);
-}
-
 export type SettingsProfileConfigValue = boolean | number;
 
 export type ProviderVscodeSettingUpdateResult =
@@ -173,8 +160,8 @@ export class SettingsProfileController {
     const reliabilitySetting = this.reliabilitySettingsByKey.get(input.key);
     if (
       (!providerSetting && !reliabilitySetting) ||
-      (reliabilitySetting &&
-        !acceptsReliabilityValue(reliabilitySetting, input.value))
+      (reliabilitySetting?.schema &&
+        !reliabilitySetting.schema.safeParse(input.value).success)
     ) {
       return { kind: 'rejected', key: input.key };
     }
