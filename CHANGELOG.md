@@ -39,6 +39,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Execution conversations page by message rather than rendered line** —
+  archive reads now report the returned message interval, next offset, and
+  selected transcript source, so resumed turns can be inspected without
+  ambiguous or repeated line windows.
 - **Runs that overflow the model context window say so** — instead of a generic
   failure message, the run now reports that the conversation exceeds the
   model's context window and suggests starting a new session or reducing
