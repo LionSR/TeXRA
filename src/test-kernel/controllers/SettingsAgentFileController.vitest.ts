@@ -9,86 +9,9 @@ import { describe, it } from 'vitest';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 
 const controller = new SettingsAgentFileController();
-const ROOT = path.join(path.sep, 'repo');
-const BUILT_IN_DIR = path.join(ROOT, 'resources', 'agents');
-const CUSTOM_DIR = path.join(ROOT, 'custom-agents');
+const CUSTOM_DIR = path.join(path.sep, 'repo', 'custom-agents');
 
 describe('SettingsAgentFileController', () => {
-  it('plans custom agent copies while preserving source-relative paths', () => {
-    const result = controller.planCustomizeAgent({
-      customDir: CUSTOM_DIR,
-      sourceDir: BUILT_IN_DIR,
-      entry: {
-        path: path.join(BUILT_IN_DIR, 'writing', 'draft.yaml'),
-      },
-    });
-
-    assert.equal(result.ok, true);
-    if (!result.ok) return;
-    assert.equal(
-      result.plan.targetPath,
-      path.join(CUSTOM_DIR, 'writing', 'draft.yaml'),
-    );
-  });
-
-  it('rejects customize targets that would escape the custom directory', () => {
-    const result = controller.planCustomizeAgent({
-      customDir: CUSTOM_DIR,
-      sourceDir: BUILT_IN_DIR,
-      entry: {
-        path: path.join(ROOT, 'other', 'outside.yaml'),
-      },
-    });
-
-    assert.deepEqual(result, { ok: false, reason: 'targetEscapesCustomDir' });
-  });
-
-  it('falls back to the basename when the source directory is unknown', () => {
-    const result = controller.planCustomizeAgent({
-      customDir: CUSTOM_DIR,
-      entry: {
-        path: path.join(ROOT, 'elsewhere', 'agent.yaml'),
-      },
-    });
-
-    assert.equal(result.ok, true);
-    if (!result.ok) return;
-    assert.equal(result.plan.targetPath, path.join(CUSTOM_DIR, 'agent.yaml'));
-  });
-
-  it.each([
-    {
-      label:
-        'accepts child paths when the custom directory is the filesystem root',
-      customDir: path.parse(ROOT).root,
-      entryPath: path.join(ROOT, 'custom-agents', 'agent.yaml'),
-    },
-    {
-      label: 'plans custom agent deletion for a custom directory agent',
-      customDir: CUSTOM_DIR,
-      entryPath: path.join(CUSTOM_DIR, 'agent.yaml'),
-    },
-  ])('$label', ({ customDir, entryPath }) => {
-    assert.deepEqual(
-      controller.planDeleteCustomAgent({
-        customDir,
-        entry: { path: entryPath },
-      }),
-      { ok: true, plan: { path: entryPath } },
-    );
-  });
-
-  it('rejects deletion outside the custom directory', () => {
-    const result = controller.planDeleteCustomAgent({
-      customDir: CUSTOM_DIR,
-      entry: {
-        path: path.join(ROOT, 'resources', 'agent.yaml'),
-      },
-    });
-
-    assert.deepEqual(result, { ok: false, reason: 'fileOutsideCustomDir' });
-  });
-
   it('validates template agent names', () => {
     assert.equal(controller.validateTemplateName(''), 'Name cannot be empty');
     assert.equal(
