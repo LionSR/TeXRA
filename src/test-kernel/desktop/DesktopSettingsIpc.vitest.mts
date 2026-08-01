@@ -364,6 +364,30 @@ describe('desktop settings IPC', () => {
     });
   });
 
+  it('round-trips multi-agent coordination and refreshes its snapshot', async () => {
+    const workspaceState = new FakeStateStore();
+    const { settings, posted } = createCapturedSettingsFixture({
+      workspaceState,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        value: true,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(workspaceState.get(WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP)).toBe(
+      true,
+    );
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
+      detachSubagentsOnStop: true,
+    });
+  });
+
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
     const { settings, posted } = createCapturedSettingsFixture();
 

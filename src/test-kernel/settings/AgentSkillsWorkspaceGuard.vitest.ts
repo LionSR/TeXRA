@@ -39,6 +39,10 @@ type AgentSkillsHarness = {
   postStateSettingSnapshot: ReturnType<typeof vi.fn>;
 };
 
+type SnapshotHarness = {
+  postStateSettingSnapshot(snapshot: 'multi-agent'): Promise<void>;
+};
+
 function createHarness(): AgentSkillsHarness {
   const handler = Object.create(SettingsViewMessageHandler.prototype);
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
@@ -85,5 +89,25 @@ describe('agent skills workspace guard', () => {
     expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
       'multi-agent',
     );
+  });
+
+  it('routes the multi-agent snapshot to its status sender', async () => {
+    const handler = Object.create(
+      SettingsViewMessageHandler.prototype,
+    ) as SnapshotHarness;
+    const webview = {};
+    const sendSuperYoloEnabled = vi.fn(async () => undefined);
+    Reflect.set(handler, 'sendSuperYoloEnabled', sendSuperYoloEnabled);
+    Reflect.set(
+      handler,
+      'withActiveWebview',
+      vi.fn(async (fn: (activeWebview: object) => Promise<void>) =>
+        fn(webview),
+      ),
+    );
+
+    await handler.postStateSettingSnapshot('multi-agent');
+
+    expect(sendSuperYoloEnabled).toHaveBeenCalledWith(webview);
   });
 });
