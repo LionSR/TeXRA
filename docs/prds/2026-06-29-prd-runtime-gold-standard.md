@@ -1,6 +1,6 @@
 ---
 created: 2026-06-29
-updated: 2026-07-18
+updated: 2026-08-01
 ---
 
 # PRD: Runtime Gold-Standard - The SDK Core (PocketFlow / Lifecycle / Injection / Retry)
@@ -15,8 +15,10 @@ updated: 2026-07-18
 > centralized baselines in [#7914] and [#8322]. The proposed frozen
 > `RunDescriptor` injection model, `ModelCell`, `PendingRequests`, `RetryPolicy`,
 > `RetryGate`, and `HostUiBus` are retired and must not be implemented from this
-> record. The `RunDescriptor` name on `main` denotes the unrelated persisted
-> stream schema introduced in [#7164].
+> record. The later [narrow ModelCell ownership ruling][modelcell-ownership-ruling]
+> supersedes only this prohibition's claim that no `ModelCell` exists on `main`;
+> it does not revive this PRD. The `RunDescriptor` name on `main` denotes the
+> unrelated persisted stream schema introduced in [#7164].
 > The companion `2026-06-28-prd-architecture-patterns.md` and
 > `cross-host-consolidation/` records remain only on the source branch and are
 > not part of this extraction; references to them below are historical context,
@@ -32,6 +34,7 @@ updated: 2026-07-18
 [#7624]: https://github.com/LionSR/TeXRA/pull/7624
 [#7914]: https://github.com/LionSR/TeXRA/pull/7914
 [#8322]: https://github.com/LionSR/TeXRA/pull/8322
+[modelcell-ownership-ruling]: ../proposals/2026-08-01-architecture-rulings-ledger.md#modelcell
 
 Decided by an adversarial design pass (4 designs x 3 lenses x 4 phases,
 2026-06-29). This is the gold-standard target for TeXRA's agent runtime core: the
