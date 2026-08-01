@@ -145,15 +145,15 @@ describe('desktop settings capability markers', () => {
     const real = realCredentialController();
     const stub = createStubDesktopCredentialSettingsController(statePorts());
 
-    expect(unsupportedCommands(real.profileActions)).toEqual([
+    expect(unsupportedCommands(real.profileHandlers)).toEqual([
       'setProviderVscodeSetting',
     ]);
-    expect(unsupportedCommands(real.chatGptActions)).toEqual([]);
-    expect(unsupportedCommands(stub.profileActions)).toEqual(
-      unsupportedCommands(real.profileActions),
+    expect(unsupportedCommands(real.chatGptHandlers)).toEqual([]);
+    expect(unsupportedCommands(stub.profileHandlers)).toEqual(
+      unsupportedCommands(real.profileHandlers),
     );
-    expect(unsupportedCommands(stub.chatGptActions)).toEqual(
-      unsupportedCommands(real.chatGptActions),
+    expect(unsupportedCommands(stub.chatGptHandlers)).toEqual(
+      unsupportedCommands(real.chatGptHandlers),
     );
   });
 
@@ -161,14 +161,14 @@ describe('desktop settings capability markers', () => {
     const domains = [
       {
         name: 'agent',
-        real: realAgentController().actions,
-        stub: createStubDesktopAgentSettingsController().actions,
+        real: realAgentController().handlers,
+        stub: createStubDesktopAgentSettingsController().handlers,
       },
       {
         name: 'history',
         real: new DesktopHistoryHandlers(createStubDesktopHistoryOptions())
-          .actions,
-        stub: createStubDesktopHistorySettingsController().actions,
+          .handlers,
+        stub: createStubDesktopHistorySettingsController().handlers,
       },
     ];
 
@@ -185,17 +185,17 @@ describe('desktop settings capability markers', () => {
     const real = realToolingController();
     const stub = createStubDesktopToolingSettingsController();
 
-    expect(unsupportedCommands(real.toolsActions)).toEqual([
-      'installExtension',
+    expect(unsupportedCommands(real.toolHandlers)).toEqual([
+      'installToolExtension',
     ]);
-    expect(unsupportedCommands(real.latexActions)).toEqual([
+    expect(unsupportedCommands(real.latexHandlers)).toEqual([
       'installLatexWorkshop',
     ]);
-    expect(unsupportedCommands(stub.toolsActions)).toEqual(
-      unsupportedCommands(real.toolsActions),
+    expect(unsupportedCommands(stub.toolHandlers)).toEqual(
+      unsupportedCommands(real.toolHandlers),
     );
-    expect(unsupportedCommands(stub.latexActions)).toEqual(
-      unsupportedCommands(real.latexActions),
+    expect(unsupportedCommands(stub.latexHandlers)).toEqual(
+      unsupportedCommands(real.latexHandlers),
     );
   });
 });
