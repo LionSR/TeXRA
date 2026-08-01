@@ -298,6 +298,17 @@ function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
       buildToolUseSection('Range:', wrapInPre(`lines ${start}–${end}`)),
     );
   }
+
+  if (typeof input.offset === 'number') {
+    sections.push(
+      buildToolUseSection('Offset:', wrapInPre(String(input.offset))),
+    );
+  }
+  if (typeof input.limit === 'number') {
+    sections.push(
+      buildToolUseSection('Limit:', wrapInPre(String(input.limit))),
+    );
+  }
   return sections;
 }
 
