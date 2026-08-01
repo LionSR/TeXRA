@@ -1528,9 +1528,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.isBackgroundModeToggleEnabled() &&
       this.isBackgroundModeEligible()
     ) {
-      this.logger.debug(
-        'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
-      );
+      if (this.getOpenAIResponseCapabilities()?.backgroundMode === 'disabled') {
+        this.logger.debug(
+          'Background mode toggle is enabled but the active provider profile disables background execution. Proceeding without background mode.',
+        );
+      } else {
+        this.logger.debug(
+          'Background mode toggle is enabled but this handler does not support background execution. Proceeding without background mode.',
+        );
+      }
     } else if (streamingToggleEnabled && useBackgroundResponses) {
       this.logger.debug(
         'Background mode enabled; skipping streaming to avoid unstable behavior.',
