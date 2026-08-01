@@ -7,6 +7,7 @@ import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
@@ -84,17 +85,20 @@ describe('execution lifecycle', () => {
 
   it('pins the active workspace path when a config has no working directory', async () => {
     const executionId = 'abc123' as ExecutionId;
-    await registerExecution(
-      executionId,
-      baseConfig,
-      'chat',
-      undefined,
-      'toolUse',
-    );
+    await registerExecution(executionId, baseConfig, 'chat', {
+      streamId: 'chat@deepseekT#abc123' as StreamTabId,
+      category: 'toolUse',
+    });
 
     expect(mocks.writeConfig).toHaveBeenCalledWith({
       ...baseConfig,
       workingDirectory: '/workspace/root',
+    });
+    expect(mocks.writeMeta).toHaveBeenCalledWith({
+      timestamp: expect.any(String),
+      streamId: 'chat@deepseekT#abc123',
+      parentExecutionId: undefined,
+      category: 'toolUse',
     });
     await finalizeExecution({
       executionId,
@@ -108,7 +112,9 @@ describe('execution lifecycle', () => {
     mocks.writeConfig.mockRejectedValueOnce(new Error('config write failed'));
 
     await expect(
-      registerExecution(executionId, baseConfig, 'chat'),
+      registerExecution(executionId, baseConfig, 'chat', {
+        streamId: 'chat@deepseekT#abc124' as StreamTabId,
+      }),
     ).rejects.toThrow('config write failed');
 
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
@@ -123,7 +129,9 @@ describe('execution lifecycle', () => {
     });
 
     await expect(
-      registerExecution(executionId, baseConfig, 'chat'),
+      registerExecution(executionId, baseConfig, 'chat', {
+        streamId: 'chat@deepseekT#abc125' as StreamTabId,
+      }),
     ).rejects.toThrow('store construction failed');
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
       status: 'missing',

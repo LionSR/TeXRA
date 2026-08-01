@@ -135,7 +135,10 @@ describe('executeSubagent childStreamId derivation', () => {
       loopParams.executionId,
       expect.any(Object),
       agentName,
-      'parent-exec',
+      expect.objectContaining({
+        parentExecutionId: 'parent-exec',
+        streamId: loopParams.childStreamId,
+      }),
     );
     const expectedChildStreamId = getStreamTabId(
       configPayload.agent,

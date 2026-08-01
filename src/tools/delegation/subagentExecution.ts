@@ -154,21 +154,24 @@ export async function executeSubagent(
   const executionId = generateExecutionId();
   const startedAt = Date.now();
   const config = AgentConfigSchema.parse(childConfigPayload);
-  await registerExecution(executionId, config, agentName, parentExecutionId);
+  // Must match the id `buildAgentLaunchContext` actually reserves for this
+  // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
+  // loop acquires the wrong follow-up queue/interrupt slot. That reservation
+  // uses the canonical config's agent/model — not the `agentName` parameter,
+  // which callers may resolve differently
+  // (e.g. an approved agent override's display name vs. its registry name).
+  // Derive from the exact same fields, not a parallel formula.
+  const childStreamId = getStreamTabId(config.agent, config.model, {
+    executionId,
+  });
+  await registerExecution(executionId, config, agentName, {
+    streamId: childStreamId,
+    parentExecutionId,
+  });
   const runWithOwnership = captureOwnedExecutionLease(executionId);
 
   return await runWithOwnership(async () => {
     const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-    // Must match the id `buildAgentLaunchContext` actually reserves for this
-    // executionId (see AgentLaunchContext.ts's `reservedStreamId`), or the
-    // loop acquires the wrong follow-up queue/interrupt slot. That reservation
-    // uses the canonical config's agent/model — not the `agentName` parameter,
-    // which callers may resolve differently
-    // (e.g. an approved agent override's display name vs. its registry name).
-    // Derive from the exact same fields, not a parallel formula.
-    const childStreamId = getStreamTabId(config.agent, config.model, {
-      executionId,
-    });
     const strategyParams = {
       config,
       agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,

@@ -243,8 +243,10 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         agentCategory: AgentCategory.ToolUse,
       }),
       'bash',
-      undefined,
-      'process',
+      {
+        streamId: `bash@tool#${executionId}` as StreamTabId,
+        category: 'process',
+      },
     );
     const streamId = `bash@tool#${executionId}` as StreamTabId;
     const transcripts = defaultSession().transcripts;
@@ -365,8 +367,10 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         agentCategory: AgentCategory.ToolUse,
       }),
       'bash',
-      undefined,
-      'process',
+      {
+        streamId: `bash@tool#${executionId}` as StreamTabId,
+        category: 'process',
+      },
     );
 
     const result = await readOutput(executionId);
@@ -388,6 +392,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         agentCategory: AgentCategory.ToolUse,
       }),
       'chat',
+      { streamId: `chat@model#${executionId}` as StreamTabId },
     );
 
     const result = await readOutput(executionId);
