@@ -200,7 +200,7 @@ describe('repairRestartedStreams', () => {
     }
   });
 
-  it('closes an unknown legacy terminal state conservatively as failed', async () => {
+  it('protects an unknown legacy terminal state from restart repair', async () => {
     const streamId = 'stream-legacy-terminal' as StreamTabId;
     const executionId = 'execution-legacy-terminal' as ExecutionId;
     const store = getExecutionStore(executionId);
@@ -223,16 +223,14 @@ describe('repairRestartedStreams', () => {
         runWithInactiveExecutionLease: performInactiveLease,
       });
 
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-      expect(closeRunningGroups).toHaveBeenCalledWith(
-        [streamId],
-        RUN_OUTCOME.FAILED,
-        expect.any(Number),
-      );
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+      expect(closeRunningGroups).not.toHaveBeenCalled();
       expect(result.failedStreams).toEqual([]);
-      await expect(store.readMeta()).resolves.toMatchObject({
+      const persistedMeta = await store.readMeta();
+      expect(persistedMeta).toMatchObject({
         terminalStatus: 'legacy-terminal',
       });
+      expect(persistedMeta?.outcome).toBeUndefined();
       expect(finalizeExecution).not.toHaveBeenCalled();
     } finally {
       await store.clear();
