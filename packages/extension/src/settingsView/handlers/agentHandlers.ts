@@ -15,7 +15,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { workspaceSM, globalSM } from '@common/state';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import { createSettingsAgentActions } from '@controllers/settingsView/SettingsAgentActions';
+import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import type { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';

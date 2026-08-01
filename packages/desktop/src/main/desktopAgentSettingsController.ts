@@ -19,7 +19,7 @@ import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPrefl
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
-import { createSettingsAgentActions } from '@controllers/settingsView/SettingsAgentActions';
+import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';

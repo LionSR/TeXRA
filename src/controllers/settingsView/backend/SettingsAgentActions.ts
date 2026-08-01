@@ -66,7 +66,7 @@ interface SettingsAgentActionsOptions {
 
 /**
  * Build the settings handlers whose file-system decisions are identical in
- * every graphical host. Host-specific presentation and catalog refresh policy
+ * every graphical host. Presentation and catalog refresh policy
  * remain explicit dependencies.
  */
 export function createSettingsAgentActions(
