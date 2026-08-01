@@ -11,7 +11,10 @@ import type { StreamTabId } from '@shared/schemas';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import {
+  FakeScopedConfigProvider,
+  FakeStateStore,
+} from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { GoalStore } from '@tools/goal';
@@ -67,55 +70,13 @@ type CapturedSettingsFixtureOverrides = Omit<
   'postToRenderer'
 >;
 
-class MemoryConfigStore {
-  readonly values = new Map<string, unknown>();
-  // Only recorded when a call site passes an explicit target -- do not
-  // default this, or a call site that forgets to pass `target` would still
-  // read back as 'workspace' and mask the exact scope-mismatch regression
-  // this store exists to catch (see issue #7085).
-  readonly updateTargets = new Map<string, 'global' | 'workspace'>();
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.values.has(key) ? this.values.get(key) : defaultValue) as T;
-  }
-
-  async update<T>(
-    key: string,
-    value: T,
-    target?: 'global' | 'workspace',
-  ): Promise<void> {
-    if (target === undefined) {
-      this.updateTargets.delete(key);
-    } else {
-      this.updateTargets.set(key, target);
-    }
-    if (value === undefined) {
-      this.values.delete(key);
-    } else {
-      this.values.set(key, value);
-    }
-  }
-
-  inspect<T = unknown>(key: string): { effectiveValue?: T } | undefined {
-    return { effectiveValue: this.get<T>(key) };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    return this.values.has(key);
-  }
-
-  watch(): { dispose(): void } {
-    return { dispose: () => undefined };
-  }
-}
-
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
     globalState = new FakeStateStore(),
     workspaceState = new FakeStateStore(),
-    config = new MemoryConfigStore(),
+    config = new FakeScopedConfigProvider(),
     ui,
     ...settingsOverrides
   } = overrides;
@@ -705,8 +666,8 @@ describe('desktop settings IPC', () => {
     const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
     });
-    const config = new MemoryConfigStore();
-    config.values.set('texra.toolUse.requireBashApproval', false);
+    const config = new FakeScopedConfigProvider();
+    config.seedWorkspace('texra.toolUse.requireBashApproval', false);
     const agentSettingsController = createStubDesktopAgentSettingsController();
     const postAgentStartupData = vi.fn(async () => undefined);
     agentSettingsController.postStartupData = postAgentStartupData;
@@ -778,7 +739,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
-    const config = new MemoryConfigStore();
+    const config = new FakeScopedConfigProvider();
 
     const { settings, posted } = createCapturedSettingsFixture({
       config,
@@ -793,10 +754,10 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(config.values.get('texra.toolUse.requireBashApproval')).toBe(false);
+    expect(config.get('texra.toolUse.requireBashApproval')).toBe(false);
     // Security-adjacent scope pin: a per-workspace approval bypass must never
     // be written to the global config target (see issue #7085).
-    expect(config.updateTargets.get('texra.toolUse.requireBashApproval')).toBe(
+    expect(config.lastTargetFor('texra.toolUse.requireBashApproval')).toBe(
       'workspace',
     );
     expect(
@@ -812,7 +773,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('writes the agent-skills toggle and returns the shared setting message', async () => {
-    const config = new MemoryConfigStore();
+    const config = new FakeScopedConfigProvider();
 
     const { settings, posted } = createCapturedSettingsFixture({
       config,
@@ -827,8 +788,8 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(config.values.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
-    expect(config.updateTargets.get(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
+    expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
+    expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
     expect(
       posted.find(
         (message) =>
@@ -854,7 +815,7 @@ describe('desktop settings IPC', () => {
 
     const { settings, posted } = createCapturedSettingsFixture({
       ...state,
-      config: new MemoryConfigStore(),
+      config: new FakeScopedConfigProvider(),
       credentialSettingsController,
       ui: { onError: () => undefined },
     });

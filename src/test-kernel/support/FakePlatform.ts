@@ -182,6 +182,126 @@ export class FakeConfigProvider implements ConfigProvider {
   }
 }
 
+/**
+ * `ConfigProvider` fake with real folder -> workspace -> global fallback,
+ * mirroring `VscodeConfigProvider`/`JsonConfigProvider`'s resolution order.
+ * Unlike `FakeConfigProvider` above (which records one target per key and
+ * so cannot hold a folder override and a global value for the same key at
+ * once), this tracks the three scopes independently.
+ *
+ * `update()`'s `target` is intentionally never defaulted: a call site that
+ * omits it is recorded as `undefined`, not silently coerced to
+ * `'workspace'`, so tests can catch scope-mismatch regressions (issue
+ * #7085) that a defaulted target would mask.
+ */
+export class FakeScopedConfigProvider implements ConfigProvider {
+  private readonly globalValues = new Map<string, unknown>();
+
+  private readonly workspaceValues = new Map<string, unknown>();
+
+  private readonly workspaceFolderValues = new Map<string, unknown>();
+
+  private readonly lastTargets = new Map<string, ConfigTarget>();
+
+  readonly updateCalls: Array<{
+    key: string;
+    value: unknown;
+    target: ConfigTarget | undefined;
+  }> = [];
+
+  /**
+   * When set, `update()` calls targeting this scope throw instead of
+   * applying -- simulates a persistence failure (e.g. VS Code rejecting the
+   * write) so tests can assert on partial-migration recovery behavior.
+   */
+  failUpdatesForTarget?: ConfigTarget;
+
+  get<T>(key: string, defaultValue?: T): T {
+    if (this.workspaceFolderValues.has(key))
+      return this.workspaceFolderValues.get(key) as T;
+    if (this.workspaceValues.has(key))
+      return this.workspaceValues.get(key) as T;
+    if (this.globalValues.has(key)) return this.globalValues.get(key) as T;
+    return defaultValue as T;
+  }
+
+  async update<T>(
+    key: string,
+    value: T,
+    target?: ConfigTarget,
+  ): Promise<void> {
+    if (target !== undefined && target === this.failUpdatesForTarget) {
+      throw new Error(`simulated ${target}-scope update failure for ${key}`);
+    }
+    this.updateCalls.push({ key, value, target });
+    if (target === undefined) {
+      this.lastTargets.delete(key);
+    } else {
+      this.lastTargets.set(key, target);
+    }
+    const store =
+      target === 'global' ? this.globalValues : this.workspaceValues;
+    if (value === undefined) {
+      store.delete(key);
+    } else {
+      store.set(key, value);
+    }
+  }
+
+  /** The most recent explicit `target` passed to `update()` for `key`, or `undefined` if none was given. */
+  lastTargetFor(key: string): ConfigTarget | undefined {
+    return this.lastTargets.get(key);
+  }
+
+  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
+    return {
+      globalValue: this.globalValues.has(key)
+        ? (this.globalValues.get(key) as T)
+        : undefined,
+      workspaceValue: this.workspaceValues.has(key)
+        ? (this.workspaceValues.get(key) as T)
+        : undefined,
+      workspaceFolderValue: this.workspaceFolderValues.has(key)
+        ? (this.workspaceFolderValues.get(key) as T)
+        : undefined,
+      effectiveValue: this.get<T>(key),
+    };
+  }
+
+  isExplicitlySet(key: string): boolean {
+    return (
+      this.globalValues.has(key) ||
+      this.workspaceValues.has(key) ||
+      this.workspaceFolderValues.has(key)
+    );
+  }
+
+  watch(): Disposable {
+    return { dispose: () => {} };
+  }
+
+  /** Seeds a legacy global value directly, without going through `update()`. */
+  seedGlobal(key: string, value: unknown): void {
+    this.globalValues.set(key, value);
+  }
+
+  /** Seeds a workspace value directly, without going through `update()`. */
+  seedWorkspace(key: string, value: unknown): void {
+    this.workspaceValues.set(key, value);
+  }
+
+  /**
+   * Seeds a resource-scoped `workspaceFolderValue` directly. Real writes to
+   * the `'workspace'` target (`ConfigTarget` has no folder-scope option)
+   * land in `workspaceValue`, but some settings are declared
+   * `resource`-scoped, so UI writes to them commonly resolve as
+   * `workspaceFolderValue` instead -- this seeds that shape directly.
+   */
+  seedWorkspaceFolder(key: string, value: unknown): void {
+    this.workspaceFolderValues.set(key, value);
+  }
+}
+
 export class FakeStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();
 
