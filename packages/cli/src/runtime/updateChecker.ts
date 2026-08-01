@@ -9,13 +9,14 @@ import type { StateStore } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  DAILY_UPDATE_CHECK_INTERVAL_MS,
-  isNewerSemverVersion,
-  UPDATE_CHECK_SKIP_ENV,
-} from '@utils/system/semverUpdateCheck';
+import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import {
+  fetchJsonStringField,
+  runDailyUpdateCheck,
+  type UpdateCheckFetchResult,
+} from '@utils/system/updateCheck';
 
 import {
   readCliAmbientState,
@@ -39,11 +40,6 @@ const CLI_HOMEBREW_FORMULA = 'texra';
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
 const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
-/**
- * Check for a new release at most once per day, matching the desktop update
- * checker's cadence (see `desktopUpdateChecker.ts`).
- */
-const CHECK_INTERVAL_MS = DAILY_UPDATE_CHECK_INTERVAL_MS;
 
 /** Package manager the running binary was installed with. */
 export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
@@ -141,18 +137,13 @@ export async function fetchLatestCliVersion(options?: {
   fetchImpl?: typeof fetch;
 }): Promise<string | undefined> {
   const registry = options?.registry ?? DEFAULT_REGISTRY;
-  const fetchImpl = options?.fetchImpl ?? fetch;
-  try {
-    const response = await fetchImpl(`${registry}/${CLI_PACKAGE_NAME}/latest`, {
-      signal: AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-      headers: { accept: 'application/json' },
-    });
-    if (!response.ok) return undefined;
-    const body = (await response.json()) as { version?: unknown };
-    return typeof body.version === 'string' ? body.version : undefined;
-  } catch {
-    return undefined;
-  }
+  return fetchJsonStringField({
+    url: `${registry}/${CLI_PACKAGE_NAME}/latest`,
+    field: 'version',
+    timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    headers: { accept: 'application/json' },
+    fetchImpl: options?.fetchImpl,
+  });
 }
 
 type CommandRunner = (
@@ -208,19 +199,13 @@ function parseHomebrewFormulaVersion(
   return entry?.versions?.stable ?? undefined;
 }
 
-/** Result of one fetch attempt against the package source. */
-export interface CliUpdateFetchResult {
-  /** Latest published version, when one could be read (possibly stale). */
-  version: string | undefined;
-  /**
-   * True when the version reflects a live consultation of the source — an npm
-   * registry response, or `brew info` after a successful tap refresh. False
-   * when only stale local metadata was readable (failed `brew update`): still
-   * usable for a prompt, but the attempt must retry next launch instead of
-   * being stamped for a full throttle window.
-   */
-  refreshed: boolean;
-}
+/**
+ * Result of one fetch attempt against the package source. For Homebrew,
+ * `refreshed: false` means a failed tap refresh yielded only stale local
+ * metadata: the version may still be offered, but the daily check is not
+ * stamped as complete.
+ */
+export type CliUpdateFetchResult = UpdateCheckFetchResult;
 
 /**
  * Attempt to refresh Homebrew tap metadata and fetch the latest formula
@@ -312,17 +297,13 @@ export interface CheckCliUpdateAvailableOptions {
 
 /**
  * At most once per day (persisted in global state), fetch the latest
- * published version and report it when newer than `currentVersion`. Mirrors
- * the desktop update checker's throttle (see `checkForDesktopUpdate` in
- * `desktopUpdateChecker.ts`), but this is the single owner of the daily
- * stamp: it is written in exactly one place, only once every outcome of the
- * attempt is known — the source was genuinely consulted (`refreshed`, not a
- * stale brew cache behind a failed tap refresh) and, when an update was
- * available, `notify` resolved (the user actually saw it). Any other outcome
- * (offline, registry hiccup, failed tap refresh, killed prompt) leaves the
- * stamp unwritten so the next launch retries instead of being suppressed for
- * a full day. The stamp write itself is best-effort: a failed write never
- * rejects the completed attempt (it only means an early re-check).
+ * published version and report it when newer than `currentVersion`. The shared
+ * daily-check state machine writes the stamp only after the source was
+ * genuinely consulted (`refreshed`, not a stale brew cache behind a failed tap
+ * refresh) and, when an update was available, `notify` resolved. Any other
+ * outcome (offline, registry hiccup, failed tap refresh, killed prompt) leaves
+ * the stamp unwritten so the next launch retries. CLI stamp persistence is
+ * best-effort: a failed write means an early re-check, not a failed update.
  */
 export async function checkCliUpdateAvailable({
   currentVersion,
@@ -331,34 +312,17 @@ export async function checkCliUpdateAvailable({
   notify,
   now = Date.now,
 }: CheckCliUpdateAvailableOptions): Promise<string | undefined> {
-  const lastCheckedAt = globalState.get<number>(
-    GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-    0,
-  );
-  const nowMs = now();
-  if (nowMs - lastCheckedAt < CHECK_INTERVAL_MS) return undefined;
-
-  const { version, refreshed } = await fetchLatest();
-  const latest =
-    version !== undefined && isNewerSemverVersion(version, currentVersion)
-      ? version
-      : undefined;
-  if (latest !== undefined) await notify(latest);
-  if (version !== undefined && refreshed) {
-    try {
-      await globalState.update(
-        GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-        nowMs,
-      );
-    } catch {
-      // Best-effort: the stamp write can fail even when `JsonStore.open`
-      // succeeded (readable-but-unwritable global storage). By this point the
-      // whole attempt — including the notify prompt — has completed, so a
-      // failed stamp must not reject and cancel an update the user already
-      // accepted; worst case the next launch re-checks a day early.
-    }
-  }
-  return latest;
+  return runDailyUpdateCheck({
+    currentVersion,
+    state: globalState,
+    lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
+    fetchLatest,
+    notify,
+    now,
+    // A readable-but-unwritable global state file must not cancel an update
+    // the user already accepted; the next launch merely checks again early.
+    stampFailure: 'ignore',
+  });
 }
 
 let notified = false;

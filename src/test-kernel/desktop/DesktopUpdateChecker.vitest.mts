@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CheckForDesktopUpdateOptions } from '@desktop/main/desktopUpdateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -13,6 +13,10 @@ type DesktopLatestRelease = Parameters<
 >[0];
 
 describe('desktop update checker', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('exposes a known-constant releases page URL (never opens API-provided URLs)', async () => {
     const { DESKTOP_RELEASES_PAGE_URL } = await loadSourceModule(
       '@desktop/main/desktopUpdateChecker',
@@ -218,6 +222,28 @@ describe('desktop update checker', () => {
       expect(
         globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
       ).toBe(nowMs + 1000);
+    });
+
+    it('treats an empty release tag as a failed fetch', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: true,
+          json: async () => ({ tag_name: '' }),
+        })) as unknown as typeof fetch,
+      );
+
+      await checkForDesktopUpdate({
+        currentVersion: '0.39.3',
+        globalState,
+        isPackaged: true,
+        env: {},
+        notify: () => {},
+      });
+
+      expect(
+        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
+      ).toBeUndefined();
     });
 
     it('does not persist the throttle stamp when notification fails', async () => {
