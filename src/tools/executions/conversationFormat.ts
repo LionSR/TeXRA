@@ -17,17 +17,36 @@ const CONVERSATION_FORMAT_OPTIONS: ConversationFormatOptions = {
   toolBlockLimit: 100,
 };
 
+export interface ConversationPageFormatOptions {
+  /** Zero-based index of the first message in this page. */
+  readonly offset?: number;
+  /** Total messages in the unsliced archive. */
+  readonly totalMessages?: number;
+  /** Archive-selection facts shown before the message blocks. */
+  readonly metadata?: readonly string[];
+}
+
 /** Render a stored conversation as numbered <message> blocks. */
-export function formatConversation(conversation: readonly unknown[]): string {
+export function formatConversation(
+  conversation: readonly unknown[],
+  options: ConversationPageFormatOptions = {},
+): string {
+  const offset = options.offset ?? 0;
+  const totalMessages = options.totalMessages ?? conversation.length;
   const messages = conversation.map((msg, i) => {
     const { role, content } = formatConversationMessage(
       msg,
       CONVERSATION_FORMAT_OPTIONS,
     );
-    return `<message index="${i + 1}" role="${role}">\n${content}\n</message>`;
+    return `<message index="${offset + i + 1}" role="${role}">\n${content}\n</message>`;
   });
 
-  return `Conversation (${conversation.length} messages):\n\n${messages.join('\n\n')}`;
+  return [
+    `Conversation (${totalMessages} messages):`,
+    ...(options.metadata ?? []),
+    '',
+    messages.join('\n\n'),
+  ].join('\n');
 }
 
 /** Slice multi-line output to a 1-based inclusive [start, end] range. */

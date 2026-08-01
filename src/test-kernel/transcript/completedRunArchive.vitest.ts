@@ -31,6 +31,7 @@ import {
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   readCompletedRunConversation,
   readCompletedRunTodos,
@@ -253,6 +254,114 @@ describe('completedRunArchive facade', () => {
     expect(todosResult.todos).toEqual([
       { content: 'Fix the bug', status: 'completed' },
     ]);
+  });
+
+  it('reconstructs both turns after a transcript writer is released and reopened', async () => {
+    const executionId = '0aa1110aa111' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#0aa1110aa111' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(streamId);
+    const firstTurn = logs.acquireWriter(streamId, executionId);
+    firstTurn.appendSettled(
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prove the first lemma.' }),
+    );
+    firstTurn.appendSettled(
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First proof.' }),
+    );
+    firstTurn.close();
+    await logs.flush();
+    logs.requestEviction(streamId);
+    expect(logs.get(streamId)).toBeUndefined();
+
+    const resumedTurn = await logs.loadAndAcquireWriter(
+      streamId,
+      `${executionId}:resume`,
+    );
+    resumedTurn.appendSettled(
+      logRow(MESSAGE_TYPES.USER_MESSAGE, {
+        text: 'Now prove the second lemma.',
+      }),
+    );
+    resumedTurn.appendSettled(
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second proof.' }),
+    );
+    resumedTurn.close();
+    await logs.flush();
+
+    const archived = await readCompletedRunConversation(executionId);
+    expect(archived).toEqual({
+      source: 'streamLog',
+      streamId,
+      conversation: [
+        { role: 'user', content: 'Prove the first lemma.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First proof.' }],
+        },
+        { role: 'user', content: 'Now prove the second lemma.' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Second proof.' }],
+        },
+      ],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain('Conversation (4 messages)');
+    expect(endpoint.output).toContain('Prove the first lemma.');
+    expect(endpoint.output).toContain('First proof.');
+    expect(endpoint.output).toContain('Now prove the second lemma.');
+    expect(endpoint.output).toContain('Second proof.');
+
+    const firstPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 0,
+      limit: 2,
+    });
+    const secondPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 2,
+      limit: 2,
+    });
+    expect(firstPage.output).toContain('Source: streamLog');
+    expect(firstPage.output).toContain(`Stream: ${streamId}`);
+    expect(firstPage.output).toContain('Returned message interval: [0, 2)');
+    expect(firstPage.output).toContain('Next offset: 2');
+    expect(firstPage.output).toContain('<message index="1"');
+    expect(firstPage.output).toContain('<message index="2"');
+    expect(firstPage.output).not.toContain('Now prove the second lemma.');
+    expect(secondPage.output).toContain('Returned message interval: [2, 4)');
+    expect(secondPage.output).toContain('Next offset: none');
+    expect(secondPage.output).toContain('<message index="3"');
+    expect(secondPage.output).toContain('<message index="4"');
+    expect(secondPage.output).not.toContain('Prove the first lemma.');
+
+    for (const text of [
+      'Prove the first lemma.',
+      'First proof.',
+      'Now prove the second lemma.',
+      'Second proof.',
+    ]) {
+      expect(
+        `${firstPage.output}\n${secondPage.output}`.split(text),
+      ).toHaveLength(2);
+    }
+
+    const lineRange = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      view_range: [1, 10],
+    });
+    expect(lineRange.status).toBe('error');
+    expect(lineRange.error).toContain(
+      'Conversation pagination is message-based. Use offset and limit',
+    );
   });
 
   it('falls back to the legacy KV projections when no sidecar exists', async () => {
