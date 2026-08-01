@@ -372,7 +372,7 @@ describe('executionRegistry', () => {
       'parent-waiting-kill-publish-result-test' as StreamTabId;
     const childStreamId =
       'child-waiting-kill-publish-result-test' as StreamTabId;
-    const trace = spiedTrace({ emit: vi.fn() });
+    const trace = spiedTrace({ emit: vi.fn() }, { strict: true });
     const leaseScopeInvoked = vi.fn();
     const leaseScope: OwnedExecutionLeaseScope = (operation) => {
       leaseScopeInvoked();
