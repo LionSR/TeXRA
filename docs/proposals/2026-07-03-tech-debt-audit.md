@@ -156,7 +156,8 @@ architecture needed.
   host. `packages/desktop/tsconfig.paths.json` is a second hand-maintained copy.
 - Desktop carries 5 tsconfigs; `scripts/extension-package-invariants.snapshot.json`
   is a 70 KB committed generated artifact (see B4 for the better end-state).
-- `patches/ink@7.1.0.patch` has no documented exit plan (upstream issue or
+- The patch audited as `patches/ink@7.1.0.patch`, now carried unchanged as
+  `patches/ink@7.1.1.patch`, has no documented exit plan (upstream issue or
   re-evaluation trigger on ink bumps).
 
 **Fixes:** use `tsconfck`/`strip-json-comments`; drop `~/*`; move host aliases

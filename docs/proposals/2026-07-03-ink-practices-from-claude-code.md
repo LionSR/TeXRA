@@ -131,9 +131,10 @@ from a write-only stdout. The provocative name prevents someone "optimizing" the
 Evidence: `ink/log-update.ts:136-147,503-513`, `ink/frame.ts:105-124`.
 **TeXRA:** Already does exactly this — the vendored patch swaps count-based erase for a
 debounced full repaint (`clearTerminal` then reprint reflowed `fullStaticOutput`), and
-`CLAUDE.md` explicitly forbids reverting to line-count erasing. Strong alignment
-(`ink@7.1.0.patch:26-66,69-82,87-124`). The only borrowable nuance is naming/commenting the
-cost in code so it stays.
+`CLAUDE.md` explicitly forbids reverting to line-count erasing. Strong alignment. The patch
+examined here as 7.1.0 is unchanged and now lives at
+`patches/ink@7.1.1.patch:26-66,69-82,87-124`. The only borrowable nuance is naming/commenting
+the cost in code so it stays.
 
 **Handle SIGWINCH synchronously (no debounce) but dedupe same-dimension events.**
 `handleResize` runs synchronously, early-returns on `(cols,rows)` equality, updates cached
@@ -143,7 +144,7 @@ render in that window detects a width change, clears, then the debounce fires an
 = double flicker.
 Evidence: `ink/ink.tsx:303-346,212-216`.
 **TeXRA:** **Divergence worth examining.** TeXRA's patch _debounces_ the full repaint at 24ms
-(`ink@7.1.0.patch`). Claude Code's argument is that debouncing desyncs source-of-truth width
+(`patches/ink@7.1.1.patch`). Claude Code's argument is that debouncing desyncs source-of-truth width
 from rendered width and can double-flicker if any other render fires in the debounce window.
 TeXRA's debounce may be safe _because_ it routes all repaints through one full-reset path (no
 spinner can paint a half-resized frame if nothing else renders independently), but this is the
