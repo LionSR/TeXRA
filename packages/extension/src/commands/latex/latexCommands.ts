@@ -8,12 +8,12 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { runLatexFormatter } from '@latex/texFormatter';
 import {
   getTeXCount,
   parseTeXCountStats,
   type TexcountMode,
 } from '@latex/texcount';
+import { runLatexFormatter } from '@latex/formatter/texFormatter';
 import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';

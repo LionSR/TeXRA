@@ -4,7 +4,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   buildMainViewExecuteMessage,
   type MainViewExecutionFormState,
-} from '@shared/mainView/executeMessage';
+} from '@shared/mainView/executionFormState';
 import {
   MainViewExecuteInboundMessageSchema,
   MainViewExecuteMessageSchema,
