@@ -169,8 +169,11 @@ export class SessionHandle {
    */
   readonly workflowControls: WorkflowControlRegistry;
   private restartRepairPromise: Promise<unknown> | undefined;
-  /** Streams with a {@link repairWaitingIfResumable} probe already in flight. */
-  private readonly waitingRepairProbes = new Set<StreamTabId>();
+  /** Per-stream {@link repairWaitingIfResumable} result currently in flight. */
+  private readonly waitingRepairProbes = new Map<
+    StreamTabId,
+    Promise<boolean>
+  >();
   private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private readonly restartRepairAbort = new AbortController();
@@ -309,31 +312,43 @@ export class SessionHandle {
     const phase = this.status.get(streamId);
     if (phase === STREAM_PHASE.WAITING) return true;
     if (isInFlightPhase(phase)) return false;
-    if (this.waitingRepairProbes.has(streamId)) return false;
+
+    const inFlight = this.waitingRepairProbes.get(streamId);
+    if (inFlight) return inFlight;
 
     const executionId = this.snapshots.getExecutionId(streamId);
     if (!executionId) return false;
 
-    this.waitingRepairProbes.add(streamId);
+    const probe = this.probeWaitingRepair(streamId, executionId);
+    this.waitingRepairProbes.set(streamId, probe);
     try {
-      const resumability = await deriveResumability(executionId);
-      if (!resumability.resumable) return false;
-      const repaired = this.status.transitionToWaiting(
-        streamId,
-        STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-        { trace: logger },
-      );
-      if (repaired) {
-        logger.debug(`Stream ${streamId} restored to WAITING before follow-up`);
-      } else {
-        logger.warn(
-          `Failed to restore resumable stream ${streamId} to WAITING before follow-up`,
-        );
-      }
-      return repaired;
+      return await probe;
     } finally {
-      this.waitingRepairProbes.delete(streamId);
+      if (this.waitingRepairProbes.get(streamId) === probe) {
+        this.waitingRepairProbes.delete(streamId);
+      }
     }
+  }
+
+  private async probeWaitingRepair(
+    streamId: StreamTabId,
+    executionId: string,
+  ): Promise<boolean> {
+    const resumability = await deriveResumability(executionId);
+    if (!resumability.resumable) return false;
+    const repaired = this.status.transitionToWaiting(
+      streamId,
+      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+      { trace: logger },
+    );
+    if (repaired) {
+      logger.debug(`Stream ${streamId} restored to WAITING before follow-up`);
+    } else {
+      logger.warn(
+        `Failed to restore resumable stream ${streamId} to WAITING before follow-up`,
+      );
+    }
+    return repaired;
   }
 
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {

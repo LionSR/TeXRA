@@ -135,11 +135,10 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
     const first = session.repairWaitingIfResumable(streamId);
     const second = session.repairWaitingIfResumable(streamId);
 
-    await expect(second).resolves.toBe(false);
     expect(resumabilityMocks.deriveResumability).toHaveBeenCalledTimes(1);
 
     release?.();
-    await expect(first).resolves.toBe(true);
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
     expect(session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
 
     // The slot is released with the probe, so a later submission probes again.
