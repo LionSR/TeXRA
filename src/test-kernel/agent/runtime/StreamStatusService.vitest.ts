@@ -386,7 +386,7 @@ describe('StreamStatusMachine', () => {
     });
   });
 
-  it('emits status trace events when a trace owns publication', () => {
+  it('bridges canonical status facts to a supplied run trace', () => {
     const events = new SessionEventHub();
     const machine = new StreamStatusMachine(events);
     const publishedRunEvents = recordSessionEvents(events, { scope: 'run' });
@@ -423,13 +423,30 @@ describe('StreamStatusMachine', () => {
     );
   });
 
+  it('settles trace subscribers before publishing to session subscribers', () => {
+    const events = new SessionEventHub();
+    const machine = new StreamStatusMachine(events);
+    const trace = new TraceEmitter();
+    const streamId = 'stream-status-order-test' as StreamTabId;
+    const order: string[] = [];
+
+    trace.subscribe((event) => {
+      if (event.type === 'status') order.push('trace');
+    });
+    events.subscribeStatus(() => order.push('session'));
+
+    machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle', { trace });
+
+    expect(order).toEqual(['trace', 'session']);
+  });
+
   // One rail: the session fact is published by the machine itself, so a
   // trace-owned transition (run start, terminal, manual-retry wait, restart
   // repair) reaches every projector without the caller passing a hub. Before
   // this became unconditional, those transitions were visible only as
   // run-scope `status` trace events, which is why each projector carried its
   // own duplicate trace arm.
-  it('publishes the session fact even when a trace owns publication', () => {
+  it('publishes the session fact when a trace bridge is present', () => {
     const { machine, statusEvents, streamId } = setupMachine(
       'stream-status-single-rail',
     );

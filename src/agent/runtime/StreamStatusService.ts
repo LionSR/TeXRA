@@ -310,13 +310,14 @@ export class StreamStatusMachine {
         : {}),
       ...(options.substate ? { substate: options.substate } : {}),
     };
+    // Transcript recording still consumes run traces. Forward the same
+    // canonical fact first so recorder-owned rows settle before synchronous
+    // host projectors read them. This is a compatibility bridge, not a second
+    // status vocabulary or delivery rail.
+    options.trace?.emit(event);
     this.eventHub.emit({
       scope: 'session',
       event,
     });
-    // Transcript recording still consumes run traces. Forward the same
-    // canonical fact after the session hub has published it; this is a
-    // compatibility bridge, not a second status vocabulary.
-    options.trace?.emit(event);
   }
 }
