@@ -63,7 +63,8 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   LOG_LEVELS,
@@ -201,16 +202,11 @@ describe('completedRunArchive facade', () => {
 
   beforeEach(() => {
     clearStoreCache();
-    vi.clearAllMocks();
-    launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
-    launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
-    launchMocks.hasPersistedParent.mockResolvedValue(false);
-    launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
-      async (_executionId: ExecutionId, error: unknown) => error,
-    );
+    vi.resetAllMocks();
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
   });
 
@@ -314,9 +310,14 @@ describe('completedRunArchive facade', () => {
 
   it('reconstructs both turns when the production resume launch reopens the canonical writer', async () => {
     const executionId = '0aa1110aa111' as ExecutionId;
-    const streamId = 'orchestrator@deepseekproT#0aa1110aa111' as StreamTabId;
+    const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
+    const config = runConfig('orchestrator');
+    expect(
+      getStreamTabId(config.agent, config.model, { executionId }),
+    ).not.toBe(streamId);
+
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(streamId, config, executionId);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();
@@ -334,6 +335,12 @@ describe('completedRunArchive facade', () => {
     expect(logs.get(streamId)).toBeUndefined();
 
     const launchFailure = new Error('stop after resumed writer acquisition');
+    launchMocks.acquireResumedExecutionLease.mockResolvedValue('existing');
+    launchMocks.clearTerminalExecutionState.mockResolvedValue(undefined);
+    launchMocks.hasPersistedParent.mockResolvedValue(false);
+    launchMocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
+      async (_executionId: ExecutionId, error: unknown) => error,
+    );
     launchMocks.resolveAgent.mockReturnValue({
       definitionPath: '/agents/orchestrator.yaml',
     });
@@ -350,7 +357,6 @@ describe('completedRunArchive facade', () => {
     });
     launchMocks.buildVars.mockRejectedValueOnce(launchFailure);
 
-    const config = runConfig('orchestrator');
     const persistedResumeState = createToolUseResumeData({
       executionId,
       streamId,
@@ -384,26 +390,40 @@ describe('completedRunArchive facade', () => {
         return writer;
       });
 
+    const resolveResumeState = vi.fn(async (requestedStreamId: StreamTabId) => {
+      const runState = snapshots.getRunConfig(requestedStreamId);
+      const resolvedExecutionId = snapshots.getExecutionId(requestedStreamId);
+      return runState && resolvedExecutionId
+        ? { runState, executionId: resolvedExecutionId }
+        : undefined;
+    });
+    const reportFailure = vi.fn();
     try {
-      const resume = await retrieveSessionResumeData(
-        streamId,
-        executionId,
-        config,
-      );
-      expect(resume?.type).toBe('toolUse');
-      if (resume?.type !== 'toolUse') {
-        throw new Error('Expected persisted tool-use resume data');
-      }
-      expect(resume.streamId).toBe(streamId);
       await expect(
-        resumeToolUseFromResumeData(resume, { session }),
-      ).rejects.toBe(launchFailure);
+        resolveAndResumeStream(streamId, {
+          interactions: session.interactions,
+          streamStatus: session.status,
+          resolveResumeState,
+          resumeToolUse: async (resume) => {
+            await resumeToolUseFromResumeData(resume, { session });
+            return true;
+          },
+          executeWorkflow: vi.fn(async () => undefined),
+          reportFailure,
+        }),
+      ).resolves.toBe(false);
     } finally {
       session.dispose();
     }
     await logs.flush();
 
+    expect(resolveResumeState).toHaveBeenCalledWith(streamId);
+    expect(reportFailure).toHaveBeenCalledWith(streamId, launchFailure);
     expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
+    expect(
+      launchMocks.releaseOwnedExecutionLeaseAfterFailure,
+    ).toHaveBeenCalledWith(executionId, launchFailure);
+    resumedWriter.mockRestore();
 
     const archived = await readCompletedRunConversation(executionId);
     expect(archived).toEqual({
