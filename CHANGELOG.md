@@ -36,13 +36,13 @@ All notable changes to this project will be documented in this file.
   kind** — consumers of `@texra-ai/agent` that switch exhaustively over a
   result event's `error.kind` must handle the new `context-window` value, which
   previously arrived as `unexpected`.
+- **Execution conversation pagination now uses messages rather than rendered
+  lines** — callers of `/executions/{id}/conversation` should replace
+  `view_range` with `offset` and `limit`. Archive reads now report the returned
+  message interval, next offset, and selected transcript source.
 
 #### Bug Fixes
 
-- **Execution conversations page by message rather than rendered line** —
-  archive reads now report the returned message interval, next offset, and
-  selected transcript source, so resumed turns can be inspected without
-  ambiguous or repeated line windows.
 - **Runs that overflow the model context window say so** — instead of a generic
   failure message, the run now reports that the conversation exceeds the
   model's context window and suggests starting a new session or reducing
