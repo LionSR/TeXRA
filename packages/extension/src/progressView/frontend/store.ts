@@ -1,5 +1,7 @@
 // Shared imports
 import {
+  createStreamState,
+  type AgentCategory,
   type AgentCategoryFilter,
   type ContextStateData,
   type LogMessageData,
@@ -51,14 +53,26 @@ export interface StreamLogs {
   generation: number;
 }
 
-export const EMPTY_STREAM_LOGS: StreamLogs = {
-  logs: [],
-  logIndex: new Map(),
-  taskGroupIndex: new Map(),
-  updatedMessageIndices: [],
-  updatedMessageBaseGeneration: 0,
-  generation: 0,
-};
+/** Fresh, unshared `StreamLogs` value for a stream with no log entries yet. */
+function createEmptyStreamLogs(): StreamLogs {
+  return {
+    logs: [],
+    logIndex: new Map(),
+    taskGroupIndex: new Map(),
+    updatedMessageIndices: [],
+    updatedMessageBaseGeneration: 0,
+    generation: 0,
+  };
+}
+
+/**
+ * Stable empty fallback for read paths (e.g. `activeStreamLogs$`) that need a
+ * value before any log has arrived for a stream. Never mutated in place —
+ * writers always replace the map entry with a fresh object (see
+ * `ensureStreamState` and `logSlice.ts`), so sharing this single reference
+ * across reads is safe.
+ */
+export const EMPTY_STREAM_LOGS: StreamLogs = createEmptyStreamLogs();
 
 export interface ProgressState {
   activeStreamId: StreamTabId | null;
@@ -91,6 +105,42 @@ export function deleteStreamState(
   draft.streamStates.delete(streamId);
   draft.streamLogs.delete(streamId);
   draft.followupOptionsByStream.delete(streamId);
+}
+
+/**
+ * Create default entries — for whichever of the same key list
+ * `deleteStreamState` owns (`streamStates`, `streamLogs`,
+ * `followupOptionsByStream`) a stream doesn't have one in yet. Single owner
+ * of that initialization logic, mirroring `deleteStreamState`, so a stream
+ * can't end up registered in some of these maps but not others depending on
+ * which handler happened to observe it first. Already-present entries are
+ * left untouched.
+ *
+ * Does not touch `streamById`, for the same reason `deleteStreamState`
+ * doesn't: every call site that introduces a brand-new stream already holds
+ * its full `StreamTabInfo` and writes it through its own logic (e.g. the
+ * newest-first sorted upsert in `streamMetaSlice.ts`) — there is no
+ * meaningful placeholder to synthesize here.
+ *
+ * Returns the stream's (possibly just-created) `StreamState`.
+ */
+export function ensureStreamState(
+  draft: Draft<ProgressState>,
+  streamId: StreamTabId,
+  agentCategory: AgentCategory,
+): StreamState {
+  let state = draft.streamStates.get(streamId);
+  if (!state) {
+    state = createStreamState(agentCategory);
+    draft.streamStates.set(streamId, state);
+  }
+  if (!draft.streamLogs.has(streamId)) {
+    draft.streamLogs.set(streamId, createEmptyStreamLogs());
+  }
+  if (!draft.followupOptionsByStream.has(streamId)) {
+    draft.followupOptionsByStream.set(streamId, {});
+  }
+  return state;
 }
 
 /** Return the first stream ID from a streamById Map, or null if empty. */

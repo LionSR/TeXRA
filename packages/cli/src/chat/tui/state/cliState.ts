@@ -13,10 +13,8 @@ import {
   type MessageType,
   type NormalizedToolUse,
   type OutputFileInfo,
-  type PhaseStage,
   type Plan,
   type RoundIndexed,
-  type RoundStage,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -153,6 +151,33 @@ interface StreamFileMetadata {
   readonly output: readonly string[];
 }
 
+/**
+ * Current run/round/phase progress for one stream. A tool-use run advances
+ * through numbered rounds; a workflow-script run advances through named
+ * phases instead — never both — so this is one discriminated field rather
+ * than two independently-optional ones (`roundStage` / `phaseStage`) that
+ * every reader had to fall back between.
+ */
+export type StreamStage =
+  | {
+      readonly kind: 'round';
+      /** Zero-based round/turn index. */
+      readonly index: number;
+      /** Planned total, when known. Workflow runs set this; tool-use turns
+       *  may not. */
+      readonly total?: number;
+    }
+  | {
+      readonly kind: 'phase';
+      /** Phase title, free-form text from the workflow script. */
+      readonly label: string;
+      /** Zero-based position in the declared phase list. Absent for a phase
+       *  the script opened dynamically, which has no declared position. */
+      readonly index?: number;
+      /** Number of declared phases, when known. */
+      readonly total?: number;
+    };
+
 export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Model identity captured from setTaskState for this specific stream. */
@@ -200,10 +225,12 @@ export interface StreamSlice {
   /** True while the runtime is summarizing prior conversation context. */
   readonly compactingActive: boolean;
   readonly conversation: ConversationProgress | undefined;
-  readonly roundStage?: RoundStage | undefined;
-  /** Current workflow-script phase. Fills the same row slot as `roundStage`
-   *  — a run advances through phases or rounds, never both. */
-  readonly phaseStage?: PhaseStage | undefined;
+  /** Round/turn progress (tool-use runs) or workflow-script phase progress
+   *  (workflow runs) — a run advances through phases or rounds, never both,
+   *  so one discriminated slot fills the same row/segment either renderer
+   *  reads, instead of two independently-optional fields every consumer had
+   *  to fall back between. */
+  readonly stage?: StreamStage | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUpMessages: readonly string[];
   readonly todos: readonly TodoItem[];
@@ -259,8 +286,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,
-    roundStage: undefined,
-    phaseStage: undefined,
+    stage: undefined,
     entries: [],
     queuedFollowUpMessages: [],
     todos: [],
