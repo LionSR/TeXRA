@@ -851,40 +851,69 @@ describe('desktop settings IPC', () => {
   });
 
   it('reports failed setting writes and restores the authoritative snapshot', async () => {
-    const config = new MemoryConfigStore();
-    const failure = new Error('config write failed');
-    vi.spyOn(config, 'update').mockRejectedValueOnce(failure);
+    const workspaceState = new FakeStateStore();
+    const failure = new Error('workspace write failed');
+    vi.spyOn(workspaceState, 'update').mockRejectedValueOnce(failure);
     const onError = vi.fn();
     const showErrorMessage = vi.fn(async () => undefined);
+    const postLatexConfigValues = vi.fn();
 
-    const { settings, posted } = createCapturedSettingsFixture({
-      config,
+    const { settings } = createCapturedSettingsFixture({
+      workspaceState,
+      toolingSettingsController: createStubDesktopToolingSettingsController({
+        postLatexConfigValues,
+      }),
       ui: { onError, showErrorMessage },
     });
 
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: BASH_APPROVAL_CONFIG_KEY,
-        value: false,
+        key: WorkspaceStateKey.LATEX_FORMATTER,
+        value: 'none',
       }),
     ).toBe(true);
     await flushAsyncWork();
 
     expect(onError).toHaveBeenCalledWith(failure);
     expect(showErrorMessage).toHaveBeenCalledWith(
-      'Failed to update "Require bash approval": config write failed',
+      `Failed to update "${WorkspaceStateKey.LATEX_FORMATTER}": workspace write failed`,
     );
-    expect(
-      posted.findLast(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      ),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      bashApprovalEnabled: true,
+    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+  });
+
+  it('reports rejected setting values and restores the authoritative snapshot', async () => {
+    const workspaceState = new FakeStateStore();
+    const update = vi.spyOn(workspaceState, 'update');
+    const onError = vi.fn();
+    const showErrorMessage = vi.fn(async () => undefined);
+    const postLatexConfigValues = vi.fn();
+
+    const { settings } = createCapturedSettingsFixture({
+      workspaceState,
+      toolingSettingsController: createStubDesktopToolingSettingsController({
+        postLatexConfigValues,
+      }),
+      ui: { onError, showErrorMessage },
     });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+        value: 1000.5,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(update).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Invalid value for "${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}":`,
+      ),
+    );
+    expect(postLatexConfigValues).toHaveBeenCalledOnce();
   });
 
   it('writes the agent-skills toggle and returns the shared setting message', async () => {

@@ -754,6 +754,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const write = resolveStateSettingWrite(key, value);
     if (!write) return;
+    if (write.kind === 'rejected') {
+      await showLoggedErrorMessage(
+        this.channel,
+        `Invalid value for “${write.entry.title ?? write.entry.key}”`,
+        write.error,
+      );
+      await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+      return;
+    }
     if (write.entry.store === 'config' && !WorkspaceFS.getPath()) {
       void showLoggedInfoMessage(
         this.channel,

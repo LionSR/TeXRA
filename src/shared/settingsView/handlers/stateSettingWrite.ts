@@ -12,8 +12,8 @@ import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
 import type { SettingsViewStateSettingEntry } from '@shared/schemas/stateSettings';
 
 /**
- * A validated state-setting write/reset, or `null` when the message must be
- * ignored (value-less, unknown key, schema-rejected value, or a catalog row
+ * A validated state-setting write/reset, a rejected catalog value, or `null`
+ * when the message must be ignored (value-less, unknown key, or a catalog row
  * this settings view does not own).
  */
 type StateSettingWrite =
@@ -25,6 +25,11 @@ type StateSettingWrite =
   | {
       readonly kind: 'reset';
       readonly entry: SettingsViewStateSettingEntry;
+    }
+  | {
+      readonly kind: 'rejected';
+      readonly entry: SettingsViewStateSettingEntry;
+      readonly error: Error;
     }
   | null;
 
@@ -42,6 +47,6 @@ export function resolveStateSettingWrite(
   if (!entry) return null;
   if (value === null) return { kind: 'reset', entry };
   const parsed = entry.schema.safeParse(value);
-  if (!parsed.success) return null;
+  if (!parsed.success) return { kind: 'rejected', entry, error: parsed.error };
   return { kind: 'write', entry, value: parsed.data };
 }

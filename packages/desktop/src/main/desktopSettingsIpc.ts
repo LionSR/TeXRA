@@ -245,6 +245,17 @@ export function createDesktopSettingsIpc(
   ): Promise<void> {
     const write = resolveStateSettingWrite(key, value);
     if (!write) return;
+    if (write.kind === 'rejected') {
+      options.ui.onError(write.error);
+      await options.ui.showErrorMessage(
+        formatError(
+          `Invalid value for "${write.entry.title ?? write.entry.key}"`,
+          write.error,
+        ),
+      );
+      postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+      return;
+    }
     const stores = { config: options.config, workspaceState, globalState };
     try {
       await (write.kind === 'reset'
@@ -253,7 +264,10 @@ export function createDesktopSettingsIpc(
     } catch (error) {
       options.ui.onError(error);
       await options.ui.showErrorMessage(
-        formatError(`Failed to update "${write.entry.title}"`, error),
+        formatError(
+          `Failed to update "${write.entry.title ?? write.entry.key}"`,
+          error,
+        ),
       );
     } finally {
       postStateSettingSnapshot(write.entry.settingsViewSnapshot);

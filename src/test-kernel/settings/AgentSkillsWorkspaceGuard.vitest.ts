@@ -91,6 +91,23 @@ describe('agent skills workspace guard', () => {
     );
   });
 
+  it('surfaces rejected values and restores the owning snapshot', async () => {
+    const handler = createHarness();
+
+    await handler.updateStateSetting(
+      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+      1000.5,
+    );
+
+    expect(mocks.writeSetting).not.toHaveBeenCalled();
+    expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
+      'SettingsViewMessageHandler',
+      `Invalid value for “${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}”`,
+      expect.any(Error),
+    );
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');
+  });
+
   it('routes the multi-agent snapshot to its status sender', async () => {
     const handler = Object.create(
       SettingsViewMessageHandler.prototype,

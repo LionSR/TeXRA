@@ -49,13 +49,20 @@ describe('resolveStateSettingWrite', () => {
     ).toBeNull();
   });
 
-  it('rejects unknown keys and values that fail the catalog schema', () => {
+  it('ignores unknown keys and preserves catalog validation errors', () => {
     expect(resolveStateSettingWrite('texra.unknown', true)).toBeNull();
     expect(
       resolveStateSettingWrite(
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
         1000.5,
       ),
-    ).toBeNull();
+    ).toMatchObject({
+      kind: 'rejected',
+      entry: {
+        key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+        settingsViewSnapshot: 'latex',
+      },
+      error: expect.any(Error),
+    });
   });
 });
