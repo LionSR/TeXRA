@@ -49,7 +49,7 @@ import {
 import { formatDuration, generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { executeCommand, signalProcessGroup } from '@utils/system/execUtils';
-import { appendHead, appendTail } from '@utils/strings/appendTail';
+import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // Local file imports
 import { defineTool } from './core/define';

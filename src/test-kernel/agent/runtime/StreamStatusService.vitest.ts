@@ -17,7 +17,7 @@ import {
   STREAM_TRANSITION_CAUSE,
   type StreamTransitionCause,
 } from '@shared/streams/streamStatus';
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 // Local file imports
 import {

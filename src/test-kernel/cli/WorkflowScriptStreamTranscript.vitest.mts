@@ -42,7 +42,7 @@ import {
 } from '@shared/schemas';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
+import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.mts';
 import { createRunTrace } from '@transcript';
 
