@@ -214,7 +214,52 @@ describe('SettingsProfileController', () => {
     expect(controller.getReliabilitySettings()).toContainEqual(
       expect.objectContaining({
         key: 'texra.model.retry.maxAttempts',
+        label: 'Automatic retries',
+        min: 0,
+        max: 5,
+        step: 1,
         value: 3,
+      }),
+    );
+  });
+
+  it('rejects fractional automatic retry values at the settings boundary', async () => {
+    const { controller, config } = createController();
+
+    const result = await controller.setProviderVscodeSetting({
+      key: 'texra.model.retry.maxAttempts',
+      value: 2.5,
+    });
+
+    expect(result).toEqual({
+      kind: 'rejected',
+      key: 'texra.model.retry.maxAttempts',
+    });
+    expect(config).not.toHaveProperty('texra.model.retry.maxAttempts');
+  });
+
+  it('shows the default when persisted automatic retries are invalid', () => {
+    const { controller } = createController({
+      config: { 'texra.model.retry.maxAttempts': 2.5 },
+    });
+
+    expect(controller.getReliabilitySettings()).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.retry.maxAttempts',
+        value: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      }),
+    );
+  });
+
+  it('does not mask a compaction value that runtime still reads directly', () => {
+    const { controller } = createController({
+      config: { 'texra.model.compactionThresholdPercent': 101 },
+    });
+
+    expect(controller.getReliabilitySettings()).toContainEqual(
+      expect.objectContaining({
+        key: 'texra.model.compactionThresholdPercent',
+        value: 101,
       }),
     );
   });

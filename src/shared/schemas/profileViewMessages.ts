@@ -81,6 +81,7 @@ export const NumberVscodeSettingSchema = z.object({
   value: z.number(),
   min: z.number().optional(),
   max: z.number().optional(),
+  step: z.number().positive().optional(),
   unit: z.string().optional(),
 });
 export type NumberVscodeSetting = z.infer<typeof NumberVscodeSettingSchema>;
