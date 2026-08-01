@@ -74,6 +74,10 @@ try {
     },
     outfile,
     minify: true,
+    // SDK error classification (src/common/errors/sdkError/) reads
+    // `constructor.name` off the prototype chain, so minified class names
+    // would silently misclassify provider errors in the published binary.
+    keepNames: true,
     sourcemap: false,
     legalComments: 'none',
     // The React Compiler runs as a Babel pre-pass scoped to .tsx files under

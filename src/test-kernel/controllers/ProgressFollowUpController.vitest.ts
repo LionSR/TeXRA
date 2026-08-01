@@ -7,7 +7,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { WorkflowTaskState } from '@agent/core/state/TaskState';
 import {
   ProgressFollowUpController,
   type ProgressFollowUpModelOption,
@@ -18,7 +17,7 @@ import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 // Local file imports
 import {
   createOutputFile,
-  createWorkflowTaskState,
+  createWorkflowConfig,
   type OutputFileHarnessOptions,
 } from '../support/ProgressControllerHarnesses';
 
@@ -41,38 +40,30 @@ type RunStorageOutputOverrides = Omit<OutputFileHarnessOptions, 'location'> & {
 };
 
 /**
- * Workflow state built from the shared harness, which also fills the legacy
+ * Workflow config built from the shared harness, which also fills the legacy
  * `inputFile` slot so the migration into the head of `inputFiles` stays
  * covered.
  */
-function createFollowUpWorkflowTaskState(
+function createFollowUpWorkflowConfig(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
-) {
-  return createWorkflowTaskState({
+): AgentConfig {
+  return createWorkflowConfig({
     ...followUpWorkflowDefaults,
     ...overrides,
   });
 }
 
-/** Workflow state whose `inputFiles` are exactly the ones passed in. */
-function createExactInputsTaskState(
+/** Workflow config whose `inputFiles` are exactly the ones passed in. */
+function createExactInputsConfig(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
-): WorkflowTaskState {
-  return {
-    agentConfig: AgentConfigSchema.parse({
-      agent: 'writer',
-      model: 'gemini31p',
-      ...followUpWorkflowDefaults,
-      agentCategory: AgentCategory.Workflow,
-      ...overrides,
-    }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
-    activeFiles: {
-      input: true,
-      context: false,
-      media: false,
-      output: true,
-    },
-  };
+): AgentConfig {
+  return AgentConfigSchema.parse({
+    agent: 'writer',
+    model: 'gemini31p',
+    ...followUpWorkflowDefaults,
+    agentCategory: AgentCategory.Workflow,
+    ...overrides,
+  });
 }
 
 function createRunStorageOutputFile(
@@ -112,7 +103,7 @@ function createCompileFailure(
 }
 
 const emptyFollowUpState: ProgressFollowUpState = {
-  getTaskState: () => undefined,
+  getRunConfig: () => undefined,
   getOutputFiles: () => ({}),
   getCompileFailures: () => ({}),
   getExecutionId: () => undefined,
@@ -145,10 +136,10 @@ function createController({
 describe('ProgressFollowUpController', () => {
   it('builds a tool-use follow-up restore plan from workflow outputs', () => {
     const controller = createController();
-    const taskState = createFollowUpWorkflowTaskState();
+    const runConfig = createFollowUpWorkflowConfig();
     const plan = controller.planToolUseFollowUp({
       streamId: 'stream-a',
-      taskState,
+      runConfig,
       outputFiles: [createRunStorageOutputFile()],
       agent: 'tool-agent',
       model: 'gemini31p',
@@ -161,32 +152,28 @@ describe('ProgressFollowUpController', () => {
     expect(plan.kind).toBe('restoreState');
     if (plan.kind !== 'restoreState') return;
     expect(plan.executeImmediately).toBe(true);
-    expect(plan.taskState.agentConfig.agent).toBe('tool-agent');
-    expect(plan.taskState.agentConfig.agentCategory).toBe(
-      AgentCategory.ToolUse,
-    );
-    // The follow-up keeps the workflow's input files exactly as the task
-    // state recorded them (the harness's legacy `inputFile` slot migrates to
+    expect(plan.config.agent).toBe('tool-agent');
+    expect(plan.config.agentCategory).toBe(AgentCategory.ToolUse);
+    // The follow-up keeps the workflow's input files exactly as the run
+    // config recorded them (the harness's legacy `inputFile` slot migrates to
     // the head of `inputFiles`, ahead of the declared 'main.tex').
-    expect(plan.taskState.agentConfig.inputFiles).toEqual(
-      taskState.agentConfig.inputFiles,
-    );
-    expect(plan.taskState.agentConfig.outputFiles.length).toBe(0);
-    expect(plan.taskState.agentConfig.instruction).toMatch(
+    expect(plan.config.inputFiles).toEqual(runConfig.inputFiles);
+    expect(plan.config.outputFiles.length).toBe(0);
+    expect(plan.config.instruction).toMatch(
       /\/executions\/exec-123\/files\/answer\.tex/,
     );
-    expect(plan.taskState.agentConfig.instruction).toMatch(
+    expect(plan.config.instruction).toMatch(
       /User follow-up request: Please inspect the proof\./,
     );
   });
 
   it('builds a stream-scoped tool-use plan from snapshot state', async () => {
-    const taskState = createFollowUpWorkflowTaskState();
+    const runConfig = createFollowUpWorkflowConfig();
     const outputFile = createRunStorageOutputFile();
     const controller = createController({
       modelOptions: [{ value: 'gemini31p' }],
       state: {
-        getTaskState: () => taskState,
+        getRunConfig: () => runConfig,
         getOutputFiles: () => ({ 2: [outputFile] }),
         getCompileFailures: () => ({}),
         getExecutionId: () => 'exec-123',
@@ -204,11 +191,11 @@ describe('ProgressFollowUpController', () => {
     expect(plan.kind).toBe('restoreState');
     if (plan.kind !== 'restoreState') return;
     expect(plan.executeImmediately).toBe(false);
-    expect(plan.taskState.agentConfig.agent).toBe('tool-agent');
-    expect(plan.taskState.agentConfig.instruction).toMatch(
+    expect(plan.config.agent).toBe('tool-agent');
+    expect(plan.config.instruction).toMatch(
       /\/executions\/exec-123\/files\/answer\.tex/,
     );
-    expect(plan.taskState.agentConfig.instruction).toMatch(
+    expect(plan.config.instruction).toMatch(
       /User follow-up request: Check the final paragraph\./,
     );
   });
@@ -216,7 +203,7 @@ describe('ProgressFollowUpController', () => {
   it('rejects follow-up setup when the selected model is disabled', () => {
     const plan = createController().planToolUseFollowUp({
       streamId: 'stream-a',
-      taskState: createFollowUpWorkflowTaskState(),
+      runConfig: createFollowUpWorkflowConfig(),
       outputFiles: [createRunStorageOutputFile()],
       agent: 'tool-agent',
       model: 'gemini31p',
@@ -237,7 +224,7 @@ describe('ProgressFollowUpController', () => {
     const output = createRunStorageOutputFile({ source: 'source.tex' });
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
-      taskState: createFollowUpWorkflowTaskState({
+      runConfig: createFollowUpWorkflowConfig({
         inputFiles: ['main.tex', 'source.tex'],
       }),
       compileFailures: [createCompileFailure()],
@@ -266,7 +253,7 @@ describe('ProgressFollowUpController', () => {
     });
     const plan = await controller.planCompileFixer({
       streamId: 'stream-a',
-      taskState: createFollowUpWorkflowTaskState({
+      runConfig: createFollowUpWorkflowConfig({
         inputFiles: ['main.tex', 'chapter.tex'],
       }),
       compileFailures: [createCompileFailure()],
@@ -289,7 +276,7 @@ describe('ProgressFollowUpController', () => {
       existingFiles: new Set(),
     }).planCompileFixer({
       streamId: 'stream-a',
-      taskState: createFollowUpWorkflowTaskState({
+      runConfig: createFollowUpWorkflowConfig({
         inputFiles: ['/external/main.tex'],
       }),
       compileFailures: [createCompileFailure()],
@@ -312,7 +299,7 @@ describe('ProgressFollowUpController', () => {
       existingFiles: new Set(['main.tex', 'main-diffea268c1.tex']),
     }).planCompileFixer({
       streamId: 'stream-a',
-      taskState: createExactInputsTaskState({
+      runConfig: createExactInputsConfig({
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
@@ -345,7 +332,7 @@ describe('ProgressFollowUpController', () => {
       existingFiles: new Set(['main-diffea268c1.tex']),
     }).planCompileFixer({
       streamId: 'stream-a',
-      taskState: createExactInputsTaskState({
+      runConfig: createExactInputsConfig({
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
@@ -367,7 +354,7 @@ describe('ProgressFollowUpController', () => {
   it('uses the inferred source when a generated latexdiff artifact is absent', async () => {
     const plan = await createController().planCompileFixer({
       streamId: 'stream-a',
-      taskState: createExactInputsTaskState({
+      runConfig: createExactInputsConfig({
         inputFiles: ['main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],
@@ -389,7 +376,7 @@ describe('ProgressFollowUpController', () => {
   it('keeps missing latexdiff context when a source target is already present', async () => {
     const plan = await createController().planCompileFixer({
       streamId: 'stream-a',
-      taskState: createExactInputsTaskState({
+      runConfig: createExactInputsConfig({
         inputFiles: ['main.tex', 'main-diffea268c1.tex'],
       }),
       compileFailures: [createCompileFailure()],

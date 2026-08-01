@@ -835,8 +835,8 @@ function createWindow(options: {
     // reached through the desktop execution bridge instead of VS Code commands.
     runExecution: (request) =>
       getAgentExecution().then((execution) => execution.runExecution(request)),
-    restoreTaskState: async (taskState) =>
-      (await getAgentExecution()).restoreTaskState(taskState),
+    restoreRunConfig: async (config) =>
+      (await getAgentExecution()).restoreRunConfig(config),
     openPath: settingsUi.openPath,
     showInfoMessage: settingsUi.showInfoMessage,
     showWarningMessage,

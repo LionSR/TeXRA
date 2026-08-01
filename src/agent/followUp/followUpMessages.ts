@@ -13,10 +13,12 @@ import type { TaskRunFileService } from '@utils/files';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 
 interface FollowUpMessageServices<C> {
-  readonly modelHandler: Pick<
-    IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
-    'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'
-  >;
+  readonly modelCell: {
+    readonly handler: Pick<
+      IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
+      'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'
+    >;
+  };
   readonly fileService: Pick<TaskRunFileService, 'createLocation'>;
   readonly logger: Pick<AgentTrace, 'warn'>;
 }
@@ -49,10 +51,11 @@ export async function appendFollowUpAsUserMessage<C>(
   followUp: FollowUpQueueBatchItem,
   services: FollowUpMessageServices<C>,
 ): Promise<AppendFollowUpResult> {
-  const nextMessages = await services.modelHandler.createUserFollowUpMessages(
-    messages,
-    followUp.text,
-  );
+  const nextMessages =
+    await services.modelCell.handler.createUserFollowUpMessages(
+      messages,
+      followUp.text,
+    );
 
   if (!followUp.mediaFiles?.length) {
     return { messages: nextMessages, attachmentKinds: [] };
@@ -61,7 +64,7 @@ export async function appendFollowUpAsUserMessage<C>(
   if (
     shouldWarnMediaNeedsVision(
       followUp.mediaFiles,
-      services.modelHandler.capabilities,
+      services.modelCell.handler.capabilities,
     )
   ) {
     const visionMediaCount = countMediaFilesNeedingVision(followUp.mediaFiles);
@@ -70,10 +73,11 @@ export async function appendFollowUpAsUserMessage<C>(
     );
   }
 
-  const attachmentKinds = await services.modelHandler.addMediaToUserMessage(
-    nextMessages,
-    followUp.mediaFiles.map((p) => services.fileService.createLocation(p)),
-  );
+  const attachmentKinds =
+    await services.modelCell.handler.addMediaToUserMessage(
+      nextMessages,
+      followUp.mediaFiles.map((p) => services.fileService.createLocation(p)),
+    );
   return { messages: nextMessages, attachmentKinds };
 }
 

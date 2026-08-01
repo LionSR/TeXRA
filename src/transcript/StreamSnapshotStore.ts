@@ -24,8 +24,7 @@ import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
@@ -446,11 +445,7 @@ export class StreamSnapshotStore {
             this.setRunDescriptor(event.descriptor);
             return;
           case 'run.config':
-            this.setTaskState(
-              event.streamId,
-              agentConfigToTaskState(event.config),
-              event.executionId,
-            );
+            this.setRunConfig(event.streamId, event.config, event.executionId);
             return;
           case 'usage':
             this.handleSessionUsageEvent(event.payload);
@@ -1468,15 +1463,15 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   /**
-   * Set task state, optionally with the execution id, in a SINGLE meta.json
-   * write (callers that have both should pass both so meta isn't written twice).
+   * Set the stream's run config, optionally with the execution id, in a SINGLE
+   * meta.json write (callers that have both should pass both so meta isn't
+   * written twice).
    */
-  setTaskState(
+  setRunConfig(
     stream: StreamTabId,
-    taskState: TaskState,
+    config: AgentConfig,
     executionId?: ExecutionId,
   ): void {
-    const config = taskState.agentConfig;
     const record = this.getOrCreateRecord(stream);
     record.runConfig = config;
     // Synthesize an identity only for a run that never emitted `run.start`
@@ -1528,11 +1523,6 @@ export class StreamSnapshotStore {
 
   setDescription(stream: StreamTabId, description: string): void {
     this.queueMetaPatch(stream, { description });
-  }
-
-  getTaskState(stream: StreamTabId): TaskState | undefined {
-    const config = this.records.get(stream)?.runConfig;
-    return config ? agentConfigToTaskState(config) : undefined;
   }
 
   getRunDescriptor(stream: StreamTabId): RunDescriptor | undefined {
@@ -1622,7 +1612,7 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Workflow stream IDs whose taskState's agentConfig matches `match`. Used by
+   * Workflow stream IDs whose run config matches `match`. Used by
    * command-palette pack/clean to clear missing-output markers across every tab
    * that surfaced markers for the cleaned files. Both sides are canonicalized
    * (agent source prefixes stripped, paths normalized to forward slashes).
@@ -1920,10 +1910,11 @@ export class StreamSnapshotStore {
     return next;
   }
 
+  /** Legacy `meta.taskState` read shim: unwrap the run config it wrapped. */
   private parseLegacyTaskState(
     stream: StreamTabId,
     meta: StreamTabMeta,
-  ): TaskState | undefined {
+  ): AgentConfig | undefined {
     if (meta.taskState === undefined) return undefined;
     const parsed = TaskStateSchema.safeParse(meta.taskState);
     if (parsed.success) {
@@ -1932,7 +1923,7 @@ export class StreamSnapshotStore {
         `Loaded legacy taskState for stream ${stream}; run config should come from execution config on new writes.`,
         { data: { stream, executionId: meta.executionId } },
       );
-      return parsed.data;
+      return parsed.data.agentConfig;
     }
 
     logger.warn(
@@ -1976,9 +1967,8 @@ export class StreamSnapshotStore {
       }
     }
 
-    const legacyTaskState = this.parseLegacyTaskState(stream, meta);
-    if (!legacyTaskState) return { descriptor };
-    const config = legacyTaskState.agentConfig;
+    const config = this.parseLegacyTaskState(stream, meta);
+    if (!config) return { descriptor };
     if (executionId) {
       descriptor =
         descriptor ?? descriptorFromConfig(stream, executionId, config);

@@ -74,6 +74,27 @@ describe('model handler compatibility inference', () => {
     expect(info).not.toHaveBeenCalled();
   });
 
+  it('prefers the persisted model id over the MODEL variable', () => {
+    expect(
+      inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
+        modelId: 'gemini35f',
+        messages: [
+          {
+            role: 'user',
+            parts: [{ text: 'continue' }],
+          },
+        ],
+        stateSlices: {
+          userChannels: {
+            input: {},
+            transient: { MODEL: 'gpt54' },
+          },
+        },
+      }),
+    ).toBe('ModelHandlerGoogleGenAI');
+    expect(info).not.toHaveBeenCalled();
+  });
+
   it('honors an explicitly persisted flow compatibility key', () => {
     expect(
       inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {

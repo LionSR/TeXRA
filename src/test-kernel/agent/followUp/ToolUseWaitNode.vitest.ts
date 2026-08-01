@@ -18,6 +18,7 @@ import {
   type ToolUseRunShared,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   SessionEventHub,
@@ -47,12 +48,13 @@ import {
   toolUseRunShared,
   withTestRunContext,
 } from '../progressTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 type WaitNodeModelHandlerOverrides = Omit<
-  Partial<ToolUseServices['modelHandler']>,
+  Partial<RunModelHandler>,
   'capabilities'
 > & {
-  capabilities?: Partial<ToolUseServices['modelHandler']['capabilities']>;
+  capabilities?: Partial<RunModelHandler['capabilities']>;
 };
 
 type WaitNodeServiceOverrides = Partial<
@@ -84,7 +86,7 @@ function createWaitNodeServices(
       ...fileService,
     },
     logger: new TraceEmitter(),
-    modelHandler: {
+    modelCell: testModelCell({
       capabilities: {
         ...DEFAULT_MODEL_CAPABILITIES,
         ...capabilities,
@@ -92,7 +94,7 @@ function createWaitNodeServices(
       createUserFollowUpMessages: vi.fn(async () => []),
       extractAssistantText: () => undefined,
       ...modelHandlerOverrides,
-    },
+    }),
     session: {
       hasQueuedFollowUp: () => false,
       waitForFollowUp: vi.fn(async () => null),

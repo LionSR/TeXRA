@@ -10,6 +10,7 @@ import type { CreateResponseOptions } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { withTestRunContext } from '../progressTestUtils';
 import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 function buildRound(supportsForcedToolChoice: boolean) {
   const requests: CreateResponseOptions[] = [];
@@ -20,26 +21,28 @@ function buildRound(supportsForcedToolChoice: boolean) {
   const services = {
     ...baseRoundServices('FinalToolSynthesis', 'final-tool-synthesis'),
     finalTool: { name: 'submit_output' },
-    modelHandler: roundModelHandler({
-      createAssistantMessageFromResponse: vi.fn(
-        (_response: unknown, text: string) =>
-          ({ role: 'assistant', content: text }) as ProviderMessage,
-      ),
-      createResponse,
-      createUserFollowUpMessages: vi.fn(
-        async (messages: ProviderMessage[], text: string) => [
-          ...messages,
-          { role: 'user', content: text } as ProviderMessage,
-        ],
-      ),
-      extractResponse: (response: { turn: number }) => ({
-        text: response.turn === 1 ? 'Draft answer' : '',
-        usage: null,
-        stopReason: 'stop',
+    modelCell: testModelCell(
+      roundModelHandler({
+        createAssistantMessageFromResponse: vi.fn(
+          (_response: unknown, text: string) =>
+            ({ role: 'assistant', content: text }) as ProviderMessage,
+        ),
+        createResponse,
+        createUserFollowUpMessages: vi.fn(
+          async (messages: ProviderMessage[], text: string) => [
+            ...messages,
+            { role: 'user', content: text } as ProviderMessage,
+          ],
+        ),
+        extractResponse: (response: { turn: number }) => ({
+          text: response.turn === 1 ? 'Draft answer' : '',
+          usage: null,
+          stopReason: 'stop',
+        }),
+        isEndTurnStop: () => true,
+        supportsForcedToolChoice,
       }),
-      isEndTurnStop: () => true,
-      supportsForcedToolChoice,
-    }),
+    ),
     session: { hasQueuedFollowUp: () => false },
     setting: {
       temperature: 0,

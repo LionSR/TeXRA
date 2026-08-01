@@ -12,7 +12,9 @@ import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
+  type ExecutionId,
   type ExecutionStatus,
+  type RunDescriptor,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -136,15 +138,33 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private terminalState: TerminalState = 'open';
 
   constructor(
-    readonly executionId: string,
+    /**
+     * The run's identity, the same object its `run.start` published and its
+     * terminal `result` reports. Held whole rather than copied field by field,
+     * so the handle and the event plane cannot describe the run differently.
+     */
+    readonly descriptor: RunDescriptor,
     parentStreamId: StreamTabId,
-    readonly childStreamId: StreamTabId,
-    readonly agentName: string,
-    readonly category: AgentCategory,
     /** The run's discriminated-event channel, for run-scoped subscribers. */
     readonly trace?: AgentTrace,
   ) {
     this._parentStreamId = parentStreamId;
+  }
+
+  get executionId(): ExecutionId {
+    return this.descriptor.executionId;
+  }
+
+  get childStreamId(): StreamTabId {
+    return this.descriptor.streamId;
+  }
+
+  get agentName(): string {
+    return this.descriptor.agent;
+  }
+
+  get category(): AgentCategory {
+    return this.descriptor.category;
   }
 
   /** Settle {@link result} with the terminal outcome (idempotent). */

@@ -7,7 +7,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { TaskState, WorkflowTaskState } from '@agent/core/state/TaskState';
 import type { ProgressBackendOptions } from '@controllers/progressView/backend/ProgressBackend';
 import {
   ProgressWorkflowActionsController,
@@ -34,23 +33,13 @@ export function createAgentConfig(
   });
 }
 
-export function createWorkflowTaskState(
+export function createWorkflowConfig(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
-  activeFiles: Partial<WorkflowTaskState['activeFiles']> = {},
-): WorkflowTaskState {
-  return {
-    agentConfig: createAgentConfig({
-      ...overrides,
-      agentCategory: AgentCategory.Workflow,
-    }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
-    activeFiles: {
-      input: true,
-      context: false,
-      media: false,
-      output: true,
-      ...activeFiles,
-    },
-  };
+): AgentConfig {
+  return createAgentConfig({
+    ...overrides,
+    agentCategory: AgentCategory.Workflow,
+  });
 }
 
 type WorkspaceLocationOverrides = {
@@ -123,7 +112,7 @@ export function createOutputFile(
 }
 
 export interface ProgressWorkflowActionsHarnessOptions {
-  taskStates?: Map<StreamTabId, TaskState>;
+  runConfigs?: Map<StreamTabId, AgentConfig>;
   executionIds?: Map<StreamTabId, string>;
   outputs?: Map<StreamTabId, RoundIndexed<OutputFileInfo>>;
   knownWorkspaceOutputs?: Map<StreamTabId, Set<string>>;
@@ -150,7 +139,7 @@ export function createProgressWorkflowActionsHarness(
   return {
     controller: new ProgressWorkflowActionsController({
       state: {
-        getTaskState: (stream) => options.taskStates?.get(stream),
+        getRunConfig: (stream) => options.runConfigs?.get(stream),
         getExecutionId: (stream) => options.executionIds?.get(stream),
         getOutputFiles: (stream) => options.outputs?.get(stream) ?? {},
         getKnownWorkspaceOutputPaths: (stream) =>

@@ -1,3 +1,12 @@
+/**
+ * Legacy run-config wrapper. `AgentConfig` is the live run-config vocabulary;
+ * this shape survives at exactly two boundaries and has no other callers:
+ *
+ * - the `meta.taskState` disk-read shim in `StreamSnapshotStore`, which parses
+ *   run configs persisted before `runDescriptor`/`executionId` were written;
+ * - the frozen CLI NDJSON `setTaskState` event payload, whose wire shape may
+ *   not change (projected from `AgentConfig` by `agentConfigToTaskState`).
+ */
 import { z } from 'zod';
 
 import {
@@ -5,7 +14,6 @@ import {
   type MultipleDocumentFileType,
 } from '@shared/schemas/fileTypes';
 
-import { AgentCategory } from '../definition/AgentDataclass';
 import {
   ToolUseAgentConfigSchema,
   WorkflowAgentConfigSchema,
@@ -25,27 +33,13 @@ const WorkflowTaskStateSchema = z.object({
   agentConfig: WorkflowAgentConfigSchema,
   activeFiles: ActiveFilesSchema,
 });
-export type WorkflowTaskState = z.infer<typeof WorkflowTaskStateSchema>;
 
 const ToolUseTaskStateSchema = z.object({
   agentConfig: ToolUseAgentConfigSchema,
 });
-export type ToolUseTaskState = z.infer<typeof ToolUseTaskStateSchema>;
 
 export const TaskStateSchema = z.union([
   WorkflowTaskStateSchema,
   ToolUseTaskStateSchema,
 ]);
 export type TaskState = z.infer<typeof TaskStateSchema>;
-
-export function isWorkflowTaskState(
-  taskState: TaskState,
-): taskState is WorkflowTaskState {
-  return taskState.agentConfig.agentCategory === AgentCategory.Workflow;
-}
-
-export function isToolUseTaskState(
-  taskState: TaskState,
-): taskState is ToolUseTaskState {
-  return taskState.agentConfig.agentCategory === AgentCategory.ToolUse;
-}

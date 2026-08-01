@@ -19,12 +19,12 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
 
 // Test support imports
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
@@ -64,13 +64,12 @@ function setupBinder(executionId: string, session?: SessionHandle) {
     session,
   });
   registry.track(
-    new AgentExecutionHandle(
+    testExecutionHandle({
       executionId,
-      streamId,
+      parentStreamId: streamId,
       childStreamId,
-      'search',
-      'toolUse',
-    ),
+      agent: 'search',
+    }),
   );
   return {
     registry,

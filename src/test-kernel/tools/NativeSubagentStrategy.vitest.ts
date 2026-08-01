@@ -10,8 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
@@ -61,6 +59,7 @@ vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
+import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
@@ -231,18 +230,17 @@ describe('NativeSubagentStrategy', () => {
     expect(ports.recordCost).toHaveBeenCalledWith(0.17);
   });
 
-  it('records a thrown AgentFlowError cost once through interactive loop settlement', async () => {
+  it('records a failed turn cost once through interactive loop settlement', async () => {
     const params = baseParams();
     const recordCost = vi.fn();
-    mocks.executeAgent.mockRejectedValueOnce(
-      new AgentFlowError('provider failed', {
-        category: 'toolUse',
-        outcome: 'failed',
-        executionId: params.executionId,
-        streamId: 'child-stream',
-        totalCostUsd: 0.29,
-      }),
-    );
+    mocks.executeAgent.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: 'failed',
+      executionId: params.executionId,
+      streamId: 'child-stream',
+      totalCostUsd: 0.29,
+      error: { message: 'provider failed', userRetryable: false },
+    });
 
     const { completion } = startChildRunLoop({
       childStreamId: 'child-stream',
@@ -567,13 +565,12 @@ describe('NativeSubagentStrategy', () => {
     const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
     const executionId = 'native-follow-up-loop-exec' as ExecutionId;
     const interactions = { emit: vi.fn() } as never;
-    const handle = new AgentExecutionHandle(
+    const handle = testExecutionHandle({
       executionId,
       parentStreamId,
       childStreamId,
-      'review',
-      'toolUse',
-    );
+      agent: 'review',
+    });
     const params = {
       ...baseParams(session),
       executionId,

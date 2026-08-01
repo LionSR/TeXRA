@@ -13,7 +13,7 @@ import {
   type DeleteExecutionResult,
 } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
-import type { TaskState } from '@agent/core/state/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   ProgressBackend,
@@ -60,14 +60,12 @@ export async function createLiveStoreSession(): Promise<SessionHandle> {
   });
 }
 
-export function toolUseTaskState(agent: string, model: string): TaskState {
+export function toolUseConfig(agent: string, model: string): AgentConfig {
   return {
-    agentConfig: {
-      agent,
-      model,
-      agentCategory: AgentCategory.ToolUse,
-    },
-  } as TaskState;
+    agent,
+    model,
+    agentCategory: AgentCategory.ToolUse,
+  } as AgentConfig;
 }
 
 export function createRecordingBackend(): {
@@ -141,7 +139,7 @@ export async function writeExecutionConfig(
   executionId: ExecutionId,
 ): Promise<void> {
   await getExecutionStore(executionId).writeConfig(
-    toolUseTaskState('search', 'deepseekproT').agentConfig,
+    toolUseConfig('search', 'deepseekproT'),
   );
 }
 
@@ -170,13 +168,13 @@ export function emitRunConfig(
   target: { session: SessionHandle },
   streamId: StreamTabId,
   executionId: ExecutionId,
-  taskState: TaskState,
+  config: AgentConfig,
 ): void {
   emitRunEvent(target, streamId, {
     type: 'run.config',
     streamId,
     executionId,
-    config: taskState.agentConfig,
+    config,
   });
 }
 

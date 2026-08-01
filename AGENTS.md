@@ -96,8 +96,15 @@ before committing, run the full command. Unlike the other targeted commands,
 This repository is a pnpm workspace. Repo-root `src/` contains shared core logic and host-neutral tests,
 `packages/extension/` contains the VS Code extension, `packages/desktop/` the Electron shell, `packages/cli/`
 the `texra` terminal client, and `packages/trace-viewer/` the standalone trace-viewer web app.
-There is currently no `@texra/core` workspace package. Hosts import shared core through the repo-root path
-aliases until a future SDK surface is enforced with a build and import-boundary lint gate.
+`packages/agent/` is the embeddable SDK surface (`@texra-ai/agent`) — it builds and bundles locally but is
+not published to npm, and there is no `@texra/core` workspace package (deleted by #7099). Hosts still reach
+shared core through the repo-root path aliases; that surface is frozen rather than open. `eslint.config.mjs`
+forbids production `src/**` and `packages/agent/src/**` from importing host layers, and four checked-in
+ratchets under `config/ratchets/` freeze the remaining edges: `host-agent-import-baseline.json` (a host may
+not add a NEW distinct `@agent/*` deep-import specifier, type-only included), plus the
+`shared-schemas-deep-import`, `host-agent-mock`, and `architecture-edges` baselines. Never widen a baseline;
+a decrease is always welcome. The remaining boundary work is the Tier-1 public manifest and shrinking the
+frozen deep-import lists, not another lint rule.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)

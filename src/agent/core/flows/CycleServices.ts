@@ -8,89 +8,15 @@ import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState'
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
-import type { IModelHandler } from '@agent/types/IModelHandler';
-import type {
-  FinalTool,
-  ModelCredentialRoute,
-  ModelCredentialSelection,
-  SdkToolCall,
-} from '@agent/types/ModelHandlerContracts';
-import type { ProviderMessage } from '@agent/types/ProviderMessage';
+import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { TaskRunFileService } from '@utils/files';
 
 /**
- * Re-fetches the provider client, e.g. after a mid-run model switch or a relay
- * token refresh.
+ * Shared services for the cycle/round flows: the run-scoped file service and
+ * state both inner primitives operate on. The live provider client comes from
+ * the `modelCell` every flow already carries through `BaseFlowContextInit`.
  */
-export type RefreshModelClient = (
-  selection?: ModelCredentialSelection,
-  signal?: AbortSignal,
-) => Promise<void>;
-
-/**
- * The live model-client contract every cycle/round flow shares because each
- * runs a `ModelInvocationNode`.
- *
- * - `client` is the provider SDK client for the run's active model.
- * - `clientCredentialRoute` is the credential route that client captured
- *   (e.g. `'relay'` vs `'api-key'`), read live from the model handler.
- * - `refreshClient` re-fetches it after a mid-run model switch so the retry
- *   path picks up the new handler.
- *
- * Declared here (instead of being supplied implicitly through an erased
- * `setServices` call) so the cycle/round factories can type-check the outer
- * node that bridges these fields in before running the inner flow.
- */
-export interface ModelClientServices<C = unknown> {
-  readonly client: C;
-  readonly clientCredentialRoute?: ModelCredentialRoute | undefined;
-  readonly refreshClient?: RefreshModelClient;
-}
-
-/**
- * Bridge the live model client into a cycle/round services object before the
- * outer node runs the inner flow.
- *
- * The `client` and `clientCredentialRoute` getters plus `refreshClient` are
- * defined on the **returned literal** — never spread from a pre-evaluated
- * object — so the relay-401 token-refresh path keeps live rebinding:
- * `refreshClient()` re-fetches the provider client after a mid-run model
- * switch and the getters reflect it (and its captured credential route) on
- * the next read. Spreading the result of this call elsewhere would snapshot
- * `client` and silently break that liveness, so callers pass the result
- * straight to `flow.setServices(...)`.
- */
-export async function withModelClient<C, T extends object>(
-  base: T,
-  modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
-): Promise<T & ModelClientServices<C>> {
-  let client = await modelHandler.getClient();
-  return {
-    ...base,
-    get client(): C {
-      return client;
-    },
-    get clientCredentialRoute(): ModelCredentialRoute | undefined {
-      return modelHandler.getCredentialRouteForClient(client);
-    },
-    async refreshClient(
-      selection: ModelCredentialSelection = 'configured',
-      signal?: AbortSignal,
-    ): Promise<void> {
-      signal?.throwIfAborted();
-      const replacement = await modelHandler.refreshClient(selection);
-      signal?.throwIfAborted();
-      client = replacement;
-    },
-  };
-}
-
-/**
- * Shared services for the cycle/round flows: the live model client plus the
- * run-scoped file service and state both inner primitives operate on.
- */
-interface CycleRunServices<C = unknown>
-  extends BaseFlowContextInit<C>, ModelClientServices<C> {
+interface CycleRunServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly fileService: TaskRunFileService;
   readonly run: AgentRunStateSnapshot;
   readonly workspace: AgentWorkspaceState;
@@ -109,8 +35,7 @@ export interface ResponseCycleServices<
  *
  * A "round" is one LLM invocation + tool dispatch loop (the inner primitive).
  * The outer session step (ToolUseCycleNode) bridges ToolUseServices into this
- * interface by adding `run`, `workspace`, and the {@link ModelClientServices}
- * fields before running the round.
+ * interface by adding `run` and `workspace` before running the round.
  */
 export interface ToolUseRoundServices<C = unknown> extends CycleRunServices<C> {
   /** Terminal tool available for the optional provider-native final turn. */

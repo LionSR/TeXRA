@@ -18,8 +18,8 @@
 import { z } from 'zod';
 
 import {
+  PersistedRunDescriptorSchema,
   RUN_DESCRIPTOR_SCHEMA_VERSION,
-  RunDescriptorSchema,
 } from './runDescriptor';
 import {
   TokenUsageStatsBaseSchema,
@@ -47,7 +47,7 @@ export const StreamTabMetaSchema = z.object({
   activeRunId: z.string().nullish(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
-  runDescriptor: RunDescriptorSchema.optional(),
+  runDescriptor: PersistedRunDescriptorSchema.optional(),
   /** Legacy field — read-shimmed from pre-RunDescriptor snapshots only. */
   taskState: z.unknown().optional(),
   /** AI-generated session description, mirrored from ExecutionMeta. */

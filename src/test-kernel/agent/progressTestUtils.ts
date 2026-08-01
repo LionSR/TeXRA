@@ -472,8 +472,6 @@ export function withTestRunContext<T>(
   return withRunContext(
     createRunContext({
       runScope: testRunScope(streamId, { interactions, session }),
-      modelSource: 'live',
-      getModel: () => undefined,
       ...contextOptions,
     }),
     fn,

@@ -38,9 +38,13 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
+import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import {
+  isInFlightPhase,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -165,6 +169,8 @@ export class SessionHandle {
    */
   readonly workflowControls: WorkflowControlRegistry;
   private restartRepairPromise: Promise<unknown> | undefined;
+  /** Streams with a {@link repairWaitingIfResumable} probe already in flight. */
+  private readonly waitingRepairProbes = new Set<StreamTabId>();
   private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private readonly restartRepairAbort = new AbortController();
@@ -282,6 +288,52 @@ export class SessionHandle {
     );
     this.restartRepairPromise = repair;
     return repair;
+  }
+
+  /**
+   * Restore one stream to WAITING when its execution is still resumable.
+   *
+   * The same repair {@link repairRestartedStreams} applies at startup, deferred
+   * to the moment it matters: a stream whose phase settled terminal while its
+   * flow record stayed resumable routes a follow-up to `no_session` instead of
+   * the resume queue (`ExecutionRegistry.getToolUseFollowUpTarget`). Callers
+   * submitting input therefore probe here first. Concurrent submissions for one
+   * stream collapse onto the first probe — the resumability read is the
+   * expensive part and only one transition can win anyway.
+   *
+   * Lives beside the startup pass rather than in a host command so all three
+   * hosts share one repair, and so the resumability read stays inside the
+   * runtime that owns the stream phase.
+   */
+  async repairWaitingIfResumable(streamId: StreamTabId): Promise<boolean> {
+    const phase = this.status.get(streamId);
+    if (phase === STREAM_PHASE.WAITING) return true;
+    if (isInFlightPhase(phase)) return false;
+    if (this.waitingRepairProbes.has(streamId)) return false;
+
+    const executionId = this.snapshots.getExecutionId(streamId);
+    if (!executionId) return false;
+
+    this.waitingRepairProbes.add(streamId);
+    try {
+      const resumability = await deriveResumability(executionId);
+      if (!resumability.resumable) return false;
+      const repaired = this.status.transitionToWaiting(
+        streamId,
+        STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+        { trace: logger },
+      );
+      if (repaired) {
+        logger.debug(`Stream ${streamId} restored to WAITING before follow-up`);
+      } else {
+        logger.warn(
+          `Failed to restore resumable stream ${streamId} to WAITING before follow-up`,
+        );
+      }
+      return repaired;
+    } finally {
+      this.waitingRepairProbes.delete(streamId);
+    }
   }
 
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {

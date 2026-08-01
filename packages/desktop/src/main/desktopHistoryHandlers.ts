@@ -13,8 +13,6 @@ import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import type { TaskState } from '@agent/core/state/TaskState';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import type { ChatExportController } from '@controllers/settingsView/ChatExportController';
 import {
@@ -54,7 +52,7 @@ export interface DesktopHistoryOptions {
   /** Run a validated request created from a persisted history entry. */
   readonly runExecution: (request: ValidatedExecutionRequest) => Promise<void>;
   /** Restore a persisted agent configuration into the main view. */
-  readonly restoreTaskState: (taskState: TaskState) => Promise<boolean>;
+  readonly restoreRunConfig: (config: AgentConfig) => Promise<boolean>;
   readonly postToRenderer: (message: unknown) => void;
   readonly openPath: (filePath: string) => Promise<void>;
   readonly showInfoMessage: (message: string) => Promise<void>;
@@ -160,9 +158,7 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   private async restore(historyId: string): Promise<void> {
     const config = await this.readHistoryConfig(historyId);
     if (!config) return;
-    const restored = await this.dependencies.restoreTaskState(
-      agentConfigToTaskState(config),
-    );
+    const restored = await this.dependencies.restoreRunConfig(config);
     if (!restored) {
       await this.dependencies.showErrorMessage(
         'Failed to restore configuration',

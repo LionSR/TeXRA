@@ -9,7 +9,6 @@
  * variation lives entirely in {@link ResumeStreamPorts}.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { TaskState } from '@agent/core/state/TaskState';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
@@ -22,7 +21,7 @@ import type { SessionHostInteractions } from './HostInteractions';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 interface ResolvedResumeState {
-  readonly runState: AgentConfig | TaskState;
+  readonly runState: AgentConfig;
   readonly executionId: ExecutionId;
   readonly parentStreamId?: StreamTabId;
 }

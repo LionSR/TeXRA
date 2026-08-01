@@ -9,15 +9,16 @@ import type { FileLocation } from '@shared/schemas';
 
 // Local file imports
 import { reflectionFlowShared } from '../progressTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
   overrides: Partial<ReflectionServices<unknown>> = {},
 ): ReflectionServices<unknown> {
   return {
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    modelHandler: {
+    modelCell: testModelCell({
       addMediaToUserMessage: vi.fn(async () => []),
-    } as never,
+    }) as never,
     ...overrides,
   } as ReflectionServices<unknown>;
 }
@@ -48,7 +49,9 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
       initialUserMessageForTranscript: 'Do the thing.',
     });
     (
-      services.modelHandler.addMediaToUserMessage as ReturnType<typeof vi.fn>
+      services.modelCell.handler.addMediaToUserMessage as ReturnType<
+        typeof vi.fn
+      >
     ).mockRejectedValue(new Error('media insertion failed'));
     const node = new MediaExtractionNode().setServices(services);
     const shared = reflectionFlowShared();
@@ -80,7 +83,9 @@ describe('MediaExtractionNode transcript logging (regression #7508)', () => {
       initialUserMessageForTranscript: 'Do the thing.',
     });
     (
-      services.modelHandler.addMediaToUserMessage as ReturnType<typeof vi.fn>
+      services.modelCell.handler.addMediaToUserMessage as ReturnType<
+        typeof vi.fn
+      >
     ).mockRejectedValue(new Error('boom'));
     const node = new MediaExtractionNode().setServices(services);
     const shared = reflectionFlowShared({ currentRound: 1 });

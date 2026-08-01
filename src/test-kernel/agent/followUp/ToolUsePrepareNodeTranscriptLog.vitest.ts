@@ -9,6 +9,7 @@ import { ToolUsePrepareNode } from '@agent/implementations/flows/tooluse/nodes/T
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { createToolUseResumeShared } from '@test/support/toolUseResumeTestUtils';
+import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
@@ -18,10 +19,10 @@ function buildServices(
     fileService: {} as never,
     isSubagent: false,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    modelHandler: {
+    modelCell: testModelCell({
       consumeInsertedAttachmentKinds: vi.fn(() => []),
       initializeMessages: vi.fn(async () => []),
-    } as never,
+    }) as never,
     onRoundFinalized: vi.fn(),
     prompt: AgentPromptSchema.parse({
       systemPrompt: 'You are careful.',
@@ -48,7 +49,7 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
       initialUserMessageForTranscript: 'Do the thing.',
     });
     (
-      services.modelHandler.initializeMessages as ReturnType<typeof vi.fn>
+      services.modelCell.handler.initializeMessages as ReturnType<typeof vi.fn>
     ).mockRejectedValue(new Error('media processing failed'));
     const node = new ToolUsePrepareNode().setServices(services);
 
@@ -61,7 +62,7 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
       expect.objectContaining({ messageType: expect.any(String) }),
     );
     expect(
-      services.modelHandler.consumeInsertedAttachmentKinds,
+      services.modelCell.handler.consumeInsertedAttachmentKinds,
     ).toHaveBeenCalledWith('initial');
   });
 
@@ -80,7 +81,7 @@ describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
     const services = buildServices({
       initialUserMessageForTranscript: undefined,
     });
-    services.modelHandler.initializeMessages = vi
+    services.modelCell.handler.initializeMessages = vi
       .fn()
       .mockRejectedValue(new Error('boom')) as never;
     const node = new ToolUsePrepareNode().setServices(services);
@@ -135,6 +136,8 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     });
     expect(result.shouldSkipCycle).toBe(true);
     // initializeMessages is the fresh-session path; resume must not call it.
-    expect(services.modelHandler.initializeMessages).not.toHaveBeenCalled();
+    expect(
+      services.modelCell.handler.initializeMessages,
+    ).not.toHaveBeenCalled();
   });
 });

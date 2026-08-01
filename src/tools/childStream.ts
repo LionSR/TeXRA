@@ -114,16 +114,14 @@ export function createChildStream(
     };
     session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
 
-    runTrace.trace.emit({
-      type: 'run.start',
-      descriptor: buildRunDescriptor({
-        streamId: childStreamId,
-        executionId,
-        agent: options.agentName,
-        category: options.streamCategory,
-        kind: options.runKind,
-      }),
+    const descriptor = buildRunDescriptor({
+      streamId: childStreamId,
+      executionId,
+      agent: options.agentName,
+      category: options.streamCategory,
+      kind: options.runKind,
     });
+    runTrace.trace.emit({ type: 'run.start', descriptor });
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,
@@ -143,11 +141,8 @@ export function createChildStream(
     });
 
     const handle = new AgentExecutionHandle(
-      executionId,
+      descriptor,
       parentStreamId,
-      childStreamId,
-      options.agentName,
-      options.streamCategory,
       runTrace.trace,
     );
     const executionLeaseScope =
