@@ -51,7 +51,7 @@ import type { ToolResult } from '@shared/schemas/toolResult';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
-} from '@test/helpers/streamStatusTestUtils';
+} from '@test/support/streamStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import * as subagentResults from '@tools/subagentResults';

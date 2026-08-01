@@ -23,7 +23,7 @@ import {
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';

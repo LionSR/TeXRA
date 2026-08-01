@@ -8,7 +8,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
-import { resolveLatexFormatter } from '../texFormatter';
+import { resolveLatexFormatter } from './texFormatter';
 
 const CHANNEL = 'LaTeXCommands';
 

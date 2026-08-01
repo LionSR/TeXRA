@@ -1,7 +1,7 @@
-// Suites for @utils/strings/appendTail (appendTail + appendHead).
+// Suites for @utils/text/appendTail (appendTail + appendHead).
 
 import { describe, expect, it } from 'vitest';
-import { appendHead, appendTail } from '@utils/strings/appendTail';
+import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // ---------------------------------------------------------------------------
 // AppendTail

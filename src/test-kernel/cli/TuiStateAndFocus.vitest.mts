@@ -99,7 +99,7 @@ import {
   type SubagentChildInfo,
   type TodoItem,
 } from '@shared/schemas';
-import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
+import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { createRunTrace } from '@transcript';
 
 const root = 'root' as StreamTabId;

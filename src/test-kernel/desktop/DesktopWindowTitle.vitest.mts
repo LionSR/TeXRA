@@ -15,7 +15,7 @@ import {
 } from '@desktop/main/desktopWindowTitle';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { formatSessionTitle } from '@shared/sessionTitle';
-import { seedStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 function createAgentHandle(id: string, streamId: StreamTabId) {
