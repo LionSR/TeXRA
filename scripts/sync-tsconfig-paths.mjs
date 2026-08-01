@@ -1,3 +1,4 @@
+import console from 'node:console';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -7,10 +8,13 @@ import {
   loadRootPaths,
   deriveExtensionPaths,
   deriveDesktopPaths,
+  deriveBuildPaths,
+  parseJsonc,
+  pathTargetExists,
 } from './aliasUtils.mjs';
 
 // Code-generate the `compilerOptions.paths` block of the extension and
-// desktop tsconfig copies from the root tsconfig.json — the single
+// desktop/build tsconfig copies from the root tsconfig.json — the single
 // hand-edited source of truth for path aliases. Mirrors
 // sync-package-contributes.mjs: in `--check` mode this is the CI diff gate,
 // failing when a copy has drifted out of sync with the root map.
@@ -21,6 +25,11 @@ const rootDir = path.resolve(
 );
 
 const targets = [
+  {
+    tsconfigPath: path.join(rootDir, 'tsconfig.build.json'),
+    derive: deriveBuildPaths,
+    validateTargets: true,
+  },
   {
     tsconfigPath: path.join(rootDir, 'packages', 'extension', 'tsconfig.json'),
     derive: deriveExtensionPaths,
@@ -49,14 +58,30 @@ const check = process.argv.includes('--check');
 const rootPaths = loadRootPaths(rootDir);
 let outOfSync = false;
 
-for (const { tsconfigPath, derive } of targets) {
+for (const { tsconfigPath, derive, validateTargets = false } of targets) {
   const currentText = await readFile(tsconfigPath, 'utf8');
-  const currentJson = JSON.parse(currentText);
+  const currentJson = parseJsonc(currentText);
+  const derivedPaths = derive(rootPaths);
+  if (validateTargets) {
+    const unresolved = Object.entries(derivedPaths).filter(
+      ([, pathTargets]) =>
+        !pathTargets.some((target) => pathTargetExists(rootDir, target)),
+    );
+    if (unresolved.length > 0) {
+      const details = unresolved
+        .map(
+          ([key, pathTargets]) =>
+            `${path.relative(rootDir, tsconfigPath)} maps "${key}" only to targets with no matches: ${pathTargets.join(', ')}.`,
+        )
+        .join('\n');
+      throw new Error(details);
+    }
+  }
   const nextJson = {
     ...currentJson,
     compilerOptions: {
       ...currentJson.compilerOptions,
-      paths: derive(rootPaths),
+      paths: derivedPaths,
     },
   };
   const nextText = await formatJson(
@@ -85,6 +110,6 @@ if (check) {
     );
   }
   console.log(
-    'packages/extension/tsconfig.json and packages/desktop/tsconfig.paths.json paths are in sync with the root.',
+    'tsconfig.build.json and the extension/desktop path maps are in sync with the root.',
   );
 }
