@@ -19,8 +19,8 @@ const completed = {
   outcome: RUN_OUTCOME.COMPLETED,
   executionId: 'exec:resume',
   streamId: STREAM,
-  lastResponse: 'done',
-  touchedFiles: [],
+  response: 'done',
+  files: [],
   totalCostUsd: 0,
 };
 

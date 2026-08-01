@@ -901,7 +901,7 @@ describe('executeCliConfig', () => {
       category: AgentCategory.ToolUse,
       executionId: 'exec-1',
       outcome: 'completed',
-      lastResponse: 'Done.',
+      response: 'Done.',
     });
     mocks.readCliRunOutcome.mockResolvedValueOnce('completed');
 
@@ -920,7 +920,7 @@ describe('executeCliConfig', () => {
       result: {
         outcome: 'completed',
         workingDirectory: '/tmp/project',
-        lastResponse: 'Done.',
+        response: 'Done.',
       },
     });
     if (result.ok) {
@@ -928,7 +928,7 @@ describe('executeCliConfig', () => {
         'category',
         'executionId',
         'outcome',
-        'lastResponse',
+        'response',
         'workingDirectory',
       ]);
     }
@@ -943,7 +943,7 @@ describe('executeCliConfig', () => {
       category: AgentCategory.ToolUse,
       executionId: 'exec-1',
       outcome: 'completed',
-      lastResponse: 'Done.',
+      response: 'Done.',
     });
     mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 

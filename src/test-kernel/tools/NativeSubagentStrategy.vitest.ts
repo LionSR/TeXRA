@@ -385,8 +385,8 @@ describe('NativeSubagentStrategy', () => {
     const waitingTurn = {
       category: 'toolUse' as const,
       outcome: STREAM_PHASE.WAITING,
-      lastResponse: 'The proof holds.',
-      touchedFiles: ['main.tex'],
+      response: 'The proof holds.',
+      files: ['main.tex'],
       executionId: params.executionId,
       streamId: 'child-stream' as StreamTabId,
     };
@@ -453,7 +453,7 @@ describe('NativeSubagentStrategy', () => {
         {
           category: 'toolUse',
           outcome: 'completed',
-          lastResponse: 'done',
+          response: 'done',
           executionId: params.executionId,
           streamId: 'child-stream' as StreamTabId,
         },
@@ -496,7 +496,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.resumeToolUseFromResumeData.mockResolvedValueOnce({
       category: 'toolUse',
       outcome: 'completed',
-      lastResponse: 'done',
+      response: 'done',
       executionId: params.executionId,
       streamId: childStreamId,
     });
@@ -580,10 +580,10 @@ describe('NativeSubagentStrategy', () => {
       orchestratorStreamId: parentStreamId,
       interactions,
     };
-    const waitingTurn = (lastResponse: string) => ({
+    const waitingTurn = (response: string) => ({
       category: 'toolUse' as const,
       outcome: STREAM_PHASE.WAITING,
-      lastResponse,
+      response,
       executionId,
       streamId: childStreamId,
     });

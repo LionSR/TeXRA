@@ -17,7 +17,7 @@ function toolUseFlowResult(
     outcome: 'completed',
     executionId: 'exec-structured' as ExecutionId,
     streamId: 'stream-structured' as StreamTabId,
-    lastResponse: 'done',
+    response: 'done',
     structured,
   };
 }

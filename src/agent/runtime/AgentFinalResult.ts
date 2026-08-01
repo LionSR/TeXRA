@@ -44,12 +44,12 @@ export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
 const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
   category: true,
   outcome: true,
+  response: true,
+  files: true,
 })
   .extend({
-    response: ToolUseFlowResultSchema.shape.lastResponse.unwrap().prefault(''),
-    files: ToolUseFlowResultSchema.shape.touchedFiles
-      .unwrap()
-      .prefault(() => []),
+    response: ToolUseFlowResultSchema.shape.response.unwrap().prefault(''),
+    files: ToolUseFlowResultSchema.shape.files.unwrap().prefault(() => []),
     cost: CostSchema,
     structured: z.json().optional(),
   })
@@ -62,39 +62,6 @@ export const AgentFinalResultSchema = z.discriminatedUnion('category', [
 ]);
 
 export type AgentFinalResult = z.infer<typeof AgentFinalResultSchema>;
-
-type ToolUseFinalTextFieldsSource = {
-  readonly response?: string;
-  readonly lastResponse?: string;
-  readonly files?: readonly string[];
-  readonly touchedFiles?: readonly string[];
-};
-
-/**
- * Single source of truth for the ToolUse `AgentFlowResult` -> `AgentFinalResult`
- * field rename (`lastResponse` -> `response`, `touchedFiles` -> `files`),
- * shared by the live path here and the legacy-persisted path in
- * `resultMeta.ts`'s `buildLegacyAgentFinalResult` so the rename can't drift
- * between the two builders. Sources are consulted in priority order; within
- * each source the canonical name wins over its legacy alias.
- */
-export function projectToolUseFinalTextFields(
-  ...sourcesInPriorityOrder: readonly (
-    ToolUseFinalTextFieldsSource | undefined
-  )[]
-): { response?: string; files?: string[] } {
-  const projected = sourcesInPriorityOrder.map((source) => {
-    const files = source?.files ?? source?.touchedFiles;
-    return {
-      response: source?.response ?? source?.lastResponse,
-      files: files ? [...files] : undefined,
-    };
-  });
-  return {
-    response: projected.find((p) => p.response !== undefined)?.response,
-    files: projected.find((p) => p.files !== undefined)?.files,
-  };
-}
 
 type AgentFinalResultSource =
   | {
@@ -152,7 +119,8 @@ export function buildAgentFinalResult(
     return AgentFinalResultSchema.parse({
       category: result.category,
       outcome,
-      ...projectToolUseFinalTextFields(result),
+      response: result.response,
+      files: result.files,
       cost: result.totalCostUsd,
       structured,
     });

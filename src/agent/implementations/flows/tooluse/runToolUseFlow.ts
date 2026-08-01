@@ -106,9 +106,9 @@ export interface RunToolUseFlowInput<
 
 export interface RunToolUseFlowResult {
   outcome: RunOutcome | typeof STREAM_PHASE.WAITING;
-  lastResponse?: string;
+  response?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
-  touchedFiles?: string[];
+  files?: string[];
   /**
    * Total model cost (USD) accumulated by this run, including any subagents
    * it delegated to (rolled up at the delegation boundary). Used by parent
@@ -393,8 +393,8 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
-  let lastResponse: string | undefined;
-  let touchedFiles: string[] | undefined;
+  let response: string | undefined;
+  let files: string[] | undefined;
   let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
   let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
@@ -593,7 +593,7 @@ export async function runToolUseFlow<C = unknown>(
       }
     } while (resumedFollowUps.length > 0);
 
-    lastResponse =
+    response =
       findLastAssistantText(shared.messages, (m) =>
         services.modelHandler.extractAssistantText(m),
       ) ||
@@ -602,9 +602,7 @@ export async function runToolUseFlow<C = unknown>(
     totalCostUsd =
       shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost;
     const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
-    touchedFiles = extractedTouchedFiles.length
-      ? extractedTouchedFiles
-      : undefined;
+    files = extractedTouchedFiles.length ? extractedTouchedFiles : undefined;
 
     // `FlowTransition.WAITING` is only ever produced by `ToolUseWaitNode`
     // suspending a subagent cycle (see its doc comment) — no further gating
@@ -634,8 +632,8 @@ export async function runToolUseFlow<C = unknown>(
       // the user notification, while preserving terminal run accounting.
       const err = new ToolUseFlowError(shared.lastError.message, {
         outcome,
-        lastResponse,
-        touchedFiles,
+        response,
+        files,
         totalCostUsd,
       });
       throwFlowLastError(err, shared.lastError);
@@ -732,8 +730,8 @@ export async function runToolUseFlow<C = unknown>(
 
   return {
     outcome,
-    lastResponse,
-    touchedFiles,
+    response,
+    files,
     totalCostUsd,
     structured: shared.structured,
   };

@@ -39,9 +39,9 @@ export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
 export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   outcome: RunOutcomeSchema,
-  lastResponse: z.string().optional(),
+  response: z.string().optional(),
   /** Workspace-relative paths of files edited by tool calls during this session. */
-  touchedFiles: z.array(z.string()).optional(),
+  files: z.array(z.string()).optional(),
   /** Value captured by the `submit_output` terminal tool, if the run used one. */
   structured: z.unknown().optional(),
 });
@@ -58,10 +58,7 @@ export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
 const WaitingToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
   outcome: z.literal(STREAM_PHASE.WAITING),
-}).extend(
-  ToolUseFlowResultSchema.pick({ lastResponse: true, touchedFiles: true })
-    .shape,
-);
+}).extend(ToolUseFlowResultSchema.pick({ response: true, files: true }).shape);
 
 export type WaitingToolUseFlowResult = z.infer<
   typeof WaitingToolUseFlowResultSchema

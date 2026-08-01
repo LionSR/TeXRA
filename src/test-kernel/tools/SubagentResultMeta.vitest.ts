@@ -113,8 +113,8 @@ describe('buildSubagentResultMeta', () => {
     const result: AgentFlowResult = {
       category: 'toolUse',
       outcome: 'completed',
-      lastResponse: 'All findings verified.',
-      touchedFiles: ['notes.md'],
+      response: 'All findings verified.',
+      files: ['notes.md'],
       executionId: 'abcdefabcdef' as ExecutionId,
       streamId: 'stream:tu' as StreamTabId,
     };
@@ -143,7 +143,7 @@ describe('buildSubagentResultMeta', () => {
     const interim: AgentFlowResult = {
       category: 'toolUse',
       outcome: 'completed',
-      lastResponse: 'looked fine before the crash',
+      response: 'looked fine before the crash',
       executionId: 'abcdefabcdef' as ExecutionId,
       streamId: 'stream:tu' as StreamTabId,
     };
