@@ -8,64 +8,8 @@ import {
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
-import type {
-  ConfigInspection,
-  ConfigProvider,
-  ConfigTarget,
-  Disposable,
-} from '@platform/interfaces';
 import { installPlatform } from '@test/support/setupPlatform';
-
-// The shared `FakeConfigProvider` records one target per key, so it cannot hold
-// a folder override and a global value for the same key at once — the exact
-// state this suite needs.
-class FolderOverrideConfigProvider implements ConfigProvider {
-  private readonly globalValues = new Map<string, unknown>();
-  private readonly workspaceValues = new Map<string, unknown>();
-  private readonly folderValues = new Map<string, unknown>();
-
-  constructor(folderValue: boolean) {
-    this.folderValues.set(CODEX_PREFER_SUBSCRIPTION_KEY, folderValue);
-  }
-
-  get<T>(key: string, defaultValue?: T): T {
-    return (this.folderValues.get(key) ??
-      this.workspaceValues.get(key) ??
-      this.globalValues.get(key) ??
-      defaultValue) as T;
-  }
-
-  async update<T>(
-    key: string,
-    value: T,
-    target: ConfigTarget = 'workspace',
-  ): Promise<void> {
-    const values =
-      target === 'global' ? this.globalValues : this.workspaceValues;
-    values.set(key, value);
-  }
-
-  inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    return {
-      globalValue: this.globalValues.get(key) as T | undefined,
-      workspaceValue: this.workspaceValues.get(key) as T | undefined,
-      workspaceFolderValue: this.folderValues.get(key) as T | undefined,
-      effectiveValue: this.get<T>(key),
-    };
-  }
-
-  isExplicitlySet(key: string): boolean {
-    return (
-      this.globalValues.has(key) ||
-      this.workspaceValues.has(key) ||
-      this.folderValues.has(key)
-    );
-  }
-
-  watch(): Disposable {
-    return { dispose: () => {} };
-  }
-}
+import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 
 describe('Codex subscription preference', () => {
   it('writes workspace preference when workspace config already controls it', async () => {
@@ -86,7 +30,8 @@ describe('Codex subscription preference', () => {
   });
 
   it('does not treat folder overrides as writable workspace config', async () => {
-    const config = new FolderOverrideConfigProvider(false);
+    const config = new FakeScopedConfigProvider();
+    config.seedWorkspaceFolder(CODEX_PREFER_SUBSCRIPTION_KEY, false);
     await installPlatform({}, { config });
 
     const update = await setPreferCodexSubscription(true);
