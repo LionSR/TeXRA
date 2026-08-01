@@ -43,12 +43,13 @@ function normalizePdfRelativePath(pdfPath: string): string {
 }
 
 function stripRoundPrefix(relativePath: string, round: number): string {
-  const separatorIndex = relativePath.indexOf('/');
-  if (separatorIndex === -1) return relativePath;
-  const firstSegment = relativePath.slice(0, separatorIndex);
+  const normalizedPath = relativePath.replaceAll('\\', '/');
+  const separatorIndex = normalizedPath.indexOf('/');
+  if (separatorIndex === -1) return normalizedPath;
+  const firstSegment = normalizedPath.slice(0, separatorIndex);
   return parseWorkflowOutputRoundDir(firstSegment) === round
-    ? relativePath.slice(separatorIndex + 1)
-    : relativePath;
+    ? normalizedPath.slice(separatorIndex + 1)
+    : normalizedPath;
 }
 
 function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
@@ -94,12 +95,16 @@ export async function publishCompiledPdfArtifact(
   if (!isFile(stats.type)) return null;
 
   const pdfRelativePath = toPdfRelativePath(options);
-  const roundRelativePath = path.join(
+  const roundRelativePath = path.posix.join(
     'output',
     `r${options.round}`,
     pdfRelativePath,
   );
-  const latestRelativePath = path.join('output', 'latest', pdfRelativePath);
+  const latestRelativePath = path.posix.join(
+    'output',
+    'latest',
+    pdfRelativePath,
+  );
   const roundAbsolutePath = path.join(options.runDirectory, roundRelativePath);
   const latestAbsolutePath = path.join(
     options.runDirectory,
