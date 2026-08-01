@@ -23,6 +23,7 @@ import {
   flowKey,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -795,6 +796,35 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       cursor: { nextNodeId: 'start' },
       shared: { shouldSkipCycle: true },
     });
+  });
+
+  it('resets the resumable cursor after the user declines a retry', async () => {
+    const executionId = 'abc-declined-retry' as ExecutionId;
+    const streamId = 'chat@gpt54#abc-declined-retry' as StreamTabId;
+    const shared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
+      userCancelledRetry: true,
+    };
+    await writeFlowRecord(executionId, shared, {
+      cursor: { nextNodeId: null, lastAction: FlowTransition.COMPLETE },
+    });
+    const runSpy = vi
+      .spyOn(PersistedFlow.prototype, 'run')
+      .mockResolvedValueOnce(FlowTransition.COMPLETE);
+
+    try {
+      const result = await runPersistedFlow(executionId, streamId, undefined);
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(await readFlowRecord(executionId)).toMatchObject({
+        cursor: { nextNodeId: 'start' },
+        shared: { shouldSkipCycle: true, userCancelledRetry: true },
+      });
+    } finally {
+      runSpy.mockRestore();
+    }
   });
 
   it('preserves an established flow when provider cancellation rejects the run', async () => {
