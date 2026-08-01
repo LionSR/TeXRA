@@ -344,7 +344,10 @@ describe('requestRetry classification (#7331)', () => {
         ctx,
       ).requestRetry?.({ ...retryRequest, errorDetails });
 
-      expect(result?.action).toBe('deny');
+      expect(result).toEqual({
+        action: 'deny',
+        reason: 'Retry skipped: credential exhausted or unauthorized.',
+      });
       expect(hasCliApprovalDenied(ctx)).toBe(true);
       expect(runOutcomeExitCode(RUN_OUTCOME.FAILED, ctx)).toBe(
         CliExitCode.ApprovalDenied,
