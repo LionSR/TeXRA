@@ -184,11 +184,9 @@ export function immediateDecision(
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }
 
-/** Retry requests caused by exhausted credentials or auth failures need user
- *  action (key swap, top-up, re-login). Interactive runs must still surface the
- *  retry panel so the user can switch to personal API keys; non-interactive
- *  and auto-approval modes should not burn the retry budget. */
-function isUnretryableRetryRequest(
+/** Retry requests caused by exhausted credentials or auth failures retain
+ *  their approval-denied classification even when yolo denies another batch. */
+function isCredentialRetryRequest(
   event: CliDecisionApprovalEvent,
   payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
 ): boolean {
@@ -196,8 +194,7 @@ function isUnretryableRetryRequest(
   const details = (payload as RetryPermission).errorDetails;
   if (!details) return false;
   if (isCredentialExhausted(details)) return true;
-  if (details.statusCode === 401 || details.statusCode === 403) return true;
-  return false;
+  return details.statusCode === 401 || details.statusCode === 403;
 }
 
 export function immediateDecisionForApproval(
@@ -205,12 +202,14 @@ export function immediateDecisionForApproval(
   payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
-  if (isUnretryableRetryRequest(event, payload)) {
-    if (approvalPromptAllowed(context)) return undefined;
-    markApprovalDenied(context);
+  if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
+    const credentialRetry = isCredentialRetryRequest(event, payload);
+    if (credentialRetry) markApprovalDenied(context);
     return {
       accepted: false,
-      userMessage: 'Retry skipped: credential exhausted or unauthorized.',
+      userMessage: credentialRetry
+        ? 'Retry skipped: credential exhausted or unauthorized.'
+        : 'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     };
   }
   return immediateDecision(context);
