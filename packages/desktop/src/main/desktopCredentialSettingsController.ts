@@ -10,7 +10,6 @@ import {
   createModelSelectionController,
   type ModelSelectionExtras,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
-import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 import {
@@ -27,7 +26,8 @@ import {
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
-import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
@@ -80,9 +80,31 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly onError: (error: unknown) => void;
 }
 
+type DesktopProfileHandlers = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_COMMANDS.SIGN_IN
+  | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT
+  | typeof SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE
+  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY
+  | typeof SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL
+  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING
+  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT
+  | typeof SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING
+  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL
+>;
+
+type DesktopChatGptHandlers = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT
+  | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT
+  | typeof SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION
+>;
+
 export interface DesktopCredentialSettingsController {
-  readonly profileActions: SettingsViewCommandActions['profile'];
-  readonly chatGptActions: SettingsViewCommandActions['chatGpt'];
+  readonly profileHandlers: DesktopProfileHandlers;
+  readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
   prepareModelSelectionData(): Promise<void>;
   postMainModelOptionsData(): Promise<void>;
@@ -93,8 +115,8 @@ export interface DesktopCredentialSettingsController {
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
 export class DefaultDesktopCredentialSettingsController implements DesktopCredentialSettingsController {
-  readonly profileActions: SettingsViewCommandActions['profile'];
-  readonly chatGptActions: SettingsViewCommandActions['chatGpt'];
+  readonly profileHandlers: DesktopProfileHandlers;
+  readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
 
   private readonly profileController: SettingsProfileController;
@@ -149,30 +171,31 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       deleteSecret: (key) => options.secrets.delete(key),
       refreshAfterKeyChange: () => this.refreshAfterProviderKeyChange(),
     });
-    this.profileActions = {
+    this.profileHandlers = {
       signIn: () => options.auth.signIn(),
       signOut: () => this.signOut(),
-      setApiAccessMode: (mode) => this.setApiAccessMode(mode),
-      setProviderKey: (provider, apiKey) =>
-        this.setProviderKey(provider, apiKey),
-      removeProviderKey: (provider) => this.removeProviderKey(provider),
-      openProviderKeyUrl: (provider) =>
-        this.profileKeyController.openProviderKeyUrl(provider),
-      setProviderStreaming: (provider, enabled) =>
-        this.setProviderStreaming(provider, enabled),
-      setProviderEndpoint: (provider, endpoint) =>
-        this.setProviderEndpoint(provider, endpoint),
-      setGlobalStreaming: (enabled) => this.setGlobalStreaming(enabled),
+      setApiAccessMode: (message) => this.setApiAccessMode(message.mode),
+      setProviderKey: (message) =>
+        this.setProviderKey(message.provider, message.apiKey),
+      removeProviderKey: (message) => this.removeProviderKey(message.provider),
+      openProviderKeyUrl: (message) =>
+        this.profileKeyController.openProviderKeyUrl(message.provider),
+      setProviderStreaming: (message) =>
+        this.setProviderStreaming(message.provider, message.enabled),
+      setProviderEndpoint: (message) =>
+        this.setProviderEndpoint(message.provider, message.endpoint),
+      setGlobalStreaming: (message) => this.setGlobalStreaming(message.enabled),
       setProviderVscodeSetting: unsupported(
         'VS Code provider settings are not applicable in the desktop app.',
       ),
-      openExternalUrl: (url) => options.externalOpener.openExternal(url),
+      openExternalUrl: (message) =>
+        options.externalOpener.openExternal(message.url),
     };
-    this.chatGptActions = {
-      signIn: () => this.signInChatGpt(),
-      signOut: () => this.signOutChatGpt(),
-      setPreferSubscription: (enabled) =>
-        this.setChatGptPreferSubscription(enabled),
+    this.chatGptHandlers = {
+      signInChatGpt: () => this.signInChatGpt(),
+      signOutChatGpt: () => this.signOutChatGpt(),
+      setChatGptPreferSubscription: (message) =>
+        this.setChatGptPreferSubscription(message.enabled),
     };
   }
 

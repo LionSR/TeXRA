@@ -42,9 +42,9 @@ export function createStubDesktopHistorySettingsController(
   overrides: Partial<DesktopHistorySettingsController> = {},
 ): DesktopHistorySettingsController {
   return {
-    actions: {
+    handlers: {
       deleteAgent: noOp,
-      clear: noOp,
+      clearHistory: noOp,
       rerunAgent: noOp,
       restoreAgent: noOp,
       exportChatMd: noOp,
@@ -73,21 +73,21 @@ export function createStubDesktopSettingsUiHost(
 
 export function createStubDesktopAgentSettingsController(): DesktopAgentSettingsController {
   return {
-    actions: {
-      setEnabled: noOp,
-      setAllEnabled: noOp,
-      openYaml: noOp,
-      openFolder: noOp,
-      create: noOp,
-      customize: noOp,
-      deleteCustom: noOp,
-      revealFile: noOp,
-      viewRemotePrompt: noOp,
-      setCustomDir: noOp,
-      resetCustomDir: noOp,
-      applyModePreset: noOp,
-      saveModePreset: noOp,
-      deleteModePreset: noOp,
+    handlers: {
+      setAgentEnabled: noOp,
+      setAllAgentsEnabled: noOp,
+      openAgentYaml: noOp,
+      openAgentFolder: noOp,
+      createAgent: noOp,
+      customizeAgent: noOp,
+      deleteCustomAgent: noOp,
+      revealAgentFile: noOp,
+      viewRemoteAgentPrompt: noOp,
+      setCustomAgentDir: noOp,
+      resetCustomAgentDir: noOp,
+      applyAgentModePreset: noOp,
+      saveAgentModePreset: noOp,
+      deleteAgentModePreset: noOp,
     },
     postStartupData: noOp,
     refreshCatalogData: noOp,
@@ -99,7 +99,7 @@ export function createStubDesktopCredentialSettingsController(
   overrides: Partial<DesktopCredentialSettingsController> = {},
 ): DesktopCredentialSettingsController {
   return {
-    profileActions: {
+    profileHandlers: {
       signIn: noOp,
       signOut: noOp,
       setApiAccessMode: noOp,
@@ -114,10 +114,10 @@ export function createStubDesktopCredentialSettingsController(
       ),
       openExternalUrl: noOp,
     },
-    chatGptActions: {
-      signIn: noOp,
-      signOut: noOp,
-      setPreferSubscription: noOp,
+    chatGptHandlers: {
+      signInChatGpt: noOp,
+      signOutChatGpt: noOp,
+      setChatGptPreferSubscription: noOp,
     },
     modelSelectionController: createModelSelectionController(state),
     prepareModelSelectionData: noOp,
@@ -133,15 +133,17 @@ export function createStubDesktopToolingSettingsController(
   overrides: Partial<DesktopToolingSettingsController> = {},
 ): DesktopToolingSettingsController {
   return {
-    toolsActions: {
-      openInstallUrl: noOp,
-      installExtension: unsupported('Desktop cannot host VS Code extensions.'),
-      recheckStatus: noOp,
-      toggle: noOp,
-      runCommand: noOp,
+    toolHandlers: {
+      openToolInstallUrl: noOp,
+      installToolExtension: unsupported(
+        'Desktop cannot host VS Code extensions.',
+      ),
+      recheckToolStatus: noOp,
+      toggleTool: noOp,
+      runToolCommand: noOp,
     },
-    latexActions: {
-      applySettings: noOp,
+    latexHandlers: {
+      applyLatexSettings: noOp,
       installLatexWorkshop: unsupported(
         'Desktop cannot host VS Code extensions.',
       ),

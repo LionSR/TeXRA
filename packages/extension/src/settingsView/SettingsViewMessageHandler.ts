@@ -20,10 +20,6 @@ import { globalSM, workspaceSM } from '@common/state';
 import { BaseViewMessageHandler } from '@common/webview';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
-  createSettingsViewCommandHandlers,
-  type SettingsViewCommandActions,
-} from '@controllers/settingsView/SettingsViewCommandHandlers';
-import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
@@ -325,229 +321,160 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
-    const actions: SettingsViewCommandActions = {
-      lifecycle: {
-        webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
-        openVscodeSettings: () => this.openVscodeSettings(),
-      },
-      memory: {
-        getData: () => this.withActiveWebview((w) => this.sendMemoryData(w)),
-        getPreview: (storagePath) =>
-          this.handleGetMemoryPreview({
-            command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
-            storagePath,
-          }),
-        openFile: (data) => this.handleOpenMemoryFile(data),
-        openFolder: () => this.handleOpenMemoryFolder(),
-        delete: (data) => this.handleDeleteMemory(data),
-        setEnabled: (enabled) =>
-          this.handleSetMemoryEnabled({
-            command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
-            enabled,
-          }),
-        pin: (storagePath) => this.setMemoryPinned(storagePath, true),
-        unpin: (storagePath) => this.setMemoryPinned(storagePath, false),
-      },
-      history: {
-        rerunAgent: (data) => this.historyHandlers.handleRerunAgent(data),
-        restoreAgent: (data) => this.historyHandlers.handleRestoreAgent(data),
-        deleteAgent: (historyId) =>
-          this.historyHandlers.handleDeleteAgent({
-            command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-            historyId,
-          }),
-        clear: () => this.historyHandlers.handleClearHistory(),
-        exportChatMd: (data) =>
-          this.historyHandlers.handleExportChat(data, 'md'),
-        exportChatTex: (data) =>
-          this.historyHandlers.handleExportChat(data, 'tex'),
-        exportChatHtml: (data) =>
-          this.historyHandlers.handleExportChat(data, 'html'),
-      },
-      profile: {
-        signIn: () =>
-          safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
-        signOut: () =>
-          safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
-        setApiAccessMode: (mode) =>
-          this.handleSetApiAccessMode({
-            command: SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE,
-            mode,
-          }),
-        setProviderKey: (provider) =>
-          this.runProviderKeyAction(provider, 'set', (targetProvider) =>
-            this.profileKeyController.setProviderKey(targetProvider),
-          ),
-        removeProviderKey: (provider) =>
-          this.runProviderKeyAction(provider, 'remove', (targetProvider) =>
+    return {
+      webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
+      openVscodeSettings: () => this.openVscodeSettings(),
+      getMemoryData: () =>
+        this.withActiveWebview((w) => this.sendMemoryData(w)),
+      getMemoryPreview: (message) => this.handleGetMemoryPreview(message),
+      openMemoryFile: (message) => this.handleOpenMemoryFile(message),
+      openMemoryFolder: () => this.handleOpenMemoryFolder(),
+      deleteMemory: (message) => this.handleDeleteMemory(message),
+      setMemoryEnabled: (message) => this.handleSetMemoryEnabled(message),
+      pinMemory: (message) => this.setMemoryPinned(message.storagePath, true),
+      unpinMemory: (message) =>
+        this.setMemoryPinned(message.storagePath, false),
+      rerunAgent: (message) => this.historyHandlers.handleRerunAgent(message),
+      restoreAgent: (message) =>
+        this.historyHandlers.handleRestoreAgent(message),
+      deleteAgent: (message) => this.historyHandlers.handleDeleteAgent(message),
+      clearHistory: () => this.historyHandlers.handleClearHistory(),
+      exportChatMd: (message) =>
+        this.historyHandlers.handleExportChat(message, 'md'),
+      exportChatTex: (message) =>
+        this.historyHandlers.handleExportChat(message, 'tex'),
+      exportChatHtml: (message) =>
+        this.historyHandlers.handleExportChat(message, 'html'),
+      signIn: () =>
+        safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
+      signOut: () =>
+        safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
+      setApiAccessMode: (message) => this.handleSetApiAccessMode(message),
+      setProviderKey: (message) =>
+        this.runProviderKeyAction(message.provider, 'set', (targetProvider) =>
+          this.profileKeyController.setProviderKey(targetProvider),
+        ),
+      removeProviderKey: (message) =>
+        this.runProviderKeyAction(
+          message.provider,
+          'remove',
+          (targetProvider) =>
             this.profileKeyController.removeProviderKey(targetProvider),
-          ),
-        openProviderKeyUrl: (provider) =>
-          this.profileKeyController.openProviderKeyUrl(provider),
-        setProviderStreaming: async (provider, enabled) => {
-          await setProviderStreaming(provider, enabled);
-          await this.withActiveWebview((webview) =>
-            this.sendProfileData(webview),
-          );
-        },
-        setProviderEndpoint: async (provider, endpoint) => {
-          await setProviderEndpoint(provider, endpoint);
-          await this.withActiveWebview((webview) =>
-            this.sendProfileData(webview),
-          );
-        },
-        setGlobalStreaming: async (enabled) => {
-          await setGlobalStreaming(enabled);
-          await this.withActiveWebview((webview) =>
-            this.sendProfileData(webview),
-          );
-        },
-        setProviderVscodeSetting: (data) =>
-          this.handleSetProviderVscodeSetting(data),
-        openExternalUrl: (url) => this.openExternalUrl(url),
+        ),
+      openProviderKeyUrl: (message) =>
+        this.profileKeyController.openProviderKeyUrl(message.provider),
+      setProviderStreaming: async (message) => {
+        await setProviderStreaming(message.provider, message.enabled);
+        await this.withActiveWebview((webview) =>
+          this.sendProfileData(webview),
+        );
       },
-      modelSelection: {
-        setEnabled: (modelName, enabled) =>
-          this.setModelEnabled(modelName, enabled),
-        setHelperModel: (modelName) =>
-          this.settingsHost.setHelperModel(modelName, {
-            respond: (message) => this.postMessageToActiveWebview(message),
-          }),
-        setReasoningLevel: (modelName, level) =>
-          this.settingsHost.setReasoningLevel(
-            {
-              modelName,
-              level,
-            },
-            {
-              respond: (message) => this.postMessageToActiveWebview(message),
-            },
-          ),
-        setPreferShortModelNames: (enabled) =>
-          this.settingsHost.setPreferShortModelNames(enabled, {
-            respond: (message) => this.postMessageToActiveWebview(message),
-          }),
-        requestAccess: (modelName) => this.handleRequestModelAccess(modelName),
+      setProviderEndpoint: async (message) => {
+        await setProviderEndpoint(message.provider, message.endpoint);
+        await this.withActiveWebview((webview) =>
+          this.sendProfileData(webview),
+        );
       },
-      agentSelection: {
-        openYaml: ({ source, name }) =>
-          this.agentHandlers.handleOpenAgentYaml({
-            command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
-            agentSource: source,
-            agentName: name,
-          }),
-        setEnabled: ({ category, source, name, enabled }) =>
-          this.agentHandlers.handleSetAgentEnabled({
-            command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-            category,
-            agentSource: source,
-            agentName: name,
-            enabled,
-          }),
-        setAllEnabled: ({ category, source, enabled }) =>
-          this.agentHandlers.handleSetAllAgentsEnabled({
-            command: SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED,
-            category,
-            source,
-            enabled,
-          }),
-        openFolder: (data) => this.agentHandlers.handleOpenAgentFolder(data),
-        create: (data) => this.agentHandlers.handleCreateAgent(data),
-        customize: (data) => this.agentHandlers.handleCustomizeAgent(data),
-        deleteCustom: (data) =>
-          this.agentHandlers.handleDeleteCustomAgent(data),
-        revealFile: ({ source, name }) =>
-          this.agentHandlers.handleRevealAgentFile({
-            command: SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
-            agentSource: source,
-            agentName: name,
-          }),
-        viewRemotePrompt: (data) =>
-          this.agentHandlers.handleViewRemoteAgentPrompt(data),
-        setCustomDir: () => this.agentHandlers.handleSetCustomAgentDir(),
-        resetCustomDir: () => this.agentHandlers.handleResetCustomAgentDir(),
-        applyModePreset: (presetId) =>
-          this.agentHandlers.handleApplyAgentModePreset({
-            command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
-            presetId,
-          }),
-        saveModePreset: () =>
-          this.agentHandlers.handleSaveAgentModePreset({
-            command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
-          }),
-        deleteModePreset: (presetId) =>
-          this.agentHandlers.handleDeleteAgentModePreset({
-            command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-            presetId,
-          }),
+      setGlobalStreaming: async (message) => {
+        await setGlobalStreaming(message.enabled);
+        await this.withActiveWebview((webview) =>
+          this.sendProfileData(webview),
+        );
       },
-      githubSubscriptions: {
-        getTokenStatus: () =>
-          this.withActiveWebview((w) =>
-            this.githubHandlers.sendGitHubTokenStatus(w),
-          ),
-        setToken: () => this.githubHandlers.handleSetGitHubToken(),
-        removeToken: () => this.githubHandlers.handleRemoveGitHubToken(),
-        openTokenUrl: () => this.githubHandlers.openGitHubTokenUrl(),
-        getSubscriptions: () =>
-          this.withActiveWebview((w) =>
-            this.githubHandlers.sendPRSubscriptions(w),
-          ),
-        unsubscribe: (data) => this.githubHandlers.handleUnsubscribePR(data),
-        openSubscriptionStream: (data) =>
-          this.githubHandlers.handleOpenPRSubscriptionStream(data),
+      setProviderVscodeSetting: (message) =>
+        this.handleSetProviderVscodeSetting(message),
+      openExternalUrl: (message) => this.openExternalUrl(message.url),
+      setModelEnabled: (message) =>
+        this.setModelEnabled(message.modelName, message.enabled),
+      setPolishModel: (message) =>
+        this.settingsHost.setHelperModel(message.modelName, {
+          respond: (response) => this.postMessageToActiveWebview(response),
+        }),
+      setModelReasoningLevel: (message) =>
+        this.settingsHost.setReasoningLevel(
+          { modelName: message.modelName, level: message.level },
+          {
+            respond: (response) => this.postMessageToActiveWebview(response),
+          },
+        ),
+      setPreferShortModelNames: (message) =>
+        this.settingsHost.setPreferShortModelNames(message.enabled, {
+          respond: (response) => this.postMessageToActiveWebview(response),
+        }),
+      requestModelAccess: (message) =>
+        this.handleRequestModelAccess(message.modelName),
+      setAgentEnabled: (message) =>
+        this.agentHandlers.handleSetAgentEnabled(message),
+      setAllAgentsEnabled: (message) =>
+        this.agentHandlers.handleSetAllAgentsEnabled(message),
+      openAgentYaml: (message) =>
+        this.agentHandlers.handleOpenAgentYaml(message),
+      openAgentFolder: (message) =>
+        this.agentHandlers.handleOpenAgentFolder(message),
+      createAgent: (message) => this.agentHandlers.handleCreateAgent(message),
+      customizeAgent: (message) =>
+        this.agentHandlers.handleCustomizeAgent(message),
+      deleteCustomAgent: (message) =>
+        this.agentHandlers.handleDeleteCustomAgent(message),
+      revealAgentFile: (message) =>
+        this.agentHandlers.handleRevealAgentFile(message),
+      viewRemoteAgentPrompt: (message) =>
+        this.agentHandlers.handleViewRemoteAgentPrompt(message),
+      setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),
+      resetCustomAgentDir: () => this.agentHandlers.handleResetCustomAgentDir(),
+      applyAgentModePreset: (message) =>
+        this.agentHandlers.handleApplyAgentModePreset(message),
+      saveAgentModePreset: (message) =>
+        this.agentHandlers.handleSaveAgentModePreset(message),
+      deleteAgentModePreset: (message) =>
+        this.agentHandlers.handleDeleteAgentModePreset(message),
+      getGitHubTokenStatus: () =>
+        this.withActiveWebview((w) =>
+          this.githubHandlers.sendGitHubTokenStatus(w),
+        ),
+      setGitHubToken: () => this.githubHandlers.handleSetGitHubToken(),
+      removeGitHubToken: () => this.githubHandlers.handleRemoveGitHubToken(),
+      openGitHubTokenUrl: () => this.githubHandlers.openGitHubTokenUrl(),
+      getPRSubscriptions: () =>
+        this.withActiveWebview((w) =>
+          this.githubHandlers.sendPRSubscriptions(w),
+        ),
+      unsubscribePR: (message) =>
+        this.githubHandlers.handleUnsubscribePR(message),
+      openPRSubscriptionStream: (message) =>
+        this.githubHandlers.handleOpenPRSubscriptionStream(message),
+      signInChatGpt: () => this.chatgptHandlers.handleSignInChatGpt(),
+      signOutChatGpt: () => this.chatgptHandlers.handleSignOutChatGpt(),
+      setChatGptPreferSubscription: (message) =>
+        this.chatgptHandlers.handleSetPreferSubscription(message.enabled),
+      updateStateSetting: (message) =>
+        this.updateStateSetting(message.key, message.value),
+      openToolInstallUrl: (message) => this.openExternalUrl(message.url),
+      installToolExtension: (message) =>
+        this.latexHandlers.installExtension(message.extensionId),
+      recheckToolStatus: () => refreshToolAvailability(),
+      toggleTool: async (message) => {
+        await setToolEnabled(message.toolId, message.enabled);
+        await this.withActiveWebview((w) =>
+          this.sendToolDashboardData(w, { skipChecks: true }),
+        );
       },
-      chatGpt: {
-        signIn: () => this.chatgptHandlers.handleSignInChatGpt(),
-        signOut: () => this.chatgptHandlers.handleSignOutChatGpt(),
-        setPreferSubscription: (enabled) =>
-          this.chatgptHandlers.handleSetPreferSubscription(enabled),
-      },
-      stateSettings: {
-        update: (key, value) => this.updateStateSetting(key, value),
-      },
-      tools: {
-        openInstallUrl: (url) => this.openExternalUrl(url),
-        installExtension: (extensionId) =>
-          this.latexHandlers.installExtension(extensionId),
-        recheckStatus: () => refreshToolAvailability(),
-        toggle: async (toolId, enabled) => {
-          await setToolEnabled(toolId, enabled);
-          await this.withActiveWebview((w) =>
-            this.sendToolDashboardData(w, { skipChecks: true }),
-          );
-        },
-        runCommand: (data) =>
-          this.handleRunToolCommand({
-            command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
-            ...data,
-          }),
-      },
-      latex: {
-        applySettings: (data) =>
-          this.latexHandlers.handleApplyLatexSettings(data),
-        installLatexWorkshop: () =>
-          this.latexHandlers.handleInstallLatexWorkshop(),
-        runInstallCommand: (installCommand) =>
-          this.latexHandlers.handleRunInstallCommand({
-            command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-            installCommand,
-          }),
-      },
-      inlineCriticism: {
-        getEnabled: () =>
-          this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
-        setEnabled: (enabled) => this.handleSetInlineCriticismEnabled(enabled),
-      },
-      goals: {
-        getList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
-        revealStream: async (streamId) => {
-          await revealProgressStream(streamId);
-        },
+      runToolCommand: (message) => this.handleRunToolCommand(message),
+      applyLatexSettings: (message) =>
+        this.latexHandlers.handleApplyLatexSettings(message),
+      installLatexWorkshop: () =>
+        this.latexHandlers.handleInstallLatexWorkshop(),
+      runInstallCommand: (message) =>
+        this.latexHandlers.handleRunInstallCommand(message),
+      getInlineCriticismEnabled: () =>
+        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+      setInlineCriticismEnabled: (message) =>
+        this.handleSetInlineCriticismEnabled(message.enabled),
+      getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
+      revealGoalStream: async (message) => {
+        await revealProgressStream(message.streamId);
       },
     };
-
-    return createSettingsViewCommandHandlers(actions);
   }
 
   public async sendGoalList(webview: vscode.Webview): Promise<void> {
