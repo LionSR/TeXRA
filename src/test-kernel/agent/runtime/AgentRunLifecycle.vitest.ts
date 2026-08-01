@@ -6,16 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { FinalizeExecutionResult } from '@agent/storage';
-import { noopTrace, TraceEmitter } from '@agent/trace';
+import { noopTrace, TraceEmitter, type StatusEvent } from '@agent/trace';
 import {
   acquireResumedExecutionLease,
   inspectExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import {
-  StreamStatusMachine,
-  type StreamStatusChange,
-} from '@agent/runtime/StreamStatusService';
+import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
   type AgentRunHandle,
@@ -62,6 +59,7 @@ import {
   recordSessionEvents,
   runEventsOfType,
   sessionFactPayloads,
+  sessionFactsOfType,
 } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
@@ -375,9 +373,7 @@ describe('runFlowWithLifecycle', () => {
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
         expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-        expect(
-          sessionFactPayloads(recorded.events, 'updateStreamStatus'),
-        ).toEqual([]);
+        expect(sessionFactsOfType(recorded.events, 'status')).toEqual([]);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
@@ -662,9 +658,9 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'lifecycle-early-stop-no-blip',
     );
-    const changes: StreamStatusChange[] = [];
-    const detachStatus = streamStatus.onDidChange((change) => {
-      if (change.streamId === streamId) changes.push(change);
+    const changes: StatusEvent[] = [];
+    const detachStatus = defaultSession().events.subscribeStatus((event) => {
+      if (event.streamId === streamId) changes.push(event);
     });
 
     try {
@@ -681,7 +677,7 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(changes.map((change) => change.status)).toEqual([
+      expect(changes.map((change) => change.phase)).toEqual([
         STREAM_PHASE.CANCELLED,
       ]);
     } finally {

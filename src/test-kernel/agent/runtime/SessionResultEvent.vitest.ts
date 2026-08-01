@@ -92,12 +92,11 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   it('emits exactly one completed result even if terminal stream-status cleanup throws', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     // A status subscriber that throws on the terminal (COMPLETED) transition,
-    // not the initial RUNNING one — models a host emit / status listener throwing
-    // during post-completion cleanup. The run already emitted `completed`, so
-    // this must NOT re-enter the catch arm and publish a second `failed`.
-    const off = streamStatus.onDidChange((change) => {
-      if (change.status === STREAM_PHASE.COMPLETED) {
-        throw new Error('status listener boom');
+    // not the initial RUNNING one. The hub isolates subscribers, so the run's
+    // completed result remains the sole terminal result.
+    const off = ctx.runScope.session.events.subscribeStatus(({ phase }) => {
+      if (phase === STREAM_PHASE.COMPLETED) {
+        throw new Error('status subscriber boom');
       }
     });
     try {
@@ -266,11 +265,11 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
-  it('emits the failed result before terminal error status listeners run', async () => {
+  it('emits the failed result before terminal error status subscribers run', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
-    const off = streamStatus.onDidChange((change) => {
-      if (change.status === STREAM_PHASE.FAILED) {
-        throw new Error('status listener boom');
+    const off = ctx.runScope.session.events.subscribeStatus(({ phase }) => {
+      if (phase === STREAM_PHASE.FAILED) {
+        throw new Error('status subscriber boom');
       }
     });
     try {
