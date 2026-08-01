@@ -10,6 +10,7 @@ import {
   DIFF_EQUAL,
   DIFF_INSERT,
 } from '@utils/text/diff';
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines } from '@utils/text/stringUtils';
 
 /** Maximum lines of diff to include per file in deliveries. */
@@ -121,7 +122,10 @@ export async function computeAndWriteWorkflowDiffs(
           const truncated = truncateDiff(diff, limit);
           // Use full relativePath (with separators replaced) to avoid collisions
           // when multiple files share the same basename in different directories.
-          const safeName = o.relativePath.replaceAll(/[\\/]/g, '_');
+          const safeName = sanitizePathSegment(o.relativePath, {
+            invalidCharPattern: /[\\/]/g,
+            replacement: '_',
+          });
           const diffRelPath = `diffs/${safeName}.diff`;
           results.set(o.absolutePath, { diffRelPath, largeChange });
           diffsToWrite.push({ diffRelPath, content: truncated });

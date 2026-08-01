@@ -6,6 +6,7 @@ import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 interface DebugContext {
   logger: AgentTrace;
@@ -67,7 +68,9 @@ export async function maybeSaveDebugObject({
     ? path.basename(outputFile, path.extname(outputFile))
     : baseName;
   const cont = continuationCount ? `_cont${continuationCount}` : '';
-  const modelPart = modelName ? `_${modelName.replaceAll(/[\\/]/g, '_')}` : '';
+  const modelPart = modelName
+    ? `_${sanitizePathSegment(modelName, { invalidCharPattern: /[\\/]/g, replacement: '_' })}`
+    : '';
   const debugFileName = `${fileBase}${modelPart}${cont}.json`;
 
   try {
