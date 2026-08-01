@@ -94,9 +94,8 @@ export class AcceptRunFilesTool extends defineTool({
   requiresApproval: true,
   description: `Accept output files from a completed workflow run into the workspace.
 
-Use this tool ONLY for workflow subagent results (category="workflow").
-Do NOT use it for tool-use subagent results — those produce text responses,
-not output files.
+Only workflow subagent results (category="workflow") have output files to
+accept; tool-use subagents return text and have nothing for this tool.
 
 Locates output files in task-run storage and writes them to the workspace.
 Each file goes through an approval step before writing and may be rejected.

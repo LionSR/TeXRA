@@ -101,15 +101,11 @@ export class PlanTool extends defineTool({
   description: `Manage the plan document and (optionally) the autonomous goal pursuing it.
 
 Commands:
-- update: Propose or replace the plan. Required field: \`objective\` - a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every update is presented to the user for approval; they may approve, run the plan as a goal, or reject.
+- update: Propose or replace the plan. Required field: \`objective\` - a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every update is presented to the user for approval; they may approve, run the plan as a goal, or reject. Update only when the objective or approach genuinely changes.
 - pause: Self-pause the goal pursuing this plan when you genuinely need user input to proceed. Required field: \`reason\` describing what you need.
-- complete: Mark the goal pursuing this plan complete. Required field: \`reason\` describing HOW you verified completion against current external state. Only call this once the objective's stopping condition is verifiably true.
+- complete: Mark the goal pursuing this plan complete. Required field: \`reason\` describing how you verified completion against current external state. Only call this once the objective's stopping condition is verifiably true.
 
-Best practices:
-- Write the objective BEFORE starting implementation.
-- State a stopping condition that can be checked against external evidence (file contents, command output, test results).
-- Track execution steps with the todo tool; update the plan only when the objective or approach genuinely changes (every update requires re-approval).
-- pause/complete only affect autonomous goals; if no goal is running, they return guidance for ordinary chat.`,
+pause/complete only affect autonomous goals; with no goal running they return guidance for ordinary chat.`,
   schema: PlanToolInputSchema,
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {

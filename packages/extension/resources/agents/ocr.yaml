@@ -49,13 +49,15 @@ prompts:
       </document>
       </documents>
     - |
-      Critically review the OCR conversion and output a refined version. Find the three most likely OCR errors or misinterpretations and check the following, fixing any issues found:
+      Critically review the OCR conversion against the images and check the following, fixing any issues found:
       \begin{itemize}
-          \item Likely OCR errors --- for each: what the handwriting showed vs. what you produced, why it is likely wrong (ambiguous symbol, inconsistent with document notation, unusual expression), and the correct interpretation.
+          \item Likely misreadings --- symbols that are ambiguous in the handwriting, inconsistent with the document's notation, or form unusual expressions; state the correct interpretation for any you fix.
           \item Symbols that differ from the document's conventions (e.g., you used $\alpha$ but the document uses $a$ for the same quantity).
           \item Mathematical environments that do not match the document's style.
           \item Subscripts/superscripts correctly ordered and nested.
       \end{itemize}
+
+      If the conversion is faithful, reproduce it unchanged rather than inventing corrections.
 
       Output the refined LaTeX content with improved notation consistency and integration:
 

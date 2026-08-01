@@ -563,6 +563,60 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('batches parallel tool results into one assistant and one user message', async () => {
+    const handler = createAnthropicHandler();
+    assert.equal(handler.requiresBatchedParallelToolResults, true);
+
+    const providerCall = (id: string) =>
+      ({
+        provider: 'anthropic',
+        callId: id,
+        name: 'demo',
+        input: {},
+        raw: { id, type: 'tool_use', name: 'demo', input: {} } as ToolUseBlock,
+      }) as const;
+
+    const messages = await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call: providerCall('call-1'),
+          result: { status: 'executed', output: 'ok-1' },
+          attachments: [],
+        },
+        {
+          call: providerCall('call-2'),
+          result: { status: 'error', error: 'boom' },
+          attachments: [],
+        },
+      ],
+      undefined,
+      'analysis',
+    );
+
+    assert.equal(messages.length, 2);
+    const [callMsg, resultMsg] = messages;
+    assert.equal(callMsg.role, 'assistant');
+    const callContent = callMsg.content as ContentBlockParam[];
+    assert.deepEqual(
+      callContent.map((block) => block.type),
+      ['text', 'tool_use', 'tool_use'],
+    );
+
+    assert.equal(resultMsg.role, 'user');
+    const resultContent = resultMsg.content as ContentBlockParam[];
+    assert.deepEqual(
+      resultContent.map((block) =>
+        block.type === 'tool_result'
+          ? [block.tool_use_id, block.is_error]
+          : block.type,
+      ),
+      [
+        ['call-1', undefined],
+        ['call-2', true],
+      ],
+    );
+  });
+
   it('skips cache control when prompt caching is disabled', async () => {
     const handler = createAnthropicHandler({ supportsPromptCaching: false });
 

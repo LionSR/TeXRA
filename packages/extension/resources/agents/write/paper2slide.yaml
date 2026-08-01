@@ -15,6 +15,8 @@ prompts:
     When creating the presentation:
     - Use LaTeX Beamer syntax and commands
     - Structure the presentation with a clear introduction, body, and conclusion
+    - Include 10-15 slides covering the main points of the paper, with slide numbers for easy reference
+    - End with a conclusion slide summarizing the main findings and potential future work
     - Include appropriate equations, figures, and tables from the paper
     - Use condensed bullet points to convey information effectively
     - Maintain a professional and scientifically rigorous tone throughout the presentation
@@ -35,22 +37,7 @@ prompts:
     Please carefully review the provided research paper before creating the presentation.
   userRequest:
     - |
-      Your task is to create a professional LaTeX Beamer presentation for a scientific audience.
-
-      When creating the presentation, please follow these guidelines:
-      \begin{enumerate}
-          \item Use LaTeX Beamer syntax and commands correctly.
-          \item Structure the presentation with a clear introduction, body, and conclusion.
-          \item Include 10-15 slides, covering the main points of the paper.
-          \item Use appropriate equations, figures, and tables from the original paper.
-          \item Write condensed bullet points to convey information effectively.
-          \item Maintain a professional and scientifically rigorous tone throughout the presentation.
-          \item Use appropriate notation and terminology consistently.
-          \item Prioritize visual representations and key takeaways over verbose descriptions.
-          \item Include slide numbers for easy reference.
-          \item End with a conclusion slide summarizing the main findings and potential future work.
-      \end{enumerate}
-
+      Create a complete, self-contained LaTeX Beamer presentation for a scientific audience, following the guidelines above, that effectively communicates the paper's key findings.
 
       {% if INSTRUCTION %}
       Focus solely on the following specific instruction:
@@ -59,64 +46,15 @@ prompts:
       </instruction>
       {% endif %}
 
-      Create a complete, self-contained LaTeX Beamer presentation that effectively communicates the paper's key findings in 10-15 slides. The presentation should be professional, condensed, and highlight the main aspects of the research paper. Use the following format:
+      Use the provided template as the skeleton for the presentation. Use the following format:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">
-      \documentclass{beamer}
-
-      \usetheme{metropolis}
-
-      \setbeamertemplate{navigation symbols}{}
-
-      \AtBeginSection[]
-      {
-      \begin{frame}<beamer>
-      \frametitle{Outline}
-      \tableofcontents[currentsection]
-      \end{frame}
-      }
-
-      \usepackage{amsmath}
-      \usepackage{amssymb}
-      \usepackage{graphicx}
-      \usepackage{physics}
-      \usepackage{hyperref}
-      \usepackage{natbib}
-
-      % Add any additional packages needed
-
-      % Title information
-      \title{...}
-      \author{...}
-      \institute{...}
-      \date{\today}
-
-      \begin{document}
-
-      % SLIDE CONTENT HERE
-
-      \begin{frame}[allowframebreaks]{References}
-          \bibliography{...}
-      \end{frame}
-
-      \end{document}
+      {{ TEMPLATE_SLIDE_CONTENT }}
       </document>
       </documents>
     - |
-      Critically review your draft and output a revised version. Check these aspects and fix any issues found:
-      \begin{enumerate}
-          \item Does the presentation effectively communicate the key findings and methodology?
-          \item Are the slides well-organized and logically structured?
-          \item Is the content appropriate for the target audience?
-          \item Are equations and mathematical content properly formatted and explained?
-          \item Are visual elements (figures, tables, diagrams) effectively used?
-          \item Is the text concise and focused, avoiding unnecessary details?
-          \item Are transitions between slides smooth and logical?
-          \item Is the overall presentation visually appealing and professional?
-      \end{enumerate}
-
-      Output the complete, self-contained revised version based on the previous version, maintaining its professional quality and technical accuracy. Use the following format:
+      Critically review the draft deck for accuracy of the paper's claims, slide organization, and equation formatting. Fix any issues you find and output the complete revised deck; if nothing needs fixing, reproduce it unchanged. Use the following format:
 
       <documents>
       <document name="{{ OUTPUT_FILES[0] }}">

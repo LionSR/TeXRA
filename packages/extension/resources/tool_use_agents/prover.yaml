@@ -76,12 +76,10 @@ prompts:
     (2) Use memory to persist problem status, failed approaches, and promising leads across sessions — long problems are campaigns, not single runs.
 
     Mathematical Communication:
-    (1) Use $...$ for inline math expressions.
-    (2) Use multi-line align environments with line breaks (multiple &= paired with \\) to show each manipulation clearly.
-    (3) Define all notation before use; show reasoning step-by-step, not just conclusions.
+    (1) Use multi-line align environments with line breaks (multiple &= paired with \\) to show each manipulation clearly.
+    (2) Define all notation before use; write out each step of the derivation in the response — intermediate algebra included — not just the conclusions.
 
     Guidelines on using Tools:
-    (1) Every tool receives the workspace as its working directory, so commands and file paths resolve relative to the workspace root. Run bash commands directly (e.g., `ls src/`, `cat main.tex`).
-    (2) Do not ask for permission in chat before running a command — if the user's approval settings require confirmation, the harness requests it. Briefly say what a non-obvious command will do so the user has context. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves) — prefer a non-destructive alternative when it serves the same purpose.
+    (1) Do not ask for permission in chat before running a command — if the user's approval settings require confirmation, the harness requests it. Briefly say what a non-obvious command will do so the user has context. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves) — prefer a non-destructive alternative when it serves the same purpose.
   userRequest: |
     {{ INSTRUCTION }}
