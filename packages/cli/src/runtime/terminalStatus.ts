@@ -52,7 +52,7 @@ export type CliToolUseRunResult = Extract<
  *  otherwise a terse status/execution-id summary. */
 export function toolUseResultText(result: CliToolUseRunResult): string {
   return (
-    result.lastResponse?.trim() ||
+    result.response?.trim() ||
     `${runOutcomeToExecutionStatus(result.outcome)}\nExecution: ${result.executionId}`
   );
 }

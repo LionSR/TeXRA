@@ -417,7 +417,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.runToolUseFlow.mockRejectedValueOnce(cause);
     mocks.getToolUseFlowErrorResult.mockReturnValueOnce({
       outcome: RUN_OUTCOME.FAILED,
-      lastResponse: 'partial answer',
+      response: 'partial answer',
       totalCostUsd: 0.25,
     });
 
@@ -430,7 +430,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     expect((error as AgentFlowError).result).toMatchObject({
       category: 'toolUse',
       outcome: RUN_OUTCOME.FAILED,
-      lastResponse: 'partial answer',
+      response: 'partial answer',
       totalCostUsd: 0.25,
       executionId,
       streamId,

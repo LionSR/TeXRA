@@ -99,8 +99,8 @@ function toDeliveryResult(
   return {
     category: 'toolUse',
     outcome: RUN_OUTCOME.COMPLETED,
-    lastResponse: turn.lastResponse,
-    touchedFiles: turn.touchedFiles,
+    response: turn.response,
+    files: turn.files,
     executionId,
     streamId: turn.streamId,
     memoryMisses: turn.memoryMisses,

@@ -633,7 +633,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(caught).not.toBe(teardownFailure);
       expect(getToolUseFlowErrorResult(caught)).toMatchObject({
         outcome: RUN_OUTCOME.FAILED,
-        lastResponse: 'partial assistant response',
+        response: 'partial assistant response',
       });
       expect(releaseSpy).toHaveBeenCalled();
       expect(errorLogSpy).toHaveBeenCalledWith(
