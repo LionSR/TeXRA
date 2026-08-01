@@ -13,9 +13,9 @@ the plan of record [`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk
 This pass inspected the tree afresh at HEAD `6ab67ce`
 (`Merge pull request #9503 from LionSR/fix/9409-windows-ci`; `CHANGELOG.md`
 heading `[Unreleased]`; package version `0.40.0`). The `-07-30` checkpoint pin
-`8116ce9` is **not** in HEAD's ancestry (`git merge-base --is-ancestor` fails —
-consistent with the repo's squash-merge history), but `git rev-list --count
-8116ce9..HEAD` reports **71 commits** reachable from HEAD and not from it. This
+`8116ce9` **is** in HEAD's ancestry (`git merge-base --is-ancestor` succeeds,
+and `git merge-base` returns that checkpoint itself). `git rev-list --count
+8116ce9..HEAD` reports **71 descendant commits**. This
 pass re-inspected the tree at HEAD and reconciled against the standing record; it
 did not perform a commit-by-commit audit of that range.
 
@@ -46,8 +46,8 @@ about what it cannot yet do (approval-requiring tools throw `:213-214`; the publ
 
 **The one item this pass elevates above the standing record is a genuine (if
 low-severity, latent) silent-degradation defect** — the `goalPaused`/`default:
-return` fall-through in `StreamSnapshotStore` (§New-14) — which is the exact
-CLAUDE.md §"Silent degradation is a defect" `default: return` pattern and is **not**
+return` fall-through in `StreamSnapshotStore` (§New-14) — a bare-default form of
+CLAUDE.md's §"Silent degradation is a defect" pattern that is **not**
 previously recorded. It is a maintainability/latent-drop defect, not a live
 incident (current behavior is correct), and — like everything here — is recorded,
 not applied.
@@ -72,7 +72,8 @@ not applied.
   boundary, not dead code.
 - `agentCreator/` still contains **0** `Node`/`Flow`/`@agent/node` references — a
   linear async function with a single production caller
-  (`agentCreatorCommands.ts:220`); CLAUDE.md's "not a flow" note is accurate.
+  (`packages/extension/src/commands/agent/agentCreatorCommands.ts:220`);
+  CLAUDE.md's "not a flow" note is accurate.
 - `node/index.ts` flow engine carries **no** upstream-PocketFlow dead surface —
   `grep` for `BatchNode|ParallelBatch|setParams|\.params` over `node/` +
   `core/flows/` + `implementations/` returns **0**.
@@ -120,7 +121,7 @@ here.
 
 - **[TRACKED] Model-handler base → collaborator extractions (standing §9.3).**
   Re-verified. `ModelHandler.ts` is **1986 LOC** at HEAD; the file is a Template
-  Method base (16 abstract members are the true "implement a new provider"
+  Method base (15 abstract members are the true "implement a new provider"
   contract), not a random god-object, and much of its length is load-bearing
   `#7101`-triage documentation — do not treat line count alone as bloat. The
   model-handler deep-dive **refines** `-07-30`'s single `ClientCredentialRouter`
@@ -163,16 +164,20 @@ here.
   precedence is still single-owner (predicate + switch keyed off the same value so
   they can't drift), which the model-handler deep-dive independently rated a good
   pattern to keep.
-- **[TRACKED] §New-9 — one stream-status transition emitted four ways.** Re-verified:
+- **[TRACKED] §New-9 — one stream-status transition has three delivery paths.** Re-verified:
   `StreamStatusService.publishStatus` still fans a single transition to the `status`
   `AgentEvent` trace, the `updateStreamStatus` `SessionFact` (`:308`), and the
-  direct `statusListeners` set (`:312`). The logging deep-dive independently
-  re-derived this as the one place the run/session channel separation is not clean.
-  Considered duplication (documented `events.ts:369-373`) — flag and confirm intent,
-  do not assume a bug; highest-value dedup in the observability surface.
+  direct `statusListeners` set (`:312`). These paths serve distinct consumers:
+  trace recording, session-fact observers, and synchronous status listeners used by
+  the status bar, window title, TUI, and execution registry. No redundant consumer
+  or effect was identified, so this checkpoint records the topology but does not
+  recommend deduplication.
 - **[TRACKED] `createChannelTrace` fabricates an inert `AgentTrace` as a module
-  logger.** Re-verified **27** non-test module singletons (28 total incl. one test)
-  do `const logger = createChannelTrace('X')` and only call `debug/info/warn/error`.
+  logger.** A defined census finds **24** non-test module-scope
+  `const … = createChannelTrace(...)` declarations. A broader file-level search
+  finds **36** non-test files invoking the factory; tests contain three local trace
+  constructions rather than one module singleton. The narrower 24-declaration
+  population is the relevant module-logger cleanup scope.
   Standing `-07-08`/`-07-18`/`-07-30` + `logger-surface-cleanup` PRD item; `-07-30`'s
   live-authorized attempt confirmed this is a deliberate-sequencing job (23 core
   files each rewriting every call to add a channel arg), not a drive-by.
@@ -185,7 +190,8 @@ here.
   core deep-dive re-flagged three flow-layer edges that point outward:
   `responseCycleToolsForModel` calling `useLaunchRunContext()`
   (`ResponseCycleFlow.ts:24,223`), `IToolUseSession` importing `@agent/followUp`
-  (`IToolUseSession.ts:4`), and `CommonCycleTypes` importing `@agent/index`
+  (`IToolUseSession.ts:4`), and `CommonCycleTypes` importing
+  `@agent/index/agentRegistry`
   (`:6`) and `@tools/subagentResults` (`:19`). All host-agnostic (no `vscode`,
   no `packages/*`) and **pre-acknowledged** by the core README as the
   canonical-collaborator pattern, not a defect — recorded as accepted debt that a
@@ -228,13 +234,17 @@ here.
   (`types` list, `:493`) but its run-fact switch folds `goalPaused` into the
   catch-all `default: return` with **no `never` exhaustiveness guard**
   (`StreamSnapshotStore.ts:477-479`). Current behavior is correct (`goalPaused` is an
-  intended no-op for the snapshot store), but this is the exact CLAUDE.md
+  intended no-op for the snapshot store), but the bare default still permits a new
+  subscribed run fact to disappear silently. This is the CLAUDE.md
   §"Silent degradation is a defect" `default: return` pattern: adding a new run-fact
   type to the subscription `types` list will silently no-op here with no compile
-  error. The sibling `TexraTranscriptRecorder.ts:644-648` does the same switch
-  correctly with `const _exhaustive: never = event`. **Fix (recorded, not applied):**
-  give `goalPaused` its own explicit `return` (documenting the intentional no-op) and
-  make `default` a `never` assertion. Not previously on the record. (The session-fact
+  error. The sibling `TexraTranscriptRecorder.ts:644-648` uses a narrowed event union
+  and a `never` assertion. Here, `SessionEventHub.subscribe` still types the callback
+  as the full `SessionEvent`; its runtime `types` filter does not narrow the callback
+  type. **Fix direction (recorded, not applied):** give `goalPaused` an explicit no-op,
+  then introduce either a selected-event callback type or an exhaustive handler map
+  before adding a `never` assertion. Adding the assertion alone would not type-check.
+  Not previously on the record. (The session-fact
   switch at `:520` also uses bare `default: return`, but it filters an unfiltered
   `{scope:'session'}` subscription, so ignoring unsubscribed facts there is expected
   — lower severity, noted for completeness.)
@@ -246,18 +256,20 @@ here.
   ("log the cause at warn"). Recommend `warn` for the trace bus to align the two
   fan-out buses; the `AppSignals` re-throw is a deliberate different contract and
   stays. Small, recorded.
-- **[NEW] §New-16 — `.catch('unknown')` on accounting-adjacent provider label.
-  (S.)** `UsageMonitor.ts:273` does `UsageProviderSchema.catch('unknown').parse(...)`
-  on a value that feeds `UsageLogService.log` (billing). Provider is a _label_, not
-  the metered quantity, so risk is low — but it is a Zod `.catch` on data flowing to
-  accounting, exactly the class the schema guardrail says to scrutinize. Flag and
-  confirm intent; likely fine, but should be a loud `warn`-and-default rather than a
-  silent `.catch` per the guardrail.
+- **[NEW] §New-16 — `.catch('unknown')` is an intentional telemetry vocabulary
+  boundary.** `UsageMonitor.ts:273` applies
+  `UsageProviderSchema.catch('unknown').parse(...)` to the internally resolved
+  `ModelConfig.provider`. The telemetry schema is deliberately narrower than the
+  model-provider vocabulary and includes an explicit `unknown` bucket. The fallback
+  changes only the provider label, not tokens, cost, or route; warning on every round
+  for a newly supported provider would create noise until telemetry catches up. No
+  change is recommended.
 - **[NEW] §New-17 — small model-handler tidy-ups (S each, recorded).**
-  (a) `withReasoningOverride` (`ModelFactory.ts:154`) is a genuine single-production-
-  caller wrapper (one call at `:360`) — inline candidate per the "single-caller
-  extractions are banned" guardrail; the _other_ `ModelFactory` wrappers are
-  multi-caller and stay. (b) `config`/`capabilities` are `public` mutable on the base
+  (a) `withReasoningOverride` (`ModelFactory.ts:154`) has one production caller at
+  `:360`, but it is not a trivial wrapper: it checks capability, reads and translates
+  configuration, logs the selected level, mutates the handler, and preserves chaining.
+  It is a cohesive helper allowed by the single-caller guardrail and should remain.
+  (b) `config`/`capabilities` are `public` mutable on the base
   (`ModelHandler.ts:212-213`) and picked into the port, with `ModelFactory.ts:168`
   mutating `capabilities.reasoningEffort` post-construction — an SDK boundary would
   expose these read-only and fold the reasoning override into construction (pairs
@@ -304,12 +316,16 @@ The seams, at HEAD:
 4. **Core-level boundary:** `runToolUseFlow({ isSubagent })` + `ToolUseWaitNode`
    suspends the persisted flow at `FlowTransition.WAITING`; the tool call is the right
    SDK granularity for a nested agent.
-5. **Cleanest micro-subagent candidates: the helper-model one-shots.** Callers share
-   `createHelperModelKit` + `runHelperModelCompletion` (`helperModel.ts`), each an
-   already-`try/catch`-guarded, non-streaming, single-shot near-pure function of
-   config (session description, text polish, LaTeX text-connection, agent-YAML
-   generation). Almost no coupling to break — the lowest-risk first "SDK sub-task"
-   surface.
+5. **Helper-model one-shots are a candidate only after their ambient dependencies are
+   made explicit.** Callers share
+   `createHelperModelKit` + `runHelperModelCompletion` (`helperModel.ts`), each a
+   non-streaming, single-shot operation used for session description, text polish,
+   LaTeX text connection, and agent-YAML generation. They are not near-pure:
+   `createHelperModelKit` defaults to ambient `currentSession()`, reads process-wide
+   platform configuration and availability state, resolves the runtime model registry,
+   and exposes an internal `ModelHandler`; `runHelperModelCompletion` performs the
+   provider request and lets terminal failures escape after retry. A public sub-task
+   needs a stable higher-level result plus explicit session, platform, and model ports.
 6. **`agentCreator` (`runAgentCreator`) — isolated linear function, host-UI coupled.**
    Already VS Code-free behind an injected `AgentCreatorUI` port; the AI core
    (`generateAgentYaml`) is already pure. Coupling to break for headless use: a
@@ -329,13 +345,15 @@ intra-run flow seams in-process.
 ## Notable strengths (unchanged, re-affirmed)
 
 - The SDK target shape is implemented and honest (`packages/agent`).
-- The `platform()` port is genuinely SDK-grade — runtime touches it in only 4
-  files / 8 sites, `Platform` is a frozen composition root of ~14 typed ports each
-  with a documented single-implementer fallback, and `nodePlatform()`
-  (`packages/agent/src/node.ts`) is a complete working default. Strongest part of the
-  readiness story.
+- The `platform()` port is structurally promising — runtime touches it in only 4
+  files / 9 direct call sites (two in `SessionHandle`, one in `AgentRunLifecycle`,
+  two in `helperModelName`, and four in `ModelFactory`). `Platform` is a frozen
+  composition root of roughly 14 typed ports, and `nodePlatform()`
+  (`packages/agent/src/node.ts`) supplies a complete working implementation. The
+  interface documents a single-implementer fallback only for optional
+  `toolMissingHandler`; it does not promise a fallback for every port.
 - `createResponse`/`extractResponse` Template Method (`ModelHandler.ts`) is textbook
-  — the one clean provider contract to keep as the SDK core; the 16 abstract members
+  — the one clean provider contract to keep as the SDK core; the 15 abstract members
   are a reasonable "implement a new provider" surface (documenting them as _the_
   provider contract is a cheap surface win).
 - `IModelHandler = Pick<ModelHandler>` prevents port drift by construction; all 43
@@ -362,12 +380,13 @@ intra-run flow seams in-process.
 Consistent with every unattended checkpoint since `-07-22`, and reinforced by
 `-07-30`'s live-authorized census finding the "already-do" subset empty of clean
 mechanical wins. Even the smallest candidates this pass could see —
-§New-17(a) (`withReasoningOverride` inline), §New-15 (trace log-level), §New-14 (the
-one defect) — are **not applied**: each wants an out-of-pass reviewer. §New-14 is
-now deliberately narrow: make the intentional `goalPaused` no-op explicit and add a
-`never` assertion to the remaining `StreamSnapshotStore` switch. `MapToolRegistry` re-checked and still
-`Map | Record` — **do not re-attempt the narrowing without a deliberate
-compatibility boundary for `Map` inputs.** The genuinely safe next steps remain additive or boundary-first: define the Tier-1
+§New-15 (trace log-level) and §New-14 (the one defect) — are **not applied**:
+each wants an out-of-pass reviewer. §New-14 is now deliberately narrow: make the
+intentional `goalPaused` no-op explicit, then establish a selected-event type or
+exhaustive handler map before adding a `never` assertion. `MapToolRegistry` remains
+`Map | Record`; **do not re-attempt the narrowing without a deliberate compatibility
+boundary for `Map` inputs.** The genuinely safe next steps remain additive or
+boundary-first: define the Tier-1
 manifest, extract the child-run loop's internal dependencies behind public ports,
 and expose the helper-model one-shots without touching the tested invariants above.
 
@@ -380,8 +399,9 @@ and expose the helper-model one-shots without touching the tested invariants abo
 - The headline claims were independently re-verified this pass by direct grep/read at
   HEAD: the 43-member `Pick`, 0 vscode/packages imports, 0 cycle-schema parses,
   `MapToolRegistry` shape, the ceiling leaks, §New-8/§New-9 presence, the
-  `createChannelTrace` 27-non-test count, the §New-14 `default: return` fall-through
-  (read directly), the §New-17 single-caller/mutable-field claims, the §New-12
+  defined `createChannelTrace` census (24 non-test module-scope declarations; 36
+  non-test invoking files), the §New-14 `default: return` fall-through (read directly),
+  the §New-17 mutable-field claim and cohesive-helper assessment, the §New-12
   build-ready-but-unpublished/R-b-and-R-a-landed status, and the shared snapshot
   ownership correction in §New-18. §New-13 is a design-judgment framing, cited to
   file:line but not re-derived exhaustively.
