@@ -850,6 +850,43 @@ describe('desktop settings IPC', () => {
     });
   });
 
+  it('reports failed setting writes and restores the authoritative snapshot', async () => {
+    const config = new MemoryConfigStore();
+    const failure = new Error('config write failed');
+    vi.spyOn(config, 'update').mockRejectedValueOnce(failure);
+    const onError = vi.fn();
+    const showErrorMessage = vi.fn(async () => undefined);
+
+    const { settings, posted } = createCapturedSettingsFixture({
+      config,
+      ui: { onError, showErrorMessage },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: BASH_APPROVAL_CONFIG_KEY,
+        value: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      'Failed to update "Require bash approval": config write failed',
+    );
+    expect(
+      posted.findLast(
+        (message) =>
+          commandOf(message) ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      ),
+    ).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      bashApprovalEnabled: true,
+    });
+  });
+
   it('writes the agent-skills toggle and returns the shared setting message', async () => {
     const config = new MemoryConfigStore();
 

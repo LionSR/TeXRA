@@ -246,10 +246,18 @@ export function createDesktopSettingsIpc(
     const write = resolveStateSettingWrite(key, value);
     if (!write) return;
     const stores = { config: options.config, workspaceState, globalState };
-    await (write.kind === 'reset'
-      ? resetSetting(write.entry, stores)
-      : writeSetting(write.entry, write.value, stores));
-    postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+    try {
+      await (write.kind === 'reset'
+        ? resetSetting(write.entry, stores)
+        : writeSetting(write.entry, write.value, stores));
+    } catch (error) {
+      options.ui.onError(error);
+      await options.ui.showErrorMessage(
+        formatError(`Failed to update "${write.entry.title}"`, error),
+      );
+    } finally {
+      postStateSettingSnapshot(write.entry.settingsViewSnapshot);
+    }
   }
 
   function postStateSettingSnapshot(snapshot: SettingsViewSnapshot): void {
