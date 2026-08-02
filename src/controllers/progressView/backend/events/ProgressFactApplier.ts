@@ -318,15 +318,19 @@ export class ProgressFactApplier {
     });
   }
 
-  handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
-    const targets = this.state.snapshots.resolveMissingOutputTargets(payload);
-    for (const streamId of targets) {
-      this.sendIfActive(streamId, () =>
-        this.webviewUpdater.updateMissingOutputs(streamId, {
-          reset: true,
-        }),
+  handleClearMissingOutputs({ streamId }: ClearMissingOutputsPayload): void {
+    // Exact addressing only (#9590 rule A3). A payload without a streamId is
+    // a defect: throw so `applyFact` logs the dropped mutation loudly.
+    if (!streamId) {
+      throw new Error(
+        'clearMissingOutputs requires the exact streamId selected by the initiator; configuration-based addressing is not accepted',
       );
     }
+    this.sendIfActive(streamId, () =>
+      this.webviewUpdater.updateMissingOutputs(streamId, {
+        reset: true,
+      }),
+    );
   }
 
   handleUpdateStreamUsage({

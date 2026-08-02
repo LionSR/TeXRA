@@ -57,7 +57,8 @@ async function runCleanCommand(
       ? await runCleanMultiple(model, inputFile, agent, outputFiles)
       : await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
-  emitClearMissingOutputs({ agent, model, inputFile, outputFiles });
+  // No missing-outputs clear: these invocations have no stream context, and
+  // configuration-based fan-out to look-alike tabs was removed (#9590 A3).
 }
 
 export async function handleCleanSingle(
@@ -105,5 +106,9 @@ export async function handleClean(config: CleanConfig): Promise<void> {
     result = await runWorkspaceClean();
   }
   showCleanResult(result, inputFile);
-  emitClearMissingOutputs(config);
+  // Exactly addressed (#9590 A3): clear only the tab the caller selected.
+  // Config-only invocations have no stream context and clear nothing.
+  if (!config.skipProgressViewClear && config.streamId) {
+    emitClearMissingOutputs(config.streamId);
+  }
 }

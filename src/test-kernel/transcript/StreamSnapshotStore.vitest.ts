@@ -17,6 +17,7 @@ import {
   buildRunDescriptor,
 } from '@shared/schemas';
 import type {
+  ClearMissingOutputsPayload,
   CompileFailure,
   ExecutionId,
   OutputFileInfo,
@@ -749,6 +750,80 @@ describe('StreamSnapshotStore', () => {
 
     const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
     expect(raw).toEqual({});
+  });
+
+  it('clears missing outputs only on the exactly addressed stream, even with duplicate run configurations (#9590 A3)', () => {
+    const events = new SessionEventHub();
+    const store = new StreamSnapshotStore();
+    const detach = store.attachSessionEvents(events);
+    // Two look-alike tabs: identical agent/model/input configuration. Only
+    // the initiator-selected StreamTabId may be mutated.
+    const duplicateConfig = AgentConfigSchema.parse({
+      agent: 'correct',
+      model: 'deepseekT',
+      agentCategory: AgentCategory.Workflow,
+      inputFiles: ['paper.tex'],
+    });
+    const executions: Record<string, ExecutionId> = {
+      [STREAM]: 'a1b2c3d4' as ExecutionId,
+      [OTHER_STREAM]: 'd4c3b2a1' as ExecutionId,
+    };
+    for (const stream of [STREAM, OTHER_STREAM]) {
+      events.emit({
+        scope: 'run',
+        streamId: stream,
+        event: {
+          type: 'run.config',
+          streamId: stream,
+          executionId: executions[stream],
+          config: duplicateConfig,
+        },
+      });
+      events.emit({
+        scope: 'run',
+        streamId: stream,
+        event: {
+          type: 'updateMissingOutputs',
+          streamId: stream,
+          filesByRound: { 1: ['missing.tex'] },
+        },
+      });
+    }
+
+    // Configuration-only addressing (the removed legacy payload shape) is
+    // rejected: the handler throws (the hub logs it) and mutates nothing.
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'clearMissingOutputs',
+        payload: {
+          streamConfig: {
+            agent: 'correct',
+            model: 'deepseekT',
+            inputFile: 'paper.tex',
+          },
+        } as unknown as ClearMissingOutputsPayload,
+      },
+    });
+    expect(store.getMissingOutputs(STREAM)).toEqual({ 1: ['missing.tex'] });
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({
+      1: ['missing.tex'],
+    });
+
+    // Exact addressing clears the selected stream alone; the duplicate
+    // configuration on the other tab does not authorize a fan-out.
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'clearMissingOutputs',
+        payload: { streamId: STREAM },
+      },
+    });
+    expect(store.getMissingOutputs(STREAM)).toEqual({});
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({
+      1: ['missing.tex'],
+    });
+    detach();
   });
 
   it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {

@@ -13,7 +13,6 @@ import {
   type UpdateQueuedFollowUpsPayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
-import type { StreamSnapshotStore } from '@transcript';
 import { assertNever } from '@utils/core';
 
 import {
@@ -116,32 +115,25 @@ function applyStage(streamId: StreamTabId, stage: StreamStage): void {
   );
 }
 
-type MissingOutputTargetResolver = Pick<
-  StreamSnapshotStore,
-  'findWorkflowStreamsMatching'
->;
-
-function applyClearMissingOutputs(
-  payload: ClearMissingOutputsPayload,
-  targetResolver: MissingOutputTargetResolver | undefined,
-): void {
-  let targets: readonly StreamTabId[] = [];
-  if (payload.streamId) {
-    targets = [payload.streamId];
-  } else if (payload.streamConfig && targetResolver) {
-    targets = targetResolver.findWorkflowStreamsMatching(payload.streamConfig);
-  }
-  for (const streamId of targets) {
-    // The empty map is a destructive reset, not a round patch. Record its
-    // source revision even when the current map is already empty so a cold
-    // read that started before this fact cannot restore older disk warnings.
-    recordMissingOutputsReset(streamId);
-    patchStream(streamId, (slice) =>
-      Object.keys(slice.missingOutputsByRound).length === 0
-        ? slice
-        : { ...slice, missingOutputsByRound: {} },
+function applyClearMissingOutputs({
+  streamId,
+}: ClearMissingOutputsPayload): void {
+  // Exact addressing only (#9590 rule A3). A payload without a streamId is a
+  // defect: throw so the hub logs the dropped mutation loudly.
+  if (!streamId) {
+    throw new Error(
+      'clearMissingOutputs requires the exact streamId selected by the initiator; configuration-based addressing is not accepted',
     );
   }
+  // The empty map is a destructive reset, not a round patch. Record its
+  // source revision even when the current map is already empty so a cold
+  // read that started before this fact cannot restore older disk warnings.
+  recordMissingOutputsReset(streamId);
+  patchStream(streamId, (slice) =>
+    Object.keys(slice.missingOutputsByRound).length === 0
+      ? slice
+      : { ...slice, missingOutputsByRound: {} },
+  );
 }
 
 type TuiRunFactHandlers = {
@@ -252,7 +244,6 @@ function refreshQueuedFollowUps(
 
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
-  missingOutputTargets?: MissingOutputTargetResolver,
 ): () => void {
   let generation = getCliStateGeneration();
   const detachResetHook = registerCliStateResetHook(() => {
@@ -298,7 +289,7 @@ export function attachTuiRunFactSubscription(
         case 'status':
           return;
         case 'clearMissingOutputs':
-          applyClearMissingOutputs(fact.payload, missingOutputTargets);
+          applyClearMissingOutputs(fact.payload);
           return;
       }
       assertNever(fact, 'Unhandled TUI session fact');

@@ -15,6 +15,7 @@ import {
   AgentCategory,
   type ActiveChildInfo,
   buildRunDescriptor,
+  type ClearMissingOutputsPayload,
   type CompileFailure,
   type InquiryThreadUpdatedEvent,
   LOG_LEVELS,
@@ -867,6 +868,23 @@ describe('ProgressBackend', () => {
     } finally {
       await target.backend.state.clearAll();
     }
+  });
+
+  it('rejects a clearMissingOutputs fact without an exact streamId (#9590 A3)', () => {
+    const { backend } = createRecordingBackend();
+
+    // Configuration-only addressing (the removed legacy payload shape) is a
+    // defect, not a broadcast: the handler throws loudly instead of clearing
+    // look-alike tabs or silently dropping the mutation.
+    expect(() =>
+      backend.factApplier.handleClearMissingOutputs({
+        streamConfig: {
+          agent: 'correct',
+          model: 'deepseekT',
+          inputFile: 'paper.tex',
+        },
+      } as unknown as ClearMissingOutputsPayload),
+    ).toThrow(/exact streamId/);
   });
 
   it('keeps the selection when an unknown stream reaches running', async () => {

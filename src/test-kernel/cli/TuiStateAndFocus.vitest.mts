@@ -145,12 +145,9 @@ function runTrace(
 }
 
 /** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
-function withRunFacts(
-  body: (hub: SessionEventHub) => void,
-  missingOutputTargets?: Parameters<typeof attachTuiRunFactSubscription>[1],
-): void {
+function withRunFacts(body: (hub: SessionEventHub) => void): void {
   const hub = new SessionEventHub();
-  const detach = attachTuiRunFactSubscription(hub, missingOutputTargets);
+  const detach = attachTuiRunFactSubscription(hub);
   try {
     body(hub);
   } finally {
@@ -3296,90 +3293,81 @@ describe('subscribeRuntimeHost run facts', () => {
     });
   });
 
-  it('projects missing-output and compile facts and clears matching warnings', () => {
-    withRunFacts(
-      (hub) => {
-        hub.emit({
-          scope: 'run',
+  it('projects missing-output and compile facts and clears the addressed stream', () => {
+    withRunFacts((hub) => {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateMissingOutputs',
           streamId: root,
-          event: {
-            type: 'updateMissingOutputs',
-            streamId: root,
-            filesByRound: { 0: ['missing.tex'] },
-          },
-        });
-        hub.emit({
-          scope: 'run',
+          filesByRound: { 0: ['missing.tex'] },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateCompileFailures',
           streamId: root,
-          event: {
-            type: 'updateCompileFailures',
-            streamId: root,
-            filesByRound: {
-              0: [
-                {
-                  round: 0,
-                  displayName: 'paper.pdf',
-                  output: {
-                    kind: 'external',
-                    absolutePath: '/tmp/paper.pdf',
-                  },
-                  log: {
-                    kind: 'external',
-                    absolutePath: '/tmp/paper.log',
-                  },
-                  logRelativePath: 'paper.log',
+          filesByRound: {
+            0: [
+              {
+                round: 0,
+                displayName: 'paper.pdf',
+                output: {
+                  kind: 'external',
+                  absolutePath: '/tmp/paper.pdf',
                 },
-              ],
-            },
-          },
-        });
-
-        expect(streams.get().get(root)).toMatchObject({
-          missingOutputsByRound: { 0: ['missing.tex'] },
-          compileFailuresByRound: {
-            0: [expect.objectContaining({ displayName: 'paper.pdf' })],
-          },
-        });
-
-        hub.emit({
-          scope: 'session',
-          event: {
-            type: 'clearMissingOutputs',
-            payload: { streamId: root },
-          },
-        });
-        expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
-
-        hub.emit({
-          scope: 'run',
-          streamId: root,
-          event: {
-            type: 'updateMissingOutputs',
-            streamId: root,
-            filesByRound: { 1: ['again.tex'] },
-          },
-        });
-        hub.emit({
-          scope: 'session',
-          event: {
-            type: 'clearMissingOutputs',
-            payload: {
-              streamConfig: {
-                agent: 'correct',
-                model: 'deepseekT',
-                inputFile: 'paper.tex',
+                log: {
+                  kind: 'external',
+                  absolutePath: '/tmp/paper.log',
+                },
+                logRelativePath: 'paper.log',
               },
-            },
+            ],
           },
-        });
+        },
+      });
 
-        expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
-        expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
-          1,
-        );
-      },
-      { findWorkflowStreamsMatching: () => [root] },
-    );
+      expect(streams.get().get(root)).toMatchObject({
+        missingOutputsByRound: { 0: ['missing.tex'] },
+        compileFailuresByRound: {
+          0: [expect.objectContaining({ displayName: 'paper.pdf' })],
+        },
+      });
+
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'clearMissingOutputs',
+          payload: { streamId: root },
+        },
+      });
+      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateMissingOutputs',
+          streamId: root,
+          filesByRound: { 1: ['again.tex'] },
+        },
+      });
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'clearMissingOutputs',
+          payload: { streamId: root },
+        },
+      });
+
+      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+      expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
+        1,
+      );
+    });
   });
 
   it('applies direct usage sequences exactly once', () => {
