@@ -39,8 +39,8 @@ describe('model handler compatibility inference', () => {
     );
   });
 
-  it('does not infer compatibility for Google transcripts', () => {
-    expect(
+  it('rejects keyless Google transcripts without inspecting their format', () => {
+    expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         messages: [
           {
@@ -55,12 +55,14 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBeUndefined();
+    ).toThrow(
+      'Persisted Google sessions without a model-handler identity cannot be resumed.',
+    );
     expect(info).not.toHaveBeenCalled();
   });
 
   it('prefers the persisted model id over the MODEL variable', () => {
-    expect(
+    expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         modelId: 'gemini35f',
         messages: [
@@ -76,7 +78,9 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBeUndefined();
+    ).toThrow(
+      'Persisted Google sessions without a model-handler identity cannot be resumed.',
+    );
     expect(info).not.toHaveBeenCalled();
   });
 
