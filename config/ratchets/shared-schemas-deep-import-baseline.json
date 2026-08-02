@@ -391,7 +391,6 @@
       "src/agent/modelHandlers/anthropic/anthropicTools.ts (type-only)",
       "src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts (type-only)",
       "src/agent/modelHandlers/google/GoogleModelHandlerBase.ts (type-only)",
-      "src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts (type-only)",
       "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts (type-only)",
       "src/agent/modelHandlers/ModelHandler.ts (type-only)",
       "src/agent/modelHandlers/modelHandlerValidation.ts (type-only)",

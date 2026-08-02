@@ -329,15 +329,33 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     const handler = createHandler();
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.setLogger({ ...noopTrace });
+    (
+      handler as unknown as {
+        postProcessResponse: (text: string) => string;
+      }
+    ).postProcessResponse = () => 'REWRITTEN';
     const calls: RecordedCall[] = [];
     const client: any = capturingClient(calls, (i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2'),
     );
-    // Compaction summarizes via models.generateContent.
-    client.models.generateContent = async () => ({
-      text: 'SUMMARY',
-      usageMetadata: { candidatesTokenCount: 5 },
-    });
+    // Compaction uses a separate stateless, non-streaming Interactions call.
+    const create = client.interactions.create;
+    client.interactions.create = async (params: { stream?: boolean }) => {
+      if (params.stream === false) {
+        return {
+          id: 'compact',
+          status: 'completed',
+          steps: [
+            {
+              type: 'model_output',
+              content: [{ type: 'text', text: 'SUMMARY' }],
+            },
+          ],
+          usage: { total_output_tokens: 5 },
+        };
+      }
+      return create(params);
+    };
 
     // Round 1 establishes a chain.
     const messages: Step[] = [userStep('a'), userStep('b'), userStep('c')];
@@ -352,6 +370,8 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
 
     expect(result.updatedMessages).toBeDefined();
     expect(result.updatedMessages!.length).toBeLessThan(messages.length);
+    expect(JSON.stringify(result.updatedMessages)).toContain('SUMMARY');
+    expect(JSON.stringify(result.updatedMessages)).not.toContain('REWRITTEN');
     // The compacted round full-resent (no chain) the compacted transcript.
     expect(calls[1].previousId).toBeUndefined();
     expect(calls[1].input).toEqual(result.updatedMessages);
