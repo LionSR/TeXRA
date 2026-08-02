@@ -6,9 +6,9 @@ import { KVStore } from '@common/storage/KVStore';
 import * as log from '@logger/logUtils';
 import {
   END_GROUP_STATUS,
-  PersistedStreamLogEntrySchema,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  StreamLogEntrySchema,
   type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
@@ -196,7 +196,7 @@ function toSummary(source: SummarySource): StreamLogSummary {
  * distinguish completed from cancelled, and `COMPLETED` matches today's
  * neutral "Stopped" rendering, so no historical transcript's displayed label
  * changes — only its typed value does. `data` stays `z.unknown()` in
- * `PersistedStreamLogEntrySchema` (Tier 3 — opaque, pattern-matched by
+ * `StreamLogEntrySchema` (Tier 3 — opaque, pattern-matched by
  * display code), so this is a value transform layered on top of the existing
  * parse, not a schema change, and needs no persisted format-version bump.
  * Any other value (already-canonical post-cutover write, or malformed data)
@@ -1431,7 +1431,7 @@ export class StreamLogStore {
     }
 
     for (const raw of rawEntries) {
-      const result = PersistedStreamLogEntrySchema.safeParse(raw);
+      const result = StreamLogEntrySchema.safeParse(raw);
       if (result.success) {
         parsed.entries.push(normalizeGroupStatusEntry(result.data));
       } else {

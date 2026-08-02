@@ -7,11 +7,8 @@
  * on-disk shapes from this one definition. Only `@agent`-free schemas live
  * here.
  *
- * Legacy data (from before the one-run-per-tab refactor) was keyed by runId:
- *   - outputFiles.json / missingOutputs.json used `{ runId: { round: … } }`
- *     (absorbed at the canonical parse entry — see
- *     `parsePersistedRoundIndexed` in `./roundIndexed`)
- *   - usageStats.json used `{ runId: TokenUsageStats }` (still the stored shape)
+ * Usage remains keyed by runId because tool-use sessions can resume across
+ * multiple executions.
  */
 
 import { z } from 'zod';
@@ -41,8 +38,6 @@ export const StreamTabMetaSchema = z.object({
   schemaVersion: z
     .literal(RUN_DESCRIPTOR_SCHEMA_VERSION)
     .prefault(RUN_DESCRIPTOR_SCHEMA_VERSION),
-  /** Legacy field — no longer written, tolerated on read so we can skip it. */
-  activeRunId: z.string().nullish(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
   runDescriptor: PersistedRunDescriptorSchema.optional(),
@@ -53,60 +48,6 @@ export const StreamTabMetaSchema = z.object({
 });
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
-
-// ============================================================================
-// Legacy instructions: { runId: { text, timestamp?, ... } }
-//
-// Archival-only: tabs created before the one-run-per-tab refactor (#3061,
-// 2026-04-19) may still have this on disk (as `legacyInstructions.json`, or
-// the older `runInstructions.json` written before that refactor renamed the
-// key). Current code never writes it; `StreamSnapshotStore.readLegacyInstruction`
-// reads it once at load() so those tabs can backfill their original user
-// message into the stream log. Retire alongside the other #3061-era shims
-// tracked in `docs/proposals/2026-07-05-architecture-checkpoints.md` / `#6981`.
-// ============================================================================
-
-const LegacyInstructionEntrySchema = z.looseObject({
-  text: z.string(),
-  timestamp: z.number().optional(),
-});
-
-export type LegacyInstructionEntry = z.infer<
-  typeof LegacyInstructionEntrySchema
->;
-
-// No whole-record `.catch`: an unreadable file degrades to "no legacy
-// instruction" at `readLegacyInstruction`, which warns first.
-export const LegacyInstructionsDataSchema = z.record(
-  z.string(),
-  LegacyInstructionEntrySchema,
-);
-
-/**
- * Pick the legacy instruction that best matches the workflow run users most
- * recently viewed. Prefer `preferredRunId` when available; otherwise fall back
- * to the newest timestamp, breaking ties by later insertion order.
- */
-export function selectPreferredLegacyInstruction(
-  record: Record<string, LegacyInstructionEntry>,
-  preferredRunId?: string | null,
-): LegacyInstructionEntry | null {
-  if (preferredRunId && record[preferredRunId]) {
-    return record[preferredRunId];
-  }
-
-  let selected: LegacyInstructionEntry | null = null;
-  let selectedTimestamp = Number.NEGATIVE_INFINITY;
-  for (const entry of Object.values(record)) {
-    const timestamp = entry.timestamp ?? Number.NEGATIVE_INFINITY;
-    if (selected === null || timestamp >= selectedTimestamp) {
-      selected = entry;
-      selectedTimestamp = timestamp;
-    }
-  }
-
-  return selected;
-}
 
 // ============================================================================
 // Usage stats — per-run map kept (tool-use can resume → multiple runs).
