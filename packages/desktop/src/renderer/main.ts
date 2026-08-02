@@ -78,11 +78,11 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
+  DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
-  DesktopSetRouteMessageSchema,
+  DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
   type DesktopLayoutPanel,
-  type DesktopRoute,
 } from '../desktopShellMessages';
 import { DesktopSetLogMessageSchema } from '../desktopLogMessages';
 import {
@@ -139,7 +139,6 @@ import {
   toggleSummaryBar,
   toggleWorkbench,
   WORKBENCH_PLACEMENTS,
-  workbenchKindForRoute,
   workbenchTabsForPlacement,
   workspaceInitials,
   workspaceName,
@@ -181,7 +180,7 @@ const appRoot = root;
 const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
-  setRoute,
+  showLauncher: returnToLauncher,
   openMultiAgent: () => openSettingsTab(SETTINGS_TAB.MULTI_AGENT),
 });
 
@@ -216,11 +215,6 @@ function commandTitle(
     rendererPlatform,
   );
   return shortcut ? `${label} - ${shortcut}` : label;
-}
-
-/** Publishes the current route on `<body>` for styling and end-to-end checks. */
-function setRouteState(route: DesktopRoute): void {
-  document.body.dataset.desktopRoute = route;
 }
 
 // =============================================================================
@@ -1338,7 +1332,8 @@ function openSettingsTab(
 // =============================================================================
 
 const desktopRendererCommandActions: DesktopCommandActions = {
-  showRoute: setRoute,
+  showLauncher: returnToLauncher,
+  openWorkbench: openKind,
   showSettings: openSettingsTab,
   showStream: switchToStream,
   openDesktopDocs: () => {
@@ -1414,23 +1409,6 @@ function returnToLauncher(): void {
       draft.activeStreamId = null;
     }),
   );
-  setRouteState('main');
-}
-
-// Entry point for `desktop:setRoute` IPC (menu items, command palette). Each
-// route resolves to the workbench tab that owns its surface; 'main'
-// additionally clears the active stream so the center pane shows the launcher.
-function setRoute(route: DesktopRoute): void {
-  setRouteState(route);
-  if (bootstrapFailed) return;
-  if (route === 'main') {
-    returnToLauncher();
-    return;
-  }
-  // Opening Logs must also fetch a snapshot; the pane renders whatever it last
-  // received, which on first open is a placeholder.
-  const kind = workbenchKindForRoute(route);
-  if (kind) openKind(kind);
 }
 
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
@@ -1460,9 +1438,12 @@ const MESSAGE_ROUTES: ReadonlyArray<(data: unknown) => boolean> = [
   messageRoute(DesktopSaveFileMessageSchema, () => {
     void editorPane.save();
   }),
-  messageRoute(DesktopSetRouteMessageSchema, (message) =>
-    setRoute(message.route),
-  ),
+  messageRoute(DesktopShowLauncherMessageSchema, () => {
+    if (!bootstrapFailed) returnToLauncher();
+  }),
+  messageRoute(DesktopOpenWorkbenchMessageSchema, (message) => {
+    if (!bootstrapFailed) openKind(message.kind);
+  }),
   messageRoute(DesktopToggleLayoutMessageSchema, (message) => {
     LAYOUT_PANEL_TOGGLES[message.panel]();
   }),

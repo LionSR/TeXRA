@@ -209,7 +209,7 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   }
 
   // The launcher can render before main.ts has finished registering its
-  // desktop:setRoute listener. Wait for the renderer's explicit readiness
+  // desktop shell listeners. Wait for the renderer's explicit readiness
   // marker so the first command after onboarding is never dropped.
   await page.waitForFunction(
     () => document.body.dataset.desktopReady === 'true',
@@ -218,65 +218,50 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   );
 }
 
-export type DesktopRoute = 'main' | 'settings' | 'logs';
-
-/**
- * Send a legacy `desktop:setRoute` IPC message through the task-centric shell
- * and wait until the route is fully applied. Main keeps the permanent
- * conversation surface; Settings and Logs activate their corresponding
- * right-workbench tabs. The wait asserts both the route marker and the target
- * surface so callers never race the first frame.
- */
-export async function setRoute(
-  launched: LaunchedApp,
-  route: DesktopRoute,
-): Promise<void> {
-  await launched.page.evaluate((next) => {
-    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
-  }, route);
+export async function showLauncher(launched: LaunchedApp): Promise<void> {
+  await launched.page.evaluate(() => {
+    window.postMessage({ command: 'desktop:showLauncher' }, '*');
+  });
   await launched.page.waitForFunction(
-    (targetRoute) => {
-      if (document.body.dataset.desktopRoute !== targetRoute) return false;
-      const shell = document.querySelector<HTMLElement>('.task-shell');
-      if (!shell) return false;
-      switch (targetRoute) {
-        case 'main': {
-          const pane = document.querySelector<HTMLElement>(
-            '.task-conversation-pane[data-pane="launcher"]',
-          );
-          return pane != null && pane.hidden === false;
-        }
-        case 'settings': {
-          const tab = document.querySelector<HTMLElement>(
-            '.task-workbench-tab[data-kind="settings"][data-active="true"]',
-          );
-          const settings = document.querySelector<HTMLElement>(
-            '.task-workbench-surface settings-app[data-desktop-view="settings"]',
-          );
-          return (
-            shell.dataset.workbenchOpen === 'true' &&
-            tab != null &&
-            settings != null
-          );
-        }
-        case 'logs': {
-          const tab = document.querySelector<HTMLElement>(
-            '.task-workbench-tab[data-kind="logs"][data-active="true"]',
-          );
-          const logs = document.querySelector<HTMLElement>(
-            '.task-workbench-surface [data-desktop-view="logs"]',
-          );
-          return (
-            shell.dataset.workbenchOpen === 'true' &&
-            tab != null &&
-            logs != null
-          );
-        }
-        default:
-          return true;
-      }
+    () => {
+      const pane = document.querySelector<HTMLElement>(
+        '.task-conversation-pane[data-pane="launcher"]',
+      );
+      return pane != null && pane.hidden === false;
     },
-    route,
+    undefined,
+    { timeout: 5000 },
+  );
+}
+
+export type DesktopWorkbenchKind = 'settings' | 'logs';
+
+export async function openWorkbench(
+  launched: LaunchedApp,
+  kind: DesktopWorkbenchKind,
+): Promise<void> {
+  await launched.page.evaluate((nextKind) => {
+    window.postMessage(
+      { command: 'desktop:openWorkbench', kind: nextKind },
+      '*',
+    );
+  }, kind);
+  await launched.page.waitForFunction(
+    (targetKind) => {
+      const shell = document.querySelector<HTMLElement>('.task-shell');
+      const tab = document.querySelector<HTMLElement>(
+        `.task-workbench-tab[data-kind="${targetKind}"][data-active="true"]`,
+      );
+      const surface = document.querySelector<HTMLElement>(
+        `[data-desktop-view="${targetKind}"]`,
+      );
+      return (
+        shell?.dataset.workbenchOpen === 'true' &&
+        tab != null &&
+        surface != null
+      );
+    },
+    kind,
     { timeout: 5000 },
   );
 }
@@ -293,7 +278,7 @@ export async function setSettingsTab(
   tabIndex: number,
   panel?: string,
 ): Promise<void> {
-  await setRoute(launched, 'settings');
+  await openWorkbench(launched, 'settings');
   await launched.page.evaluate((idx) => {
     window.postMessage({ command: 'setTab', tabIndex: idx }, '*');
   }, tabIndex);

@@ -77,17 +77,20 @@ test('application menu releases a closed window and binds once to its replacemen
   await windowB.waitForSelector('#app', { state: 'attached' });
 
   await windowB.evaluate(() => {
-    document.body.dataset.menuRouteMessageCount = '0';
+    document.body.dataset.menuWorkbenchMessageCount = '0';
     window.addEventListener('message', (event) => {
-      const message = event.data as { command?: unknown; route?: unknown };
-      if (message.command !== 'desktop:setRoute' || message.route !== 'logs') {
+      const message = event.data as { command?: unknown; kind?: unknown };
+      if (
+        message.command !== 'desktop:openWorkbench' ||
+        message.kind !== 'logs'
+      ) {
         return;
       }
       const current = Number.parseInt(
-        document.body.dataset.menuRouteMessageCount ?? '0',
+        document.body.dataset.menuWorkbenchMessageCount ?? '0',
         10,
       );
-      document.body.dataset.menuRouteMessageCount = String(current + 1);
+      document.body.dataset.menuWorkbenchMessageCount = String(current + 1);
     });
   });
 
@@ -113,7 +116,7 @@ test('application menu releases a closed window and binds once to its replacemen
   await expect
     .poll(() =>
       windowB.evaluate(
-        () => document.body.dataset.menuRouteMessageCount ?? '0',
+        () => document.body.dataset.menuWorkbenchMessageCount ?? '0',
       ),
     )
     .toBe('1');
