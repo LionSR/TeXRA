@@ -61,10 +61,10 @@ const WorkflowScriptToolInputSchema = z
       .min(1)
       .describe('Default workflow agent used when agent() omits agentName.'),
     args: z
-      .json()
+      .looseObject({})
       .nullish()
       .describe(
-        'JSON arguments exposed to the script as the global args value.',
+        'JSON argument object exposed to the script as the global args value.',
       ),
     files: WorkflowScriptFilesSchema.nullish().describe(
       'Workspace files bound to the workflow run by role and exposed to the script as the immutable global files object.',
@@ -85,6 +85,13 @@ const WorkflowScriptToolInputSchema = z
       ),
   })
   .superRefine((input, ctx) => {
+    if (input.args != null && !z.json().safeParse(input.args).success) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Workflow arguments must contain valid JSON values.',
+        path: ['args'],
+      });
+    }
     if ((input.script == null) === (input.scriptPath == null)) {
       ctx.addIssue({
         code: 'custom',
