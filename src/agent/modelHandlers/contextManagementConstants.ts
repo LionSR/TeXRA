@@ -1,6 +1,3 @@
-/** Must match `texra.model.compactionThresholdPercent` default in package.json. Set 0 to disable. */
-export const DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
-
 /** Minimum completion tokens when reducing max tokens due to context pressure. */
 const MIN_COMPLETION_TOKENS = 100;
 
