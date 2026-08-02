@@ -135,6 +135,26 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect((content[1] as Interactions.TextContent).text).toBe('caption');
   });
 
+  it('creates a new user turn for an image-only follow-up', async () => {
+    const handler = createHandler();
+    const steps: Step[] = [
+      { type: 'user_input', content: [{ type: 'text', text: 'question' }] },
+      { type: 'model_output', content: [{ type: 'text', text: 'answer' }] },
+    ];
+    stubImageMediaLoader(handler);
+
+    await handler.createUserFollowUpMessages(steps, '');
+    await handler.addMediaToUserMessage(steps, [
+      { absolutePath: '/x/follow-up.png' } as never,
+    ]);
+
+    expect(steps).toHaveLength(3);
+    expect(steps[2]).toEqual({
+      type: 'user_input',
+      content: [{ type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' }],
+    });
+  });
+
   it('initializeMessages includes typed media content when mediaFiles are provided', async () => {
     const handler = createHandler();
     stubImageMediaLoader(handler);
