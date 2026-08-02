@@ -19,6 +19,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
+import { onAbort } from '@utils/core';
 
 export interface ExecutionStatusInfo {
   status: StreamPhase | ExecutionStatus | 'unknown';
@@ -213,11 +214,9 @@ export class AgentExecutionHandle implements ExecutionHandle {
     this.toolUseFlowContext = context;
     if (!signal) return;
 
-    const interrupt = (): void => context.interrupt();
-    signal.addEventListener('abort', interrupt, { once: true });
-    this.detachToolUseAbortListener = () =>
-      signal.removeEventListener('abort', interrupt);
-    if (signal.aborted) interrupt();
+    this.detachToolUseAbortListener = onAbort(signal, () =>
+      context.interrupt(),
+    );
   }
 
   detachToolUseFlow(context?: LiveToolUseFlowContext): void {
