@@ -1274,6 +1274,48 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('retains archive diagnostics when an empty sidecar falls back to legacy', async () => {
+    const executionId = '0888b90888b9' as ExecutionId;
+    const selected = 'aOrchestrator@old#0888b90888b9' as StreamTabId;
+    const disconnected = 'bOrchestrator@other#0888b90888b9' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(selected, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      disconnected,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          selected,
+          [
+            logRow(MESSAGE_TYPES.PROGRESS_STATUS, {
+              text: 'No conversation',
+            }),
+          ],
+        ],
+        [
+          disconnected,
+          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Unrelated prompt' })],
+        ],
+      ]),
+    );
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'user', content: 'Legacy prompt' },
+    ]);
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'legacyKV',
+      streamId: selected,
+      candidateStreamIds: [disconnected],
+      conversation: [{ role: 'user', content: 'Legacy prompt' }],
+    });
+  });
+
   it('keeps the selected archive when copied-row ordering forms a cycle', async () => {
     const executionId = '0888bf0888bf' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;

@@ -655,8 +655,26 @@ async function readSidecarConversation(
     }
     // Exact metadata established the selected stream and candidate set. An
     // empty selected conversation falls back to the legacy projection, never
-    // to a child, disconnected candidate, or suffix-only sidecar.
-    return null;
+    // to a child, disconnected candidate, or suffix-only sidecar. Retain the
+    // archive diagnostics so the fallback is not mistaken for a complete
+    // sidecar chronology.
+    const hasDiagnostics =
+      merged.candidateStreamIds.length > 0 ||
+      merged.conflicts.length > 0 ||
+      merged.hasOrderingCycle ||
+      merged.hasOrderingAmbiguity;
+    if (!hasDiagnostics) return null;
+    return {
+      conversation: null,
+      source: 'none',
+      streamId: resolved.streamId,
+      ...(merged.candidateStreamIds.length > 0
+        ? { candidateStreamIds: merged.candidateStreamIds }
+        : {}),
+      ...(merged.conflicts.length > 0 ? { conflicts: merged.conflicts } : {}),
+      ...(merged.hasOrderingCycle ? { hasOrderingCycle: true } : {}),
+      ...(merged.hasOrderingAmbiguity ? { hasOrderingAmbiguity: true } : {}),
+    };
   }
 
   const primaryConversation = await conversationFromStream(
@@ -710,27 +728,22 @@ export async function readCompletedRunConversation(
     streamLogStore,
   });
 
-  // Legacy `conversation.json`; `null` when missing or empty.
-  const tryLegacy =
-    async (): Promise<CompletedRunConversationReadResult | null> => {
-      const conversation =
-        await getExecutionStore(executionId).readConversation();
-      return conversation ? { conversation, source: 'legacyKV' } : null;
-    };
-  const trySidecar =
-    async (): Promise<CompletedRunConversationReadResult | null> =>
-      resolved
-        ? readSidecarConversation(
-            executionId,
-            resolved,
-            snapshotStore,
-            streamLogStore,
-          )
-        : null;
+  const sidecar = resolved
+    ? await readSidecarConversation(
+        executionId,
+        resolved,
+        snapshotStore,
+        streamLogStore,
+      )
+    : null;
+  if (sidecar?.conversation) return sidecar;
 
-  for (const arm of [trySidecar, tryLegacy]) {
-    const result = await arm();
-    if (result) return result;
+  // Legacy `conversation.json`; `null` when missing or empty.
+  const legacy = await getExecutionStore(executionId).readConversation();
+  if (legacy) {
+    return sidecar
+      ? { ...sidecar, conversation: legacy, source: 'legacyKV' }
+      : { conversation: legacy, source: 'legacyKV' };
   }
-  return { conversation: null, source: 'none' };
+  return sidecar ?? { conversation: null, source: 'none' };
 }
