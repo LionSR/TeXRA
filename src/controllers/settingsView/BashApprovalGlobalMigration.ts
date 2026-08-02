@@ -35,7 +35,7 @@
  */
 import * as logger from '@logger/logUtils';
 import type { ConfigProvider, ConfigTarget } from '@platform/interfaces';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
