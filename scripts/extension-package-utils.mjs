@@ -102,6 +102,10 @@ export const CATALOG_DERIVED_CONTRIBUTES = [
   'keybindings',
 ];
 
+// A native-settings-only extension legitimately has no VS Code configuration
+// contribution. Commands and keybindings must still be present in every VSIX.
+export const REQUIRED_CATALOG_CONTRIBUTES = ['commands', 'keybindings'];
+
 export function withoutCatalogDerivedContributes(packageJson) {
   const { contributes } = packageJson;
   if (!contributes || typeof contributes !== 'object') return packageJson;
