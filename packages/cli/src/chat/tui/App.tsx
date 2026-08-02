@@ -583,6 +583,7 @@ export function App(props: AppProps): React.JSX.Element {
           pendingEscape.parentStreamId,
         );
         const printableInput =
+          input.length > 0 &&
           !key.meta &&
           !key.return &&
           metaChordInput(input, key) === undefined &&
