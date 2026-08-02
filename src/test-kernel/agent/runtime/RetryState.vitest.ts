@@ -46,6 +46,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
 import {
   attachContextWindowError,
+  attachManualRetryOnlyError,
   attachSdkErrorMetadata,
 } from '@common/errors/sdkErrorUtils';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
@@ -458,6 +459,16 @@ describe('RetryState', () => {
     tagOpenAISdkError(error, 'openai');
 
     expect(node.shouldAutoRetry(error)).toBe(true);
+  });
+
+  it('does not automatically repeat a manual-retry-only failure', () => {
+    const node = new ExposedRetryNode();
+    const error = Object.assign(new Error('retry explicitly'), {
+      provider: 'openai',
+    });
+    attachManualRetryOnlyError(error);
+
+    expect(node.shouldAutoRetry(error)).toBe(false);
   });
 
   it('delays an unclassified retryable failure before the next attempt', async () => {
