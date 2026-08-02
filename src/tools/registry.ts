@@ -167,10 +167,8 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
  * so the model sees only the canonical definition.
  */
 const TOOL_ALIASES: Record<string, RegisteredToolName> = {
-  add_criticism: 'diagnostics',
   // Remove on 2026-08-19 after the custom-agent migration window; see #6981.
   crossref_doi: 'crossref_search',
-  external_inquiry: 'inquiry',
 };
 
 function canonicalToolName(name: string): string {

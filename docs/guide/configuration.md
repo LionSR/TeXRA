@@ -97,9 +97,7 @@ the hosted service.
 ## File discovery
 
 TeXRA uses built-in file extensions and exclusions when discovering inputs,
-context, edited files, and media. The former `texra.files.included.*` and
-`texra.files.ignored.*` settings have been removed; saved values for those keys
-no longer affect discovery.
+context, edited files, and media.
 
 ## LaTeX configuration
 

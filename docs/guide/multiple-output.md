@@ -108,10 +108,6 @@ settings:
     - appendix.tex
 ```
 
-The legacy `useMultipleOutputs` and `isMultipleOutput` YAML fields are no longer
-part of the current agent settings schema. Update existing YAML files to declare
-`defaultOutputFiles` instead.
-
 ## Example: Multiple-Output Agent Prompts
 
 Workflow edit prompts can use `INPUT_FILES` to request and format

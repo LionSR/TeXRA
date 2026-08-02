@@ -30,12 +30,9 @@ import {
   type FileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import {
-  WORKFLOW_DOCUMENT_OUTPUT_EXT,
-  WORKFLOW_RAW_OUTPUT_EXT,
-} from '@shared/constants/workflowOutput';
+import { WORKFLOW_RAW_OUTPUT_EXT } from '@shared/constants/workflowOutput';
 import { seedResumedConversationSidecar } from '@transcript/completedRunArchive';
-import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import { TaskRunFileService } from '@utils/files';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 import { TeXCountNode } from './nodes/TeXCountNode';
@@ -152,22 +149,9 @@ export async function runReflectionFlow<C = unknown>(
   const getOutputFileLocation =
     input.getOutputFileLocation ??
     (async (round: number): Promise<AgentFileLocation> => {
-      const canonical = fileService.createLocation(
+      return fileService.createLocation(
         getOutputFileName(WORKFLOW_RAW_OUTPUT_EXT, round),
       ) as AgentFileLocation;
-      // Resume-from-pre-refactor compat: if a round was partially written on an
-      // older build that used `.tex` for non-scratchpad agents, keep using that
-      // file on resume so initializeOutputAndPrefill sees the existing content
-      // instead of starting a fresh round at output.xml.
-      if (!(await AbsoluteFS.exists(canonical.absolutePath))) {
-        const legacy = fileService.createLocation(
-          getOutputFileName(WORKFLOW_DOCUMENT_OUTPUT_EXT, round),
-        ) as AgentFileLocation;
-        if (await AbsoluteFS.exists(legacy.absolutePath)) {
-          return legacy;
-        }
-      }
-      return canonical;
     });
 
   setActiveRun(

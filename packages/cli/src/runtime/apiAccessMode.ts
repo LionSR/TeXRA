@@ -11,9 +11,7 @@ export interface CliApiModeUpdate {
 
 // Two canonical names per mode: the descriptive `included`/`personal` (used in
 // labels and config) plus the common shorthand `relay`/`byok` (accepted as
-// input aliases). Earlier builds also accepted `texra`/`direct`/`api`/`key`/
-// `keys`, but those undocumented synonyms only bloated the accepted-value list
-// without adding clarity.
+// input aliases).
 const CLI_API_MODE_BY_INPUT = {
   included: 'included',
   relay: 'included',

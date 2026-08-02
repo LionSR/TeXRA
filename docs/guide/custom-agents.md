@@ -120,9 +120,7 @@ that file's text, `ALL_*` bundles every selected file into one
 `<document name="...">…</document>` XML string, and `LIST_OF_*` gives the same
 set as a comma-separated path list. Media is the exception — `MEDIA_FILE` is a
 path, but the media itself is sent to multimodal models separately rather than
-inlined as text (see [Working with Figures](./working-with-figures.md)). Legacy
-custom agents can still read the `REFERENCE_*` and `AUXILIARY_*` aliases, but new
-agents should use `CONTEXT_*`.
+inlined as text (see [Working with Figures](./working-with-figures.md)).
 
 **Multiple Document Output:**
 

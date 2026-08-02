@@ -930,7 +930,6 @@ describe('DesktopProgressBridge', () => {
       contextFiles: [],
       mediaFiles: [],
       outputFiles: ['main.review.tex'],
-      useMultipleOutputs: false,
       toolConfig: DEFAULT_TOOL_CONFIG,
     });
 
@@ -2338,7 +2337,6 @@ describe('DesktopProgressBridge', () => {
       contextFiles: [],
       mediaFiles: [],
       outputFiles: ['main.review.tex'],
-      useMultipleOutputs: false,
       toolConfig: DEFAULT_TOOL_CONFIG,
     });
     // The port emits its own ensure-view/activation events; settle them

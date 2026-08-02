@@ -3,12 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveToolDefinitions } from '@tools/registry';
 
 describe('tool registry aliases', () => {
-  it('keeps legacy add_criticism configs on the diagnostics tool', () => {
-    expect(
-      resolveToolDefinitions(['add_criticism']).map((tool) => tool.name),
-    ).toEqual(['diagnostics']);
-  });
-
   it('keeps legacy crossref_doi configs on the unified Crossref tool', () => {
     // Remove with the dated Crossref alias row in #6981 (2026-08-19).
     const [tool] = resolveToolDefinitions(['crossref_doi']);

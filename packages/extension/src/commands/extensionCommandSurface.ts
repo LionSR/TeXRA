@@ -151,9 +151,13 @@ export function createExtensionCommandActions(
  * Duplicate-registration audit (#3787 follow-up):
  * Every command id in `EXTENSION_COMMAND_HANDLERS` has been verified to
  * have no stale `vscode.commands.registerCommand(...)` call elsewhere.
- * The remaining legacy `registerCommand` call sites all register ids NOT
- * tagged `extensionRegistry` in `commandCatalog` — they're legitimate VS
- * Code-only handlers (git, file selection/opening, merge, and LaTeX tools).
+ * The remaining direct `registerCommand` call sites register ids NOT
+ * tagged `extensionRegistry` in `commandCatalog` — legitimate VS Code-only
+ * handlers (git, file selection/opening, merge, and LaTeX tools) — with one
+ * exception: the no-workspace activation path in `extension.ts` registers
+ * standalone variants of `texra.createSampleProject` and
+ * `texra.openGettingStarted` and returns before this registry runs, so the
+ * two registrations never coexist.
  */
 
 /**

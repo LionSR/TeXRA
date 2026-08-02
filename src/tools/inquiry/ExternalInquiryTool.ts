@@ -438,7 +438,10 @@ export class ExternalInquiryTool extends defineTool({
     });
     const isFollowUp = !!input.thread_id;
     const basePermission = {
-      requestId: persisted.threadId, // legacy field — panel addresses by threadId now
+      // `requestId` is the shared permission key (`PermissionBaseSchema`) the
+      // permission-handler generics are parameterized on; for inquiries it
+      // mirrors the threadId the panel addresses.
+      requestId: persisted.threadId,
       question: input.question,
       threadId: persisted.threadId,
       context: input.context ?? undefined,

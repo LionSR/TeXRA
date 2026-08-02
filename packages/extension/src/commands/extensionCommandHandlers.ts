@@ -50,8 +50,8 @@ const SetApiKeyArgsSchema = z.tuple([z.enum(API_PROVIDERS).optional()]);
 
 /**
  * Optional `AgentCategory` argument for `texra.createAgentWithAI`. The
- * registry parses raw `unknown` and the action defaults to `workflow`
- * when undefined (preserving the legacy `category ?? 'workflow'` shape).
+ * settings view passes an explicit category; palette invocations pass no
+ * argument and default to `workflow`.
  */
 const CreateAgentWithAIArgsSchema = z.tuple([AgentCategorySchema.optional()]);
 
@@ -62,14 +62,14 @@ const CreateAgentWithAIArgsSchema = z.tuple([AgentCategorySchema.optional()]);
 const ShowAgentsArgsSchema = z.tuple([AgentCategorySchema.optional()]);
 
 /**
- * Optional `{ inPlace }` argument for `texra.showProgressView`. The
- * legacy registration accepted any argument shape and only honoured the
- * `inPlace` boolean — `z.unknown()` here preserves that best-effort
- * semantics so callers passing `null`, booleans, or stringified flags
- * still open the progress view (just without the in-place flag) instead
- * of being rejected by the dispatcher as unhandled.
+ * Optional `{ inPlace }` argument for `texra.showProgressView`. Palette,
+ * keybinding, and status-bar invocations pass no argument; the main view
+ * passes `{ inPlace: true }`. Malformed arguments fail the dispatcher's
+ * parse loudly instead of silently opening without the flag.
  */
-const ShowProgressViewArgsSchema = z.tuple([z.unknown().optional()]);
+const ShowProgressViewArgsSchema = z.tuple([
+  z.object({ inPlace: z.boolean().optional() }).optional(),
+]);
 
 /** Positional arguments for opening a comparison between two files. */
 const CompareCommandArgsSchema = z
@@ -343,13 +343,8 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
   'texra.showProgressView': definedHandler(
     ShowProgressViewArgsSchema,
-    (actions: ExtensionCommandActions, parsed?: unknown) => {
-      const inPlace =
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        (parsed as { inPlace?: unknown }).inPlace === true;
-      return awaitTrue(actions.showProgressView(inPlace));
-    },
+    (actions: ExtensionCommandActions, parsed?: { inPlace?: boolean }) =>
+      awaitTrue(actions.showProgressView(parsed?.inPlace === true)),
   ),
   'texra.setApiKey': definedHandler(
     SetApiKeyArgsSchema,
