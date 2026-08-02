@@ -92,6 +92,8 @@ const SEED_IO_CONCURRENCY = 8;
 /** Bound retries for writes that remain dirty. */
 const MAX_DIRTY_WRITE_RETRIES = 3;
 
+class DirtySidecarWritesError extends Error {}
+
 /**
  * The run facts this store subscribes to, and the single source of truth for
  * the `attachSessionEvents` run-fact switch.
@@ -1882,7 +1884,7 @@ export class StreamSnapshotStore {
 
     const remaining = this.dirtyWriteEntries(stream).length;
     if (remaining > 0) {
-      throw new Error(
+      throw new DirtySidecarWritesError(
         `Sidecar writes remain dirty after ${MAX_DIRTY_WRITE_RETRIES} retries; ` +
           `${remaining} sidecar write(s) remain dirty.`,
       );
@@ -1918,6 +1920,7 @@ export class StreamSnapshotStore {
   async flush(): Promise<void> {
     const failures: unknown[] = [];
     const completedSeeds = new Set<Promise<void>>();
+    let dirtyWritesDurable = false;
 
     // Seed work can rebind a record's chain while an earlier chain is awaited.
     // Reach seed quiescence before taking the one deletion-recovery snapshot.
@@ -1948,16 +1951,21 @@ export class StreamSnapshotStore {
       await this.drainSeedChains(completedSeeds, failures);
       try {
         await this.retryDirtyWrites();
+        dirtyWritesDurable = true;
       } catch (error) {
+        dirtyWritesDurable = false;
         failures.push(error);
         break;
       }
       if (this.unseenSeedChains(completedSeeds).length === 0) break;
     }
 
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) {
-      throw new AggregateError(failures, 'Snapshot flush failed');
+    const remainingFailures = dirtyWritesDurable
+      ? failures.filter((error) => !(error instanceof DirtySidecarWritesError))
+      : failures;
+    if (remainingFailures.length === 1) throw remainingFailures[0];
+    if (remainingFailures.length > 1) {
+      throw new AggregateError(remainingFailures, 'Snapshot flush failed');
     }
   }
 
