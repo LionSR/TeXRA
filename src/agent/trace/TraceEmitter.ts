@@ -85,7 +85,11 @@ export class TraceEmitter implements AgentTrace {
         // A misbehaving subscriber must not break the run. Log via the
         // output-channel logger (not back through this emitter) so a throwing
         // sink is diagnosable without recursing into the trace stream.
-        logger.debug(
+        // `warn`, not `debug`: swallowing a subscriber fault at debug level is
+        // the quiet-degradation shape the guardrail forbids, and it matches the
+        // sibling fan-out bus (`SessionEventHub.emit`). `AppSignals.emit`
+        // deliberately re-throws instead — a different, documented contract.
+        logger.warn(
           'TraceEmitter',
           `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
         );

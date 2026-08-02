@@ -23,6 +23,7 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
+import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema } from '@agent/core/state/TaskState';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -88,6 +89,40 @@ const CHANNEL = 'StreamSnapshotStore';
 /** Bounded fan-out for seeding many streams' sidecars (mirrors the retired
  *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
 const SEED_IO_CONCURRENCY = 8;
+
+/**
+ * The run facts this store subscribes to, and the single source of truth for
+ * the `attachSessionEvents` run-fact switch.
+ *
+ * Kept as one frozen tuple (the `RUN_FACT_EVENT_TYPES` idiom in
+ * `@agent/trace`) so the runtime subscription filter and the compile-time
+ * handled union cannot drift: extend this list and the switch's `default` arm
+ * stops type-checking until the new fact is handled.
+ */
+const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
+  'run.start',
+  'run.config',
+  'usage',
+  'updateTodos',
+  'updatePlan',
+  'addOutputFiles',
+  'updateMissingOutputs',
+  'updateCompileFailures',
+  'goalPaused',
+] as const satisfies readonly AgentEvent['type'][]);
+
+type SnapshotRunFactType = (typeof SNAPSHOT_RUN_FACT_TYPES)[number];
+
+/** The `AgentEvent` arms named by {@link SNAPSHOT_RUN_FACT_TYPES}. */
+type SnapshotRunFact = Extract<AgentEvent, { type: SnapshotRunFactType }>;
+
+const SNAPSHOT_RUN_FACT_TYPE_SET: ReadonlySet<AgentEvent['type']> = new Set(
+  SNAPSHOT_RUN_FACT_TYPES,
+);
+
+function isSnapshotRunFact(event: AgentEvent): event is SnapshotRunFact {
+  return SNAPSHOT_RUN_FACT_TYPE_SET.has(event.type);
+}
 
 async function storagePathExists(target: string): Promise<boolean> {
   try {
@@ -439,6 +474,11 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'run') return;
         const { event } = sessionEvent;
+        // The hub filters by `SNAPSHOT_RUN_FACT_TYPES` at runtime but still
+        // types the callback as the whole `SessionEvent`, so narrow to the
+        // subscribed set here. That is what lets the `default` arm below be a
+        // real exhaustiveness check instead of a silent catch-all.
+        if (!isSnapshotRunFact(event)) return;
 
         switch (event.type) {
           case 'run.start':
@@ -466,24 +506,19 @@ export class StreamSnapshotStore {
             this.updateCompileFailures(event.streamId, event.filesByRound);
             return;
           case 'goalPaused':
-          default:
+            // Subscribed so the goal plane can grow a snapshot-visible fact
+            // later, but deliberately not persisted: pausing changes liveness,
+            // and liveness is not durable display state (see the file header).
             return;
+          default: {
+            // Exhaustiveness check: adding a type to `SNAPSHOT_RUN_FACT_TYPES`
+            // without handling it here is a compile error, not a silent drop.
+            const unhandled: never = event;
+            return unhandled;
+          }
         }
       },
-      {
-        scope: 'run',
-        types: [
-          'run.start',
-          'run.config',
-          'usage',
-          'updateTodos',
-          'updatePlan',
-          'addOutputFiles',
-          'updateMissingOutputs',
-          'updateCompileFailures',
-          'goalPaused',
-        ],
-      },
+      { scope: 'run', types: SNAPSHOT_RUN_FACT_TYPES },
     );
     const detachSessionEvents = events.subscribe(
       (sessionEvent) => {
