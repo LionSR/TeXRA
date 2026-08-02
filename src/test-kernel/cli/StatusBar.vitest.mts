@@ -257,6 +257,24 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('prefers a richer transcript row in a medium-width parent view', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        width: 80,
+        shortcuts: {
+          agentSelectionAvailable: true,
+          childNavigationAvailable: true,
+          parentNavigationAvailable: true,
+          transcriptAvailable: true,
+        },
+      }),
+    );
+
+    expect(display.bindings).toBe(
+      'Esc back · Tab children · Ctrl-T full output · /agent agents · Ctrl-C exit',
+    );
+  });
+
   it('retains full output before compact setup controls for a parent', () => {
     const display = buildStatusBarDisplay(
       statusInput({
