@@ -481,15 +481,19 @@ async function mergedCandidateConversation(
 ): Promise<MergedConversationResult> {
   const streams = await loadConversationStreams(streamLogStore, streamIds);
   const neighbors = new Map<StreamTabId, Set<StreamTabId>>();
+  const conflictingPairs: [StreamTabId, StreamTabId][] = [];
   const conflictStreamsById = new Map<string, Set<StreamTabId>>();
   for (const [index, left] of streams.entries()) {
     for (const right of streams.slice(index + 1)) {
       const { overlaps, conflictingIds } = sharedRows(left, right);
-      for (const id of conflictingIds) {
-        const conflictStreams = conflictStreamsById.get(id) ?? new Set();
-        conflictStreams.add(left.streamId);
-        conflictStreams.add(right.streamId);
-        conflictStreamsById.set(id, conflictStreams);
+      if (conflictingIds.length > 0) {
+        conflictingPairs.push([left.streamId, right.streamId]);
+        for (const id of conflictingIds) {
+          const conflictStreams = conflictStreamsById.get(id) ?? new Set();
+          conflictStreams.add(left.streamId);
+          conflictStreams.add(right.streamId);
+          conflictStreamsById.set(id, conflictStreams);
+        }
       }
       if (overlaps === 0 || conflictingIds.length > 0) continue;
       const leftNeighbors = neighbors.get(left.streamId) ?? new Set();
@@ -524,9 +528,8 @@ async function mergedCandidateConversation(
   const connected = streams.filter(({ streamId }) =>
     connectedIds.has(streamId),
   );
-  const connectedConflict = [...conflictStreamsById.values()].some(
-    (conflictStreams) =>
-      [...conflictStreams].filter((id) => connectedIds.has(id)).length > 1,
+  const connectedConflict = conflictingPairs.some(
+    ([left, right]) => connectedIds.has(left) && connectedIds.has(right),
   );
   const mergeStreams = connectedConflict ? [selected] : connected;
   const nodes = new Map<string, StreamLogEntry>();
@@ -582,6 +585,9 @@ async function mergedCandidateConversation(
     ? streamLogEntriesToConversation(ordered)
     : streamLogEntriesToConversation(selected.entries);
   const usedIds = new Set(usedStreams.map(({ streamId }) => streamId));
+  const streamOrder = new Map(
+    streams.map(({ streamId }, index) => [streamId, index]),
+  );
   return {
     conversation,
     streamIds: usedStreams.map(({ streamId }) => streamId),
@@ -589,7 +595,13 @@ async function mergedCandidateConversation(
       .map(({ streamId }) => streamId)
       .filter((streamId) => !usedIds.has(streamId)),
     conflicts: [...conflictStreamsById]
-      .map(([rowId, ids]) => ({ rowId, streamIds: [...ids] }))
+      .map(([rowId, ids]) => ({
+        rowId,
+        streamIds: [...ids].toSorted(
+          (left, right) =>
+            (streamOrder.get(left) ?? 0) - (streamOrder.get(right) ?? 0),
+        ),
+      }))
       .toSorted((left, right) => left.rowId.localeCompare(right.rowId)),
     hasOrderingCycle,
     hasOrderingAmbiguity,

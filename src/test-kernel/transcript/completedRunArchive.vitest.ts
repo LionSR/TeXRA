@@ -1096,6 +1096,118 @@ describe('completedRunArchive facade', () => {
     }
   });
 
+  it('merges a valid overlap component despite a disconnected conflicting candidate', async () => {
+    const executionId = '0888b60888b6' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b60888b6' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b60888b6' as StreamTabId;
+    const conflicting = 'cOrchestrator@other#0888b60888b6' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [canonical, continuation, conflicting]) {
+      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    }
+    await snapshots.flush();
+
+    const prefix = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prefix' });
+    const copied = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared answer' }),
+      id: 'shared-conflict-row',
+    };
+    const continued = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Valid continuation',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [prefix, copied]],
+        [continuation, [copied, continued]],
+        [conflicting, [{ ...copied, text: 'Incompatible copy' }]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: canonical,
+      streamIds: [canonical, continuation],
+      candidateStreamIds: [conflicting],
+      conflicts: [
+        {
+          rowId: 'shared-conflict-row',
+          streamIds: [canonical, continuation, conflicting],
+        },
+      ],
+      conversation: [
+        { role: 'user', content: 'Prefix' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Shared answer' }],
+        },
+        { role: 'user', content: 'Valid continuation' },
+      ],
+    });
+  });
+
+  it('falls back when acyclic overlap constraints do not establish unique chronology', async () => {
+    const executionId = '0888b70888b7' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b70888b7' as StreamTabId;
+    const ambiguous = 'bOrchestrator@new#0888b70888b7' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(ambiguous, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const shared = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
+      id: 'ambiguous-shared',
+    };
+    const canonicalSuccessor = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Canonical branch',
+    });
+    const ambiguousSuccessor = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Ambiguous branch',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [shared, canonicalSuccessor]],
+        [ambiguous, [shared, ambiguousSuccessor]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: canonical,
+      candidateStreamIds: [ambiguous],
+      hasOrderingAmbiguity: true,
+      conversation: [
+        { role: 'user', content: 'Shared prompt' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Canonical branch' }],
+        },
+      ],
+    });
+
+    const firstPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 0,
+      limit: 1,
+    });
+    const secondPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 1,
+      limit: 1,
+    });
+    for (const page of [firstPage, secondPage]) {
+      expect(page.output).toContain('Complete chronology established: no');
+      expect(page.output).toContain(
+        `Ambiguous candidate streams: ${ambiguous}`,
+      );
+      expect(page.output).not.toContain('Ambiguous branch');
+    }
+    expect(firstPage.output).toContain('Returned message interval: [0, 1)');
+    expect(secondPage.output).toContain('Returned message interval: [1, 2)');
+  });
+
   it('keeps the selected archive when copied-row ordering forms a cycle', async () => {
     const executionId = '0888bf0888bf' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;
