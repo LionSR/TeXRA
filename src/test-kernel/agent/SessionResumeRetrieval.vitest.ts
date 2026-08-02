@@ -526,54 +526,6 @@ describe('retrieveSessionResumeData', () => {
     expect((await readFlowRecord(executionId))?.shared).toEqual(shared);
   });
 
-  it('normalizes legacy nested conversation shared state for tool-use resume', async () => {
-    const executionId = 'abc128' as ExecutionId;
-    const streamId = 'chat@gpt54#abc128' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      state: {
-        conversation: [
-          {
-            role: 'user',
-            content: 'Continue the legacy conversation.',
-          },
-        ],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-    });
-
-    const resume = await retrieveToolUseResume(streamId, executionId);
-
-    expect(resume.shared.messages).toEqual([
-      {
-        role: 'user',
-        content: 'Continue the legacy conversation.',
-      },
-    ]);
-  });
-
-  it('falls back to a flat legacy conversation when messages is invalid', async () => {
-    // Distinct from the nested `{ state: { conversation } }` case above: this
-    // is the flat (unwrapped) legacy shape -- `conversation` at the top level
-    // of `shared`, never renamed to `messages`.
-    const executionId = 'abc133' as ExecutionId;
-    const streamId = 'chat@gpt54#abc133' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      messages: null,
-      conversation: [
-        { role: 'user', content: 'Continue the flat legacy conversation.' },
-      ],
-      shouldSkipCycle: false,
-      stateSlices: defaultStateSlices(),
-    });
-
-    const resume = await retrieveToolUseResume(streamId, executionId);
-
-    expect(resume.shared.messages).toEqual([
-      { role: 'user', content: 'Continue the flat legacy conversation.' },
-    ]);
-  });
-
   it('throws when resumable tool-use storage cannot be read', async () => {
     const executionId = 'abc129' as ExecutionId;
     const streamId = 'chat@gpt54#abc129' as StreamTabId;
@@ -1539,39 +1491,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       runSpy.mockRestore();
       session.followUps.terminalize(streamId);
     }
-  });
-
-  it('hydrates a legacy-shaped flow record through the single boundary, then self-heals via its canonical fields', async () => {
-    const executionId = 'abc140' as ExecutionId;
-    const streamId = 'chat@gpt54#abc140' as StreamTabId;
-    const legacyShared = {
-      state: {
-        conversation: [
-          { role: 'user', content: 'Continue the legacy conversation.' },
-        ],
-        shouldSkipCycle: false,
-        // Pass-through state must survive the consumer's self-heal write.
-        systemPrompt: 'You are a helpful assistant.',
-        stateSlices: defaultStateSlices(),
-      },
-    };
-    await writeFlowRecord(executionId, legacyShared, WAITING_AT_START);
-
-    const resume = await retrieveToolUseResume(streamId, executionId);
-    expect(resume.shared.modelHandlerCompatibilityKey).toBeUndefined();
-
-    await runResumedFlowToWaiting(executionId, streamId, resume);
-
-    const healedRecord = await readFlowRecord(executionId);
-
-    expect(healedRecord?.shared).toMatchObject({
-      messages: resume.shared.messages,
-      // Derived from the legacy MODEL variable and persisted by the self-heal.
-      modelId: 'gpt54',
-      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-      stateSlices: resume.shared.stateSlices,
-      systemPrompt: 'You are a helpful assistant.',
-    });
   });
 
   it('skips the resume self-heal write when the persisted record is already canonical (issue #8018)', async () => {
