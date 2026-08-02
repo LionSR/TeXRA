@@ -13,10 +13,15 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
-import { updateConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
+
+// Local imports - VS Code configuration
+import {
+  isVscodeHostConfigExplicitlySet,
+  updateVscodeHostConfig,
+} from './vscode/vscodeHostConfig';
 
 /**
  * Version number for LaTeX-related VS Code config setup.
@@ -141,13 +146,6 @@ export async function refreshCustomAgentRoot(): Promise<void> {
   }
 }
 
-/** Default options for global settings that should only be set if not already configured */
-const GLOBAL_IF_UNSET = {
-  target: 'global',
-  prefix: false,
-  ifUnset: true,
-} as const;
-
 /**
  * Configure LaTeX-related workspace settings if LaTeX Workshop extension is installed
  */
@@ -196,13 +194,22 @@ export async function configureLatexSettings(): Promise<void> {
       'LaTeX Workshop extension detected, configuring settings',
     );
 
-    await updateConfig('[latex]', { 'editor.wordWrap': 'on' }, GLOBAL_IF_UNSET);
+    if (!isVscodeHostConfigExplicitlySet('[latex]')) {
+      await updateVscodeHostConfig(
+        '[latex]',
+        { 'editor.wordWrap': 'on' },
+        'global',
+      );
+    }
 
-    if (!vscode.env.appName?.toLowerCase().includes('windsurf')) {
-      await updateConfig(
+    if (
+      !vscode.env.appName?.toLowerCase().includes('windsurf') &&
+      !isVscodeHostConfigExplicitlySet('workbench.activityBar.location')
+    ) {
+      await updateVscodeHostConfig(
         'workbench.activityBar.location',
         'default',
-        GLOBAL_IF_UNSET,
+        'global',
       );
       logger.info('extension', 'Activity bar location set to default');
     }
