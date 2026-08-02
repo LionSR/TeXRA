@@ -1,10 +1,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import {
-  NullableFileFieldsSchema,
-  migrateLegacyContextFileFields,
-} from '@shared/schemas/fileFields';
+import { NullableFileFieldsSchema } from '@shared/schemas/fileFields';
 import { AgentSourceSchema } from '@shared/schemas/agent';
 import { AgentDelegationScopeSchema } from '@shared/schemas/agentRoster';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
@@ -73,20 +70,19 @@ const AgentConfigFieldsSchema = z.discriminatedUnion('agentCategory', [
 ]);
 
 /**
- * Normalize legacy file fields and materialize the historical absent-category
- * default before the discriminated union selects a variant.
+ * Materialize the absent-category default before the discriminated union
+ * selects a variant.
  */
 function normalizeAgentConfigInput(input: unknown): unknown {
-  const migrated = migrateLegacyContextFileFields(input);
   if (
-    typeof migrated !== 'object' ||
-    migrated === null ||
-    Array.isArray(migrated) ||
-    ('agentCategory' in migrated && migrated.agentCategory !== undefined)
+    typeof input !== 'object' ||
+    input === null ||
+    Array.isArray(input) ||
+    ('agentCategory' in input && input.agentCategory !== undefined)
   ) {
-    return migrated;
+    return input;
   }
-  return { ...migrated, agentCategory: AgentCategory.Workflow };
+  return { ...input, agentCategory: AgentCategory.Workflow };
 }
 
 function validateOutputFileCount(

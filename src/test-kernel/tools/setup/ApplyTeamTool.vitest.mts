@@ -18,6 +18,7 @@ import { refresh } from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import type { AgentRosterSelection } from '@shared/schemas/agentRoster';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -35,34 +36,15 @@ const REPO_ROOT = resolve(
   '../../../..',
 );
 
-// Expected workflow rosters (sorted) for the seeded teams under test.
-const STARTER_WORKFLOW = ['builtInWorkflow:correct', 'builtInWorkflow:polish'];
-
-function workspaceRoster(): {
-  workflow: string[] | undefined;
-  toolUse: string[] | undefined;
-} {
-  return {
-    workflow: platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_AGENTS,
-    ),
-    toolUse: platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-    ),
-  };
+function workspaceRoster(): AgentRosterSelection | undefined {
+  return platform().workspaceState.get<AgentRosterSelection>(
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+  );
 }
 
 async function clearOnboardingState(): Promise<void> {
   __resetSetupPlatformForTests();
   setSetupPlatform(createFakeSetupPlatform());
-  await platform().workspaceState.update(
-    WorkspaceStateKey.ENABLED_AGENTS,
-    undefined,
-  );
-  await platform().workspaceState.update(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-    undefined,
-  );
   await platform().workspaceState.update(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     undefined,
@@ -103,26 +85,14 @@ afterEach(() => {
 describe('apply_team', () => {
   beforeEach(clearOnboardingState);
 
-  it('applies the starter roster as source-qualified workspace keys', async () => {
+  it('applies the starter team as the canonical workspace selection', async () => {
     const result = await new ApplyTeamTool().call({
       teamId: 'starter',
       unavailableAction: 'continue',
     });
 
     expect(result.status).toBe('executed');
-    const roster = workspaceRoster();
-    expect(roster.workflow?.toSorted()).toEqual(STARTER_WORKFLOW);
-    // `orchestrator` is remote-only and unresolved while signed out: it is
-    // kept as a bare name so it joins the roster on sign-in (visibility
-    // filtering matches by name).
-    expect(roster.toolUse?.toSorted()).toEqual([
-      'builtInToolUse:assistant',
-      'builtInToolUse:latexFixer',
-      'builtInToolUse:research',
-      'builtInToolUse:review',
-      'builtInToolUse:setup',
-      'orchestrator',
-    ]);
+    expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
   });
 
   it('records the user-level default team id', async () => {
@@ -155,9 +125,7 @@ describe('apply_team', () => {
     const result = await new ApplyTeamTool().call({ teamId: 'astrologer' });
 
     expect(result.status).toBe('error');
-    const roster = workspaceRoster();
-    expect(roster.workflow).toBeUndefined();
-    expect(roster.toolUse).toBeUndefined();
+    expect(workspaceRoster()).toBeUndefined();
     expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
   });
 
@@ -166,10 +134,7 @@ describe('apply_team', () => {
 
     expect(result.status).toBe('executed');
     expect(result.output).toMatch(/Sign in to TeXRA/);
-    expect(workspaceRoster()).toEqual({
-      workflow: undefined,
-      toolUse: undefined,
-    });
+    expect(workspaceRoster()).toBeUndefined();
     expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
   });
 
@@ -179,13 +144,10 @@ describe('apply_team', () => {
     });
 
     expect(result.status).toBe('executed');
-    expect(workspaceRoster().toolUse).toEqual([
-      'builtInToolUse:engineer',
-      'builtInToolUse:coder',
-      'builtInToolUse:codeReviewer',
-      'builtInToolUse:testEngineer',
-      'builtInToolUse:codeSimplifier',
-    ]);
+    expect(workspaceRoster()).toEqual({
+      kind: 'team',
+      teamId: 'software-engineer',
+    });
   });
 
   it('cancels without writing roster or default-team state', async () => {
@@ -198,10 +160,7 @@ describe('apply_team', () => {
     expect(result.output).toMatch(
       /No roster or default-team state was written/,
     );
-    expect(workspaceRoster()).toEqual({
-      workflow: undefined,
-      toolUse: undefined,
-    });
+    expect(workspaceRoster()).toBeUndefined();
     expect(getDefaultTeamId(platform().globalState)).toBeUndefined();
   });
 
@@ -220,7 +179,7 @@ describe('apply_team', () => {
 
     expect(result.status).toBe('executed');
     expect(result.summary).toMatch(/Applied the Starter roster/);
-    expect(workspaceRoster().toolUse).toContain('orchestrator');
+    expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
     expect(getDefaultTeamId(platform().globalState)).toBe('starter');
   });
 
@@ -245,9 +204,6 @@ describe('apply_team', () => {
       'error',
       expect.stringContaining('still unavailable after refreshing'),
     );
-    expect(workspaceRoster()).toEqual({
-      workflow: undefined,
-      toolUse: undefined,
-    });
+    expect(workspaceRoster()).toBeUndefined();
   });
 });

@@ -67,7 +67,7 @@
     },
     "@shared/schemas/fileFields": {
       "type": [],
-      "value": ["migrateLegacyContextFileFields", "NullableFileFieldsSchema"]
+      "value": ["NullableFileFieldsSchema"]
     },
     "@shared/schemas/fileTypes": {
       "type": [
@@ -293,6 +293,7 @@
     "@shared/schemas/agentSkills": [
       "packages/cli/src/commands/orchestrate.ts",
       "packages/extension/src/settingsView/frontend/settingsState.ts",
+      "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
       "src/agent/utils/userVars.ts",
       "src/shared/settingsView/handlers/agentSkillsHandlers.ts"
     ],
@@ -304,21 +305,17 @@
     ],
     "@shared/schemas/coreSettings": [
       "packages/cli/src/schemas/knownKeys.ts",
-      "packages/extension/src/frontend/review/AgentReviewService.ts",
-      "packages/extension/src/frontend/review/promptReviewOptions.ts",
       "packages/extension/src/schemas/texraSettings.ts",
+      "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
       "src/agent/core/flows/RetryState.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
       "src/agent/review/reviewIssues.ts",
       "src/agent/runtime/ModelFactory.ts",
-      "src/common/files/fileListingRules.ts",
-      "src/common/files/fileTypeUtils.ts",
       "src/controllers/settingsView/SettingsProfileController.ts",
       "src/replacement/engine.ts",
-      "src/replacement/maxRules.ts (type-only)",
-      "src/replacement/rules.ts (type-only)",
-      "src/replacement/rulesRegex.ts (type-only)",
+      "src/shared/settingsView/handlers/approvalHandlers.ts",
+      "src/shared/settingsView/handlers/telemetrySettingsHandlers.ts",
       "src/telemetry/UsageLogService.ts",
       "src/tools/approval/latexPreview.ts"
     ],
@@ -371,13 +368,16 @@
       "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "packages/cli/src/commands/config.ts",
       "packages/cli/src/schemas/knownKeys.ts",
+      "packages/desktop/src/main/desktopSettingsIpc.ts (type-only)",
       "packages/extension/src/settingsView/frontend/settingsState.ts",
       "packages/extension/src/settingsView/frontend/tabs/AIAgentsTab.ts",
       "packages/extension/src/settingsView/frontend/tabs/GitTab.ts",
       "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts",
+      "packages/extension/src/settingsView/SettingsViewMessageHandler.ts (type-only)",
       "src/shared/config/settingsAccess.ts (type-only)",
       "src/shared/settingsView/handlers/approvalHandlers.ts",
       "src/shared/settingsView/handlers/stateSettingWrite.ts",
+      "src/shared/settingsView/handlers/stateSettingWrite.ts (type-only)",
       "src/utils/config/platformSettings.ts",
       "src/utils/system/gitAuthorSettings.ts"
     ],
@@ -468,7 +468,8 @@
       "src/tools/zotero/ZoteroAddTool.ts",
       "src/tools/zotero/ZoteroCollectionsTool.ts (type-only)",
       "src/tools/zotero/ZoteroExportTool.ts",
-      "src/tools/zotero/ZoteroSearchTool.ts (type-only)"
+      "src/tools/zotero/ZoteroSearchTool.ts (type-only)",
+      "src/transcript/completedRunArchive.ts"
     ],
     "@shared/schemas/workflowScriptFiles": [
       "packages/extension/src/progressView/frontend/formatters/logFormatters/toolFormatters/toolSections.ts",
@@ -649,7 +650,6 @@
       "src/agent/runtime/AgentFlowResult.ts",
       "src/agent/runtime/executeAgent.ts",
       "src/agent/runtime/selectAutoOpenFinalOutput.ts (type-only)",
-      "src/agent/storage/resultMeta.ts",
       "src/tools/subagentDiffs.ts (type-only)",
       "src/tools/subagentResults.ts (type-only)",
       "src/utils/text/xmlExtraction.ts"
@@ -686,7 +686,6 @@
       "packages/desktop/src/main/desktopToolingSettingsController.ts (type-only)",
       "packages/desktop/src/renderer/main.ts",
       "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "packages/extension/src/frontend/setup.ts",
       "packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.ts (type-only)",
       "packages/extension/src/settingsView/frontend/components/profile/ApiAccessSection.ts",
       "packages/extension/src/settingsView/frontend/components/profile/ModelSelectionList.ts",
