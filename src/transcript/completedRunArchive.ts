@@ -31,7 +31,6 @@ import { ToolResultSchema } from '@shared/schemas/toolResult';
 import { assertNever, generateShortId, isObject } from '@utils/core';
 
 import {
-  findPersistedRootStreamsForExecution,
   findPersistedStreamFallbacksForExecution,
   resolvePersistedStreamIdForExecution,
   type PersistedStreamIdResolution,
@@ -447,10 +446,7 @@ async function readSidecarConversation(
   // release/reopen regression proves resumed turns append there. Only
   // pre-registration resolutions can represent historical split sidecars, so
   // keep the ordinary completed-read path constant-time.
-  const rootStreamIds =
-    resolved.source === 'executionMeta'
-      ? []
-      : await findPersistedRootStreamsForExecution(executionId, snapshotStore);
+  const rootStreamIds = resolved.associatedRootStreamIds ?? [];
   if (rootStreamIds.length > 0) {
     const orderedRoots = [
       ...(rootStreamIds.includes(resolved.streamId) ? [resolved.streamId] : []),

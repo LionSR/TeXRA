@@ -192,6 +192,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId: secondStream,
       source: 'streamDataMeta',
       fallbackStreamIds: [firstStream],
+      associatedRootStreamIds: [firstStream, secondStream],
     });
   });
 
@@ -220,6 +221,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId: logStream,
       source: 'streamDataMeta',
       fallbackStreamIds: [workPlanStream],
+      associatedRootStreamIds: [workPlanStream, logStream],
     });
     expect(
       (await getExecutionStore(executionId).readMeta())?.streamId,

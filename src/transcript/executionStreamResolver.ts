@@ -15,6 +15,8 @@ export interface PersistedStreamIdResolution {
   readonly source: PersistedStreamIdResolutionSource;
   /** Other persisted candidates to try when a historical primary is empty. */
   readonly fallbackStreamIds?: readonly StreamTabId[];
+  /** Exact execution matches with no persisted parent, for archive merging. */
+  readonly associatedRootStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -72,20 +74,6 @@ async function scanPersistedStreamsForExecution(
       .map((candidate) => candidate.streamId)
       .toSorted(),
   };
-}
-
-/**
- * Persisted root streams positively associated with an execution. A suffix
- * resemblance is deliberately insufficient, and a stream carrying
- * `parentStreamId` is excluded so archive repair never folds child output into
- * its parent's conversation.
- */
-export async function findPersistedRootStreamsForExecution(
-  executionId: ExecutionId,
-  snapshotStore: StreamSnapshotStore = new StreamSnapshotStore(),
-): Promise<StreamTabId[]> {
-  return (await scanPersistedStreamsForExecution(executionId, snapshotStore))
-    .rootMetaMatched;
 }
 
 /** Streams whose id carries the `#executionId` suffix, in the given order. */
@@ -180,7 +168,7 @@ export async function resolvePersistedStreamIdForExecution(
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched } =
+  const { persistedStreams, metaMatched, rootMetaMatched } =
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
@@ -204,6 +192,9 @@ export async function resolvePersistedStreamIdForExecution(
       streamId,
       source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
+      ...(metaMatched.length > 1 && rootMetaMatched.length > 0
+        ? { associatedRootStreamIds: rootMetaMatched }
+        : {}),
     };
   }
 
