@@ -10,9 +10,9 @@
  *   - ToolUseCycleNode  (implementations/flows/tooluse) = one session turn,
  *     which may invoke many rounds via createToolUseRoundFlow()
  *
- * This file is the public entry point. The node implementations and shared
- * types live in ./toolUseRound/; external consumers import the flow factory
- * and shared schema/state types from here.
+ * This file owns the flow factory only. The node implementations and the
+ * shared schema/state types live in ./toolUseRound/ and are imported from the
+ * file that defines them — this module re-exports nothing.
  */
 
 // Local imports - core flow primitives
@@ -27,8 +27,6 @@ import { ToolUseProcessNode } from './toolUseRound/ToolUseProcessNode';
 import { ToolUseDispatchNode } from './toolUseRound/ToolUseDispatchNode';
 import type { ToolUseRoundServices } from './CycleServices';
 import type { ToolUseRoundShared } from './toolUseRound/roundShared';
-
-export { type ToolUseRoundShared } from './toolUseRound/roundShared';
 
 /**
  * Creates a tool-use round flow with services injected via params.

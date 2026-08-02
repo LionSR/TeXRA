@@ -26,10 +26,8 @@ import {
   FileInteractionState,
 } from '@agent/core/state/AgentWorkspaceState';
 import { ToolUseDispatchNode } from '@agent/core/flows/toolUseRound/ToolUseDispatchNode';
-import {
-  createToolUseRoundFlow,
-  type ToolUseRoundShared,
-} from '@agent/core/flows/ToolUseRoundFlow';
+import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
+import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
