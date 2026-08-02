@@ -819,9 +819,48 @@ describe('toGoogleTools', () => {
 
     for (const schema of [interactionSchema, generateContentSchema]) {
       expect(schema.properties.args.description).toEqual(expect.any(String));
-      expect(schema.properties.args.type).toBe('object');
+      expect(schema.properties.args.type).toBeUndefined();
       expect(JSON.stringify(schema)).not.toContain('$ref');
     }
+  });
+
+  it('preserves opaque Google schema annotations', () => {
+    const schema = convertGoogleToolSchema({
+      name: 'annotated_input',
+      parameters: {
+        type: 'object',
+        properties: {
+          options: {
+            type: 'object',
+            default: { mode: 'fast' },
+            example: { mode: 'careful' },
+          },
+        },
+      },
+    }) as { properties: Record<string, Record<string, unknown>> };
+
+    expect(schema.properties.options.default).toStrictEqual({ mode: 'fast' });
+    expect(schema.properties.options.example).toStrictEqual({
+      mode: 'careful',
+    });
+  });
+
+  it('rejects unsupported nested Google combinators', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'combined_input',
+        parameters: {
+          type: 'object',
+          properties: {
+            value: {
+              oneOf: [{ type: 'string' }, { type: 'number' }],
+            },
+          },
+        },
+      }),
+    ).toThrow(
+      'Google tool schemas do not support nested oneOf or allOf combinators.',
+    );
   });
 
   it('preserves constraints attached to nested Google parameters', () => {

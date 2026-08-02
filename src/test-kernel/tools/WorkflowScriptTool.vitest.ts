@@ -242,9 +242,7 @@ describe('WorkflowScriptTool', () => {
         scriptPath: expect.any(Object),
       },
     });
-    expect(JSON.stringify(providerProperties?.args)).toContain(
-      '"type":"object"',
-    );
+    expect(providerProperties?.args?.description).toContain('JSON value');
     expect(providerProperties).not.toHaveProperty('scriptInput');
     expect(providerSchema?.required).not.toContain('script');
     expect(providerSchema?.required).not.toContain('scriptPath');
@@ -291,7 +289,7 @@ describe('WorkflowScriptTool', () => {
         script,
         args: ['not', 'an', 'argument', 'object'],
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('rejects invalid JSON arguments at the schema boundary', async () => {

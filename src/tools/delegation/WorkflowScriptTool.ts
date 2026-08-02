@@ -61,11 +61,9 @@ const WorkflowScriptToolInputSchema = z
       .min(1)
       .describe('Default workflow agent used when agent() omits agentName.'),
     args: z
-      .looseObject({})
+      .unknown()
       .nullish()
-      .describe(
-        'JSON argument object exposed to the script as the global args value.',
-      ),
+      .describe('JSON value exposed to the script as the global args value.'),
     files: WorkflowScriptFilesSchema.nullish().describe(
       'Workspace files bound to the workflow run by role and exposed to the script as the immutable global files object.',
     ),
