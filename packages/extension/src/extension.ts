@@ -124,8 +124,13 @@ async function refreshApiKeyStatus() {
   // funnel. This keeps ChatGPT subscription, Researcher Access, and direct API
   // keys in agreement about whether the first-run CTA should remain visible.
   const exists = await hasAnyUsableSetupCredential();
-  // A pre-retirement `ui.showApiKeyReminders` of false is a deliberate
-  // opt-out; keep honoring it rather than making the CTA unsuppressible.
+  // `ui.showApiKeyReminders` is no longer declared in
+  // `contributes.configuration` and nothing writes it, so this is a read-only
+  // compat arm: a settings.json that predates the key's removal can still
+  // carry `false`, which is a deliberate opt-out worth honoring rather than
+  // making the CTA unsuppressible.
+  // Retire on 2026-11-01: drop this read and let the credential predicate
+  // alone decide whether the CTA shows.
   const remindersOptOut =
     getConfig<boolean>('ui.showApiKeyReminders', true) === false;
   if (!exists && !remindersOptOut) {

@@ -1,11 +1,6 @@
-// Node imports
 import { access, constants } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-
-// Third-party imports
 import { app } from 'electron';
-
-// Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
@@ -29,8 +24,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Local file imports
 import {
   migrateLegacyDesktopDataRoot,
   migrateLegacyDesktopWorkspaceBucket,

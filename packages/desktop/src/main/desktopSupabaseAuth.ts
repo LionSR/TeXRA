@@ -106,6 +106,7 @@ export interface DesktopAuthCoordinator {
 }
 
 export function createDesktopAuthCallbackState(
+  log: DesktopAuthLog,
   store?: Pick<StateStore, 'get' | 'update'>,
 ): DesktopAuthCallbackState {
   let pendingState = readPendingOAuthState(store);
@@ -120,9 +121,20 @@ export function createDesktopAuthCallbackState(
     );
   };
 
-  if (pendingState && isPendingOAuthStateExpired(pendingState)) {
+  // A dropped persist leaves the expired nonce on disk; in-memory state is
+  // already cleared, so the next launch re-expires it. Logged so the stale
+  // record has a trace rather than appearing out of nowhere.
+  const forgetExpiredPendingState = (): void => {
     pendingState = null;
-    void persistPendingState(null).catch(() => {});
+    void persistPendingState(null).catch((error: unknown) => {
+      log.debug(
+        `Desktop pending OAuth state cleanup failed: ${toErrorMessage(error)}`,
+      );
+    });
+  };
+
+  if (pendingState && isPendingOAuthStateExpired(pendingState)) {
+    forgetExpiredPendingState();
   }
 
   // True only while a non-expired sign-in attempt is pending; clears and
@@ -130,8 +142,7 @@ export function createDesktopAuthCallbackState(
   const hasValidPendingState = (): boolean => {
     if (!pendingState) return false;
     if (isPendingOAuthStateExpired(pendingState)) {
-      pendingState = null;
-      void persistPendingState(null).catch(() => {});
+      forgetExpiredPendingState();
       return false;
     }
     return true;
@@ -214,7 +225,11 @@ export function createDesktopSupabaseAuth(
           activeAttempt = undefined;
           void callbackState
             .clearAwaitingCallback(attempt.nonce)
-            .catch(() => {});
+            .catch((error: unknown) => {
+              log.debug(
+                `Desktop sign-in timeout cleanup failed: ${toErrorMessage(error)}`,
+              );
+            });
         }
       }, timeoutMs);
       let settled = false;

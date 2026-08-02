@@ -107,7 +107,7 @@ export class SupabaseClient {
   static initialize(url: string, publicKey: string): void {
     if (!url || !publicKey) {
       throw new Error(
-        'Supabase credentials missing. Check extension configuration.',
+        'Supabase credentials missing. Check the TeXRA configuration.',
       );
     }
     // Idempotent re-init: returning the existing client preserves the in-memory
@@ -141,9 +141,7 @@ export class SupabaseClient {
    */
   static getClient(): Client {
     if (!this.instance) {
-      throw new Error(
-        'Supabase client not initialized. Restart the extension.',
-      );
+      throw new Error('Supabase client not initialized. Restart TeXRA.');
     }
     return this.instance;
   }

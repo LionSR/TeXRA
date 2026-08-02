@@ -1,13 +1,8 @@
-// Agent imports
 import { createChannelTrace } from '@agent/trace';
 import { SessionStores } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-
-// Tool imports
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-
-// Local imports
 import { prepareDesktopLegacyStreamImport } from './desktopLegacyStreamImporter.js';
 import { toLogData } from './desktopLogUtils.js';
 

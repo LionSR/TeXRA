@@ -66,7 +66,7 @@ export function createDesktopShortcutRegistry(
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void
   >();
-  const menuEntries = getDesktopCommandMenuEntries(undefined, platform);
+  const menuEntries = getDesktopCommandMenuEntries(platform);
 
   function entries(): DesktopShortcutEntry[] {
     return [desktopCommandPaletteShortcut(platform), ...menuEntries].map(

@@ -112,11 +112,11 @@ export function shouldUseOpenRouter(config: ModelRoutingConfig): boolean {
  *
  * Centralized here (#7101 triage — "runtime combinator over profile data")
  * so callers that only have a plain `ModelConfig`-shaped value, not a full
- * `ModelHandler` instance — e.g. `UsageMonitor`, which deliberately avoids
- * holding an `IModelHandler` reference (see `UsageMonitorModelInfo`'s doc
- * comment) — read the same combinator `ModelHandler.shouldUseServerSideKeys()`
- * delegates to, instead of re-deriving the `!openRouter && relaySync` formula
- * independently and risking drift.
+ * `ModelHandler` instance — e.g. `UsageMonitor`, which reads the run's live
+ * handler through its `IModelHandler` surface — read the same combinator
+ * `ModelHandler.shouldUseServerSideKeys()` delegates to, instead of
+ * re-deriving the `!openRouter && relaySync` formula independently and
+ * risking drift.
  */
 export function usesServerSideKeysRoute(
   config: ModelRoutingConfig & {

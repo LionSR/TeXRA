@@ -14,6 +14,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import {
   SwitchViewMessageSchema,
+  ThemeSchema,
   WebviewReadyMessageSchema,
 } from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
@@ -49,7 +50,7 @@ function fileWithBaseCommand<T extends string>(command: T) {
 
 const ThemeSetMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
-  theme: z.enum(['dark', 'light']),
+  theme: ThemeSchema,
 });
 
 const DebugModeSetMessageSchema = z.object({

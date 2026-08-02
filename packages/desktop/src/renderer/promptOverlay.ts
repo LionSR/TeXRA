@@ -1,18 +1,12 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
-
-// Local imports - prompt protocol
 import {
   DESKTOP_PROMPT_COMMANDS,
   type DesktopSettlePromptMessage,
   type DesktopShowPromptMessage,
 } from '../desktopPromptMessages';
-
-// Local imports - shared overlay chrome
 import { createOverlayDialog } from './overlayDialog';
-
-// Third-party imports - component types
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 export interface DesktopPromptOverlay {

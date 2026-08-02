@@ -89,6 +89,12 @@ function createAnthropicHandler(
   );
 }
 
+/**
+ * Client stand-in for follow-up tests whose calls carry no attachments, so no
+ * SDK member is ever reached.
+ */
+const NO_UPLOAD_CLIENT = {} as never;
+
 /** A minimal single-turn "hello" user message, the shape most tests need. */
 function helloMessages(): MessageParam[] {
   return [
@@ -592,7 +598,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     } as const;
 
     const [, resultMsg] = await handler.createToolUseFollowUpMessages(
-      undefined,
+      NO_UPLOAD_CLIENT,
       providerCall,
       { status: 'executed', output: 'ok' },
       [],
@@ -634,6 +640,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       ],
       undefined,
       'analysis',
+      NO_UPLOAD_CLIENT,
     );
 
     assert.equal(messages.length, 2);

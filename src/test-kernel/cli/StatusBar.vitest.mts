@@ -493,6 +493,20 @@ describe('CLI StatusBar display model', () => {
     expect(segment?.compactText).toBe('r2');
   });
 
+  it('carries a workflow-script phase in the same stage slot', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        status: STREAM_PHASE.RUNNING,
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+      }),
+    );
+
+    const segment = display.left.find((item) => item.text === 'Reduce 2/3');
+    expect(segment).toBeDefined();
+    // Narrow terminals degrade to the bare current phase, not to nothing.
+    expect(segment?.compactText).toBe('Reduce 2');
+  });
+
   it('prefixes the running label with the current spin frame', () => {
     const display = buildStatusBarDisplay(
       statusInput({ status: STREAM_PHASE.RUNNING, runningFrame: '/' }),
@@ -874,294 +888,272 @@ describe('CLI StatusBar display model', () => {
     },
   );
 
-  it('derives isChildStream for statusBarStreamTarget from whichever stream is actually displayed', () => {
-    const root = 'root';
-    const child = 'child';
-    const waitingChildSlice = {
-      streamId: child,
-      status: STREAM_PHASE.WAITING,
-    } as StreamSlice;
-    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
-      [child, waitingChildSlice],
+  // `statusBarStreamTarget` resolves three coupled outputs from one input: the
+  // Ctrl-C action, which slice the footer renders, and whether that displayed
+  // slice belongs to a child stream. Every case asserts all three, and asserts
+  // `displaySlice` by identity so the live-ancestor fallback stays
+  // distinguishable from a structurally equal slice.
+  describe('statusBarStreamTarget', () => {
+    function streamSlice(
+      streamId: string,
+      status: StreamSlice['status'],
+    ): StreamSlice {
+      return { streamId, status } as StreamSlice;
+    }
+
+    function streamMap(
+      entries: ReadonlyArray<readonly [string, StreamSlice]>,
+    ): ReadonlyMap<StreamSlice['streamId'], StreamSlice> {
+      return new Map<StreamSlice['streamId'], StreamSlice>(entries);
+    }
+
+    const parentOfChild = new Map([['child', 'root']]);
+    const parentOfGrandchild = new Map([
+      ['child', 'root'],
+      ['grandchild', 'child'],
     ]);
 
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: child,
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams,
-      }),
-    ).toMatchObject({
-      displaySlice: waitingChildSlice,
-      isChildStream: true,
-    });
+    const rootRunning = streamSlice('root', STREAM_PHASE.RUNNING);
+    const rootPending = streamSlice('root', undefined);
+    const rootWaiting = streamSlice('root', STREAM_PHASE.WAITING);
+    const rootCancelled = streamSlice('root', STREAM_PHASE.CANCELLED);
+    const childWaiting = streamSlice('child', STREAM_PHASE.WAITING);
+    const childCancelled = streamSlice('child', STREAM_PHASE.CANCELLED);
+    const grandchildCancelled = streamSlice(
+      'grandchild',
+      STREAM_PHASE.CANCELLED,
+    );
 
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams,
-      }),
-    ).toMatchObject({
-      displaySlice: undefined,
-      isChildStream: false,
-    });
-  });
-
-  it('projects focused status while keeping stop capability host-owned', () => {
-    const root = 'root';
-    const child = 'child';
-    const grandchild = 'grandchild';
-    const rootSlice = {
-      streamId: root,
-      status: STREAM_PHASE.RUNNING,
-    } as StreamSlice;
-    const childSlice = {
-      streamId: child,
-      status: STREAM_PHASE.CANCELLED,
-    } as StreamSlice;
-    const grandchildSlice = {
-      streamId: grandchild,
-      status: STREAM_PHASE.CANCELLED,
-    } as StreamSlice;
-    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
-      [root, rootSlice],
-      [child, childSlice],
-      [grandchild, grandchildSlice],
+    const liveRootTree = streamMap([
+      ['root', rootRunning],
+      ['child', childCancelled],
+      ['grandchild', grandchildCancelled],
+    ]);
+    const liveRootWaitingChild = streamMap([
+      ['root', rootRunning],
+      ['child', childWaiting],
+    ]);
+    const waitingChildOnly = streamMap([['child', childWaiting]]);
+    const stoppedTree = streamMap([
+      ['root', rootCancelled],
+      ['child', childCancelled],
     ]);
 
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
-        canStopActiveRun: false,
-        parentStream: new Map([[child, root]]),
-        streams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: rootSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'stop',
-      displaySlice: rootSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: child,
-        canStopActiveRun: false,
-        parentStream: new Map([[child, root]]),
-        streams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: childSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: child,
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'stop root',
-      displaySlice: childSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: grandchild,
-        canStopActiveRun: false,
-        parentStream: new Map([
-          [child, root],
-          [grandchild, child],
-        ]),
-        streams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: grandchildSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: grandchild,
-        canStopActiveRun: true,
-        parentStream: new Map([
-          [child, root],
-          [grandchild, child],
-        ]),
-        streams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'stop root',
-      displaySlice: grandchildSlice,
-    });
-
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: undefined,
-        canStopActiveRun: true,
-        canStopPendingRunWithoutStream: false,
-        parentStream: new Map([[child, root]]),
-        streams: new Map(),
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: undefined,
-    });
-
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: undefined,
-        canStopActiveRun: true,
-        canStopPendingRunWithoutStream: true,
-        parentStream: new Map([[child, root]]),
-        streams: new Map(),
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'stop',
-      displaySlice: undefined,
-    });
-
-    const pendingRootSlice = {
-      streamId: root,
-      status: undefined,
-    } as StreamSlice;
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams: new Map<StreamSlice['streamId'], StreamSlice>([
-          [root, pendingRootSlice],
-        ]),
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'stop',
-      displaySlice: pendingRootSlice,
-    });
-
-    const waitingRootSlice = {
-      streamId: root,
-      status: STREAM_PHASE.WAITING,
-    } as StreamSlice;
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
-        canStopActiveRun: true,
-        canStopPendingRunWithoutStream: true,
-        parentStream: new Map([[child, root]]),
-        streams: new Map<StreamSlice['streamId'], StreamSlice>([
-          [root, waitingRootSlice],
-        ]),
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'stop',
-      displaySlice: waitingRootSlice,
-    });
-
-    const stoppedRootSlice = {
-      streamId: root,
-      status: STREAM_PHASE.CANCELLED,
-    } as StreamSlice;
-    const stoppedChildSlice = {
-      streamId: child,
-      status: STREAM_PHASE.CANCELLED,
-    } as StreamSlice;
-    const stoppedStreams = new Map<StreamSlice['streamId'], StreamSlice>([
-      [root, stoppedRootSlice],
-      [child, stoppedChildSlice],
-    ]);
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
+    const cases: ReadonlyArray<{
+      readonly name: string;
+      readonly input: Parameters<typeof statusBarStreamTarget>[0];
+      readonly ctrlCAction: ReturnType<
+        typeof statusBarStreamTarget
+      >['ctrlCAction'];
+      readonly displaySlice: StreamSlice | undefined;
+      readonly isChildStream: boolean;
+    }> = [
+      {
+        name: 'focused waiting child with nothing pending or live to stop',
+        input: {
+          activeStreamId: 'child',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: waitingChildOnly,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: childWaiting,
+        isChildStream: true,
+      },
+      {
+        name: 'focused root that has no slice and no live ancestor',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: waitingChildOnly,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: undefined,
+        isChildStream: false,
+      },
+      {
+        name: 'focused live root without stop capability',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: false,
+          parentStream: parentOfChild,
+          streams: liveRootTree,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: rootRunning,
+        isChildStream: false,
+      },
+      {
+        name: 'focused live root with stop capability',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: liveRootTree,
+        },
+        ctrlCAction: 'stop',
+        displaySlice: rootRunning,
+        isChildStream: false,
+      },
+      {
+        name: 'focused stopped child without stop capability',
+        input: {
+          activeStreamId: 'child',
+          canStopActiveRun: false,
+          parentStream: parentOfChild,
+          streams: liveRootTree,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: childCancelled,
+        isChildStream: true,
+      },
+      {
+        name: 'focused stopped child with stop capability',
+        input: {
+          activeStreamId: 'child',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: liveRootTree,
+        },
+        ctrlCAction: 'stop root',
+        displaySlice: childCancelled,
+        isChildStream: true,
+      },
+      {
+        name: 'focused waiting child while the root is still live',
+        input: {
+          activeStreamId: 'child',
+          canStopActiveRun: false,
+          parentStream: parentOfChild,
+          streams: liveRootWaitingChild,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: childWaiting,
+        isChildStream: true,
+      },
+      {
+        name: 'focused stopped grandchild without stop capability',
+        input: {
+          activeStreamId: 'grandchild',
+          canStopActiveRun: false,
+          parentStream: parentOfGrandchild,
+          streams: liveRootTree,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: grandchildCancelled,
+        isChildStream: true,
+      },
+      {
+        name: 'focused stopped grandchild with stop capability',
+        input: {
+          activeStreamId: 'grandchild',
+          canStopActiveRun: true,
+          parentStream: parentOfGrandchild,
+          streams: liveRootTree,
+        },
+        ctrlCAction: 'stop root',
+        displaySlice: grandchildCancelled,
+        isChildStream: true,
+      },
+      {
+        name: 'no focused stream and no pending run to stop',
+        input: {
+          activeStreamId: undefined,
+          canStopActiveRun: true,
+          canStopPendingRunWithoutStream: false,
+          parentStream: parentOfChild,
+          streams: streamMap([]),
+        },
+        ctrlCAction: 'exit',
+        displaySlice: undefined,
+        isChildStream: false,
+      },
+      {
+        name: 'no focused stream but a pending run that has no stream yet',
+        input: {
+          activeStreamId: undefined,
+          canStopActiveRun: true,
+          canStopPendingRunWithoutStream: true,
+          parentStream: parentOfChild,
+          streams: streamMap([]),
+        },
+        ctrlCAction: 'stop',
+        displaySlice: undefined,
+        isChildStream: false,
+      },
+      {
+        name: 'focused root whose stream has not reported a phase yet',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: streamMap([['root', rootPending]]),
+        },
+        ctrlCAction: 'stop',
+        displaySlice: rootPending,
+        isChildStream: false,
+      },
+      {
+        name: 'focused waiting root while a pending run is stoppable',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: true,
+          canStopPendingRunWithoutStream: true,
+          parentStream: parentOfChild,
+          streams: streamMap([['root', rootWaiting]]),
+        },
+        ctrlCAction: 'stop',
+        displaySlice: rootWaiting,
+        isChildStream: false,
+      },
+      {
+        name: 'focused waiting root without stop capability',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: false,
+          parentStream: parentOfChild,
+          streams: streamMap([['root', rootWaiting]]),
+        },
+        ctrlCAction: 'exit',
+        displaySlice: rootWaiting,
+        isChildStream: false,
+      },
+      {
         // A stale host callback must not leave the footer advertising stop
         // after the visible stream tree has already become terminal.
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams: stoppedStreams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: stoppedRootSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: child,
-        canStopActiveRun: true,
-        parentStream: new Map([[child, root]]),
-        streams: stoppedStreams,
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: stoppedChildSlice,
-    });
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: root,
-        canStopActiveRun: false,
-        parentStream: new Map([[child, root]]),
-        streams: new Map<StreamSlice['streamId'], StreamSlice>([
-          [
-            root,
-            { streamId: root, status: STREAM_PHASE.WAITING } as StreamSlice,
-          ],
-        ]),
-      }),
-    ).toMatchObject({
-      ctrlCAction: 'exit',
-      displaySlice: { streamId: root, status: STREAM_PHASE.WAITING },
-    });
-  });
+        name: 'stale stop capability over a fully terminal root',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: stoppedTree,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: rootCancelled,
+        isChildStream: false,
+      },
+      {
+        name: 'stale stop capability over a fully terminal child',
+        input: {
+          activeStreamId: 'child',
+          canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: stoppedTree,
+        },
+        ctrlCAction: 'exit',
+        displaySlice: childCancelled,
+        isChildStream: true,
+      },
+    ];
 
-  it('uses focused stream status when a stopped child stream is focused', () => {
-    const rootSlice = {
-      status: STREAM_PHASE.RUNNING,
-    } as StreamSlice;
-    const childSlice = {
-      status: STREAM_PHASE.CANCELLED,
-    } as StreamSlice;
-    const waitingChildSlice = {
-      status: STREAM_PHASE.WAITING,
-    } as StreamSlice;
-    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
-      ['root', rootSlice],
-      ['child', childSlice],
-      ['waiting-child', waitingChildSlice],
-    ]);
+    it.each(cases)('$name', ({ input, ...expected }) => {
+      const target = statusBarStreamTarget(input);
 
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: 'child',
-        canStopActiveRun: false,
-        parentStream: new Map([['child', 'root']]),
-        streams,
-      }).displaySlice,
-    ).toBe(childSlice);
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: 'waiting-child',
-        canStopActiveRun: false,
-        parentStream: new Map([['waiting-child', 'root']]),
-        streams,
-      }).displaySlice,
-    ).toBe(waitingChildSlice);
-    expect(
-      statusBarStreamTarget({
-        activeStreamId: 'root',
-        canStopActiveRun: false,
-        parentStream: new Map([['child', 'root']]),
-        streams,
-      }).displaySlice,
-    ).toBe(rootSlice);
+      expect(target.ctrlCAction).toBe(expected.ctrlCAction);
+      expect(target.displaySlice).toBe(expected.displaySlice);
+      expect(target.isChildStream).toBe(expected.isChildStream);
+    });
   });
 
   it('keeps status discoverable in narrow single-stream sessions', () => {

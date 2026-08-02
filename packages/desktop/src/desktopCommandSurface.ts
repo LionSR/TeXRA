@@ -268,10 +268,9 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
 ]);
 
 export function getDesktopCommandMenuEntries(
-  ids: readonly DesktopCommandId[] = DESKTOP_COMMAND_IDS,
   platform: NodeJS.Platform = process.platform,
 ): DesktopCommandMenuEntry[] {
-  return ids.map((id) => {
+  return DESKTOP_COMMAND_IDS.map((id) => {
     if (isDesktopLocalCommandId(id)) {
       const localEntry = DESKTOP_LOCAL_COMMAND_ENTRIES.get(id);
       if (!localEntry) throw new Error(`Missing desktop command entry: ${id}`);
@@ -415,10 +414,7 @@ export function buildDesktopMenuTemplate(
   platform: NodeJS.Platform = process.platform,
 ): DesktopMenuTemplateItem[] {
   const entriesById = new Map(
-    getDesktopCommandMenuEntries(DESKTOP_COMMAND_IDS, platform).map((entry) => [
-      entry.id,
-      entry,
-    ]),
+    getDesktopCommandMenuEntries(platform).map((entry) => [entry.id, entry]),
   );
   const commandItem = (id: DesktopCommandId): DesktopMenuTemplateItem => {
     const entry = entriesById.get(id);

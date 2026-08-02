@@ -90,12 +90,13 @@ export interface RunToolUseFlowInput<
   /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: (lastResponse: string | undefined) => void;
   /**
-   * Fires after a running tool-use chat changes its model. The launch context
-   * owns every mirror of the live model (`AgentConfig.model`, the `MODEL` user
-   * variable, usage accounting), so this is required: without it those
-   * mirrors would silently keep reporting the model the run started with.
+   * Fires after a running tool-use chat changes its model, once the shared
+   * `ModelCell` already holds the new pair. The handler is deliberately not
+   * passed: readers take it from the cell. Required because the launch
+   * context still owns the persisted `AgentConfig.model` field, which would
+   * otherwise keep naming the model the run started with.
    */
-  onModelChanged: (modelHandler: RunModelHandler<C>, model: string) => void;
+  onModelChanged: (model: string) => void;
   /** Runtime feature registry for auto-injected tools. */
   toolInjections?: ToolInjectionRegistry;
   /** Caller-supplied tools available only to this run. */
@@ -336,7 +337,7 @@ export async function runToolUseFlow<C = unknown>(
     nextHandler.setLogger(logger);
 
     services.modelCell.swap(nextHandler, model);
-    input.onModelChanged(nextHandler, model);
+    input.onModelChanged(model);
     logger.emit({
       type: 'run.config',
       streamId,

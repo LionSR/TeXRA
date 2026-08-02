@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildUpdateCommand,
@@ -8,9 +8,19 @@ import {
   fetchLatestHomebrewFormulaVersion,
   formatUpdateCommand,
   isPackageManagerInstall,
+  notifyCliUpdate,
+  resetCliUpdateNotifyLatchForTests,
 } from '@cli/runtime/updateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeStateStore } from '@test/support/FakePlatform';
+
+const mocks = vi.hoisted(() => ({ readCliAmbientState: vi.fn() }));
+
+vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/cliContext')>()),
+  readCliAmbientState: mocks.readCliAmbientState,
+}));
 
 describe('detectInstallMethod', () => {
   it('recognizes pnpm, yarn, and bun global layouts', () => {
@@ -258,6 +268,40 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
         cwd: '/workspace',
       },
     ]);
+  });
+});
+
+describe('notifyCliUpdate', () => {
+  // A CI run returns right after the ambient read, so the number of ambient
+  // reads is exactly the number of times the latch let the check start.
+  const context = createTestCliContext({ version: '0.39.3' });
+
+  beforeEach(() => {
+    resetCliUpdateNotifyLatchForTests();
+    mocks.readCliAmbientState.mockReset().mockReturnValue({
+      isCi: true,
+      stdinIsTty: true,
+      stdoutIsTty: true,
+      stderrIsTty: true,
+      termIsDumb: false,
+      stdoutColorEnabled: false,
+      stderrColorEnabled: false,
+    });
+  });
+
+  it('runs the check at most once per process', async () => {
+    await notifyCliUpdate(context);
+    await notifyCliUpdate(context);
+
+    expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a fresh check once the latch is cleared', async () => {
+    await notifyCliUpdate(context);
+    resetCliUpdateNotifyLatchForTests();
+    await notifyCliUpdate(context);
+
+    expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(2);
   });
 });
 

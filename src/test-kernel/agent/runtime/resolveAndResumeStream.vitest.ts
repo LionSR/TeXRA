@@ -13,9 +13,10 @@ import {
   resolveAndResumeStream,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -116,11 +117,9 @@ describe('resolveAndResumeStream', () => {
     // `resumeInFlight` (held here) cannot catch that, so the post-retrieval
     // re-check must bail before touching the resume ports.
     retrieveSessionResumeDataMock.mockImplementation(async () => {
-      seedStreamStatusForTest(
-        defaultSession().status,
-        STREAM,
-        STREAM_STATUS.RUNNING,
-      );
+      seedStreamStatusForTest(defaultSession().status, STREAM, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       return createToolUseResumeData({ streamId: STREAM });
     });
     const ports = basePorts();
@@ -131,11 +130,9 @@ describe('resolveAndResumeStream', () => {
   });
 
   it('skips resume without resolving when the stream is already active', async () => {
-    seedStreamStatusForTest(
-      defaultSession().status,
-      STREAM,
-      STREAM_STATUS.RUNNING,
-    );
+    seedStreamStatusForTest(defaultSession().status, STREAM, {
+      phase: STREAM_PHASE.RUNNING,
+    });
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
@@ -189,8 +186,10 @@ describe('resolveAndResumeStream', () => {
     // Desktop scenario: the window's own session machine has the stream
     // active while the process-global default is empty. The guard must read
     // the injected machine — before #7640 it read the global and never fired.
-    const windowStatus = new StreamStatusMachine();
-    seedStreamStatusForTest(windowStatus, STREAM, STREAM_STATUS.RUNNING);
+    const windowStatus = new StreamStatusMachine(new SessionEventHub());
+    seedStreamStatusForTest(windowStatus, STREAM, {
+      phase: STREAM_PHASE.RUNNING,
+    });
     const ports = basePorts({ streamStatus: windowStatus });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
@@ -202,15 +201,15 @@ describe('resolveAndResumeStream', () => {
   it('ignores activity recorded only on a different session machine', async () => {
     // The inverse: activity on the process default must not block a resume in
     // a session whose own machine says the stream is idle.
-    seedStreamStatusForTest(
-      defaultSession().status,
-      STREAM,
-      STREAM_STATUS.RUNNING,
-    );
+    seedStreamStatusForTest(defaultSession().status, STREAM, {
+      phase: STREAM_PHASE.RUNNING,
+    });
     retrieveSessionResumeDataMock.mockResolvedValue(
       createToolUseResumeData({ streamId: STREAM }),
     );
-    const ports = basePorts({ streamStatus: new StreamStatusMachine() });
+    const ports = basePorts({
+      streamStatus: new StreamStatusMachine(new SessionEventHub()),
+    });
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
     expect(ports.resumeToolUse).toHaveBeenCalled();

@@ -184,16 +184,12 @@ async function launchToolUseRun(
       ),
       onFlowRecordDisposition: (disposition) =>
         lifecycle.setFlowRecordDisposition(disposition),
-      onModelChanged: (modelHandler, model) => {
-        // The flow swapped its ModelCell, which is the live model. Every
-        // launch-context view of it is mirrored here, in one place, so none of
-        // them keeps reporting the model the run started with.
+      onModelChanged: (model) => {
+        // The cell is the live model; usage accounting and the prompt-side
+        // MODEL variable read it directly. This one mirror remains because
+        // config.model is a persisted AgentConfig schema field, not a view
+        // of the cell.
         ctx.config.model = model;
-        ctx.userVarChannels.transient.MODEL = model;
-        ctx.usageMonitor.setModelInfo({
-          capabilities: modelHandler.capabilities,
-          config: modelHandler.config,
-        });
       },
       ...(variant.kind === 'fresh'
         ? { onIdle: variant.onIdle }

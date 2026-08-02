@@ -63,7 +63,6 @@ export class MediaExtractionNode<C = unknown> extends Node<
         prepRes.files,
         prepRes.workspaceState,
         config.toolConfig,
-        true,
         prepRes.extraMediaFiles,
       );
     } else {
@@ -75,7 +74,6 @@ export class MediaExtractionNode<C = unknown> extends Node<
         prepRes.files,
         prepRes.workspaceState,
         config.toolConfig,
-        true,
       );
     }
 

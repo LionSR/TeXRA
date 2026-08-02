@@ -264,6 +264,11 @@ export class TaskGroupList extends LitElement {
     const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
       const prev = this.previousStatuses.get(group.id);
+      // Every live producer sets `kind`, so only replayed rows written before
+      // it landed (2026-07-11) reach the name-parse arm, which reproduces the
+      // round-directory inference the old code used.
+      // Retire on 2026-11-01 with the other roster/task-group compat reads:
+      // `group.kind === 'round'` then stands alone.
       const isRunGroup =
         !this.isToolUse &&
         (group.kind === 'round' ||

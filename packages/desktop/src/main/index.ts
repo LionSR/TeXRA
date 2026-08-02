@@ -990,8 +990,10 @@ function createWindow(options: {
         hasPriorInstall,
         hasRunHistory,
       });
-    } catch {
-      // Swallow — backfill failure must not block window creation.
+    } catch (error) {
+      // Never block window creation, but a swallowed failure here leaves the
+      // flag unwritten, so an existing user is re-shown the welcome card.
+      reportAsyncError(error);
     } finally {
       // Open the gate (whether we backfilled or early-returned) so the
       // onboarding IPC's gated first refresh — driven by WEBVIEW_READY — derives
@@ -1315,6 +1317,7 @@ if (protocolLifecycle.shouldContinue) {
           log: console,
         });
         const authCallbackState = createDesktopAuthCallbackState(
+          console,
           platform().globalState,
         );
         installContentSecurityPolicy();

@@ -16,8 +16,10 @@ export function currentModelFromUserChannels(
 
 /**
  * Record a model switch in persisted shared state: `modelId` is the resume
- * SSOT, and the `MODEL` user variable is re-projected from it so prompts keep
- * seeing the model the run is actually on.
+ * SSOT. The `MODEL` user variable is re-projected alongside it so the
+ * pre-`modelId` reader in {@link currentModelFromUserChannels} agrees with it
+ * on records this run rewrites; prompts read the live model off the run's
+ * `ModelCell`, not from here.
  */
 export function setToolUseSharedModel(
   shared: ToolUseRunShared,

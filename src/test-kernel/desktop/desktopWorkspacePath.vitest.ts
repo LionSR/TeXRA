@@ -4,8 +4,8 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  getWorkspacePathInput,
   hasResolvedWorkspacePath,
-  hasWorkspacePath,
   serializeWorkspacePresenceArg,
   withWorkspacePathArg,
 } from '@desktop/workspacePath';
@@ -48,17 +48,21 @@ describe('desktop workspace path', () => {
   });
 
   it('does not treat empty workspace flags as an opened workspace', () => {
-    expect(hasWorkspacePath({ argv: ['--texra-workspace'] })).toBe(false);
-    expect(hasWorkspacePath({ argv: ['--texra-workspace='] })).toBe(false);
-    expect(hasWorkspacePath({ argv: ['--texra-workspace', 'paper'] })).toBe(
-      true,
-    );
+    expect(
+      getWorkspacePathInput({ argv: ['--texra-workspace'] }),
+    ).toBeUndefined();
+    expect(
+      getWorkspacePathInput({ argv: ['--texra-workspace='] }),
+    ).toBeUndefined();
+    expect(
+      getWorkspacePathInput({ argv: ['--texra-workspace', 'paper'] }),
+    ).toBe('paper');
   });
 
   it('does not treat option-like positional workspace values as paths', () => {
-    expect(hasWorkspacePath({ argv: ['--texra-workspace', '--inspect'] })).toBe(
-      false,
-    );
+    expect(
+      getWorkspacePathInput({ argv: ['--texra-workspace', '--inspect'] }),
+    ).toBeUndefined();
     expect(
       resolveWorkspacePath({ argv: ['--texra-workspace', '--inspect'] }),
     ).toBeUndefined();
@@ -66,20 +70,20 @@ describe('desktop workspace path', () => {
 
   it('does not treat desktop protocol callback URLs as workspace paths', () => {
     expect(
-      hasWorkspacePath({
+      getWorkspacePathInput({
         argv: ['--texra-workspace', 'texra://auth-callback?code=1'],
       }),
-    ).toBe(false);
+    ).toBeUndefined();
     expect(
       resolveWorkspacePath({
         argv: ['--texra-workspace', 'texra://auth-callback?code=1'],
       }),
     ).toBeUndefined();
     expect(
-      hasWorkspacePath({
+      getWorkspacePathInput({
         argv: ['--texra-workspace=texra://auth-callback?code=1'],
       }),
-    ).toBe(false);
+    ).toBeUndefined();
     expect(
       resolveWorkspacePath({
         argv: ['--texra-workspace=texra://auth-callback?code=1'],

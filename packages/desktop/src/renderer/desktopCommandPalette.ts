@@ -137,7 +137,7 @@ export function createDesktopCommandPalette({
       (getShortcuts?.() ?? []).map((entry) => [entry.id, entry]),
     );
     return [
-      ...getDesktopCommandMenuEntries(undefined, platform).map((entry) =>
+      ...getDesktopCommandMenuEntries(platform).map((entry) =>
         toPaletteEntry(entry, shortcutsById.get(entry.id), platform),
       ),
       ...streams.map(toStreamPaletteEntry),

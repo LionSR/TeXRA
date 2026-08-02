@@ -216,7 +216,7 @@
         "UpdateGitAuthorSettingsMessage",
         "UpdateLatexConfigValuesMessage",
         "UpdateModelSelectionMessage",
-        "UpdateSuperYoloEnabledMessage"
+        "UpdateReliabilityAndOrchestrationMessage"
       ],
       "value": [
         "API_ACCESS_MODE_OPTIONS",

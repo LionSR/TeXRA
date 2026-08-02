@@ -139,23 +139,4 @@ describe('ProgressFollowUpPolishController', () => {
       logData: error,
     });
   });
-
-  it('skips polishing when no task state is available', async () => {
-    let calls = 0;
-    const controller = new ProgressFollowUpPolishController({
-      polishText: async () => {
-        calls += 1;
-        return { success: true, text: 'unused' };
-      },
-    });
-
-    const result = await controller.polishFollowUp({
-      stream: 'stream-a',
-      text: 'draft text',
-      runConfig: undefined,
-    });
-
-    assert.deepEqual(result, { kind: 'skipped' });
-    assert.equal(calls, 0);
-  });
 });

@@ -181,15 +181,10 @@ export class OutputFileProcessor {
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
 
-    // `documents` stays empty: the extracted text lives once in
-    // `tagContents[OUTPUT_DOCUMENTS_TAG]`, and nothing downstream reads a
-    // second, tag-wrapped copy. Round summaries are cloned per node step (see
-    // persistedFlow.ts), so a duplicate full text would cost per round per run.
     const buildSummary = (
       tagContents: Record<string, string[]> = {},
     ): OutputXmlSummary => ({
       tagContents,
-      documents: [],
       singleOutputFile: singleFile,
       sourceLocation: rawOutput,
     });

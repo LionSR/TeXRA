@@ -88,20 +88,13 @@ interface TestFlowContext {
 }
 
 interface ModelSwitchingFlowInput {
-  onModelChanged: (
-    modelHandler: {
-      capabilities: Record<string, unknown>;
-      config: Record<string, unknown>;
-    },
-    model: string,
-  ) => void;
+  onModelChanged: (model: string) => void;
 }
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  usageMonitor: { setModelInfo: ReturnType<typeof vi.fn> },
 ): AgentLaunchContext {
   const abortController = new AbortController();
   return {
@@ -122,7 +115,7 @@ function buildResumeContext(
       transient: { MODEL: 'test-model' },
     },
     attachedMemoryMisses: [],
-    usageMonitor: { recordUsage: vi.fn(), ...usageMonitor },
+    usageMonitor: { recordUsage: vi.fn() },
     interrupt: () => abortController.abort(),
   } as unknown as AgentLaunchContext;
 }
@@ -158,9 +151,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     });
     mocks.buildAgentLaunchContext.mockImplementationOnce(async () => {
       order.push('launch');
-      return buildResumeContext(executionId, streamId, {
-        setModelInfo: vi.fn(),
-      });
+      return buildResumeContext(executionId, streamId);
     });
     mocks.hasPersistedParent.mockResolvedValueOnce(true);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
@@ -366,11 +357,10 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     ]);
   });
 
-  it('mirrors a mid-run model switch onto every launch-context view', async () => {
+  it('mirrors a mid-run model switch onto the persisted config only', async () => {
     const executionId = 'e9421-model' as ExecutionId;
     const streamId = 'stream-9421-model' as StreamTabId;
-    const setModelInfo = vi.fn();
-    const ctx = buildResumeContext(executionId, streamId, { setModelInfo });
+    const ctx = buildResumeContext(executionId, streamId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
     mocks.hasPersistedParent.mockResolvedValueOnce(false);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
@@ -381,13 +371,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
     mocks.runToolUseFlow.mockImplementationOnce(
       async (input: ModelSwitchingFlowInput) => {
-        input.onModelChanged(
-          {
-            capabilities: { supportsVision: true },
-            config: { provider: 'anthropic' },
-          },
-          'next-model',
-        );
+        input.onModelChanged('next-model');
         return { outcome: RUN_OUTCOME.COMPLETED };
       },
     );
@@ -396,14 +380,11 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       createToolUseResumeData({ executionId, streamId }),
     );
 
-    expect(setModelInfo).toHaveBeenCalledWith({
-      capabilities: { supportsVision: true },
-      config: { provider: 'anthropic' },
-    });
-    // The flow's ModelCell is the live model; these mirrors would otherwise
-    // keep reporting the model the run started with.
+    // The cell is the live model: usage accounting and the prompt-side MODEL
+    // variable read it directly, so the only remaining mirror is the
+    // persisted AgentConfig schema field; the seeded transient stays as-is.
     expect(ctx.config.model).toBe('next-model');
-    expect(ctx.userVarChannels.transient.MODEL).toBe('next-model');
+    expect(ctx.userVarChannels.transient.MODEL).toBe('test-model');
   });
 
   it('carries a failed resumed flow result, error included, to the lifecycle', async () => {
@@ -414,7 +395,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       userRetryable: true,
     };
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-      buildResumeContext(executionId, streamId, { setModelInfo: vi.fn() }),
+      buildResumeContext(executionId, streamId),
     );
     mocks.hasPersistedParent.mockResolvedValueOnce(true);
     mocks.runFlowWithLifecycle.mockImplementationOnce(

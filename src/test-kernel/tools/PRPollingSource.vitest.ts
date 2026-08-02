@@ -2,39 +2,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - tools
-import {
-  DEFAULT_CHECK_ANNOTATION_LEVEL,
-  type GitHubCheckAnnotationLevel,
-} from '@tools/github/checkAnnotationLevels';
+import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
 import { GitHubRateLimitError } from '@tools/github/githubClient';
 import {
   PRPollingSource,
   prKeyToString,
   type PRSubscribeInput,
+  type PRSubscriptionState,
 } from '@tools/github/PRPollingSource';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
 
-interface CurrentShaState {
-  pendingAnnotationRuns: GhCheckRun[];
-}
-
-interface AnnotationDrainState {
-  pr: { owner: string; repo: string; pullNumber: number };
-  slug: string;
-  listeners: Set<(text: string) => void>;
-  annotationLevelByListener: Map<
-    (text: string) => void,
-    GitHubCheckAnnotationLevel
-  >;
-  currentShaState: CurrentShaState | undefined;
-  lastSuccessAt: number;
-  consecutiveFailures: number;
-  skipPollUntilMs: number;
-}
+// Local imports - test support
+import {
+  createPRCurrentShaState,
+  createPRSubscriptionState,
+} from '../support/prPollingSourceState';
 
 interface AnnotationDrainSource {
   drainAnnotationQueues(
-    entries: ReadonlyArray<readonly [string, AnnotationDrainState]>,
+    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now?: number,
   ): Promise<void>;
   fetchAnnotations(
@@ -51,7 +37,7 @@ interface AnnotationDrainSource {
     input: PRSubscribeInput,
     onEvent: (text: string) => void,
   ): void;
-  getSubscriptionState(key: string): AnnotationDrainState | undefined;
+  getSubscriptionState(key: string): PRSubscriptionState | undefined;
   has(key: string): boolean;
 }
 
@@ -80,17 +66,12 @@ function annotation(
   };
 }
 
-function createDrainState(runs: GhCheckRun[]): AnnotationDrainState {
-  return {
-    pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
-    slug: 'owner/repo',
-    listeners: new Set(),
-    annotationLevelByListener: new Map(),
-    currentShaState: { pendingAnnotationRuns: runs },
-    lastSuccessAt: Date.now(),
-    consecutiveFailures: 0,
-    skipPollUntilMs: 0,
-  };
+function createDrainState(runs: GhCheckRun[]): PRSubscriptionState {
+  return createPRSubscriptionState({
+    currentShaState: createPRCurrentShaState('abcdef1234567890', {
+      pendingAnnotationRuns: runs,
+    }),
+  });
 }
 
 /** A source whose subscription states stay active for the whole drain. */
@@ -221,7 +202,9 @@ describe('PRPollingSource annotation drain', () => {
       .fn()
       .mockResolvedValue([annotation('warning', 'format warning')]);
 
-    state.currentShaState = { pendingAnnotationRuns: [createCheckRun(13)] };
+    state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
+      pendingAnnotationRuns: [createCheckRun(13)],
+    });
     await source.drainAnnotationQueues([[key, state]]);
 
     expect(listener).not.toHaveBeenCalled();
@@ -230,7 +213,9 @@ describe('PRPollingSource annotation drain', () => {
       { ...pr, minAnnotationLevel: 'warning' },
       listener,
     );
-    state.currentShaState = { pendingAnnotationRuns: [createCheckRun(14)] };
+    state.currentShaState = createPRCurrentShaState('abcdef1234567890', {
+      pendingAnnotationRuns: [createCheckRun(14)],
+    });
 
     await source.drainAnnotationQueues([[key, state]]);
 

@@ -66,8 +66,7 @@ function runPost(
 ): Promise<unknown> {
   const node = new ToolUseWaitNode().setServices(services);
   const shared: ToolUseRunShared = toolUseRunShared();
-  const interactions = { emit: vi.fn() };
-  return withTestRunContext(interactions, 'test-stream', () =>
+  return withTestRunContext(services.runScope, () =>
     node.post(shared, PREP_RES, execRes),
   );
 }

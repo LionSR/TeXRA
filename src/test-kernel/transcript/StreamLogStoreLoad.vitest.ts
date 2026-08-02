@@ -902,7 +902,7 @@ describe('StreamLogStore load', () => {
 
     expect(storage.fullLogReads()).toBe(0);
 
-    const affected = await store.endRunningGroups(300);
+    const affected = await store.endRunningGroupsForStreams(['alpha'], 300);
     await store.flush();
     expect(store.get('alpha')).toBeUndefined();
     expect(storage.fullLogReads()).toBe(1);
@@ -910,8 +910,8 @@ describe('StreamLogStore load', () => {
 
     expect(affected).toEqual(['alpha']);
     expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    // endRunningGroups() defaults to RUN_OUTCOME.FAILED, the orphan sweep's
-    // caller-classified default.
+    // endRunningGroupsForStreams() defaults to RUN_OUTCOME.FAILED, the orphan
+    // sweep's caller-classified default.
     expect(entry?.data).toEqual({ status: RUN_OUTCOME.FAILED, endTime: 300 });
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(100, 100),
@@ -1231,7 +1231,7 @@ describe('StreamLogStore load', () => {
 
     const store = await StreamLogStore.open();
 
-    const endRunningGroups = store.endRunningGroups(300);
+    const endRunningGroups = store.endRunningGroupsForStreams(streamIds, 300);
     await waitForCondition(() => storage.fullLogReads() === 8, {
       timeoutMessage:
         'Expected stale stream rehydrate reads to reach the concurrency cap',

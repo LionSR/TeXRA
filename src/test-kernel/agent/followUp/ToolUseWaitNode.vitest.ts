@@ -19,6 +19,7 @@ import {
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   SessionEventHub,
@@ -58,24 +59,34 @@ type WaitNodeModelHandlerOverrides = Omit<
 };
 
 type WaitNodeServiceOverrides = Partial<
-  Pick<
-    ToolUseServices,
-    'isSubagent' | 'onFollowUpConsumed' | 'onIdle' | 'runScope'
-  >
+  Pick<ToolUseServices, 'isSubagent' | 'onFollowUpConsumed' | 'onIdle'>
 > & {
   fileService?: Partial<ToolUseServices['fileService']>;
   logger?: AgentTrace;
   modelHandler?: WaitNodeModelHandlerOverrides;
   session?: Partial<ToolUseServices['session']>;
+  /** Run identity the node reads off `services.runScope`. */
+  streamId?: string;
+  /** Session owning this run's status machine and approvals. */
+  ownerSession?: SessionHandle;
+  signal?: AbortSignal;
 };
 
 function createWaitNodeServices(
   overrides: WaitNodeServiceOverrides = {},
 ): ToolUseServices {
-  const { fileService, modelHandler, session, ...topLevel } = overrides;
+  const {
+    fileService,
+    modelHandler,
+    ownerSession,
+    session,
+    signal,
+    streamId = 'test-stream',
+    ...topLevel
+  } = overrides;
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
   return {
-    runScope: testRunScope('test-stream'),
+    runScope: testRunScope(streamId, { session: ownerSession, signal }),
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
       ...fileService,
@@ -131,7 +142,6 @@ function recordRunEvents(
 describe('ToolUseWaitNode', () => {
   it('always suspends a subagent cycle at WAITING, carrying its turn facts', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
-    const interactions = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
 
     const services = createWaitNodeServices({
@@ -148,14 +158,10 @@ describe('ToolUseWaitNode', () => {
     // them after suspension (see childRunLoop.ts), so the node carries none.
     expect(prep.lastResponse).toBeUndefined();
 
-    const transition = await withTestRunContext(
-      interactions,
-      'test-stream',
-      async () => {
-        const exec = await node.exec(prep);
-        return node.post(shared, prep, exec);
-      },
-    );
+    const transition = await withTestRunContext(services.runScope, async () => {
+      const exec = await node.exec(prep);
+      return node.post(shared, prep, exec);
+    });
 
     expect(transition).toBe(FlowTransition.WAITING);
     // The flow never blocks on session.waitForFollowUp in subagent mode —
@@ -168,7 +174,6 @@ describe('ToolUseWaitNode', () => {
     // already queued is the child-run loop's concern (it resumes immediately
     // instead of genuinely waiting), not something the flow special-cases.
     const shared: ToolUseRunShared = toolUseRunShared();
-    const interactions = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
 
     const services = createWaitNodeServices({
@@ -181,7 +186,7 @@ describe('ToolUseWaitNode', () => {
 
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
-    const exec = await withTestRunContext(interactions, 'test-stream', () =>
+    const exec = await withTestRunContext(services.runScope, () =>
       node.exec(prep),
     );
 
@@ -191,7 +196,6 @@ describe('ToolUseWaitNode', () => {
 
   it('advances a drained child-loop batch once without reading the session queue', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
-    const interactions = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
     const createUserFollowUpMessages = vi.fn(
       async (
@@ -220,16 +224,12 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode(batch).setServices(services);
     const prep = await node.prep(shared);
 
-    const first = await withTestRunContext(
-      interactions,
-      'test-stream',
-      async () => {
-        const exec = await node.exec(prep);
-        const transition = await node.post(shared, prep, exec);
-        return { exec, transition };
-      },
-    );
-    const second = await withTestRunContext(interactions, 'test-stream', () =>
+    const first = await withTestRunContext(services.runScope, async () => {
+      const exec = await node.exec(prep);
+      const transition = await node.post(shared, prep, exec);
+      return { exec, transition };
+    });
+    const second = await withTestRunContext(services.runScope, () =>
       node.exec(prep),
     );
 
@@ -256,7 +256,6 @@ describe('ToolUseWaitNode', () => {
 
   it('stops instead of suspending when stopAfterCycle is set (headless in-band subagent)', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
-    const interactions = { emit: vi.fn() };
 
     const services = createWaitNodeServices({
       isSubagent: true,
@@ -265,8 +264,7 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
     const transition = await withTestRunContext(
-      interactions,
-      'test-stream',
+      services.runScope,
       async () => {
         const exec = await node.exec(prep);
         expect(exec.kind).toBe('stop');
@@ -280,26 +278,19 @@ describe('ToolUseWaitNode', () => {
 
   it('stops immediately on interruption instead of suspending a subagent', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
-    const interactions = { emit: vi.fn() };
 
     const services = createWaitNodeServices({
-      runScope: testRunScope('test-stream', {
-        signal: AbortSignal.abort(),
-      }),
+      signal: AbortSignal.abort(),
       isSubagent: true,
     });
 
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    const transition = await withTestRunContext(
-      interactions,
-      'test-stream',
-      async () => {
-        const exec = await node.exec(prep);
-        return node.post(shared, prep, exec);
-      },
-    );
+    const transition = await withTestRunContext(services.runScope, async () => {
+      const exec = await node.exec(prep);
+      return node.post(shared, prep, exec);
+    });
 
     expect(transition).toBe(FlowTransition.COMPLETE);
   });
@@ -309,7 +300,6 @@ describe('ToolUseWaitNode', () => {
       messages: [{ role: 'assistant', content: 'partial response' } as never],
     });
     const onIdle = vi.fn();
-    const interactions = { emit: vi.fn() };
     let waitCalls = 0;
 
     const services = createWaitNodeServices({
@@ -326,9 +316,7 @@ describe('ToolUseWaitNode', () => {
 
     const node = new ToolUseWaitNode().setServices(services);
     const prep = await node.prep(shared);
-    await withTestRunContext(interactions, 'test-stream', () =>
-      node.exec(prep),
-    );
+    await withTestRunContext(services.runScope, () => node.exec(prep));
 
     expect(onIdle).toHaveBeenCalledOnce();
     expect(onIdle).toHaveBeenCalledWith('partial response');
@@ -340,7 +328,6 @@ describe('ToolUseWaitNode', () => {
     const info = vi.fn();
     const warn = vi.fn();
     const addMediaToUserMessage = vi.fn(async () => []);
-    const interactions = { emit: vi.fn() };
     const logger = Object.assign(new TraceEmitter(), { info, warn });
 
     const services = createWaitNodeServices({
@@ -356,20 +343,17 @@ describe('ToolUseWaitNode', () => {
     });
 
     const node = new ToolUseWaitNode().setServices(services);
-    const transition = await withTestRunContext(
-      interactions,
-      'test-stream',
-      () =>
-        node.post(shared, waitPrep(), {
-          followUps: [
-            {
-              text: 'please inspect this figure',
-              mediaFiles: ['/tmp/figure.png'],
-              origin: 'user',
-            },
-          ],
-          kind: 'continue',
-        }),
+    const transition = await withTestRunContext(services.runScope, () =>
+      node.post(shared, waitPrep(), {
+        followUps: [
+          {
+            text: 'please inspect this figure',
+            mediaFiles: ['/tmp/figure.png'],
+            origin: 'user',
+          },
+        ],
+        kind: 'continue',
+      }),
     );
 
     expect(transition).toBe(FlowTransition.CONTINUE);
@@ -388,7 +372,6 @@ describe('ToolUseWaitNode', () => {
   it('logs follow-up markers reported by provider insertion', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
     const info = vi.fn();
-    const interactions = { emit: vi.fn() };
     const logger = Object.assign(new TraceEmitter(), {
       info,
       warn: vi.fn(),
@@ -407,7 +390,7 @@ describe('ToolUseWaitNode', () => {
     });
 
     const node = new ToolUseWaitNode().setServices(services);
-    await withTestRunContext(interactions, 'test-stream', () =>
+    await withTestRunContext(services.runScope, () =>
       node.post(shared, waitPrep(), {
         followUps: [
           {
@@ -435,9 +418,8 @@ describe('ToolUseWaitNode', () => {
     const shared: ToolUseRunShared = toolUseRunShared({
       lastError: { message: 'cycle failed', userRetryable: false },
     });
-    const interactions = { emit: vi.fn() };
     const setApprovalBypassState = vi.fn();
-    const session = sessionWithInteractions({
+    const ownerSession = sessionWithInteractions({
       setApprovalBypassState,
       cancel: vi.fn(),
     });
@@ -447,6 +429,8 @@ describe('ToolUseWaitNode', () => {
     const services = createWaitNodeServices({
       isSubagent: false,
       logger,
+      ownerSession,
+      streamId,
       session: {
         waitForFollowUp,
       },
@@ -455,10 +439,9 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const exec = await withTestRunContext(
-        interactions,
-        streamId,
+        services.runScope,
         () => node.exec(waitPrep(true)),
-        { session, stopAfterCycle: true },
+        { stopAfterCycle: true },
       );
 
       const goal = GoalStore.getForStream(streamId);
@@ -505,15 +488,16 @@ describe('ToolUseWaitNode', () => {
     );
     const onFollowUpConsumed = vi.fn();
     const waitForFollowUp = vi.fn();
-    const streamStatus = new StreamStatusMachine();
+    const streamStatus = new StreamStatusMachine(new SessionEventHub());
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
-    const interactions = { emit: vi.fn() };
     const services = createWaitNodeServices({
       isSubagent: false,
       modelHandler: {
         createUserFollowUpMessages,
       },
       onFollowUpConsumed,
+      ownerSession,
+      streamId,
       session: {
         waitForFollowUp,
       },
@@ -521,13 +505,12 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(
-        interactions,
-        streamId,
-        () => node.exec(prep),
-        { session: ownerSession },
+      const exec = await withTestRunContext(services.runScope, () =>
+        node.exec(prep),
       );
 
       expect(exec.kind).toBe('continue');
@@ -542,11 +525,8 @@ describe('ToolUseWaitNode', () => {
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
 
-      const transition = await withTestRunContext(
-        interactions,
-        streamId,
-        () => node.post(shared, prep, exec),
-        { session: ownerSession },
+      const transition = await withTestRunContext(services.runScope, () =>
+        node.post(shared, prep, exec),
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
@@ -590,12 +570,12 @@ describe('ToolUseWaitNode', () => {
       ],
     );
     const waitForFollowUp = vi.fn(async () => null);
-    const interactions = { emit: vi.fn() };
     const services = createWaitNodeServices({
       isSubagent: false,
       modelHandler: {
         createUserFollowUpMessages,
       },
+      streamId,
       session: {
         waitForFollowUp,
       },
@@ -606,7 +586,7 @@ describe('ToolUseWaitNode', () => {
       const continuationCycles = 25;
       for (let cycle = 0; cycle < continuationCycles; cycle += 1) {
         const prep = await node.prep(shared);
-        const exec = await withTestRunContext(interactions, streamId, () =>
+        const exec = await withTestRunContext(services.runScope, () =>
           node.exec(prep),
         );
 
@@ -617,10 +597,8 @@ describe('ToolUseWaitNode', () => {
           'Keep solving the hard problem until verification is complete.',
         );
 
-        const transition = await withTestRunContext(
-          interactions,
-          streamId,
-          () => node.post(shared, prep, exec),
+        const transition = await withTestRunContext(services.runScope, () =>
+          node.post(shared, prep, exec),
         );
         expect(transition).toBe(FlowTransition.CONTINUE);
         expect(createUserFollowUpMessages).toHaveBeenCalledTimes(cycle + 1);
@@ -635,7 +613,7 @@ describe('ToolUseWaitNode', () => {
       await GoalStore.setStatus(streamId, 'paused');
 
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(interactions, streamId, () =>
+      const exec = await withTestRunContext(services.runScope, () =>
         node.exec(prep),
       );
 
@@ -656,8 +634,8 @@ describe('ToolUseWaitNode', () => {
       items: [{ text: 'user correction', origin: 'user' as const }],
       synthetic: false,
     }));
-    const interactions = { emit: vi.fn() };
     const services = createWaitNodeServices({
+      streamId,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp,
@@ -666,7 +644,7 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await withTestRunContext(interactions, streamId, () =>
+      const exec = await withTestRunContext(services.runScope, () =>
         node.exec(waitPrep()),
       );
 
@@ -692,9 +670,9 @@ describe('ToolUseWaitNode', () => {
     await GoalStore.start(streamId, 'Parent-owned objective.');
 
     const waitForFollowUp = vi.fn(async () => null);
-    const interactions = { emit: vi.fn() };
     const services = createWaitNodeServices({
       isSubagent: true,
+      streamId,
       session: {
         waitForFollowUp,
       },
@@ -702,7 +680,7 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      const exec = await withTestRunContext(interactions, streamId, () =>
+      const exec = await withTestRunContext(services.runScope, () =>
         node.exec(waitPrep()),
       );
 
@@ -716,13 +694,13 @@ describe('ToolUseWaitNode', () => {
 
   it('updates the run session status while waiting and resuming', async () => {
     const streamId = 'wait-node-owner' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
+    const streamStatus = new StreamStatusMachine(new SessionEventHub());
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
     const shared: ToolUseRunShared = toolUseRunShared();
     const createUserFollowUpMessages = vi.fn(async () => []);
-    const interactions = { emit: vi.fn() };
     const services = createWaitNodeServices({
-      runScope: testRunScope(streamId, { session: ownerSession }),
+      ownerSession,
+      streamId,
       modelHandler: {
         createUserFollowUpMessages,
       },
@@ -736,22 +714,18 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(
-        interactions,
-        streamId,
-        () => node.exec(prep),
-        { session: ownerSession },
+      const exec = await withTestRunContext(services.runScope, () =>
+        node.exec(prep),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
 
-      await withTestRunContext(
-        interactions,
-        streamId,
-        () => node.post(shared, prep, exec),
-        { session: ownerSession },
+      await withTestRunContext(services.runScope, () =>
+        node.post(shared, prep, exec),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
       expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
@@ -762,9 +736,8 @@ describe('ToolUseWaitNode', () => {
 
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
+    const streamStatus = new StreamStatusMachine(new SessionEventHub());
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
-    const interactions = { emit: vi.fn() };
     const logger = Object.assign(new TraceEmitter(), {
       error: vi.fn(),
       info: vi.fn(),
@@ -774,6 +747,8 @@ describe('ToolUseWaitNode', () => {
     const services = createWaitNodeServices({
       isSubagent: false,
       logger,
+      ownerSession,
+      streamId,
       session: {
         waitForFollowUp,
       },
@@ -781,13 +756,12 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.CANCELLED);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.CANCELLED,
+      });
 
-      const exec = await withTestRunContext(
-        interactions,
-        streamId,
-        () => node.exec(waitPrep(true)),
-        { session: ownerSession },
+      const exec = await withTestRunContext(services.runScope, () =>
+        node.exec(waitPrep(true)),
       );
 
       expect(exec.kind).toBe('stop');
@@ -833,7 +807,6 @@ describe('ToolUseWaitNode', () => {
     );
     const sequence: string[] = [];
     const info = vi.fn(() => sequence.push('info'));
-    const interactions = { emit: vi.fn() };
     const streamId = 'test-stream' as StreamTabId;
     const logger = Object.assign(new TraceEmitter(), {
       error: vi.fn(),
@@ -842,7 +815,7 @@ describe('ToolUseWaitNode', () => {
     const recorded = recordRunEvents(logger, streamId, (event) => {
       if (event.type === 'status') sequence.push('status');
     });
-    const streamStatus = new StreamStatusMachine();
+    const streamStatus = new StreamStatusMachine(new SessionEventHub());
     const ownerSession = sessionWithInteractions(undefined, streamStatus);
     const services = createWaitNodeServices({
       logger,
@@ -850,6 +823,8 @@ describe('ToolUseWaitNode', () => {
         capabilities: { supportsVision: true },
         createUserFollowUpMessages,
       },
+      ownerSession,
+      streamId,
       session: {
         hasQueuedFollowUp: () => true,
         waitForFollowUp: async () => ({
@@ -868,18 +843,18 @@ describe('ToolUseWaitNode', () => {
       },
     });
     const node = new ToolUseWaitNode().setServices(services);
-    seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.WAITING);
+    seedStreamStatusForTest(streamStatus, streamId, {
+      phase: STREAM_PHASE.WAITING,
+    });
 
     const prep = await node.prep(shared);
     try {
       const transition = await withTestRunContext(
-        interactions,
-        streamId,
+        services.runScope,
         async () => {
           const exec = await node.exec(prep);
           return node.post(shared, prep, exec);
         },
-        { session: ownerSession },
       );
 
       expect(transition).toBe(FlowTransition.CONTINUE);
@@ -930,7 +905,6 @@ describe('ToolUseWaitNode', () => {
       message: 'stale failure from the previous cycle',
       userRetryable: false,
     };
-    const interactions = { emit: vi.fn() };
     const setApprovalBypassState = vi.fn();
     const ownerSession = sessionWithInteractions({
       setApprovalBypassState,
@@ -939,7 +913,8 @@ describe('ToolUseWaitNode', () => {
     const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
     const services = createWaitNodeServices({
       isSubagent: true,
-      runScope: testRunScope(streamId),
+      ownerSession,
+      streamId,
       modelHandler: {
         createUserFollowUpMessages: vi.fn(
           async (
@@ -956,13 +931,11 @@ describe('ToolUseWaitNode', () => {
       expect(prep.afterError).toBe(true);
 
       const { exec, transition } = await withTestRunContext(
-        interactions,
-        streamId,
+        services.runScope,
         async () => {
           const exec = await node.exec(prep);
           return { exec, transition: await node.post(shared, prep, exec) };
         },
-        { session: ownerSession },
       );
 
       expect(exec).toEqual({
@@ -991,7 +964,6 @@ describe('ToolUseWaitNode', () => {
       message: 'stale failure from the previous cycle',
       userRetryable: false,
     };
-    const interactions = { emit: vi.fn() };
     const setApprovalBypassState = vi.fn();
     const ownerSession = sessionWithInteractions({
       setApprovalBypassState,
@@ -1001,7 +973,8 @@ describe('ToolUseWaitNode', () => {
     const batch = [{ text: 'use this diagram', origin: 'user' as const }];
     const services = createWaitNodeServices({
       isSubagent: true,
-      runScope: testRunScope(streamId),
+      ownerSession,
+      streamId,
       modelHandler: {
         createUserFollowUpMessages: vi.fn(async () => {
           throw applicationError;
@@ -1012,19 +985,13 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const prep = await node.prep(shared);
-      const exec = await withTestRunContext(
-        interactions,
-        streamId,
-        () => node.exec(prep),
-        { session: ownerSession },
+      const exec = await withTestRunContext(services.runScope, () =>
+        node.exec(prep),
       );
 
       await expect(
-        withTestRunContext(
-          interactions,
-          streamId,
-          () => node.post(shared, prep, exec),
-          { session: ownerSession },
+        withTestRunContext(services.runScope, () =>
+          node.post(shared, prep, exec),
         ),
       ).rejects.toBe(applicationError);
 
@@ -1050,7 +1017,6 @@ describe('ToolUseWaitNode', () => {
   it('still stops a subagent after an error when no batch was drained', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
     shared.lastError = { message: 'boom', userRetryable: false };
-    const interactions = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
     const services = createWaitNodeServices({
       isSubagent: true,
@@ -1059,7 +1025,7 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    const exec = await withTestRunContext(interactions, 'test-stream', () =>
+    const exec = await withTestRunContext(services.runScope, () =>
       node.exec(prep),
     );
 

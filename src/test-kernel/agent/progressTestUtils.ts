@@ -23,11 +23,11 @@ import {
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import type {
-  SessionEvent,
+import {
   SessionEventHub,
-  SessionEventSubscriptionFilter,
-  SessionFact,
+  type SessionEvent,
+  type SessionEventSubscriptionFilter,
+  type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -405,7 +405,7 @@ export function sessionWithInteractions(
     | SessionHostInteractions
     | Pick<SessionHostInteractions, 'emit'>
     | undefined,
-  status = new StreamStatusMachine(),
+  status = new StreamStatusMachine(new SessionEventHub()),
 ): SessionHandle {
   const owner =
     interactions instanceof SessionHostInteractions
@@ -429,8 +429,9 @@ export function sessionWithInteractions(
 
 /**
  * The `RunScope` a flow-services fixture must carry, since nodes read run
- * identity from `services.runScope`. Same shape {@link withTestRunContext}
- * installs ambiently — pass one `session` to both so they agree.
+ * identity from `services.runScope`. Pass the same object to
+ * {@link withTestRunContext} so the ambient context and the services bag name
+ * one scope, as production does.
  */
 export function testRunScope(
   streamId: string,
@@ -452,31 +453,24 @@ export function testRunScope(
 }
 
 /**
- * Run `fn` inside a launch `RunContext` carrying `interactions`/`streamId`.
+ * Run `fn` inside a launch `RunContext` built on `runScope`.
  *
- * Most flow nodes now read run identity from `services.runScope`; the reads
- * still on the ambient context need the launch scope installed — production
- * always runs them inside `withExecutionRunContext`, which always projects a
- * `launch` context. Tests calling a node's `exec`/`post` directly need the
- * same scope. Pass `session` so it matches the one on the services bag.
+ * Flow nodes read run identity from `services.runScope` and read the remaining
+ * ambient-only fields (`stopAfterCycle`, tool availability) off this context.
+ * Production installs the run's one scope on both, so a test that also builds
+ * services must pass `services.runScope` here rather than a second scope.
  */
 export function withTestRunContext<T>(
-  interactions: SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>,
-  streamId: string,
+  runScope: RunScope,
   fn: () => Promise<T>,
   options: {
     approvalPromptsUnavailable?: boolean;
     runtimeUnavailableTools?: readonly string[];
-    session?: SessionHandle;
     stopAfterCycle?: boolean;
   } = {},
 ): Promise<T> {
-  const { session, ...contextOptions } = options;
   return withRunContext(
-    createRunContext({
-      runScope: testRunScope(streamId, { interactions, session }),
-      ...contextOptions,
-    }),
+    createRunContext({ runScope, ...options }),
     fn,
   ) as Promise<T>;
 }

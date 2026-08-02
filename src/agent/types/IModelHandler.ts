@@ -97,9 +97,12 @@ export type IModelHandler<
    * @param entries - One entry per tool call, in original model-response order.
    *   Each entry bundles the call with its own result and attachments, so
    *   alignment is structural rather than three positionally-zipped arrays.
-   * @param workspaceState - Optional workspace state for reasoning blocks
-   * @param text - Optional text to include before function calls
-   * @param client - Client bound to the current run and credential route
+   * @param workspaceState - Workspace state for reasoning blocks, if any
+   * @param text - Text to include before the function calls, if any
+   * @param client - Client bound to the current run and credential route.
+   *   Required: the caller already holds the run's client, so a handler that
+   *   uploads tool-result attachments uses that one rather than resolving a
+   *   second credential route of its own.
    */
   createBatchedToolUseFollowUpMessages?(
     entries: Array<{
@@ -107,8 +110,8 @@ export type IModelHandler<
       result: ToolResult;
       attachments: ToolFileAttachment[];
     }>,
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-    client?: C,
+    workspaceState: AgentWorkspaceState | undefined,
+    text: string | undefined,
+    client: C,
   ): Promise<M[]>;
 };

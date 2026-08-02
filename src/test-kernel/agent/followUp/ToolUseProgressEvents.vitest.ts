@@ -133,7 +133,7 @@ describe('tool-use progress events', () => {
       forcedToolOverrides([{ name: 'submit_output' }]),
     );
 
-    await withTestRunContext(host, streamId, () =>
+    await withTestRunContext(node.services.runScope, () =>
       node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
     );
 
@@ -152,8 +152,7 @@ describe('tool-use progress events', () => {
     );
 
     await withTestRunContext(
-      host,
-      streamId,
+      node.services.runScope,
       () => node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
       { stopAfterCycle: true },
     );
@@ -177,7 +176,7 @@ describe('tool-use progress events', () => {
     const node = createCycleNode(streamId, host, logger);
 
     try {
-      const result = await withTestRunContext(host, streamId, () =>
+      const result = await withTestRunContext(node.services.runScope, () =>
         node.exec(createPrepResult(workspaceState)),
       );
 
@@ -344,7 +343,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
       const node = createCycleNode(streamId, host, logger);
 
       try {
-        const result = await withTestRunContext(host, streamId, () =>
+        const result = await withTestRunContext(node.services.runScope, () =>
           node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
         );
 
