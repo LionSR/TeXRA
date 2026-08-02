@@ -86,7 +86,7 @@ describe('Tool edit approval gating', () => {
 
     testApprovalHandler = async (request) => {
       capturedRequest = request;
-      return { accepted: true };
+      return { accepted: true, appliedContent: request.proposedContent };
     };
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
@@ -149,9 +149,9 @@ describe('Tool edit approval gating', () => {
 
     const write = stubWorkspaceFile({ exists: false, content: '' });
 
-    testApprovalHandler = async () => {
+    testApprovalHandler = async (request) => {
       handlerCalled = true;
-      return { accepted: true };
+      return { accepted: true, appliedContent: request.proposedContent };
     };
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
@@ -167,9 +167,9 @@ describe('Tool edit approval gating', () => {
 
     const write = stubWorkspaceFile({ exists: false, content: '' });
 
-    testApprovalHandler = async () => {
+    testApprovalHandler = async (request) => {
       handlerCalled = true;
-      return { accepted: true };
+      return { accepted: true, appliedContent: request.proposedContent };
     };
 
     setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
@@ -219,7 +219,7 @@ describe('Tool edit approval gating', () => {
 
     assert.strictEqual(handlerCalls, 1);
     setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
-    firstApproval.resolve({ accepted: true });
+    firstApproval.resolve({ accepted: true, appliedContent: 'first.txt' });
 
     const results = await Promise.all([firstRequest, secondRequest]);
     assert.deepStrictEqual(

@@ -262,15 +262,27 @@ export interface ToolEditApprovalRequest {
   readonly streamId?: string | null;
 }
 
-/** Platform-level contract for a tool-edit approval result. */
-export interface ToolEditApprovalResult {
-  readonly accepted: boolean;
-  readonly userMessage?: string;
-  readonly appliedContent?: string;
-  readonly userPatch?: string;
-  readonly lineChanges?: { readonly added: number; readonly removed: number };
-  readonly startLine?: number;
-}
+/**
+ * Platform-level contract for a tool-edit approval result. `appliedContent`
+ * is required on acceptance — every host implementation always supplies the
+ * content the user actually approved, so this is a type-level guarantee
+ * rather than a convention callers must null-check.
+ */
+export type ToolEditApprovalResult =
+  | {
+      readonly accepted: true;
+      readonly appliedContent: string;
+      readonly userPatch?: string;
+      readonly lineChanges?: {
+        readonly added: number;
+        readonly removed: number;
+      };
+      readonly startLine?: number;
+    }
+  | {
+      readonly accepted: false;
+      readonly userMessage?: string;
+    };
 
 // ---------------------------------------------------------------------------
 // Tool notifications

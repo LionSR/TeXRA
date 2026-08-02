@@ -240,19 +240,31 @@ const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   bypassActive: z.boolean(),
 });
 
-const FollowUpTextKindSchema = z.enum([
-  'polished',
-  'polishError',
-  'transcribed',
+// `error` is only ever populated (and only ever read) on the `polishError`
+// branch — a discriminated union enforces that at the type level instead of
+// leaving it a flat optional field a `polished`/`transcribed` sender could
+// set by mistake.
+const UpdateFollowUpTextMessageSchema = z.discriminatedUnion('kind', [
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
+    stream: StreamTabIdSchema.nullish(),
+    kind: z.literal('polished'),
+    text: z.string().nullish(),
+  }),
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
+    stream: StreamTabIdSchema.nullish(),
+    kind: z.literal('polishError'),
+    text: z.string().nullish(),
+    error: z.string().optional(),
+  }),
+  z.object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
+    stream: StreamTabIdSchema.nullish(),
+    kind: z.literal('transcribed'),
+    text: z.string().nullish(),
+  }),
 ]);
-
-const UpdateFollowUpTextMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT),
-  stream: StreamTabIdSchema.nullish(),
-  kind: FollowUpTextKindSchema,
-  text: z.string().nullish(),
-  error: z.string().optional(),
-});
 
 const RecordingStatusSchema = z.enum(['started', 'stopped', 'error']);
 
