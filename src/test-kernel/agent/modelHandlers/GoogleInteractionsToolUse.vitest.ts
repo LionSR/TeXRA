@@ -177,8 +177,11 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       temperature: 0,
       tools: [
         {
-          name: 'positive_count',
-          zodSchema: z.strictObject({ count: z.number().positive() }),
+          name: 'bounded_counts',
+          zodSchema: z.strictObject({
+            integer: z.int().positive().lt(10),
+            number: z.number().positive().lt(10),
+          }),
         },
       ],
     });
@@ -188,11 +191,17 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     const parameters = interactionTool?.parameters as {
       properties: Record<string, Record<string, unknown>>;
     };
-    expect(parameters.properties.count).toStrictEqual({
+    expect(parameters.properties.integer).toStrictEqual({
+      type: 'integer',
+      minimum: 1,
+      maximum: 9,
+    });
+    expect(parameters.properties.number).toStrictEqual({
       type: 'number',
       minimum: 0,
+      maximum: 10,
     });
-    expect(JSON.stringify(parameters)).not.toContain('exclusiveMinimum');
+    expect(JSON.stringify(parameters)).not.toContain('exclusive');
   });
 
   it('accumulates parallel arguments_delta chunks and extracts tool calls', async () => {
