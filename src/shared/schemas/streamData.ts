@@ -2,11 +2,10 @@
  * Host-agnostic parsing schemas for per-stream sidecar data on disk
  * (`streamData/{id}/{outputFiles,missingOutputs,compileFailures,usageStats}.json`).
  *
- * Relocated out of the extension's `streamTabSchemas.ts` so the shared
- * `StreamSnapshotStore` (core) and the extension managers parse identical
- * on-disk shapes — the CLI, extension, and desktop all read/write the same
- * files. Only `@agent`-free schemas live here; `StreamTabMetaSchema` keeps its
- * `TaskState` dependency in the extension layer.
+ * The CLI, extension, and desktop all read and write these files, so the
+ * shared `StreamSnapshotStore` and the extension managers parse identical
+ * on-disk shapes from this one definition. Only `@agent`-free schemas live
+ * here.
  *
  * Legacy data (from before the one-run-per-tab refactor) was keyed by runId:
  *   - outputFiles.json / missingOutputs.json used `{ runId: { round: … } }`
@@ -36,8 +35,7 @@ import {
  * On-disk shape of `meta.json`. `taskState` is kept as `unknown` here so this
  * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
  * need the typed value parse it with `TaskStateSchema` (which depends on
- * `@agent`). This is THE definition — the core `StreamSnapshotStore` /
- * `streamSnapshotRead` import it directly, never their own copy.
+ * `@agent`).
  */
 export const StreamTabMetaSchema = z.object({
   schemaVersion: z
@@ -133,8 +131,15 @@ const numericUsageParsingShape = Object.fromEntries(
     ]),
 );
 
-/** Parsing schema with safe number coercion. */
-const TokenUsageStatsParsingBaseSchema = z
+/**
+ * Parsing schema with safe number coercion.
+ *
+ * Exported so callers that need to validate a single usage delta (e.g.
+ * {@link StreamSnapshotStore.addUsage}) can `safeParse` it themselves and log
+ * loudly on failure, instead of defaulting to zero. Never wrap this in
+ * `.catch()` for persisted/cost data — see `parseUsageData`'s docs and #7464.
+ */
+export const TokenUsageStatsParsingBaseSchema = z
   .object({
     ...numericUsageParsingShape,
     viaChatGptSubscription: z.boolean().prefault(false),
@@ -149,14 +154,6 @@ const TokenUsageStatsParsingBaseSchema = z
       (viaChatGptSubscription === true ? 'chatgpt-subscription' : undefined);
     return usageRoute == null ? stats : { ...stats, usageRoute };
   }) as z.ZodType<TokenUsageStats>;
-
-/**
- * Exported so callers that need to validate a single usage delta (e.g.
- * {@link StreamSnapshotStore.addUsage}) can `safeParse` it themselves and log
- * loudly on failure, instead of defaulting to zero. Never wrap this in
- * `.catch()` for persisted/cost data — see `parseUsageData`'s docs and #7464.
- */
-export { TokenUsageStatsParsingBaseSchema };
 
 export interface ParsedUsageData {
   /** Successfully parsed, non-empty per-run usage. */
@@ -178,21 +175,17 @@ export interface ParsedUsageData {
  * and tool-use streams. Workflow has one entry per run (= one entry per
  * tab); tool-use can accumulate multiple via resume.
  *
- * Failures are isolated PER RUN — via `safeParse` rather than the previous
- * `.catch(emptyUsageStats())` — so one malformed entry can't silently zero
+ * Failures are isolated PER RUN, so one malformed entry can't silently zero
  * every other run's cost data. A run whose value isn't a well-formed usage
  * object is logged loudly (not swallowed) and its raw value is returned in
  * `unparsedRuns` for the caller to preserve, rather than defaulted to zero
  * and dropped. Individual numeric fields inside an otherwise object-shaped
  * entry still coerce/zero via `TokenUsageStatsParsingBaseSchema`'s own
- * per-field handling — that salvage behavior is unrelated to this fix and
- * intentionally unchanged.
+ * per-field handling.
  *
  * A top-level value that isn't a record at all (e.g. corrupted to an array
  * or a scalar) has no runId to key a preserved raw entry against, so it is
- * only logged loudly; recovering it would require guessing intent. This is
- * an extreme, likely-tampered edge case — the realistic failure mode this
- * fixes is a single corrupted run entry within an otherwise valid record.
+ * only logged loudly; recovering it would require guessing intent. See #7464.
  */
 export function parseUsageData(raw: unknown): ParsedUsageData {
   const usage = new Map<string, TokenUsageStats>();

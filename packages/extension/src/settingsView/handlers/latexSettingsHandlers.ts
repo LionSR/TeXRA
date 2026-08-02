@@ -1,7 +1,6 @@
 /**
  * LaTeX settings domain handlers.
  *
- * Extracted from SettingsViewMessageHandler to improve cohesion.
  * Handles LaTeX tool detection, recommended VS Code settings,
  * LaTeX Workshop installation, and install commands.
  */
@@ -38,10 +37,7 @@ import {
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
 
-/**
- * LaTeX settings handler delegate.
- * Manages LaTeX tool detection, recommended settings, and installation.
- */
+/** LaTeX settings handler delegate. */
 export class LatexSettingsHandlers {
   private readonly recommendedSettingsController =
     new LatexRecommendedSettingsController({
@@ -131,10 +127,6 @@ export class LatexSettingsHandlers {
    * Push current LaTeX/compile/diff config values to the webview. Each field
    * is left undefined when no value is set in workspace storage so the UI
    * can render the documented default rather than overwriting it on save.
-   *
-   * Iterates LATEX_FIELD_TO_KEY (the shared single-source-of-truth field/key
-   * map) so the read path stays automatically aligned with the write path
-   * and the migration helper.
    */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(

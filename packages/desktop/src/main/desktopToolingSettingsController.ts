@@ -1,4 +1,3 @@
-// Local imports
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';

@@ -45,6 +45,13 @@ function dispatch(
   assertSupported(handler!)(message as never);
 }
 
+/** A message as the webview receives it, after the postMessage JSON round-trip. */
+function overWire(
+  message: ProgressViewOutboundMessage,
+): ProgressViewOutboundMessage {
+  return JSON.parse(JSON.stringify(message)) as ProgressViewOutboundMessage;
+}
+
 function registerStream(
   state: ProgressState,
   streamId: StreamTabId,
@@ -250,27 +257,25 @@ describe('stream meta frontend state', () => {
     );
     const getState = seedState(state);
 
-    const message = JSON.parse(
-      JSON.stringify({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        streamInfo: {
-          name: streamId,
-          label: 'stream-a',
-          kind: 'agent',
-          agentCategory: AgentCategory.Workflow,
-          creationTimestamp: 1,
+    const message = overWire({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      streamInfo: {
+        name: streamId,
+        label: 'stream-a',
+        kind: 'agent',
+        agentCategory: AgentCategory.Workflow,
+        creationTimestamp: 1,
+      },
+      streamState: {
+        kind: AgentCategory.Workflow,
+        status: STREAM_PHASE.RUNNING,
+        conversationProgress: {
+          toolCallCount: 0,
         },
-        streamState: {
-          kind: AgentCategory.Workflow,
-          status: STREAM_PHASE.RUNNING,
-          conversationProgress: {
-            toolCallCount: 0,
-          },
-          roundStage: null,
-          subagents: [],
-        },
-      } satisfies ProgressViewOutboundMessage),
-    ) as ProgressViewOutboundMessage;
+        roundStage: null,
+        subagents: [],
+      },
+    });
 
     dispatch(streamMetaHandlers, message);
 
@@ -286,28 +291,26 @@ describe('stream meta frontend state', () => {
     const patch = (
       phaseStage: { label: string; index?: number; total?: number } | null,
     ): ProgressViewOutboundMessage =>
-      JSON.parse(
-        JSON.stringify({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-          streamInfo: {
-            name: streamId,
-            label: 'stream-a',
-            kind: 'agent',
-            agentCategory: AgentCategory.Workflow,
-            creationTimestamp: 1,
+      overWire({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+        streamInfo: {
+          name: streamId,
+          label: 'stream-a',
+          kind: 'agent',
+          agentCategory: AgentCategory.Workflow,
+          creationTimestamp: 1,
+        },
+        streamState: {
+          kind: AgentCategory.Workflow,
+          status: STREAM_PHASE.RUNNING,
+          conversationProgress: {
+            toolCallCount: 0,
           },
-          streamState: {
-            kind: AgentCategory.Workflow,
-            status: STREAM_PHASE.RUNNING,
-            conversationProgress: {
-              toolCallCount: 0,
-            },
-            roundStage: null,
-            phaseStage,
-            subagents: [],
-          },
-        } satisfies ProgressViewOutboundMessage),
-      ) as ProgressViewOutboundMessage;
+          roundStage: null,
+          phaseStage,
+          subagents: [],
+        },
+      });
 
     dispatch(
       streamMetaHandlers,
@@ -388,25 +391,23 @@ describe('stream meta frontend state', () => {
     );
     const getState = seedState(state);
 
-    const message = JSON.parse(
-      JSON.stringify({
-        command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
-        stream: streamId,
-        action: 'render',
-        kind: AgentCategory.Workflow,
-        runUsage: {},
-        outputs: { files: {}, missing: {}, compileFailures: {} },
-        activeState: {
-          conversationProgress: { toolCallCount: 0 },
-          roundStage: null,
-          phaseStage: null,
-          badges: {
-            subagents: [],
-          },
-          parentStreamId: null,
+    const message = overWire({
+      command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      stream: streamId,
+      action: 'render',
+      kind: AgentCategory.Workflow,
+      runUsage: {},
+      outputs: { files: {}, missing: {}, compileFailures: {} },
+      activeState: {
+        conversationProgress: { toolCallCount: 0 },
+        roundStage: null,
+        phaseStage: null,
+        badges: {
+          subagents: [],
         },
-      } satisfies ProgressViewOutboundMessage),
-    ) as ProgressViewOutboundMessage;
+        parentStreamId: null,
+      },
+    });
 
     dispatch(syncHandlers, message);
 

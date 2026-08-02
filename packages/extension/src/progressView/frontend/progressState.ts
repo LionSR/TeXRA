@@ -1,13 +1,10 @@
 /**
  * Module-level reactive state for the Progress view.
  *
- * Hoisted from `ProgressApp` private fields (PRD: docs/prds/2026-05-08-electron-shell-layout.md § 7.A).
- * Both the rail (`<stream-tabs>`) and the conversation body need to observe the
- * same signals from independent DOM trees once PR 2 extracts `<stream-conversation>`.
- *
- * No behavior change: every signal here was previously a private field on the
- * `ProgressApp` class. Identity and reactivity are preserved — selectors are
- * still `select()` / `Signal.Computed`, so consumers do not need to re-subscribe.
+ * The signals live here rather than on `ProgressApp` because independent DOM
+ * trees observe them: the rail (`<stream-tabs>`), the conversation body
+ * (`<stream-conversation>`), and the desktop renderer, which drives the same
+ * `appState` without mounting `<progress-app>` at all.
  *
  * Singleton scope: only one Progress view per webview/page. If we ever need
  * multiple independent progress instances on the same page, this file must be
@@ -360,12 +357,8 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
 });
 
 // ---------------------------------------------------------------------------
-// Mutators — module-level helpers for stream-scoped updates.
-//
-// Hoisted from `ProgressApp` private methods (PRD: docs/prds/2026-05-08-electron-shell-layout.md
-// § 7.A) so the desktop renderer can drive the same `appState` updates without
-// mounting `<progress-app>`. Behavior preserved exactly: same fast-path,
-// same skip-no-op short-circuit, same Mutative structural sharing.
+// Mutators — module-level helpers for stream-scoped updates, shared by the
+// webview and the desktop renderer.
 // ---------------------------------------------------------------------------
 
 export function setStreamStateForId(

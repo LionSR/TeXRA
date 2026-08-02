@@ -1,14 +1,13 @@
 /**
  * `SessionHandle` — one owner per session for the runtime's coordination state.
  *
- * SDK Step 7d composition root. It is a **composition record**, not a facade:
- * it re-exposes no per-concern methods, so callers keep the existing instance
- * vocabulary they already use after 7a–c landed (`session.interactions.x(...)`,
- * `session.executions.y(...)`). Its sole lifecycle gate,
- * {@link SessionHandle.waitUntilReady}, ensures persistent restart repair has
- * settled before a host exposes the session. It composes the landed runtime owners —
+ * It is a **composition record**, not a facade: it re-exposes no per-concern
+ * methods, so callers address each owner directly
+ * (`session.interactions.x(...)`, `session.executions.y(...)`). Its sole
+ * lifecycle gate, {@link SessionHandle.waitUntilReady}, ensures persistent
+ * restart repair has settled before a host exposes the session. It composes
  * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
- * {@link SessionHostInteractions} — plus the other session-scoped owners.
+ * {@link SessionHostInteractions}, and the other session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop Electron process. The default instance is installed
@@ -882,8 +881,8 @@ export function teardownDefaultSession(): void {
  * The process-default session — the sole owner of the process-wide runtime
  * singletons (#7694). Every member the constructor doesn't receive is
  * fresh-built in the same FORCED dependency order any other `SessionHandle`
- * uses; there is no separate `Shared*`/`*Service` module export to alias
- * anymore, so this construction *is* where those singletons now live.
+ * uses, and this construction is the only place those singletons live: no
+ * module-level `Shared*`/`*Service` export aliases them.
  *
  * Hosts must initialize it explicitly after opening transcript persistence.
  * Access before that composition step is a lifecycle error rather than an

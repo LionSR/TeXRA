@@ -46,10 +46,10 @@ interface ResolveGoogleClientParams {
  * Resolve a `GoogleGenAI` client, refreshing on every call for server-side relay
  * keys (auth tokens expire ~30 mins) and caching for non-expiring personal keys.
  *
- * SDK-level retries are disabled (`retryOptions: { attempts: 1 }`) so that only
- * the flow-level retry loop (`RetryState.getNodeRetryConfig`) governs the user's
- * retry budget — otherwise transient errors would be retried by both the SDK and
- * the flow, multiplying the configured attempt count.
+ * The client is built without `retryOptions` so that only the flow-level retry
+ * loop (`RetryState.getNodeRetryConfig`) governs the user's retry budget; see
+ * the note in `createClient` for why passing any value there is worse than
+ * passing none.
  */
 export async function resolveGoogleClient(
   params: ResolveGoogleClientParams,

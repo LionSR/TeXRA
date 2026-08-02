@@ -311,7 +311,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     if (!syncActiveStream) return;
 
     // Skip content sync when streams exist but filter excludes all of them
-    const hasStreams = this.state.streamLogs.keys().length > 0;
+    const hasStreams = this.state.selectableStreamNames().length > 0;
     if (activeStream || !hasStreams) {
       // If the active stream's entries were released (e.g. filter change
       // moved active to a previously-evicted stream), rehydrate before

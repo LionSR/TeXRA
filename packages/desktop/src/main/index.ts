@@ -307,11 +307,10 @@ function createWindow(options: {
   } = {};
   // `installDesktopHostBridge.postToRenderer` is itself a no-op when
   // `webContents.isDestroyed()`. Without checking that here too, callers would
-  // falsely report success and skip their external-viewer fallback. Bot
-  // review (#3816) caught it. Shared by the prompt controller, preview host,
-  // agent-execution wiring, and the pty/browser-view workspace IPC below; the
-  // diff host keeps its own narrower check (no `webContents.isDestroyed()`)
-  // per bot review #3815, so it is not folded in.
+  // falsely report success and skip their external-viewer fallback. Shared by
+  // the prompt controller, preview host, agent-execution wiring, and the
+  // pty/browser-view workspace IPC below; the diff host keeps its own narrower
+  // check (no `webContents.isDestroyed()`), so it is not folded in.
   const postToRendererIfAlive = (message: unknown): boolean => {
     const ipc = ipcRef.current;
     if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
@@ -391,10 +390,10 @@ function createWindow(options: {
     if (response === 1) return 'continue';
     return 'cancel';
   };
-  // Lightweight update check (issue #7682, arm b): at most once/day, notifies
-  // at most once per release via a native dialog linking to the GitHub
-  // release page. Not a full updater — no download, no install, no feed
-  // files. Disable with TEXRA_NO_UPDATE_CHECK=1. Gated on owning the
+  // Lightweight update check: at most once/day, notifies at most once per
+  // release via a native dialog linking to the GitHub release page. Not a full
+  // updater: no download, no install, no feed files. Disable with
+  // TEXRA_NO_UPDATE_CHECK=1. Gated on owning the
   // single-instance lock so an "open folder in new window" launch (which
   // deliberately runs as its own process) never duplicates the check or
   // dialog alongside the primary process.
@@ -438,17 +437,11 @@ function createWindow(options: {
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
-    // Audit item B / trajectory #17: prefer the in-app PDF overlay
-    // (<iframe> mounted inside a wa-dialog so Electron's bundled
-    // Chromium PDF viewer renders the build output). The external
-    // viewer (`shell.openPath`) is preserved as a fallback when
-    // `postToRenderer` is unavailable or the renderer rejects the
-    // post — mirrors the diff-host wiring just above.
-    //
-    // Return `false` when the IPC bridge is not yet wired (startup
-    // race) or the BrowserWindow has been destroyed; the host then
-    // falls back to the external viewer so previews never silently
-    // disappear.
+    // Prefer the in-app PDF overlay (an <iframe> inside a wa-dialog, so
+    // Electron's bundled Chromium PDF viewer renders the build output).
+    // Returning `false` when the IPC bridge is not yet wired (startup race)
+    // or the BrowserWindow has been destroyed falls the host back to the
+    // external viewer (`shell.openPath`) so previews never silently disappear.
     postToRenderer: postToRendererIfAlive,
   });
   let teamSignInPending = false;
@@ -559,16 +552,10 @@ function createWindow(options: {
     openBuildDisplay: previewHost.openBuildDisplay,
     openDiff: createDesktopDiffHost({
       openPath: previewHost.openPath,
-      // Audit item C / trajectory #18: prefer the in-app overlay
-      // (<texra-diff-view> inside a wa-dialog). The external-editor
-      // path is preserved as a fallback when `postToRenderer` is
-      // unavailable or `forceExternal` is set.
-      //
-      // Return `false` when the IPC bridge is not yet wired (startup
-      // race) or the BrowserWindow has been destroyed — the host then
-      // falls back to the external-editor flow so diffs never silently
-      // disappear. Bot review (#3815): the previous arrow form
-      // silently no-op'd on `ipcRef.current === undefined`.
+      // Prefer the in-app overlay (<texra-diff-view> inside a wa-dialog).
+      // Returning `false` when the IPC bridge is not yet wired (startup race)
+      // or the BrowserWindow has been destroyed falls the host back to the
+      // external-editor flow, so diffs never silently disappear.
       postToRenderer: (message) => {
         const ipc = ipcRef.current;
         if (!ipc) return false;
@@ -648,9 +635,6 @@ function createWindow(options: {
     },
     onError: reportAsyncError,
   });
-  // Workspace-explorer sidebar removed in PR 3 (PRD § 7.D + § 8). File staging
-  // happens entirely inside <main-app>'s built-in panel; the duplicate tree
-  // sidebar and its IPC are gone.
   const agentSettingsController = new DefaultDesktopAgentSettingsController({
     workspaceState: platform().workspaceState,
     globalState: platform().globalState,
@@ -843,7 +827,7 @@ function createWindow(options: {
     showErrorMessage: settingsUi.showErrorMessage,
     onError: settingsUi.onError,
   });
-  // Cross-host history refresh (#8625): the shared ~/.texra executions dir
+  // Cross-host history refresh: the shared ~/.texra executions dir
   // is written by the CLI and extension too, so the settings history list
   // re-posts when any host adds, finishes, or deletes a run. Best-effort: a
   // watch failure only disables live refresh; manual refresh still works.
@@ -973,9 +957,7 @@ function createWindow(options: {
   onboardingIpcRef.current = onboardingIpc;
   // One-shot migration: existing desktop users with a credential or run
   // history never see the welcome card (State 0) or setup auto-start (State
-  // 1). Mirrors the extension (`extension.ts:282`) and CLI
-  // (`runOnboarding.tsx:154`) backfill, which desktop formerly skipped by
-  // hardcoding `'done'`.
+  // 1). Mirrors the extension and CLI backfill.
   void (async () => {
     try {
       const globalState = platform().globalState;
@@ -1021,11 +1003,9 @@ function createWindow(options: {
       openOnboardingReadyGate();
     }
   })();
-  // Real desktop git host — closes audit item A from
-  // `docs/dev/audits/2026-05-08-standalone-trajectory-audit.md` (trajectory #16). Spawns
-  // `git log` under the active workspace to populate the launcher banner's
-  // recent-commits picker. The host is stateless and re-probes per request,
-  // so workspace switches don't need cache invalidation.
+  // Spawns `git log` under the active workspace to populate the launcher
+  // banner's recent-commits picker. The host is stateless and re-probes per
+  // request, so workspace switches don't need cache invalidation.
   const gitHost = createDesktopGitHost({
     getWorkspacePath: () => options.workspacePath,
     onError: reportAsyncError,

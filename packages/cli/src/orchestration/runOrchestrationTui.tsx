@@ -270,11 +270,6 @@ export function OrchestrationApp(
     kind: 'launcher',
   });
   const pending = step.kind === 'model' ? step.action : undefined;
-  const modelAccessOpen = step.kind === 'model-access';
-  const resumeOpen = step.kind === 'resume';
-  const agentOpen = step.kind === 'agent';
-  const teamOpen = step.kind === 'team';
-  const accountOpen = step.kind === 'account';
   const modelAccessItems = props.modelAccess
     ? buildCliModelAccessItems({
         kind: 'loaded',
@@ -331,7 +326,7 @@ export function OrchestrationApp(
   const headerLines: readonly string[] = [title, subtitle];
 
   let footerHints: readonly string[];
-  if (teamOpen) {
+  if (step.kind === 'team') {
     footerHints = orchestrationFooterHints(teamItems);
   } else if (step.kind === 'launcher') {
     footerHints = listFooterHints;
@@ -402,7 +397,7 @@ export function OrchestrationApp(
     goBack();
   });
 
-  if (modelAccessOpen) {
+  if (step.kind === 'model-access') {
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
@@ -427,7 +422,7 @@ export function OrchestrationApp(
     );
   }
 
-  if (resumeOpen) {
+  if (step.kind === 'resume') {
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
@@ -451,11 +446,15 @@ export function OrchestrationApp(
     );
   }
 
-  if (agentOpen || teamOpen || accountOpen) {
+  if (
+    step.kind === 'agent' ||
+    step.kind === 'team' ||
+    step.kind === 'account'
+  ) {
     let pickerItems: readonly CliOrchestrationItem[];
-    if (agentOpen) {
+    if (step.kind === 'agent') {
       pickerItems = agentItems;
-    } else if (teamOpen) {
+    } else if (step.kind === 'team') {
       pickerItems = teamItems;
     } else {
       pickerItems = props.accountItems ?? [];

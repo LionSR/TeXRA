@@ -166,8 +166,7 @@ describe('CLI agents run command', () => {
       response: 'Correct.',
       workingDirectory: '/tmp/project',
     });
-    // The v0.41 cut removed the three deprecated status projections; `outcome`
-    // is the only terminal fact the headless JSON publishes.
+    // `outcome` is the only terminal fact the headless JSON publishes.
     expect(Object.keys(emission?.json ?? {})).toEqual([
       'category',
       'executionId',

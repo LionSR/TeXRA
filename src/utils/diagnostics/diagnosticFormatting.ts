@@ -40,21 +40,34 @@ const SEVERITY_HINT = 3;
  * Unified severity metadata for labels, counting, and formatting. The
  * `countKey` doubles as the plural label ('info' stays 'info'), and numeric
  * keys iterate in ascending order so `Object.values` gives formatting order.
+ * `sectionTitle` is the markdown section a severity belongs to; info and hint
+ * deliberately share one.
  */
 const SEVERITY_CONFIG: Record<
   number,
-  { label: string; countKey: keyof SeverityCounts }
+  { label: string; countKey: keyof SeverityCounts; sectionTitle: string }
 > = {
-  [SEVERITY_ERROR]: { label: 'error', countKey: 'errors' },
-  [SEVERITY_WARNING]: { label: 'warning', countKey: 'warnings' },
-  [SEVERITY_INFO]: { label: 'info', countKey: 'info' },
-  [SEVERITY_HINT]: { label: 'hint', countKey: 'hints' },
+  [SEVERITY_ERROR]: {
+    label: 'error',
+    countKey: 'errors',
+    sectionTitle: 'Errors',
+  },
+  [SEVERITY_WARNING]: {
+    label: 'warning',
+    countKey: 'warnings',
+    sectionTitle: 'Warnings',
+  },
+  [SEVERITY_INFO]: {
+    label: 'info',
+    countKey: 'info',
+    sectionTitle: 'Info/Hints',
+  },
+  [SEVERITY_HINT]: {
+    label: 'hint',
+    countKey: 'hints',
+    sectionTitle: 'Info/Hints',
+  },
 };
-
-/** Get the string label for a severity level. */
-function getSeverityLabel(severity: number): string {
-  return SEVERITY_CONFIG[severity]?.label ?? 'unknown';
-}
 
 /** Count diagnostics by severity level. */
 export function countBySeverity(
@@ -91,7 +104,7 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
   return diagnostics
     .map((d) => {
       const line = d.range.start.line + 1;
-      const label = getSeverityLabel(d.severity);
+      const label = SEVERITY_CONFIG[d.severity]?.label ?? 'unknown';
       return `  ${line}: [${label}] ${d.message}`;
     })
     .join('\n');
@@ -105,22 +118,14 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
  * **Line 10:** Unexpected token
  * **Line 20:** Missing semicolon
  */
-const SECTION_TITLE_BY_SEVERITY: Partial<Record<number, string>> = {
-  [SEVERITY_ERROR]: 'Errors',
-  [SEVERITY_WARNING]: 'Warnings',
-  [SEVERITY_INFO]: 'Info/Hints',
-  [SEVERITY_HINT]: 'Info/Hints',
-};
-
 export function formatGroupedSections(
   diagnostics: GenericDiagnostic[],
 ): string {
-  // Diagnostics with an unrecognized severity key to `undefined` and are
-  // dropped by the `.get(title) ?? []` lookups below — same silent omission
-  // as the three `.filter()` calls this replaced.
+  // A diagnostic with an unrecognized severity groups under `undefined` and is
+  // deliberately dropped: only the three known section titles are rendered.
   const bySectionTitle = groupBy(
     diagnostics,
-    (d) => SECTION_TITLE_BY_SEVERITY[d.severity],
+    (d) => SEVERITY_CONFIG[d.severity]?.sectionTitle,
   );
   const sections: Array<[title: string, items: GenericDiagnostic[]]> = [
     'Errors',

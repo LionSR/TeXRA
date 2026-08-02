@@ -41,9 +41,11 @@ import {
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-// installPlatform dynamically imports @platform/platform at call time, so
-// every call below also re-resolves it after this file's vi.resetModules()
-// calls, keeping it on the instance the factory reads.
+// This file calls vi.resetModules(), which desyncs the statically-imported
+// factory from a freshly-imported @platform copy. Blocks that must agree with
+// the platform therefore re-import '@agent/runtime/ModelFactory' right after
+// installPlatform, which itself dynamically imports @platform/platform at call
+// time and so always lands on the instance the re-imported factory reads.
 
 function modelConfig(
   provider: ModelProvider,
@@ -568,9 +570,8 @@ describe('Google Interactions API routing', () => {
 
   const googleConfig = (): ModelConfig => modelConfig(ModelProvider.GOOGLE);
 
-  // Re-import the factory alongside the platform it reads from. An earlier test
-  // in this file calls vi.resetModules(), which would otherwise desync the
-  // statically-imported factory from a freshly-imported @platform copy.
+  // Re-imports the factory alongside the platform it reads from (see the
+  // module-header note on this file's vi.resetModules() calls).
   async function initWithFlag(
     useInteractions?: boolean,
     useOpenRouter = false,
@@ -856,11 +857,10 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
   // the class differs, not the key), so this signed-out sweep guards the key
   // invariant for both states.
   it('tags every registered model with its predicted compatibility key', async () => {
-    // Re-import the factory alongside a freshly-initialized platform. An
-    // earlier test in this file calls vi.resetModules(), which would otherwise
-    // desync the statically-imported factory from the platform it reads; this
-    // also makes the block robust to isolated `--grep` runs rather than
-    // free-riding on a prior test's initPlatform.
+    // Re-import the factory alongside a freshly-initialized platform (see the
+    // module-header note). Initializing here also keeps the block correct
+    // under an isolated `--grep` run rather than free-riding on a prior
+    // test's initPlatform.
     await installPlatform({}, { languageModel: AVAILABLE_LANGUAGE_MODEL_PORT });
     const {
       modelHandlerCompatibilityKey: compatKey,
@@ -868,7 +868,7 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
       activeModelHandlerCompatibilityKey: activeKey,
     } = await import('@agent/runtime/ModelFactory');
     // Stub the relay service on the same fresh module instance the re-imported
-    // factory reads (static imports are desynced by this file's resetModules).
+    // factory reads.
     const { setServerSideKeyService: setService } =
       await import('@auth/serverKeys');
     setService({
@@ -912,8 +912,8 @@ describe('Kimi Code reroute under included access', () => {
   async function createKimiHandler(options: {
     readonly includedAccess: boolean;
   }): Promise<ModelConfig> {
-    // Re-import alongside a freshly-initialized platform — see the invariant
-    // test above for why this file cannot rely on the static factory import.
+    // Re-import alongside a freshly-initialized platform (see the
+    // module-header note).
     await installPlatform({
       globalState: { 'texra.kimiCode.prefer': true },
       secrets: { 'apiKey.kimiCode': 'test-kimi-code-key' },

@@ -65,8 +65,10 @@ export type LatexdiffTempFileLocation =
 export type AgentReviewApproach = (typeof AGENT_REVIEW_APPROACHES)[number];
 
 /**
- * Contract for the historical `model.retry.maxAttempts` setting. The value is
- * the number of automatic retries after the initial model request.
+ * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
+ * number of automatic retries after the initial model request. Shared by
+ * {@link ModelRetryMaxAttemptsSchema} and the settings-view reliability row so
+ * the schema and the UI cannot disagree about the range.
  */
 export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
   defaultValue: 2,
@@ -610,22 +612,21 @@ const CoreSettingsSchema = z
 
 export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
 
+/** True for an index-signature record, false for a fixed-key settings group. */
+type IsRecord<T> = string extends keyof T ? true : false;
+
 /**
  * Dotted leaf paths of the settings tree, enumerated at the type level.
  *
  * Drives the compile-time guards below so {@link CORE_SETTING_PATHS} stays in
  * lockstep with {@link CoreSettingsShape}: a record/array/primitive field is a
  * leaf, a nested settings group is recursed into.
- */
-type IsRecord<T> = string extends keyof T ? true : false;
-
-/**
+ *
  * `NonNullable` is applied before the `extends object` test so that an optional
  * group added without a default (`Group | undefined`) still recurses into its
  * leaves instead of silently collapsing to a single key. The guard therefore
  * stays sound whether a nested group is declared with `.prefault()` (every group
- * today) or `.optional()`. Arrays and records resolve to leaves; nested settings
- * groups recurse.
+ * today) or `.optional()`.
  */
 type LeafPaths<T> = {
   [K in keyof T & string]: NonNullable<T[K]> extends readonly unknown[]
@@ -647,10 +648,9 @@ type AssertNever<T extends never> = T;
  * lists for typo detection without hand-maintaining the list in each host.
  *
  * Kept in sync with the schema by the two compile-time guards just below: the
- * `satisfies` clause rejects a typo'd or renamed path, and `_AssertCorePathsExhaustive`
- * fails the build if a setting is added to the schema without a matching entry
- * here. Previously both failure modes were silent (the list compiled fine while
- * host typo-detection quietly broke).
+ * `satisfies` clause rejects a typo'd or renamed path, and
+ * `_AssertCorePathsExhaustive` fails the build if a setting is added to the
+ * schema without a matching entry here.
  */
 export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',

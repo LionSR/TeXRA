@@ -47,7 +47,7 @@ type SendFollowUpMessage = ProgressViewMessage<
   typeof PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
 >;
 
-export type ProgressViewFollowUpImage = NonNullable<
+type ProgressViewFollowUpImage = NonNullable<
   SendFollowUpMessage['images']
 >[number];
 
@@ -521,9 +521,9 @@ export function createProgressViewSecondTierHandlers(
       deps.postToRenderer({
         command: CMD.SET_FOLLOWUP_OPTIONS,
         stream: data.stream,
-        ...(toolUseAgentsData && { toolUseAgentsData }),
-        ...(modelOptionsData && { modelOptionsData }),
-      } as ProgressViewOutboundMessage);
+        ...(toolUseAgentsData && { toolUseAgentsData: [...toolUseAgentsData] }),
+        ...(modelOptionsData && { modelOptionsData: [...modelOptionsData] }),
+      });
     },
     [CMD.RUN_COMPILE_FIXER]: async (data) => {
       await deps.applyFollowUpPlan(

@@ -1,12 +1,11 @@
 /**
- * Schema-driven message handler for SettingsView.
+ * Schema-driven message handler for every SettingsView tab.
  *
- * Combines handlers from MemoryView, HistoryView, and ProfileView
- * into a single unified message handler.
- *
- * Domain-specific handlers are delegated to focused handler classes:
- * - AgentHandlers: agent selection, directories, and teams
- * - LatexSettingsHandlers: LaTeX tool detection and recommended settings
+ * This class owns the inbound registry, the memory/profile/model/tool commands,
+ * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
+ * focused handler classes in `./handlers/`: `AgentHandlers`,
+ * `LatexSettingsHandlers`, `HistoryHandlers`, `GitHubSubscriptionHandlers`, and
+ * `ChatGptSubscriptionHandlers`.
  */
 import * as path from 'node:path';
 
@@ -1030,9 +1029,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await vscode.env.openExternal(vscode.Uri.parse(url));
   }
 
-  private async postMessageToActiveWebview(
-    message: unknown | null | undefined,
-  ): Promise<void> {
+  private async postMessageToActiveWebview(message: unknown): Promise<void> {
     if (message == null) return;
     await this.withActiveWebview(async (webview) => {
       await webview.postMessage(message);

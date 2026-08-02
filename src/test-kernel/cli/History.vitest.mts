@@ -1576,8 +1576,8 @@ describe('CLI history runtime', () => {
 
         expect(exitCode).toBe(CliExitCode.Success);
         expect(stdout).toBe(JSON.stringify(trace));
-        // Must not contain the old literal placeholder tokens, which read like
-        // an unresolved template rather than instructions.
+        // The instruction names concrete paths; literal placeholder tokens
+        // would read as an unresolved template.
         expect(stderr).not.toContain('<redirected-path>');
         expect(stderr).not.toContain('<relative-path-to-the-redirected-file>');
         expect(stderr).toContain(

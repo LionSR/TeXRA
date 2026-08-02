@@ -129,7 +129,6 @@ describe('desktop renderer bootstrap fallback', () => {
     const source = loadRendererMain();
     expect(source).toContain('renderBootstrapFallback');
     expect(source).toContain('try {');
-    // `logsController` since the logs viewer moved from a wa-drawer to a tab.
     expect(source).toContain('logsController.rerenderViewer();');
     expect(source).toContain('rerenderShell();');
     expect(source).toContain('catch (error)');
@@ -149,9 +148,7 @@ describe('desktop renderer bootstrap fallback', () => {
     const source = loadRendererMain();
     // The DOM-dependent setup (event wiring + onboarding REQUEST_STATE +
     // WEBVIEW_READY emission) must be gated behind !bootstrapFailed so it
-    // cannot throw on top of the already-rendered fallback UI. (The
-    // workspace-explorer sidebar — and its REQUEST_TREE call — was removed
-    // in PRD PR 3; only the onboarding state + ready emission remain.)
+    // cannot throw on top of the already-rendered fallback UI.
     expect(source).toContain('if (!bootstrapFailed) {');
     expect(source).toContain('DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE');
     expect(source).toContain('postWebviewReady');

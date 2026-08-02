@@ -353,8 +353,8 @@ describe('desktop settings IPC', () => {
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
     const { settings, posted } = createCapturedSettingsFixture();
 
-    // Was previously declared unsupported and appeared in the derived
-    // capability broadcast (SET_UNSUPPORTED_COMMANDS); the fix removes it.
+    // The desktop serves this command, so it must stay out of the derived
+    // capability broadcast (SET_UNSUPPORTED_COMMANDS).
     settings.handleMessage({
       command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
       view: 'settings',

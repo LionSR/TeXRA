@@ -815,45 +815,34 @@ export async function readCompletedRunConversation(
     streamLogStore,
   });
 
-  // Legacy `conversation.json`; `null` when missing or empty.
-  const tryLegacy =
-    async (): Promise<CompletedRunConversationReadResult | null> => {
-      const conversation =
-        await getExecutionStore(executionId).readConversation();
-      return conversation ? { conversation, source: 'legacyKV' } : null;
-    };
-  const trySidecar =
-    async (): Promise<CompletedRunConversationReadResult | null> =>
-      resolved
-        ? readSidecarConversation(
-            executionId,
-            resolved,
-            snapshotStore,
-            streamLogStore,
-          )
-        : null;
-
-  const sidecar = await trySidecar();
+  const sidecar = resolved
+    ? await readSidecarConversation(
+        executionId,
+        resolved,
+        snapshotStore,
+        streamLogStore,
+      )
+    : null;
   if (sidecar?.conversation) return sidecar;
-  const legacy = await tryLegacy();
-  if (legacy) {
-    return sidecar
-      ? {
-          conversation: legacy.conversation,
-          source: 'legacyKV',
-          ...(sidecar.candidateStreamIds
-            ? { candidateStreamIds: sidecar.candidateStreamIds }
-            : {}),
-          ...(sidecar.associatedStreamIds
-            ? { associatedStreamIds: sidecar.associatedStreamIds }
-            : {}),
-          ...(sidecar.conflicts ? { conflicts: sidecar.conflicts } : {}),
-          ...(sidecar.hasOrderingCycle ? { hasOrderingCycle: true } : {}),
-          ...(sidecar.hasOrderingAmbiguity
-            ? { hasOrderingAmbiguity: true }
-            : {}),
-        }
-      : legacy;
+
+  // Legacy `conversation.json`; absent or empty leaves the sidecar diagnostics
+  // as the only answer.
+  const legacyConversation =
+    await getExecutionStore(executionId).readConversation();
+  if (!legacyConversation) {
+    return sidecar ?? { conversation: null, source: 'none' };
   }
-  return sidecar ?? { conversation: null, source: 'none' };
+  return {
+    conversation: legacyConversation,
+    source: 'legacyKV',
+    ...(sidecar?.candidateStreamIds
+      ? { candidateStreamIds: sidecar.candidateStreamIds }
+      : {}),
+    ...(sidecar?.associatedStreamIds
+      ? { associatedStreamIds: sidecar.associatedStreamIds }
+      : {}),
+    ...(sidecar?.conflicts ? { conflicts: sidecar.conflicts } : {}),
+    ...(sidecar?.hasOrderingCycle ? { hasOrderingCycle: true } : {}),
+    ...(sidecar?.hasOrderingAmbiguity ? { hasOrderingAmbiguity: true } : {}),
+  };
 }

@@ -32,19 +32,14 @@ async function mountTabs(props: Partial<StreamTabs>): Promise<StreamTabs> {
   return element;
 }
 
-/**
- * Regression coverage: the child-stream expand/collapse chevron renders as
- * the shared `wa-button` action-icon pattern (matching the sibling delete
- * button two elements over), not a hand-rolled native `<button>` reset. The
- * delegated click handler in StreamTabs.handleTabClick keys off
- * `[data-stream][data-action]`, so the element must keep carrying both
- * attributes regardless of tag name.
- */
 describe('stream-tab expand chevron', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/StreamTabs'),
   );
 
+  // The child-stream expand/collapse chevron uses the shared `wa-button`
+  // action-icon pattern, and StreamTabs.handleTabClick delegates off
+  // `[data-stream][data-action]`, so the element must carry both attributes.
   it('renders the expand toggle as a wa-button carrying the delegated-click contract', async () => {
     const tabs = await mountTabs({
       streams: [makeStream('parent')],

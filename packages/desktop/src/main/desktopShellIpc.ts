@@ -27,6 +27,7 @@ import {
   DESKTOP_DOCS_URL,
   DESKTOP_LOCAL_COMMANDS,
   postDesktopSettingsRoute,
+  vsCodeOnlyGettingStartedMessage,
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
 
@@ -38,11 +39,9 @@ export interface DesktopShellActionFactoryOptions {
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
   /**
-   * Async git log host — closes audit item A from
-   * `docs/dev/audits/2026-05-08-standalone-trajectory-audit.md` (trajectory #16). The shell
-   * forwards its recent-commit result to the renderer. The host converts
-   * expected git failures into an empty result with its best-effort
-   * `isGitRepo` value.
+   * Async git log host. The shell forwards its recent-commit result to the
+   * renderer. The host converts expected git failures into an empty result
+   * with its best-effort `isGitRepo` value.
    */
   getRecentCommits(): Promise<{
     commits: string[];
@@ -235,14 +234,8 @@ function dispatchMainViewInboundOnShell(
       if (message.action === 'openWalkthrough') {
         actions.showFirstRunWalkthrough();
       } else {
-        const labels: Record<typeof message.action, string> = {
-          runSetup: 'Run setup assistant',
-          createSampleProject: 'Create sample project',
-          cloneOverleaf: 'Import from Overleaf',
-          downloadArxiv: 'Import from arXiv',
-        };
         actions.showInfoMessage(
-          `"${labels[message.action]}" requires the VS Code extension.`,
+          vsCodeOnlyGettingStartedMessage(message.action),
         );
       }
       return true;

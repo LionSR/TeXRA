@@ -102,7 +102,6 @@ function createCycleNode(
   overrides: Record<string, unknown> = {},
 ): ToolUseCycleNode<unknown> {
   return new ToolUseCycleNode<unknown>().setServices({
-    streamId,
     runScope: testRunScope(streamId, { interactions: host }),
     logger,
     modelCell: testModelCell({ getClient: vi.fn() }),

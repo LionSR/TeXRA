@@ -224,8 +224,7 @@ function handleStreamStatus(
   streamId: string,
   status: StreamPhase,
 ): void {
-  // Status reaches the renderer on the session-fact rail only; the renderer
-  // no longer reads run-scope `status` trace events.
+  // Status reaches the renderer on the session-fact rail only.
   renderer?.handleSessionEvent({
     scope: 'session',
     event: {
@@ -734,7 +733,7 @@ describe('CLI run progress renderer', () => {
     expect(output).not.toContain('\r\x1b[2K');
   });
 
-  it('deduplicates matching run and session stream-status facts', async () => {
+  it('writes one status line when a run-scope status fact accompanies the session fact', async () => {
     const output = await captureStreamWrites(process.stderr, async () => {
       const events = new SessionEventHub();
       const host = createCliRuntimeHost(

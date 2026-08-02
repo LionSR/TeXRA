@@ -93,7 +93,7 @@ vi.mock('@tools/approval', () => ({
 const PARENT_STREAM_ID = 'parent-stream' as StreamTabId;
 const CHILD_STREAM_ID = 'child-stream' as StreamTabId;
 
-/** The run context shared by nearly every case (host/stopAfterCycle/session vary). */
+/** The run context shared by nearly every case (stream/stopAfterCycle/session vary). */
 function parentRunContext(
   overrides: Partial<{
     streamId: StreamTabId;
@@ -410,11 +410,11 @@ describe('headless delegation', () => {
       () => callDelegateReview(),
     );
 
-    // The delivery XML still returns synchronously — a persistence hiccup on
+    // The delivery XML still returns synchronously: a persistence hiccup on
     // the best-effort path never fails a call whose result already returned
-    // inline (see PersistenceMode's `best-effort-delivery`, unchanged by this
-    // fix). What is lost is the durable report copy, which is why the lease
-    // must be marked undurable — mirroring `childRunLoop.ts`'s twin marks.
+    // inline (PersistenceMode's `best-effort-delivery`). What is lost is the
+    // durable report copy, so the lease must be marked undurable — mirroring
+    // `childRunLoop.ts`'s twin marks.
     expect(result.status).toBe('executed');
     expect(result.summary).toBe("Completed 'review'");
     const executionId = mocks.registerExecution.mock.calls[0]?.[0];
@@ -1086,17 +1086,9 @@ describe('headless delegation', () => {
   });
 
   it('rejects an approved model override unavailable in the active API mode', async () => {
-    // Only deepseekT is available; gpt5 is not — the override must be rejected
-    // synchronously, mirroring the initial delegate path's availability gate.
-    mocks.computeModelOptionsData.mockResolvedValue([
-      {
-        value: 'deepseekT',
-        label: 'DeepSeek',
-        disabled: false,
-        requiresKey: false,
-      },
-    ]);
-
+    // Only deepseekT is available (see beforeEach); gpt5 is not, so the
+    // override must be rejected synchronously, mirroring the initial delegate
+    // path's availability gate.
     const result = await delegateWithProposalDecision({
       action: 'approve',
       model: 'gpt5',
@@ -1165,10 +1157,8 @@ describe('headless delegation', () => {
   });
 
   it('includes memory misses in interactive early-delivered reports', async () => {
-    // Async delegation is now driven by the child-run loop over
-    // nativeSubagentStrategy: `executeAgent` (mocked here) is the loop's
-    // `launch` turn, and a returned WAITING result is the loop's one
-    // delivery site's input — there is no more onBeforeWaiting callback.
+    // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
+    // WAITING result it returns is what the loop's single delivery site sees.
     mockWaitingChildOnce({
       memoryMisses: [
         { path: '/memories/missing.md', reason: 'not found & unreadable' },

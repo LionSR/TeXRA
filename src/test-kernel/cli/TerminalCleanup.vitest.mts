@@ -51,8 +51,7 @@ afterEach(() => {
 });
 
 /** Put one real approval in the queue: the title reads the queue's own
- *  projection, so the test drives it through the queue rather than writing a
- *  status value the queue no longer stores. */
+ *  projection, so the test has to drive it through the queue. */
 function queueTitleApproval(streamId: string): void {
   void enqueueApproval({
     kind: 'bash',

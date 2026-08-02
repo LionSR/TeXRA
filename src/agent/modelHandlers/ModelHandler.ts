@@ -947,10 +947,9 @@ export abstract class ModelHandler<
       return null;
     }
 
-    // NONE is a deliberate user choice ("minimize reasoning"), not "no preference".
-    // Providers map it to their minimum effort level (e.g. Anthropic → 'low').
-    // Returning null here would silently fall back to high/default effort.
-
+    // NONE stays a value, not a null: it is a deliberate user choice
+    // ("minimize reasoning") that providers map to their minimum effort level
+    // (e.g. Anthropic → 'low'), while null would fall back to default effort.
     return this.shouldUseServerSideKeys()
       ? includedModelAccess().capReasoningEffort(
           this.config.name,

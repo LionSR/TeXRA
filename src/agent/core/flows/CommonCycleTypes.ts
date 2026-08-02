@@ -83,11 +83,7 @@ export function replaceMessagesInPlace<T>(target: T[], newContents: T[]): void {
   target.push(...newContents);
 }
 
-/**
- * Core services scoped with the run's workspace state. Named distinctly from
- * the exported service interfaces in the sibling `CycleServices.ts` (which
- * model the live model client) to avoid a same-folder name collision.
- */
+/** Core services scoped with the run's workspace state. */
 type WorkspaceScopedCore = AgentCore & { workspace: AgentWorkspaceState };
 
 export type CycleDebugFileOptions = {

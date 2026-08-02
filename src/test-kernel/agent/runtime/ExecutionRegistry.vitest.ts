@@ -37,7 +37,6 @@ import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 // Local file imports
 import {
-  createRecordingHost,
   recordSessionEvents,
   runEventsOfType,
   sessionFactPayloads,
@@ -223,9 +222,7 @@ describe('executionRegistry', () => {
   });
 
   it('drains a background-bash AgentExecutionHandle on shutdown without disturbing a resumable agent execution (issue #8155)', () => {
-    // Regression for #8155: killBackgroundProcesses() previously only walked
-    // a since-deleted background-process handle class, missing a background
-    // `bash` run — which is registered as an AgentExecutionHandle (see
+    // A background `bash` run is registered as an AgentExecutionHandle (see
     // createChildStream in tools/bash.ts) with its OS-process kill reachable
     // only via the interrupt handler BashBackgroundSession attaches. The two
     // AgentExecutionHandles below are tracked concurrently, mirroring the real
@@ -317,11 +314,11 @@ describe('executionRegistry', () => {
   });
 
   it('falls back to the parked teardown when a suspended handle has no live interrupt (issue #7287)', async () => {
-    // Regression: a native subagent suspended at WAITING has already had its
-    // live interrupt context detached (runToolUseFlow's finally), while the
-    // handle stays tracked for resume. Before the fix, terminate() found no
-    // interrupt target and silently no-opped, leaving the handle stuck
-    // registered forever with no way to tear it down from a stop/kill.
+    // A native subagent suspended at WAITING has already had its live
+    // interrupt context detached (runToolUseFlow's finally), while the handle
+    // stays tracked for resume. With no interrupt target left, terminate()
+    // must fall back to the parked teardown rather than no-op and strand the
+    // handle registered forever.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-waiting-cleanup-kill-test';
@@ -353,16 +350,16 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('publishes the cancelled terminal result when killing a suspended WAITING handle (Bugbot: waiting kill omits trace result)', async () => {
-    // Regression: terminateWaitingHandle settles handle.result and the run's
-    // own (already-disposed, per runFlowWithLifecycle's finally) trace, but
-    // previously never told the owning session about the terminal event —
-    // trace/session-result-stream subscribers (session.onResult et al.) would
-    // silently miss a user-initiated stop of a suspended native subagent even
-    // though handle.result itself resolved correctly. `publishResult` is the
-    // callback SessionHandle injects (see SessionHandle.publishRunEvent) so
-    // this path can reach those subscribers directly, since the turn's own
-    // trace subscriptions are already torn down by the time a kill runs.
+  it('publishes the cancelled terminal result when killing a suspended WAITING handle', async () => {
+    // terminateWaitingHandle settles handle.result and the run's own
+    // (already-disposed, per runFlowWithLifecycle's finally) trace, and must
+    // also tell the owning session about the terminal event — otherwise
+    // session-result subscribers (session.onResult et al.) silently miss a
+    // user-initiated stop of a suspended native subagent even though
+    // handle.result itself resolved. `publishResult` is the callback
+    // SessionHandle injects (see SessionHandle.publishRunEvent) so this path
+    // reaches those subscribers directly, since the turn's own trace
+    // subscriptions are already torn down by the time a kill runs.
     const events = new SessionEventHub();
     const streamStatus = new StreamStatusMachine(events);
     const publishResult = vi.fn();
@@ -751,10 +748,10 @@ describe('executionRegistry', () => {
   });
 
   it('reports a failed kill for a tracked handle with neither an interrupt nor a suspension', () => {
-    // Guards the fallback above: a handle that never parked must still no-op
-    // exactly like before the fix — otherwise the fallback could spuriously
-    // tear down a handle mid-completion, in the narrow window between its own
-    // interrupt unregister and its own untrack.
+    // Guards the fallback above: a handle that never parked must still no-op,
+    // or the fallback could spuriously tear down a handle mid-completion, in
+    // the narrow window between its own interrupt unregister and its own
+    // untrack.
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
     const executionId = 'exec-no-cleanup-kill-test';
@@ -1446,7 +1443,6 @@ describe('executionRegistry', () => {
   });
 
   it('publishes parent links through the attached session event hub', () => {
-    const explicit = createRecordingHost();
     const events = new SessionEventHub();
     const seen: SessionEvent[] = [];
     const detach = events.subscribe((event) => seen.push(event));
@@ -1460,7 +1456,6 @@ describe('executionRegistry', () => {
 
       registry.track(handle);
 
-      expect(explicit.events).toEqual([]);
       expect(seen).toContainEqual({
         scope: 'session',
         event: {
@@ -1744,7 +1739,6 @@ describe('executionRegistry', () => {
   });
 
   it('publishes detach parent links through the attached session event hub', () => {
-    const explicit = createRecordingHost();
     const events = new SessionEventHub();
     const seen: SessionEvent[] = [];
     const detach = events.subscribe((event) => seen.push(event));
@@ -1761,7 +1755,6 @@ describe('executionRegistry', () => {
       registry.track(handle);
       registry.detachActiveChildren(parentStreamId);
 
-      expect(explicit.events).toEqual([]);
       expect(seen).toContainEqual({
         scope: 'session',
         event: {
@@ -1779,27 +1772,30 @@ describe('executionRegistry', () => {
   });
 
   it('detaches its stream-status subscription when disposed', () => {
-    const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
-    const executionId = 'exec-dispose-runtime-host-test';
-    const parentStreamId = 'parent-dispose-runtime-host-test' as StreamTabId;
-    const childStreamId = 'child-dispose-runtime-host-test' as StreamTabId;
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
+    const executionId = 'exec-dispose-status-subscription';
+    const parentStreamId = 'parent-dispose-status-subscription' as StreamTabId;
+    const childStreamId = 'child-dispose-status-subscription' as StreamTabId;
 
-    const handle = createHandle(executionId, parentStreamId, childStreamId);
-
-    registry.track(handle);
+    registry.track(createHandle(executionId, parentStreamId, childStreamId));
     registry.dispose();
-    explicit.events.length = 0;
+    const recorded = recordSessionEvents(events);
 
-    streamStatus.transition(
-      childStreamId,
-      STREAM_PHASE.WAITING,
-      'restart-repair',
-    );
+    try {
+      streamStatus.transition(
+        childStreamId,
+        STREAM_PHASE.WAITING,
+        'restart-repair',
+      );
 
-    expect(
-      explicit.events.some((entry) => entry.event === 'updateActiveSubagents'),
-    ).toBe(false);
+      // Only the status machine's own fact remains; the registry contributes
+      // no roster emission once its subscription is gone.
+      expect(runEventsOfType(recorded.events, 'child.activity')).toEqual([]);
+      expect(sessionFactsOfType(recorded.events, 'status')).toHaveLength(1);
+    } finally {
+      recorded.detach();
+    }
   });
 });

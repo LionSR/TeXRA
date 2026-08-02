@@ -76,18 +76,16 @@ export function parseWorkspacePathFromArgv(
 ): string | undefined {
   for (const [index, arg] of argv.entries()) {
     if (isWorkspacePathFlag(arg)) {
-      return getPositionalWorkspacePathArg(argv[index + 1]);
+      return readWorkspacePathValue(argv[index + 1]);
     }
     if (isWorkspacePathAssignment(arg)) {
-      return getPositionalWorkspacePathArg(arg.slice(arg.indexOf('=') + 1));
+      return readWorkspacePathValue(arg.slice(arg.indexOf('=') + 1));
     }
   }
   return undefined;
 }
 
-function getPositionalWorkspacePathArg(
-  arg: string | undefined,
-): string | undefined {
+function readWorkspacePathValue(arg: string | undefined): string | undefined {
   const trimmed = arg?.trim();
   if (!trimmed || trimmed.startsWith('--') || isDesktopProtocolUrl(trimmed)) {
     return undefined;

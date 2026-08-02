@@ -1,14 +1,11 @@
 /**
- * Completed-run archive facade (#7246 Decision 1): the transcript sidecars
- * own completed-run display/export, with `executions/{id}/conversation.json`
- * / `todos.json` as read-only legacy fallbacks.
+ * Completed-run archive facade: the transcript sidecars own completed-run
+ * display/export, with `executions/{id}/conversation.json` / `todos.json` as
+ * read-only legacy fallbacks.
  *
- * Cross-module scenario (stated in the PR body): the fixture below builds a
- * real completed execution on disk with ONLY sidecar data — no
- * `conversation.json` / `todos.json` projections, matching what tool-use
- * runs persist now that the per-step projection writes are deleted — and
- * proves conversation display, chat export, and todos all read through the
- * facade.
+ * The fixtures build real completed executions on disk from sidecar data
+ * alone, which is what a tool-use run persists, and prove that conversation
+ * display, chat export, and todos all read through the facade.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -73,6 +70,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamTabId,
+  type TodoItem,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 import {
@@ -99,6 +97,31 @@ function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
     model,
     agentCategory: AgentCategory.ToolUse,
   });
+}
+
+interface StreamSeed {
+  streamId: StreamTabId;
+  /** Agent that ran the stream; roots run the orchestrator by default. */
+  agent?: string;
+  /** Set when the stream is a delegated child of another stream. */
+  parent?: StreamTabId;
+  /** Work-plan todos persisted alongside the run config. */
+  todos?: TodoItem[];
+}
+
+/** Persist the snapshot sidecars that tie streams to an execution. */
+async function seedStreams(
+  executionId: ExecutionId,
+  seeds: readonly StreamSeed[],
+): Promise<StreamSnapshotStore> {
+  const snapshots = new StreamSnapshotStore();
+  for (const { streamId, agent = 'orchestrator', parent, todos } of seeds) {
+    snapshots.setRunConfig(streamId, runConfig(agent), executionId);
+    if (parent) snapshots.setParentStream(streamId, parent);
+    if (todos) snapshots.setTodos(streamId, todos);
+  }
+  await snapshots.flush();
+  return snapshots;
 }
 
 let entryCounter = 0;
@@ -149,12 +172,14 @@ async function writeSidecarFixture(
   executionId: ExecutionId,
   streamId: StreamTabId,
 ): Promise<void> {
-  const snapshots = new StreamSnapshotStore();
-  snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-  snapshots.setTodos(streamId, [
-    { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
+  await seedStreams(executionId, [
+    {
+      streamId,
+      todos: [
+        { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
+      ],
+    },
   ]);
-  await snapshots.flush();
 
   const logs = await StreamLogStore.open();
   logs.ensureStream(streamId);
@@ -343,9 +368,7 @@ describe('completedRunArchive facade', () => {
       getStreamTabId(config.agent, config.model, { executionId }),
     ).not.toBe(streamId);
 
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, config, executionId);
-    await snapshots.flush();
+    const snapshots = await seedStreams(executionId, [{ streamId }]);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
@@ -550,10 +573,7 @@ describe('completedRunArchive facade', () => {
   it('treats a present empty work plan as authoritative over stale legacy todos', async () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    snapshots.setTodos(streamId, []);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId, todos: [] }]);
     await getExecutionStore(executionId).write('todos', [
       { content: 'Stale legacy todo', status: 'pending' },
     ]);
@@ -613,9 +633,7 @@ describe('completedRunArchive facade', () => {
   it('seeds a resumed legacy conversation into an empty transcript once', async () => {
     const executionId = '0dd4440dd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0dd4440dd444' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId }]);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
@@ -657,9 +675,7 @@ describe('completedRunArchive facade', () => {
   it('reconstructs structured successful and failed tool results as model-facing text', async () => {
     const executionId = '0ee5550ee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId }]);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
@@ -739,11 +755,10 @@ describe('completedRunArchive facade', () => {
     const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
     const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
 
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(emptyStream, runConfig('bash'), executionId);
-    snapshots.setRunConfig(fullStream, runConfig('orchestrator'), executionId);
-    snapshots.setParentStream(emptyStream, fullStream);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: emptyStream, agent: 'bash', parent: fullStream },
+      { streamId: fullStream },
+    ]);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(emptyStream);
@@ -781,14 +796,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888ba0888ba' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888ba0888ba' as StreamTabId;
     const ambiguousChild = 'zOrchestrator@new#0888ba0888ba' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      ambiguousChild,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: ambiguousChild },
+    ]);
 
     await persistRows(
       executionId,
@@ -841,10 +852,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b50888b5' as ExecutionId;
     const first = 'aOrchestrator@old#0888b50888b5' as StreamTabId;
     const second = 'zOrchestrator@new#0888b50888b5' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId: first }, { streamId: second }]);
     await persistRows(
       executionId,
       new Map([
@@ -875,10 +883,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888bd0888bd' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888bd0888bd' as StreamTabId;
     const conflicting = 'zOrchestrator@new#0888bd0888bd' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(conflicting, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: conflicting },
+    ]);
 
     const copiedText = {
       ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Canonical answer' }),
@@ -958,12 +966,11 @@ describe('completedRunArchive facade', () => {
     const secondRoot = 'bOrchestrator@new#0888bb0888bb' as StreamTabId;
     const child = 'child@tool#0888bb0888bb' as StreamTabId;
 
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(firstRoot, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(secondRoot, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(child, runConfig('bash'), executionId);
-    snapshots.setParentStream(child, firstRoot);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: firstRoot },
+      { streamId: secondRoot },
+      { streamId: child, agent: 'bash', parent: firstRoot },
+    ]);
 
     const firstQuestion = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First question' }),
@@ -1032,10 +1039,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888bc0888bc' as ExecutionId;
     const firstRoot = 'orchestrator@old#0888bc0888bc' as StreamTabId;
     const resumedRoot = 'orchestrator@new#0888bc0888bc' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(firstRoot, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(resumedRoot, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: firstRoot },
+      { streamId: resumedRoot },
+    ]);
 
     const copiedQuestion = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Copied question' }),
@@ -1071,11 +1078,10 @@ describe('completedRunArchive facade', () => {
       (name) => `orchestrator@${name}#0888be0888be` as StreamTabId,
     );
     const [streamA, streamB, streamC, streamD, disconnected] = streams;
-    const snapshots = new StreamSnapshotStore();
-    for (const streamId of streams) {
-      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    }
-    await snapshots.flush();
+    await seedStreams(
+      executionId,
+      streams.map((streamId) => ({ streamId })),
+    );
 
     const rows = ['A', 'B', 'C', 'D', 'E'].map((text) => ({
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text }),
@@ -1121,11 +1127,10 @@ describe('completedRunArchive facade', () => {
     const canonical = 'aOrchestrator@old#0888b60888b6' as StreamTabId;
     const continuation = 'bOrchestrator@new#0888b60888b6' as StreamTabId;
     const conflicting = 'cOrchestrator@other#0888b60888b6' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    for (const streamId of [canonical, continuation, conflicting]) {
-      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    }
-    await snapshots.flush();
+    await seedStreams(
+      executionId,
+      [canonical, continuation, conflicting].map((streamId) => ({ streamId })),
+    );
 
     const prefix = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prefix' });
     const copied = {
@@ -1161,14 +1166,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b80888b8' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b80888b8' as StreamTabId;
     const continuation = 'bOrchestrator@new#0888b80888b8' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      continuation,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: continuation },
+    ]);
 
     const shared = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
@@ -1217,14 +1218,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b90888b9' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b90888b9' as StreamTabId;
     const continuation = 'bOrchestrator@new#0888b90888b9' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      continuation,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: continuation },
+    ]);
 
     const prompt = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Reconverged prompt' }),
@@ -1303,14 +1300,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b00888b0' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b00888b0' as StreamTabId;
     const continuation = 'bOrchestrator@new#0888b00888b0' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      continuation,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: continuation },
+    ]);
 
     const prompt = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Payload prompt' }),
@@ -1374,14 +1367,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b20888b2' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b20888b2' as StreamTabId;
     const continuation = 'bOrchestrator@new#0888b20888b2' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      continuation,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: continuation },
+    ]);
 
     const first = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First turn' });
     const shared = {
@@ -1439,10 +1428,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b30888b3' as ExecutionId;
     const first = 'aOrchestrator@old#0888b30888b3' as StreamTabId;
     const second = 'bOrchestrator@new#0888b30888b3' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId: first }, { streamId: second }]);
 
     const sharedDiagnostic = {
       ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
@@ -1473,9 +1459,7 @@ describe('completedRunArchive facade', () => {
   it('recognizes a sole diagnostic-only root as an existing execution', async () => {
     const executionId = '0888c20888c2' as ExecutionId;
     const streamId = 'orchestrator@model#0888c20888c2' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId }]);
     await persistRows(
       executionId,
       new Map([
@@ -1502,10 +1486,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888c10888c1' as ExecutionId;
     const first = 'aOrchestrator@old#0888c10888c1' as StreamTabId;
     const second = 'bOrchestrator@new#0888c10888c1' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId: first }, { streamId: second }]);
 
     const sharedDiagnostic = {
       ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
@@ -1541,12 +1522,10 @@ describe('completedRunArchive facade', () => {
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const firstChild = 'bash@tool#0888b40888b4' as StreamTabId;
     const secondChild = 'codex@tool#0888b40888b4' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(firstChild, runConfig('bash'), executionId);
-    snapshots.setParentStream(firstChild, parent);
-    snapshots.setRunConfig(secondChild, runConfig('codex'), executionId);
-    snapshots.setParentStream(secondChild, parent);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: firstChild, agent: 'bash', parent },
+      { streamId: secondChild, agent: 'codex', parent },
+    ]);
     await persistRows(
       executionId,
       new Map([
@@ -1589,14 +1568,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b10888b1' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;
     const continuation = 'bOrchestrator@new#0888b10888b1' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      continuation,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: continuation },
+    ]);
 
     const first = logRow(MESSAGE_TYPES.USER_MESSAGE, {
       text: 'Before diagnostic bridge',
@@ -1633,10 +1608,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888b70888b7' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b70888b7' as StreamTabId;
     const ambiguous = 'bOrchestrator@new#0888b70888b7' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(ambiguous, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: ambiguous },
+    ]);
 
     const shared = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
@@ -1688,14 +1663,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0888bf0888bf' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;
     const contradictory = 'bOrchestrator@new#0888bf0888bf' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(
-      contradictory,
-      runConfig('orchestrator'),
-      executionId,
-    );
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: canonical },
+      { streamId: contradictory },
+    ]);
 
     const first = {
       ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First' }),
@@ -1736,11 +1707,10 @@ describe('completedRunArchive facade', () => {
       streamId: root,
       streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
     });
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(child, runConfig('child'), executionId);
-    snapshots.setParentStream(child, root);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: root },
+      { streamId: child, agent: 'child', parent: root },
+    ]);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(root);
@@ -1766,9 +1736,7 @@ describe('completedRunArchive facade', () => {
   it('preserves a sole diagnostic-only exact root as execution evidence', async () => {
     const executionId = '0999cb0999cb' as ExecutionId;
     const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId: root }]);
 
     const logs = await StreamLogStore.open();
     logs.append(
@@ -1795,11 +1763,10 @@ describe('completedRunArchive facade', () => {
     const executionId = '0999cc0999cc' as ExecutionId;
     const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
     const child = 'child@tool#0999cc0999cc' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
-    snapshots.setRunConfig(child, runConfig('bash'), executionId);
-    snapshots.setParentStream(child, root);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: root },
+      { streamId: child, agent: 'bash', parent: root },
+    ]);
 
     const logs = await StreamLogStore.open();
     logs.append(
@@ -1829,12 +1796,10 @@ describe('completedRunArchive facade', () => {
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const firstChild = 'bash@tool#0999ce0999ce' as StreamTabId;
     const secondChild = 'codex@tool#0999ce0999ce' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(firstChild, runConfig('bash'), executionId);
-    snapshots.setParentStream(firstChild, parent);
-    snapshots.setRunConfig(secondChild, runConfig('codex'), executionId);
-    snapshots.setParentStream(secondChild, parent);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId: firstChild, agent: 'bash', parent },
+      { streamId: secondChild, agent: 'codex', parent },
+    ]);
 
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       conversation: null,
@@ -1856,10 +1821,9 @@ describe('completedRunArchive facade', () => {
     const executionId = '0999cd0999cd' as ExecutionId;
     const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
     const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('bash'), executionId);
-    snapshots.setParentStream(streamId, parentStreamId);
-    await snapshots.flush();
+    await seedStreams(executionId, [
+      { streamId, agent: 'bash', parent: parentStreamId },
+    ]);
 
     const logs = await StreamLogStore.open();
     logs.append(
@@ -1889,9 +1853,7 @@ describe('completedRunArchive facade', () => {
     const executionId = 'eee555eee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#eee555eee555' as StreamTabId;
 
-    const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
-    await snapshots.flush();
+    await seedStreams(executionId, [{ streamId }]);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);

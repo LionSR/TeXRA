@@ -16,8 +16,8 @@
  * consumed by `childRunLoop`. `runTurn` is unreachable for a workflow child —
  * a workflow flow never produces a WAITING result, so `isTerminal` is always
  * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
- * terminal turn before ever consulting `runTurn` (see `childRunLoop.ts:642-
- * 650`). `allowWaitingResult: true` is likewise inert for workflow —
+ * terminal turn before ever consulting `runTurn`.
+ * `allowWaitingResult: true` is likewise inert for workflow —
  * `isWaitingFlowResult` requires `category === 'toolUse'`, so a workflow
  * result can never satisfy it. Delivery choreography (format/persist/
  * manifest/deliver), duplicate-delivery prevention (there is exactly one
@@ -207,12 +207,12 @@ export function createNativeSubagentStrategy(
   };
 
   return {
-    // Not used as a trace stage for native delegation (childRunLoop.ts:535-
-    // 537 gates `logger.openStage` on `childStream`, which native delegation
-    // never passes) — its only reader is the loop's non-throwing-failure
-    // message, which becomes the persisted terminal `error.message` for the
-    // execution record. Keep it category-derived so a failed workflow
-    // subagent's record never reads "tool-use".
+    // Not used as a trace stage for native delegation (the loop gates
+    // `logger.openStage` on `childStream`, which native delegation never
+    // passes) — its only reader is the loop's non-throwing-failure message,
+    // which becomes the persisted terminal `error.message` for the execution
+    // record. Keep it category-derived so a failed workflow subagent's record
+    // never reads "tool-use".
     stageLabel:
       params.config.agentCategory === AgentCategory.ToolUse
         ? 'Native tool-use subagent'

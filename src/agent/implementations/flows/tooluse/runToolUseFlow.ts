@@ -460,8 +460,8 @@ export async function runToolUseFlow<C = unknown>(
     // queue clear instead of the resume-startup rescue above.
     inResumeStartupWindow = false;
 
+    if (flowRecord) logger.debug('Resuming tool-use flow from persistence');
     if (flowRecord && input.resume) {
-      logger.debug('Resuming tool-use flow from persistence');
       // Retrieval owns the single migration/validation boundary. The second
       // read may be self-healed only when it still matches the exact value
       // retrieval observed; any intervening drift must fail loudly instead of
@@ -484,7 +484,6 @@ export async function runToolUseFlow<C = unknown>(
         );
       }
     } else if (flowRecord) {
-      logger.debug('Resuming tool-use flow from persistence');
       const migrationResult = migrateSharedState(flowRecord.shared);
       if (!migrationResult.success) {
         throw new PersistedFlowStateError(executionId, 'invalid-shared', {

@@ -61,7 +61,17 @@ function setupResultCase(): {
   return { logger, results, ctx, streamStatus: ctx.runScope.session.status };
 }
 
-describe('terminal result event (SDK Step 7d PR 6)', () => {
+/** The completed tool-use result a flow returns for the given run. */
+function completedRun(ctx: AgentLaunchContext) {
+  return {
+    category: 'toolUse',
+    outcome: RUN_OUTCOME.COMPLETED,
+    executionId: ctx.runScope.executionId,
+    streamId: ctx.runScope.streamId,
+  } as const;
+}
+
+describe('terminal result event', () => {
   setupPlatform({
     globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
   });
@@ -69,12 +79,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
   it('emits exactly one completed result on a successful run', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        executionId: ctx.runScope.executionId,
-        streamId: ctx.runScope.streamId,
-      }));
+      await runFlowWithLifecycle(ctx, async () => completedRun(ctx));
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({
         type: 'result',
@@ -104,12 +109,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     });
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.runScope.executionId,
-          streamId: ctx.runScope.streamId,
-        })),
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       expect(results).toHaveLength(1);
       expect(results[0].outcome).toBe('completed');
@@ -127,12 +127,7 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
 
     try {
       await expect(
-        runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.runScope.executionId,
-          streamId: ctx.runScope.streamId,
-        })),
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
 
       expect(results).toHaveLength(1);
@@ -145,24 +140,15 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     }
   });
 
-  it('exposes the per-run handle via onRun and settles handle.result (F-2)', async () => {
+  it('exposes the per-run handle via onRun and settles handle.result', async () => {
     const { logger, ctx, streamStatus } = setupResultCase();
     let handle: AgentRunHandle | undefined;
     try {
-      await runFlowWithLifecycle(
-        ctx,
-        async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.runScope.executionId,
-          streamId: ctx.runScope.streamId,
-        }),
-        {
-          onRun: (h) => {
-            handle = h;
-          },
+      await runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+        onRun: (h) => {
+          handle = h;
         },
-      );
+      });
       expect(handle).toBeDefined();
       // The handle carries the run's trace channel for run-scoped subscribers.
       expect(handle?.trace).toBe(logger);
@@ -181,20 +167,11 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
-        runFlowWithLifecycle(
-          ctx,
-          async () => ({
-            category: 'toolUse',
-            outcome: RUN_OUTCOME.COMPLETED,
-            executionId: ctx.runScope.executionId,
-            streamId: ctx.runScope.streamId,
-          }),
-          {
-            onRun: () => {
-              throw new Error('onRun boom');
-            },
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+          onRun: () => {
+            throw new Error('onRun boom');
           },
-        ),
+        }),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
 
       expect(results).toHaveLength(1);
@@ -212,20 +189,11 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const { ctx, streamStatus, results } = setupResultCase();
     try {
       await expect(
-        runFlowWithLifecycle(
-          ctx,
-          async () => ({
-            category: 'toolUse',
-            outcome: RUN_OUTCOME.COMPLETED,
-            executionId: ctx.runScope.executionId,
-            streamId: ctx.runScope.streamId,
-          }),
-          {
-            onRun: async () => {
-              throw new Error('onRun async boom');
-            },
+        runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+          onRun: async () => {
+            throw new Error('onRun async boom');
           },
-        ),
+        }),
       ).resolves.toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
       await Promise.resolve();
 
@@ -398,16 +366,9 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
     const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
     session.onResult(onResult);
     try {
-      await runFlowWithLifecycle(
-        ctx,
-        async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId: ctx.runScope.executionId,
-          streamId: ctx.runScope.streamId,
-        }),
-        { isSubagent: true },
-      );
+      await runFlowWithLifecycle(ctx, async () => completedRun(ctx), {
+        isSubagent: true,
+      });
       expect(onResult).toHaveBeenCalledOnce();
       expect(onResult.mock.calls[0][0]).toMatchObject({
         type: 'result',

@@ -106,7 +106,10 @@ export interface StableInBandSubagentExecutionOptions {
   readonly onActiveExecutionId?: (executionId: ExecutionId) => void;
 }
 
-/** Legacy delivery callers may still provide a bare one-shot run context. */
+/**
+ * Options for the XML-delivery API. A one-shot run context need not have a
+ * persisted parent execution, so parentage is optional here.
+ */
 export interface InBandSubagentDeliveryOptions extends InBandSubagentExecutionBaseOptions {
   readonly parentExecutionId?: ExecutionId;
 }
@@ -747,11 +750,11 @@ export async function executeStableSubagentInBand(
   });
 }
 
-/** Preserve the existing headless delegation tool's XML/report behavior. */
+/** Run one child and return its XML delivery alongside the typed result. */
 export async function executeSubagentForDeliveryInBand(
   options: InBandSubagentDeliveryOptions,
 ): Promise<InBandSubagentDeliveryResult> {
-  const executionId = generateExecutionId() as ExecutionId;
+  const executionId = generateExecutionId();
   const completed = await executeInBand(
     options,
     'best-effort-delivery',

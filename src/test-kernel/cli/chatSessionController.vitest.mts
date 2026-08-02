@@ -1,8 +1,8 @@
-// Unit tests for the chat-session controller's state transitions.
-// Does not require actual agent execution — the controller's orchestration
-// methods (startRootRun, resume) touch real agent runtime infrastructure,
-// so these tests focus on the factory contract and the stop/idle state
-// mutations that are safe to verify without a full agent harness.
+// Unit tests for the chat-session controller's run-slot ownership, stop and
+// resume paths, and presentation-host lifecycle. Agent execution itself is
+// mocked; the session surfaces the controller reasons about (execution
+// registry, event hub, stream status, host interactions) are the real
+// runtime objects wherever a test asserts through them.
 
 import PQueue from 'p-queue';
 import pDefer from 'p-defer';
@@ -177,10 +177,6 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { StreamSnapshotStore } from '@transcript';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Session fixture in the states the controller is exercised from. The
@@ -494,10 +490,6 @@ describe('CLI terminal outcome resolution', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Predicate: chatTuiCanStartRootRun
-// ---------------------------------------------------------------------------
-
 describe('chatTuiCanStartRootRun', () => {
   it('allows a new root run when no run has ever been started', () => {
     expect(chatTuiCanStartRootRun(makeSession())).toBe(true);
@@ -525,10 +517,6 @@ describe('chatTuiCanStartRootRun', () => {
     ).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Factory: createChatSessionController
-// ---------------------------------------------------------------------------
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
@@ -1272,15 +1260,11 @@ describe('createChatSessionController', () => {
   });
 
   it('resume() suspended on the resolution keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
-    // Reproduces the finding's interleaving: resume(A) suspends on
-    // resolveCliResume (an await-suspension point) with the slot
-    // already claimed; a follow-up wake (tryResumeStream for a different
-    // stream) fires while A is still suspended. Pre-fix, resume(A) checked
-    // availability but claimed the slot only after this (and three more)
-    // awaits, so B's tryResumeStream would see the slot as free, claim it,
-    // and start doing real work — which resume(A) would then clobber when
-    // it woke back up and unconditionally overwrote session.runPromise.
-    // Post-fix, exactly one caller (A) ever holds the slot.
+    // resume(A) suspends on resolveCliResume (an await-suspension point)
+    // with the slot already claimed; a follow-up wake (tryResumeStream for a
+    // different stream) fires while A is still suspended. Exactly one caller
+    // (A) holds the slot end to end, so B must bail out rather than claim it
+    // and start work that A would clobber on waking.
     const resolution = pDefer<{ readonly type: 'not-found' }>();
     mocks.resolveCliResume.mockReturnValueOnce(resolution.promise);
     const session = makeSession({ runCompleted: true });

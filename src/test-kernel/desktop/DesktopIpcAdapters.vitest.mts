@@ -11,6 +11,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - test support
@@ -73,24 +74,9 @@ async function createShellHarness(
   };
 }
 
-// Backing store the onboarding adapter reads and writes; `update` is a spy so
-// tests can assert persisted keys, `values` exposes the raw map for seeding.
-function createMemoryState() {
-  const values = new Map<string, unknown>();
-  const update = vi.fn(async (key: string, value: unknown) => {
-    values.set(key, value);
-  });
-  const state = {
-    get<T>(key: string, defaultValue?: T): T {
-      return (values.has(key) ? values.get(key) : defaultValue) as T;
-    },
-    update,
-  };
-  return { values, update, state };
-}
-
 // Own the repeated onboarding boundary setup so each test declares only its
-// initial state and host callbacks.
+// initial state and host callbacks. `update` is spied so tests can assert
+// persisted keys; `state` is the store the adapter reads and writes.
 async function createOnboardingHarness({
   seed = {},
   ...options
@@ -102,10 +88,8 @@ async function createOnboardingHarness({
     loadSourceModule('@desktop/main/desktopOnboardingIpc'),
     loadSourceModule('@desktop/desktopOnboardingMessages'),
   ]);
-  const memory = createMemoryState();
-  for (const [key, value] of Object.entries(seed)) {
-    memory.values.set(key, value);
-  }
+  const state = new FakeStateStore({ ...seed });
+  const update = vi.spyOn(state, 'update');
   const postToRenderer = vi.fn();
   const onboarding = createDesktopOnboardingIpc(
     { postToRenderer },
@@ -116,11 +100,12 @@ async function createOnboardingHarness({
       signInWithChatGpt: async () => {},
       openGettingStarted: async () => {},
       ...options,
-      state: memory.state,
+      state,
     },
   );
   return {
-    ...memory,
+    state,
+    update,
     onboarding,
     postToRenderer,
     dismissedStateKey: DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
@@ -279,9 +264,8 @@ describe('desktop IPC adapters', () => {
   });
 
   it('forwards real recent commits when a git host is wired', async () => {
-    // Closes audit item A: `getRecentCommits` is now a first-class shell
-    // option, so the launcher banner sees the actual `git log` output
-    // instead of the legacy empty stub.
+    // `getRecentCommits` is a first-class shell option, so the launcher
+    // banner shows the host's actual `git log` output.
     const getRecentCommits = vi.fn(async () => ({
       commits: ['abc1234: Add feature (2 days ago)'],
       isGitRepo: true,
@@ -629,12 +613,13 @@ describe('desktop IPC adapters', () => {
     // Before the backfill settles this derives 'setup'; the gate must hold the
     // first derivation so the renderer never sees the transient State 1.
     const selectSetupAgent = vi.fn(async () => {});
-    const { onboarding, postToRenderer, values } =
-      await createOnboardingHarness({
+    const { onboarding, postToRenderer, state } = await createOnboardingHarness(
+      {
         readyGate: readyGate.promise,
         hasCredential: () => true,
         selectSetupAgent,
-      });
+      },
+    );
 
     expect(
       onboarding.handleMessage({
@@ -648,7 +633,7 @@ describe('desktop IPC adapters', () => {
     expect(selectSetupAgent).not.toHaveBeenCalled();
 
     // Backfill marks the veteran done, then opens the gate.
-    values.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
+    void state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
     readyGate.resolve();
     await flushAsync();
 

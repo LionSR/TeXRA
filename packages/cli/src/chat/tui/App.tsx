@@ -184,7 +184,6 @@ export function App(props: AppProps): React.JSX.Element {
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
-  const agentSelectionAvailable = rootRunStartAvailable;
   const activeApprovalVisible = approvalVisibleForActiveStream({
     activeStreamId,
     pending,
@@ -624,7 +623,7 @@ export function App(props: AppProps): React.JSX.Element {
               }
             />
             <StatusBar
-              agentSelectionAvailable={agentSelectionAvailable}
+              agentSelectionAvailable={rootRunStartAvailable}
               commandName={props.commandName}
               foregroundEscapeAction={foregroundEscapeAction({
                 activeFormEscapeAction: formBusy

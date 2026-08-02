@@ -35,7 +35,7 @@ import {
 } from '@shared/state/PersistedState';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -210,7 +210,7 @@ export class ProgressViewState {
   /**
    * Compute which stream should be active given available streams (pure query).
    */
-  pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
+  private pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const current = this._prefs.get('activeStream');
     if (availableStreams.includes(current)) {
       return current;
@@ -244,13 +244,21 @@ export class ProgressViewState {
 
   /**
    * Stream tabs offered for selection, newest first — the order
-   * `buildStreamInfos` renders. Membership and rotation only depend on
-   * creation time, so this answers them without building tab infos or
-   * touching the worktree resolver.
+   * `buildStreamInfos` renders. Process streams are transient views of live
+   * commands, so terminal and restored process transcripts are not sessions
+   * in the navigation list. Their execution artifacts remain available
+   * through the parent run.
    */
   selectableStreamNames(): StreamTabId[] {
     return this.streamLogs
       .keys()
+      .filter((name) => {
+        const metadata = this.getStreamMetadata(name);
+        return (
+          metadata.run?.kind !== 'process' ||
+          isInFlightPhase(this.streamStatus.get(name))
+        );
+      })
       .map((name) => ({
         name,
         creationTimestamp: this.getStreamMetadata(name).creationTimestamp,
@@ -295,8 +303,7 @@ export class ProgressViewState {
    * through here rather than assigning fields by hand. A field the patch
    * doesn't mention is preserved verbatim from `current` — callers that want
    * to clear a field (e.g. detaching a parent) do so by including that key
-   * in the patch with an explicit `undefined`, same as before this was
-   * centralized.
+   * in the patch with an explicit `undefined`.
    */
   private applyMetadataPatch(
     current: StoredStreamMetadata,
@@ -721,22 +728,16 @@ export class ProgressViewState {
     return restoredCount;
   }
 
-  /**
-   * The topmost (newest) visible stream tab, or '' when none exist.
-   *
-   * `streamLogs.keys()` is ascending by creation time (load() sorts by
-   * `firstTimestamp` ASC, session additions are appended), but the sidebar
-   * renders newest-first, so `.at(-1)` matches the topmost visible tab rather
-   * than the oldest one at the bottom.
-   */
+  /** The topmost (newest) selectable stream tab, or '' when none exist. */
   private topmostStreamTab(): ActiveStreamId {
-    return this.streamLogs.keys().at(-1) ?? '';
+    return this.selectableStreamNames().at(0) ?? '';
   }
 
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
-    if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
+    const selectableStreams = this.selectableStreamNames();
+    if (!savedActiveStream || !selectableStreams.includes(savedActiveStream)) {
       const fallback = this.topmostStreamTab();
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });

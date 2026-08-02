@@ -198,12 +198,7 @@ describe('SessionHandle', () => {
     );
   });
 
-  it('defaultSession is a stable process-wide singleton (#7694: no separate module export to alias)', () => {
-    // No `Shared*`/`*Service` module export exists anymore — the process
-    // default's owners are installed together by the test composition root.
-    // What's left to verify is that repeated calls return the identical
-    // session (and therefore identical members), including its one owned
-    // trace-flusher set.
+  it('defaultSession is a stable process-wide singleton', () => {
     const first = defaultSession();
     const second = defaultSession();
     expect(second).toBe(first);

@@ -19,8 +19,8 @@ import {
   type DesktopOAuthClient,
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
-import type { StateStore } from '@platform/interfaces';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
@@ -109,22 +109,6 @@ function callbackSessionResult() {
       refreshToken: 'refresh-token',
       account: { id: 'user-1', label: 'user@example.com' },
       expiresAt: Date.now() + 60_000,
-    },
-  };
-}
-
-function createStateStore(): Pick<StateStore, 'get' | 'update'> {
-  const state = new Map<string, unknown>();
-  return {
-    get<T>(key: string, defaultValue?: T): T {
-      return state.has(key) ? (state.get(key) as T) : (defaultValue as T);
-    },
-    async update(key: string, value: unknown): Promise<void> {
-      if (value == null) {
-        state.delete(key);
-      } else {
-        state.set(key, value);
-      }
     },
   };
 }
@@ -514,7 +498,7 @@ describe('desktop Supabase auth', () => {
   it('preserves pending sign-in across desktop auth recreation', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const stateStore = createStateStore();
+    const stateStore = new FakeStateStore();
     const callbackState = createDesktopAuthCallbackState(stateStore);
     const oauthClient = createOAuthClient();
     const auth = createTestAuth({
@@ -552,7 +536,7 @@ describe('desktop Supabase auth', () => {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
       const router = createDesktopProtocolCallbackRouter();
       const coordinator = createCoordinator();
-      const stateStore = createStateStore();
+      const stateStore = new FakeStateStore();
       const oauthClient = createOAuthClient();
       const auth = createTestAuth({
         router,
@@ -592,7 +576,7 @@ describe('desktop Supabase auth', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
-      const stateStore = createStateStore();
+      const stateStore = new FakeStateStore();
       const callbackState = createDesktopAuthCallbackState(stateStore);
 
       await callbackState.beginAuthAttempt('attempt-nonce');
@@ -612,7 +596,7 @@ describe('desktop Supabase auth', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
-      const stateStore = createStateStore();
+      const stateStore = new FakeStateStore();
       const initialState = createDesktopAuthCallbackState(stateStore);
       await initialState.beginAuthAttempt('expired-nonce');
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
