@@ -26,6 +26,7 @@ import {
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -320,17 +321,15 @@ function execList(): ToolResult {
     .map((b) => b.key);
   const all = [...repoKeys, ...prKeys, ...issueKeys];
   if (all.length === 0) {
-    return {
-      status: 'executed',
-      summary: 'No active subscriptions on this stream.',
-      output: 'No active subscriptions on this stream.',
-    };
+    return executed(
+      'No active subscriptions on this stream.',
+      'No active subscriptions on this stream.',
+    );
   }
-  return {
-    status: 'executed',
-    summary: `${all.length} active subscription(s).`,
-    output: all.map((k) => `- ${k}`).join('\n'),
-  };
+  return executed(
+    all.map((k) => `- ${k}`).join('\n'),
+    `${all.length} active subscription(s).`,
+  );
 }
 
 // GitHub SSH/HTTPS URL → { owner, repo }. Handles `.git` suffix, and repo

@@ -9,9 +9,18 @@ import {
 } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
+import {
+  startChildRunLoop,
+  type ChildRunPorts,
+  type ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import type { RunContext } from '@agent/runtime/RunContext';
 import type {
   ExecutionId,
@@ -32,6 +41,10 @@ import {
   getChildStreamId,
   type ChildStream,
 } from './childStream';
+import type {
+  AgentCliSessionEntry,
+  AgentCliSessionRegistry,
+} from './agentCliSessionRegistry';
 
 /**
  * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
@@ -263,4 +276,171 @@ export async function withAgentCliApproval(
 
   contexts?.callContext?.hooks?.onExecutionReady?.();
   return run(contexts?.runContext);
+}
+
+// ============================================================================
+// Shared session loop — one turn per enqueued prompt, delivers to parent
+// ============================================================================
+
+/** Minimal token-usage shape the loop's turn summary needs. Structurally
+ * compatible with `ChildRunStrategy`'s own (unexported) turn-usage type. */
+interface AgentCliTurnUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
+export interface AgentCliLoopParams<
+  TTurn,
+  TEntry extends AgentCliSessionEntry,
+> {
+  childStream: ChildStream;
+  parentStreamId: StreamTabId;
+  executionId: ExecutionId;
+  /** Passed through to `startChildRunLoop` (registry lookups, log labels). */
+  agentName: string;
+  /** Stage label opened on the child trace (e.g. "Codex session"). */
+  stageLabel: string;
+  initialPrompt: string;
+  /** Session/thread registry the loop tracks in-flight and successful turns in. */
+  store: AgentCliSessionRegistry<TEntry>;
+  /**
+   * The disk-based fallback session/thread id claimed synchronously before the
+   * loop starts, if any. Release it if the loop exits before promoting it.
+   */
+  releaseFallbackClaim: (() => void) | undefined;
+  /** Provider-specific single-turn execution, given the joined follow-up prompt. */
+  runProviderTurn: (
+    prompt: string,
+    ports: ChildRunPorts,
+    abortController: AbortController,
+  ) => Promise<TTurn>;
+  /** Build the store entry to register/track for the currently active session. */
+  buildEntry: (session: SessionHandle) => TEntry;
+  /**
+   * Session/thread ids to register as active after a successful turn. Falsy
+   * entries (not-yet-known ids) are skipped.
+   */
+  resolveSessionIds: (turn: TTurn) => readonly (string | null | undefined)[];
+  /** Token usage for the turn summary (null when none). */
+  getUsage: (turn: TTurn) => AgentCliTurnUsage | null;
+  /** Usage-stats payload to publish to the UI, or undefined to skip publishing. */
+  buildUsageStats: (turn: TTurn) => TokenUsageStats | undefined;
+  formatDelivery: (
+    turn: TTurn,
+    wallTimeMs: number,
+    lastPrompt: string,
+  ) => string;
+  formatError: (turn: TTurn | null, err: unknown, lastPrompt: string) => string;
+  /** Omitted by providers (codex) that always throw on failure. */
+  isTurnError?: (turn: TTurn) => boolean;
+  onTurnError?: (turn: TTurn, logger: AgentTrace) => void;
+  /** Logged if the loop's completion promise rejects after launch. */
+  loopFailedMessage: string;
+}
+
+/**
+ * Run the shared agent-CLI session loop. `startChildRunLoop` processes prompts
+ * from the child's follow-up queue one at a time and delivers each turn's
+ * result to the parent's follow-up queue; this wraps that with the scaffolding
+ * common to every agent-CLI provider (codex, claudeAgent): a dedup'd
+ * session/thread registration closure, the `lastPrompt` capture feeding
+ * `formatDelivery`/`formatError`, and the boilerplate-identical
+ * `ChildRunStrategy` fields (`isTerminal`, `getUsage`, `onLoopStart`,
+ * `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`). Callers supply
+ * only their provider-specific turn execution, usage/delivery formatting, and
+ * registry entry shape.
+ */
+export function startAgentCliLoop<TTurn, TEntry extends AgentCliSessionEntry>(
+  params: AgentCliLoopParams<TTurn, TEntry>,
+): void {
+  const {
+    childStream,
+    parentStreamId,
+    executionId,
+    agentName,
+    stageLabel,
+    initialPrompt,
+    store,
+    releaseFallbackClaim,
+    runProviderTurn,
+    buildEntry,
+    resolveSessionIds,
+    getUsage,
+    buildUsageStats,
+    formatDelivery,
+    formatError,
+    isTurnError,
+    onTurnError,
+    loopFailedMessage,
+  } = params;
+  const { childStreamId, logger } = childStream;
+
+  // Fresh and resumed session/thread ids are registered after the first
+  // successful turn is persisted, immediately before its result reaches the
+  // parent.
+  const registerSessionId = (id: string, session: SessionHandle): void => {
+    if (store.lookup(id)) return;
+    store.register(id, buildEntry(session));
+  };
+
+  // The joined prompt text for whichever turn is currently in flight —
+  // captured here (rather than threaded through the loop contract) since
+  // `formatDelivery`/`formatError` run strictly after the turn that set it.
+  let lastPrompt = initialPrompt;
+  const runTurn = (
+    followUps: readonly FollowUpQueueBatchItem[],
+    ports: ChildRunPorts,
+    abortController: AbortController,
+  ): Promise<TTurn> => {
+    lastPrompt = followUps.map((f) => f.text).join('\n\n');
+    return runProviderTurn(lastPrompt, ports, abortController);
+  };
+
+  const strategy: ChildRunStrategy<TTurn> = {
+    stageLabel,
+    launch: (ports, abortController) =>
+      runTurn(
+        [{ text: initialPrompt, origin: 'user' }],
+        ports,
+        abortController,
+      ),
+    runTurn,
+    isTerminal: () => false,
+    getUsage,
+    isTurnError,
+    onTurnError,
+    onLoopStart: (session) => {
+      store.trackInFlight(buildEntry(session));
+    },
+    onTurnSuccess: (turn, session) => {
+      for (const id of resolveSessionIds(turn)) {
+        if (id) registerSessionId(id, session);
+      }
+    },
+    publishUsage: (turn) => {
+      const usage = buildUsageStats(turn);
+      if (usage) {
+        publishAgentCliStreamUsage(childStreamId, executionId, usage, logger);
+      }
+    },
+    formatDelivery: (turn, wallTimeMs) =>
+      formatDelivery(turn, wallTimeMs, lastPrompt),
+    formatError: (turn, err) => formatError(turn, err, lastPrompt),
+    releaseSessionOwnership: () => {
+      releaseFallbackClaim?.();
+      store.releaseByExecutionId(executionId);
+    },
+  };
+
+  const { completion } = startChildRunLoop({
+    childStream,
+    childStreamId,
+    parentStreamId,
+    executionId,
+    agentName,
+    strategy,
+  });
+  void completion.catch((error: unknown) => {
+    childStream.logger.error(loopFailedMessage, { data: error });
+  });
 }

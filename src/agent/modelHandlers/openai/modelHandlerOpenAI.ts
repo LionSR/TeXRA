@@ -47,6 +47,10 @@ import { getConfig } from '@utils/config/configUtils';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
 import {
+  classifyMediaEntry,
+  unknownMediaCategoryWarning,
+} from '../support/mediaClassification';
+import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
@@ -825,10 +829,15 @@ export class ModelHandlerOpenAI<
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
   createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
-      if (media.media_category === 'image') {
+      const classification = classifyMediaEntry(media);
+
+      // This handler has no PDF-specific rendering; treat a classified PDF
+      // the same as any other image, matching the prior media_category-only
+      // check.
+      if (classification === 'image' || classification === 'pdf') {
         return this.buildStandardVisionParts(media);
       } else if (
-        media.media_category === 'audio' &&
+        classification === 'audio' &&
         this.capabilities.supportsNativeAudio
       ) {
         // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
@@ -847,13 +856,13 @@ export class ModelHandlerOpenAI<
             input_audio: { data: media.data, format: audioFormat },
           },
         ];
-      } else if (media.media_category === 'audio') {
+      } else if (classification === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but native audio is not supported by this specific model/provider (${this.config.provider}). Skipping.`,
         );
         return [];
       } else {
-        this.logger.warn(`Unknown media category: ${media.media_category}`);
+        this.logger.warn(unknownMediaCategoryWarning(media));
         return [];
       }
     });

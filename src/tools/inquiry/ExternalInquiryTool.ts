@@ -38,6 +38,7 @@ import {
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
@@ -305,11 +306,10 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
     }
   }
 
-  return {
-    status: 'executed',
-    summary: `Inquiry thread ${manifest.threadId} (${manifest.status}, ${formatResultCount(manifest.turns.length, 'turn')})`,
-    output: lines.join('\n'),
-  };
+  return executed(
+    lines.join('\n'),
+    `Inquiry thread ${manifest.threadId} (${manifest.status}, ${formatResultCount(manifest.turns.length, 'turn')})`,
+  );
 }
 
 function buildListOutput(
@@ -318,11 +318,10 @@ function buildListOutput(
   scope: string,
 ): ToolResult {
   if (summaries.length === 0) {
-    return {
-      status: 'executed',
-      summary: `No inquiry threads (${filterStatus}, scope=${scope})`,
-      output: '(no threads)',
-    };
+    return executed(
+      '(no threads)',
+      `No inquiry threads (${filterStatus}, scope=${scope})`,
+    );
   }
   const lines = [
     `${summaries.length} thread(s) (${filterStatus}, scope=${scope}):`,
@@ -333,11 +332,7 @@ function buildListOutput(
     );
     lines.push(`    "${s.lastQuestionPreview}"`);
   }
-  return {
-    status: 'executed',
-    summary: `Inquiry threads: ${summaries.length}`,
-    output: lines.join('\n'),
-  };
+  return executed(lines.join('\n'), `Inquiry threads: ${summaries.length}`);
 }
 
 // ============================================================================

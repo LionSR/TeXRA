@@ -1,4 +1,4 @@
-import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
+import { ChannelStreamAggregator } from '../utils/channelStreamAggregator';
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -21,23 +21,19 @@ type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
  * Base class for streaming aggregators that support reasoning models.
  * Used by DeepSeek, Kimi, and other OpenAI-compatible reasoning models.
  */
-export class BaseReasoningStreamAggregator implements StreamingAggregator {
-  private readonly contentParts: string[] = [];
-  private readonly reasoningParts: string[] = [];
-  private readonly toolCalls = new ToolCallAccumulator();
+export class BaseReasoningStreamAggregator
+  extends ChannelStreamAggregator
+  implements StreamingAggregator
+{
   private lastChunkWithChoices: ChatCompletionChunk | undefined;
   private usageChunk: ChatCompletionChunk | undefined;
 
   appendContent(delta: string): void {
-    if (delta) {
-      this.contentParts.push(delta);
-    }
+    this.pushContent(delta);
   }
 
   appendReasoning(delta: string): void {
-    if (delta) {
-      this.reasoningParts.push(delta);
-    }
+    this.pushReasoning(delta);
   }
 
   consumeChunk(chunk: ChatCompletionChunk): void {
@@ -120,14 +116,6 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
       choices: [mergedChoice],
       usage: usage ?? undefined,
     };
-  }
-
-  getFullContent(): string {
-    return this.contentParts.join('');
-  }
-
-  getFullReasoning(): string {
-    return this.reasoningParts.join('');
   }
 
   private buildToolCalls(): ChatCompletionMessageFunctionToolCall[] {
