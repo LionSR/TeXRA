@@ -37,6 +37,12 @@ const RUN_PROGRESS_RUN_FACT_TYPES = [
   'child.activity',
 ] as const satisfies readonly AgentEvent['type'][];
 
+/** The run-fact vocabulary this renderer's subscription filter admits. */
+type RunProgressRunFactEvent = Extract<
+  AgentEvent,
+  { type: (typeof RUN_PROGRESS_RUN_FACT_TYPES)[number] }
+>;
+
 // Carriage return + erase-line (CSI 2K): rewind to column 0 and clear the row
 // so the single live status line can be repainted in place.
 const CLEAR_LINE = '\r\x1b[2K';
@@ -52,6 +58,11 @@ interface RenderState {
 }
 
 export interface RunProgressRenderer {
+  /**
+   * Takes session facts and the run facts named by
+   * `RUN_PROGRESS_RUN_FACT_TYPES` only; any other run fact is out of contract
+   * and throws rather than being dropped.
+   */
   handleSessionEvent(event: SessionEvent): void;
   clear(): void;
   preserve(): void;
@@ -143,7 +154,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       this.handleSessionFact(event.event);
       return;
     }
-    this.handleRunFact(event.streamId, event.event);
+    // Narrowed by `attachRunProgressRenderer`'s filter, which admits only
+    // `RUN_PROGRESS_RUN_FACT_TYPES`.
+    this.handleRunFact(event.streamId, event.event as RunProgressRunFactEvent);
   }
 
   clear(): void {
@@ -188,7 +201,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     assertNever(event, 'Unhandled run-progress renderer session fact');
   }
 
-  private handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
+  private handleRunFact(
+    streamId: StreamTabId,
+    event: RunProgressRunFactEvent,
+  ): void {
     switch (event.type) {
       case 'run.config':
         if (this.applyRunConfig(event.streamId, event.config)) {
@@ -223,9 +239,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         this.updateHeartbeat();
         this.render(true);
         return;
-      default:
-        return;
     }
+    assertNever(event, 'Unhandled run-progress renderer run fact');
   }
 
   private applyRunConfig(streamId: StreamTabId, config: AgentConfig): boolean {

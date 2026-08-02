@@ -1,14 +1,8 @@
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import {
-  STREAM_STATUS,
-  StreamPhaseSchema,
-  type StreamPhase,
-  type StreamStatus,
-  type StreamSubstate,
-  type StreamTabId,
-  streamStatusToPhase,
-  streamStatusToSubstate,
-} from '@shared/schemas';
+import type {
+  StreamPhaseState,
+  StreamStatusMachine,
+} from '@agent/runtime/StreamStatusService';
+import type { StreamTabId } from '@shared/schemas';
 
 /**
  * The machine's single per-stream entry map. Seeding writes the settled
@@ -17,13 +11,7 @@ import {
 interface StreamStatusMachineInternals {
   readonly streams: Map<
     StreamTabId,
-    {
-      readonly kind: 'phase';
-      readonly state: {
-        readonly phase: StreamPhase;
-        readonly substate?: StreamSubstate;
-      };
-    }
+    { readonly kind: 'phase'; readonly state: StreamPhaseState }
   >;
 }
 
@@ -47,25 +35,7 @@ export function clearAllStreamStatusesForTest(
 export function seedStreamStatusForTest(
   machine: StreamStatusMachine,
   streamId: StreamTabId,
-  status: StreamPhase | StreamStatus,
+  state: StreamPhaseState,
 ): void {
-  const { streams } = internals(machine);
-  if (status === STREAM_STATUS.READY) {
-    streams.delete(streamId);
-    return;
-  }
-
-  const phase = StreamPhaseSchema.safeParse(status);
-  const substate = phase.success
-    ? undefined
-    : streamStatusToSubstate(status as StreamStatus);
-  streams.set(streamId, {
-    kind: 'phase',
-    state: {
-      phase: phase.success
-        ? phase.data
-        : streamStatusToPhase(status as StreamStatus),
-      ...(substate ? { substate } : {}),
-    },
-  });
+  internals(machine).streams.set(streamId, { kind: 'phase', state });
 }

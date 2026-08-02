@@ -73,7 +73,7 @@ describe('desktop command surface', () => {
       DESKTOP_LOCAL_COMMANDS,
       getDesktopCommandMenuEntries,
     } = await loadSourceModule('@desktop/desktopCommandSurface');
-    const entries = getDesktopCommandMenuEntries(undefined, 'darwin');
+    const entries = getDesktopCommandMenuEntries('darwin');
 
     expect(entries.map((entry) => entry.id)).toEqual(DESKTOP_COMMAND_IDS);
     for (const entry of entries) {

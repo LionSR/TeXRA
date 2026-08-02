@@ -7,10 +7,7 @@
 // disk: a path from the renderer is untrusted input, and `../` traversal would
 // otherwise read or overwrite anything the user can reach.
 
-// Node imports
 import { basename, dirname, join } from 'node:path';
-
-// Local imports - file listing
 import { isFileNotFoundError } from '@common/errors';
 import {
   loadFileListSettings,

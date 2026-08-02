@@ -498,10 +498,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.MAIN);
   }
 
-  public async popBackToSidebar(): Promise<void> {
-    await this.showInSidebar();
-  }
-
   public override dispose(): void {
     this.releaseEditorTarget({ disposePanel: true });
     this.backend.dispose();

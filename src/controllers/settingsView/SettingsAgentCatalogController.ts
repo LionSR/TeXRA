@@ -57,14 +57,6 @@ export interface SettingsAgentCatalogControllerDeps {
   now?: () => number;
 }
 
-export type SettingsAgentPresetApplyResult =
-  | {
-      ok: true;
-      preset: AgentModePreset;
-      unresolvedNames: string[];
-    }
-  | { ok: false; reason: 'unknownPreset' };
-
 export class SettingsAgentCatalogController implements TeamRosterCatalog {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
@@ -148,16 +140,6 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         ),
       ],
     }).rootAgent?.name;
-  }
-
-  async applyPreset(presetId: string): Promise<SettingsAgentPresetApplyResult> {
-    const resolved = this.resolvePreset(presetId);
-    if (!resolved.ok) return resolved;
-
-    const { preset, resolution } = resolved;
-    await this.commitPresetResolution(preset, resolution);
-
-    return { ok: true, preset, unresolvedNames: resolution.unresolvedNames };
   }
 
   resolvePreset(presetId: string): TeamRosterPresetResolution {

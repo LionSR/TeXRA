@@ -106,8 +106,11 @@ export class FollowUpInput extends LitElement {
             color-mix(in srgb, var(--wa-color-surface-shadow) 16%, transparent);
       }
 
-      /* Height comes off the shared textarea scale; the composer sits inside
-         its own bordered card, so it drops the field's own box. */
+      /* Web Awesome's resize="auto" copies the textarea scroll height into an
+         invisible grid item. Inside a constrained composer that grid item can
+         preserve an oversized row for an empty draft. Size the native
+         textarea part from its content instead: two lines initially, growing
+         to the bounded reading height before it scrolls. */
       #followUpInput {
         display: block;
         min-width: 0;
@@ -115,11 +118,16 @@ export class FollowUpInput extends LitElement {
         box-sizing: border-box;
         line-height: var(--line-height-relaxed);
         height: auto;
-        --textarea-min-height: var(--textarea-h-m);
+        --textarea-min-height: calc(
+          2lh + var(--wa-space-xs) + var(--wa-space-3xs)
+        );
         --textarea-max-height: min(32vh, 240px);
       }
 
       #followUpInput::part(base) {
+        align-items: start;
+        max-height: var(--textarea-max-height);
+        overflow: hidden;
         border: 0;
         background: transparent;
         box-shadow: none;
@@ -128,8 +136,12 @@ export class FollowUpInput extends LitElement {
       /* The one place a textarea renders sans rather than mono: this is prose a
          user writes to an agent, not code. */
       #followUpInput::part(textarea) {
+        field-sizing: content;
         width: 100%;
-        padding: var(--wa-space-s) var(--wa-space-s) var(--wa-space-xs);
+        height: auto;
+        min-height: var(--textarea-min-height);
+        max-height: var(--textarea-max-height);
+        padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
         box-sizing: border-box;
         overflow-x: hidden;
         overflow-y: auto;

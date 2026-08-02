@@ -54,6 +54,7 @@ import type {
 } from '@shared/schemas/toolResult';
 import { joinNonEmpty } from '@utils/text/stringUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
+import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
 import {
@@ -90,7 +91,6 @@ import {
   enforceCacheControlLimit,
 } from './anthropicContextManagement';
 import {
-  countPdfPagesFromBuffer,
   extractDocumentBlocks,
   analyzeDocumentSources,
   replaceDocumentDataWithUploads,
@@ -307,7 +307,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
             const buffer = Buffer.from(await response.arrayBuffer());
             try {
               signal?.throwIfAborted();
-              const pageCount = await countPdfPagesFromBuffer(buffer);
+              // A parse failure falls to the catch below, which applies the
+              // metadata fallback the comment there describes.
+              const pageCount = await countPdfPagesInBuffer(buffer);
               if (pageCount > 0) {
                 this.uploadedPdfPageCounts.set(fileId, pageCount);
                 sizeEstimate =
@@ -1526,7 +1528,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   async createToolUseFollowUpMessages(
-    client: Anthropic | undefined,
+    client: Anthropic,
     call: AnthropicToolCall,
     result: ToolResult,
     attachments: ToolFileAttachment[],
@@ -1567,9 +1569,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       result: ToolResult;
       attachments: ToolFileAttachment[];
     }>,
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-    client?: Anthropic,
+    workspaceState: AgentWorkspaceState | undefined,
+    text: string | undefined,
+    client: Anthropic,
   ): Promise<MessageParam[]> {
     if (entries.length === 0) return [];
 
@@ -1583,22 +1585,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     }
 
-    const uploadClient =
-      this.supportsToolResultFileUpload &&
-      entries.some((entry) => entry.attachments.length > 0)
-        ? (client ?? (await this.getClient()))
-        : undefined;
-
     // Sequential on purpose: uploads share the PDF-page tracking state.
     const resultBlocks: ContentBlockParam[] = [];
     for (const { call, result, attachments } of entries) {
       resultBlocks.push(
-        await this.buildToolResultBlock(
-          uploadClient,
-          call,
-          result,
-          attachments,
-        ),
+        await this.buildToolResultBlock(client, call, result, attachments),
       );
     }
 
@@ -1612,7 +1603,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Build one tool_result block, uploading attachments when supported.
    */
   private async buildToolResultBlock(
-    client: Anthropic | undefined,
+    client: Anthropic,
     call: AnthropicToolCall,
     result: ToolResult,
     attachments: ToolFileAttachment[],
@@ -1626,7 +1617,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const unsupportedAttachments: ToolFileAttachment[] = [];
     const pageLimitExceeded: ToolFileAttachment[] = [];
 
-    if (canUploadFiles && attachments.length > 0 && client) {
+    if (canUploadFiles && attachments.length > 0) {
       // This upload occurs while assembling the next turn, outside the model
       // invocation gate. Restore the SDK's ordinary two retries for this
       // auxiliary request; generation requests keep maxRetries: 0.

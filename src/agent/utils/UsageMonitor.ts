@@ -3,6 +3,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import { usesServerSideKeysRoute } from '@agent/modelHandlers/support/ProxyConfigResolver';
+import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
   ExtendedTokenUsageStats,
   StorageKey,
@@ -52,8 +53,8 @@ export interface UsageMonitorMetadata {
 /**
  * Minimal model info needed for usage tracking.
  *
- * This interface captures only the fields UsageMonitor actually uses,
- * eliminating the need to store a full IModelHandler reference.
+ * This interface names the fields UsageMonitor reads off the run's live model
+ * handler, so widening what usage accounting depends on is a visible edit here.
  * Fields are directly from ModelCapabilities and ModelConfig.
  */
 export interface UsageMonitorModelInfo {
@@ -106,13 +107,18 @@ export class UsageMonitor {
   private lastSeenTotals: RunUsageTotals | undefined;
 
   constructor(
-    private modelInfo: UsageMonitorModelInfo,
+    private readonly modelCell: ModelCell,
     private readonly context: UsageMonitorContext,
     private readonly metadata: UsageMonitorMetadata,
   ) {}
 
-  setModelInfo(modelInfo: UsageMonitorModelInfo): void {
-    this.modelInfo = modelInfo;
+  /**
+   * The model this run is live on. Read from the cell on every use, so a
+   * mid-run model switch is priced and reported against the model that
+   * actually served the round without anyone mirroring it back in.
+   */
+  private get modelInfo(): UsageMonitorModelInfo {
+    return this.modelCell.handler;
   }
 
   /** The last run totals recorded this run, or undefined before any round. */
@@ -247,9 +253,8 @@ export class UsageMonitor {
   private usesRelayRoute(): boolean {
     // Shares ModelHandler's runtime combinator (#7101 triage) rather than
     // re-deriving the same `!openRouter && relaySync` formula independently
-    // — this class deliberately holds only `modelInfo.config`
-    // (`ModelConfig`-shaped), not a full `IModelHandler` reference, so it
-    // can't call `ModelHandler.shouldUseServerSideKeys()` directly.
+    // — `IModelHandler` does not expose `shouldUseServerSideKeys()`, so the
+    // config-shaped combinator is what this class can call.
     return usesServerSideKeysRoute(this.modelInfo.config);
   }
 

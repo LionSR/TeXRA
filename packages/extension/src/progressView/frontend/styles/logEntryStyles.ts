@@ -11,12 +11,12 @@ export const logEntryStyles = css`
   .log-container {
     flex: 1 1 auto;
     width: 100%;
-    padding: var(--wa-space-m)
+    padding: var(--wa-space-xs)
       max(
         var(--wa-space-m),
         calc((100% - var(--conversation-reading-width, 800px)) / 2)
       )
-      var(--wa-space-2xl);
+      var(--wa-space-s);
     box-sizing: border-box;
     min-width: 0;
     min-height: 0;
@@ -455,7 +455,7 @@ export const logEntryStyles = css`
       var(--wa-color-surface-default, transparent)
     );
     color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
-    padding-block: var(--wa-space-m);
+    padding-block: var(--wa-space-xs);
   }
 
   :host([terminal]) .log-line {

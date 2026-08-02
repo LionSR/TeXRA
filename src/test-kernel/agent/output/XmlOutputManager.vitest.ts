@@ -37,7 +37,6 @@ function createRoundData(round: number): RoundOutput {
     compileFailures: [],
     xmlSummary: {
       tagContents: {},
-      documents: [],
       singleOutputFile: null,
       sourceLocation: null,
     },

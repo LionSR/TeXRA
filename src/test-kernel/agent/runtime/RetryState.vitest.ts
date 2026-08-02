@@ -32,6 +32,7 @@ import type { ModelCell } from '@agent/runtime/ModelCell';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type {
   ModelCredentialRoute,
@@ -190,7 +191,7 @@ function createRetryNode(
     sessionOverride ??
     sessionWithInteractions(
       { requestRetry, cancel: () => {} },
-      new StreamStatusMachine(),
+      new StreamStatusMachine(new SessionEventHub()),
     );
   const streamStatus = session.status;
   const node = new ExposedRetryNode().setServices(
@@ -460,7 +461,7 @@ describe('RetryState', () => {
     const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
     const session = sessionWithInteractions(
       { requestRetry, cancel: () => {} },
-      new StreamStatusMachine(),
+      new StreamStatusMachine(new SessionEventHub()),
     );
 
     class DiagnosticRetryNode extends ExposedRetryNode {
@@ -486,7 +487,9 @@ describe('RetryState', () => {
     );
 
     try {
-      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(session.status, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await expect(node._exec(undefined)).resolves.toBe('recovered');
 
@@ -605,7 +608,7 @@ describe('RetryState', () => {
         }),
         cancel: () => {},
       },
-      new StreamStatusMachine(),
+      new StreamStatusMachine(new SessionEventHub()),
     );
 
     class ClientPreparationRetryNode extends ExposedRetryNode {
@@ -627,7 +630,9 @@ describe('RetryState', () => {
     );
 
     try {
-      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(session.status, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await expect(node._exec(undefined)).resolves.toBe('recovered');
 
@@ -1433,7 +1438,9 @@ describe('RetryState', () => {
     requestRetry.mockResolvedValueOnce({ action: 'retry' });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await withRetryRunContext(streamId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
@@ -1469,7 +1476,9 @@ describe('RetryState', () => {
     node.seedPersistent401Guards();
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await expect(
         withRetryRunContext(streamId, session, () =>
@@ -1496,7 +1505,9 @@ describe('RetryState', () => {
     const streamStatus = session.status;
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       const prompt = withRetryRunContext(streamId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
@@ -1528,7 +1539,9 @@ describe('RetryState', () => {
     requestRetry.mockResolvedValueOnce({ action: 'cancel' });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await withRetryRunContext(streamId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
@@ -1552,7 +1565,9 @@ describe('RetryState', () => {
     const error = new Error('stream dropped before first token');
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       const shouldRetry = await withRetryRunContext(streamId, session, () =>
         node.retryPrompt(undefined, error),

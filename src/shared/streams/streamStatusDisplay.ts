@@ -149,3 +149,17 @@ export function formatPhaseStageLabel(
   const current = `${stage.label} ${stage.index + 1}`;
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
+
+/** Label for the one stage slot a stream fills: a workflow-script run advances
+ *  through named phases, a tool-use run through numbered rounds, never both,
+ *  so every surface that shows the slot dispatches on the same discriminant. */
+export function formatStageLabel(
+  stage:
+    | ({ readonly kind: 'round' } & Readonly<RoundStage>)
+    | ({ readonly kind: 'phase' } & Readonly<PhaseStage>)
+    | undefined,
+): string | undefined {
+  if (stage === undefined) return undefined;
+  if (stage.kind === 'round') return formatRoundStageLabel(stage);
+  return formatPhaseStageLabel(stage);
+}

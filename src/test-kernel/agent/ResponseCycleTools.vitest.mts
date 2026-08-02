@@ -63,8 +63,7 @@ describe('response cycle tool visibility', () => {
     },
   ])('$name', async ({ services, expected }) => {
     const tools = await withTestRunContext(
-      { emit: vi.fn() },
-      'response-cycle-stream',
+      testRunScope('response-cycle-stream'),
       async () => responseCycleToolsForModel(responseServices({})),
       services,
     );
@@ -74,8 +73,7 @@ describe('response cycle tool visibility', () => {
 
   it('omits workflow tools when the model handler cannot call functions', async () => {
     const tools = await withTestRunContext(
-      { emit: vi.fn() },
-      'response-cycle-stream',
+      testRunScope('response-cycle-stream'),
       async () =>
         responseCycleToolsForModel(
           responseServices({ supportsFunctionCalling: false }),
@@ -118,14 +116,11 @@ describe('response cycle tool visibility', () => {
       },
     } as unknown as AgentCore);
 
-    await withTestRunContext(
-      { emit: vi.fn() },
-      'response-cycle-invocation',
-      () =>
-        node.run({
-          messages: [],
-          shouldStop: false,
-        } as unknown as BaseCycleFields),
+    await withTestRunContext(node.services.runScope, () =>
+      node.run({
+        messages: [],
+        shouldStop: false,
+      } as unknown as BaseCycleFields),
     );
 
     expect(createResponse).toHaveBeenCalledWith(

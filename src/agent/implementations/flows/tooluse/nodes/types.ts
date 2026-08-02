@@ -43,8 +43,8 @@ const ToolUseRunSharedSchema = z.looseObject({
   messages: ProviderMessageArraySchema,
   /**
    * The model the run is on, mirroring the live `ModelCell`. This is the
-   * resume SSOT for model identity; the `MODEL` user variable is a prompt-side
-   * projection of it.
+   * resume SSOT for model identity; the `MODEL` user variable is the legacy
+   * record of it, read only when this field is absent.
    */
   modelId: z.string().optional(),
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullable()

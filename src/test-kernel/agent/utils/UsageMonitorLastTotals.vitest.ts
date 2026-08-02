@@ -9,6 +9,7 @@ import {
 } from '@agent/core/state/AgentState';
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   AgentCategory,
@@ -21,6 +22,7 @@ import {
 } from '@telemetry/UsageLogService';
 
 // Local file imports
+import { testModelCell } from '../modelCellTestUtils';
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 import { testModelInfo } from '../runtime/launchContextTestUtils';
 
@@ -33,13 +35,15 @@ function createMonitorWithEvents() {
   const detachTrace = logger.subscribe((event) =>
     hub.emit({ scope: 'run', streamId, event }),
   );
+  const modelCell = testModelCell({ ...testModelInfo, dispose: vi.fn() });
   const monitor = new UsageMonitor(
-    testModelInfo,
+    modelCell,
     { logger, storageKey, streamId },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {
     monitor,
+    modelCell,
     logger,
     events: recorded.events,
     dispose: () => {
@@ -121,6 +125,40 @@ describe('UsageMonitor', () => {
         totalInputTokens: 10,
         totalOutputTokens: 2,
       });
+    } finally {
+      log.mockRestore();
+      dispose();
+    }
+  });
+
+  it('bills a round against the model the run switched to', async () => {
+    const { dispose, modelCell, monitor } = createMonitorWithEvents();
+    const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+    try {
+      modelCell.swap(
+        {
+          ...testModelInfo,
+          config: { ...testModelInfo.config, fullName: 'Switched Model' },
+          dispose: vi.fn(),
+        } as unknown as RunModelHandler,
+        'switched-model',
+      );
+
+      const state = AgentRunStateSnapshotSchema.parse({});
+      recordCycleMetrics(state, 50, {
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: 0.01,
+        responseTimeMs: 50,
+        provider: 'openai' as const,
+      });
+      await monitor.recordUsage(state);
+
+      // Nothing pushes the new model in: the monitor reads the live handler
+      // out of the run's ModelCell on every round.
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'Switched Model' }),
+      );
     } finally {
       log.mockRestore();
       dispose();
