@@ -481,15 +481,20 @@ export function App(props: AppProps): React.JSX.Element {
       });
   };
 
+  const appOwnsEscape = (): boolean => {
+    const state = escapeInterruptStateRef.current;
+    return appEscapeInterruptActive({
+      inputDisabled: state.inputDisabled,
+      reverseSearchOpen: state.reverseSearchOpen,
+      runPending: true,
+      slashPaletteOpen: state.slashPaletteOpen,
+    });
+  };
+
   const bareEscapeActive = (streamId: StreamTabId): boolean => {
     const state = escapeInterruptStateRef.current;
     return (
-      appEscapeInterruptActive({
-        inputDisabled: state.inputDisabled,
-        reverseSearchOpen: state.reverseSearchOpen,
-        runPending: true,
-        slashPaletteOpen: state.slashPaletteOpen,
-      }) &&
+      appOwnsEscape() &&
       (parentStreamSignal.get().has(streamId) ||
         state.canInterruptStream(streamId))
     );
@@ -546,7 +551,7 @@ export function App(props: AppProps): React.JSX.Element {
         return;
       }
       if (!key.ctrl && !key.tab && input.length > 0) {
-        if (handleMetaShortcut(input)) return;
+        if (appOwnsEscape() && handleMetaShortcut(input)) return;
         handleBareEscape(pendingEscape.streamId);
         return;
       }
