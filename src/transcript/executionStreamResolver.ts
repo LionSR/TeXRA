@@ -19,8 +19,11 @@ export interface PersistedStreamIdResolution {
   readonly source: PersistedStreamIdResolutionSource;
   /** Other persisted candidates to try when a historical primary is empty. */
   readonly fallbackStreamIds?: readonly StreamTabId[];
-  /** Exact execution matches with no persisted parent, for archive merging. */
-  readonly associatedRootStreamIds?: readonly StreamTabId[];
+  /** Exact execution matches without an explicit persisted parent. These are
+   *  merge candidates, not proven roots: old/partial metadata may omit the
+   *  parent field. The archive reader admits only candidates connected to the
+   *  selected stream by agreeing copied-row identities. */
+  readonly mergeCandidateStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -42,8 +45,8 @@ interface ExecutionStreamScan {
   readonly persistedStreams: StreamTabId[];
   /** Persisted streams whose sidecar `meta.json` claims this execution. */
   readonly metaMatched: StreamTabId[];
-  /** Exact execution matches that are not recorded as child streams. */
-  readonly rootMetaMatched: StreamTabId[];
+  /** Exact execution matches without an explicit persisted parent. */
+  readonly unparentedMetaMatched: StreamTabId[];
 }
 
 /**
@@ -69,7 +72,7 @@ async function scanPersistedStreamsForExecution(
     metaMatched: scanned
       .filter((candidate) => candidate.association.executionId === executionId)
       .map((candidate) => candidate.streamId),
-    rootMetaMatched: scanned
+    unparentedMetaMatched: scanned
       .filter(
         (candidate) =>
           candidate.association.executionId === executionId &&
@@ -175,12 +178,12 @@ export async function resolvePersistedStreamIdForExecution(
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched, rootMetaMatched } =
+  const { persistedStreams, metaMatched, unparentedMetaMatched } =
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
     const primaryCandidates =
-      rootMetaMatched.length > 0 ? rootMetaMatched : metaMatched;
+      unparentedMetaMatched.length > 0 ? unparentedMetaMatched : metaMatched;
     const streamId = await pickBestLegacyMetaMatch(
       primaryCandidates,
       snapshotStore,
@@ -201,8 +204,8 @@ export async function resolvePersistedStreamIdForExecution(
       streamId,
       source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
-      ...(rootMetaMatched.length > 0
-        ? { associatedRootStreamIds: rootMetaMatched }
+      ...(unparentedMetaMatched.length > 0
+        ? { mergeCandidateStreamIds: unparentedMetaMatched }
         : {}),
     };
   }

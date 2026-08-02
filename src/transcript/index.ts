@@ -22,6 +22,7 @@ export { StreamSnapshotStore } from './StreamSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {
+  type CompletedRunArchiveDiagnostic,
   readCompletedRunConversation,
   readCompletedRunTodos,
   seedResumedConversationSidecar,

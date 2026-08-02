@@ -56,6 +56,7 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
+  type CompletedRunArchiveDiagnostic,
   readCompletedRunConversation,
   readCompletedRunTodos,
   resolvePersistedStreamIdForExecution,
@@ -67,6 +68,19 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
+
+function formatArchiveDiagnostic(
+  diagnostic: CompletedRunArchiveDiagnostic,
+): string {
+  switch (diagnostic.kind) {
+    case 'disconnectedStream':
+      return `Archive diagnostic: disconnected candidate ${diagnostic.streamId}`;
+    case 'conflictingRow':
+      return `Archive diagnostic: conflicting row ${diagnostic.rowId} in ${diagnostic.streamId}`;
+    case 'orderingCycle':
+      return `Archive diagnostic: ordering cycle in ${diagnostic.streamId}`;
+  }
+}
 
 // Local file imports
 import {
@@ -857,7 +871,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     limit: number,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const { conversation, source, streamId, streamIds } =
+    const { conversation, source, streamId, streamIds, diagnostics } =
       await readCompletedRunConversation(executionId);
 
     if (!conversation) {
@@ -875,7 +889,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           totalMessages: 0,
           metadata: [
             'Source: none',
-            'Stream: none',
+            `Stream: ${streamId ?? 'none'}`,
+            ...(diagnostics ?? []).map(formatArchiveDiagnostic),
             'Returned message interval: [0, 0)',
             'Next offset: none',
           ],
@@ -893,6 +908,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         `Source: ${source}`,
         `Stream: ${streamId ?? 'none'}`,
         ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+        ...(diagnostics ?? []).map(formatArchiveDiagnostic),
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],
