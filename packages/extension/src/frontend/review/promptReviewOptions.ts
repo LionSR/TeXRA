@@ -2,8 +2,8 @@
  * Per-run options prompt for the "Find Issues" agent review.
  *
  * Mirrors the GitKraken/Cursor "Find Issues" popover with native VS Code
- * QuickPicks: an optional free-text focus, the review approach, and the
- * branch to diff against. Returns the gathered options, or `undefined` when
+ * QuickPicks: an optional free-text focus and the branch to diff against.
+ * Returns the gathered options, or `undefined` when
  * the user cancels at any step (Escape).
  */
 
@@ -12,20 +12,13 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { listBaseBranchCandidates } from '@agent/review/reviewDiff';
-import type { ReviewApproach } from '@agent/review/reviewIssues';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 
 export interface ReviewOptions {
   /** Free-text focus for the reviewer; omitted when left blank. */
   userInstructions?: string;
-  /** Per-run approach override. */
-  approach: ReviewApproach;
   /** Branch to diff against; omitted to auto-detect the main branch. */
   baseBranch?: string;
-}
-
-interface ApproachItem extends vscode.QuickPickItem {
-  value: ReviewApproach;
 }
 
 interface BranchItem extends vscode.QuickPickItem {
@@ -33,8 +26,6 @@ interface BranchItem extends vscode.QuickPickItem {
   ref: string | undefined;
 }
 
-const APPROACH_PROMPT_HINT =
-  'Quick checks key suspicions (fast); Thorough reads all changed files (deeper)';
 const BRANCH_PROMPT_HINT =
   'The review will diff the current branch against the selected branch';
 
@@ -69,7 +60,7 @@ function pickFromQuickPick<T extends vscode.QuickPickItem>(config: {
 }
 
 /**
- * Drive the three-step QuickPick flow. Each step honors Escape: returning
+ * Drive the two-step prompt flow. Each step honors Escape: returning
  * `undefined` from any prompt cancels the whole run, so a half-configured
  * review never starts.
  */
@@ -85,31 +76,7 @@ export async function promptReviewOptions(
   // Escape returns undefined; an empty submission returns "".
   if (userInstructions === undefined) return undefined;
 
-  const quickItem: ApproachItem = {
-    label: 'Quick',
-    detail: 'Verify only the strongest suspicions with tools — fast and cheap.',
-    value: 'quick',
-  };
-  const thoroughItem: ApproachItem = {
-    label: 'Thorough',
-    detail:
-      'Read every changed file, check callers, and pull diagnostics — deeper, higher cost.',
-    value: 'thorough',
-  };
-  const approachItems = [quickItem, thoroughItem];
   const trimmedInstructions = userInstructions.trim();
-  // Echo the step-1 focus text when present; otherwise keep the original
-  // approach explanation visible.
-  const approachPick = await pickFromQuickPick({
-    title: 'Agent Review — Approach',
-    placeholder: 'Choose review depth',
-    items: approachItems,
-    prompt: trimmedInstructions
-      ? `Focus: ${trimmedInstructions}`
-      : APPROACH_PROMPT_HINT,
-  });
-  if (!approachPick) return undefined;
-
   const candidates = await listBaseBranchCandidates(cwd);
   const branchItems: BranchItem[] = [
     {
@@ -132,14 +99,15 @@ export async function promptReviewOptions(
     title: 'Agent Review — Diff Against',
     placeholder: 'Choose the branch to compare against',
     items: branchItems,
-    prompt: BRANCH_PROMPT_HINT,
+    prompt: trimmedInstructions
+      ? `Focus: ${trimmedInstructions}`
+      : BRANCH_PROMPT_HINT,
     defaultButton: useDefaultButton,
   });
   if (!branchPick) return undefined;
 
   return {
     userInstructions: userInstructions.trim() || undefined,
-    approach: approachPick.value,
     baseBranch: branchPick.ref,
   };
 }

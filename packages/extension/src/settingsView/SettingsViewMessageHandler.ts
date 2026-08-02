@@ -80,7 +80,7 @@ import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHa
 import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_URLS,
-  PROVIDER_VSCODE_SETTINGS,
+  PROVIDER_SETTINGS,
 } from '@shared/constants/providers';
 import {
   getLastCheckResults,
@@ -161,7 +161,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.profileController = new SettingsProfileController({
       globalState: globalSM,
       providerIds: SecretManager.API_PROVIDERS,
-      providerVscodeSettings: PROVIDER_VSCODE_SETTINGS,
+      providerSettings: PROVIDER_SETTINGS,
       providerDisplayNames: PROVIDER_DISPLAY_NAMES,
       providerKeyUrls: PROVIDER_URLS,
       loadProviderKeyStatuses: () =>
@@ -380,8 +380,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.sendProfileData(webview),
         );
       },
-      setProviderVscodeSetting: (message) =>
-        this.handleSetProviderVscodeSetting(message),
+      setProviderSetting: (message) => this.handleSetProviderSetting(message),
       openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
         this.setModelEnabled(message.modelName, message.enabled),
@@ -980,14 +979,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  private async handleSetProviderVscodeSetting(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_VSCODE_SETTING>,
+  private async handleSetProviderSetting(
+    data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_SETTING>,
   ): Promise<void> {
-    const result = await this.profileController.setProviderVscodeSetting(data);
+    const result = await this.profileController.setProviderSetting(data);
     if (result.kind === 'rejected') {
       this.logger.warn(
         this.channel,
-        `Rejected unknown vscode setting key: ${result.key}`,
+        `Rejected unknown provider setting key: ${result.key}`,
       );
       return;
     }

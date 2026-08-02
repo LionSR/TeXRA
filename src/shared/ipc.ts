@@ -300,7 +300,7 @@ export const SETTINGS_VIEW_CMD = {
   SET_PROVIDER_STREAMING: 'setProviderStreaming',
   SET_PROVIDER_ENDPOINT: 'setProviderEndpoint',
   SET_GLOBAL_STREAMING: 'setGlobalStreaming',
-  SET_PROVIDER_VSCODE_SETTING: 'setProviderVscodeSetting',
+  SET_PROVIDER_SETTING: 'setProviderSetting',
   OPEN_EXTERNAL_URL: 'openExternalUrl',
   // Model selection commands
   SET_MODEL_ENABLED: 'setModelEnabled',

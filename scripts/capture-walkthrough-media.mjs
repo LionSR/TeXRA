@@ -271,7 +271,7 @@ function providerStatus(provider, displayName, status) {
     streaming: true,
     customEndpoint: '',
     supportsCustomEndpoint: provider === 'openai',
-    vscodeSettings: [],
+    providerSettings: [],
   };
 }
 

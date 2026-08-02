@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  agentKeyOf,
-  agentMatchesIdentifier,
-  agentName,
-} from '@shared/schemas/agent';
+import { agentMatchesIdentifier } from '@shared/schemas/agent';
 
 const remoteReview = {
   category: 'toolUse',
@@ -26,20 +22,13 @@ vi.mock('@agent/runtime/RunContext', () => ({
   tryUseRunContext: () => mocks.context,
 }));
 
-// `resolveDelegationScopeAgents` and `resolveWithinCategory` are the single
+// `resolveDelegationScopeAgents` and `findAgentByIdentifier` are the single
 // sources of truth for scope resolution and identity matching (agentRegistry.ts)
 // — this test only exercises which candidate set and resolver
 // delegationAgentAvailability.ts feeds them, so the mock reproduces just this
 // scope's expected resolution rather than re-implementing priority/dedup logic
 // that belongs to agentRegistry's own tests.
 vi.mock('@agent/index/agentRegistry', () => {
-  const aliasTarget = (identifier: string) => {
-    if (identifier === 'remote:review') return remoteReview;
-    if (identifier === 'custom:review' || identifier === 'review') {
-      return customReview;
-    }
-    return undefined;
-  };
   return {
     getVisibleAgent: () => customReview,
     resolveDelegationScopeAgents: (
@@ -51,21 +40,10 @@ vi.mock('@agent/index/agentRegistry', () => {
       scope.toolUseAgentKeys.includes('remote:review')
         ? [remoteReview]
         : [],
-    resolveWithinCategory: (
+    findAgentByIdentifier: (
       entries: Array<{ source: string; name: string }>,
-      _category: string,
       identifier: string,
-    ) => {
-      const exact = entries.find((entry) =>
-        agentMatchesIdentifier(entry, identifier),
-      );
-      if (exact) return exact;
-      const alias = aliasTarget(identifier);
-      if (!alias) return undefined;
-      const mapped =
-        identifier === agentName(identifier) ? alias.name : agentKeyOf(alias);
-      return entries.find((entry) => agentMatchesIdentifier(entry, mapped));
-    },
+    ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
   };
 });
 

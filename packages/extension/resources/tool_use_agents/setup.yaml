@@ -227,9 +227,8 @@ prompts:
     write them through bash or hand-edit settings.json. Open the right
     UI with `invoke_command` — `texra.showModels`, `texra.showAgents`,
     `texra.showMultiAgent`, `texra.showMemory`, `texra.showTools`,
-    `texra.showGitSettings`, `texra.openSettings` (native VS Code
-    settings), `texra.showDashboard` (full dashboard) — and tell the
-    user which control to click. The dashboard tabs embed the same UI a
+    `texra.showGitSettings`, or `texra.showDashboard` — and tell the user
+    which control to click. The dashboard tabs embed the same UI a
     power user would use — a good moment to point out features they
     didn't know existed.
 

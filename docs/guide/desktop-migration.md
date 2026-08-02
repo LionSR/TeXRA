@@ -1,4 +1,4 @@
-# Migrating to the Desktop App
+# Shared Data Across TeXRA Apps
 
 The TeXRA desktop app, VS Code extension, and command-line client use the same
 TeXRA configuration files wherever possible. Opening the same project gives
@@ -9,7 +9,7 @@ Workspace settings live in `.texra/config.json`. Global TeXRA settings and
 shared task data live under `~/.texra`. These are native TeXRA files rather than
 VS Code settings, so the three hosts read the same values.
 
-## What Carries Over
+## Shared Data
 
 Your project files remain the source of truth. If you open the same repository,
 paper folder, or Overleaf Git checkout in the desktop app, TeXRA can work with
@@ -20,14 +20,20 @@ Secure credentials remain host-specific. The extension uses VS Code Secret
 Storage, while the desktop and command-line hosts use their own secure stores.
 API keys and sign-in sessions therefore need to be added separately for now.
 
-- Workspace and global TeXRA settings
-- Agent, tool, approval, telemetry, skill, and LaTeX preferences stored there
-- Shared history and execution records
-- Project files, custom instructions, and checked-in agent definitions
+The shared subset is:
 
-Provider API keys, account sessions, and other secrets do not yet carry over.
+- native workspace and global values stored in TeXRA configuration, including
+  approval, telemetry, skill, model-behavior, bibliography, and selected TikZ
+  and LaTeX replacement settings;
+- shared history and execution records; and
+- project files, custom instructions, and checked-in agent definitions.
 
-## Recommended First Launch
+Agent and team rosters, tool enablement and availability, model visibility, and
+host-specific LaTeX compile and formatter preferences remain in each host's
+state. Review those controls after opening a project in another app. Provider
+API keys, account sessions, and other secrets also do not yet carry over.
+
+## Opening a Project in the Desktop App
 
 1. Install and open the desktop app.
 2. Open the same project folder you use with the extension or CLI.
@@ -38,7 +44,7 @@ Provider API keys, account sessions, and other secrets do not yet carry over.
 6. Run a small command, such as a short polish task or LaTeX compile check, and
    confirm the output lands in the expected task storage.
 
-## Export And Import
+## Credentials
 
 There is no settings or history export step. A future shared credential service
 may remove the remaining need to enter secrets separately; until then, TeXRA

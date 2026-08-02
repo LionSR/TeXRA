@@ -24,7 +24,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import type {
   ChatGptAuthStatus,
   ModelSelectionItem,
-  NumberVscodeSetting,
+  NumberSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
 
@@ -73,8 +73,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
-  @property({ attribute: false }) reliabilitySettings: NumberVscodeSetting[] =
-    [];
+  @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
 

@@ -492,8 +492,7 @@ export function getInstallGuide(guide: Guide, platform: string): string {
 // These constants are imported by:
 //   - readers in src/agent/, src/latex/, src/housekeeping/, src/commands/
 //   - the inbound/outbound message schemas in src/shared/schemas/
-//   - the LaTeX tab UI in src/settingsView/frontend/
-//   - the activation-time migration helper in src/frontend/setup.ts
+//   - the native LaTeX settings handlers and tab UI
 // so changing a default or range here propagates everywhere with no rot.
 //
 import { WorkspaceStateKey } from '@shared/state/stateKeys';

@@ -57,7 +57,7 @@ describe('reliability-settings-section', () => {
 
     expect(input!.value).toBe('3');
     expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING,
+      SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
       {
         key: 'texra.model.retry.maxAttempts',
         value: 3,
