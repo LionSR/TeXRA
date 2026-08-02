@@ -21,7 +21,10 @@ import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
-import { readCompletedRunConversation } from '@transcript';
+import {
+  hasCompletedRunConversationEvidence,
+  readCompletedRunConversation,
+} from '@transcript';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
 import {
@@ -166,6 +169,8 @@ export async function readCliHistoryDetails(
     deriveResumability(id),
   ]);
   const conversation = conversationResult.conversation;
+  const hasTranscriptEvidence =
+    hasCompletedRunConversationEvidence(conversationResult);
   const resumeData =
     resumability.resumable && config
       ? await readCliToolUseResumeDataForListing(id, config)
@@ -193,7 +198,8 @@ export async function readCliHistoryDetails(
     !config &&
     !conversationPreview &&
     !fullConversation &&
-    !resumeData
+    !resumeData &&
+    !hasTranscriptEvidence
   ) {
     return null;
   }
@@ -252,10 +258,12 @@ export type CliHistoryExportInputResult =
 export async function readCliHistoryExportInput(
   id: ExecutionId,
 ): Promise<CliHistoryExportInputResult> {
-  const { meta, config, conversation, exportInput } =
+  const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
     await loadChatExportInput(id);
   if (exportInput) return { status: 'ok', exportInput };
-  if (!meta && !config && !conversation) return { status: 'not_found' };
+  if (!meta && !config && !conversation && !hasTranscriptEvidence) {
+    return { status: 'not_found' };
+  }
   return { status: 'incomplete' };
 }
 

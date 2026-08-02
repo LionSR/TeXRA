@@ -79,6 +79,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
       { role: 'user', content: 'Polish the lemma.' },
       { role: 'assistant', content: 'Done.' },
     ]);
+    expect(result.hasTranscriptEvidence).toBe(true);
   });
 
   it('returns a null exportInput when nothing is stored at all', async () => {
@@ -88,6 +89,7 @@ describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => 
       meta: null,
       config: null,
       conversation: null,
+      hasTranscriptEvidence: false,
       exportInput: null,
     });
   });
