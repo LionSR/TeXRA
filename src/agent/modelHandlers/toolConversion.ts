@@ -191,12 +191,16 @@ function containsSchemaReference(value: unknown): boolean {
   if (!isSchemaObject(value)) return false;
   return (
     typeof value.$ref === 'string' ||
-    Object.entries(value).some(
-      ([key, child]) =>
-        key !== 'default' &&
-        key !== 'example' &&
-        containsSchemaReference(child),
-    )
+    Object.entries(value).some(([key, child]) => {
+      if (key === 'default' || key === 'example') return false;
+      if (
+        (key === 'properties' || key === '$defs' || key === 'definitions') &&
+        isSchemaObject(child)
+      ) {
+        return Object.values(child).some(containsSchemaReference);
+      }
+      return containsSchemaReference(child);
+    })
   );
 }
 
