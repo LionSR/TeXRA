@@ -45,7 +45,7 @@ export class ResidentStreamRegistry<TId, TState> {
     return this.records.get(id);
   }
 
-  /** Matches `Map.set` so a record can be seeded directly (e.g. by tests). */
+  /** Matches `Map.set` for tests that seed a stale resident record directly. */
   set(id: TId, state: TState): void {
     this.records.set(id, state);
   }
@@ -64,10 +64,6 @@ export class ResidentStreamRegistry<TId, TState> {
 
   values(): IterableIterator<TState> {
     return this.records.values();
-  }
-
-  entries(): IterableIterator<[TId, TState]> {
-    return this.records.entries();
   }
 
   [Symbol.iterator](): IterableIterator<[TId, TState]> {

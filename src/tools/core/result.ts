@@ -21,15 +21,6 @@ export function executed(output: string, summary?: string): ExecutedToolResult {
 }
 
 /**
- * Build a `status: 'executed'` result for an empty-collection short-circuit
- * (e.g. "No files matched"), where one message serves as both the model-facing
- * `output` and the human-facing `summary`.
- */
-export function emptyResult(message: string): ExecutedToolResult {
-  return { status: 'executed', output: message, summary: message };
-}
-
-/**
  * Build a `status: 'error'` result literal. Reserved for call sites that
  * cannot use the dominant `throw new ToolError(...)` convention (caught
  * centrally by `BaseTool.call`) — typically because the caller must keep
