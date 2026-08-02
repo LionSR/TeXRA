@@ -73,6 +73,7 @@ function bgClient(opts: {
   getSequence: Array<Interaction | Error>;
   onCancel?: (id: string) => void | Promise<void>;
   generateContent?: () => Promise<unknown>;
+  countTokens?: (params: unknown) => Promise<unknown>;
 }): { client: unknown; calls: CapturedCalls } {
   let getIdx = 0;
   const calls: CapturedCalls = { create: [], get: [], cancel: [] };
@@ -108,9 +109,12 @@ function bgClient(opts: {
         return {};
       },
     },
-    models: opts.generateContent
-      ? { generateContent: opts.generateContent }
-      : {},
+    models: {
+      ...(opts.generateContent
+        ? { generateContent: opts.generateContent }
+        : {}),
+      ...(opts.countTokens ? { countTokens: opts.countTokens } : {}),
+    },
   };
   return { client, calls };
 }
@@ -118,12 +122,13 @@ function bgClient(opts: {
 /** Workflow-mode handler so isBackgroundModeEligible() is true. */
 function createHandler(
   category: AgentCategory = AgentCategory.Workflow,
+  supportsTokenCounting = false,
 ): ModelHandlerGoogleInteractions {
   const handler = new ModelHandlerGoogleInteractions(
     buildTestModelConfig(GOOGLE_INTERACTIONS_TEST_CONFIG, {
       capabilities: {
         supportsReasoning: true,
-        supportsTokenCounting: false,
+        supportsTokenCounting,
       },
     }),
   );
@@ -485,6 +490,60 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.create).toHaveLength(1);
     expect(calls.get).toEqual(['int_expire']);
     expect(calls.cancel).toEqual(['int_expire']);
+  });
+
+  it('clears a pre-aborted pending interaction before token counting', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler(AgentCategory.Workflow, true);
+    let releaseCancel!: () => void;
+    const cancelPending = new Promise<void>((resolve) => {
+      releaseCancel = resolve;
+    });
+    const countTokens = vi.fn(
+      async (params: { config?: { abortSignal?: AbortSignal } }) => {
+        params.config?.abortSignal?.throwIfAborted();
+        return { totalTokens: 1 };
+      },
+    );
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_abort_before_count', status: 'in_progress' }),
+      getSequence: [new TypeError('fetch failed')],
+      countTokens: countTokens as (params: unknown) => Promise<unknown>,
+      onCancel: () => cancelPending,
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toThrow('fetch failed');
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+    expect(countTokens).toHaveBeenCalledTimes(1);
+    countTokens.mockClear();
+
+    const controller = new AbortController();
+    controller.abort();
+    let settled = false;
+    let caught: unknown;
+    const retry = respond(
+      handler,
+      client,
+      [userStep('a')],
+      controller.signal,
+    ).catch((error: unknown) => {
+      settled = true;
+      caught = error;
+    });
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    const settledBeforeCancel = settled;
+    releaseCancel();
+    await retry;
+
+    expect(settledBeforeCancel).toBe(true);
+    expect(caught).toMatchObject({ name: 'AbortError' });
+    expect(countTokens).not.toHaveBeenCalled();
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_abort_before_count']);
+    expect(calls.cancel).toEqual(['int_abort_before_count']);
   });
 
   it('lets an already-aborted signal win over pending expiry without awaiting cancel', async () => {

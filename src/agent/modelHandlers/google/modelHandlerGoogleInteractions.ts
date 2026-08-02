@@ -1179,6 +1179,14 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // leaves a later re-enable on a safe full-resend boundary.
     if (!stateful) this.invalidateChain();
 
+    const pending = this.pendingBackgroundInteraction;
+    if (pending && signal?.aborted) {
+      if (this.clearPendingBackgroundInteraction(pending.id)) {
+        void this.cancelBackgroundInteraction(client, pending.id);
+      }
+      signal.throwIfAborted();
+    }
+
     const generationConfig = this.buildGenerationConfig(endTag);
     const interactionsTools = tools?.length
       ? this.toInteractionsTools(tools)
@@ -1441,12 +1449,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     let initial: GoogleGenAIInteraction;
     if (pending) {
-      if (signal?.aborted) {
-        if (this.clearPendingBackgroundInteraction(pending.id)) {
-          void this.cancelBackgroundInteraction(client, pending.id);
-        }
-        signal.throwIfAborted();
-      }
       if (Date.now() >= pending.deadlineAtMs) {
         this.clearPendingBackgroundInteraction(pending.id);
         await this.cancelBackgroundInteraction(client, pending.id);
