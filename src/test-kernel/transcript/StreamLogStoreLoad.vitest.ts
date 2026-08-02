@@ -1031,49 +1031,6 @@ describe('StreamLogStore load', () => {
     );
   });
 
-  it('settles every orphaned nonterminal workflow call during cold recovery', async () => {
-    const storage = mockStorage({
-      logs: {
-        workflow: [
-          runningWorkflowCallEntry('workflow', 1, 100),
-          runningWorkflowCallEntry('workflow', 2, 101, 'planned'),
-        ],
-      },
-      summaries: {
-        workflow: summary(100, 101, { hasNonterminalWorkflowTask: true }),
-      },
-    });
-    const store = await StreamLogStore.open();
-
-    const affected = await store.endRunningGroupsForStreams(['workflow'], 300);
-    await store.flush();
-    expect(store.get('workflow')).toBeUndefined();
-    const entries = writtenLog(storage.writes, 'workflow');
-
-    expect(affected).toEqual(['workflow']);
-    expect(entries.at(0)).toMatchObject({
-      level: LOG_LEVELS.ERROR,
-      settlementSeqNo: 3,
-      data: {
-        id: 'audit-core',
-        status: 'failed',
-        error: 'The previous host stopped before this call completed.',
-      },
-    });
-    expect(entries.at(1)).toMatchObject({
-      level: LOG_LEVELS.INFO,
-      settlementSeqNo: 4,
-      data: {
-        id: 'audit-extension',
-        status: 'skipped',
-        reason: 'not-reached',
-      },
-    });
-    expect(writtenSummary(storage.writes, 'workflow')).toEqual(
-      settledSummary(100, 101),
-    );
-  });
-
   it('can close selected running groups with a caller-supplied RunOutcome', async () => {
     const storage = mockStorage({
       logs: {

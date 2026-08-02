@@ -65,6 +65,10 @@ const CONFIG = AgentConfigSchema.parse({
   workingDirectory: '/workspace',
 });
 const GOOGLE_CONFIG: AgentConfig = { ...CONFIG, model: 'gemini35f' };
+const WORKFLOW_CONFIG: AgentConfig = {
+  ...CONFIG,
+  agentCategory: AgentCategory.Workflow,
+};
 const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
@@ -385,6 +389,36 @@ describe('retrieveSessionResumeData', () => {
       success: false,
       error: expect.objectContaining({ name: 'ZodError' }),
     });
+  });
+
+  it('retrieves a workflow record with the current conversation field', async () => {
+    const executionId = 'workflow-current-conversation' as ExecutionId;
+    const streamId =
+      'reflection@gpt54#workflow-current-conversation' as StreamTabId;
+    await writeFlowRecord(executionId, {
+      currentRound: 1,
+      totalRounds: 2,
+      conversation: [{ role: 'user', content: 'Continue.' }],
+    });
+
+    await expect(
+      retrieveSessionResumeData(streamId, executionId, WORKFLOW_CONFIG),
+    ).resolves.toMatchObject({ type: 'workflow', executionId });
+  });
+
+  it('rejects a workflow record that only has the retired messages field', async () => {
+    const executionId = 'workflow-retired-messages' as ExecutionId;
+    const streamId =
+      'reflection@gpt54#workflow-retired-messages' as StreamTabId;
+    await writeFlowRecord(executionId, {
+      currentRound: 1,
+      totalRounds: 2,
+      messages: [{ role: 'user', content: 'Continue.' }],
+    });
+
+    await expect(
+      retrieveSessionResumeData(streamId, executionId, WORKFLOW_CONFIG),
+    ).resolves.toBeNull();
   });
 
   it('preserves structured output at the persisted shared-state boundary', () => {

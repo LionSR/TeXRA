@@ -50,7 +50,7 @@ interface ExecutionStreamScan {
 /**
  * Compatibility scan for executions registered before their stream identity
  * was stored directly: list every `streamData/` stream once, read each one's
- * `meta.json` executionId, and report which of them claim `executionId`.
+ * run descriptor, and report which of them claim `executionId`.
  */
 async function scanPersistedStreamsForExecution(
   executionId: ExecutionId,

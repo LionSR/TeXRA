@@ -158,7 +158,6 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   toolUseAgent: z.string().prefault('orchestrator'),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   commit: z.string().prefault('HEAD'),
-  instruction: z.string().prefault(''),
   workflowInstruction: z.string().prefault(''),
   toolUseInstruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),

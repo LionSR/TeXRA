@@ -29,8 +29,6 @@ export function createFakeKv(
     readMetaStrict: async () => null,
     readConfig: async () => null,
     readReport: async () => null,
-    readTodos: async () => [],
-    readConversation: async () => null,
     readWorkspaceFiles: async () => [],
     readChildren: async () => [],
     readResultMeta: async () => null,
