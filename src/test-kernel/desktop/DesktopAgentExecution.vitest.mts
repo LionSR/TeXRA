@@ -2360,7 +2360,7 @@ describe('DesktopProgressBridge', () => {
 
     await expect(result).resolves.toEqual({ action: 'setup' });
     expect(messages).toEqual([
-      { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
+      { command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER },
       expect.objectContaining({
         command: COMMON_COMMANDS.STATE_RESTORE,
         state: expect.objectContaining({
@@ -2402,7 +2402,7 @@ describe('DesktopProgressBridge', () => {
     });
 
     expect(messages).toEqual([
-      { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
+      { command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER },
       expect.objectContaining({ command: COMMON_COMMANDS.STATE_RESTORE }),
     ]);
   });
