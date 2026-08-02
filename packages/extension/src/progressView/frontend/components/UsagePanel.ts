@@ -9,12 +9,12 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-// Local imports - shared schemas
+// Local imports - shared schemas, styles, and constants
 import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 
-// Local imports - shared styles
+// Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
