@@ -7,7 +7,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared icon contract
 import {
-  LEGACY_ICON_ALIASES,
   TEXRA_ICON_LIBRARY,
   TEXRA_ICON_NAMES,
 } from '@shared/wa/webAwesomeIcons';
@@ -76,14 +75,14 @@ describe('desktop icon library', () => {
     expect(svg).not.toContain('<path fill="currentColor"');
   });
 
-  it('keeps aliases and unknown runtime names visible in both libraries', async () => {
-    const aliasSvg = decodeSvg(await resolve(texraResolver, 'send'));
+  it('keeps canonical and unknown runtime names visible in both libraries', async () => {
+    const canonicalSvg = decodeSvg(await resolve(texraResolver, 'paper-plane'));
     const unknownSvg = decodeSvg(
       await resolve(defaultResolver, 'unexpected-runtime-icon'),
     );
 
-    expect(aliasSvg).toContain('stroke-width="1.75"');
-    expect(aliasSvg).not.toContain('<path fill="currentColor"');
+    expect(canonicalSvg).toContain('stroke-width="1.75"');
+    expect(canonicalSvg).not.toContain('<path fill="currentColor"');
     expect(unknownSvg).toContain('stroke-width="1.75"');
   });
 
@@ -96,14 +95,6 @@ describe('desktop icon library', () => {
       unmapped: 'circle-question',
       // Guards the parse itself: an empty list would make the walk vacuous.
       minimumSize: 50,
-    },
-    {
-      // Aliases take an extra hop (alias -> canonical -> Lucide). Skipping that
-      // hop previously blanked 22 icons, so the whole table is walked.
-      table: 'codicon alias',
-      readNames: () => Object.keys(LEGACY_ICON_ALIASES),
-      unmapped: 'question',
-      minimumSize: 0,
     },
     {
       table: 'canonical TeXRA name',

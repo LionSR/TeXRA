@@ -314,7 +314,7 @@ export class FileSelectGroup extends LitElement {
         <div class="file-select-header">
           <div class="file-select-label-group">
             <span class="file-select-icon" aria-hidden="true">
-              ${waIcon(config.icon as TeXRAIconName)}
+              ${waIcon(config.icon)}
             </span>
             <label>${config.label}</label>
             ${
