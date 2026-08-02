@@ -23,31 +23,11 @@ import { RunUsageMapSchema } from './usage';
 // appear on either kind — e.g. a subagent launched via a specific CLI tool
 // (`options.toolName` in `createChildStream`), or a background process running
 // a named tool (`bash`, `codex`) — so it stays a shared, optional field.
-//
-// Where a roster comes from, since the legacy arms below are only meaningful
-// against it. The roster is liveness state, and every artifact we have written
-// carries an empty one: `assembleSnapshot` does not set `subagents` (it takes
-// the `[]` prefault) and every hydrate clamps it, `replayTrace()` included.
-// It still crosses two parse boundaries, because `StreamSnapshotSchema` picks
-// `subagents` from `BackendOwnedFieldsSchema`: the progress-view wire
-// (`UPDATE_STREAMS`/`STREAM_STATE`), and an exported `trace.json`, which the
-// standalone viewer re-parses — the same permanent second boundary documented
-// on `GroupLogPayloadSchema` in `./taskGroup`. So the legacy arms guard
-// cross-version input on those two boundaries, not our own on-disk state.
-//
-// Retire the roster's legacy arms — `fillLegacyActiveChildKind` and the "still
-// parse" halves of the optional fields below — on 2026-11-01, with the other
-// roster/task-group compat reads. They were added defensively against
-// persisted rosters that, per the note above, no release ever wrote.
 
 const ActiveChildInfoBaseSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
-  /**
-   * Current execution phase. Takes `StreamPhase` only: no artifact carries a
-   * roster (see the note above), so no input can hold the retired 7-value
-   * `StreamStatus` vocabulary and there is nothing to normalize here.
-   */
+  /** Current execution phase. */
   status: StreamPhaseSchema.optional(),
   /** Epoch milliseconds when the child execution began. */
   startedAt: z.int().positive().optional(),
@@ -76,42 +56,16 @@ const ActiveChildInfoBaseSchema = z.object({
   workflowPhase: z.string().optional(),
 });
 
-/**
- * Replayed ActiveChildInfo entries written before the `kind` discriminant
- * landed (2026-07-06) inferred subagent vs. process from array membership
- * (`subagents` vs. `processes`) or from whether `childStreamId` happened to be
- * set. `childStreamId` was — and still is — exclusive to subagents, so
- * backfill `kind` from that same signal on read, matching the legacy
- * inference, instead of failing to parse.
- */
-function fillLegacyActiveChildKind(raw: unknown): unknown {
-  if (
-    typeof raw !== 'object' ||
-    raw === null ||
-    (raw as { kind?: unknown }).kind !== undefined
-  ) {
-    return raw;
-  }
-  const data = raw as Record<string, unknown>;
-  return {
-    ...data,
-    kind: typeof data.childStreamId === 'string' ? 'subagent' : 'process',
-  };
-}
-
-export const ActiveChildInfoSchema = z.preprocess(
-  fillLegacyActiveChildKind,
-  z.discriminatedUnion('kind', [
-    ActiveChildInfoBaseSchema.extend({
-      kind: z.literal('subagent'),
-      /** Stream tab ID — subagents own their own tab. */
-      childStreamId: z.string(),
-    }),
-    ActiveChildInfoBaseSchema.extend({
-      kind: z.literal('process'),
-    }),
-  ]),
-);
+export const ActiveChildInfoSchema = z.discriminatedUnion('kind', [
+  ActiveChildInfoBaseSchema.extend({
+    kind: z.literal('subagent'),
+    /** Stream tab ID — subagents own their own tab. */
+    childStreamId: z.string(),
+  }),
+  ActiveChildInfoBaseSchema.extend({
+    kind: z.literal('process'),
+  }),
+]);
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 export type SubagentChildInfo = Extract<ActiveChildInfo, { kind: 'subagent' }>;

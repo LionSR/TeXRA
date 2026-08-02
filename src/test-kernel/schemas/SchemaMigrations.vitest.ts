@@ -160,29 +160,11 @@ describe('ContextManagementDataSchema — legacy missing tokensAfter/utilization
   });
 });
 
-describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
-  const legacyBase = {
+describe('ActiveChildInfoSchema — current status vocabulary', () => {
+  const base = {
     executionId: 'exec-1',
     agentName: 'review',
   };
-
-  it('infers kind: subagent from a legacy entry that has childStreamId', () => {
-    const result = ActiveChildInfoSchema.parse({
-      ...legacyBase,
-      childStreamId: 'stream-1',
-    });
-
-    expect(result).toMatchObject({
-      kind: 'subagent',
-      childStreamId: 'stream-1',
-    });
-  });
-
-  it('infers kind: process from a legacy entry without childStreamId', () => {
-    const result = ActiveChildInfoSchema.parse({ ...legacyBase });
-
-    expect(result).toMatchObject({ kind: 'process' });
-  });
 
   // `status` has no legacy migration on purpose. The child roster is liveness
   // state: `assembleSnapshot` never writes `subagents`, and every hydrate
@@ -192,7 +174,7 @@ describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
   it('rejects a retired StreamStatus value rather than folding it', () => {
     expect(() =>
       ActiveChildInfoSchema.parse({
-        ...legacyBase,
+        ...base,
         kind: 'process',
         status: STREAM_STATUS.INITIALIZING,
       }),
