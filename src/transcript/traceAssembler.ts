@@ -46,11 +46,6 @@ export async function assembleTrace(
     executionStore.readConfig(),
     executionStore.readMeta(),
   ]);
-  if (!config) return { status: 'config_missing' };
-
-  const fallbackStreamId = getStreamTabId(config.agent, config.model, {
-    executionId,
-  });
   // One call-scoped snapshot store serves both the resolver's sidecar scan and
   // the snapshot read, so the two share its per-stream KV handles.
   const snapshotStore = new StreamSnapshotStore();
@@ -64,6 +59,10 @@ export async function assembleTrace(
       ? { status: 'streamId_ambiguous', candidateStreamIds }
       : { status: 'streamLogs_missing' };
   }
+  if (!config) return { status: 'config_missing' };
+  const fallbackStreamId = getStreamTabId(config.agent, config.model, {
+    executionId,
+  });
   const streamId = resolved?.streamId ?? fallbackStreamId;
 
   const [, snapshot] = await Promise.all([

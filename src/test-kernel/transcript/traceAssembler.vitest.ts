@@ -137,6 +137,21 @@ describe('assembleTrace', () => {
     });
   });
 
+  it('reports candidate-only sidecars as ambiguous even when execution config is absent', async () => {
+    const executionId = 'aaa446aaa446' as ExecutionId;
+    const first = `orchestrator@old#${executionId}` as StreamTabId;
+    const second = `orchestrator@new#${executionId}` as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, config(), executionId);
+    snapshots.setRunConfig(second, config(), executionId);
+    await snapshots.flush();
+
+    await expect(assembleTrace(executionId)).resolves.toEqual({
+      status: 'streamId_ambiguous',
+      candidateStreamIds: [second, first],
+    });
+  });
+
   it('does not classify children-only associations as ambiguous or choose a fallback', async () => {
     const executionId = 'aaa445aaa445' as ExecutionId;
     const executionConfig = config();

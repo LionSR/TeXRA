@@ -1197,6 +1197,29 @@ describe('CLI history runtime', () => {
       ).resolves.toEqual({ status: 'not_found' });
     });
 
+    it('reports candidate-only sidecars as incomplete rather than not found', async () => {
+      const executionId = 'a11ce6a11ce6' as ExecutionId;
+      const snapshots = new StreamSnapshotStore();
+      snapshots.setRunConfig(
+        `orchestrator@old#${executionId}` as StreamTabId,
+        config,
+        executionId,
+      );
+      snapshots.setRunConfig(
+        `orchestrator@new#${executionId}` as StreamTabId,
+        config,
+        executionId,
+      );
+      await snapshots.flush();
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readMeta.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue(null);
+
+      await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
+        status: 'incomplete',
+      });
+    });
+
     it('reports "incomplete" (not "not_found") when config exists but conversation does not', async () => {
       // history show would still display this execution (it has a config) —
       // export just has nothing to render, which is a different failure than

@@ -877,6 +877,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const exists =
         meta !== null ||
         resumability.resumable ||
+        streamId !== undefined ||
         (streamIds?.length ?? 0) > 0 ||
         (candidateStreamIds?.length ?? 0) > 0 ||
         (associatedStreamIds?.length ?? 0) > 0;
@@ -889,7 +890,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           totalMessages: 0,
           metadata: [
             'Source: none',
-            'Stream: none',
+            `Stream: ${streamId ?? 'none'}`,
             ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
             ...(associatedStreamIds
               ? [`Associated streams: ${associatedStreamIds.join(', ')}`]

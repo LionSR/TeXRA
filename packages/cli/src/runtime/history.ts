@@ -261,7 +261,15 @@ export async function readCliHistoryExportInput(
   const { meta, config, conversation, exportInput } =
     await loadChatExportInput(id);
   if (exportInput) return { status: 'ok', exportInput };
-  if (!meta && !config && !conversation) return { status: 'not_found' };
+  if (!meta && !config && !conversation) {
+    const transcript = await readCompletedRunConversation(id);
+    const hasTranscriptEvidence =
+      transcript.streamId !== undefined ||
+      (transcript.streamIds?.length ?? 0) > 0 ||
+      (transcript.candidateStreamIds?.length ?? 0) > 0 ||
+      (transcript.associatedStreamIds?.length ?? 0) > 0;
+    if (!hasTranscriptEvidence) return { status: 'not_found' };
+  }
   return { status: 'incomplete' };
 }
 

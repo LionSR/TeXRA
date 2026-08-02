@@ -1469,6 +1469,34 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).toContain('Returned message interval: [0, 0)');
   });
 
+  it('recognizes a sole diagnostic-only root as an existing execution', async () => {
+    const executionId = '0888c20888c2' as ExecutionId;
+    const streamId = 'orchestrator@model#0888c20888c2' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          streamId,
+          [logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' })],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      streamId,
+      conversation: null,
+    });
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(`Stream: ${streamId}`);
+  });
+
   it('does not attribute a legacy conversation to diagnostic-only merged streams', async () => {
     const executionId = '0888c10888c1' as ExecutionId;
     const first = 'aOrchestrator@old#0888c10888c1' as StreamTabId;

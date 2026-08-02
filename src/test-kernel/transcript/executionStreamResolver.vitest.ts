@@ -279,6 +279,24 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
   });
 
+  it('resolves a sole delegated stream without treating it as an associated sibling', async () => {
+    const executionId = 'abc88a' as ExecutionId;
+    const streamId = 'bash@tool#abc88a' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('bash'), executionId);
+    snapshots.setParentStream(
+      streamId,
+      'orchestrator@model#parent' as StreamTabId,
+    );
+    await snapshots.flush();
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+      }),
+    ).resolves.toEqual({ streamId, source: 'streamDataMeta' });
+  });
+
   it('preserves the legacy streamData suffix fallback', async () => {
     const executionId = 'abc999' as ExecutionId;
     const first = 'a@model#abc999' as StreamTabId;

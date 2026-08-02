@@ -733,16 +733,11 @@ async function readSidecarConversation(
         ...diagnostics,
       };
     }
-    if (!resolved.streamId && exactCandidates.length > 1) {
-      return { conversation: null, source: 'none', ...diagnostics };
-    }
     // Exact metadata established the selected stream and candidate set. An
     // empty selected conversation falls back to the legacy projection, never
     // to a child, disconnected candidate, or suffix-only sidecar. Preserve
-    // child association evidence so an empty legacy fallback remains findable.
-    return resolved.associatedStreamIds?.length
-      ? { conversation: null, source: 'none', ...diagnostics }
-      : null;
+    // the association diagnostics so every persisted root remains findable.
+    return { conversation: null, source: 'none', ...diagnostics };
   }
 
   if (!resolved.streamId) {
