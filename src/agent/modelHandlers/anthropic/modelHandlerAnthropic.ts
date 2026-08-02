@@ -1575,6 +1575,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
+    client?: Anthropic,
   ): Promise<MessageParam[]> {
     if (entries.length === 0) return [];
 
@@ -1588,19 +1589,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
       });
     }
 
-    // The batched dispatch path does not thread a client through; fetch one
-    // only when an attachment upload actually needs it.
-    const client =
+    const uploadClient =
       this.supportsToolResultFileUpload &&
       entries.some((entry) => entry.attachments.length > 0)
-        ? await this.getClient()
+        ? (client ?? (await this.getClient()))
         : undefined;
 
     // Sequential on purpose: uploads share the PDF-page tracking state.
     const resultBlocks: ContentBlockParam[] = [];
     for (const { call, result, attachments } of entries) {
       resultBlocks.push(
-        await this.buildToolResultBlock(client, call, result, attachments),
+        await this.buildToolResultBlock(
+          uploadClient,
+          call,
+          result,
+          attachments,
+        ),
       );
     }
 

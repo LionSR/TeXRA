@@ -254,6 +254,53 @@ describe('ModelHandlerAnthropic auxiliary requests', () => {
     assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.equal(upload.mock.calls.length, 1);
   });
+
+  it('uses the run-bound client for batched tool-result uploads', async () => {
+    const handler = createAnthropicHandler();
+    handler.setLogger({ ...noopTrace });
+    const upload = vi.fn(async () => ({ id: 'file-batched' }));
+    const uploadClient = { beta: { files: { upload } } };
+    const withOptions = vi.fn(() => uploadClient);
+    const call: AnthropicToolCall = {
+      provider: 'anthropic',
+      callId: 'call-batched',
+      name: 'read_file',
+      input: {},
+      raw: {
+        id: 'call-batched',
+        type: 'tool_use',
+        caller: { type: 'direct' },
+        name: 'read_file',
+        input: {},
+      },
+    };
+    const getClient = vi
+      .spyOn(handler, 'getClient')
+      .mockRejectedValue(new Error('must not select another credential route'));
+
+    await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call,
+          result: { status: 'executed', output: 'done' },
+          attachments: [
+            {
+              path: 'chart.png',
+              mimeType: 'image/png',
+              bytes: new Uint8Array([1, 2, 3]),
+            },
+          ],
+        },
+      ],
+      undefined,
+      undefined,
+      { withOptions } as never,
+    );
+
+    assert.equal(getClient.mock.calls.length, 0);
+    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+    assert.equal(upload.mock.calls.length, 1);
+  });
 });
 
 describe('ModelHandlerAnthropic forced tool choice', () => {
