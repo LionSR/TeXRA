@@ -1,5 +1,6 @@
 // Node imports
 import {
+  access,
   chmod,
   mkdtemp,
   mkdir,
@@ -11,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Third-party imports
+import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - extension
@@ -76,6 +78,11 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
       mkdir(globalStorage),
     ]);
 
+    const projectConfig = join(workspace, '.texra', 'config.json');
+    const globalConfig = join(globalStorage, 'config.json');
+    await expect(access(projectConfig)).rejects.toThrow();
+    await expect(access(globalConfig)).rejects.toThrow();
+
     const config = await createExtensionTexraConfig(
       createStorage(internalStorage, globalStorage),
       workspace,
@@ -88,6 +95,8 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
       workspaceValue: undefined,
       effectiveValue: 23119,
     });
+    await expect(access(projectConfig)).rejects.toThrow();
+    await expect(access(globalConfig)).rejects.toThrow();
   });
 
   it('waits for workspace storage to commit before rebinding fallback config', async () => {
@@ -114,16 +123,33 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     const config = await createExtensionTexraConfig(storage, workspaceRoot);
 
     workspaceRoot = readOnlyWorkspace;
-    await expect(config.rebindWorkspace(workspaceRoot)).rejects.toThrow(
-      'before the workspace storage change commits',
+    const continueTransition = pDefer<void>();
+    const transition = config.enqueueWorkspaceTransition(
+      workspaceRoot,
+      async (hooks) => {
+        await continueTransition.promise;
+        expect(
+          storage.commitWorkspaceStorageChange({
+            workspacePath: workspaceRoot,
+          }),
+        ).toBe(true);
+        await hooks.afterStorageCommit();
+        storage.finalizeWorkspaceStorageChange();
+        hooks.afterStorageFinalize();
+      },
     );
+    let updateCompleted = false;
+    const update = config.update('texra.bib.zoteroPort', 25000).then(() => {
+      updateCompleted = true;
+    });
+    await Promise.resolve();
+    expect(updateCompleted).toBe(false);
     expect(config.get('texra.bib.zoteroPort')).toBe(24001);
 
-    expect(storage.commitWorkspaceStorageChange()).toBe(true);
+    continueTransition.resolve();
+    await transition.completion;
     const secondInternalConfig = join(storage.getStoragePath(), 'config.json');
-    await config.rebindWorkspace(workspaceRoot);
-    storage.finalizeWorkspaceStorageChange();
-    await config.update('texra.bib.zoteroPort', 25000);
+    await update;
 
     await expect(readFile(secondInternalConfig, 'utf8')).resolves.toContain(
       '25000',
@@ -186,7 +212,14 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
     config.watch('texra.bib.zoteroPort', listener);
 
     expect(config.get('texra.bib.zoteroPort')).toBe(24001);
-    await config.rebindWorkspace(secondWorkspace);
+    const transition = config.enqueueWorkspaceTransition(
+      secondWorkspace,
+      async (hooks) => {
+        await hooks.afterStorageCommit();
+        hooks.afterStorageFinalize();
+      },
+    );
+    await transition.completion;
     expect(config.get('texra.bib.zoteroPort')).toBe(24002);
     expect(listener).toHaveBeenCalledOnce();
 

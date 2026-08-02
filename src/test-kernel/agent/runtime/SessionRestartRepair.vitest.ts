@@ -541,14 +541,23 @@ describe('SessionHandle restart repair', () => {
       STREAM_PHASE.RUNNING,
       'lifecycle',
     );
+    const transitionHooks = {
+      workspacePath: '/workspace/new',
+      afterStorageCommit: vi.fn(async () => {}),
+      afterStorageRollback: vi.fn(),
+      afterStorageFinalize: vi.fn(),
+    };
 
     try {
-      await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
-        reloadError,
-      );
+      await expect(
+        session.reloadAfterStorageRootChange(transitionHooks),
+      ).rejects.toBe(reloadError);
 
       expect(activeRoot).toBe('/workspace/old-storage');
       expect(rollbackWorkspaceStorageChange).toHaveBeenCalledOnce();
+      expect(transitionHooks.afterStorageCommit).toHaveBeenCalledOnce();
+      expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
+      expect(transitionHooks.afterStorageFinalize).not.toHaveBeenCalled();
       expect(reload).toHaveBeenCalledTimes(2);
       expect(evictSnapshots).toHaveBeenCalledOnce();
       expect(reload).toHaveBeenNthCalledWith(2, {
@@ -558,9 +567,14 @@ describe('SessionHandle restart repair', () => {
         STREAM_PHASE.RUNNING,
       );
 
-      await expect(session.reloadAfterStorageRootChange()).resolves.toBe(true);
+      await expect(
+        session.reloadAfterStorageRootChange(transitionHooks),
+      ).resolves.toBe(true);
       expect(activeRoot).toBe('/workspace/new-storage');
       expect(finalizeWorkspaceStorageChange).toHaveBeenCalledOnce();
+      expect(transitionHooks.afterStorageCommit).toHaveBeenCalledTimes(2);
+      expect(transitionHooks.afterStorageRollback).toHaveBeenCalledOnce();
+      expect(transitionHooks.afterStorageFinalize).toHaveBeenCalledOnce();
     } finally {
       session.dispose();
     }

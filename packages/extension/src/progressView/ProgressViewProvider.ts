@@ -211,37 +211,22 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     ProgressViewProvider._instance = this;
 
     this._disposables.push(
-      vscode.workspace.onDidChangeWorkspaceFolders(async () => {
-        let storageReloadError: unknown;
-        try {
-          await this.backend.reloadAfterStorageRootChange();
-        } catch (error) {
-          storageReloadError = error;
-        }
-
-        let configReloadError: unknown;
-        try {
-          await this.config.rebindWorkspace(this.workspace.getWorkspacePath());
-        } catch (error) {
-          configReloadError = error;
-        }
-
-        if (!storageReloadError && !configReloadError) {
-          this.syncFullView();
-          return;
-        }
-        const error =
-          storageReloadError && configReloadError
-            ? new AggregateError(
-                [storageReloadError, configReloadError],
-                'Failed to reload workspace storage and configuration',
-              )
-            : (storageReloadError ?? configReloadError);
-        this.logger.error('Failed to reload after workspace change', {
-          data: error,
-        });
-        void vscode.window.showErrorMessage(
-          'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        const transition = this.config.enqueueWorkspaceTransition(
+          this.workspace.getWorkspacePath(),
+          (hooks) => this.backend.reloadAfterStorageRootChange(hooks),
+        );
+        void transition.completion.then(
+          () => this.syncFullView(),
+          (error: unknown) => {
+            this.logger.error(
+              `Failed workspace transition ${transition.generation}`,
+              { data: error },
+            );
+            void vscode.window.showErrorMessage(
+              'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
+            );
+          },
         );
       }),
       vscode.window.onDidChangeActiveColorTheme(() => {
