@@ -12,6 +12,7 @@ import {
 } from '@cli/chat/tui/panes/ConversationPane';
 import {
   SubagentList,
+  workflowDashboardPanelItemCount,
   type SubagentListProps,
 } from '@cli/chat/tui/panes/SubagentList';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
@@ -79,6 +80,66 @@ async function renderSubagentList(
 }
 
 describe('CLI child list display model', () => {
+  it('budgets a wide dashboard from the selected phase rather than all tasks', () => {
+    const tasks = [
+      ['a-1', 'A'],
+      ['a-2', 'A'],
+      ['b-1', 'B'],
+      ['b-2', 'B'],
+      ['b-3', 'B'],
+      ['b-4', 'B'],
+      ['b-5', 'B'],
+    ].map(([id, phase]) => ({
+      id: `task-${id}`,
+      role: 'workflowTask' as const,
+      text: `Planned: ${id}`,
+      finalized: false,
+      task: { id, label: id, phase, status: 'planned' as const },
+    }));
+    const root = workflowAgentSlice('budget-root', {
+      entries: [
+        {
+          id: 'phase-a',
+          role: 'phase',
+          text: 'A',
+          finalized: false,
+          phaseLabel: 'A',
+        },
+        ...tasks.slice(0, 2),
+        {
+          id: 'phase-b',
+          role: 'phase',
+          text: 'B',
+          finalized: false,
+          phaseLabel: 'B',
+        },
+        ...tasks.slice(2),
+      ],
+    });
+
+    expect(
+      workflowDashboardPanelItemCount(
+        root,
+        workflowPhaseListValue('phase-a'),
+        100,
+      ),
+    ).toBe(3);
+    expect(
+      workflowDashboardPanelItemCount(
+        root,
+        workflowTaskListValue('task-b-1'),
+        100,
+      ),
+    ).toBe(6);
+    expect(
+      workflowDashboardPanelItemCount(
+        root,
+        workflowPhaseListValue('phase-a'),
+        99,
+      ),
+    ).toBe(10);
+  });
+
   it('omits static input and context counts from the live workflow band', () => {
     const workflow = workflowAgentSlice('devise', {
       files: {
