@@ -221,6 +221,28 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('interrupts the root only once for two quick bare Escapes', async () => {
+    seedChildHierarchy();
+    focusStream(ROOT);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      stdin.write(ESC);
+      await waitFor(() => onInterruptStream.mock.calls.length >= 1);
+      await sleep(600);
+
+      expect(activeStreamId.get()).toBe(ROOT);
+      expect(onInterruptStream).toHaveBeenCalledOnce();
+      expect(onInterruptStream).toHaveBeenCalledWith(ROOT);
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('keeps an Esc-digit focus target after the bare-Escape window expires', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
