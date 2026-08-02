@@ -873,7 +873,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // when the shared storage decision says it is resumable.
       const meta = await store.readMeta();
       const resumability = await deriveResumability(executionId);
-      const exists = meta !== null || resumability.resumable;
+      const exists =
+        meta !== null ||
+        resumability.resumable ||
+        (candidateStreamIds?.length ?? 0) > 0;
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
@@ -884,6 +887,22 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           metadata: [
             'Source: none',
             'Stream: none',
+            ...(candidateStreamIds
+              ? [
+                  `Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`,
+                ]
+              : []),
+            ...(conflicts
+              ? [
+                  `Conflicting row IDs: ${conflicts
+                    .map(({ rowId }) => rowId)
+                    .join(', ')}`,
+                ]
+              : []),
+            ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
+            ...(hasOrderingAmbiguity
+              ? ['Complete chronology established: no']
+              : []),
             'Returned message interval: [0, 0)',
             'Next offset: none',
           ],

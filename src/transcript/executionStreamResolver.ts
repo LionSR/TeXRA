@@ -15,7 +15,8 @@ type PersistedStreamIdResolutionSource =
   'executionMeta' | 'streamDataMeta' | 'streamDataSuffix' | 'streamLogsSuffix';
 
 export interface PersistedStreamIdResolution {
-  readonly streamId: StreamTabId;
+  /** Canonical stream when registration or persisted evidence proves one. */
+  readonly streamId?: StreamTabId;
   readonly source: PersistedStreamIdResolutionSource;
   /** Other persisted candidates to try when a historical primary is empty. */
   readonly fallbackStreamIds?: readonly StreamTabId[];
@@ -89,34 +90,6 @@ function findExecutionSuffixMatches(
   return streams.filter((id) => id.endsWith(suffix));
 }
 
-/** Choose the data-bearing primary for an ambiguous historical record. */
-async function pickBestLegacyMetaMatch(
-  candidates: readonly StreamTabId[],
-  snapshotStore: StreamSnapshotStore,
-  streamLogStore: Pick<StreamLogStore, 'has'> | undefined,
-): Promise<StreamTabId> {
-  if (candidates.length === 1) return candidates[0];
-
-  const withData = await pMap(
-    candidates,
-    async (streamId) => {
-      const hasLog = streamLogStore?.has(streamId) ?? false;
-      return {
-        streamId,
-        hasLog,
-        hasWorkPlan:
-          hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
-      };
-    },
-    { concurrency: META_SCAN_CONCURRENCY },
-  );
-  return (
-    withData.find((entry) => entry.hasLog)?.streamId ??
-    withData.find((entry) => entry.hasWorkPlan)?.streamId ??
-    candidates[0]
-  );
-}
-
 function orderedFallbacks(
   primary: StreamTabId,
   candidates: readonly StreamTabId[],
@@ -159,8 +132,10 @@ export async function findPersistedStreamFallbacksForExecution(
  * remain subject to the bounded scan because a later resume can add another
  * root sidecar. Only birth-time registrations use the constant-time path.
  *
- * `null` means no persisted stream carries this execution. Callers that have
- * a derivable stream id own that substitution.
+ * `null` means no persisted stream carries this execution. A resolution with
+ * no `streamId` exposes exact-execution candidates whose canonical owner is
+ * unproven; callers must not substitute one of them. Callers that receive
+ * `null` and have a derivable stream id own that compatibility substitution.
  */
 export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
@@ -183,13 +158,19 @@ export async function resolvePersistedStreamIdForExecution(
       mergeCandidateMetaMatched.length > 0
         ? mergeCandidateMetaMatched
         : metaMatched;
-    const streamId = await pickBestLegacyMetaMatch(
-      primaryCandidates,
-      snapshotStore,
-      options.streamLogStore,
-    );
-    if (metaMatched.length === 1) {
+    const streamId =
+      primaryCandidates.length === 1 ? primaryCandidates[0] : undefined;
+    if (metaMatched.length === 1 && streamId) {
       await writeLegacyExecutionStreamId(executionId, streamId);
+    }
+    if (!streamId) {
+      // Exact execution metadata associates every candidate with this run, but
+      // missing parent metadata does not prove which one owns the archive.
+      // Data presence and lexical order are not canonical-ownership evidence.
+      return {
+        source: 'streamDataMeta',
+        exactExecutionCandidateStreamIds: primaryCandidates,
+      };
     }
     const suffixMatched = findExecutionSuffixMatches(
       [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
