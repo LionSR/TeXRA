@@ -83,13 +83,11 @@ Configure how TeXRA connects to AI model providers:
 
 ```json
 "texra.model.useOpenAIResponsesAPI": true,
-"texra.model.useGoogleInteractionsAPI": true,
 "texra.model.gpt5ReasoningSummary": false
 ```
 
 - **OpenRouter**: To route all API calls through OpenRouter, expand the OpenRouter row in the Dashboard → Models tab → API Configuration and enable **"Use OpenRouter for All Models"**
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
-- `useGoogleInteractionsAPI`: Use Google's Interactions API instead of Generate Content when available; enabled by default for direct Google models
 - `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.5 and GPT-5.5 Pro (requires verified account and user tier)
 
 ### Anthropic 1M Context Window

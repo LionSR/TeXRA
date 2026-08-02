@@ -21,9 +21,9 @@ const providerVscodeSettings = {
   ],
   google: [
     {
-      key: 'texra.model.useGoogleInteractionsAPI',
-      label: 'Use Interactions API',
-      description: 'Use Google Interactions API',
+      key: 'texra.model.useGoogleInteractionsServerState',
+      label: 'Server state',
+      description: 'Use Google server-side conversation state',
       defaultValue: true,
     },
   ],
@@ -191,7 +191,7 @@ describe('SettingsProfileController', () => {
 
     expect(google?.vscodeSettings).toContainEqual(
       expect.objectContaining({
-        key: 'texra.model.useGoogleInteractionsAPI',
+        key: 'texra.model.useGoogleInteractionsServerState',
         value: true,
       }),
     );

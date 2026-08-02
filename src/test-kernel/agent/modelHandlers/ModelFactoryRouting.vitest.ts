@@ -12,7 +12,7 @@ import {
 
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
@@ -541,6 +541,9 @@ describe('OpenAI model handler routing', () => {
     vi.stubEnv('CI', '1');
 
     vi.resetModules();
+    await installPlatform({
+      globalState: { 'texra.useOpenRouter': true },
+    });
     const passingFactory = await import('@agent/runtime/ModelFactory');
     expect(
       passingFactory.modelHandlerCompatibilityKey(
@@ -549,6 +552,16 @@ describe('OpenAI model handler routing', () => {
         false,
       ),
     ).toBe('ModelHandlerValidation');
+
+    const validationHandler = await passingFactory.createModelHandler({
+      ...modelConfig(ModelProvider.GOOGLE),
+      requiresInteractionsAPI: true,
+    } as ModelConfig);
+    try {
+      expect(validationHandler.constructor.name).toBe('ModelHandlerValidation');
+    } finally {
+      validationHandler.dispose();
+    }
 
     vi.stubEnv('TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG', '');
     vi.resetModules();
@@ -572,64 +585,49 @@ describe('Google Interactions API routing', () => {
 
   // Re-imports the factory alongside the platform it reads from (see the
   // module-header note on this file's vi.resetModules() calls).
-  async function initWithFlag(
-    useInteractions?: boolean,
+  async function initGoogleRouting(
     useOpenRouter = false,
   ): Promise<typeof import('@agent/runtime/ModelFactory')> {
     await installPlatform({
-      config:
-        useInteractions === undefined
-          ? {}
-          : { 'texra.model.useGoogleInteractionsAPI': useInteractions },
       // getUseOpenRouter() reads USE_OPENROUTER from global state first.
       globalState: { 'texra.useOpenRouter': useOpenRouter },
     });
     return import('@agent/runtime/ModelFactory');
   }
 
-  it('routes Google to Interactions only when the flag is on', async () => {
-    let factory = await initWithFlag(true);
-    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), false)).toBe(
-      true,
-    );
-
-    factory = await initWithFlag(false);
-    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), false)).toBe(
-      false,
-    );
-  });
-
-  it('routes Google to Interactions by default when the setting is unset', async () => {
-    const factory = await initWithFlag();
-    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), false)).toBe(
-      true,
-    );
-  });
-
-  it('never routes a Google model to Interactions via OpenRouter', async () => {
-    const factory = await initWithFlag(true);
-    expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), true)).toBe(
-      false,
-    );
-    expect(
-      factory.modelHandlerCompatibilityKey(googleConfig(), true, false),
-    ).toBe('ModelHandlerOpenRouterNative');
-  });
-
-  it('exposes the Interactions compatibility key for history-restore parity', async () => {
-    let factory = await initWithFlag(true);
+  it('routes direct Google models to Interactions', async () => {
+    const factory = await initGoogleRouting();
     expect(
       factory.modelHandlerCompatibilityKey(googleConfig(), false, false),
     ).toBe('ModelHandlerGoogleInteractions');
+  });
 
-    factory = await initWithFlag(false);
-    expect(
-      factory.modelHandlerCompatibilityKey(googleConfig(), false, false),
-    ).toBe('ModelHandlerGoogleGenAI');
+  it('keeps key derivation pure for Interactions-only models under OpenRouter', async () => {
+    const factory = await initGoogleRouting();
+    const forced = {
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    } as ModelConfig;
+    expect(factory.modelHandlerCompatibilityKey(forced, true, false)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
+  });
+
+  it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
+    // OpenRouter cannot proxy Interactions — the live-routing path must error
+    // rather than silently route to OpenRouter (spec §6.3).
+    const factory = await initGoogleRouting(true);
+    const forced = {
+      ...googleConfig(),
+      requiresInteractionsAPI: true,
+    } as ModelConfig;
+    await expect(factory.createModelHandler(forced)).rejects.toThrow(
+      /OpenRouter/,
+    );
   });
 
   it('creates the Interactions handler tagged with its compatibility key', async () => {
-    const factory = await initWithFlag(true);
+    const factory = await initGoogleRouting();
     const handler = await factory.createModelHandler(googleConfig());
     try {
       expect(factory.activeModelHandlerCompatibilityKey(handler)).toBe(
@@ -640,30 +638,14 @@ describe('Google Interactions API routing', () => {
     }
   });
 
-  it('can explicitly rebuild the legacy Google GenAI handler for resumed sessions', async () => {
-    const factory = await initWithFlag();
+  it('keeps a direct Interactions session off OpenRouter after the global toggle changes', async () => {
+    const factory = await initGoogleRouting(true);
     const handler = await factory.createModelHandlerForCompatibilityKey(
       googleConfig(),
-      'ModelHandlerGoogleGenAI',
+      'ModelHandlerGoogleInteractions',
     );
     try {
-      expect(handler.constructor.name).toBe('ModelHandlerGoogleGenAI');
-      expect(factory.activeModelHandlerCompatibilityKey(handler)).toBe(
-        'ModelHandlerGoogleGenAI',
-      );
-    } finally {
-      handler.dispose();
-    }
-  });
-
-  it('keeps a direct compatibility handler off OpenRouter after the global toggle changes', async () => {
-    const factory = await initWithFlag(true, /* useOpenRouter */ true);
-    const handler = await factory.createModelHandlerForCompatibilityKey(
-      googleConfig(),
-      'ModelHandlerGoogleGenAI',
-    );
-    try {
-      expect(handler.constructor.name).toBe('ModelHandlerGoogleGenAI');
+      expect(handler.constructor.name).toBe('ModelHandlerGoogleInteractions');
       const routedConfig = (
         handler as unknown as {
           config: ModelConfig & { forceDirectProvider?: boolean };
@@ -677,7 +659,7 @@ describe('Google Interactions API routing', () => {
   });
 
   it('keeps an OpenRouter compatibility handler on OpenRouter after the global toggle changes', async () => {
-    const factory = await initWithFlag(true, /* useOpenRouter */ false);
+    const factory = await initGoogleRouting(false);
     const handler = await factory.createModelHandlerForCompatibilityKey(
       googleConfig(),
       'ModelHandlerOpenRouterNative',
@@ -757,7 +739,7 @@ describe('direct handler capability overrides', () => {
   // replaced the inline isGoogle/isDeepSeek/isKimi/isMiniMax gate.
   it('flags batching on reasoning-carrying providers except GLM', () => {
     expect(
-      new ModelHandlerGoogleGenAI(modelConfig(ModelProvider.GOOGLE))
+      new ModelHandlerGoogleInteractions(modelConfig(ModelProvider.GOOGLE))
         .requiresBatchedParallelToolResults,
     ).toBe(true);
     expect(
