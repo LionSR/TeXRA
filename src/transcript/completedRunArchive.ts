@@ -390,9 +390,10 @@ async function conversationFromStream(
 }
 
 /**
- * Interleave execution-matched root sidecars by recorded time while preserving
- * each stream's authoritative local sequence. Persisted row identity removes
- * copied overlap without collapsing distinct messages with equal text.
+ * Merge execution-matched root sidecars as a partial order. Each stream adds
+ * its authoritative adjacent-row constraints, while equal persisted row IDs
+ * identify copied overlap. Recorded time orders rows only when the combined
+ * stream sequences leave both choices admissible.
  */
 async function mergedRootConversation(
   streamLogStore: StreamLogStore,
@@ -404,35 +405,66 @@ async function mergedRootConversation(
       return streamLogStore.get(streamId)?.toJSON() ?? [];
     }),
   );
-  const seen = new Set<string>();
-  const uniqueEntriesByStream = entriesByStream.map((entries) =>
-    entries.filter((entry) => {
-      if (seen.has(entry.id)) return false;
-      seen.add(entry.id);
-      return true;
-    }),
+  const nodes = new Map<
+    string,
+    { readonly entry: StreamLogEntry; readonly streamIndex: number }
+  >();
+  const successors = new Map<string, Set<string>>();
+  const indegrees = new Map<string, number>();
+  for (const [streamIndex, entries] of entriesByStream.entries()) {
+    let previousId: string | undefined;
+    for (const entry of entries) {
+      if (!nodes.has(entry.id)) nodes.set(entry.id, { entry, streamIndex });
+      if (!indegrees.has(entry.id)) indegrees.set(entry.id, 0);
+      if (previousId && previousId !== entry.id) {
+        const nextIds = successors.get(previousId) ?? new Set<string>();
+        if (!nextIds.has(entry.id)) {
+          nextIds.add(entry.id);
+          successors.set(previousId, nextIds);
+          indegrees.set(entry.id, (indegrees.get(entry.id) ?? 0) + 1);
+        }
+      }
+      previousId = entry.id;
+    }
+  }
+
+  const remaining = new Set(nodes.keys());
+  const ready = new Set(
+    [...remaining].filter((id) => (indegrees.get(id) ?? 0) === 0),
   );
-  const nextIndexes = uniqueEntriesByStream.map(() => 0);
   const ordered: StreamLogEntry[] = [];
-  while (true) {
-    let next:
-      | { readonly entry: StreamLogEntry; readonly streamIndex: number }
-      | undefined;
-    for (const [streamIndex, entries] of uniqueEntriesByStream.entries()) {
-      const entry = entries[nextIndexes[streamIndex] ?? 0];
+  while (remaining.size > 0) {
+    // Contradictory copied-row orders form a cycle. Such persisted data cannot
+    // satisfy every stream; choose deterministically so archive reads remain
+    // available while preserving every compatible constraint.
+    const candidates = ready.size > 0 ? ready : remaining;
+    let nextId: string | undefined;
+    for (const id of candidates) {
+      const candidate = nodes.get(id);
+      const next = nextId ? nodes.get(nextId) : undefined;
       if (
-        entry &&
+        candidate &&
         (!next ||
-          entry.timestamp < next.entry.timestamp ||
-          (entry.timestamp === next.entry.timestamp &&
-            streamIndex < next.streamIndex))
+          candidate.entry.timestamp < next.entry.timestamp ||
+          (candidate.entry.timestamp === next.entry.timestamp &&
+            (candidate.streamIndex < next.streamIndex ||
+              (candidate.streamIndex === next.streamIndex &&
+                candidate.entry.seqNo < next.entry.seqNo))))
       ) {
-        next = { entry, streamIndex };
+        nextId = id;
       }
     }
+    if (!nextId) break;
+    const next = nodes.get(nextId);
     if (!next) break;
     ordered.push(next.entry);
-    nextIndexes[next.streamIndex] = (nextIndexes[next.streamIndex] ?? 0) + 1;
+    ready.delete(nextId);
+    remaining.delete(nextId);
+    for (const successorId of successors.get(nextId) ?? []) {
+      const indegree = (indegrees.get(successorId) ?? 0) - 1;
+      indegrees.set(successorId, indegree);
+      if (indegree === 0 && remaining.has(successorId)) ready.add(successorId);
+    }
   }
   return streamLogEntriesToConversation(ordered);
 }

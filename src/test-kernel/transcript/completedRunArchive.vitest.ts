@@ -825,6 +825,44 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output?.split('First answer')).toHaveLength(3);
   });
 
+  it('retains copied rows as ordering constraints across roots', async () => {
+    const executionId = '0888bc0888bc' as ExecutionId;
+    const firstRoot = 'orchestrator@old#0888bc0888bc' as StreamTabId;
+    const resumedRoot = 'orchestrator@new#0888bc0888bc' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstRoot, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(resumedRoot, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const copiedQuestion = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Copied question' }),
+      timestamp: 2000,
+    };
+    const answer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Later answer' }),
+      // The copied prompt still constrains this row despite the earlier clock.
+      timestamp: 1000,
+    };
+    const logs = await StreamLogStore.open();
+    logs.append(firstRoot, copiedQuestion);
+    logs.append(resumedRoot, copiedQuestion);
+    logs.append(resumedRoot, answer);
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: resumedRoot,
+      streamIds: [resumedRoot, firstRoot],
+      conversation: [
+        { role: 'user', content: 'Copied question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Later answer' }],
+        },
+      ],
+    });
+  });
+
   it('never substitutes child conversation rows for empty confirmed roots', async () => {
     const executionId = '0999cc0999cc' as ExecutionId;
     const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
