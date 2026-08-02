@@ -1180,11 +1180,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     if (!stateful) this.invalidateChain();
 
     const pending = this.pendingBackgroundInteraction;
-    if (pending && signal?.aborted) {
-      if (this.clearPendingBackgroundInteraction(pending.id)) {
-        void this.cancelBackgroundInteraction(client, pending.id);
-      }
-      signal.throwIfAborted();
+    if (pending) {
+      this.throwIfPendingBackgroundInteractionAborted(
+        client,
+        pending.id,
+        signal,
+      );
     }
 
     const generationConfig = this.buildGenerationConfig(endTag);
@@ -1449,16 +1450,29 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     let initial: GoogleGenAIInteraction;
     if (pending) {
-      if (Date.now() >= pending.deadlineAtMs) {
-        this.clearPendingBackgroundInteraction(pending.id);
-        await this.cancelBackgroundInteraction(client, pending.id);
-        throw this.createBackgroundTimeoutError(pending.id);
-      }
-      initial = await this.retrieveBackgroundInteraction(
+      this.throwIfPendingBackgroundInteractionAborted(
         client,
         pending.id,
-        requestOptions,
+        signal,
       );
+      await this.throwIfPendingBackgroundInteractionExpired(client, pending);
+      try {
+        initial = await this.retrieveBackgroundInteraction(
+          client,
+          pending.id,
+          requestOptions,
+        );
+      } finally {
+        // Retrieval happens before BackgroundPoller installs its guards.
+        // Recheck both boundaries after success or failure so neither outcome
+        // can bypass cancellation or extend the original lifetime.
+        this.throwIfPendingBackgroundInteractionAborted(
+          client,
+          pending.id,
+          signal,
+        );
+        await this.throwIfPendingBackgroundInteractionExpired(client, pending);
+      }
     } else {
       // background:true forces store:true (already true under `stateful`).
       const submitParams = {
@@ -1513,6 +1527,28 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     if (this.pendingBackgroundInteraction?.id !== interactionId) return false;
     this.pendingBackgroundInteraction = null;
     return true;
+  }
+
+  private throwIfPendingBackgroundInteractionAborted(
+    client: GoogleGenAI,
+    interactionId: string,
+    signal: AbortSignal | undefined,
+  ): void {
+    if (!signal?.aborted) return;
+    if (this.clearPendingBackgroundInteraction(interactionId)) {
+      void this.cancelBackgroundInteraction(client, interactionId);
+    }
+    signal.throwIfAborted();
+  }
+
+  private async throwIfPendingBackgroundInteractionExpired(
+    client: GoogleGenAI,
+    pending: PendingBackgroundInteraction,
+  ): Promise<void> {
+    if (Date.now() < pending.deadlineAtMs) return;
+    this.clearPendingBackgroundInteraction(pending.id);
+    await this.cancelBackgroundInteraction(client, pending.id);
+    throw this.createBackgroundTimeoutError(pending.id);
   }
 
   private createManualBackgroundError(message: string, cause?: unknown): Error {
