@@ -25,6 +25,12 @@ export function workflowTaskListValue(entryId: string): ChildListValue {
   return `workflowTask:${entryId}`;
 }
 
+export function isWorkflowTaskListValue(
+  value: ChildListValue | undefined,
+): value is `workflowTask:${string}` {
+  return value?.startsWith('workflowTask:') ?? false;
+}
+
 export function childListStreamId(
   value: ChildListValue | undefined,
 ): StreamTabId | undefined {
