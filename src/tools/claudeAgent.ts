@@ -114,7 +114,7 @@ const ClaudeAgentInputSchema = z.strictObject({
   // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
   // to the SDK and never offered here.
   permission_mode: ClaudeAgentPermissionModeSchema.nullish().describe(
-    'Permission behavior for the agent (defaults to user-configured mode, typically acceptEdits).',
+    'Permission behavior for the agent: acceptEdits auto-applies file edits, plan keeps the agent read-only (defaults to user-configured mode, typically acceptEdits).',
   ),
   model: z
     .string()

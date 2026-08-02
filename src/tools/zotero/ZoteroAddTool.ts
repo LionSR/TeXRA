@@ -282,7 +282,7 @@ function toZoteroItem(
 export class ZoteroAddTool extends defineTool({
   name: 'zotero_add',
   description:
-    'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files). Use itemType "preprint" for arXiv papers and preprints — never "webpage".',
+    'Add literature items to Zotero library. Requires Zotero to be running with the Connector enabled. Supports adding items by DOI (recommended), URL, or manual metadata entry. When possible, check for duplicates first (via zotero_search or grepping .bib files).',
   schema: ZoteroAddInputSchema,
 }) {
   protected async execute({

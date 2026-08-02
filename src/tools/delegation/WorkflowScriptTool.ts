@@ -178,9 +178,15 @@ export class WorkflowScriptTool extends defineTool({
   slow: true,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out and join structure is known in advance and should resume safely after interruption.
 
-Script input: provide exactly one of script (newly generated source) or scriptPath (an existing saved file). Every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
+Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
-Script rules: start with an export const meta object containing name and description; no imports or require (only the injected primitives exist: agent, phase, log, parallel, args, and files). Metadata and agent() options reject unknown fields so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }]. When the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent. The tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). agent() and parallel() return Promises: ALWAYS await them. Use ordinary JavaScript loops and awaited calls for sequential stages. A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is REQUIRED unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Every call may use agentName (another visible workflow agent; defaults to this tool's agent field) and model (an available model short name for this call). A call without meta.tasks may also use id, label, and phase. Omit model to follow ordinary delegation policy. A failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
+Script rules:
+- Meta: start with an export const meta object containing name and description. No imports or require — only the injected primitives exist: agent, phase, log, parallel, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
+- Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
+- Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs.
+- Calls: every call may use agentName (another visible workflow agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase.
+- Awaiting: agent() and parallel() return Promises — await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
+- Failures: a failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
@@ -196,15 +202,12 @@ export const meta = {
     { id: 'second', label: 'Fix second draft', phase: 'Fix' },
     { id: 'merge', label: 'Merge corrected drafts', phase: 'Merge' },
   ],
-  timeoutMs: 1800000,
 }
 phase('Fix')
 const results = await parallel(files.inputFiles.slice(0, 2).map((file, index) => () =>
   agent('Fix spelling errors only.', {
     id: index === 0 ? 'first' : 'second',
     inputFiles: [file],
-    contextFiles: files.contextFiles,
-    mediaFiles: files.mediaFiles,
   })
 ))
 const correctedFiles = results
@@ -513,7 +516,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
             `Execution ID: ${runExecutionId}`,
             `Stream tab: ${runChildStreamId}`,
-            `To check intermediate progress: executions tool with path=/executions/${runExecutionId} and action=wait (waits for next status change).`,
+            `The result arrives automatically — continue other work meanwhile. To check progress: executions tool with path=/executions/${runExecutionId}; use action=wait only when you cannot proceed without it.`,
             `To resume after a timeout or interruption: call this tool again with the same meta.name.`,
           ].join('\n'),
         },

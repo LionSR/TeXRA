@@ -77,7 +77,8 @@ const AskSchema = z.strictObject({
     .min(1)
     .describe(
       'The self-contained question. The external model has NO context from this conversation; ' +
-        'include all definitions, notation, and problem setup directly.',
+        'include all definitions, notation, and problem setup directly, and say what kind of ' +
+        'answer you need (proof sketch, calculation, reference, etc.).',
     ),
   thread_id: ExternalInquiryThreadIdSchema.nullish().describe(
     'Omit to start a new thread. Pass an existing answered thread_id to ask a follow-up — ' +
@@ -345,29 +346,17 @@ function buildListOutput(
 
 const TOOL_DESCRIPTION = `Ask a question to an external AI model (ChatGPT, Gemini, Claude, etc.) via the user's own subscription, or inspect prior inquiry threads.
 
-This tool is NON-BLOCKING. The 'ask' subcommand dispatches a question and returns immediately with {status: "dispatched", thread_id}. The user will paste the external model's answer back through the inquiry panel at some later point — possibly minutes or hours later. When the answer arrives, you will be woken with a [inquiry] continuation message on the originating stream.
-
-Do NOT wait on a dispatched question. Either continue with independent work or end your turn now and let the continuation wake you up.
-
 Subcommands:
   - ask   — dispatch a new question or follow up on an existing thread
   - read  — return the full untruncated transcript of one inquiry thread
   - list  — enumerate inquiry threads. Defaults: status='open', scope='stream'
 
-IMPORTANT for 'ask':
-  Questions MUST be self-contained. The external model has NO context from this conversation. Include all background, definitions, notation, and problem setup directly.
+Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", thread_id}; continue independent work or end your turn, and the answer — possibly minutes or hours later — arrives as a [inquiry] continuation message on the originating stream.
 
 Follow-up semantics:
   Omit thread_id to start a new thread. Pass an answered thread_id to ask a follow-up turn; prior Q/A is preserved and rendered as a conversation in the user's panel. You cannot re-dispatch on an open or dropped thread — read or list to recover state instead.
 
 When the [inquiry] continuation arrives, its Q is truncated to 400 chars and its A to 2000 chars. If you need the full content, call inquiry { command: 'read', thread_id }.
-
-Tips for effective questions:
-  - State the problem completely with all definitions
-  - Include relevant equations and notation
-  - Specify what kind of answer you need (proof sketch, calculation, reference, etc.)
-  - Set suggestSearch=true when the question could benefit from web search
-  - Use attachFiles to list workspace files the user should upload to the external model
 
 Do not treat paper-specific claims from the external model as automatically verified — verify with arxiv_search / arxiv_metadata / download_arxiv_source before building on them.`;
 
