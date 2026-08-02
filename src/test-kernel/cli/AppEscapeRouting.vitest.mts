@@ -308,6 +308,25 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('resolves deferred child back before an arrow key', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      stdin.write('\u001B[A');
+      await waitFor(() => activeStreamId.get() === ROOT);
+
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('discards failed-chord child back after lifecycle focus advances', async () => {
     seedChildHierarchy();
     focusStream(GRANDCHILD);
