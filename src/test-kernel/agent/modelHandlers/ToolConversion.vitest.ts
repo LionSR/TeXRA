@@ -884,25 +884,48 @@ describe('toGoogleTools', () => {
   );
 
   it('preserves raw numeric exclusive integer bounds exactly', () => {
-    const schema = convertGoogleToolSchema({
+    const definition = {
       name: 'bounded_integer',
       parameters: {
         type: 'object',
         properties: {
-          value: {
+          lowerInclusiveStricter: {
             type: 'integer',
+            minimum: 7,
             exclusiveMinimum: 3,
+          },
+          lowerExclusiveStricter: {
+            type: 'integer',
+            minimum: 3,
+            exclusiveMinimum: 7,
+          },
+          upperInclusiveStricter: {
+            type: 'integer',
+            maximum: 4,
             exclusiveMaximum: 10,
+          },
+          upperExclusiveStricter: {
+            type: 'integer',
+            maximum: 10,
+            exclusiveMaximum: 4,
           },
         },
       },
-    }) as { properties: Record<string, Record<string, unknown>> };
+    };
+    const interactionSchema = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
 
-    expect(schema.properties.value).toMatchObject({
-      type: 'integer',
-      minimum: 4,
-      maximum: 9,
-    });
+    for (const schema of [interactionSchema, generateContentSchema]) {
+      expect(schema.properties.lowerInclusiveStricter.minimum).toBe(7);
+      expect(schema.properties.lowerExclusiveStricter.minimum).toBe(8);
+      expect(schema.properties.upperInclusiveStricter.maximum).toBe(4);
+      expect(schema.properties.upperExclusiveStricter.maximum).toBe(3);
+    }
   });
 
   it('rejects Google literal constraints that cannot be represented', () => {
@@ -915,6 +938,54 @@ describe('toGoogleTools', () => {
         },
       }),
     ).toThrow('Google tool schemas support only string literal constraints.');
+  });
+
+  it('intersects compatible Google string const and enum constraints', () => {
+    const definition = {
+      name: 'literal_intersection',
+      parameters: {
+        type: 'object',
+        properties: {
+          value: {
+            type: 'string',
+            const: 'review',
+            enum: ['draft', 'review'],
+          },
+        },
+      },
+    };
+    const interactionSchema = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const schema of [interactionSchema, generateContentSchema]) {
+      expect(schema.properties.value.enum).toStrictEqual(['review']);
+    }
+  });
+
+  it('rejects contradictory Google string const and enum constraints', () => {
+    const definition = {
+      name: 'literal_contradiction',
+      parameters: {
+        type: 'object',
+        properties: {
+          value: {
+            type: 'string',
+            const: 'review',
+            enum: ['draft', 'final'],
+          },
+        },
+      },
+    };
+    const message =
+      'Google tool schemas cannot represent contradictory const and enum constraints.';
+
+    expect(() => convertGoogleToolSchema(definition)).toThrow(message);
+    expect(() => toGoogleTools([definition])).toThrow(message);
   });
 
   it('preserves constraints attached to nested Google parameters', () => {

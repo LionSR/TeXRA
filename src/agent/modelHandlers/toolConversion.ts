@@ -301,10 +301,17 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
     );
   }
 
-  const converted: JSONSchemaObject = {};
-  if (typeof value.const === 'string' && !Array.isArray(value.enum)) {
-    converted.enum = [value.const];
+  if (
+    typeof value.const === 'string' &&
+    Array.isArray(value.enum) &&
+    !value.enum.includes(value.const)
+  ) {
+    throw new Error(
+      'Google tool schemas cannot represent contradictory const and enum constraints.',
+    );
   }
+
+  const converted: JSONSchemaObject = {};
   for (const [key, child] of Object.entries(value)) {
     if (!GOOGLE_OPENAPI_SCHEMA_KEYS.has(key)) continue;
     if (key === 'default' || key === 'example') {
@@ -323,24 +330,43 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
     converted[key] = toGoogleOpenApiSchemaNode(child);
   }
 
+  if (typeof value.const === 'string') {
+    converted.enum = [value.const];
+  }
+
   // Google has no exclusive-bound fields, but integer exclusivity can be
   // represented exactly with the adjacent inclusive integer.
   if (value.type === 'integer') {
+    let exclusiveMinimum: number | undefined;
     if (typeof value.exclusiveMinimum === 'number') {
-      converted.minimum = Math.floor(value.exclusiveMinimum) + 1;
+      exclusiveMinimum = Math.floor(value.exclusiveMinimum) + 1;
     } else if (
       value.exclusiveMinimum === true &&
       typeof value.minimum === 'number'
     ) {
-      converted.minimum = Math.floor(value.minimum) + 1;
+      exclusiveMinimum = Math.floor(value.minimum) + 1;
     }
+    if (exclusiveMinimum !== undefined) {
+      converted.minimum =
+        typeof converted.minimum === 'number'
+          ? Math.max(converted.minimum, exclusiveMinimum)
+          : exclusiveMinimum;
+    }
+
+    let exclusiveMaximum: number | undefined;
     if (typeof value.exclusiveMaximum === 'number') {
-      converted.maximum = Math.ceil(value.exclusiveMaximum) - 1;
+      exclusiveMaximum = Math.ceil(value.exclusiveMaximum) - 1;
     } else if (
       value.exclusiveMaximum === true &&
       typeof value.maximum === 'number'
     ) {
-      converted.maximum = Math.ceil(value.maximum) - 1;
+      exclusiveMaximum = Math.ceil(value.maximum) - 1;
+    }
+    if (exclusiveMaximum !== undefined) {
+      converted.maximum =
+        typeof converted.maximum === 'number'
+          ? Math.min(converted.maximum, exclusiveMaximum)
+          : exclusiveMaximum;
     }
   }
   return converted;
