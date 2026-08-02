@@ -870,6 +870,25 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       hasOrderingCycle,
       hasOrderingAmbiguity,
     } = conversationResult;
+    const streamDiagnostics = [
+      `Stream: ${streamId ?? 'none'}`,
+      ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+      ...(associatedStreamIds
+        ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
+        : []),
+      ...(candidateStreamIds
+        ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
+        : []),
+      ...(conflicts
+        ? [
+            `Conflicting row IDs: ${conflicts
+              .map(({ rowId }) => rowId)
+              .join(', ')}`,
+          ]
+        : []),
+      ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
+      ...(hasOrderingAmbiguity ? ['Complete chronology established: no'] : []),
+    ];
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
@@ -889,27 +908,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           totalMessages: 0,
           metadata: [
             'Source: none',
-            `Stream: ${streamId ?? 'none'}`,
-            ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
-            ...(associatedStreamIds
-              ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
-              : []),
-            ...(candidateStreamIds
-              ? [
-                  `Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`,
-                ]
-              : []),
-            ...(conflicts
-              ? [
-                  `Conflicting row IDs: ${conflicts
-                    .map(({ rowId }) => rowId)
-                    .join(', ')}`,
-                ]
-              : []),
-            ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
-            ...(hasOrderingAmbiguity
-              ? ['Complete chronology established: no']
-              : []),
+            ...streamDiagnostics,
             'Returned message interval: [0, 0)',
             'Next offset: none',
           ],
@@ -925,25 +924,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       totalMessages: conversation.length,
       metadata: [
         `Source: ${source}`,
-        `Stream: ${streamId ?? 'none'}`,
-        ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
-        ...(associatedStreamIds
-          ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
-          : []),
-        ...(candidateStreamIds
-          ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
-          : []),
-        ...(conflicts
-          ? [
-              `Conflicting row IDs: ${conflicts
-                .map(({ rowId }) => rowId)
-                .join(', ')}`,
-            ]
-          : []),
-        ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
-        ...(hasOrderingAmbiguity
-          ? ['Complete chronology established: no']
-          : []),
+        ...streamDiagnostics,
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],
