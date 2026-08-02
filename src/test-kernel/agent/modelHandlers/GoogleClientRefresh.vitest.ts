@@ -2,7 +2,6 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
@@ -25,22 +24,10 @@ type GoogleHandlerWithCache = {
 };
 
 function setCachedClient(
-  handler: ModelHandlerGoogleGenAI | ModelHandlerGoogleInteractions,
+  handler: ModelHandlerGoogleInteractions,
   client: GoogleGenAI,
 ): void {
   (handler as unknown as GoogleHandlerWithCache).googleClient = client;
-}
-
-class GoogleGenAIRefreshProbe extends ModelHandlerGoogleGenAI {
-  readonly replacement = {} as GoogleGenAI;
-  cacheSeenByGetClient: GoogleGenAI | null | undefined;
-
-  override async getClient(): Promise<GoogleGenAI> {
-    this.cacheSeenByGetClient = (
-      this as unknown as GoogleHandlerWithCache
-    ).googleClient;
-    return this.replacement;
-  }
 }
 
 class GoogleInteractionsRefreshProbe extends ModelHandlerGoogleInteractions {
@@ -56,17 +43,7 @@ class GoogleInteractionsRefreshProbe extends ModelHandlerGoogleInteractions {
 }
 
 describe('Google client refresh', () => {
-  it('drops the native Google client cached under the previous key', async () => {
-    const handler = new GoogleGenAIRefreshProbe(
-      buildTestModelConfig(GOOGLE_TEST_CONFIG),
-    );
-    setCachedClient(handler, {} as GoogleGenAI);
-
-    await expect(handler.refreshClient()).resolves.toBe(handler.replacement);
-    expect(handler.cacheSeenByGetClient).toBeNull();
-  });
-
-  it('drops the Google Interactions client cached under the previous key', async () => {
+  it('drops the Google client cached under the previous key', async () => {
     const handler = new GoogleInteractionsRefreshProbe(
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
     );
@@ -80,7 +57,7 @@ describe('Google client refresh', () => {
     const initial = {} as GoogleGenAI;
     const replacement = {} as GoogleGenAI;
     let finishRefresh: (() => void) | undefined;
-    const handler = new GoogleGenAIRefreshProbe(
+    const handler = new GoogleInteractionsRefreshProbe(
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
     );
     handler.getClient = async () => initial;

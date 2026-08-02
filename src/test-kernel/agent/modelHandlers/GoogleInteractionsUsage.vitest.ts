@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent model handlers
-import { computeGooglePrice } from '@agent/modelHandlers/google/googleUsage';
 import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,
@@ -20,8 +19,7 @@ function usage(fields: Partial<Interactions.Usage>): Interactions.Usage {
 }
 
 describe('Google Interactions usage', () => {
-  it('matches the camelCase chat price for equivalent token counts', () => {
-    // Interactions: visible output 100, no thoughts.
+  it('prices cached input and visible output', () => {
     const interactionsPrice = computeGoogleInteractionsPrice(
       usage({
         total_input_tokens: 1000,
@@ -31,17 +29,10 @@ describe('Google Interactions usage', () => {
       CONFIG,
     );
 
-    // Chat equivalent: promptTokenCount 1000, candidatesTokenCount 100.
-    const chatPrice = computeGooglePrice(
-      {
-        promptTokenCount: 1000,
-        cachedContentTokenCount: 600,
-        candidatesTokenCount: 100,
-      },
-      CONFIG,
+    expect(interactionsPrice).toBeCloseTo(
+      (400 * 2) / 1e6 + (600 * 2 * 0.25) / 1e6 + (100 * 12) / 1e6,
+      12,
     );
-
-    expect(interactionsPrice).toBeCloseTo(chatPrice, 12);
   });
 
   it('does not double-count thought tokens (mirrors candidates + thoughts)', () => {
@@ -55,18 +46,6 @@ describe('Google Interactions usage', () => {
       CONFIG,
     );
 
-    // Chat folds thoughts into outputTokens via candidates + thoughts (140),
-    // with NO extra reasoning surcharge. The Interactions adapter must match.
-    const chatPrice = computeGooglePrice(
-      {
-        promptTokenCount: 1000,
-        candidatesTokenCount: 100,
-        thoughtsTokenCount: 40,
-      },
-      CONFIG,
-    );
-
-    expect(interactionsPrice).toBeCloseTo(chatPrice, 12);
     // Explicit: output billed once at 140 tokens, not 100 + a 40-token surcharge.
     expect(interactionsPrice).toBeCloseTo(
       (1000 * 2) / 1e6 + (140 * 12) / 1e6,

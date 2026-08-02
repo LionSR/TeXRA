@@ -1,79 +1,85 @@
-/**
- * Google Interactions API usage accounting & pricing.
- *
- * The Interactions API reports usage with snake_case totals
- * ({@link Interactions.Usage}) that differ from the camelCase
- * `GenerateContentResponseUsageMetadata` the chat handler reads. This module
- * supplies only the snake_case field accessor; the token math, pricing, and
- * normalization are shared with the chat handler via `googleUsage.ts` — no
- * formula is duplicated.
- *
- * The handler keeps thin `computePrice` / `normalizeUsage` overrides that
- * delegate here with the model's pricing config.
- */
+/** Google Interactions usage accounting and pricing. */
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-
 import {
-  computeGooglePriceFromFields,
-  normalizeGoogleUsageFromFields,
-  type GooglePricingConfig,
-  type GoogleUsageFields,
-} from './googleUsage';
+  computeStandardPrice,
+  type StandardPricingConfig,
+} from '@agent/utils/priceUtils';
+
+import { normalizeUsage } from '../support/UsageNormalizer';
+
 import type { Interactions } from '@google/genai';
 
 type InteractionsUsage = Interactions.Usage;
 
-/**
- * Field accessors for the snake_case Interactions usage shape.
- *
- * Maps onto the same unified token model as the chat handler
- * (`outputTokens = visible output + thoughts`, input = prompt + tool-use), so
- * reasoning tokens are billed once at the output rate and never double-counted.
- *
- * NOTE: whether `total_output_tokens` already includes thoughts is documented
- * ambiguously upstream; a real-key smoke test should confirm before relying on
- * billing accuracy (spec §6.5). If the API ever folds thoughts into
- * `total_output_tokens`, drop the reasoning term in `visibleOutputTokens`'s sum
- * (see `computeGoogleTokenCounts`).
- *
- * Verified live (spec §6 S1, gemini-3.5-flash 2-round run): under
- * previous_interaction_id chaining, total_input_tokens reports the CUMULATIVE
- * server-side context, not just the new turn's delta (turn 2 reported 79 input
- * tokens for a 1-step delta send). That is correct for billing — the server
- * reprocesses the retained context — so we report it as-is; no double-count.
- */
-const INTERACTIONS_USAGE_FIELDS: GoogleUsageFields<InteractionsUsage> = {
-  promptTokens: (usage) => usage.total_input_tokens ?? 0,
-  toolUseTokens: (usage) => usage.total_tool_use_tokens ?? 0,
-  visibleOutputTokens: (usage) => usage.total_output_tokens ?? 0,
-  reasoningTokens: (usage) => usage.total_thought_tokens ?? 0,
-  totalTokens: (usage) => usage.total_tokens,
-  cachedTokens: (usage) => usage.total_cached_tokens ?? 0,
-};
+interface GoogleTokenCounts {
+  inputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+}
 
-/** Computes cost based on Interactions token usage and model pricing. */
+/** Map Interactions totals onto TeXRA's unified token model. */
+function tokenCounts(usage: InteractionsUsage | null): GoogleTokenCounts {
+  if (!usage) {
+    return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+  }
+
+  const inputTokens =
+    (usage.total_input_tokens ?? 0) + (usage.total_tool_use_tokens ?? 0);
+  const reasoningTokens = usage.total_thought_tokens ?? 0;
+  const directOutput = (usage.total_output_tokens ?? 0) + reasoningTokens;
+  const derivedOutput = Math.max(
+    0,
+    (usage.total_tokens ?? inputTokens) - inputTokens,
+  );
+
+  return {
+    inputTokens,
+    outputTokens: directOutput > 0 ? directOutput : derivedOutput,
+    reasoningTokens,
+  };
+}
+
+/** Compute Google cost from Interactions token totals. */
 export function computeGoogleInteractionsPrice(
-  responseUsage: InteractionsUsage | null,
-  config: GooglePricingConfig,
+  usage: InteractionsUsage | null,
+  config: StandardPricingConfig,
 ): number {
-  return computeGooglePriceFromFields(
-    responseUsage,
+  if (!usage) return 0;
+  const { inputTokens, outputTokens } = tokenCounts(usage);
+  return computeStandardPrice(
+    {
+      inputTokens,
+      outputTokens,
+      cachedTokens: usage.total_cached_tokens ?? 0,
+    },
     config,
-    INTERACTIONS_USAGE_FIELDS,
   );
 }
 
-/** Normalizes Google Interactions usage data into a unified format. */
+/** Normalize Google Interactions usage into TeXRA's provider-neutral shape. */
 export function normalizeGoogleInteractionsUsage(
-  rawUsage: InteractionsUsage | null,
+  usage: InteractionsUsage | null,
   responseTimeMs: number,
-  config: GooglePricingConfig,
+  config: StandardPricingConfig,
 ): NormalizedUsage {
-  return normalizeGoogleUsageFromFields(
-    rawUsage,
+  return normalizeUsage(
+    {
+      provider: 'google',
+      computePrice: (value) => computeGoogleInteractionsPrice(value, config),
+      extract: (value) => {
+        const { inputTokens, outputTokens, reasoningTokens } =
+          tokenCounts(value);
+        return {
+          inputTokens,
+          outputTokens,
+          cachedTokens: value.total_cached_tokens ?? 0,
+          reasoningTokens,
+          toolUsePromptTokens: value.total_tool_use_tokens ?? 0,
+        };
+      },
+    },
+    usage,
     responseTimeMs,
-    config,
-    INTERACTIONS_USAGE_FIELDS,
   );
 }

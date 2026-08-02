@@ -2,7 +2,6 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
@@ -14,7 +13,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
@@ -72,10 +70,6 @@ function textFromAnthropicContent(message: MessageParam): string {
   const { content } = message;
   if (typeof content === 'string') return content;
   return content.map((part) => ('text' in part ? part.text : '')).join('');
-}
-
-function textFromGoogleContent(message: Content): string {
-  return (message.parts ?? []).map((part) => part.text ?? '').join('');
 }
 
 function textFromInteractionStep(step: Interactions.Step): string {
@@ -173,29 +167,6 @@ const cases: ContinuationCase[] = [
         textFromAnthropicContent(messages.at(-1)!),
         'partial resumed',
       );
-    },
-  },
-  {
-    name: 'Google GenAI',
-    run: () => {
-      const handler = new ModelHandlerGoogleGenAI(
-        buildTestModelConfig({
-          provider: ModelProvider.GOOGLE,
-          capabilities: CONTINUATION_CAPABILITIES,
-        }),
-      );
-      handler.setLogger({ ...noopTrace });
-      const messages: Content[] = [
-        { role: 'model', parts: [createPartFromText('partial')] },
-      ];
-      const workspaceState = createWorkspaceState();
-
-      handler.addContinueMessage(messages, workspaceState, agentSetting);
-      handler.updateMessageContent(messages, '', ' resumed', workspaceState);
-
-      assertSingleAssistantTurn(messages);
-      assert.equal(messages.at(-1)?.role, 'model');
-      assert.equal(textFromGoogleContent(messages.at(-1)!), 'partial resumed');
     },
   },
   {
@@ -429,37 +400,6 @@ describe('model handler continuation contract', () => {
       'partial resumed',
     );
     assert.equal(openRouterMessages.at(-1), openRouterContinuation);
-  });
-
-  it('keeps Google GenAI continuation prompts separate from trailing user turns', () => {
-    const handler = new ModelHandlerGoogleGenAI(
-      buildTestModelConfig({
-        provider: ModelProvider.GOOGLE,
-        capabilities: CONTINUATION_CAPABILITIES,
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-    const messages: Content[] = [
-      { role: 'model', parts: [createPartFromText('partial')] },
-      { role: 'user', parts: [createPartFromText('follow-up')] },
-    ];
-    const workspaceState = createWorkspaceState();
-
-    handler.addContinueMessage(messages, workspaceState, agentSetting);
-
-    assert.equal(messages.length, 3);
-    assert.equal(textFromGoogleContent(messages[1]!), 'follow-up');
-    assert.match(
-      textFromGoogleContent(messages[2]!),
-      /continue responding exactly from where you left/i,
-    );
-
-    handler.updateMessageContent(messages, '', ' resumed', workspaceState);
-
-    assert.equal(messages.length, 3);
-    assert.equal(textFromGoogleContent(messages[1]!), 'follow-up');
-    assert.equal(messages.at(-1)?.role, 'model');
-    assert.equal(textFromGoogleContent(messages.at(-1)!), 'partial resumed');
   });
 
   it('falls back to accumulated output when OpenAI Responses continuation follows a user turn', () => {
