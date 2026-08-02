@@ -135,11 +135,9 @@ interface ToolEndEvent extends StageStamp {
  * call moves from its declared plan through execution to a terminal state.
  */
 interface WorkflowCallEvent extends StageStamp {
-  /** Legacy protocol spelling retained for trace consumers. */
-  readonly type: 'workflow.task';
+  readonly type: 'workflow.call';
   readonly logId: string;
-  /** Legacy payload key retained for trace consumers. */
-  readonly task: WorkflowCallProgress;
+  readonly call: WorkflowCallProgress;
 }
 
 /** Token-usage report. */

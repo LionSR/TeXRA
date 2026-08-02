@@ -18,10 +18,8 @@ export const DEFAULT_NODE_STORAGE_ROOT = path.join(
 );
 
 /**
- * Project-local config file shared by the CLI and the desktop app:
- * `<workspaceRoot>/.texra/config.json`. The VS Code extension keeps workspace
- * config in `.vscode/settings.json`; the other hosts converge on this path so
- * a checked-in `.texra/config.json` behaves the same in both.
+ * Project-local config file shared by the CLI, extension, and desktop app:
+ * `<workspaceRoot>/.texra/config.json`.
  */
 export function workspaceTexraConfigPath(workspaceRoot: string): string {
   return path.join(

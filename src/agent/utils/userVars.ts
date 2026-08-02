@@ -79,17 +79,11 @@ export const USER_VAR_RUNTIME_TOKENS = [
   'INPUT_FILES',
   'ALL_INPUTS',
   'LIST_OF_ALL_INPUTS',
-  'REFERENCE_FILE',
-  'REFERENCE_CONTENT',
-  'REFERENCE_FILES',
-  'ALL_REFERENCES',
-  'LIST_OF_ALL_REFERENCES',
   'CONTEXT_FILE',
   'CONTEXT_CONTENT',
+  'CONTEXT_FILES',
   'ALL_CONTEXTS',
   'LIST_OF_ALL_CONTEXTS',
-  'ALL_AUXILIARYS',
-  'LIST_OF_ALL_AUXILIARYS',
   'EDITED_FILE',
   'EDITED_CONTENT',
   'EDITED_FILES',
@@ -313,10 +307,7 @@ function getAgentDirectoryVars(): UserVars {
   return vars;
 }
 
-// Maps a template prefix to the canonical multi-list field. The
-// single-keyed aliases (INPUT_FILE, CONTEXT_FILE, …, plus _CONTENT
-// siblings) resolve to the head of this list for back-compat with
-// custom user YAMLs.
+// Maps a template prefix to its canonical file-list field.
 type FileCategoryConfig = {
   multiple: keyof AgentConfig;
   single?: keyof AgentConfig;
@@ -324,7 +315,7 @@ type FileCategoryConfig = {
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
   INPUT: { multiple: 'inputFiles' },
-  REFERENCE: { multiple: 'contextFiles' },
+  CONTEXT: { multiple: 'contextFiles' },
   MEDIA: { multiple: 'mediaFiles' },
   EDITED: { multiple: 'editedFiles', single: 'editedFile' },
 };
@@ -339,7 +330,7 @@ function getCategoryFiles(config: AgentConfig, category: string): string[] {
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
-const FILE_VAR_CATEGORIES = ['INPUT', 'REFERENCE', 'EDITED'];
+const FILE_VAR_CATEGORIES = ['INPUT', 'CONTEXT', 'EDITED'];
 
 async function getFileVars(
   agentConfig: AgentConfig,
@@ -348,8 +339,7 @@ async function getFileVars(
 ): Promise<UserVars> {
   const userVars: UserVars = {};
 
-  const contextFiles = getCategoryFiles(agentConfig, 'REFERENCE');
-  const readableFilesByPrefix: Record<string, string[]> = {};
+  const contextFiles = getCategoryFiles(agentConfig, 'CONTEXT');
 
   // Log file categories being loaded (skip for tool-use agents).
   // Media files are excluded: they have no user vars (display-only in Init)
@@ -368,10 +358,8 @@ async function getFileVars(
         ? await getXmlFormatFromReadableFiles(allFiles)
         : { xml: null, readableFiles: [] };
     const readableFiles = fileContent.readableFiles;
-    readableFilesByPrefix[prefix] = readableFiles;
     const primaryFile = readableFiles[0];
 
-    // Aliases for custom YAMLs that still reference INPUT_FILE / INPUT_CONTENT.
     const loaded =
       primaryFile != null &&
       (await setVarFromFile(primaryFile, prefix, userVars));
@@ -386,16 +374,6 @@ async function getFileVars(
     );
     userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(readableFiles);
   }
-
-  // ALL_CONTEXTS is the unified template var; the legacy ALL_REFERENCES
-  // alias keeps populating it for back-compat with custom YAMLs.
-  const readableContextFiles = readableFilesByPrefix.REFERENCE ?? [];
-  userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
-  userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(readableContextFiles);
-  userVars.CONTEXT_FILE = userVars.REFERENCE_FILE;
-  userVars.CONTEXT_CONTENT = userVars.REFERENCE_CONTENT;
-  userVars.ALL_AUXILIARYS = userVars.ALL_CONTEXTS;
-  userVars.LIST_OF_ALL_AUXILIARYS = userVars.LIST_OF_ALL_CONTEXTS;
 
   const mediaFiles = getCategoryFiles(agentConfig, 'MEDIA');
   userVars.MEDIA_FILE = mediaFiles[0] ?? null;

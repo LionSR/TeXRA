@@ -28,6 +28,7 @@ import { modelSelectionHandlers } from './slices/modelSelectionSlice';
 import { multiAgentHandlers } from './slices/multiAgentSlice';
 import { profileHandlers } from './slices/profileSlice';
 import { tabHandlers } from './slices/tabSlice';
+import { telemetrySettingsHandlers } from './slices/telemetrySettingsSlice';
 import { toolDashboardHandlers } from './slices/toolDashboardSlice';
 
 /** Composed registry: every SETTINGS_VIEW_COMMANDS outbound handler, keyed by command. */
@@ -39,6 +40,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   ...modelSelectionHandlers,
   ...agentSelectionHandlers,
   ...agentSkillsSettingsHandlers,
+  ...telemetrySettingsHandlers,
   ...agentTeamsHandlers,
   ...multiAgentHandlers,
   ...approvalSettingsHandlers,

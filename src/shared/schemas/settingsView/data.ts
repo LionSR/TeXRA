@@ -13,6 +13,8 @@ import {
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
 } from '@shared/constants/latex';
 import {
   createDispatcher,
@@ -126,7 +128,8 @@ export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
  * appended tab cannot ship without being placed here.
  */
 export const SETTINGS_TAB_GROUPS = [
-  { label: 'Account & Access', tabs: ['ACCOUNT', 'MODELS'] },
+  { label: 'Account', tabs: ['ACCOUNT'] },
+  { label: 'Models', tabs: ['MODELS'] },
   { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
   { label: 'Capabilities', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
   { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
@@ -369,6 +372,7 @@ const UpdateToolDashboardMessageSchema = z.object({
  */
 const UpdateApprovalAndSafetySettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
+  editApprovalEnabled: z.boolean(),
   bashApprovalEnabled: z.boolean(),
   toolPathProtectionEnabled: z.boolean(),
   codexSandboxMode: CodexSandboxModeSchema,
@@ -389,6 +393,15 @@ const UpdateAgentSkillsSettingsMessageSchema = z.object({
 });
 export type UpdateAgentSkillsSettingsMessage = z.infer<
   typeof UpdateAgentSkillsSettingsMessageSchema
+>;
+
+/** Outbound: backend → frontend telemetry preference. */
+const UpdateTelemetrySettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS),
+  enabled: z.boolean(),
+});
+export type UpdateTelemetrySettingsMessage = z.infer<
+  typeof UpdateTelemetrySettingsMessageSchema
 >;
 
 // ============================================================
@@ -533,6 +546,15 @@ export const LatexConfigValuesSchema = z.object({
   latexdiffMathMarkup: LatexdiffMathMarkupSchema.optional(),
   latexdiffChangesOnly: z.boolean().optional(),
   latexFormatter: LatexFormatterSchema.optional(),
+  wrapCritiqueInAlign: z.boolean().optional(),
+  enabledReplacements: z
+    .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
+    .optional(),
+  enabledReplacementsRegex: z
+    .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
+    .optional(),
+  customReplacementsRegex: z.record(z.string(), z.string()).optional(),
+  customReplacements: z.record(z.string(), z.string()).optional(),
 });
 export type LatexConfigValues = z.infer<typeof LatexConfigValuesSchema>;
 
@@ -585,6 +607,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateAgentModePresetsMessageSchema,
   UpdateApprovalAndSafetySettingsMessageSchema,
   UpdateAgentSkillsSettingsMessageSchema,
+  UpdateTelemetrySettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,

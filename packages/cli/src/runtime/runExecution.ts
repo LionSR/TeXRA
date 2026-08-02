@@ -34,7 +34,7 @@ import {
   type ExecuteAgentResult,
 } from './terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
-import { attachWorkflowPlainProjection } from './workflowPlainProjection';
+import { attachWorkflowPlainOutput } from './workflowPlainOutput';
 import type { CliContext } from './cliContext';
 
 export interface CliExecuteOptions {
@@ -208,8 +208,8 @@ export async function executeCliRequest(
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
       : () => undefined;
-  const detachWorkflowPlainProjection = renderWorkflowPlainProgress
-    ? attachWorkflowPlainProjection(session.events, {
+  const detachWorkflowPlainOutput = renderWorkflowPlainProgress
+    ? attachWorkflowPlainOutput(session.events, {
         beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
         writeLine: writeTextStderr,
       })
@@ -299,7 +299,7 @@ export async function executeCliRequest(
     detachResultToast();
     detachRunProgressRenderer();
     detachSessionProgressProjection();
-    detachWorkflowPlainProjection();
+    detachWorkflowPlainOutput();
     detachHostInteractions();
     await presentationHost.close();
   };
