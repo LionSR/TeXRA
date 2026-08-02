@@ -44,12 +44,23 @@ describe('DesktopShowDiffMessageSchema', () => {
       additions: 1,
       deletions: 1,
       language: 'latex',
-      originalPath: '/a',
-      proposedPath: '/b',
     });
     expect(parsed.command).toBe('desktop:showDiff');
     expect(parsed.language).toBe('latex');
     expect(parsed.displayPath).toBe('src/file.ts');
+  });
+
+  it('requires displayPath', async () => {
+    const { DesktopShowDiffMessageSchema } = await loadSourceModule(
+      '@desktop/desktopDiffMessages',
+    );
+    const result = DesktopShowDiffMessageSchema.safeParse({
+      command: 'desktop:showDiff',
+      title: 'Compare',
+      originalText: 'a',
+      proposedText: 'b',
+    });
+    expect(result.success).toBe(false);
   });
 
   it('defaults missing language to plaintext', async () => {
@@ -59,6 +70,7 @@ describe('DesktopShowDiffMessageSchema', () => {
     const parsed = DesktopShowDiffMessageSchema.parse({
       command: 'desktop:showDiff',
       title: 'Compare',
+      displayPath: 'src/file.ts',
       originalText: 'a',
       proposedText: 'b',
     });
