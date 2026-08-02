@@ -318,15 +318,12 @@ export class ProgressFactApplier {
     });
   }
 
-  handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
-    const targets = this.state.snapshots.resolveMissingOutputTargets(payload);
-    for (const streamId of targets) {
-      this.sendIfActive(streamId, () =>
-        this.webviewUpdater.updateMissingOutputs(streamId, {
-          reset: true,
-        }),
-      );
-    }
+  handleClearMissingOutputs({ streamId }: ClearMissingOutputsPayload): void {
+    this.sendIfActive(streamId, () =>
+      this.webviewUpdater.updateMissingOutputs(streamId, {
+        reset: true,
+      }),
+    );
   }
 
   handleUpdateStreamUsage({

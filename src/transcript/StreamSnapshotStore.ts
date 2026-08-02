@@ -58,9 +58,8 @@ import {
   type UpdateStreamUsagePayload,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import { mapToRecord, normalizeFilePath } from '@utils/core';
+import { mapToRecord } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -147,30 +146,6 @@ type UsageUpdateResult =
 interface HydratedRunState {
   config?: AgentConfig;
   descriptor?: RunDescriptor;
-}
-
-/**
- * Match criteria for {@link StreamSnapshotStore.findWorkflowStreamsMatching}.
- * Mirrors the `streamConfig` payload on the `clearMissingOutputs` progress
- * event.
- */
-interface WorkflowStreamMatch {
-  agent: string;
-  model: string;
-  inputFile: string;
-  outputFiles?: readonly string[];
-}
-
-function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
-  return (outputFiles ?? [])
-    .map((file) => normalizeFilePath(file))
-    .filter((file) => file.length > 0)
-    .sort();
-}
-
-function sameOutputFiles(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((file, index) => file === right[index]);
 }
 
 /**
@@ -530,13 +505,11 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
         switch (sessionEvent.event.type) {
-          case 'clearMissingOutputs': {
-            const targets = this.resolveMissingOutputTargets(
-              sessionEvent.event.payload,
-            );
-            for (const target of targets) this.clearMissingOutputs(target);
+          case 'clearMissingOutputs':
+            // Exactly addressed (#9590 rule A3): the payload carries the
+            // initiator-selected streamId; there is no config fan-out.
+            this.clearMissingOutputs(sessionEvent.event.payload.streamId);
             return;
-          }
           case 'updateStreamDescription':
             this.setDescription(
               sessionEvent.event.payload.streamId,
@@ -1667,52 +1640,6 @@ export class StreamSnapshotStore {
       if (record.meta?.executionId) map.set(stream, record.meta.executionId);
     }
     return map;
-  }
-
-  /**
-   * Workflow stream IDs whose run config matches `match`. Used by
-   * command-palette pack/clean to clear missing-output markers across every tab
-   * that surfaced markers for the cleaned files. Both sides are canonicalized
-   * (agent source prefixes stripped, paths normalized to forward slashes).
-   */
-  findWorkflowStreamsMatching(match: WorkflowStreamMatch): StreamTabId[] {
-    const wantAgent = getCleanAgentName(match.agent);
-    const wantFile = normalizeFilePath(match.inputFile);
-    const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
-    const result: StreamTabId[] = [];
-    for (const [stream, record] of this.records) {
-      const cfg = record.runConfig;
-      if (!cfg || cfg.agentCategory !== 'workflow') continue;
-      const cfgPrimaryInput = normalizeFilePath(cfg.inputFiles[0] ?? '');
-      if (
-        getCleanAgentName(cfg.agent) !== wantAgent ||
-        cfg.model !== match.model ||
-        cfgPrimaryInput !== wantFile ||
-        !sameOutputFiles(normalizeOutputFiles(cfg.outputFiles), wantOutputFiles)
-      ) {
-        continue;
-      }
-      result.push(stream);
-    }
-    return result;
-  }
-
-  /**
-   * Resolve a `clearMissingOutputs` target descriptor to the stream tabs it
-   * affects: an explicit `streamId`, else every workflow tab matching
-   * `streamConfig`, else none. Shared by this store's own session-event handler
-   * and the progress-view `ProgressFactApplier` so the resolution rule lives in
-   * exactly one place.
-   */
-  resolveMissingOutputTargets(target: {
-    streamId?: StreamTabId;
-    streamConfig?: WorkflowStreamMatch;
-  }): StreamTabId[] {
-    if (target.streamId) return [target.streamId];
-    if (target.streamConfig) {
-      return this.findWorkflowStreamsMatching(target.streamConfig);
-    }
-    return [];
   }
 
   // ==========================================================================
