@@ -43,7 +43,6 @@ interface TestSourceModules {
   '@desktop/main/desktopToolEditApproval': typeof import('@desktop/main/desktopToolEditApproval');
   '@desktop/main/desktopUpdateChecker': typeof import('@desktop/main/desktopUpdateChecker');
   '@desktop/main/desktopViewStateIpc': typeof import('@desktop/main/desktopViewStateIpc');
-  '@desktop/main/platform/dataRootMigration': typeof import('@desktop/main/platform/dataRootMigration');
   '@desktop/main/platform/electronSecrets': typeof import('@desktop/main/platform/electronSecrets');
   '@desktop/main/platform/pathFix': typeof import('@desktop/main/platform/pathFix');
   '@desktop/main/platform/paths': typeof import('@desktop/main/platform/paths');

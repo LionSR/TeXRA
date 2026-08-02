@@ -15,7 +15,6 @@ import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
-import { getConfig } from '@utils/config/configUtils';
 
 import type {
   DesktopCommandMessage,
@@ -84,7 +83,7 @@ export async function listDesktopWorkspaceFiles(
   // process-wide workspace instead.
   workspacePath: string | undefined,
 ): Promise<string[]> {
-  const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
+  const config = getFileListConfig(fileType, loadFileListSettings());
   if (!workspacePath || !config) return [];
   return listFiles(workspacePath, config);
 }
@@ -172,7 +171,7 @@ export function createDesktopFileSelection(
       postFileList('edited', []);
       return;
     }
-    const config = getEditedFileListConfig(loadFileListSettings(getConfig));
+    const config = getEditedFileListConfig(loadFileListSettings());
     const files = (await listFiles(workspacePath, config)).filter((file) =>
       matchesEditedFile(file, baseFile),
     );
@@ -203,10 +202,7 @@ export function createDesktopFileSelection(
     if (!workspacePath) return;
 
     const fileType = message.fileType;
-    const listConfig = getFileListConfig(
-      fileType,
-      loadFileListSettings(getConfig),
-    );
+    const listConfig = getFileListConfig(fileType, loadFileListSettings());
     const currentFile =
       typeof message.currentFile === 'string' ? message.currentFile : undefined;
     const defaultPath =

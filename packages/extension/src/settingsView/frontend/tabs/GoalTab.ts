@@ -4,16 +4,11 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import {
-  designTokens,
-  commonViewStyles,
-  settingsBannerStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatGoalTime, isGoalInFlight, goalElapsedMs } from '@shared/schemas';
 import type { Goal } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import type { MetaPart } from '@shared/wa/metaStrip';
@@ -28,7 +23,6 @@ export class GoalTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    settingsBannerStyles,
     metaStripStyles,
     css`
       :host {
@@ -39,6 +33,12 @@ export class GoalTab extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
+      }
+
+      .goal-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: var(--wa-space-xs);
       }
 
       .goal-row {
@@ -103,20 +103,16 @@ export class GoalTab extends LitElement {
     }
   }
 
-  private renderReminder(): TemplateResult {
-    return renderSettingsBanner({
-      id: 'goal-information-banner',
-      title: 'Goal',
-      description:
-        'Goals are autonomous-continuation modes the assistant enters for itself when you describe a goal with a verifiable stopping condition. The agent decides when to start, pause, or complete a Goal via its tools — this list is for observation and navigation only.',
-      actions: renderLabeledActionButton({
+  private renderActions(): TemplateResult {
+    return html`<div class="goal-actions">
+      ${renderLabeledActionButton({
         icon: 'rotate-right',
         text: 'Refresh',
         kind: 'secondary',
         appearance: 'outlined',
         onClick: this.handleRefresh,
-      }),
-    });
+      })}
+    </div>`;
   }
 
   private renderRow(item: Goal): TemplateResult {
@@ -159,7 +155,7 @@ export class GoalTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="tab-content-container">
-        ${this.renderReminder()}
+        ${this.renderActions()}
         ${
           this.items.length === 0
             ? renderEmptyState({

@@ -50,13 +50,6 @@ export class ModelsTab extends LitElement {
 
       /* max-width and centering provided by .tab-content-container */
 
-      .models-jump-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--wa-space-2xs);
-        margin-bottom: var(--wa-space-s);
-      }
-
       .keyless-source__limit {
         display: flex;
         align-items: flex-start;
@@ -85,80 +78,12 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
 
-  private scrollToSection(
-    selector:
-      | 'api-access-section'
-      | 'provider-key-list'
-      | '#chatgpt-subscription'
-      | '#copilot-access',
-  ): void {
-    const el = this.shadowRoot?.querySelector(selector);
-    if (el instanceof HTMLElement) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }
-
-  private readonly handleScrollToApiAccess = (): void =>
-    this.scrollToSection('api-access-section');
-
-  private readonly handleScrollToApiConfig = (): void =>
-    this.scrollToSection('provider-key-list');
-
-  private readonly handleScrollToChatGpt = (): void =>
-    this.scrollToSection('#chatgpt-subscription');
-
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     const enabled = (event.target as WaSwitch).checked;
     postMessage(SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION, {
       enabled,
     });
   };
-
-  private renderSectionLinks(): TemplateResult {
-    const copilotAvailable = this.modelSelectionItems.some(
-      (model) => model.provider === 'copilot',
-    );
-
-    const accessJump = this.authenticated
-      ? renderLabeledActionButton({
-          text: 'Model Access',
-          kind: 'secondary',
-          appearance: 'outlined',
-          onClick: this.handleScrollToApiAccess,
-        })
-      : nothing;
-
-    return html`
-      <nav class="models-jump-links" aria-label="Model settings sections">
-        ${accessJump}
-        ${renderLabeledActionButton({
-          icon: 'comments',
-          text: 'ChatGPT Subscription',
-          kind: 'secondary',
-          appearance: 'outlined',
-          onClick: this.handleScrollToChatGpt,
-        })}
-        ${
-          copilotAvailable
-            ? renderLabeledActionButton({
-                icon: 'shield',
-                text: 'Copilot in VS Code',
-                kind: 'secondary',
-                appearance: 'outlined',
-                onClick: () => this.scrollToSection('#copilot-access'),
-              })
-            : nothing
-        }
-        ${renderLabeledActionButton({
-          icon: 'key',
-          text: 'Jump to API Configuration',
-          kind: 'secondary',
-          appearance: 'outlined',
-          onClick: this.handleScrollToApiConfig,
-        })}
-      </nav>
-    `;
-  }
 
   override render(): TemplateResult {
     const apiAccessSection = this.authenticated
@@ -169,8 +94,8 @@ export class ModelsTab extends LitElement {
 
     return html`
       <div class="models-container tab-content-container">
-        ${this.renderSectionLinks()} ${apiAccessSection}
-        ${this.renderChatGptSection()} ${this.renderCopilotSection()}
+        ${apiAccessSection} ${this.renderChatGptSection()}
+        ${this.renderCopilotSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .apiAccessMode=${this.apiAccessMode}
@@ -329,7 +254,9 @@ export class ModelsTab extends LitElement {
                       onClick: () =>
                         postMessage(
                           SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-                          { modelName: consentModel.name },
+                          {
+                            modelName: consentModel.name,
+                          },
                         ),
                     })
                   : nothing

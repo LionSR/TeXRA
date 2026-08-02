@@ -22,6 +22,7 @@ import {
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
+import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
@@ -174,6 +175,10 @@ export function createDesktopSettingsIpc(
     options.postToRenderer(buildAgentSkillsSettingsMessage(options.config));
   }
 
+  function postTelemetrySettings(): void {
+    options.postToRenderer(buildTelemetrySettingsMessage(options.config));
+  }
+
   async function postGoalList(): Promise<void> {
     try {
       options.postToRenderer({
@@ -200,6 +205,7 @@ export function createDesktopSettingsIpc(
     postSuperYoloEnabled();
     postApprovalSettings();
     postAgentSkillsSettings();
+    postTelemetrySettings();
     await Promise.all([
       goalListPosted,
       memoryEnabledPosted,
@@ -288,6 +294,9 @@ export function createDesktopSettingsIpc(
       case 'multi-agent':
         postSuperYoloEnabled();
         break;
+      case 'telemetry':
+        postTelemetrySettings();
+        break;
       default:
         assertNever(snapshot, 'Unhandled settings-view snapshot');
     }
@@ -375,8 +384,6 @@ export function createDesktopSettingsIpc(
     // the dispatcher, so this entry is never actually invoked — it exists
     // only to satisfy the exhaustive registry type.
     webviewReady: () => {},
-    // VS Code-only surfaces with no desktop equivalent.
-    openVscodeSettings: unsupported('No VS Code settings in the desktop app.'),
     getMemoryData: () => settingsHost.sendMemoryData(),
     getMemoryPreview: (message) =>
       settingsHost.sendMemoryPreview(message, { onError }),

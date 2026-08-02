@@ -246,15 +246,6 @@ describe('desktop protocol callback lifecycle', () => {
       protocolRegistrations: [] as string[],
     },
     {
-      name: 'stops retired new-window launches behind the same lock',
-      lockAvailable: false,
-      argv: ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
-      shouldContinue: false,
-      requestCount: 1,
-      quitCount: 1,
-      protocolRegistrations: [] as string[],
-    },
-    {
       name: 'allows the first desktop process to become primary',
       lockAvailable: true,
       argv: ['--texra-workspace-path=/Users/ray/paper'],
@@ -298,7 +289,7 @@ describe('desktop protocol callback lifecycle', () => {
 
     app.listeners.secondInstance?.(
       {},
-      ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
+      ['--texra-workspace-path=/Users/ray/paper'],
       process.cwd(),
     );
     expect(focusMainWindow).toHaveBeenCalledTimes(1);

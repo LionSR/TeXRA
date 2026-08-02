@@ -17,7 +17,7 @@ one at a time.
 | #   | Trajectory                                  | Status  | Backed by                                                                                |
 | --- | ------------------------------------------- | ------- | ---------------------------------------------------------------------------------------- |
 | 1   | First launch, no workspace                  | Works   | `desktopOnboarding.ts`, `main.ts` empty-state factory                                    |
-| 2   | First launch, with workspace                | Works   | `--texra-workspace` arg, `DESKTOP_WORKSPACE_PATH_STATE_KEY`                              |
+| 2   | First launch, with workspace                | Works   | `--texra-workspace-path` arg, `DESKTOP_WORKSPACE_PATH_STATE_KEY`                         |
 | 3   | Open Folder via chrome button               | Works   | `dialog.showOpenDialog` → `app.relaunch`                                                 |
 | 4   | Sign In via Researcher Access banner        | Works   | `desktopSupabaseAuth.ts` (full OAuth + protocol cb)                                      |
 | 5   | Manual API key entry (Models tab)           | Works   | `promptInRenderer` + `platform().secrets`                                                |
@@ -138,10 +138,8 @@ close it:
   derives unfinished work from transcript summaries, distinguishes resumable
   executions through persisted flow records, and rebinds executions that are
   still active in another desktop window.
-- The retired global `streams.json` file is read only by a temporary importer.
-  It migrates a stream identity only when the current workspace already has
-  transcript or sidecar evidence, then removes that row after canonical state
-  has loaded successfully. New desktop activity never writes this file.
+- The unreleased desktop now starts directly from the shared transcript and
+  execution stores; its temporary `streams.json` importer was removed.
 
 ### E. Multi-launch settings persistence test — shipped
 

@@ -3,6 +3,7 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -22,6 +23,7 @@ import type { SessionProblem } from '@shared/schemas/profileViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - settings view components
 import '../components/profile/RelayQuotaMeter';
@@ -64,9 +66,7 @@ export class AccountTab extends LitElement {
   @property({ attribute: false })
   spendingStatusError: SpendingStatusError | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
-  @property({ type: Boolean }) vscodeSettingsAvailable = false;
-  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
-    'personal';
+  @property({ type: Boolean }) telemetryEnabled = true;
 
   private readonly handleSignIn = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
@@ -74,10 +74,6 @@ export class AccountTab extends LitElement {
 
   private readonly handleSignOut = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-  };
-
-  private readonly handleOpenVscodeSettings = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
   };
 
   private handleManageProviderKeys(): void {
@@ -88,6 +84,13 @@ export class AccountTab extends LitElement {
       }),
     );
   }
+
+  private readonly handleTelemetryChange = (event: Event): void => {
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key: 'texra.telemetry.enabled',
+      value: (event.target as WaSwitch).checked,
+    });
+  };
 
   private renderUsage(): TemplateResult {
     // Session and spend-check failures take priority over stale usage data.
@@ -119,16 +122,6 @@ export class AccountTab extends LitElement {
       return html`
         <div class="account-empty">
           Sign in to monitor your included TeXRA usage and monthly relay quota.
-        </div>
-      `;
-    }
-    // After a quota-exhaustion auto-switch (included -> personal) the meter
-    // stays visible: it carries the "switched you to your own keys" notice.
-    if (this.apiAccessMode !== 'included' && !this.quotaAutoSwitched) {
-      return html`
-        <div class="account-empty">
-          Included model access is not enabled. Switch to included access in
-          Providers &amp; Models to see usage data.
         </div>
       `;
     }
@@ -234,6 +227,31 @@ export class AccountTab extends LitElement {
 
         <section>
           ${renderSettingsSectionHeading({
+            title: 'Privacy',
+            description:
+              'Choose whether TeXRA records anonymous usage metadata.',
+          })}
+          <div class="settings-section">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-label">Share usage telemetry</span>
+                <span class="settings-row-help">
+                  Sends model, token, cost, timing, route, and host metadata.
+                  Prompt text, document content, and file names are never sent.
+                </span>
+              </div>
+              <wa-switch
+                class="settings-row-control"
+                aria-label="Share usage telemetry"
+                ?checked=${this.telemetryEnabled}
+                @change=${this.handleTelemetryChange}
+              ></wa-switch>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          ${renderSettingsSectionHeading({
             title: 'Credentials',
             description:
               'Provider API keys remain in Providers & Models, alongside the models that use them.',
@@ -256,31 +274,6 @@ export class AccountTab extends LitElement {
                 })}
               </div>
             </div>
-            ${
-              this.vscodeSettingsAvailable
-                ? html`
-                    <div class="settings-row">
-                      <div class="settings-row-text">
-                        <span class="settings-row-label">
-                          VS Code settings
-                        </span>
-                        <span class="settings-row-help">
-                          Open host-level TeXRA configuration.
-                        </span>
-                      </div>
-                      <div class="settings-row-control">
-                        ${renderLabeledActionButton({
-                          icon: 'gear',
-                          text: 'Open settings',
-                          kind: 'secondary',
-                          appearance: 'outlined',
-                          onClick: this.handleOpenVscodeSettings,
-                        })}
-                      </div>
-                    </div>
-                  `
-                : nothing
-            }
           </div>
         </section>
       </div>
