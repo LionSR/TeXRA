@@ -60,6 +60,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Failed latexdiff builds no longer flood the workflow log** — the visible
+  warning identifies the affected diff file without dumping the LaTeX compiler
+  transcript; the full diagnostic remains available in debug data.
 - **Google models handle prompts and tool-enabled tasks reliably** — requests
   no longer fail when a prompt has no prefix or when complex tool sets are
   enabled.
