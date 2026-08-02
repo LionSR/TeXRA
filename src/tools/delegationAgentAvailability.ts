@@ -17,9 +17,9 @@
  */
 
 import {
+  findAgentByIdentifier,
   getVisibleAgent as getWorkspaceVisibleAgent,
   resolveDelegationScopeAgents,
-  resolveWithinCategory,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
@@ -100,9 +100,8 @@ export function getDelegationAgentForScope(
   identifier: string,
   scope: AgentDelegationScope,
 ): AgentEntry | undefined {
-  return resolveWithinCategory(
+  return findAgentByIdentifier(
     getDelegationAgentsForScope(category, scope),
-    category,
     identifier,
   );
 }

@@ -1126,36 +1126,6 @@ describe('headless delegation', () => {
     );
   });
 
-  it('canonicalizes legacy tool-use agent names before launch', async () => {
-    mocks.getVisibleAgents.mockReturnValue([
-      {
-        name: 'assistant',
-        description: 'General assistant.',
-        tools: [],
-      },
-    ]);
-    mocks.getVisibleAgent.mockImplementation(
-      (_category: AgentCategory, name: string) =>
-        name === 'chat' || name === 'assistant'
-          ? { name: 'assistant' }
-          : undefined,
-    );
-
-    const result = await withRunContext(parentRunContext(), () =>
-      callDelegateReview('chat'),
-    );
-
-    expect(result.summary).toBe("Launched 'assistant' (async)");
-    expect(mocks.executeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'assistant',
-        agentCategory: AgentCategory.ToolUse,
-      }),
-      expect.any(String),
-      expect.anything(),
-    );
-  });
-
   it('includes memory misses in interactive early-delivered reports', async () => {
     // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
     // WAITING result it returns is what the loop's single delivery site sees.

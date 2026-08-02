@@ -100,7 +100,6 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -123,16 +122,7 @@ async function refreshApiKeyStatus() {
   // funnel. This keeps ChatGPT subscription, Researcher Access, and direct API
   // keys in agreement about whether the first-run CTA should remain visible.
   const exists = await hasAnyUsableSetupCredential();
-  // `ui.showApiKeyReminders` is no longer declared in
-  // `contributes.configuration` and nothing writes it, so this is a read-only
-  // compat arm: a settings.json that predates the key's removal can still
-  // carry `false`, which is a deliberate opt-out worth honoring rather than
-  // making the CTA unsuppressible.
-  // Retire on 2026-11-01: drop this read and let the credential predicate
-  // alone decide whether the CTA shows.
-  const remindersOptOut =
-    getConfig<boolean>('ui.showApiKeyReminders', true) === false;
-  if (!exists && !remindersOptOut) {
+  if (!exists) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
@@ -570,8 +560,20 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
-    // gates the GitHub PR subscription tool group.
+    // gates the GitHub PR subscription tool group. Native workspace settings
+    // must follow the same first-folder replacement as workspace and storage.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void config
+        .rebindWorkspace(workspace.getWorkspacePath())
+        .catch((error) => {
+          logger.error(
+            'extension',
+            `Failed to load TeXRA settings after workspace change: ${toErrorMessage(error)}`,
+          );
+          void vscode.window.showErrorMessage(
+            'TeXRA could not load settings for the new workspace. Restart TeXRA before changing settings.',
+          );
+        });
       void refreshToolAvailability().catch(
         logRefreshFailure('workspace folder change'),
       );

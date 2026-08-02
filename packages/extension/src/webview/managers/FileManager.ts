@@ -32,7 +32,6 @@ import {
 } from '@shared/schemas/fileTypes';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -356,22 +355,12 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  /** Post show/hide getting started banner. The banner's own close button
-   * dismisses it for the session; a `ui.showGettingStartedBanner` of false
-   * still counts as a permanent opt-out, matching the login/orchestrator
-   * banners. The key is no longer declared in `contributes.configuration` and
-   * nothing writes it back, so this is a read-only compat arm for a
-   * settings.json that predates its removal.
-   * Retire on 2026-11-01: drop this read and let the close button be the only
-   * dismissal. */
+  /** Post show/hide getting started banner. */
   private postGettingStartedBanner(show: boolean): void {
-    const legacyOptOut =
-      getConfig<boolean>('ui.showGettingStartedBanner', true) === false;
     this.postMessage({
-      command:
-        show && !legacyOptOut
-          ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
-          : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
+      command: show
+        ? MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER
+        : MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER,
     });
   }
 

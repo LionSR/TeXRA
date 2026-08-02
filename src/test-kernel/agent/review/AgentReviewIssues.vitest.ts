@@ -69,30 +69,18 @@ describe('normalizeReviewFilePath', () => {
 });
 
 describe('buildReviewInstruction', () => {
-  it('embeds base, file list, and diff; approach selects the guidance', () => {
-    const thorough = buildReviewInstruction({
+  it('embeds the base, file list, and diff', () => {
+    const instruction = buildReviewInstruction({
       baseDescription: 'main branch (origin/main)',
       changedFiles: ['a.tex', 'b.ts'],
       diff: 'diff --git a/a.tex b/a.tex',
       truncated: true,
-      approach: 'thorough',
     });
-    expect(thorough).toContain('main branch (origin/main)');
-    expect(thorough).toContain('THOROUGH');
-    expect(thorough).toContain('a.tex\nb.ts');
-    expect(thorough).toContain('diff --git a/a.tex b/a.tex');
-    expect(thorough).toContain('report_review_issue');
-    expect(thorough).toContain('truncated');
-
-    const quick = buildReviewInstruction({
-      baseDescription: 'main',
-      changedFiles: ['a.tex'],
-      diff: 'x',
-      truncated: false,
-      approach: 'quick',
-    });
-    expect(quick).toContain('QUICK');
-    expect(quick).not.toContain('truncated');
+    expect(instruction).toContain('main branch (origin/main)');
+    expect(instruction).toContain('a.tex\nb.ts');
+    expect(instruction).toContain('diff --git a/a.tex b/a.tex');
+    expect(instruction).toContain('report_review_issue');
+    expect(instruction).toContain('truncated');
   });
 
   it('weaves in per-run user instructions when provided', () => {
@@ -101,7 +89,6 @@ describe('buildReviewInstruction', () => {
       changedFiles: ['a.tex'],
       diff: 'x',
       truncated: false,
-      approach: 'quick',
       userInstructions: 'Focus on error handling',
     });
     expect(focused).toContain('<reviewer-instructions>');
@@ -112,7 +99,6 @@ describe('buildReviewInstruction', () => {
       changedFiles: ['a.tex'],
       diff: 'x',
       truncated: false,
-      approach: 'quick',
     });
     expect(plain).not.toContain('reviewer-instructions');
   });

@@ -400,12 +400,6 @@
         "icon": "$(git-branch)"
       },
       {
-        "command": "texra.openSettings",
-        "title": "Open TeXRA Settings",
-        "category": "TeXRA",
-        "icon": "$(settings-gear)"
-      },
-      {
         "command": "texra.showMainView",
         "title": "Show Launcher",
         "category": "TeXRA",
@@ -908,10 +902,6 @@
         },
         {
           "command": "texra.showGitSettings",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.openSettings",
           "when": "texra.activated"
         },
         {

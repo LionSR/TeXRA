@@ -24,7 +24,6 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { getConfig } from '@utils/config/configUtils';
-import { SETTINGS_QUERY } from '@utils/config/constants';
 import {
   checkCoreDependencies,
   getToolDocsCommand,
@@ -147,11 +146,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       },
 
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
-        safeExecuteCommand(
-          'workbench.action.openSettings',
-          [SETTINGS_QUERY.EXTENSION],
-          this.viewName,
-        ),
+        safeExecuteCommand('texra.showDashboard', [], this.viewName),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: (m) =>
         safeExecuteCommand(
           'texra.showAgents',

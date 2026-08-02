@@ -4,8 +4,7 @@ import { hasExtension } from '@utils/core/pathCore';
 import { FILE_HANDLING_RULES } from './fileHandlingRules';
 
 /**
- * File categories for extension configuration lookups.
- * These map to VS Code settings keys for allowed file extensions.
+ * File categories for the product's fixed file-handling rules.
  *
  * Note: This is distinct from DocumentFileType in utils/config/constants.ts
  * which defines UI file input field types.
@@ -21,7 +20,7 @@ const INCLUDED_EXTENSIONS: Record<ExtensionCategory, readonly string[]> = {
   edited: FILE_HANDLING_RULES.included.editedExtensions,
 };
 
-/** Every configurable extension category, for callers that aggregate them all. */
+/** Every extension category, for callers that aggregate them all. */
 export const EXTENSION_CATEGORIES = Object.keys(
   INCLUDED_EXTENSIONS,
 ) as readonly ExtensionCategory[];

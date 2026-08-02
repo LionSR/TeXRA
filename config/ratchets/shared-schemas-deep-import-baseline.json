@@ -144,7 +144,7 @@
       ]
     },
     "@shared/schemas/profileViewMessages": {
-      "type": ["NumberVscodeSetting"],
+      "type": ["NumberSetting"],
       "value": []
     },
     "@shared/schemas/progressView": {
@@ -192,9 +192,9 @@
         "MemoryPreview",
         "MemoryViewItem",
         "ModelSelectionItem",
-        "NumberVscodeSetting",
+        "NumberSetting",
         "ProviderKeyStatus",
-        "ProviderVscodeSetting",
+        "ProviderSetting",
         "PRSubscriptionEntry",
         "ReasoningLevel",
         "SETTINGS_VIEW_CMD",
@@ -305,12 +305,10 @@
     ],
     "@shared/schemas/coreSettings": [
       "packages/cli/src/schemas/knownKeys.ts",
-      "packages/extension/src/schemas/texraSettings.ts",
       "packages/extension/src/settingsView/frontend/tabs/ToolsTab.ts",
       "src/agent/core/flows/RetryState.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAI.ts",
       "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts",
-      "src/agent/review/reviewIssues.ts",
       "src/agent/runtime/ModelFactory.ts",
       "src/controllers/settingsView/SettingsProfileController.ts",
       "src/replacement/engine.ts",
