@@ -175,6 +175,21 @@ describe('CLI chat defaults', () => {
     });
   });
 
+  it('ignores a history model that the CLI cannot run', async () => {
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('research', { model: 'Copilot GPT-4o' }),
+    ]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({
+      agent: 'assistant',
+      model: 'deepseekproT',
+      source: 'builtin',
+      modelSource: 'builtin-default',
+    });
+  });
+
   it('does not inherit the model from a multi-agent team run', async () => {
     // A `texra multi-agent run physicist` is stored as a tool-use execution
     // whose root is the team orchestrator. It must not affect plain
