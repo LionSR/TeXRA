@@ -122,7 +122,7 @@ export class FollowUpInput extends LitElement {
         --textarea-max-height: clamp(var(--textarea-min-height), 32vh, 240px);
       }
 
-      #followUpInput::part(base) {
+      #followUpInput::part(textarea-wrapper) {
         align-items: start;
         max-height: var(--textarea-max-height);
         overflow: hidden;
