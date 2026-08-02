@@ -118,9 +118,7 @@ Largest models for deep reasoning; long-context for lengthy tedious work; cost-e
 
 Optional auto-attach from the input LaTeX:
 - extractFigures=true: pull \\includegraphics / \\begin{overpic} figures into mediaFiles.
-- extractTikz=true: compile TikZ figures into standalone PDFs and attach.
-
-Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instruction="Quantum error correction paper. Fix grammar, tighten sentences, keep terminology consistent — especially in the abstract and intro."`,
+- extractTikz=true: compile TikZ figures into standalone PDFs and attach.`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -231,8 +229,6 @@ Agent selection: choose the most specific agent whose description matches the ta
 Available models: loaded from the active API mode at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
-Example (new, targeted LaTeX repair): agent=latexFixer, instruction="Fix the unresolved citation commands on slides 3 and 7 in slides/talk.tex using refs.bib."
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
 
 Git worktree support: resolved from the active workspace at runtime.`,

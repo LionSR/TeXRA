@@ -59,7 +59,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
   instruction: z
     .string()
     .describe(
-      'What the agent should do, in plain prose. If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
+      'What the agent should do, in plain prose: state the document subject, the changes wanted, and any constraints (terminology, scope, sections to prioritize). If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
     ),
   inputFiles: z
     .array(z.string())

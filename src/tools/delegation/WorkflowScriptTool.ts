@@ -202,15 +202,12 @@ export const meta = {
     { id: 'second', label: 'Fix second draft', phase: 'Fix' },
     { id: 'merge', label: 'Merge corrected drafts', phase: 'Merge' },
   ],
-  timeoutMs: 1800000,
 }
 phase('Fix')
 const results = await parallel(files.inputFiles.slice(0, 2).map((file, index) => () =>
   agent('Fix spelling errors only.', {
     id: index === 0 ? 'first' : 'second',
     inputFiles: [file],
-    contextFiles: files.contextFiles,
-    mediaFiles: files.mediaFiles,
   })
 ))
 const correctedFiles = results

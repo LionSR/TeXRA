@@ -103,19 +103,7 @@ Each file goes through an approval step before writing and may be rejected.
 Parameters map directly to subagent-result delivery attributes:
   execution_id ← <subagent-result id="...">
   path         ← <file path="...">
-  original     ← <file original="...">
-
-Example — given delivery:
-  <subagent-result id="a1b2c3d4" agent="correct" category="workflow" status="completed">
-    <file path="paper__correct__r0_gemini.tex" original="paper.tex" added="42" removed="15" />
-  </subagent-result>
-
-Call:
-  execution_id: "a1b2c3d4"
-  files: [{path: "paper__correct__r0_gemini.tex", original: "paper.tex"}]
-
-Optional:
-  strip_criticize  when true, remove all \\criticize{...}{...}{...} annotations from accepted files before the approval diff`,
+  original     ← <file original="...">`,
   schema: AcceptRunFilesInputSchema,
 }) {
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
