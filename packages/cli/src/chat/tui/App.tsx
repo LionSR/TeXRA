@@ -573,7 +573,9 @@ export function App(props: AppProps): React.JSX.Element {
         }
         return;
       }
-      if (!key.ctrl && !key.tab && input.length > 0) {
+      const arrowInput =
+        key.upArrow || key.downArrow || key.leftArrow || key.rightArrow;
+      if (!key.ctrl && !key.tab && (input.length > 0 || arrowInput)) {
         if (appOwnsEscape() && handleMetaShortcut(input)) return;
         const inputWasDisabled = inputDisabled;
         const handled = handlePendingBareEscape(
