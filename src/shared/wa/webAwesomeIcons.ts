@@ -286,7 +286,7 @@ let isRegistered = false;
  * may still reference the old names). The static migration handled the source
  * code; this map handles data that lives outside the repo.
  */
-export const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
+const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
   Object.freeze({
     close: 'xmark',
     diff: 'code-compare',
