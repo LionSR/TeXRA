@@ -273,6 +273,11 @@ const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>(
 function toGoogleOpenApiSchemaNode(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toGoogleOpenApiSchemaNode);
   if (!isSchemaObject(value)) return value;
+  if (Object.hasOwn(value, 'oneOf') || Object.hasOwn(value, 'allOf')) {
+    throw new Error(
+      'Google tool schemas do not support nested oneOf or allOf combinators.',
+    );
+  }
 
   const converted: JSONSchemaObject = {};
   if (typeof value.const === 'string' && !Array.isArray(value.enum)) {
@@ -280,6 +285,10 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
   }
   for (const [key, child] of Object.entries(value)) {
     if (!GOOGLE_OPENAPI_SCHEMA_KEYS.has(key)) continue;
+    if (key === 'default' || key === 'example') {
+      converted[key] = child;
+      continue;
+    }
     if (key === 'properties' && isSchemaObject(child)) {
       converted.properties = Object.fromEntries(
         Object.entries(child).map(([name, schema]) => [
