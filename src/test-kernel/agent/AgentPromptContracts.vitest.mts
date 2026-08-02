@@ -35,7 +35,7 @@ describe('assistant agent prompt', () => {
   );
   const { systemPrompt } = agent.prompts;
 
-  it('is named assistant (renamed from chat)', () => {
+  it('is named assistant', () => {
     expect(agent.name).toBe('assistant');
   });
 

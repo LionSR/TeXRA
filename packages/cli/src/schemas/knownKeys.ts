@@ -16,8 +16,9 @@ import { CLI_SETTING_PATHS } from './cliSettings';
  * *from config*. Keys the CLI doesn't read from `.texra/config.json` are
  * intentionally excluded so they still warn as unknown:
  *
- * - Core settings only the VS Code extension reads (`agentReview.*`,
- *   `inlineCriticism.enabled`), which belong in `.vscode/settings.json`.
+ * - Core settings the CLI does not consume (`agentReview.*`,
+ *   `inlineCriticism.enabled`). Other hosts may write them to the shared TeXRA
+ *   config, but they have no CLI behavior.
  * - State-backed settings the CLI reads from its `state.json` store
  *   (workflow/latexdiff): putting those in `config.json` is a no-op.
  */
@@ -31,9 +32,4 @@ export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
   ...CLI_STATE_SETTINGS.filter(
     (entry) => (entry.cliStore ?? entry.store) === 'config',
   ).map((entry) => entry.key),
-  // Retired keys still honored at the read site for one release
-  // (debugMessageSaver ORs them into saveModelIO); known so they do not warn
-  // while they still work. Drop together with that read-site fallback.
-  'texra.debug.saveDebugObjects',
-  'texra.debug.saveInputPrompt',
 ]);

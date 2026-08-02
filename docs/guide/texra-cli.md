@@ -85,10 +85,9 @@ include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
 filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
-Final run result objects report their terminal state only through `outcome`.
-The deprecated `status`, `terminalStatus`, and `endGroupStatus` compatibility
-fields are no longer emitted. This removal does not apply to status fields on
-streamed NDJSON progress records.
+Final run result objects report their terminal state through `outcome`.
+Streamed NDJSON progress records continue to use status fields for live
+progress.
 
 ## Authentication
 

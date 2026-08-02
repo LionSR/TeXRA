@@ -341,7 +341,7 @@ describe('UsageLogService', () => {
       expect(batches).toEqual([]);
     });
 
-    it('ignores a workspace-scoped telemetry value', async () => {
+    it('honours a workspace-scoped telemetry opt-out', async () => {
       vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
         'token',
       );
@@ -350,13 +350,13 @@ describe('UsageLogService', () => {
       const batches: unknown[] = [];
       const fetchMock = stubFetch(batches);
 
-      UsageLogService.log(usageEntry('sent'));
+      UsageLogService.log(usageEntry('dropped'));
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
       );
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(batches.map(batchModels)).toEqual([['sent']]);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
     });
 
     // The setting is read live, so turning it off has to drop rounds already

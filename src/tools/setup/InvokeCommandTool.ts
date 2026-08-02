@@ -35,8 +35,6 @@ const ALLOWED_COMMAND_IDS = [
   'texra.showMultiAgent',
   'texra.showTools',
   'texra.showGitSettings',
-  // Native VS Code settings, search-filterable to texra.*
-  'texra.openSettings',
   // Workspace bootstrap
   'texra.createSampleProject',
   'texra.showMainView',
@@ -60,7 +58,7 @@ type InvokeCommandInput = z.infer<typeof InvokeCommandInputSchema>;
 export class InvokeCommandTool extends defineTool({
   name: 'invoke_command',
   requiresApproval: true,
-  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX — the API-key quick-pick (texra.setApiKey), the Researcher Access sign-in (texra.auth.signIn), the settings-dashboard tab openers (texra.showModels / texra.showAgents / texra.showMemory / texra.showMultiAgent / texra.showTools / texra.showGitSettings), the native VS Code settings UI filtered to texra.* (texra.openSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead — it enforces a stricter per-extension allowlist.`,
+  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX — the API-key quick-pick (texra.setApiKey), the Researcher Access sign-in (texra.auth.signIn), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showMultiAgent / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead — it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,
 }) {
   protected async execute(input: InvokeCommandInput): Promise<ToolResult> {

@@ -141,13 +141,11 @@ describe('desktop settings capability markers', () => {
     await installPlatform({ workspacePath: '/workspace' });
   });
 
-  it('matches the real credential controller, which excludes VS Code provider settings', () => {
+  it('matches the real credential controller, which supports every action', () => {
     const real = realCredentialController();
     const stub = createStubDesktopCredentialSettingsController(statePorts());
 
-    expect(unsupportedCommands(real.profileHandlers)).toEqual([
-      'setProviderVscodeSetting',
-    ]);
+    expect(unsupportedCommands(real.profileHandlers)).toEqual([]);
     expect(unsupportedCommands(real.chatGptHandlers)).toEqual([]);
     expect(unsupportedCommands(stub.profileHandlers)).toEqual(
       unsupportedCommands(real.profileHandlers),
