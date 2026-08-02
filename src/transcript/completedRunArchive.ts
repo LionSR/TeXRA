@@ -104,7 +104,7 @@ export interface CompletedRunConversationReadResult {
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
   readonly streamId?: StreamTabId;
-  /** Sidecars admitted to the selected stream's overlap-connected component. */
+  /** Sidecars admitted to the selected stream's consistent linear history. */
   readonly streamIds?: readonly StreamTabId[];
   /** Historical candidates rejected because their persisted rows do not
    *  establish one consistent continuation of the selected stream. */
@@ -123,6 +123,10 @@ export type CompletedRunArchiveDiagnostic =
     }
   | {
       readonly kind: 'orderingCycle';
+      readonly streamId: StreamTabId;
+    }
+  | {
+      readonly kind: 'branchingHistory';
       readonly streamId: StreamTabId;
     };
 
@@ -429,6 +433,38 @@ function entriesAgree(left: StreamLogEntry, right: StreamLogEntry): boolean {
   );
 }
 
+/**
+ * Decide whether a candidate and the currently admitted chronology describe
+ * one linear history. Their common rows must occupy the same contiguous
+ * interval after alignment. Thus a suffix may continue into a prefix (in
+ * either direction), and a contained historical prefix is harmless, while
+ * two continuations that fork after a copied row are rejected.
+ */
+function isSingleContinuation(
+  admitted: readonly StreamLogEntry[],
+  candidate: readonly StreamLogEntry[],
+): boolean {
+  const admittedIndexById = new Map(
+    admitted.map((entry, index) => [entry.id, index]),
+  );
+  const firstCandidateOverlap = candidate.findIndex((entry) =>
+    admittedIndexById.has(entry.id),
+  );
+  if (firstCandidateOverlap === -1) return false;
+  const firstAdmittedOverlap = admittedIndexById.get(
+    candidate[firstCandidateOverlap]!.id,
+  )!;
+  const offset = firstAdmittedOverlap - firstCandidateOverlap;
+  return candidate.every((entry, candidateIndex) => {
+    const admittedIndex = candidateIndex + offset;
+    return (
+      admittedIndex < 0 ||
+      admittedIndex >= admitted.length ||
+      admitted[admittedIndex]?.id === entry.id
+    );
+  });
+}
+
 function orderMergedEntries(
   entriesByStream: readonly (readonly StreamLogEntry[])[],
 ): StreamLogEntry[] | null {
@@ -493,10 +529,10 @@ function orderMergedEntries(
 }
 
 /**
- * Merge only the overlap-connected component rooted at the selected stream.
- * A candidate must share an agreeing persisted row identity with the admitted
- * component. Conflicting identities and contradictory ordering constraints
- * reject that candidate instead of being presented as complete chronology.
+ * Merge only the consistent linear history rooted at the selected stream. A
+ * candidate must align an agreeing contiguous interval with the admitted
+ * chronology. Disconnected, forked, conflicting, and cyclic candidates are
+ * rejected instead of being presented as one complete chronology.
  */
 async function mergeConnectedConversation(
   streamLogStore: StreamLogStore,
@@ -516,7 +552,21 @@ async function mergeConnectedConversation(
     admittedEntries[0]?.map((entry) => [entry.id, entry]) ?? [],
   );
   const diagnostics: CompletedRunArchiveDiagnostic[] = [];
-  let ordered = orderMergedEntries(admittedEntries) ?? admittedEntries[0] ?? [];
+  const canonicalOrder = orderMergedEntries(admittedEntries);
+  if (canonicalOrder === null) {
+    return {
+      conversation: [],
+      streamIds: admittedIds,
+      diagnostics: [
+        { kind: 'orderingCycle', streamId: streamIds[0] },
+        ...streamIds.slice(1).map((streamId) => ({
+          kind: 'disconnectedStream' as const,
+          streamId,
+        })),
+      ],
+    };
+  }
+  let ordered = canonicalOrder;
 
   const pending = entriesByStream.slice(1).flatMap((entries, index) => {
     const streamId = streamIds[index + 1];
@@ -550,6 +600,10 @@ async function mergeConnectedConversation(
         streamId,
         rowId: conflict.id,
       });
+      continue;
+    }
+    if (!isSingleContinuation(ordered, candidateEntries)) {
+      diagnostics.push({ kind: 'branchingHistory', streamId });
       continue;
     }
     const nextEntries = [...admittedEntries, candidateEntries];
@@ -692,6 +746,8 @@ export async function readCompletedRunConversation(
     return {
       conversation: legacy,
       source: 'legacyKV',
+      ...(sidecar?.streamId ? { streamId: sidecar.streamId } : {}),
+      ...(sidecar?.streamIds ? { streamIds: sidecar.streamIds } : {}),
       ...(sidecar?.diagnostics ? { diagnostics: sidecar.diagnostics } : {}),
     };
   }

@@ -863,7 +863,7 @@ describe('completedRunArchive facade', () => {
     });
   });
 
-  it('merges the transitive overlap component and reports disconnected candidates', async () => {
+  it('merges a transitive continuation and reports disconnected candidates', async () => {
     const executionId = '0888bd0888bd' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888bd0888bd' as StreamTabId;
     const transitive = 'bOrchestrator@middle#0888bd0888bd' as StreamTabId;
@@ -983,6 +983,106 @@ describe('completedRunArchive facade', () => {
           content: [{ type: 'text', text: 'Second' }],
         },
       ],
+    });
+  });
+
+  it('rejects a sibling continuation that forks after a copied row', async () => {
+    const executionId = '0888c00888c0' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888c00888c0' as StreamTabId;
+    const continued = 'bOrchestrator@new#0888c00888c0' as StreamTabId;
+    const forked = 'cOrchestrator@fork#0888c00888c0' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [canonical, continued, forked]) {
+      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    }
+    await snapshots.flush();
+
+    const anchor = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Anchor' });
+    const logs = await StreamLogStore.open();
+    logs.append(canonical, anchor);
+    logs.append(continued, anchor);
+    logs.append(
+      continued,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Chosen continuation' }),
+    );
+    logs.append(forked, anchor);
+    logs.append(
+      forked,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Forked continuation' }),
+    );
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId: canonical,
+      streamIds: [canonical, continued],
+      diagnostics: [{ kind: 'branchingHistory', streamId: forked }],
+      conversation: [
+        { role: 'user', content: 'Anchor' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Chosen continuation' }],
+        },
+      ],
+    });
+  });
+
+  it('reports a cycle in the selected canonical stream', async () => {
+    const executionId = '0888c10888c1' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888c10888c1' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First' });
+    const second = logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second' });
+    const logs = await StreamLogStore.open();
+    logs.append(canonical, first);
+    logs.append(canonical, second);
+    logs.append(canonical, first);
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      streamId: canonical,
+      diagnostics: [{ kind: 'orderingCycle', streamId: canonical }],
+      conversation: null,
+    });
+  });
+
+  it('retains selected stream context when diagnostics accompany legacy fallback', async () => {
+    const executionId = '0888c20888c2' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888c20888c2' as StreamTabId;
+    const disconnected = 'bOrchestrator@other#0888c20888c2' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      disconnected,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      canonical,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'No conversation' }),
+    );
+    logs.append(
+      disconnected,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Unrelated prompt' }),
+    );
+    await logs.flush();
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'user', content: 'Legacy prompt' },
+    ]);
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'legacyKV',
+      streamId: canonical,
+      diagnostics: [{ kind: 'disconnectedStream', streamId: disconnected }],
+      conversation: [{ role: 'user', content: 'Legacy prompt' }],
     });
   });
 

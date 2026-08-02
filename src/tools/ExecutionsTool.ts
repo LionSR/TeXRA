@@ -69,21 +69,6 @@ import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 
-function formatArchiveDiagnostic(
-  diagnostic: CompletedRunArchiveDiagnostic,
-): string {
-  switch (diagnostic.kind) {
-    case 'disconnectedStream':
-      return `Archive diagnostic: disconnected candidate ${diagnostic.streamId}`;
-    case 'conflictingRow':
-      return `Archive diagnostic: conflicting row ${diagnostic.rowId} in ${diagnostic.streamId}`;
-    case 'orderingCycle':
-      return `Archive diagnostic: ordering cycle in ${diagnostic.streamId}`;
-    default:
-      return assertNever(diagnostic, 'Unhandled archive diagnostic');
-  }
-}
-
 // Local file imports
 import {
   formatListingLine,
@@ -117,6 +102,23 @@ import {
   type ExecutionSummaryOptions,
 } from './executions/summaryFormat';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
+
+function formatArchiveDiagnostic(
+  diagnostic: CompletedRunArchiveDiagnostic,
+): string {
+  switch (diagnostic.kind) {
+    case 'disconnectedStream':
+      return `Archive diagnostic: disconnected candidate ${diagnostic.streamId}`;
+    case 'conflictingRow':
+      return `Archive diagnostic: conflicting row ${diagnostic.rowId} in ${diagnostic.streamId}`;
+    case 'orderingCycle':
+      return `Archive diagnostic: ordering cycle in ${diagnostic.streamId}`;
+    case 'branchingHistory':
+      return `Archive diagnostic: branching history in ${diagnostic.streamId}`;
+    default:
+      return assertNever(diagnostic, 'Unhandled archive diagnostic');
+  }
+}
 
 // ============================================================================
 // Resource path catalog
