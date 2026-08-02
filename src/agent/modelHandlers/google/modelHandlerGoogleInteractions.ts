@@ -1151,12 +1151,14 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     mediaFiles: FileLocation[],
   ): Promise<MediaAttachmentKind[]> {
     if (!mediaFiles.length || !this.supportsFileUploads()) return [];
-    const lastUser = messages.findLast(
-      (s): s is UserInputStep => s.type === 'user_input',
-    );
-    if (!lastUser) return [];
     const media = await this.createMediaForRound(mediaFiles, 'insert');
     if (media.length === 0) return [];
+    const trailing = messages.at(-1);
+    const lastUser =
+      trailing?.type === 'user_input' && messages.length > this.sentStepCount
+        ? trailing
+        : ({ type: 'user_input', content: [] } satisfies UserInputStep);
+    if (lastUser !== trailing) messages.push(lastUser);
     (lastUser.content ??= []).unshift(...media);
     return this.consumeInsertedAttachmentKinds('insert');
   }
