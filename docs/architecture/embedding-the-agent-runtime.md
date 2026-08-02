@@ -99,7 +99,6 @@ The `?.` on the following lines (`:508-527`) is for the `'personal'` branch.
 Production model-client constructors call `resolveClientCredential` directly
 (`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:396`;
 `src/agent/modelHandlers/openai/modelHandlerOpenAI.ts:249`;
-`src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts:175`;
 `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:546`;
 `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts:1165`;
 `src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`).
