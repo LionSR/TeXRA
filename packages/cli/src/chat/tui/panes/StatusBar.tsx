@@ -231,6 +231,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     shortcuts: {
       agentSelectionAvailable: props.agentSelectionAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
+      parentNavigationAvailable:
+        activeStreamId !== undefined && parentStream.has(activeStreamId),
       streamFocusAvailable: props.streamFocusAvailable,
       shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,
