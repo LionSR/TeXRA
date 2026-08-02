@@ -680,7 +680,9 @@ function RelayProgressFrame(props: {
       title={props.title ?? 'Sign in · Researcher Access'}
       footer={<LoadingIndicator label={props.spinnerLabel} />}
     >
-      <Box flexDirection="column">{props.children}</Box>
+      <Box marginTop={1} flexDirection="column">
+        {props.children}
+      </Box>
     </BorderedPanel>
   );
 }
