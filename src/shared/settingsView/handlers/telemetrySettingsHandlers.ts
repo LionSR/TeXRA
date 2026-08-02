@@ -9,6 +9,8 @@ export function buildTelemetrySettingsMessage(
   const schema = CoreSettingsShape.telemetry.unwrap().shape.enabled;
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS,
-    enabled: schema.parse(config.get<unknown>('texra.telemetry.enabled')),
+    enabled: schema.parse(
+      config.inspect<unknown>('texra.telemetry.enabled')?.globalValue,
+    ),
   };
 }
