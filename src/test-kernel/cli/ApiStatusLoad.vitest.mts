@@ -72,7 +72,6 @@ describe('loadCliApiStatusLines', () => {
       name: 'without a profile note',
       profile: { authenticated: false },
       lines: ['api: personal API keys', 'auth: signed out'],
-      detailLines: [],
     },
     {
       name: 'with a profile note',
@@ -85,19 +84,14 @@ describe('loadCliApiStatusLines', () => {
         'auth: signed out',
         'The configured relay token was rejected.',
       ],
-      detailLines: ['The configured relay token was rejected.'],
     },
-  ])(
-    'preserves signed-out details $name',
-    async ({ profile, lines, detailLines }) => {
-      mocks.getCliAuthProfile.mockResolvedValue(profile);
+  ])('preserves signed-out details $name', async ({ profile, lines }) => {
+    mocks.getCliAuthProfile.mockResolvedValue(profile);
 
-      await expect(loadCliApiStatus()).resolves.toEqual({
-        lines,
-        detailLines,
-      });
-    },
-  );
+    await expect(loadCliApiStatus()).resolves.toEqual({
+      lines,
+    });
+  });
 
   it('uses an invocation API mode override for launcher status text', async () => {
     await expect(
@@ -113,7 +107,7 @@ describe('loadCliApiStatusLines', () => {
     expect(mocks.getCliApiMode).not.toHaveBeenCalled();
   });
 
-  it('keeps action hints out of detailed account facts', async () => {
+  it('includes action hints only when requested', async () => {
     const actionHint =
       'actions: choose Model access below; `texra login` signs in to Researcher Access';
 
@@ -123,8 +117,6 @@ describe('loadCliApiStatusLines', () => {
     });
 
     expect(status.lines).toContain(actionHint);
-    expect(status.detailLines).not.toContain(actionHint);
-    expect(status.detailLines).toEqual([]);
   });
 
   it('keeps launcher usage compact while exposing detailed account facts', async () => {
@@ -142,10 +134,6 @@ describe('loadCliApiStatusLines', () => {
         'api: personal API keys',
         'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 100.3% used, 0% remaining',
       ],
-      detailLines: [
-        'tier: Ultra',
-        'included usage this month: 100.3% used, 0% remaining',
-      ],
     });
     await expect(loadCliApiStatusLines()).resolves.toEqual([
       'api: personal API keys',
@@ -153,7 +141,7 @@ describe('loadCliApiStatusLines', () => {
     ]);
   });
 
-  it('preserves profile notes and personal-key warnings in detailed facts', async () => {
+  it('preserves profile notes and the personal-key inventory', async () => {
     mocks.getCliAuthProfile.mockResolvedValue({
       authenticated: true,
       accountLabel: 'researcher@example.com',
@@ -169,14 +157,8 @@ describe('loadCliApiStatusLines', () => {
       lines: [
         'api: personal API keys',
         'auth: signed in as researcher@example.com · tier: Researcher · included usage this month: 25.0% used, 75.0% remaining',
-        'available: included TeXRA access; personal API keys: DeepSeek',
+        'personal API keys: DeepSeek',
         'Account metadata may be stale.',
-      ],
-      detailLines: [
-        'available: included TeXRA access; personal API keys: DeepSeek',
-        'Account metadata may be stale.',
-        'tier: Researcher',
-        'included usage this month: 25.0% used, 75.0% remaining',
       ],
     });
   });
@@ -197,7 +179,6 @@ describe('loadCliApiStatusLines', () => {
         'api: personal API keys',
         `auth: signed in as CI relay token (TEXRA_RELAY_TOKEN) · tier: Researcher · ${unavailable}`,
       ],
-      detailLines: ['tier: Researcher', unavailable],
     });
     expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
@@ -217,10 +198,6 @@ describe('loadCliApiStatusLines', () => {
         'api: personal API keys',
         'auth: signed in as researcher@example.com · tier: Ultra · included usage: unavailable (quota offline)',
       ],
-      detailLines: [
-        'tier: Ultra',
-        'included usage: unavailable (quota offline)',
-      ],
     });
   });
 
@@ -237,6 +214,37 @@ describe('loadCliApiStatusLines', () => {
     });
 
     expect(lines.filter((line) => line === profileNote)).toHaveLength(1);
+  });
+
+  it('renders one detailed snapshot for preferences, accounts, keys, and usage', async () => {
+    mocks.readCliModelAccessStatus.mockResolvedValue({
+      apiFallback: 'included',
+      preferences: { chatGpt: 'on', kimiCode: 'on' },
+      chatGptSignedIn: true,
+      chatGptAccountLabel: 'chatgpt@example.com',
+      kimiCodeKeySet: true,
+    });
+    mocks.getCliAuthProfile.mockResolvedValue({
+      authenticated: true,
+      accountLabel: 'texra@example.com',
+      tier: 'Ultra',
+      credentialSource: 'session',
+    });
+    mocks.lookupApiKeyOrigin.mockResolvedValue('env');
+    mocks.resolveCliUsageTier.mockResolvedValue('Ultra');
+    mocks.fetchRelayUsageSummary.mockResolvedValue({ usagePercent: 24.5 });
+
+    await expect(
+      loadCliAccountStatusLines({
+        apiMode: 'included',
+        includeApiDetails: true,
+      }),
+    ).resolves.toEqual([
+      'Model access: ChatGPT On · Kimi Code On · fallback Included TeXRA access',
+      'Accounts: ChatGPT chatgpt@example.com · TeXRA texra@example.com',
+      'personal API keys: DeepSeek',
+      'tier: Ultra · included usage this month: 24.5% used, 75.5% remaining',
+    ]);
   });
 
   it('reports both preferences and the API fallback without collapsing them', async () => {
@@ -272,6 +280,17 @@ describe('loadCliApiStatusLines', () => {
     });
   });
 
+  it('loads the model-access form without reading personal-key storage', async () => {
+    mocks.lookupApiKeyOrigin.mockRejectedValue(new Error('keychain offline'));
+
+    await expect(
+      loadCliModelAccessOverview({ apiMode: 'personal' }),
+    ).resolves.toMatchObject({
+      access: { apiFallback: 'personal' },
+    });
+    expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
+  });
+
   it('reports Kimi and ChatGPT preference states separately', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'personal',
@@ -300,6 +319,7 @@ describe('loadCliApiStatusLines', () => {
     ).resolves.toEqual([
       'api: personal API keys',
       'auth: signed out',
+      'personal API keys: DeepSeek',
       'actions: choose Model access below; provider keys are configured',
     ]);
   });
