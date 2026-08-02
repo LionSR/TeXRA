@@ -8,6 +8,7 @@ import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
+  EXECUTION_STREAM_ID_SOURCE,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -85,7 +86,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
 
-    expect(resolved).toEqual({ streamId, source: 'streamDataMeta' });
+    expect(resolved).toEqual({
+      streamId,
+      source: 'streamDataMeta',
+      associatedRootStreamIds: [streamId],
+    });
   });
 
   it(
@@ -107,15 +112,16 @@ describe('resolvePersistedStreamIdForExecution', () => {
       const resolveStore = new StreamSnapshotStore();
       let inFlight = 0;
       let maxInFlight = 0;
-      vi.spyOn(resolveStore, 'readPersistedExecutionId').mockImplementation(
-        async () => {
-          inFlight++;
-          maxInFlight = Math.max(maxInFlight, inFlight);
-          await new Promise((resolve) => setTimeout(resolve, 5));
-          inFlight--;
-          return undefined;
-        },
-      );
+      vi.spyOn(
+        resolveStore,
+        'readPersistedStreamAssociation',
+      ).mockImplementation(async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight--;
+        return {};
+      });
 
       await resolvePersistedStreamIdForExecution('abcdff' as ExecutionId, {
         snapshotStore: resolveStore,
@@ -147,14 +153,18 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
     await expect(
       getExecutionStore(executionId).readMeta(),
-    ).resolves.toMatchObject({ streamId });
+    ).resolves.toMatchObject({
+      streamId,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+    });
   });
 
-  it('retains a sidecar scan fallback for execution records predating streamId', async () => {
+  it('scans execution records whose stream-id provenance predates registration', async () => {
     const executionId = 'abc666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc666' as StreamTabId;
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date().toISOString(),
+      streamId,
     });
 
     const store = new StreamSnapshotStore();
@@ -164,10 +174,36 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
     });
-    expect(resolved).toEqual({ streamId, source: 'streamDataMeta' });
+    expect(resolved).toEqual({
+      streamId,
+      source: 'streamDataMeta',
+      associatedRootStreamIds: [streamId],
+    });
     await expect(
       getExecutionStore(executionId).readMeta(),
-    ).resolves.toMatchObject({ streamId });
+    ).resolves.toMatchObject({
+      streamId,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION,
+    });
+
+    const resumedStream = 'zOrchestrator@newModel#abc666' as StreamTabId;
+    store.setRunConfig(
+      resumedStream,
+      runConfig('orchestrator', 'newModel'),
+      executionId,
+    );
+    await store.flush();
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+      }),
+    ).resolves.toEqual({
+      streamId,
+      source: 'streamDataMeta',
+      fallbackStreamIds: [resumedStream],
+      associatedRootStreamIds: [streamId, resumedStream],
+    });
   });
 
   it('prefers a work-plan-bearing historical stream over a bare match', async () => {
@@ -191,6 +227,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId: secondStream,
       source: 'streamDataMeta',
       fallbackStreamIds: [firstStream],
+      associatedRootStreamIds: [firstStream, secondStream],
     });
   });
 
@@ -219,6 +256,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId: logStream,
       source: 'streamDataMeta',
       fallbackStreamIds: [workPlanStream],
+      associatedRootStreamIds: [workPlanStream, logStream],
     });
     expect(
       (await getExecutionStore(executionId).readMeta())?.streamId,

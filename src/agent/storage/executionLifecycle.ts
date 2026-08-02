@@ -13,6 +13,7 @@ import { flowKey } from '@agent/node/persistedFlow';
 
 import * as logger from '@logger/logUtils';
 import {
+  EXECUTION_STREAM_ID_SOURCE,
   RUN_OUTCOME,
   executionStatusToRunOutcome,
   type ExecutionId,
@@ -123,6 +124,7 @@ export async function registerExecution(
       const meta = {
         timestamp,
         streamId,
+        streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
         parentExecutionId,
         ...(category ? { category } : {}),
       };
@@ -343,7 +345,10 @@ export async function writeLegacyExecutionStreamId(
 ): Promise<void> {
   await persistSupplementaryMetaFieldsBestEffort(
     executionId,
-    { streamId },
+    {
+      streamId,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION,
+    },
     'legacy execution stream id',
   );
 }

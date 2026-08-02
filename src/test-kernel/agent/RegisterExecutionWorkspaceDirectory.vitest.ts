@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
+  EXECUTION_STREAM_ID_SOURCE,
   EXECUTION_STATUS,
   RUN_OUTCOME,
   type ExecutionId,
@@ -97,6 +98,7 @@ describe('execution lifecycle', () => {
     expect(mocks.writeMeta).toHaveBeenCalledWith({
       timestamp: expect.any(String),
       streamId: 'chat@deepseekT#abc123',
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
       parentExecutionId: undefined,
       category: 'toolUse',
     });
