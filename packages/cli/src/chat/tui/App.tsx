@@ -92,6 +92,7 @@ import {
 import {
   childListStreamId,
   childStreamListValue,
+  isWorkflowTaskListValue,
   workflowPhaseListValue,
   workflowTaskListValue,
   INITIAL_CHILD_LIST_SELECTION,
@@ -446,7 +447,7 @@ export function App(props: AppProps): React.JSX.Element {
   }, [childListValues]);
   const focusSession = useCallback(
     (streamId: StreamTabId) => {
-      if (selectedChildValue?.startsWith('workflowTask:')) {
+      if (isWorkflowTaskListValue(selectedChildValue)) {
         dispatchChildListSelection({ kind: 'blur' });
       } else {
         dispatchChildListSelection({ kind: 'focusStream', streamId });
