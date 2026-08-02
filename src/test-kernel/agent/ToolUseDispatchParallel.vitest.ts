@@ -77,6 +77,8 @@ interface HarnessOptions {
   rootUserInstruction?: string;
   /** The run's one interrupt signal; defaults to a run nobody interrupts. */
   abortSignal?: AbortSignal;
+  modelHandlerOverrides?: Record<string, unknown>;
+  runClient?: unknown;
 }
 
 function dispatchHarness(opts: HarnessOptions) {
@@ -95,7 +97,8 @@ function dispatchHarness(opts: HarnessOptions) {
     modelCell: testModelCell({
       requiresBatchedParallelToolResults: false,
       createToolUseFollowUpMessages: async () => [],
-      getClient: async () => ({}),
+      getClient: async () => opts.runClient ?? {},
+      ...opts.modelHandlerOverrides,
     }),
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
@@ -213,6 +216,45 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       assert.equal(results[1]?.call.callId, 'c2');
       assert.equal(results[0]?.result.status, 'executed');
       assert.equal(results[1]?.result.status, 'executed');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('passes the run-bound client to batched follow-up construction', async () => {
+    const probe: DispatchProbe = { events: [], inFlight: 0, maxInFlight: 0 };
+    const runClient = { route: 'personal' };
+    let receivedClient: unknown;
+    const { node, dispose } = dispatchHarness({
+      tools: {
+        grep: probeTool(probe, 'grep', 0, { parallelSafe: true }),
+      },
+      runClient,
+      modelHandlerOverrides: {
+        requiresBatchedParallelToolResults: true,
+        createBatchedToolUseFollowUpMessages: async (
+          _entries: unknown,
+          _workspace: unknown,
+          _text: unknown,
+          client: unknown,
+        ) => {
+          receivedClient = client;
+          return [];
+        },
+      },
+    });
+    const calls = [
+      makeCall('c1', 'grep', { pattern: 'a' }),
+      makeCall('c2', 'grep', { pattern: 'b' }),
+    ];
+    const shared = { toolCalls: calls, shouldStop: false, messages: [] };
+
+    try {
+      const prepped = await internals(node).prep(shared);
+      const results = await execPrepped(node, prepped);
+      await internals(node).post(shared, prepped, results);
+
+      assert.equal(receivedClient, runClient);
     } finally {
       dispose();
     }

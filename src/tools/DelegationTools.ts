@@ -107,18 +107,18 @@ export class WorkflowAgentTool extends defineTool({
   // resolveAgentTools boundary.
   description: `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
+Delegations run asynchronously: when subtasks are independent, launch them all in one turn and continue your own work — each result arrives automatically as a follow-up message.
+
 Available agents: loaded from the active roster at runtime.
 
-Pick the agent whose description matches the task — don't default to correct. correct is for proofreading only. For applying review suggestions use apply; for new derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize.
+Pick the agent whose description matches the task — do not default to the first listed agent.
 
 Available models: loaded from the active API mode at runtime.
 Largest models for deep reasoning; long-context for lengthy tedious work; cost-effective for parallel routine work.
 
 Optional auto-attach from the input LaTeX:
 - extractFigures=true: pull \\includegraphics / \\begin{overpic} figures into mediaFiles.
-- extractTikz=true: compile TikZ figures into standalone PDFs and attach.
-
-Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instruction="Quantum error correction paper. Fix grammar, tighten sentences, keep terminology consistent — especially in the abstract and intro."`,
+- extractTikz=true: compile TikZ figures into standalone PDFs and attach.`,
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
@@ -220,17 +220,15 @@ export class DelegateAgentTool extends defineTool({
 
 **Resume** (with execution_id): Sends follow-up instructions to a WAITING or still-running subagent. If the subagent is busy, the instruction is queued for its next turn. The subagent keeps its full history. Result arrives asynchronously like the original delegation.
 
-When a subagent result is delivered, preserve its stated evidence, tool names, and caveats accurately; do not substitute or invent methods while summarizing it for the user.
+Delegations run asynchronously: when subtasks are independent, launch them all in one turn and continue your own work — each result arrives automatically as a follow-up message.
 
 Available agents: loaded from the active roster at runtime.
 
-Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. When using a general-purpose agent, state why the work does not map cleanly to a listed specialist.
+Agent selection: choose the most specific agent whose description matches the task.
 
 Available models: loaded from the active API mode at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
-Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
-Example (new, targeted LaTeX repair): agent=latexFixer, instruction="Fix the unresolved citation commands on slides 3 and 7 in slides/talk.tex using refs.bib."
 Example (resume): execution_id=exec_abc123, instruction="Also fix the bibliography slide formatting."
 
 Git worktree support: resolved from the active workspace at runtime.`,

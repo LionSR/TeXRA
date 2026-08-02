@@ -8,19 +8,32 @@ import { renderPrompt } from '@utils/prompt';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 
-/** Instructions appended to tool-use agent prompts */
+/**
+ * Instructions appended to tool-use agent prompts.
+ *
+ * The tool-call mechanics block is provider-gated: OpenAI-compatible providers
+ * (DeepSeek, Kimi, GLM, MiniMax, …) need the schema/JSON/multi_tool_use
+ * guardrails and the sequential-call constraint (Google/DeepSeek thought-
+ * signature batching assumes ordered follow-ups). Anthropic models handle
+ * parallel tool calls natively — the handler batches parallel results into the
+ * canonical single-assistant/single-user shape — so they get the parallel
+ * encouragement instead of the weak-model boilerplate.
+ */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
-IMPORTANT — Working directory: The bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
+Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
 Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, todos, file access, or a tool, do not use it; report any resulting conflict instead.
 
-When using a tool, follow the JSON schema exactly and include all required properties.
-Always produce valid JSON when calling a tool.
 Prefer using tools over asking the user to take manual actions.
 If you say you will perform an action, immediately call the corresponding tool.
-When an approved plan or autonomous objective is active, work toward it end to end: keep going and verify against real evidence rather than pausing to confirm each step or to summarize progress, and stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
-Never mention tool names when speaking to the user.
+{% if IS_ANTHROPIC_MODEL %}Independent tool calls may be issued together in one response; sequence only calls that depend on an earlier result.
+{% else %}When using a tool, follow the JSON schema exactly and include all required properties.
+Always produce valid JSON when calling a tool.
 Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.
+{% endif %}Do only what the task requires — do not refactor, restructure, or "improve" material beyond it. When the user describes a problem without asking for a change, deliver your assessment before editing files.
+When an approved plan or autonomous objective is active, work toward it end to end: keep going and verify against real evidence rather than pausing to confirm each step or to summarize progress, and stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
+In replies, lead with the outcome; keep responses short by being selective about what to include, not by compressing the writing.
+Never mention tool names when speaking to the user.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 {% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
 {% if AVAILABLE_SKILLS %}
@@ -33,26 +46,9 @@ The following imported skills are available. If one is relevant, inspect its SKI
 
 /** Base memory instructions for all agents with memory enabled. */
 const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
-Pinned memories are always loaded (unless the user forbids memory use): at session start, \`view\` the \`/memories\` directory to find entries marked [pinned] — if the listing is truncated, continue it until you have seen every [pinned] entry — then \`view\` each pinned file so its content actually applies, regardless of how self-contained the request looks. Beyond that, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context; for a self-contained request, do not read unpinned memory files or write memory merely because the tool is available (the directory listing itself is fine — needed to find pinned entries).
+Pinned memories are always loaded (unless the user forbids memory use): at session start, \`view\` the \`/memories\` directory to find entries marked [pinned] — if the listing is truncated, continue it until you have seen every [pinned] entry — then \`view\` each pinned file so its content actually applies, regardless of how self-contained the request looks. Pinned entries are the core reusable insights (techniques, strategies, pitfalls) accumulated across sessions; the directory listing alone does not load their content. Beyond that, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context; for a self-contained request, do not read unpinned memory files or write memory merely because the tool is available (the directory listing itself is fine — needed to find pinned entries).
 
-MEMORY PROTOCOL:
-1. At session start (unless the user forbids memory use), \`view\` \`/memories\`, then \`view\` each [pinned] file found; when memory is relevant beyond that, review the rest of the directory for earlier progress.
-2. ... (work on the task) ...
-   - For long-running work that needs continuity, record durable progress and decisions in memory.
-   - Record user preferences: writing style, coding conventions, formatting requirements, workflow preferences, and any explicit or implicit guidelines the user follows.
-   - When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them.
-
-Your memory persists across conversations, allowing you to continue tasks and remember user preferences over time.
-
-Note: when editing your memory folder, always try to keep its content up-to-date, coherent and organized. You can rename or delete files that are no longer relevant. Do not create new files unless necessary.
-
-PINNED MEMORIES:
-Some memories may be marked as "pinned" (shown with [pinned] in directory listings and file headers). These are core long-term insights—techniques, strategies, pitfalls, and best practices accumulated over time. They represent the kind of knowledge a seasoned researcher would build up through years of project experience.
-
-- Always read each pinned memory file at session start (unless the user forbids memory use), even for requests that otherwise look self-contained; they contain the most valuable accumulated knowledge, and the directory listing alone does not load their content.
-- When you discover a reusable trick, technique, strategy, pitfall, or best practice, consider using the \`pin\` command to mark it as a core memory.
-- Do NOT pin task-specific progress notes or ephemeral status updates. Only pin long-term reusable insights.
-- Use \`unpin\` to remove the pinned status when a memory is no longer relevant as a core insight.
+Your memory persists across conversations. When memory is in play, record durable progress, decisions, and user preferences (writing style, conventions, formatting, workflow) — keep the folder current and organized, updating, renaming, or deleting files rather than duplicating them, and do not store what the workspace files already state. When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them. \`pin\` only long-term reusable insights, never task-specific progress notes; \`unpin\` entries that no longer earn their place.
 </memory_tool_instructions>`;
 
 /** Memory instructions for orchestrators that launch subagents. */

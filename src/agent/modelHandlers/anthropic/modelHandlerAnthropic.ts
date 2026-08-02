@@ -388,6 +388,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
+  /**
+   * Parallel tool results must land as one assistant message carrying all
+   * tool_use blocks plus one user message of tool_result blocks — the wire
+   * shape the API documents for parallel tool use, and the only one that
+   * replays thinking blocks correctly on adaptive-thinking models. See
+   * `createBatchedToolUseFollowUpMessages`.
+   */
+  override get requiresBatchedParallelToolResults(): boolean {
+    return true;
+  }
+
   async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<Anthropic> {
@@ -1469,14 +1480,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
   }
 
-  async createToolUseFollowUpMessages(
-    client: Anthropic | undefined,
-    call: AnthropicToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
+  /**
+   * Assistant-side content preceding tool_use blocks. Consumes the stored
+   * assistant content (or reconstructs thinking/server-tool blocks) exactly
+   * once per model response, so it must be called once per follow-up turn,
+   * before any tool_use blocks are appended.
+   */
+  private buildToolCallAssistantContent(
     workspaceState?: AgentWorkspaceState,
     text?: string,
-  ): Promise<MessageParam[]> {
+  ): ContentBlockParam[] {
     const content: ContentBlockParam[] = [];
 
     // Use stored assistant content if available - preserves original order from API
@@ -1515,19 +1528,101 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    // Add tool_use block at the end
-    const toolInput = call.raw.input ?? {};
+    return content;
+  }
+
+  async createToolUseFollowUpMessages(
+    client: Anthropic | undefined,
+    call: AnthropicToolCall,
+    result: ToolResult,
+    attachments: ToolFileAttachment[],
+    workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): Promise<MessageParam[]> {
+    const content = this.buildToolCallAssistantContent(workspaceState, text);
     content.push({
       type: 'tool_use',
       id: call.callId,
       name: call.name,
-      input: toolInput,
+      input: call.raw.input ?? {},
     });
-    const callMsg: MessageParam = {
-      role: 'assistant',
-      content,
-    };
 
+    const resultBlock = await this.buildToolResultBlock(
+      client,
+      call,
+      result,
+      attachments,
+    );
+    return [
+      { role: 'assistant', content },
+      { role: 'user', content: [resultBlock] },
+    ];
+  }
+
+  /**
+   * Batched variant for parallel tool calls: one assistant message carrying
+   * the original response content plus ALL tool_use blocks, then ONE user
+   * message with all tool_result blocks. This is the wire shape Anthropic
+   * documents for parallel tool use — splitting results into alternating
+   * per-call message pairs reads as sequential history and trains the model
+   * away from parallel calls (and would replay thinking blocks incorrectly).
+   */
+  async createBatchedToolUseFollowUpMessages(
+    entries: Array<{
+      call: AnthropicToolCall;
+      result: ToolResult;
+      attachments: ToolFileAttachment[];
+    }>,
+    workspaceState?: AgentWorkspaceState,
+    text?: string,
+    client?: Anthropic,
+  ): Promise<MessageParam[]> {
+    if (entries.length === 0) return [];
+
+    const content = this.buildToolCallAssistantContent(workspaceState, text);
+    for (const { call } of entries) {
+      content.push({
+        type: 'tool_use',
+        id: call.callId,
+        name: call.name,
+        input: call.raw.input ?? {},
+      });
+    }
+
+    const uploadClient =
+      this.supportsToolResultFileUpload &&
+      entries.some((entry) => entry.attachments.length > 0)
+        ? (client ?? (await this.getClient()))
+        : undefined;
+
+    // Sequential on purpose: uploads share the PDF-page tracking state.
+    const resultBlocks: ContentBlockParam[] = [];
+    for (const { call, result, attachments } of entries) {
+      resultBlocks.push(
+        await this.buildToolResultBlock(
+          uploadClient,
+          call,
+          result,
+          attachments,
+        ),
+      );
+    }
+
+    return [
+      { role: 'assistant', content },
+      { role: 'user', content: resultBlocks },
+    ];
+  }
+
+  /**
+   * Build one tool_result block, uploading attachments when supported.
+   */
+  private async buildToolResultBlock(
+    client: Anthropic | undefined,
+    call: AnthropicToolCall,
+    result: ToolResult,
+    attachments: ToolFileAttachment[],
+  ): Promise<ContentBlockParam> {
     // Result is already sanitized by source - use the passed attachments
     // Create mutable copy with explicit type to avoid type assertions later
     const sanitizedResult: ToolResult = { ...result };
@@ -1652,19 +1747,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    const resultMsg: MessageParam = {
-      role: 'user',
-      content: [
-        {
-          type: 'tool_result',
-          tool_use_id: call.callId,
-          content: toolResultContent,
-          is_error: result.status === 'error' || undefined,
-        },
-      ],
+    return {
+      type: 'tool_result',
+      tool_use_id: call.callId,
+      content: toolResultContent,
+      is_error: result.status === 'error' || undefined,
     };
-
-    return [callMsg, resultMsg];
   }
 
   // =========================================================================

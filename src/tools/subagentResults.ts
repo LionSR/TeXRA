@@ -461,6 +461,8 @@ export function formatPostCompactionContext(
     note +=
       ' Any active executions listed below may still be running and their results will be delivered as follow-up messages when they complete.';
   }
+  note +=
+    ' Continue the task from this state — do not stop, re-plan from scratch, or suggest starting a new session.';
 
   const lines: string[] = ['<post-compaction-context>', `<note>${note}</note>`];
 

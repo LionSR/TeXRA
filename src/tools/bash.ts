@@ -646,9 +646,9 @@ export class BashTool extends defineTool({
         `Command launched in background.`,
         `Execution ID: ${executionId}`,
         `Stream tab: ${childStreamId}`,
+        'Result arrives automatically as a follow-up message when complete — continue other work or end your turn.',
         `To read its output so far (works while it runs): executions tool with path=/executions/${executionId}/output`,
-        `To wait for completion: executions tool with path=/executions/${executionId} action=wait`,
-        'Result will be delivered as a follow-up message when complete.',
+        `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${executionId} action=wait`,
       ].join('\n'),
     };
   }

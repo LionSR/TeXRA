@@ -70,7 +70,7 @@ prompts:
           <Round 1: Direct instruction to produce the output as <documents><document name="output.tex">...</document></documents>.>
         # For 2-round agents, add a second entry:
         # - |
-        #   <Round 2: Reflection and refinement instruction with bullet-form failure-mode probes,
+        #   <Round 2: Reflection and refinement instruction with a brief critique of the produced output,
         #    then output the updated <documents><document name="output.tex">...</document></documents>.>
 
     Here is a complete real-world example for reference (the "polish" agent):
@@ -104,11 +104,12 @@ prompts:
           Critically reflect on the changes and output a further enhanced version. Check for these
           failure modes and fix any you find:
           \begin{itemize}
-              \item Find the three weakest changes you made and how to fix them.
+              \item Review each change you made: is it inaccurate, unnecessary, or damaging to flow? Fix the ones that are. If a change holds up, leave it alone --- do not invent weaknesses to satisfy this checklist.
               \item Are any equations or notations from the original now missing or used before defined?
               \item Did you add generic filler sentences? Use ``show not tell.''
               \item Did you change anything NOT required by the instruction? If so, revert it.
           \end{itemize}
+          If the previous output already satisfies the instruction and no failure modes apply, reproduce it unchanged.
           Output the further enhanced content as <documents>{% for output in INPUT_FILES %}<document name="{{ output }}">...</document>{% endfor %}</documents>.
 
     IMPORTANT REMINDERS:

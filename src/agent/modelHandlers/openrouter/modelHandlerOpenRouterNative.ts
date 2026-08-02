@@ -111,7 +111,8 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
    * OpenRouter proxies multiple underlying providers behind a single handler
    * class (config.provider is preserved through routing), so batching must be
    * decided by the routed-through provider rather than the handler class —
-   * mirroring the Google/DeepSeek/Kimi/MiniMax direct-handler overrides.
+   * mirroring the Anthropic/Google/DeepSeek/Kimi/MiniMax direct-handler
+   * overrides.
    * Keyed on provider identity rather than `capabilities.supportsReasoning`
    * for the same reason those direct-handler overrides are — see the base
    * getter's doc comment (#7101 triage).
@@ -119,6 +120,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   override get requiresBatchedParallelToolResults(): boolean {
     const { provider } = this.config;
     return (
+      provider === ModelProvider.ANTHROPIC ||
       provider === ModelProvider.GOOGLE ||
       provider === ModelProvider.DEEPSEEK ||
       provider === ModelProvider.MOONSHOT ||

@@ -132,7 +132,6 @@ Example queries:
 - "|- _ < _ → tsum _ < tsum _" - search by hypothesis pattern
 
 Supports batched queries: pass an array of strings to search multiple identifiers in one call.
-Example: query: ["Matrix.mul_assoc", "Matrix.transpose_mul", "List.map_append"]
 
 Returns: name, type signature, module (for imports), and documentation.
 
