@@ -15,12 +15,15 @@ type PersistedStreamIdResolutionSource =
   'executionMeta' | 'streamDataMeta' | 'streamDataSuffix' | 'streamLogsSuffix';
 
 export interface PersistedStreamIdResolution {
-  readonly streamId: StreamTabId;
+  /** Canonical stream when registration or persisted evidence proves one. */
+  readonly streamId?: StreamTabId;
   readonly source: PersistedStreamIdResolutionSource;
   /** Other persisted candidates to try when a historical primary is empty. */
   readonly fallbackStreamIds?: readonly StreamTabId[];
-  /** Exact execution matches with no persisted parent, for archive merging. */
-  readonly associatedRootStreamIds?: readonly StreamTabId[];
+  /** Exact-execution sidecars eligible for overlap-gated archive merging. */
+  readonly exactExecutionCandidateStreamIds?: readonly StreamTabId[];
+  /** Proven child associations excluded from archive ownership and row reads. */
+  readonly associatedStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -42,8 +45,10 @@ interface ExecutionStreamScan {
   readonly persistedStreams: StreamTabId[];
   /** Persisted streams whose sidecar `meta.json` claims this execution. */
   readonly metaMatched: StreamTabId[];
-  /** Exact execution matches that are not recorded as child streams. */
-  readonly rootMetaMatched: StreamTabId[];
+  /** Exact execution matches not positively identified as child streams. */
+  readonly mergeCandidateMetaMatched: StreamTabId[];
+  /** Exact execution matches positively identified as child streams. */
+  readonly childMetaMatched: StreamTabId[];
 }
 
 /**
@@ -69,11 +74,19 @@ async function scanPersistedStreamsForExecution(
     metaMatched: scanned
       .filter((candidate) => candidate.association.executionId === executionId)
       .map((candidate) => candidate.streamId),
-    rootMetaMatched: scanned
+    mergeCandidateMetaMatched: scanned
       .filter(
         (candidate) =>
           candidate.association.executionId === executionId &&
           candidate.association.parentStreamId === undefined,
+      )
+      .map((candidate) => candidate.streamId)
+      .toSorted(),
+    childMetaMatched: scanned
+      .filter(
+        (candidate) =>
+          candidate.association.executionId === executionId &&
+          candidate.association.parentStreamId !== undefined,
       )
       .map((candidate) => candidate.streamId)
       .toSorted(),
@@ -87,34 +100,6 @@ function findExecutionSuffixMatches(
 ): StreamTabId[] {
   const suffix = `#${executionId}`;
   return streams.filter((id) => id.endsWith(suffix));
-}
-
-/** Choose the data-bearing primary for an ambiguous historical record. */
-async function pickBestLegacyMetaMatch(
-  candidates: readonly StreamTabId[],
-  snapshotStore: StreamSnapshotStore,
-  streamLogStore: Pick<StreamLogStore, 'has'> | undefined,
-): Promise<StreamTabId> {
-  if (candidates.length === 1) return candidates[0];
-
-  const withData = await pMap(
-    candidates,
-    async (streamId) => {
-      const hasLog = streamLogStore?.has(streamId) ?? false;
-      return {
-        streamId,
-        hasLog,
-        hasWorkPlan:
-          hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
-      };
-    },
-    { concurrency: META_SCAN_CONCURRENCY },
-  );
-  return (
-    withData.find((entry) => entry.hasLog)?.streamId ??
-    withData.find((entry) => entry.hasWorkPlan)?.streamId ??
-    candidates[0]
-  );
 }
 
 function orderedFallbacks(
@@ -140,13 +125,17 @@ export async function findPersistedStreamFallbacksForExecution(
   options: PersistedStreamIdResolverOptions = {},
 ): Promise<StreamTabId[]> {
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched } =
+  const { persistedStreams, mergeCandidateMetaMatched, childMetaMatched } =
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
+  const excludedChildren = new Set(childMetaMatched);
   const suffixMatched = findExecutionSuffixMatches(
     [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
     executionId,
-  );
-  return orderedFallbacks(primary, [...metaMatched, ...suffixMatched]);
+  ).filter((candidate) => !excludedChildren.has(candidate));
+  return orderedFallbacks(primary, [
+    ...mergeCandidateMetaMatched,
+    ...suffixMatched,
+  ]);
 }
 
 /**
@@ -159,8 +148,12 @@ export async function findPersistedStreamFallbacksForExecution(
  * remain subject to the bounded scan because a later resume can add another
  * root sidecar. Only birth-time registrations use the constant-time path.
  *
- * `null` means no persisted stream carries this execution. Callers that have
- * a derivable stream id own that substitution.
+ * `null` means no persisted stream carries this execution. A resolution with
+ * no `streamId` means persisted associations exist but prove no canonical
+ * archive root; when unproven roots exist, they are exposed as exact-execution
+ * candidates. Callers must not substitute a candidate or proven child.
+ * Callers that receive `null` and have a derivable stream id own that
+ * compatibility substitution.
  */
 export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
@@ -175,35 +168,65 @@ export async function resolvePersistedStreamIdForExecution(
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched, rootMetaMatched } =
-    await scanPersistedStreamsForExecution(executionId, snapshotStore);
+  const {
+    persistedStreams,
+    metaMatched,
+    mergeCandidateMetaMatched,
+    childMetaMatched,
+  } = await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
-    const primaryCandidates =
-      rootMetaMatched.length > 0 ? rootMetaMatched : metaMatched;
-    const streamId = await pickBestLegacyMetaMatch(
-      primaryCandidates,
-      snapshotStore,
-      options.streamLogStore,
+    // A sole delegated stream can itself be the historical execution being
+    // resolved. Several proven children, however, are not competing archive
+    // roots and must never enter overlap-gated merging.
+    const soleDelegatedStream =
+      mergeCandidateMetaMatched.length === 0 && metaMatched.length === 1
+        ? metaMatched[0]
+        : undefined;
+    const streamId =
+      mergeCandidateMetaMatched.length === 1
+        ? mergeCandidateMetaMatched[0]
+        : soleDelegatedStream;
+    const associatedStreamIds = childMetaMatched.filter(
+      (candidate) => candidate !== streamId,
     );
-    if (metaMatched.length === 1) {
+    if (metaMatched.length === 1 && streamId) {
       await writeLegacyExecutionStreamId(executionId, streamId);
     }
+    if (!streamId) {
+      // Exact execution metadata associates every root candidate with this
+      // run, but missing parent metadata does not prove which root owns the
+      // archive. Data presence and lexical order are not canonical-ownership
+      // evidence. When every match is a proven child there are no candidates.
+      return {
+        source: 'streamDataMeta',
+        ...(mergeCandidateMetaMatched.length > 0
+          ? {
+              exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
+            }
+          : {}),
+        ...(associatedStreamIds.length > 0 ? { associatedStreamIds } : {}),
+      };
+    }
+    const excludedChildren = new Set(associatedStreamIds);
     const suffixMatched = findExecutionSuffixMatches(
       [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
       executionId,
-    );
+    ).filter((candidate) => !excludedChildren.has(candidate));
     const fallbackStreamIds = orderedFallbacks(streamId, [
-      ...metaMatched,
+      ...mergeCandidateMetaMatched,
       ...suffixMatched,
     ]);
     return {
       streamId,
       source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
-      ...(rootMetaMatched.length > 0
-        ? { associatedRootStreamIds: rootMetaMatched }
+      ...(mergeCandidateMetaMatched.length > 0
+        ? {
+            exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
+          }
         : {}),
+      ...(associatedStreamIds.length > 0 ? { associatedStreamIds } : {}),
     };
   }
 

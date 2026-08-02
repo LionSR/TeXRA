@@ -13,13 +13,18 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 import {
   cleanupTempDirs,
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { assembleTrace, StreamLogStore } from '@transcript';
+import {
+  assembleTrace,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 
 const tempDirs: string[] = [];
 
@@ -99,6 +104,84 @@ describe('assembleTrace', () => {
     const result = await assembleTrace(executionId);
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
+  });
+
+  it('reports candidate-only sidecars as ambiguous without choosing the derived fallback', async () => {
+    const executionId = 'aaa444aaa444' as ExecutionId;
+    const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const first = `orchestrator@old#${executionId}` as StreamTabId;
+    const second = `orchestrator@new#${executionId}` as StreamTabId;
+    const derived = getStreamTabId(
+      executionConfig.agent,
+      executionConfig.model,
+      { executionId },
+    );
+    expect(derived).not.toBe(first);
+    expect(derived).not.toBe(second);
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, executionConfig, executionId);
+    snapshots.setRunConfig(second, executionConfig, executionId);
+    await snapshots.flush();
+    await appendLogEntry(first, 'first candidate');
+    await appendLogEntry(second, 'second candidate');
+    await appendLogEntry(derived, 'derived fallback must not be selected');
+
+    const result = await assembleTrace(executionId);
+
+    expect(result).toEqual({
+      status: 'streamId_ambiguous',
+      candidateStreamIds: [second, first],
+    });
+  });
+
+  it('reports candidate-only sidecars as ambiguous even when execution config is absent', async () => {
+    const executionId = 'aaa446aaa446' as ExecutionId;
+    const first = `orchestrator@old#${executionId}` as StreamTabId;
+    const second = `orchestrator@new#${executionId}` as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, config(), executionId);
+    snapshots.setRunConfig(second, config(), executionId);
+    await snapshots.flush();
+
+    await expect(assembleTrace(executionId)).resolves.toEqual({
+      status: 'streamId_ambiguous',
+      candidateStreamIds: [second, first],
+    });
+  });
+
+  it('does not classify children-only associations as ambiguous or choose a fallback', async () => {
+    const executionId = 'aaa445aaa445' as ExecutionId;
+    const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = `bash@tool#${executionId}` as StreamTabId;
+    const secondChild = `codex@tool#${executionId}` as StreamTabId;
+    const derived = getStreamTabId(
+      executionConfig.agent,
+      executionConfig.model,
+      { executionId },
+    );
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstChild, config({ agent: 'bash' }), executionId);
+    snapshots.setParentStream(firstChild, parent);
+    snapshots.setRunConfig(
+      secondChild,
+      config({ agent: 'codex' }),
+      executionId,
+    );
+    snapshots.setParentStream(secondChild, parent);
+    await snapshots.flush();
+    await appendLogEntry(firstChild, 'first child must not be selected');
+    await appendLogEntry(secondChild, 'second child must not be selected');
+    await appendLogEntry(derived, 'derived fallback must not be selected');
+
+    await expect(assembleTrace(executionId)).resolves.toEqual({
+      status: 'streamLogs_missing',
+    });
   });
 
   it('resolves a child stream by executionId suffix when its id does not match the derived agent@model#executionId format', async () => {

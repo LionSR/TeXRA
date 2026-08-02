@@ -6,6 +6,7 @@ import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
+import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -138,16 +139,27 @@ export async function runHistoryExport(
 
   const traceResult = await assembleTrace(id);
   if (traceResult.status !== 'ok') {
-    if (traceResult.status === 'config_missing') {
-      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-    } else {
-      writeTextStderr(
-        `Execution ${id} exists but has no stored transcript to export (it ` +
-          'may predate transcript persistence, or the run never produced ' +
-          'any output). Run `texra history show ' +
-          id +
-          '` to see what is available.',
-      );
+    switch (traceResult.status) {
+      case 'config_missing':
+        writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+        break;
+      case 'streamLogs_missing':
+        writeTextStderr(
+          `Execution ${id} exists but has no replayable execution-root transcript ` +
+            '(it may predate transcript persistence, the run may have produced ' +
+            'no output, or only proven child transcripts may remain).',
+        );
+        break;
+      case 'streamId_ambiguous':
+        writeTextStderr(
+          `Execution ${id} has multiple associated transcript sidecars ` +
+            `(${traceResult.candidateStreamIds.join(', ')}), but no canonical ` +
+            'trace timeline can be established, so HTML trace export was ' +
+            'not written.',
+        );
+        break;
+      default:
+        assertNever(traceResult, 'Unhandled trace assembly result');
     }
     return CliExitCode.Usage;
   }

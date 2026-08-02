@@ -11,7 +11,7 @@
  */
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { StreamLogStore } from './StreamLogStore';
@@ -21,14 +21,19 @@ import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
   | { readonly status: 'ok'; readonly trace: TraceDocument }
-  | { readonly status: 'config_missing' | 'streamLogs_missing' };
+  | { readonly status: 'config_missing' | 'streamLogs_missing' }
+  | {
+      readonly status: 'streamId_ambiguous';
+      readonly candidateStreamIds: readonly StreamTabId[];
+    };
 
 /**
- * `streamLogs_missing` is the expected outcome for any execution recorded
- * before the headless-persistence fix (TeXRA#7057) — headless runs before
- * that fix never wrote a `streamLogs` file at all, so there is nothing here
- * to replay faithfully. Callers should surface that distinction rather than
- * a generic "not found".
+ * `streamId_ambiguous` means several unproven archive roots claim the
+ * execution, but persisted evidence does not identify one as canonical. By
+ * contrast, `streamLogs_missing` means no replayable execution-root timeline
+ * is available, either because the run predates transcript persistence or
+ * because its only exact associations are proven children. Callers should
+ * surface both distinctions rather than reporting a generic "not found".
  */
 export async function assembleTrace(
   executionId: ExecutionId,
@@ -41,21 +46,24 @@ export async function assembleTrace(
     executionStore.readConfig(),
     executionStore.readMeta(),
   ]);
-  if (!config) return { status: 'config_missing' };
-
-  const fallbackStreamId = getStreamTabId(config.agent, config.model, {
-    executionId,
-  });
   // One call-scoped snapshot store serves both the resolver's sidecar scan and
   // the snapshot read, so the two share its per-stream KV handles.
   const snapshotStore = new StreamSnapshotStore();
-  const streamId =
-    (
-      await resolvePersistedStreamIdForExecution(executionId, {
-        snapshotStore,
-        streamLogStore,
-      })
-    )?.streamId ?? fallbackStreamId;
+  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
+    snapshotStore,
+    streamLogStore,
+  });
+  if (resolved && !resolved.streamId) {
+    const candidateStreamIds = resolved.exactExecutionCandidateStreamIds ?? [];
+    return candidateStreamIds.length > 0
+      ? { status: 'streamId_ambiguous', candidateStreamIds }
+      : { status: 'streamLogs_missing' };
+  }
+  if (!config) return { status: 'config_missing' };
+  const fallbackStreamId = getStreamTabId(config.agent, config.model, {
+    executionId,
+  });
+  const streamId = resolved?.streamId ?? fallbackStreamId;
 
   const [, snapshot] = await Promise.all([
     streamLogStore.ensureLoaded(streamId),

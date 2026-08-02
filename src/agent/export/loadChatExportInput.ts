@@ -28,7 +28,10 @@ import { getExecutionStore, type ExecutionMeta } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { ExecutionId } from '@shared/schemas';
-import { readCompletedRunConversation } from '@transcript';
+import {
+  hasCompletedRunConversationEvidence,
+  readCompletedRunConversation,
+} from '@transcript';
 
 /**
  * Facts read from the execution store, plus the assembled
@@ -43,6 +46,8 @@ export interface ChatExportLoadResult {
   /** Normalized: `null` when absent *or* empty — an empty array never counts
    *  as "a conversation is present" (see module doc). */
   readonly conversation: readonly unknown[] | null;
+  /** Host-neutral storage evidence used to distinguish incomplete from absent. */
+  readonly hasTranscriptEvidence: boolean;
   readonly exportInput: ChatExportInput | null;
 }
 
@@ -77,15 +82,24 @@ export async function loadChatExportInput(
   const conversation = hasConversationMessages(conversationResult.conversation)
     ? conversationResult.conversation
     : null;
+  const hasTranscriptEvidence =
+    hasCompletedRunConversationEvidence(conversationResult);
 
   if (!config || !conversation) {
-    return { meta, config, conversation, exportInput: null };
+    return {
+      meta,
+      config,
+      conversation,
+      hasTranscriptEvidence,
+      exportInput: null,
+    };
   }
 
   return {
     meta,
     config,
     conversation,
+    hasTranscriptEvidence,
     exportInput: {
       timestamp: meta?.timestamp ?? new Date().toISOString(),
       description: meta?.description,
