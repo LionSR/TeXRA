@@ -4,6 +4,7 @@ import {
   childListStreamId,
   childPhaseListValue,
   childStreamListValue,
+  isWorkflowTaskListValue,
   workflowPhaseListValue,
   workflowTaskListValue,
   INITIAL_CHILD_LIST_SELECTION,
@@ -42,6 +43,13 @@ describe('CLI child list selection', () => {
       'workflowPhase:entry:phase',
     );
     expect(workflowTaskListValue('entry:task')).toBe('workflowTask:entry:task');
+    expect(isWorkflowTaskListValue(workflowTaskListValue('entry:task'))).toBe(
+      true,
+    );
+    expect(isWorkflowTaskListValue(workflowPhaseListValue('entry:phase'))).toBe(
+      false,
+    );
+    expect(isWorkflowTaskListValue(undefined)).toBe(false);
     expect(
       childListStreamId(workflowTaskListValue('entry:task')),
     ).toBeUndefined();
