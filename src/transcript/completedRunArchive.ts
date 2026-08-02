@@ -31,6 +31,7 @@ import { ToolResultSchema } from '@shared/schemas/toolResult';
 import { assertNever, generateShortId, isObject } from '@utils/core';
 
 import {
+  findPersistedRootStreamsForExecution,
   findPersistedStreamFallbacksForExecution,
   resolvePersistedStreamIdForExecution,
   type PersistedStreamIdResolution,
@@ -102,6 +103,8 @@ export interface CompletedRunConversationReadResult {
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
   readonly streamId?: StreamTabId;
+  /** All positively associated root sidecars used for a merged archive. */
+  readonly streamIds?: readonly StreamTabId[];
 }
 
 /**
@@ -387,6 +390,48 @@ async function conversationFromStream(
   return log ? streamLogEntriesToConversation(log.toJSON()) : [];
 }
 
+/** Load one stream's raw rows; `[]` when its persisted log is absent. */
+async function entriesFromStream(
+  streamLogStore: StreamLogStore,
+  streamId: StreamTabId,
+): Promise<StreamLogEntry[]> {
+  await streamLogStore.ensureLoaded(streamId);
+  return streamLogStore.get(streamId)?.toJSON() ?? [];
+}
+
+/**
+ * Merge execution-matched root sidecars by recorded time. Stream order and
+ * local sequence number break ties, and persisted row identity removes copied
+ * overlap without collapsing two distinct messages that happen to have equal
+ * text.
+ */
+async function mergedRootConversation(
+  streamLogStore: StreamLogStore,
+  streamIds: readonly StreamTabId[],
+): Promise<unknown[]> {
+  const entriesByStream = await Promise.all(
+    streamIds.map((streamId) => entriesFromStream(streamLogStore, streamId)),
+  );
+  const ordered = entriesByStream
+    .flatMap((entries, streamIndex) =>
+      entries.map((entry) => ({ entry, streamIndex })),
+    )
+    .toSorted(
+      (left, right) =>
+        left.entry.timestamp - right.entry.timestamp ||
+        left.streamIndex - right.streamIndex ||
+        left.entry.seqNo - right.entry.seqNo,
+    );
+  const seen = new Set<string>();
+  return streamLogEntriesToConversation(
+    ordered.flatMap(({ entry }) => {
+      if (seen.has(entry.id)) return [];
+      seen.add(entry.id);
+      return [entry];
+    }),
+  );
+}
+
 /**
  * Sidecar arm of the non-empty rule. Current executions normally need only
  * their registered primary. If it reconstructs empty, historical candidates
@@ -398,6 +443,33 @@ async function readSidecarConversation(
   snapshotStore: StreamSnapshotStore,
   streamLogStore: StreamLogStore,
 ): Promise<CompletedRunConversationReadResult | null> {
+  // Current executions register one canonical stream at birth; a disk-backed
+  // release/reopen regression proves resumed turns append there. Only
+  // pre-registration resolutions can represent historical split sidecars, so
+  // keep the ordinary completed-read path constant-time.
+  const rootStreamIds =
+    resolved.source === 'executionMeta'
+      ? []
+      : await findPersistedRootStreamsForExecution(executionId, snapshotStore);
+  if (rootStreamIds.length > 0) {
+    const orderedRoots = [
+      ...(rootStreamIds.includes(resolved.streamId) ? [resolved.streamId] : []),
+      ...rootStreamIds.filter((streamId) => streamId !== resolved.streamId),
+    ];
+    const conversation = await mergedRootConversation(
+      streamLogStore,
+      orderedRoots,
+    );
+    if (conversation.length > 0) {
+      return {
+        conversation,
+        source: 'streamLog',
+        streamId: orderedRoots[0],
+        ...(orderedRoots.length > 1 ? { streamIds: orderedRoots } : {}),
+      };
+    }
+  }
+
   const primaryConversation = await conversationFromStream(
     streamLogStore,
     resolved.streamId,

@@ -107,15 +107,16 @@ describe('resolvePersistedStreamIdForExecution', () => {
       const resolveStore = new StreamSnapshotStore();
       let inFlight = 0;
       let maxInFlight = 0;
-      vi.spyOn(resolveStore, 'readPersistedExecutionId').mockImplementation(
-        async () => {
-          inFlight++;
-          maxInFlight = Math.max(maxInFlight, inFlight);
-          await new Promise((resolve) => setTimeout(resolve, 5));
-          inFlight--;
-          return undefined;
-        },
-      );
+      vi.spyOn(
+        resolveStore,
+        'readPersistedStreamAssociation',
+      ).mockImplementation(async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight--;
+        return {};
+      });
 
       await resolvePersistedStreamIdForExecution('abcdff' as ExecutionId, {
         snapshotStore: resolveStore,

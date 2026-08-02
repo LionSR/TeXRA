@@ -715,6 +715,7 @@ describe('completedRunArchive facade', () => {
     const snapshots = new StreamSnapshotStore();
     snapshots.setRunConfig(emptyStream, runConfig('bash'), executionId);
     snapshots.setRunConfig(fullStream, runConfig('orchestrator'), executionId);
+    snapshots.setParentStream(emptyStream, fullStream);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();
@@ -746,6 +747,75 @@ describe('completedRunArchive facade', () => {
         },
       ],
     });
+  });
+
+  it('merges matched roots, excluding children and only deduplicating row identity', async () => {
+    const executionId = '0888bb0888bb' as ExecutionId;
+    const firstRoot = 'aOrchestrator@old#0888bb0888bb' as StreamTabId;
+    const secondRoot = 'bOrchestrator@new#0888bb0888bb' as StreamTabId;
+    const child = 'child@tool#0888bb0888bb' as StreamTabId;
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstRoot, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(secondRoot, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(child, runConfig('bash'), executionId);
+    snapshots.setParentStream(child, firstRoot);
+    await snapshots.flush();
+
+    const firstQuestion = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'First question',
+    });
+    const firstAnswer = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'First answer',
+    });
+    const secondQuestion = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Second question',
+    });
+    const secondAnswer = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      // Equal text with a distinct row identity is a real second message.
+      text: 'First answer',
+    });
+    const childMessage = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Child implementation detail',
+    });
+
+    const logs = await StreamLogStore.open();
+    logs.append(firstRoot, firstQuestion);
+    logs.append(firstRoot, firstAnswer);
+    // The resumed sidecar copied the last settled row before appending turn 2.
+    logs.append(secondRoot, firstAnswer);
+    logs.append(secondRoot, secondQuestion);
+    logs.append(secondRoot, secondAnswer);
+    logs.append(child, childMessage);
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId: firstRoot,
+      streamIds: [firstRoot, secondRoot],
+      conversation: [
+        { role: 'user', content: 'First question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First answer' }],
+        },
+        { role: 'user', content: 'Second question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First answer' }],
+        },
+      ],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain(
+      `Merged streams: ${firstRoot}, ${secondRoot}`,
+    );
+    expect(endpoint.output).not.toContain('Child implementation detail');
+    expect(endpoint.output?.split('First answer')).toHaveLength(3);
   });
 
   it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {

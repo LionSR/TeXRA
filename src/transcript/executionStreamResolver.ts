@@ -36,6 +36,8 @@ interface ExecutionStreamScan {
   readonly persistedStreams: StreamTabId[];
   /** Persisted streams whose sidecar `meta.json` claims this execution. */
   readonly metaMatched: StreamTabId[];
+  /** Exact execution matches that are not recorded as child streams. */
+  readonly rootMetaMatched: StreamTabId[];
 }
 
 /**
@@ -52,16 +54,38 @@ async function scanPersistedStreamsForExecution(
     persistedStreams,
     async (streamId) => ({
       streamId,
-      executionId: await snapshotStore.readPersistedExecutionId(streamId),
+      association: await snapshotStore.readPersistedStreamAssociation(streamId),
     }),
     { concurrency: META_SCAN_CONCURRENCY },
   );
   return {
     persistedStreams,
     metaMatched: scanned
-      .filter((candidate) => candidate.executionId === executionId)
+      .filter((candidate) => candidate.association.executionId === executionId)
       .map((candidate) => candidate.streamId),
+    rootMetaMatched: scanned
+      .filter(
+        (candidate) =>
+          candidate.association.executionId === executionId &&
+          candidate.association.parentStreamId === undefined,
+      )
+      .map((candidate) => candidate.streamId)
+      .toSorted(),
   };
+}
+
+/**
+ * Persisted root streams positively associated with an execution. A suffix
+ * resemblance is deliberately insufficient, and a stream carrying
+ * `parentStreamId` is excluded so archive repair never folds child output into
+ * its parent's conversation.
+ */
+export async function findPersistedRootStreamsForExecution(
+  executionId: ExecutionId,
+  snapshotStore: StreamSnapshotStore = new StreamSnapshotStore(),
+): Promise<StreamTabId[]> {
+  return (await scanPersistedStreamsForExecution(executionId, snapshotStore))
+    .rootMetaMatched;
 }
 
 /** Streams whose id carries the `#executionId` suffix, in the given order. */
