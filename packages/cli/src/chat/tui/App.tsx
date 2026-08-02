@@ -406,6 +406,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (workflowDashboardRoot) {
       if (activeStreamId === workflowDashboardRoot.streamId) return;
       const matchingTask = workflowChildTaskIndex.get(activeStreamId);
+      if (matchingTask === null) return;
       if (matchingTask) {
         dispatchChildListSelection({
           kind: 'highlight',
