@@ -16,22 +16,24 @@ import type {
   HostRetryRequest,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
+import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
+import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   appendCliApiSwitchHint,
   approvalPromptAllowed,
-  createHeadlessCliHostInteractions,
-  formatAgentProposalApprovalSummary,
-  formatRetryRequestMessage,
-  formatToolEditApprovalSummary,
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
-} from '@cli/runtime/approvalAdapter';
-import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
-import type { CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPolicy';
+  type CliApprovalPromptHooks,
+} from '@cli/runtime/approval/approvalPolicy';
+import {
+  formatAgentProposalApprovalSummary,
+  formatRetryRequestMessage,
+  formatToolEditApprovalSummary,
+} from '@cli/runtime/approval/approvalSummaries';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,

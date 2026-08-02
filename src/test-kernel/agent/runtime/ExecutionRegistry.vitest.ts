@@ -26,6 +26,7 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_STATUS,
+  STREAM_SUBSTATE,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -162,7 +163,7 @@ describe('executionRegistry', () => {
   it('settles without persisting a stopped waiting handle after lease loss', async () => {
     const events = new SessionEventHub();
     const streamStatus = new StreamStatusMachine(events);
-    const registry = new ExecutionRegistry({ streamStatus });
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-waiting-lease-lost' as ExecutionId;
     const streamId = 'stream-waiting-lease-lost' as StreamTabId;
     const handle = createHandle(executionId, streamId, streamId);
@@ -172,7 +173,9 @@ describe('executionRegistry', () => {
       registry.track(handle);
       handle.suspend(() => {});
       handle.markExecutionLeaseLost();
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       await expect(handle.result).resolves.toMatchObject({
@@ -230,8 +233,9 @@ describe('executionRegistry', () => {
     // ordinary resumable agent execution (e.g. a native subagent loop, whose
     // own loop-level interrupt handler must stay untouched so restart recovery
     // can resume it). Drain must reach only the former.
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const bashExecutionId = 'exec-background-bash-drain-test';
     const bashParentStreamId =
       'parent-background-bash-drain-test' as StreamTabId;
@@ -292,8 +296,9 @@ describe('executionRegistry', () => {
   });
 
   it('uses the handle interrupt target when terminating agent handles', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-injected-interrupt-test';
     const parentStreamId = 'parent-injected-interrupt-test' as StreamTabId;
     const childStreamId = 'child-injected-interrupt-test' as StreamTabId;
@@ -319,8 +324,9 @@ describe('executionRegistry', () => {
     // stays tracked for resume. With no interrupt target left, terminate()
     // must fall back to the parked teardown rather than no-op and strand the
     // handle registered forever.
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-waiting-cleanup-kill-test';
     const parentStreamId = 'parent-waiting-cleanup-kill-test' as StreamTabId;
     const childStreamId = 'child-waiting-cleanup-kill-test' as StreamTabId;
@@ -333,11 +339,9 @@ describe('executionRegistry', () => {
       // No handle interrupt target: mirrors a suspended subagent whose live
       // tool-use session has already been disposed. The stream phase follows
       // the same suspension, as it does in production.
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       await handle.result;
@@ -363,11 +367,8 @@ describe('executionRegistry', () => {
     const events = new SessionEventHub();
     const streamStatus = new StreamStatusMachine(events);
     const publishResult = vi.fn();
-    const registry = new ExecutionRegistry({
-      streamStatus,
-      events,
-      publishResult,
-    });
+    const registry = new ExecutionRegistry({ streamStatus, events });
+    registry.attachSessionEvents(events, publishResult);
     const executionId = 'exec-waiting-kill-publish-result-test';
     const parentStreamId =
       'parent-waiting-kill-publish-result-test' as StreamTabId;
@@ -388,11 +389,9 @@ describe('executionRegistry', () => {
       registry.track(handle);
       handle.suspend(() => {});
       // Genuinely suspended: only `transitionToWaiting` reaches this status.
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       await handle.result;
@@ -428,10 +427,12 @@ describe('executionRegistry', () => {
   });
 
   it('publishes a waiting cancellation after its transcript cleanup settles', async () => {
-    const streamStatus = new StreamStatusMachine();
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const order: string[] = [];
     const publishResult = vi.fn(() => order.push('publish'));
-    const registry = new ExecutionRegistry({ streamStatus, publishResult });
+    const registry = new ExecutionRegistry({ streamStatus, events });
+    registry.attachSessionEvents(events, publishResult);
     const executionId = 'exec-waiting-cleanup-order' as ExecutionId;
     const childStreamId = 'child-waiting-cleanup-order' as StreamTabId;
     let finishCleanup = (): void => undefined;
@@ -450,11 +451,9 @@ describe('executionRegistry', () => {
         await cleanupGate;
         order.push('cleanup');
       });
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       await Promise.resolve();
@@ -477,9 +476,11 @@ describe('executionRegistry', () => {
 
   it('hands a waiting stop to a successor tracked during cleanup', async () => {
     storageMocks.finalizeExecution.mockClear();
-    const streamStatus = new StreamStatusMachine();
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const publishResult = vi.fn();
-    const registry = new ExecutionRegistry({ streamStatus, publishResult });
+    const registry = new ExecutionRegistry({ streamStatus, events });
+    registry.attachSessionEvents(events, publishResult);
     const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
     const childStreamId = 'child-waiting-stop-handoff' as StreamTabId;
     let finishCleanup = (): void => undefined;
@@ -495,11 +496,9 @@ describe('executionRegistry', () => {
       );
       registry.track(previous);
       previous.suspend(() => cleanupGate);
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
 
@@ -529,8 +528,9 @@ describe('executionRegistry', () => {
   });
 
   it('does not let lost-generation recovery mutate a successor handle or lease', async () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const releaseLease = vi.fn(async () => undefined);
     registry.attachRootExecutionLeaseRelease(releaseLease);
     const executionId = 'exec-waiting-lost-generation' as ExecutionId;
@@ -545,7 +545,9 @@ describe('executionRegistry', () => {
       });
       registry.track(previous);
       previous.suspend(() => undefined);
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.WAITING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       const successor = createHandle(executionId, streamId, streamId);
@@ -561,13 +563,12 @@ describe('executionRegistry', () => {
   });
 
   it('settles waiting termination when detached publication throws', async () => {
-    const streamStatus = new StreamStatusMachine();
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const publishFailure = new Error('terminal subscriber failed');
-    const registry = new ExecutionRegistry({
-      streamStatus,
-      publishResult: () => {
-        throw publishFailure;
-      },
+    const registry = new ExecutionRegistry({ streamStatus, events });
+    registry.attachSessionEvents(events, () => {
+      throw publishFailure;
     });
     const executionId = 'exec-waiting-publication-failure' as ExecutionId;
     const childStreamId = 'child-waiting-publication-failure' as StreamTabId;
@@ -580,11 +581,9 @@ describe('executionRegistry', () => {
       );
       registry.track(handle);
       handle.suspend(() => {});
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       await expect(handle.result).resolves.toMatchObject({
@@ -599,8 +598,9 @@ describe('executionRegistry', () => {
   });
 
   it('settles and untracks a waiting handle when terminal metadata persistence fails', async () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-waiting-kill-metadata-failure' as ExecutionId;
     const parentStreamId =
       'parent-waiting-kill-metadata-failure' as StreamTabId;
@@ -618,11 +618,9 @@ describe('executionRegistry', () => {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
       handle.suspend(() => {});
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
 
@@ -652,8 +650,9 @@ describe('executionRegistry', () => {
   });
 
   it('persists a waiting stop after transcript cleanup fails', async () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
     const parentStreamId = 'parent-waiting-cleanup-failure' as StreamTabId;
     const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
@@ -669,11 +668,9 @@ describe('executionRegistry', () => {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
       handle.suspend(() => Promise.reject(cleanupError));
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
 
@@ -695,8 +692,9 @@ describe('executionRegistry', () => {
   });
 
   it('persists a waiting stop when only flow-record deletion fails', async () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-waiting-kill-flow-delete-failure' as ExecutionId;
     const parentStreamId =
       'parent-waiting-kill-flow-delete-failure' as StreamTabId;
@@ -715,11 +713,9 @@ describe('executionRegistry', () => {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
       handle.suspend(() => {});
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
 
@@ -752,8 +748,9 @@ describe('executionRegistry', () => {
     // or the fallback could spuriously tear down a handle mid-completion, in
     // the narrow window between its own interrupt unregister and its own
     // untrack.
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-no-cleanup-kill-test';
     const parentStreamId = 'parent-no-cleanup-kill-test' as StreamTabId;
     const childStreamId = 'child-no-cleanup-kill-test' as StreamTabId;
@@ -776,8 +773,9 @@ describe('executionRegistry', () => {
     // projection of it. A stop landing in the narrow window between a live
     // turn's interrupt-handler detach and its own untrack must not abandon a
     // run that never parked, no matter what phase the stream currently shows.
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-never-suspended-phase-only-test';
     const parentStreamId =
       'parent-never-suspended-phase-only-test' as StreamTabId;
@@ -787,11 +785,9 @@ describe('executionRegistry', () => {
     try {
       const handle = createHandle(executionId, parentStreamId, childStreamId);
       registry.track(handle);
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       expect(registry.kill(executionId)).toBe(false);
 
@@ -807,8 +803,9 @@ describe('executionRegistry', () => {
     // `finalizeRunTerminal` is parked at its persist await cannot run the
     // suspended teardown, publish a second `result`, or persist a second
     // terminal status over the finalizer's outcome.
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-waiting-stop-after-claim' as ExecutionId;
     const childStreamId = 'child-waiting-stop-after-claim' as StreamTabId;
     const teardown = vi.fn();
@@ -834,11 +831,9 @@ describe('executionRegistry', () => {
       );
       registry.track(handle);
       handle.suspend(teardown);
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
 
       const finalized = finalizeRunTerminal({
         handle,
@@ -877,8 +872,9 @@ describe('executionRegistry', () => {
     // own interrupt context. The handle it is resuming is still parked from
     // the earlier genuine WAITING suspension, so a kill landing in that window
     // tears it down off that fact alone — no phase or substate is consulted.
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const executionId = 'exec-resuming-window-kill-test' as ExecutionId;
     const parentStreamId = 'parent-resuming-window-kill-test' as StreamTabId;
     const childStreamId = 'child-resuming-window-kill-test' as StreamTabId;
@@ -907,11 +903,10 @@ describe('executionRegistry', () => {
       handle.suspend(cleanup);
       // Mirrors resumeQueuedToolUseFromResumeData's status flip that runs ahead of
       // the resumed run's own context — RUNNING phase, RESUMING substate.
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.RESUMING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.RESUMING,
+      });
 
       expect(registry.kill(executionId)).toBe(true);
       await handle.result;
@@ -984,8 +979,9 @@ describe('executionRegistry', () => {
   });
 
   it('interrupts grandchildren when killing a subagent chain', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const rootStreamId = 'root-cascade-test' as StreamTabId;
     const childStreamId = 'child-cascade-test' as StreamTabId;
     const grandchildStreamId = 'grandchild-cascade-test' as StreamTabId;
@@ -1156,8 +1152,9 @@ describe('executionRegistry', () => {
   });
 
   it('stops one child while preserving its owner, sibling, and agent descendants', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const rootStreamId = 'root-focused-stop-test' as StreamTabId;
     const childStreamId = 'child-focused-stop-test' as StreamTabId;
     const siblingStreamId = 'sibling-focused-stop-test' as StreamTabId;
@@ -1247,12 +1244,15 @@ describe('executionRegistry', () => {
   });
 
   it('leaves an already-terminal stream phase untouched', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const streamId = 'terminal-stop-policy-test' as StreamTabId;
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.COMPLETED);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.COMPLETED,
+      });
 
       registry.stopAgentStream(streamId);
 
@@ -1263,18 +1263,17 @@ describe('executionRegistry', () => {
   });
 
   it('reports agent status from its stream-status owner', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const parentStreamId = 'parent-owned-status-test' as StreamTabId;
     const childStreamId = 'child-owned-status-test' as StreamTabId;
     const executionId = 'exec-owned-status-test';
 
     try {
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
       registry.track(createHandle(executionId, parentStreamId, childStreamId));
 
       expect(registry.getActiveChildren(parentStreamId)).toEqual([
@@ -1289,8 +1288,9 @@ describe('executionRegistry', () => {
   });
 
   it('publishes initial status when tracking an agent execution', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const parentStreamId = 'parent-track-agent-status-test' as StreamTabId;
     const childStreamId = 'child-track-agent-status-test' as StreamTabId;
     const executionId = 'exec-track-agent-status-test';
@@ -1314,8 +1314,9 @@ describe('executionRegistry', () => {
   });
 
   it('updates live agent status without reviving stopped or stale handles', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const parentStreamId = 'parent-update-agent-status-test' as StreamTabId;
     const childStreamId = 'child-update-agent-status-test' as StreamTabId;
     const executionId = 'exec-update-agent-status-test';
@@ -1329,11 +1330,9 @@ describe('executionRegistry', () => {
       ).toBe(true);
       expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
 
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_PHASE.CANCELLED,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.CANCELLED,
+      });
       expect(registry.getActiveChildren(parentStreamId)).toEqual([
         expect.objectContaining({
           executionId,
@@ -1346,11 +1345,9 @@ describe('executionRegistry', () => {
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.CANCELLED);
 
       registry.untrack(executionId);
-      seedStreamStatusForTest(
-        streamStatus,
-        childStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
       expect(
         registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
       ).toBe(false);
@@ -1583,8 +1580,9 @@ describe('executionRegistry', () => {
   });
 
   it('owns tool-use follow-up admission from status, context, and children', () => {
-    const streamStatus = new StreamStatusMachine();
-    const registry = new ExecutionRegistry({ streamStatus });
+    const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
+    const registry = new ExecutionRegistry({ streamStatus, events });
     const activeStreamId = 'stream-follow-up-active-test' as StreamTabId;
     const resumingStreamId = 'stream-follow-up-resuming-test' as StreamTabId;
     const waitingStreamId = 'stream-follow-up-waiting-test' as StreamTabId;
@@ -1613,52 +1611,43 @@ describe('executionRegistry', () => {
       );
       activeHandle.attachToolUseFlow(context);
       registry.track(activeHandle);
-      seedStreamStatusForTest(
-        streamStatus,
-        activeStreamId,
-        STREAM_STATUS.RUNNING,
-      );
+      seedStreamStatusForTest(streamStatus, activeStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       expect(registry.getToolUseFollowUpTarget(activeStreamId)).toEqual({
         kind: 'active',
         context,
       });
 
-      seedStreamStatusForTest(
-        streamStatus,
-        resumingStreamId,
-        STREAM_STATUS.RESUMING,
-      );
+      seedStreamStatusForTest(streamStatus, resumingStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.RESUMING,
+      });
       expect(registry.getToolUseFollowUpTarget(resumingStreamId)).toEqual({
         kind: 'queue',
         reason: 'resuming',
       });
 
-      seedStreamStatusForTest(
-        streamStatus,
-        waitingStreamId,
-        STREAM_STATUS.WAITING,
-      );
+      seedStreamStatusForTest(streamStatus, waitingStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
       expect(registry.getToolUseFollowUpTarget(waitingStreamId)).toEqual({
         kind: 'queue',
         reason: 'waiting',
       });
 
-      seedStreamStatusForTest(
-        streamStatus,
-        stoppedStreamId,
-        STREAM_PHASE.CANCELLED,
-      );
+      seedStreamStatusForTest(streamStatus, stoppedStreamId, {
+        phase: STREAM_PHASE.CANCELLED,
+      });
       expect(registry.getToolUseFollowUpTarget(stoppedStreamId)).toEqual({
         kind: 'no_session',
         streamStatus: STREAM_PHASE.CANCELLED,
       });
 
-      seedStreamStatusForTest(
-        streamStatus,
-        parentStreamId,
-        STREAM_PHASE.CANCELLED,
-      );
+      seedStreamStatusForTest(streamStatus, parentStreamId, {
+        phase: STREAM_PHASE.CANCELLED,
+      });
       registry.track(
         createHandle(
           'exec-follow-up-child-test',

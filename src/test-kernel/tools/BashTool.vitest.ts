@@ -41,7 +41,6 @@ import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmen
 import {
   EXECUTION_STATUS,
   STREAM_PHASE,
-  STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
@@ -317,12 +316,7 @@ describe('BashTool', () => {
     // Create and run the flow directly
     const flow = createToolUseRoundFlow();
     flow.setServices(options);
-    await withTestRunContext(
-      defaultSession().interactions,
-      'bash-tool',
-      () => flow.run(shared),
-      { session: options.runScope.session },
-    );
+    await withTestRunContext(options.runScope, () => flow.run(shared));
 
     const toolOutputMessage = messages.find(
       (msg) => (msg as any).type === 'function_call_output',
@@ -514,31 +508,27 @@ describe('BashTool', () => {
 
       const node = new ToolUseDispatchNode<OpenAI>();
       node.setServices(options);
-      await withTestRunContext(
-        defaultSession().interactions,
-        'tool-status-log',
-        () =>
-          node.post(
-            shared,
-            [call],
-            [
-              {
-                call,
-                result: {},
-                parsedInput: {},
-                extracted: {
-                  attachments: [],
-                  sanitizedResult: { status: 'executed' },
-                },
-                editedFiles: [],
-                logRef: {
-                  logId: undefined,
-                  groupId: runTrace.trace.activeStageId(),
-                },
-              } as any,
-            ],
-          ),
-        { session: options.runScope.session },
+      await withTestRunContext(options.runScope, () =>
+        node.post(
+          shared,
+          [call],
+          [
+            {
+              call,
+              result: {},
+              parsedInput: {},
+              extracted: {
+                attachments: [],
+                sanitizedResult: { status: 'executed' },
+              },
+              editedFiles: [],
+              logRef: {
+                logId: undefined,
+                groupId: runTrace.trace.activeStageId(),
+              },
+            } as any,
+          ],
+        ),
       );
 
       const completedEvent = events.findLast(
@@ -674,11 +664,9 @@ describe('BashTool', () => {
     await installPlatform(BASH_PLATFORM_OPTIONS, {
       agentResume: { tryResumeStream },
     });
-    seedStreamStatusForTest(
-      defaultSession().status,
-      parentStreamId,
-      STREAM_STATUS.WAITING,
-    );
+    seedStreamStatusForTest(defaultSession().status, parentStreamId, {
+      phase: STREAM_PHASE.WAITING,
+    });
 
     const recorded = recordSessionEvents(defaultSession().events);
 
@@ -735,11 +723,9 @@ describe('BashTool', () => {
     await installPlatform(BASH_PLATFORM_OPTIONS, {
       agentResume: { tryResumeStream },
     });
-    seedStreamStatusForTest(
-      defaultSession().status,
-      parentStreamId,
-      STREAM_STATUS.WAITING,
-    );
+    seedStreamStatusForTest(defaultSession().status, parentStreamId, {
+      phase: STREAM_PHASE.WAITING,
+    });
 
     const recorded = recordSessionEvents(defaultSession().events);
 
@@ -995,11 +981,8 @@ describe('BashTool', () => {
 
     try {
       node.setServices(options);
-      const result = await withTestRunContext(
-        defaultSession().interactions,
-        'bash-tool',
-        () => node.exec(call),
-        { session: options.runScope.session },
+      const result = await withTestRunContext(options.runScope, () =>
+        node.exec(call),
       );
 
       assert.equal(result, null);

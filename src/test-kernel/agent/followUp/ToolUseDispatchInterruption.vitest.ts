@@ -148,12 +148,8 @@ function runRound(
   services: ToolUseRoundServices,
   shared: ToolUseRoundShared,
 ): Promise<string | undefined> {
-  const { session } = services.runScope;
-  return withTestRunContext(
-    session.interactions,
-    'test-stream',
-    () => createToolUseRoundFlow().setServices(services).run(shared),
-    { session },
+  return withTestRunContext(services.runScope, () =>
+    createToolUseRoundFlow().setServices(services).run(shared),
   );
 }
 

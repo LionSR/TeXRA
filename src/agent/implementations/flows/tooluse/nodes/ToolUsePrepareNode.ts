@@ -38,6 +38,13 @@ export class ToolUsePrepareNode<C> extends Node<
       hasDelegationTools,
       isSubagent: this.services.isSubagent,
     };
+    // `MODEL` comes from the run's ModelCell rather than the launch snapshot
+    // baked into the channel, so a resume that rebuilds this prompt states the
+    // model the run is actually on.
+    const promptVars = {
+      ...userVarChannels.transient,
+      MODEL: this.services.modelCell.modelId,
+    };
 
     if (resumeShared) {
       logger.debug('Resuming tool-use session from saved state.');
@@ -57,7 +64,7 @@ export class ToolUsePrepareNode<C> extends Node<
       // it here is orthogonal to the caching concern above.
       const rebuiltPrompts = await buildInitialToolUsePrompts(
         this.services.prompt,
-        userVarChannels.transient,
+        promptVars,
         logger,
         promptOptions,
       );
@@ -90,7 +97,7 @@ export class ToolUsePrepareNode<C> extends Node<
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
       await buildInitialToolUsePrompts(
         this.services.prompt,
-        userVarChannels.transient,
+        promptVars,
         logger,
         promptOptions,
       );

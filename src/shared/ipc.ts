@@ -18,7 +18,6 @@ export const MAIN_VIEW_COMMANDS = {
   COMPARE: 'compare',
 
   // Settings
-  MODEL_SELECTED: 'modelSelected',
   SETTINGS_OPEN: 'openSettings',
 
   // File selection cases (single-file pickers; multi pickers go through SELECT_MULTIPLE_FILES)

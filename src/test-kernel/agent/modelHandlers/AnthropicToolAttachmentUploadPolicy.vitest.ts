@@ -88,4 +88,50 @@ describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)
       'the failure should be reported through the shared policy owner',
     );
   });
+
+  it('uploads an unreadable PDF without a page count and warns about the skipped budget check', async () => {
+    const { logger, warnMessages } = createWarningRecorder();
+
+    const attachments: ToolFileAttachment[] = [
+      {
+        path: 'corrupt.pdf',
+        mimeType: 'application/pdf',
+        bytes: new Uint8Array([1, 2, 3]),
+      },
+    ];
+
+    const client = {
+      beta: {
+        files: {
+          upload: async () => ({ id: 'file_pdf' }),
+        },
+      },
+    } as any;
+
+    const pageCounts: Array<[string, number]> = [];
+    const result = await uploadToolAttachments(
+      client,
+      attachments,
+      logger,
+      0,
+      (fileId, pageCount) => pageCounts.push([fileId, pageCount]),
+      100,
+    );
+
+    assert.equal(
+      result.uploaded.length,
+      1,
+      'an unparseable PDF still uploads so the API can enforce its own limit',
+    );
+    assert.equal(result.pageLimitExceeded.length, 0);
+    assert.equal(
+      pageCounts.length,
+      0,
+      'no page count is reported when the PDF cannot be parsed',
+    );
+    assert.ok(
+      warnMessages.some((m) => m.includes('corrupt.pdf')),
+      'the skipped local page-limit check must be logged, not silent',
+    );
+  });
 });

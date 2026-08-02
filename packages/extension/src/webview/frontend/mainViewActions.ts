@@ -361,7 +361,6 @@ export function changeAgent(sessionType: SessionType, value: string): void {
 
 export function changeModel(value: string): void {
   model$.set(value);
-  postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
 }
 
 export function changeWorkingDirectory(value: string): void {

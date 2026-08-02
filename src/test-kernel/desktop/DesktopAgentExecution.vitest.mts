@@ -556,11 +556,9 @@ describe('desktop follow-up submission', () => {
     const bridge = await createBridge([], {
       retrieveSessionResumeData: vi.fn(() => resumeLookup),
       configureSession: (session) => {
-        seedStreamStatusForTest(
-          session.status,
-          streamId,
-          STREAM_STATUS.WAITING,
-        );
+        seedStreamStatusForTest(session.status, streamId, {
+          phase: STREAM_PHASE.WAITING,
+        });
       },
     });
 
@@ -2277,11 +2275,9 @@ describe('DesktopProgressBridge', () => {
     });
 
     try {
-      seedStreamStatusForTest(
-        bridgeStatus(bridge),
-        'stream-1',
-        STREAM_STATUS.RUNNING,
-      );
+      seedStreamStatusForTest(bridgeStatus(bridge), 'stream-1', {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await expect(tryResumeStream('stream-1')).resolves.toBe(false);
       expect(retrieveSessionResumeData).not.toHaveBeenCalled();
@@ -3355,11 +3351,9 @@ describe('DesktopProgressBridge', () => {
         childStreamId,
         'Transient bash child',
       );
-      seedStreamStatusForTest(
-        owner.processSession.status,
-        childStreamId,
-        STREAM_PHASE.RUNNING,
-      );
+      seedStreamStatusForTest(owner.processSession.status, childStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       const followUpLease = owner.processSession.followUps.claimLive(
         childStreamId,
         'flow',

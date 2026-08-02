@@ -298,7 +298,14 @@ export async function checkCliUpdateAvailable({
   });
 }
 
-let notified = false;
+/** Once-per-process latch for {@link notifyCliUpdate}. */
+let updateNotifyStarted = false;
+
+/** Clear the once-per-process {@link notifyCliUpdate} latch. Tests only:
+ *  a process never re-runs the check. */
+export function resetCliUpdateNotifyLatchForTests(): void {
+  updateNotifyStarted = false;
+}
 
 /**
  * Once per process: check the package source for a newer release (at most
@@ -311,8 +318,8 @@ let notified = false;
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
 export async function notifyCliUpdate(context: CliContext): Promise<void> {
-  if (notified) return;
-  notified = true;
+  if (updateNotifyStarted) return;
+  updateNotifyStarted = true;
 
   const ambient = readCliAmbientState();
   if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV)) return;

@@ -22,10 +22,7 @@ import {
   workflowPhaseCallProgress,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
-import {
-  formatPhaseStageLabel,
-  formatRoundStageLabel,
-} from '@shared/streams/streamStatusDisplay';
+import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI rendering
@@ -49,7 +46,6 @@ import {
   pendingApprovalRowSuffix,
 } from './SubagentListDisplay';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { StreamStage } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 function HiddenRowSummary({
@@ -115,14 +111,6 @@ function PhaseHeader({
       ) : null}
     </Box>
   );
-}
-
-// A workflow-script run advances through phases, a tool-use run through
-// rounds; one slot carries whichever this stream has.
-function formatStageLabel(stage: StreamStage | undefined): string | undefined {
-  if (stage === undefined) return undefined;
-  if (stage.kind === 'round') return formatRoundStageLabel(stage);
-  return formatPhaseStageLabel(stage);
 }
 
 function SessionRow({

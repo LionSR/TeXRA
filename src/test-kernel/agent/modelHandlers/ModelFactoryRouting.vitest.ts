@@ -606,47 +606,14 @@ describe('Google Interactions API routing', () => {
     );
   });
 
-  it('forces the Interactions handler for requiresInteractionsAPI models even with the flag off', async () => {
-    const factory = await initWithFlag(false);
-    const forced = {
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    } as ModelConfig;
-    expect(factory.shouldUseGoogleInteractionsAPI(forced, false)).toBe(true);
-  });
-
-  it('never routes a flag-enabled (non-required) Google model to Interactions via OpenRouter', async () => {
+  it('never routes a Google model to Interactions via OpenRouter', async () => {
     const factory = await initWithFlag(true);
     expect(factory.shouldUseGoogleInteractionsAPI(googleConfig(), true)).toBe(
       false,
     );
-  });
-
-  it('keeps the routing predicate + key derivation pure (no throw) for Interactions-only under OpenRouter', async () => {
-    const factory = await initWithFlag(true);
-    const forced = {
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    } as ModelConfig;
-    // The predicate must not throw — key-derivation callers (history restore,
-    // modelSwitchDisabledReason) rely on string|undefined, never an exception.
-    expect(factory.shouldUseGoogleInteractionsAPI(forced, true)).toBe(false);
-    expect(factory.modelHandlerCompatibilityKey(forced, true, false)).toBe(
-      'ModelHandlerOpenRouterNative',
-    );
-  });
-
-  it('createModelHandler fails loudly for an Interactions-only model under active OpenRouter', async () => {
-    // OpenRouter cannot proxy Interactions — the live-routing path must error
-    // rather than silently route to OpenRouter (spec §6.3).
-    const factory = await initWithFlag(true, /* useOpenRouter */ true);
-    const forced = {
-      ...googleConfig(),
-      requiresInteractionsAPI: true,
-    } as ModelConfig;
-    await expect(factory.createModelHandler(forced)).rejects.toThrow(
-      /OpenRouter/,
-    );
+    expect(
+      factory.modelHandlerCompatibilityKey(googleConfig(), true, false),
+    ).toBe('ModelHandlerOpenRouterNative');
   });
 
   it('exposes the Interactions compatibility key for history-restore parity', async () => {

@@ -71,6 +71,10 @@ export function createTestLaunchContext({
   });
   const setting = AgentSettingSchema.parse({ agentCategory: category });
   const storageKey = executionId as StorageKey;
+  const modelCell = testModelCell(
+    { ...testModelInfo, dispose: vi.fn() },
+    config.model,
+  );
 
   return {
     config,
@@ -89,11 +93,11 @@ export function createTestLaunchContext({
     userVarChannels: { input: Object.freeze({}), transient: {} },
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
-      testModelInfo,
+      modelCell,
       { logger, storageKey, streamId },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
-    modelCell: testModelCell({ dispose: vi.fn() }, config.model),
+    modelCell,
     interrupt: () => abortController.abort(),
     disposeTrace: vi.fn(),
   };

@@ -22,10 +22,12 @@ import { z } from 'zod';
 import pTimeout from 'p-timeout';
 
 // Local imports
+import * as logger from '@logger/logUtils';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -37,6 +39,7 @@ import {
   type CslCreator,
 } from './bbtClient';
 
+const CHANNEL = 'ZoteroAddTool';
 const CROSSREF_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
 
 /**
@@ -239,7 +242,13 @@ async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
     if (work.abstract) item.abstractNote = work.abstract;
     if (work.resource?.primary?.URL) item.url = work.resource.primary.URL;
     return item;
-  } catch {
+  } catch (err) {
+    // The caller still falls back to the user's own metadata; log so a
+    // silently degraded entry is traceable to the Crossref failure.
+    logger.warn(
+      CHANNEL,
+      `Crossref lookup failed for DOI ${doi}: ${toErrorMessage(err)}`,
+    );
     return null;
   }
 }

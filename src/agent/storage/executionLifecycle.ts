@@ -220,12 +220,8 @@ export async function clearTerminalExecutionState(
   }));
 }
 
-/**
- * Persist a terminal status and its canonical outcome projection.
- * @deprecated Use {@link finalizeExecution} so flow-record disposition and
- * durability failures are handled together.
- */
-export async function writeTerminalStatus(
+/** Persist a terminal status and its canonical outcome projection. */
+async function writeTerminalStatus(
   executionId: ExecutionId,
   status: ExecutionStatus,
 ): Promise<void> {

@@ -348,11 +348,16 @@ export type AgentRunHandle = Pick<
   | 'interrupt'
 >;
 
-/** True when the handle is a child of parentStreamId (not the parent itself). */
+/**
+ * True when the handle is a child of parentStreamId (not the parent itself).
+ * Only an `AgentExecutionHandle` can be one, so callers that need the child's
+ * agent-run members narrow through this predicate rather than re-testing
+ * `instanceof` alongside it.
+ */
 export function isChildExecution(
   handle: ExecutionHandle,
   parentStreamId: StreamTabId,
-): boolean {
+): handle is AgentExecutionHandle {
   if (handle.parentStreamId !== parentStreamId) return false;
   return handle instanceof AgentExecutionHandle && handle.isChildExecution;
 }

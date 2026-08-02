@@ -166,24 +166,28 @@ describe('SettingsAgentCatalogController', () => {
       customPresets: [persistedPreset],
     });
 
-    assert.deepEqual(await controller.applyPreset('custom-team'), {
-      ok: true,
-      preset: {
-        ...persistedPreset,
-        icon: 'bookmark',
-      },
-      unresolvedNames: ['missing'],
+    const resolved = controller.resolvePreset('custom-team');
+    assert.ok(resolved.ok);
+    assert.deepEqual(resolved.preset, {
+      ...persistedPreset,
+      icon: 'bookmark',
     });
+    assert.deepEqual(resolved.resolution.unresolvedNames, ['missing']);
+    await controller.commitPresetResolution(
+      resolved.preset,
+      resolved.resolution,
+    );
+
     assert.deepEqual(enabled.workflow, ['remote:writer']);
     // Unresolved names are kept bare so the agent joins the roster the
     // moment it appears (sign-in, install) — never silently dropped.
     assert.deepEqual(enabled.toolUse, ['builtInToolUse:review', 'missing']);
   });
 
-  it('reports unknown presets without writing enabled agent state', async () => {
+  it('reports unknown presets without writing enabled agent state', () => {
     const { controller, enabled } = createController();
 
-    assert.deepEqual(await controller.applyPreset('missing'), {
+    assert.deepEqual(controller.resolvePreset('missing'), {
       ok: false,
       reason: 'unknownPreset',
     });

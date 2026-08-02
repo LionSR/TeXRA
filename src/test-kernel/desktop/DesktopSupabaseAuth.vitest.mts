@@ -76,7 +76,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     router,
     coordinator,
     oauthClient,
-    callbackState = createDesktopAuthCallbackState(),
+    callbackState = createDesktopAuthCallbackState(createLog()),
     log = createLog(),
     openExternalUrl = vi.fn(async () => {}),
     showInfoMessage = vi.fn(),
@@ -499,7 +499,10 @@ describe('desktop Supabase auth', () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const stateStore = new FakeStateStore();
-    const callbackState = createDesktopAuthCallbackState(stateStore);
+    const callbackState = createDesktopAuthCallbackState(
+      createLog(),
+      stateStore,
+    );
     const oauthClient = createOAuthClient();
     const auth = createTestAuth({
       router,
@@ -510,7 +513,10 @@ describe('desktop Supabase auth', () => {
 
     await auth.signIn();
     auth.dispose();
-    const persistedCallbackState = createDesktopAuthCallbackState(stateStore);
+    const persistedCallbackState = createDesktopAuthCallbackState(
+      createLog(),
+      stateStore,
+    );
     routeMatchingCallback(router, oauthClient);
 
     createTestAuth({
@@ -542,14 +548,17 @@ describe('desktop Supabase auth', () => {
         router,
         coordinator,
         oauthClient,
-        callbackState: createDesktopAuthCallbackState(stateStore),
+        callbackState: createDesktopAuthCallbackState(createLog(), stateStore),
       });
 
       await auth.signIn();
       auth.dispose();
 
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
-      const expiredCallbackState = createDesktopAuthCallbackState(stateStore);
+      const expiredCallbackState = createDesktopAuthCallbackState(
+        createLog(),
+        stateStore,
+      );
       createTestAuth({
         router,
         coordinator,
@@ -577,7 +586,10 @@ describe('desktop Supabase auth', () => {
     try {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
       const stateStore = new FakeStateStore();
-      const callbackState = createDesktopAuthCallbackState(stateStore);
+      const callbackState = createDesktopAuthCallbackState(
+        createLog(),
+        stateStore,
+      );
 
       await callbackState.beginAuthAttempt('attempt-nonce');
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
@@ -585,7 +597,10 @@ describe('desktop Supabase auth', () => {
       expect(callbackState.matchesPendingNonce('attempt-nonce')).toBe(false);
       expect(callbackState.hasPendingSignIn()).toBe(false);
       expect(
-        createDesktopAuthCallbackState(stateStore).hasPendingSignIn(),
+        createDesktopAuthCallbackState(
+          createLog(),
+          stateStore,
+        ).hasPendingSignIn(),
       ).toBe(false);
     } finally {
       vi.useRealTimers();
@@ -597,7 +612,10 @@ describe('desktop Supabase auth', () => {
     try {
       vi.setSystemTime(new Date('2026-05-06T00:00:00Z'));
       const stateStore = new FakeStateStore();
-      const initialState = createDesktopAuthCallbackState(stateStore);
+      const initialState = createDesktopAuthCallbackState(
+        createLog(),
+        stateStore,
+      );
       await initialState.beginAuthAttempt('expired-nonce');
       vi.setSystemTime(Date.now() + 11 * 60 * 1000);
 
@@ -610,7 +628,10 @@ describe('desktop Supabase auth', () => {
         },
       );
 
-      const recreatedState = createDesktopAuthCallbackState(stateStore);
+      const recreatedState = createDesktopAuthCallbackState(
+        createLog(),
+        stateStore,
+      );
       const beginNewAttempt = recreatedState.beginAuthAttempt('new-nonce');
       await vi.waitFor(() => {
         expect(stateStore.update).toHaveBeenCalledOnce();
@@ -619,7 +640,10 @@ describe('desktop Supabase auth', () => {
       cleanup.resolve();
       await beginNewAttempt;
 
-      const persistedState = createDesktopAuthCallbackState(stateStore);
+      const persistedState = createDesktopAuthCallbackState(
+        createLog(),
+        stateStore,
+      );
       expect(persistedState.matchesPendingNonce('new-nonce')).toBe(true);
     } finally {
       vi.useRealTimers();
@@ -629,7 +653,7 @@ describe('desktop Supabase auth', () => {
   it('cancels pending callback state on sign-out', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const callbackState = createDesktopAuthCallbackState();
+    const callbackState = createDesktopAuthCallbackState(createLog());
     const oauthClient = createOAuthClient();
     const log = createLog();
     const auth = createTestAuth({
@@ -686,7 +710,7 @@ describe('desktop Supabase auth', () => {
   it('does not store a superseded callback or clear the newer sign-in', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const callbackState = createDesktopAuthCallbackState();
+    const callbackState = createDesktopAuthCallbackState(createLog());
     const oauthClient = createOAuthClient();
     const callbackProcessing = createDeferred<void>();
     coordinator.createSessionFromCallback.mockImplementationOnce(async () => {
@@ -757,7 +781,7 @@ describe('desktop Supabase auth', () => {
   it('removes a stored callback before starting a newer sign-in', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
-    const callbackState = createDesktopAuthCallbackState();
+    const callbackState = createDesktopAuthCallbackState(createLog());
     const oauthClient = createOAuthClient();
     const sessionStorage = createDeferred<void>();
     const storeSession = coordinator.storeSession.getMockImplementation();

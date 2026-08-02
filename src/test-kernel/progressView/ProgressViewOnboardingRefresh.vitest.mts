@@ -113,7 +113,6 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     getPendingAgentProposal: vi.fn(),
     markWebviewReady: vi.fn(),
     popOutToEditor: vi.fn(),
-    popBackToSidebar: vi.fn(),
     refreshOnboardingFunnel: vi.fn(),
     setActiveStream: vi.fn(),
     syncFullView: vi.fn(),

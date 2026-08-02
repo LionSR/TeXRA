@@ -109,6 +109,21 @@ describe('follow-up-input layout', () => {
     expect(textarea?.getAttribute('rows')).toBe('2');
     expect(textarea?.getAttribute('resize')).toBe('none');
   });
+
+  it('grows with content through CSS field-sizing, not WA auto-resize', () => {
+    // The auto-grow behavior is pure CSS (jsdom cannot lay it out), so pin the
+    // declarations that carry it: content-driven sizing with a bounded band.
+    const ctor = customElements.get('follow-up-input') as unknown as {
+      styles: { cssText: string } | Array<{ cssText: string }>;
+    };
+    const cssText = [ctor.styles]
+      .flat()
+      .map((sheet) => sheet.cssText)
+      .join('\n');
+    expect(cssText).toContain('field-sizing: content');
+    expect(cssText).toContain('--textarea-min-height: calc(');
+    expect(cssText).toContain('min-height: var(--textarea-min-height)');
+  });
 });
 
 describe('follow-up-input pasted-image state across stream switches', () => {

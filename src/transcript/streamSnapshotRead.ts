@@ -134,7 +134,13 @@ export async function readLegacyInstruction(
   if (raw === undefined) return null;
 
   const result = LegacyInstructionsDataSchema.safeParse(raw);
-  if (!result.success || Object.keys(result.data).length === 0) return null;
+  if (!result.success) {
+    logger.warn(CHANNEL, 'Discarding unreadable legacy instructions.', {
+      data: result.error,
+    });
+    return null;
+  }
+  if (Object.keys(result.data).length === 0) return null;
 
   return selectPreferredLegacyInstruction(result.data, meta?.activeRunId);
 }

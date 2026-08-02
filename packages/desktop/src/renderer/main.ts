@@ -196,7 +196,7 @@ const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
 const shortcutAcceleratorsById = new Map<string, string | undefined>(
-  getDesktopCommandMenuEntries(undefined, rendererPlatform).map((entry) => [
+  getDesktopCommandMenuEntries(rendererPlatform).map((entry) => [
     entry.id,
     entry.accelerator,
   ]),

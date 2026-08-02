@@ -14,7 +14,7 @@ import {
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 
-import { SwitchViewMessageSchema } from '../commonViewMessages';
+import { SwitchViewMessageSchema, ThemeSchema } from '../commonViewMessages';
 import { commandOnly, withFilesArray } from '../messageFactories';
 import {
   CurrentFileTypeSchema,
@@ -34,7 +34,7 @@ const CommonMessages = [
   SwitchViewMessageSchema,
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.THEME_SET),
-    theme: z.enum(['dark', 'light']),
+    theme: ThemeSchema,
   }),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.DEBUG_MODE_SET),
@@ -69,10 +69,6 @@ const SettingsMessages = [
   commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
   OpenAgentSettingsMessageSchema,
   OpenAgentDirectoryMessageSchema,
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.MODEL_SELECTED),
-    model: z.string().min(1),
-  }),
 ] as const;
 
 // MERGE sends the primary input plus the edited file; COMPARE and
@@ -122,13 +118,6 @@ const FileSelectionMessages = [
     command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
     fileType: ExtendedDocumentFileTypeSchema,
     currentFile: z.string().optional(),
-  }),
-] as const;
-
-const FileSelectedMessages = [
-  z.object({
-    command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
-    filePath: z.string().optional(),
   }),
 ] as const;
 
@@ -377,7 +366,6 @@ export const MainViewInboundMessageSchema = z.discriminatedUnion('command', [
   ...SettingsMessages,
   ...ExecutionMessages,
   ...FileSelectionMessages,
-  ...FileSelectedMessages,
   ...RequestFileMessages,
   ...SetFilesMessages,
   ...FileOperationMessages,

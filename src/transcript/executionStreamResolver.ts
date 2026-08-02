@@ -11,13 +11,9 @@ import {
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StreamLogStore } from './StreamLogStore';
 
-type PersistedStreamIdResolutionSource =
-  'executionMeta' | 'streamDataMeta' | 'streamDataSuffix' | 'streamLogsSuffix';
-
 export interface PersistedStreamIdResolution {
   /** Canonical stream when registration or persisted evidence proves one. */
   readonly streamId?: StreamTabId;
-  readonly source: PersistedStreamIdResolutionSource;
   /** Other persisted candidates to try when a historical primary is empty. */
   readonly fallbackStreamIds?: readonly StreamTabId[];
   /** Exact-execution sidecars eligible for overlap-gated archive merging. */
@@ -164,7 +160,7 @@ export async function resolvePersistedStreamIdForExecution(
     executionMeta?.streamId &&
     executionMeta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
   ) {
-    return { streamId: executionMeta.streamId, source: 'executionMeta' };
+    return { streamId: executionMeta.streamId };
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
@@ -199,7 +195,6 @@ export async function resolvePersistedStreamIdForExecution(
       // archive. Data presence and lexical order are not canonical-ownership
       // evidence. When every match is a proven child there are no candidates.
       return {
-        source: 'streamDataMeta',
         ...(mergeCandidateMetaMatched.length > 0
           ? {
               exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
@@ -219,7 +214,6 @@ export async function resolvePersistedStreamIdForExecution(
     ]);
     return {
       streamId,
-      source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
       ...(mergeCandidateMetaMatched.length > 0
         ? {
@@ -239,7 +233,6 @@ export async function resolvePersistedStreamIdForExecution(
     const fallbackStreamIds = orderedFallbacks(matchedSidecar, matchedSidecars);
     return {
       streamId: matchedSidecar,
-      source: 'streamDataSuffix',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
     };
   }
@@ -252,7 +245,6 @@ export async function resolvePersistedStreamIdForExecution(
     const fallbackStreamIds = orderedFallbacks(matchedLog, matchedLogs);
     return {
       streamId: matchedLog,
-      source: 'streamLogsSuffix',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
     };
   }

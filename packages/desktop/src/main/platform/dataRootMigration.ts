@@ -1,8 +1,5 @@
-// Node imports
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-
-// Local imports - platform
 import {
   mergeLegacyWorkspaceStorageBucket,
   moveEntryIfAbsent,
@@ -11,8 +8,6 @@ import {
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Type imports - platform
 
 export type DesktopDataRootMigrationLogger = LegacyDataMigrationLogger;
 

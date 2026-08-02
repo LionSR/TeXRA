@@ -985,6 +985,22 @@ describe('createProgressViewSecondTierHandlers', () => {
     );
   });
 
+  it('skips polishing when the stream has no run config', async () => {
+    const actions = createSecondTierActions({
+      getRunConfig: vi.fn().mockReturnValue(undefined),
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP])({
+      command: PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+      stream: 'stream-1',
+      text: 'Improve this',
+    });
+
+    expect(actions.followUpPolish.polishFollowUp).not.toHaveBeenCalled();
+    expect(actions.applyPolishResult).not.toHaveBeenCalled();
+  });
+
   it('awaits polish error reporting', async () => {
     const polishFailure = new Error('polish failed');
     const reportingFailure = new Error('reporting failed');

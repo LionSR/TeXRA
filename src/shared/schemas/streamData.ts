@@ -75,9 +75,12 @@ export type LegacyInstructionEntry = z.infer<
   typeof LegacyInstructionEntrySchema
 >;
 
-export const LegacyInstructionsDataSchema = z
-  .record(z.string(), LegacyInstructionEntrySchema)
-  .catch({});
+// No whole-record `.catch`: an unreadable file degrades to "no legacy
+// instruction" at `readLegacyInstruction`, which warns first.
+export const LegacyInstructionsDataSchema = z.record(
+  z.string(),
+  LegacyInstructionEntrySchema,
+);
 
 /**
  * Pick the legacy instruction that best matches the workflow run users most

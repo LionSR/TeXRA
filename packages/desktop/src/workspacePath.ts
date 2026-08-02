@@ -27,10 +27,6 @@ export function getWorkspacePathInput(
   return options.storedWorkspacePath?.trim() || undefined;
 }
 
-export function hasWorkspacePath(options: WorkspacePathOptions = {}): boolean {
-  return getWorkspacePathInput(options) != null;
-}
-
 export function serializeWorkspacePresenceArg(hasWorkspace: boolean): string {
   return `${WORKSPACE_PRESENT_ARG}${hasWorkspace ? '1' : '0'}`;
 }

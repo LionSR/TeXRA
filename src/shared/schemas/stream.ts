@@ -176,7 +176,7 @@ export function executionStatusToRunOutcome(
   }
 }
 
-export function streamStatusToPhase(status: StreamStatus): StreamPhase {
+function streamStatusToPhase(status: StreamStatus): StreamPhase {
   switch (status) {
     case STREAM_STATUS.RUNNING:
     case STREAM_STATUS.RESUMING:
@@ -189,19 +189,6 @@ export function streamStatusToPhase(status: StreamStatus): StreamPhase {
     case STREAM_STATUS.STOPPED:
     case STREAM_STATUS.READY:
       return STREAM_PHASE.COMPLETED;
-  }
-}
-
-export function streamStatusToSubstate(
-  status: StreamStatus,
-): StreamSubstate | undefined {
-  switch (status) {
-    case STREAM_STATUS.INITIALIZING:
-      return STREAM_SUBSTATE.STARTING;
-    case STREAM_STATUS.RESUMING:
-      return STREAM_SUBSTATE.RESUMING;
-    default:
-      return undefined;
   }
 }
 

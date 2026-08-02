@@ -1,4 +1,3 @@
-// Local imports
 import { codexCoordinator, loginWithLoopback } from '@auth/codex';
 import { relayTokenSignOutNotice } from '@auth/relayToken';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
