@@ -92,9 +92,6 @@ export enum GlobalStateKey {
   STREAMING_GLM = 'texra.streaming.glm',
   STREAMING_META = 'texra.streaming.meta',
 
-  // LaTeX settings
-  LATEX_CONFIG_VERSION = 'texra.latexConfigVersion',
-
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR = 'texra.customAgentDir',
   REMOTE_AGENT_META_CACHE = 'texra.remoteAgentMetaCache',
