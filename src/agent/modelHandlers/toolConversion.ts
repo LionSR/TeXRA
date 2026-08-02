@@ -196,9 +196,9 @@ function containsSchemaReference(value: unknown): boolean {
 }
 
 /**
- * Convert a tool directly from its canonical Zod schema to Google's finite
- * OpenAPI representation. Recursive references are rejected locally rather
- * than weakened on the wire.
+ * Convert a tool directly from its canonical Zod schema to the finite OpenAPI
+ * subset accepted by Google's model APIs. Recursive references are rejected
+ * locally rather than weakened on the wire.
  */
 export function convertGoogleToolSchema(
   def: ToolDefinition,
@@ -227,7 +227,7 @@ export function convertGoogleToolSchema(
     );
   }
   const { $defs: _defs, definitions: _definitions, ...finite } = normalized;
-  return finite;
+  return toGoogleOpenApiSchemaNode(finite) as JSONSchemaObject;
 }
 
 // This mirrors @google/genai's Schema interface. Validation-only JSON Schema
@@ -293,9 +293,7 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
 function convertGoogleFunctionParameters(
   def: ToolDefinition,
 ): GeminiSchema | null {
-  const schema = convertGoogleToolSchema(def);
-  if (!schema) return null;
-  return toGoogleOpenApiSchemaNode(schema) as GeminiSchema;
+  return convertGoogleToolSchema(def) as GeminiSchema | null;
 }
 
 /**

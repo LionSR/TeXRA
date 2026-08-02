@@ -700,7 +700,6 @@ describe('toGoogleTools', () => {
       nullable: true,
       type: 'number',
       minimum: 0,
-      exclusiveMinimum: true,
     });
     expect(JSON.stringify(interactionParams)).not.toContain('anyOf');
 
