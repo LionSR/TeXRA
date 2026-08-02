@@ -15,7 +15,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { parseWorkflowScript } from './parseScript';
 import { runScriptInSandbox } from './sandbox';
 import {
-  WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
   normalizeWorkflowScriptPhaseTitle,
   type WorkflowAgentCallOptions,
@@ -32,30 +31,24 @@ import {
 /**
  * Stable execution identity for one agent() call. Current keys exclude
  * display-only labels and phases, so editing a declarative task plan does not
- * invalidate otherwise identical completed work. The legacy format is retained
- * only to verify and migrate version-1 journal entries. A prior entry at the
- * same call index with a matching key replays its cached result. sha256
- * (truncated) makes a collision that replays the wrong result impractical.
+ * invalidate otherwise identical completed work. A prior entry at the same
+ * call index with a matching key replays its cached result. sha256 (truncated)
+ * makes a collision that replays the wrong result impractical.
  */
 function journalKey(
   prompt: string,
   options: WorkflowAgentCallOptions,
-  keyFormat: WorkflowJournalEntry['keyFormat'],
   dependencyFingerprint?: string,
 ): string {
   const executionOptions: WorkflowAgentCallOptions = { ...options };
-  if (keyFormat !== WORKFLOW_JOURNAL_KEY_FORMAT.LEGACY_V1) {
-    delete executionOptions.label;
-    delete executionOptions.phase;
-  }
+  delete executionOptions.label;
+  delete executionOptions.phase;
   return createHash('sha256')
     .update(
       stableStringify({
         options: executionOptions,
         prompt,
-        ...(keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3 && {
-          dependencyFingerprint,
-        }),
+        dependencyFingerprint,
       }),
     )
     .digest('hex')
@@ -437,12 +430,7 @@ export async function runWorkflowScript(
     let dependencyFingerprint = hasFileDependencies
       ? await readDependencyFingerprint()
       : undefined;
-    let key = journalKey(
-      prompt,
-      callOptions,
-      WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-      dependencyFingerprint,
-    );
+    let key = journalKey(prompt, callOptions, dependencyFingerprint);
     const progressId = plannedTask?.id ?? `call-${index}`;
     if (plannedTask) {
       if (issuedPlannedTaskIds.has(progressId)) {
@@ -479,7 +467,6 @@ export async function runWorkflowScript(
       const refreshedKey = journalKey(
         prompt,
         callOptions,
-        WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         refreshedFingerprint,
       );
       if (issuedCallKeys.has(refreshedKey)) {
@@ -529,19 +516,9 @@ export async function runWorkflowScript(
     };
 
     const prior = priorEntries.get(index);
-    let priorKey: string | undefined;
-    if (
-      prior !== undefined &&
-      (!hasFileDependencies ||
-        prior.keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3)
-    ) {
-      priorKey = journalKey(
-        prompt,
-        callOptions,
-        prior.keyFormat,
-        dependencyFingerprint,
-      );
-    }
+    const priorKey = prior
+      ? journalKey(prompt, callOptions, dependencyFingerprint)
+      : undefined;
     if (prior && prior.key === priorKey) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
@@ -550,7 +527,6 @@ export async function runWorkflowScript(
       journal.set(index, {
         ...prior,
         key,
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         result: normalizedResult,
       });
       emit({ type: 'agent:end', ...eventBase, outcome: 'cached' });
@@ -711,7 +687,6 @@ export async function runWorkflowScript(
         await recordJournalEntry({
           index,
           key,
-          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
           result: normalizedResult,
         });
       } catch (error) {

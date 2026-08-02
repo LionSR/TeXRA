@@ -15,14 +15,12 @@ import { workflowScriptCheckpointKvKey } from './checkpointKey';
 import { parseWorkflowScript } from './parseScript';
 import { runWorkflowScript } from './runWorkflowScript';
 import {
-  WORKFLOW_JOURNAL_KEY_FORMAT,
-  WorkflowJournalKeyFormatSchema,
   type WorkflowJournalEntry,
   type WorkflowScriptRunOptions,
   type WorkflowScriptRunResult,
 } from './types';
 
-const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 2;
+const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 3;
 const JsonValueSchema = z.json();
 
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
@@ -30,57 +28,20 @@ const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
 ]);
 
-const LegacyWorkflowJournalEntrySchema = z.strictObject({
+const PersistedWorkflowJournalEntrySchema = z.strictObject({
   index: z.int().nonnegative(),
   key: z.string().regex(/^[a-f0-9]{16}$/),
   result: PersistedJsonValueSchema,
 });
 
-const PersistedWorkflowJournalEntrySchema =
-  LegacyWorkflowJournalEntrySchema.extend({
-    keyFormat: z.union([
-      WorkflowJournalKeyFormatSchema,
-      z
-        .literal('presentation-independent-v2')
-        .transform(
-          (): z.infer<typeof WorkflowJournalKeyFormatSchema> =>
-            WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-        ),
-    ]),
-  });
-
-const WorkflowScriptCheckpointV2Schema = z.strictObject({
-  schemaVersion: z.literal(WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION),
-  script: z.string().min(1),
-  args: PersistedJsonValueSchema,
-  files: WorkflowScriptFilesSchema.prefault({}),
-  journal: z.array(PersistedWorkflowJournalEntrySchema),
-});
-
-const WorkflowScriptCheckpointV1Schema = z
+const WorkflowScriptCheckpointSchema = z
   .strictObject({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION),
     script: z.string().min(1),
     args: PersistedJsonValueSchema,
-    files: WorkflowScriptFilesSchema.prefault({}),
-    journal: z.array(LegacyWorkflowJournalEntrySchema),
+    files: WorkflowScriptFilesSchema,
+    journal: z.array(PersistedWorkflowJournalEntrySchema),
   })
-  .transform(
-    ({
-      journal,
-      ...checkpoint
-    }): z.infer<typeof WorkflowScriptCheckpointV2Schema> => ({
-      ...checkpoint,
-      schemaVersion: WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION,
-      journal: journal.map((entry) => ({
-        ...entry,
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.LEGACY_V1,
-      })),
-    }),
-  );
-
-const WorkflowScriptCheckpointSchema = z
-  .union([WorkflowScriptCheckpointV2Schema, WorkflowScriptCheckpointV1Schema])
   .superRefine(({ journal }, context) => {
     const indices = new Set<number>();
     for (const entry of journal) {
@@ -159,7 +120,6 @@ function encodeJournalEntry(
   return {
     index: entry.index,
     key: entry.key,
-    keyFormat: entry.keyFormat,
     result: encodeJsonValue(entry.result),
   };
 }
@@ -170,7 +130,6 @@ function decodeJournalEntry(
   return {
     index: entry.index,
     key: entry.key,
-    keyFormat: entry.keyFormat,
     result: decodeJsonValue(entry.result),
   };
 }
@@ -181,7 +140,7 @@ function orderedJournal(
   return [...entries].toSorted((a, b) => a.index - b.index);
 }
 
-/** Read one checkpoint. Absence is legacy-compatible; malformed data fails. */
+/** Read one checkpoint. Absence returns null; malformed data fails. */
 export async function readWorkflowScriptCheckpoint(
   store: ExecutionKVStore,
   checkpointId: string,

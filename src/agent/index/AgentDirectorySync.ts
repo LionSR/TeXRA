@@ -13,15 +13,6 @@ import {
   type BundledAgentDirectoryName,
 } from './BundledAgentDirectories';
 
-const LEGACY_AGENT_FILES = [
-  'agents/generic.yaml',
-  'agents/generic_multiple.yaml',
-  'agents/correct_multiple.yaml',
-  'agents/polish_multiple.yaml',
-  'agents/merge_multiple.yaml',
-  'agents/write/paper2cover.yaml',
-  'agents/write/write_slide.yaml',
-];
 const SYNC_MARKER_FILE = '.bundled-agent-sync.json';
 const RECENT_EXTERNAL_SYNC_MS = 5 * 60 * 1000;
 
@@ -42,10 +33,8 @@ export interface AgentDirectoryBundleSource {
 
 export interface AgentDirectoryStorage {
   ensureDir(relativePath: string): Promise<void>;
-  exists(relativePath: string): Promise<boolean>;
   read(relativePath: string): Promise<string>;
   write(relativePath: string, content: string): Promise<void>;
-  delete(relativePath: string): Promise<void>;
   fullPath(relativePath: string): string;
 }
 
@@ -86,20 +75,12 @@ export class GlobalStorageAgentDirectoryStorage implements AgentDirectoryStorage
     return GlobalStorageFS.ensureDir(relativePath);
   }
 
-  exists(relativePath: string): Promise<boolean> {
-    return GlobalStorageFS.exists(relativePath);
-  }
-
   read(relativePath: string): Promise<string> {
     return GlobalStorageFS.read(relativePath);
   }
 
   write(relativePath: string, content: string): Promise<void> {
     return GlobalStorageFS.write(relativePath, content);
-  }
-
-  delete(relativePath: string): Promise<void> {
-    return GlobalStorageFS.delete(relativePath);
   }
 
   fullPath(relativePath: string): string {
@@ -122,7 +103,6 @@ export class BundledAgentDirectorySync {
   private async reconcileUnlocked(
     currentVersion: string | undefined,
   ): Promise<boolean> {
-    await this.deleteLegacyAgentFiles();
     if (await this.hasRecentExternalSync(currentVersion)) {
       await this.options.versionStore.update(currentVersion);
       return false;
@@ -184,23 +164,6 @@ export class BundledAgentDirectorySync {
       this.options.logger.warn(
         `Failed to write bundled agent sync marker: ${toErrorMessage(error)}`,
       );
-    }
-  }
-
-  private async deleteLegacyAgentFiles(): Promise<void> {
-    for (const legacyFile of LEGACY_AGENT_FILES) {
-      if (!(await this.options.storage.exists(legacyFile))) {
-        continue;
-      }
-      try {
-        await this.options.storage.delete(legacyFile);
-        this.options.logger.info(`Deleted legacy agent file: ${legacyFile}`);
-      } catch (error) {
-        this.options.logger.warn(
-          `Failed to delete legacy agent file ${legacyFile}`,
-          error,
-        );
-      }
     }
   }
 }

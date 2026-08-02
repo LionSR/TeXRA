@@ -6,11 +6,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import {
-  UIFileFieldsSchema,
-  migrateLegacyContextFileFields,
-  requiredFileListFields,
-} from '../fileFields';
+import { UIFileFieldsSchema, requiredFileListFields } from '../fileFields';
 import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
@@ -170,10 +166,7 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   openedFiles: z.array(z.string()).nullish(),
 });
 
-export const MainViewPersistedStateSchema = z.preprocess(
-  migrateLegacyContextFileFields,
-  MainViewPersistedStateBaseSchema,
-);
+export const MainViewPersistedStateSchema = MainViewPersistedStateBaseSchema;
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;
