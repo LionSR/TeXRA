@@ -832,36 +832,53 @@ describe('toGoogleTools', () => {
         properties: {
           options: {
             type: 'object',
-            default: { mode: 'fast' },
-            example: { mode: 'careful' },
+            default: {
+              $ref: 'literal default data',
+              oneOf: ['fast'],
+              allOf: [{ mode: 'fast' }],
+            },
+            example: {
+              $ref: 'literal example data',
+              oneOf: ['careful'],
+              allOf: [{ mode: 'careful' }],
+            },
           },
         },
       },
     }) as { properties: Record<string, Record<string, unknown>> };
 
-    expect(schema.properties.options.default).toStrictEqual({ mode: 'fast' });
+    expect(schema.properties.options.default).toStrictEqual({
+      $ref: 'literal default data',
+      oneOf: ['fast'],
+      allOf: [{ mode: 'fast' }],
+    });
     expect(schema.properties.options.example).toStrictEqual({
-      mode: 'careful',
+      $ref: 'literal example data',
+      oneOf: ['careful'],
+      allOf: [{ mode: 'careful' }],
     });
   });
 
-  it('rejects unsupported nested Google combinators', () => {
-    expect(() =>
-      convertGoogleToolSchema({
-        name: 'combined_input',
-        parameters: {
-          type: 'object',
-          properties: {
-            value: {
-              oneOf: [{ type: 'string' }, { type: 'number' }],
+  it.each(['oneOf', 'allOf'] as const)(
+    'rejects unsupported nested Google %s combinators',
+    (combinator) => {
+      expect(() =>
+        convertGoogleToolSchema({
+          name: 'combined_input',
+          parameters: {
+            type: 'object',
+            properties: {
+              value: {
+                [combinator]: [{ type: 'string' }, { type: 'number' }],
+              },
             },
           },
-        },
-      }),
-    ).toThrow(
-      'Google tool schemas do not support nested oneOf or allOf combinators.',
-    );
-  });
+        }),
+      ).toThrow(
+        'Google tool schemas do not support nested oneOf or allOf combinators.',
+      );
+    },
+  );
 
   it('preserves constraints attached to nested Google parameters', () => {
     const tools = toGoogleTools([
