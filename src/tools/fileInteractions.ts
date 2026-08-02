@@ -1,6 +1,7 @@
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { type ToolResult } from '@shared/schemas/toolResult';
+import { errorResult } from '@tools/core/result';
 
 export function recordToolFileRead(path: string): void {
   const context = getCurrentToolCallContext();
@@ -17,12 +18,12 @@ export function requireFileReadForEdit(
   if (!context || !exists || context.tracker.hasRead(path)) {
     return null;
   }
-  return {
-    status: 'error',
-    summary: `Read ${path} before editing`,
-    error:
-      errorMessage ??
+  return errorResult(
+    errorMessage ??
       'Edits to existing files require a prior read in this session. Please call read_file first.',
-    diagnostics: { reason: 'unread-file', path },
-  };
+    {
+      summary: `Read ${path} before editing`,
+      diagnostics: { reason: 'unread-file', path },
+    },
+  );
 }

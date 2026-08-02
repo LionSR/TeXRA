@@ -18,6 +18,7 @@ import {
   unwrapAbortError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { errorResult, executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -205,11 +206,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
         return {
           query,
           hits: [],
-          result: {
-            status: 'error',
+          result: errorResult(`Error: ${data.error}${suggestionText}`, {
             summary: 'No results',
-            error: `Error: ${data.error}${suggestionText}`,
-          },
+          }),
         };
       }
 
@@ -219,11 +218,10 @@ Useful for finding the right lemma when you know roughly what type it should hav
         return {
           query,
           hits: [],
-          result: {
-            status: 'executed',
-            summary: 'No results',
-            output: `No theorems found matching: ${query}\n\nTry a different type signature or name pattern.`,
-          },
+          result: executed(
+            `No theorems found matching: ${query}\n\nTry a different type signature or name pattern.`,
+            'No results',
+          ),
         };
       }
 
@@ -234,11 +232,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
       return {
         query,
         hits,
-        result: {
-          status: 'executed',
-          summary: formatResultCount(hits.length, 'result'),
-          output: formatted,
-        },
+        result: executed(formatted, formatResultCount(hits.length, 'result')),
       };
     } catch (error) {
       // Defensive: ensure the checks below (and the surfaced message) see the
@@ -249,24 +243,20 @@ Useful for finding the right lemma when you know roughly what type it should hav
         return {
           query,
           hits: [],
-          result: {
-            status: 'error',
-            summary: 'Timeout',
-            error:
-              `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
+          result: errorResult(
+            `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
               `The Loogle server may be overloaded. Retry the request. ` +
               `If it persists, try a simpler type signature or search by name instead.`,
-          },
+            { summary: 'Timeout' },
+          ),
         };
       }
       return {
         query,
         hits: [],
-        result: {
-          status: 'error',
+        result: errorResult(`Error: ${toErrorMessage(err)}`, {
           summary: 'Loogle search failed',
-          error: `Error: ${toErrorMessage(err)}`,
-        },
+        }),
       };
     }
   }
@@ -305,17 +295,9 @@ Useful for finding the right lemma when you know roughly what type it should hav
 
     const output = sections.join('\n\n---\n\n');
     if (allFailed) {
-      return {
-        status: 'error',
-        summary,
-        error: output,
-      };
+      return errorResult(output, { summary });
     }
 
-    return {
-      status: 'executed',
-      summary,
-      output,
-    };
+    return executed(output, summary);
   }
 }

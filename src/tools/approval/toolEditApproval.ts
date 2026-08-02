@@ -19,6 +19,7 @@ import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { createSessionBypassAccessors } from '@tools/approval/sessionBypassAccessors';
+import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -347,15 +348,10 @@ export function buildApprovalRejectedResult(
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
   const feedback = userMessage?.trim();
-  const result: ToolResult = {
-    status: 'error',
+  return errorResult(baseMessage, {
     summary: baseMessage,
-    error: baseMessage,
-  };
-  if (feedback) {
-    result.userInstruction = feedback;
-  }
-  return result;
+    ...(feedback && { userInstruction: feedback }),
+  });
 }
 
 interface WrittenApprovedEdit extends WriteApprovedContentResult {
