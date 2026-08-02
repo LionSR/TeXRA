@@ -286,32 +286,6 @@ export const instructionPanelStyles: CSSResult = css`
     height: var(--height-control);
   }
 
-  /*
-   * Execute is the primary action of the entire UI and the one place in this
-   * view that spends the accent budget. It carries .btn-primary, so the fill,
-   * radius, weight, hover, and focus ring all come from the shared skin; only
-   * the footer placement and the label floor are local.
-   */
-  wa-button.execute-button {
-    min-width: auto;
-    height: auto;
-    flex: 0 0 auto;
-    margin-left: auto;
-  }
-
-  wa-button.execute-button::part(base) {
-    min-width: 64px;
-  }
-
-  wa-button.execute-button wa-icon {
-    font-size: var(--font-size-sm);
-  }
-
-  .execute-button__label {
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-tight);
-  }
-
   /* Lock both selects to identical fixed width. Without flex: 0 0, the
      agent box would shrink/stretch with its label content (e.g.
      "humanize" vs. "🎯 orchestrator ☁"), shifting the model select to
@@ -344,7 +318,6 @@ export const instructionPanelStyles: CSSResult = css`
     width: 100%;
     container-name: desktop-composer;
     container-type: inline-size;
-    --desktop-send-size: var(--control-size-l);
     --agent-model-listbox-max-width: min(24rem, calc(100vw - 3rem));
   }
 
@@ -439,8 +412,7 @@ export const instructionPanelStyles: CSSResult = css`
     --control-size: var(--control-size-m);
   }
 
-  :host([desktop-host]) .desktop-drop-affordance .icon-surface wa-icon,
-  :host([desktop-host]) wa-button.execute-button wa-icon {
+  :host([desktop-host]) .desktop-drop-affordance .icon-surface wa-icon {
     display: block;
     flex: 0 0 auto;
     width: 1em;
@@ -460,7 +432,7 @@ export const instructionPanelStyles: CSSResult = css`
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: end;
     gap: var(--wa-space-2xs);
-    min-height: var(--desktop-send-size);
+    min-height: var(--control-size-l);
   }
 
   :host([desktop-host]) .model-selection-footer {
@@ -503,38 +475,6 @@ export const instructionPanelStyles: CSSResult = css`
     width: auto;
     min-width: 0;
     max-width: none;
-  }
-
-  :host([desktop-host]) wa-button.execute-button {
-    align-self: end;
-    justify-self: end;
-    margin: 0;
-  }
-
-  :host([desktop-host]) wa-button.execute-button::part(base) {
-    min-height: var(--desktop-send-size);
-    padding-inline: var(--wa-space-s);
-  }
-
-  :host([desktop-host]) wa-button.execute-button::part(label) {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-  }
-
-  :host([desktop-host]) .execute-button__key {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    padding: 2px 4px;
-    border: var(--border-thin) solid
-      color-mix(in srgb, currentColor 24%, transparent);
-    border-radius: var(--border-radius);
-    background: color-mix(in srgb, currentColor 10%, transparent);
-    font-family: var(--wa-font-family-code);
-    font-size: var(--font-size-xs);
-    line-height: 1;
   }
 
   .visually-hidden {
