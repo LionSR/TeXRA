@@ -103,6 +103,12 @@ const missingApiKeyErrorMarker = createErrorMarker('missingApiKeyError');
 export const attachMissingApiKeyError = missingApiKeyErrorMarker.attach;
 export const hasMissingApiKeyErrorMarker = missingApiKeyErrorMarker.has;
 
+const manualRetryOnlyErrorMarker = createErrorMarker('manualRetryOnlyError');
+
+/** Marks a user-retryable failure that must not repeat automatically. */
+export const attachManualRetryOnlyError = manualRetryOnlyErrorMarker.attach;
+export const hasManualRetryOnlyErrorMarker = manualRetryOnlyErrorMarker.has;
+
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');
 

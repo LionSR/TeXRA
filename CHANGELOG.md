@@ -51,7 +51,8 @@ All notable changes to this project will be documented in this file.
 
 - **OpenAI background responses keep one polling deadline across retries** —
   reconnecting to the same response no longer restarts its three-hour polling
-  window.
+  window. Once that window expires, TeXRA stops automatic retries and permits
+  an explicit retry to start a new response.
 - **Automatic model retry settings are bounded** — the retry setting now
   accepts zero to five additional attempts after the initial request. Invalid
   stored values fall back to the documented default instead of creating an

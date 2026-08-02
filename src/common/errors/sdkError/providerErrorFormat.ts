@@ -25,6 +25,7 @@ import {
   detectPartialText,
   detectSdkErrorMetadata,
   detectStreamDiagnostics,
+  hasManualRetryOnlyErrorMarker,
   providerErrorMetadata,
 } from './errorMetadata';
 import {
@@ -625,7 +626,13 @@ export function isUnauthorizedProviderError(formatted: ProviderError): boolean {
 
 /** Whether repeating the same provider request can recover without user action. */
 export function isProviderErrorAutoRetryable(err: unknown): boolean {
-  if (isUserAbort(err) || isContextWindowError(err)) return false;
+  if (
+    isUserAbort(err) ||
+    isContextWindowError(err) ||
+    hasManualRetryOnlyErrorMarker(err)
+  ) {
+    return false;
+  }
 
   const formatted = normalizeProviderError(err);
   return (
