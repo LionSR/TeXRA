@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Failed latexdiff builds no longer flood the workflow log** — the visible
+  warning identifies the affected diff file without dumping the LaTeX compiler
+  transcript; the full diagnostic remains available in debug data.
 - **OpenAI background responses keep one polling deadline across retries** —
   reconnecting to the same response no longer restarts its three-hour polling
   window. Once that window expires, TeXRA stops automatic retries and permits
