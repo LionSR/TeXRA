@@ -74,7 +74,6 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
    * reasoning cap the entitlement actually enforces.
    */
   readonly modelSelectionExtras: ModelSelectionExtras;
-  readonly modelListRefresh: PromiseLike<void>;
   readonly onCredentialChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
 }
@@ -105,7 +104,6 @@ export interface DesktopCredentialSettingsController {
   readonly profileHandlers: DesktopProfileHandlers;
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
-  prepareModelSelectionData(): Promise<void>;
   postMainModelOptionsData(): Promise<void>;
   postStartupData(): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
@@ -195,10 +193,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       setChatGptPreferSubscription: (message) =>
         this.setChatGptPreferSubscription(message.enabled),
     };
-  }
-
-  async prepareModelSelectionData(): Promise<void> {
-    await this.options.modelListRefresh;
   }
 
   async postStartupData(): Promise<void> {
@@ -416,7 +410,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   private async postModelSelectionData(): Promise<void> {
-    await this.prepareModelSelectionData();
     this.options.renderer.postToRenderer(
       await buildModelSelectionMessage(this.modelSelectionController),
     );
