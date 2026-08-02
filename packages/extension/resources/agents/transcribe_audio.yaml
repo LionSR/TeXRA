@@ -20,7 +20,7 @@ prompts:
         \item Divide the final transcript into logical sections based on topic shifts or conversation flow.
         \item Pay attention to punctuation and grammar for readability.
         \item Handle overlapping speech or unclear audio segments gracefully, indicating uncertainty where necessary (e.g., [unintelligible]).
-        \item **Do not use any markdown formatting (like bold or italics) in the final transcript output.**
+        \item \textbf{Do not use any markdown formatting (like bold or italics) in the final transcript output.}
     \end{itemize}
 
   userPrefix: |
@@ -64,6 +64,8 @@ prompts:
           \item Punctuation and formatting clear and readable; no unintended markdown formatting (bold, italics).
           \item Uncertain or unintelligible parts handled appropriately (e.g., `[unintelligible]`).
       \end{itemize}
+
+      If the transcript already meets all of these requirements, reproduce it unchanged rather than rewording it.
 
       Output the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Use the following format:
 

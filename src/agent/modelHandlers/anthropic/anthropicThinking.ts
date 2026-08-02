@@ -17,8 +17,8 @@ const OPUS_48_FULLNAME = 'claude-opus-4-8';
 const OPUS_5_FULLNAME = 'claude-opus-5';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 const SONNET_5_FULLNAME = 'claude-sonnet-5';
-const FABLE_5_FULLNAME = 'claude-fable-5';
-const MYTHOS_5_FULLNAME = 'claude-mythos-5';
+const FABLE_FAMILY_PREFIX = 'claude-fable-';
+const MYTHOS_FAMILY_PREFIX = 'claude-mythos-';
 
 // Native context-window sizes come from llm-zoo. Opus 4.6/4.7/4.8/5,
 // Sonnet 4.6/5, and the Mythos-class models have a 1M context window at
@@ -64,8 +64,12 @@ const ANTHROPIC_REQUEST_TRAITS: ReadonlyArray<
   [OPUS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
   [SONNET_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false }],
   [SONNET_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
-  [FABLE_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
-  [MYTHOS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  // Mythos-class entries match the whole family (like the temperature
+  // patterns above): their API default is display 'omitted', so a new family
+  // member falling through to DEFAULT_REQUEST_TRAITS would silently lose all
+  // visible reasoning output.
+  [MYTHOS_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true }],
+  [FABLE_FAMILY_PREFIX, { compactionEligible: true, summarizedDisplay: true }],
 ];
 
 const DEFAULT_REQUEST_TRAITS: AnthropicRequestTraits = {

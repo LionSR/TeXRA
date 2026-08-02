@@ -59,7 +59,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
   instruction: z
     .string()
     .describe(
-      'What the agent should do, in plain prose. If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
+      'What the agent should do, in plain prose: state the document subject, the changes wanted, and any constraints (terminology, scope, sections to prioritize). If you attach context or media files, name each one and say what role it plays — e.g., "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The sub-agent has no other signal for why each file was attached.',
     ),
   inputFiles: z
     .array(z.string())
@@ -103,14 +103,9 @@ export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Allow agents to work in git worktrees' on the Multi-Agent settings tab).";
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
-  'Delegated task handoff:',
-  '- Treat the delegated instruction as your full task contract.',
-  '- Follow any tool, network, file, approval, output-format, or scope constraints it includes.',
-  '- If a requested action conflicts with those constraints or needs missing context, report the conflict instead of guessing permission.',
-  '- Your final response is delivered verbatim to the parent orchestrator.',
-  '- Include the substantive result requested: answer, findings, evidence/checks, and unresolved caveats.',
-  '- Do not finish with only status/process notes such as "done", "complete", or "no files were edited"; if no files were edited, state that after the task result.',
-].join('\n');
+  'The delegated instruction above is your full task contract, including any tool, network, file, approval, output-format, or scope constraints it states; if a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
+  'Your final response is delivered verbatim to the parent orchestrator — end with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
+].join(' ');
 export function withToolUseSubagentHandoffInstruction(
   instruction: string,
   parentInstruction?: string,
@@ -127,9 +122,7 @@ export function withToolUseSubagentHandoffInstruction(
             ]
           : ['Parent user request (constraint context only):', trimmedParent]),
         '',
-        'Constraints in the parent user request are mandatory and override conflicting delegated-task wording or agent workflow defaults.',
-        'Apply every relevant tool, network, file, approval, output-format, and scope constraint to the delegated task.',
-        'Do not repeat orchestration actions assigned to the parent.',
+        'Constraints in the parent user request are mandatory and override conflicting delegated-task wording; do not repeat orchestration actions assigned to the parent.',
       ].join('\n'),
     );
   }

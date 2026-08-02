@@ -944,14 +944,14 @@ describe('headless delegation', () => {
 
     const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
     expect(instruction).toContain(
-      'Your final response is delivered verbatim to the parent orchestrator.',
+      'Your final response is delivered verbatim to the parent orchestrator',
+    );
+    expect(instruction).toContain('never only a status note');
+    expect(instruction).toContain(
+      'tool, network, file, approval, output-format, or scope constraints',
     );
     expect(instruction).toContain(
-      'Do not finish with only status/process notes',
-    );
-    expect(instruction).toContain('Follow any tool, network, file, approval');
-    expect(instruction).toContain(
-      'report the conflict instead of guessing permission',
+      'report the conflict instead of assuming permission',
     );
   });
 
@@ -994,12 +994,14 @@ describe('headless delegation', () => {
     );
   });
 
-  it('tells orchestrators to preserve delegated result evidence when summarizing', () => {
+  it('tells orchestrators that delegations run asynchronously and support parallel dispatch', () => {
     const description = new DelegateAgentTool().definition.description;
 
-    expect(description).toContain('preserve its stated evidence');
-    expect(description).toContain('tool names');
-    expect(description).toContain('do not substitute or invent methods');
+    expect(description).toContain('Delegations run asynchronously');
+    expect(description).toContain('launch them all in one turn');
+    expect(description).toContain(
+      'arrives automatically as a follow-up message',
+    );
   });
 
   it('formats returned child error results as subagent errors', async () => {

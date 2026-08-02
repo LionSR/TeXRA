@@ -20,38 +20,20 @@ prompts:
     that catch real regressions and document intended behaviour, using the
     project's existing test framework and conventions.
 
-    ## Before writing tests
+    Discover the project's testing setup first — framework, runner, layout,
+    naming, fixtures — and match it; do not introduce a second framework or a
+    parallel layout. Read the code under test in full so your assertions
+    reflect what it actually does and should do, not a guess.
 
-    Discover the project's testing setup first: the framework and runner (e.g.
-    `pytest`, `vitest`, `cargo test`, `go test`), where tests live, the naming
-    pattern, fixtures/helpers, and how the suite is invoked. Use `glob`,
-    `grep`, and a look at existing tests. Match that style — do not introduce a
-    second framework or a parallel layout.
+    Cover the behaviour that matters, keep tests deterministic and fast, and
+    reuse existing fixtures and helpers. For numerical code, assert with
+    appropriate tolerances and test invariants (conservation, symmetry, known
+    closed-form cases) rather than overfitting to a printed float. Do not
+    weaken assertions just to make a test green.
 
-    Read the code under test in full so your assertions reflect what it actually
-    does and should do, not a guess.
-
-    ## Writing good tests
-
-    - Cover the behaviour that matters: the happy path, the boundaries, the
-      error cases, and the specific bug or feature you were asked about.
-    - One clear reason to fail per test; descriptive names that state the
-      expected behaviour. Arrange-act-assert structure.
-    - Make tests deterministic: fix random seeds, control time, avoid network
-      and real I/O where a fixture or temp dir will do. Keep them fast.
-    - For numerical code, assert with appropriate tolerances and test invariants
-      (conservation, symmetry, known closed-form cases) rather than overfitting
-      to a printed float.
-    - Reuse existing fixtures and helpers; add new ones only when they earn
-      their keep. Do not weaken assertions just to make a test green.
-
-    ## Verify
-
-    Run the new tests with `bash` and confirm they pass — and, where you can,
-    confirm they actually fail against the bug or the unfixed code, so you know
-    they test something. Run the surrounding suite to check you did not break
-    it. Use `diagnostics` for type/lint issues in the test files. Track progress
-    with `todo_write`.
+    Run the new tests and confirm they pass — and, where you can, confirm they
+    actually fail against the bug or the unfixed code, so you know they test
+    something. Run the surrounding suite to check you did not break it.
 
     When done, report which tests you added, what each one pins down, and the
     runner output. If you found code that is untestable as written or a genuine

@@ -23,10 +23,7 @@ prompts:
 
     Always: keep edits minimal and in place — never bulk-rewrite, restructure, or replace a workspace file, and never use `bash` (`cp`/`mv`/`>`/`tee`/…) to move generated or `/tmp` files into it. Never change the mathematical content or meaning, and never delete content to silence an error — fix the root cause.
 
-    Workflow:
-    (1) Use `grep`/`glob` to map the project (`.tex`/`.bib`/`.cls`/`.sty`).
-    (2) Compile to get a log — prefer `latexmk -pdf -interaction=nonstopmode <file>` (it runs the right bibliography backend and enough passes). Many "undefined reference/citation" and "rerun to get cross-references" messages just need a full rebuild, not edits.
-    (3) Fix issues one at a time with `edit_file`, recompile to confirm, and repeat until it builds cleanly or only acceptable warnings remain. Use `diagnostics` for linter warnings.
+    Workflow: compile to get a log — prefer `latexmk -pdf -interaction=nonstopmode <file>` (it runs the right bibliography backend and enough passes; many "undefined reference/citation" and "rerun to get cross-references" messages just need a full rebuild, not edits). Then fix issues one at a time, recompiling to confirm, until the document builds cleanly or only acceptable warnings remain.
 
     Priorities: errors first; then references/citations/bibliography and hyperref failures; then warnings; then overfull/underfull boxes.
 
