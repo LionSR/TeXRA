@@ -3,12 +3,10 @@ import { Mutex } from 'async-mutex';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   parseAuthCallbackCode,
-  parseAuthCallbackTokens,
   type AuthCallbackUriParts,
 } from './core/authCallback';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import {
-  firstAccountLabel,
   parseStoredSupabaseSession,
   parseTokenExchangeResponse,
   toStorableSupabaseSession,
@@ -213,25 +211,14 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     };
   }
 
-  /**
-   * Convert an OAuth callback into a host-neutral session record. PKCE callbacks
-   * carry a one-time ?code= that is exchanged for a session; a legacy
-   * implicit-flow token callback (tokens in the fragment or query) is kept as a
-   * fallback so an older redirect target still authenticates.
-   */
+  /** Convert a PKCE OAuth callback into a host-neutral session record. */
   async createSessionFromCallback(
     uri: AuthCallbackUriParts,
   ): Promise<SupabaseCallbackResult> {
     const parsedCode = parseAuthCallbackCode(uri);
-    if (parsedCode.success) {
-      return this.createSessionViaCodeExchange(parsedCode.code);
-    }
-    // An explicit error in the callback is terminal for either flow.
-    if (parsedCode.isAuthError) {
-      return parsedCode;
-    }
-    // No code present: fall back to the legacy implicit-flow token callback.
-    return this.createSessionViaTokens(uri);
+    return parsedCode.success
+      ? this.createSessionViaCodeExchange(parsedCode.code)
+      : parsedCode;
   }
 
   private async createSessionViaCodeExchange(
@@ -250,43 +237,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     return { success: true, session: toStorableSupabaseSession(data.session) };
-  }
-
-  private async createSessionViaTokens(
-    uri: AuthCallbackUriParts,
-  ): Promise<SupabaseCallbackResult> {
-    const parsedCallback = parseAuthCallbackTokens(uri);
-
-    if (!parsedCallback.success) return parsedCallback;
-
-    const { accessToken, refreshToken, expiresIn } = parsedCallback.tokens;
-    const { data, error: userError } = await this.options
-      .getClient()
-      .auth.getUser(accessToken);
-
-    if (userError || !data.user) {
-      return {
-        success: false,
-        error: userError?.message || 'User verification failed',
-        isAuthError: true,
-      };
-    }
-
-    const expiresAt = this.getCallbackExpiry(expiresIn);
-
-    return {
-      success: true,
-      session: {
-        id: data.user.id,
-        accessToken,
-        refreshToken,
-        account: {
-          id: data.user.id,
-          label: firstAccountLabel(data.user.email, data.user.id),
-        },
-        expiresAt,
-      },
-    };
   }
 
   /**
@@ -450,23 +400,6 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       this.lastStoredSession.refreshToken === session.refreshToken &&
       this.lastStoredSession.id === session.id
     );
-  }
-
-  private getCallbackExpiry(expiresIn: string | null): number {
-    if (!expiresIn) {
-      return Date.now() + this.options.defaultSessionExpiryMs;
-    }
-
-    const expiresInSeconds = Number(expiresIn);
-    if (!Number.isFinite(expiresInSeconds) || expiresInSeconds <= 0) {
-      this.options.log?.warn?.(
-        'SupabaseSession',
-        `Invalid expires_in callback value: ${expiresIn}`,
-      );
-      return Date.now() + this.options.defaultSessionExpiryMs;
-    }
-
-    return Date.now() + expiresInSeconds * 1000;
   }
 
   private async refreshViaCustomEndpoint(

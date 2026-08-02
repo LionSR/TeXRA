@@ -160,7 +160,6 @@ async function handleCallbackRequest(
     const result = await authCoordinator.createSessionFromCallback({
       path: CALLBACK_PATH,
       query: trimUrlMarker(body.query, '?'),
-      fragment: trimUrlMarker(body.fragment, '#'),
     });
     if (!result.success) throw new Error(result.error);
     if (!attemptState.acceptingCallbacks) {
@@ -220,7 +219,6 @@ function readRequestBody(request: IncomingMessage): Promise<string> {
  */
 const CallbackBodySchema = z.object({
   query: z.string().nullish().catch(undefined),
-  fragment: z.string().nullish().catch(undefined),
   nonce: z.string().nullish().catch(undefined),
 });
 
@@ -263,14 +261,12 @@ function callbackHtml(nonce: string): string {
   <p>Completing TeXRA CLI sign-in...</p>
   <script>
     const callbackQuery = window.location.search;
-    const callbackFragment = window.location.hash;
     window.history.replaceState(null, document.title, window.location.pathname);
     fetch('/auth-callback/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: callbackQuery,
-        fragment: callbackFragment,
         nonce: ${JSON.stringify(nonce)}
       })
     })
