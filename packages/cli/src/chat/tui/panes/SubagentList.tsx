@@ -6,7 +6,12 @@ import { useMemo } from 'react';
 
 // Local imports - shared stream state
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { POINTER, STATUS_DIAMOND, TICK } from '@cli/tui/ui/glyphs';
+import {
+  POINTER,
+  STATUS_DIAMOND,
+  TICK,
+  TOKENS_GENERATED,
+} from '@cli/tui/ui/glyphs';
 import {
   Select,
   visibleSelectRange,
@@ -14,6 +19,8 @@ import {
 } from '@cli/tui/ui/Select';
 import {
   AgentCategory,
+  WORKFLOW_TASK_STATUS_LABEL,
+  isTerminalWorkflowCallProgress,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -23,11 +30,17 @@ import {
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { formatCompactTokenCount } from '@utils/core';
+import {
+  formatCompactDuration,
+  formatCostUsd,
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 // Local imports - TUI rendering
 import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
+import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 
 // Local imports - TUI state and controls
 import { childElapsed } from '../state/childControls';
@@ -35,17 +48,21 @@ import {
   childListStreamId,
   childPhaseListValue,
   childStreamListValue,
+  workflowPhaseListValue,
+  workflowTaskListValue,
   type ChildListValue,
 } from '../state/childListSelection';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
+  WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS,
   childRowMetadataText,
   childStatusColor,
   pendingApprovalRowSuffix,
 } from './SubagentListDisplay';
 import type { PendingApprovalKind } from '../state/approvalQueue';
+import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 function HiddenRowSummary({
@@ -97,8 +114,10 @@ function PhaseHeader({
   return (
     <Box flexDirection="row" flexGrow={1} minWidth={0}>
       <Box minWidth={0} flexShrink={1}>
+        <Text dimColor>{'    '}</Text>
+        <Text aria-hidden dimColor>{`${STATUS_DIAMOND} `}</Text>
         <Text dimColor wrap="truncate-end">
-          {`    ${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
+          {`${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
         </Text>
       </Box>
       {metadataColumn && details.progress ? (
@@ -214,6 +233,360 @@ function SessionRow({
   );
 }
 
+type WorkflowTaskEntry = Extract<
+  StreamSlice['entries'][number],
+  { readonly role: 'workflowTask' }
+>;
+type WorkflowPhaseEntry = Extract<
+  StreamSlice['entries'][number],
+  { readonly role: 'phase' }
+>;
+
+interface WorkflowPhaseGroup {
+  readonly value: ChildListValue;
+  readonly label: string;
+  heading?: WorkflowPhaseEntry;
+  readonly tasks: WorkflowTaskEntry[];
+}
+
+function workflowPhaseGroups(root: StreamSlice): WorkflowPhaseGroup[] {
+  const groups: WorkflowPhaseGroup[] = [];
+  const byPhase = new Map<string | undefined, WorkflowPhaseGroup>();
+  for (const entry of root.entries) {
+    if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
+    const phase = entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
+    let group = byPhase.get(phase);
+    if (!group) {
+      group = {
+        value: workflowPhaseListValue(entry.id),
+        label: phase ?? 'Unphased',
+        ...(entry.role === 'phase' ? { heading: entry } : {}),
+        tasks: [],
+      };
+      byPhase.set(phase, group);
+      groups.push(group);
+    } else if (entry.role === 'phase' && group.heading === undefined) {
+      group.heading = entry;
+    }
+    if (entry.role === 'workflowTask') group.tasks.push(entry);
+  }
+  return groups;
+}
+
+type WorkflowChildTaskIndex = ReadonlyMap<
+  StreamTabId,
+  WorkflowTaskEntry | null
+>;
+
+function workflowChildTaskIndex(
+  tasks: readonly WorkflowTaskEntry[],
+): WorkflowChildTaskIndex {
+  const index = new Map<StreamTabId, WorkflowTaskEntry | null>();
+  for (const entry of tasks) {
+    const childStreamId = entry.task.childStreamId;
+    if (childStreamId === undefined) continue;
+    index.set(childStreamId, index.has(childStreamId) ? null : entry);
+  }
+  return index;
+}
+
+function uniqueWorkflowChildStreamId(
+  entry: WorkflowTaskEntry,
+  childTaskIndex: WorkflowChildTaskIndex,
+  streams: ReadonlyMap<StreamTabId, StreamSlice>,
+): StreamTabId | undefined {
+  const childStreamId = entry.task.childStreamId;
+  return childStreamId !== undefined &&
+    childTaskIndex.get(childStreamId) === entry &&
+    streams.has(childStreamId)
+    ? childStreamId
+    : undefined;
+}
+
+function workflowTaskMetadata(
+  call: WorkflowCallProgress,
+  child: StreamSlice | undefined,
+  nowMs: number,
+): string | undefined {
+  const terminal = isTerminalWorkflowCallProgress(call);
+  const usage = child?.cumulativeUsage ?? child?.usage;
+  let elapsed: string | undefined;
+  let model: string | undefined;
+  let cost: number | undefined;
+  if (terminal) {
+    if ('durationMs' in call && call.durationMs !== undefined) {
+      elapsed = formatCompactDuration(call.durationMs);
+    }
+    model = ('model' in call ? call.model : undefined) ?? child?.model;
+    cost =
+      ('totalCostUsd' in call ? call.totalCostUsd : undefined) ?? usage?.cost;
+  } else {
+    if (child?.runStartedAt !== undefined) {
+      elapsed = formatCompactDuration(nowMs - child.runStartedAt);
+    }
+    model = child?.model;
+    cost = usage?.cost;
+  }
+  const parts = [
+    model,
+    elapsed,
+    usage && usage.outputTokens > 0
+      ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`
+      : undefined,
+    cost !== undefined && cost > 0 ? formatCostUsd(cost) : undefined,
+  ].filter((part): part is string => part !== undefined);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
+function WorkflowTaskRow({
+  child,
+  entry,
+  focused,
+  nowMs,
+}: {
+  readonly child: StreamSlice | undefined;
+  readonly entry: WorkflowTaskEntry;
+  readonly focused: boolean;
+  readonly nowMs: number;
+}): React.JSX.Element {
+  const style = WORKFLOW_TASK_STATUS_STYLE[entry.task.status];
+  const metadata = workflowTaskMetadata(entry.task, child, nowMs);
+  return (
+    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
+        {focused ? POINTER : ' '}
+      </Text>
+      <Text aria-hidden color={style.color}>{` ${style.marker} `}</Text>
+      <Box minWidth={0} flexShrink={1}>
+        <Text wrap="truncate-end">
+          {entry.task.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.task.status]}
+        </Text>
+      </Box>
+      {metadata ? (
+        <Box minWidth={0} flexShrink={2}>
+          <Text dimColor wrap="truncate-end">{`  ${metadata}`}</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function WorkflowDashboard({
+  columns,
+  keyboardActive,
+  maxRows,
+  onCancel,
+  onFocusStream,
+  onSelectionChange,
+  root,
+  selectedValue,
+  streams,
+  uniqueChildTaskIndex,
+}: {
+  readonly columns: number;
+  readonly keyboardActive: boolean;
+  readonly maxRows: number | undefined;
+  readonly onCancel: () => void;
+  readonly onFocusStream: ((streamId: StreamTabId) => void) | undefined;
+  readonly onSelectionChange: ((value: ChildListValue) => void) | undefined;
+  readonly root: StreamSlice;
+  readonly selectedValue: ChildListValue | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly uniqueChildTaskIndex: WorkflowChildTaskIndex;
+}): React.JSX.Element | null {
+  const groups = workflowPhaseGroups(root);
+  const tasks = groups.flatMap((group) => group.tasks);
+  const taskByValue = new Map(
+    tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
+  );
+  const groupByValue = new Map(groups.map((group) => [group.value, group]));
+  const selectedGroup = selectedValue
+    ? groupByValue.get(selectedValue)
+    : undefined;
+  const selectedTask = selectedValue
+    ? taskByValue.get(selectedValue)
+    : undefined;
+  const selectedTaskGroup = selectedTask
+    ? groups.find((group) => group.tasks.includes(selectedTask))
+    : undefined;
+  const activeGroup = selectedGroup ?? selectedTaskGroup ?? groups[0];
+  const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
+    uniqueWorkflowChildStreamId(entry, uniqueChildTaskIndex, streams);
+  const liveElapsedKey = tasks
+    .map((entry) => {
+      const childStreamId = uniqueChildId(entry);
+      return childStreamId === undefined
+        ? undefined
+        : streams.get(childStreamId)?.runStartedAt;
+    })
+    .filter((startedAt): startedAt is number => startedAt !== undefined)
+    .join(':');
+  const nowMs = useLiveNowMs(liveElapsedKey.length > 0, liveElapsedKey);
+  const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
+  const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
+    label: group.label,
+    value: group.value,
+  }));
+  const taskItems: SelectItem<ChildListValue>[] = (
+    activeGroup?.tasks ?? []
+  ).map((entry) => ({
+    label: entry.task.label,
+    value: workflowTaskListValue(entry.id),
+  }));
+  const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
+    { label: group.label, value: group.value, disabled: true },
+    ...group.tasks.map((entry) => ({
+      label: entry.task.label,
+      value: workflowTaskListValue(entry.id),
+    })),
+  ]);
+  const { done, total } = workflowPhaseCallProgress(
+    tasks.map((entry) => entry.task),
+  );
+  const contentRows =
+    maxRows === undefined ? undefined : Math.max(0, maxRows - 2);
+
+  const selectTask = (value: ChildListValue): void => {
+    const entry = taskByValue.get(value);
+    if (!entry) return;
+    const childStreamId = uniqueChildId(entry);
+    if (childStreamId !== undefined) onFocusStream?.(childStreamId);
+  };
+  const enterPhase = (value: ChildListValue): void => {
+    const firstTask = groupByValue.get(value)?.tasks[0];
+    if (firstTask) onSelectionChange?.(workflowTaskListValue(firstTask.id));
+  };
+
+  useInput(
+    (_input, key) => {
+      if (!wide || key.ctrl || key.meta) return;
+      if (key.rightArrow && selectedGroup) {
+        enterPhase(selectedGroup.value);
+      } else if (key.leftArrow && selectedTaskGroup) {
+        onSelectionChange?.(selectedTaskGroup.value);
+      }
+    },
+    { isActive: keyboardActive },
+  );
+
+  if (tasks.length === 0 || (contentRows !== undefined && contentRows <= 0)) {
+    return null;
+  }
+  const heading = `${root.agent ?? 'Workflow'} · ${done}/${total} done`;
+  const renderTask = (
+    item: SelectItem<ChildListValue>,
+    state: { readonly focused: boolean },
+  ): React.JSX.Element | null => {
+    const entry = taskByValue.get(item.value);
+    if (!entry) return null;
+    const childStreamId = uniqueChildId(entry);
+    return (
+      <WorkflowTaskRow
+        child={
+          childStreamId === undefined ? undefined : streams.get(childStreamId)
+        }
+        entry={entry}
+        focused={state.focused}
+        nowMs={nowMs}
+      />
+    );
+  };
+  const groupDetails = (group: WorkflowPhaseGroup): PhaseHeaderDetails => {
+    const progress = workflowPhaseCallProgress(
+      group.tasks.map((entry) => entry.task),
+    );
+    return {
+      phaseLabel: group.label,
+      ...(group.heading?.phaseIndex !== undefined
+        ? { phaseIndex: group.heading.phaseIndex }
+        : {}),
+      ...(group.heading?.phaseTotal !== undefined
+        ? { phaseTotal: group.heading.phaseTotal }
+        : {}),
+      progress: `${progress.done}/${progress.total}`,
+    };
+  };
+  const selectProps = {
+    hotkeys: false,
+    maxVisibleItems: contentRows,
+    onCancel,
+    wrap: false,
+  } as const;
+
+  return (
+    <Box
+      flexDirection="column"
+      height={maxRows === undefined ? undefined : Math.max(0, maxRows - 1)}
+      marginTop={1}
+      paddingX={1}
+      width={columns}
+    >
+      <Text bold wrap="truncate-end">
+        {heading}
+      </Text>
+      {wide ? (
+        <Box flexDirection="row" height={contentRows} minWidth={0}>
+          <Box flexDirection="column" width="32%" paddingRight={1}>
+            <Select
+              {...selectProps}
+              isActive={keyboardActive && selectedTask === undefined}
+              highlightedValue={selectedGroup ? (selectedValue ?? null) : null}
+              items={phaseItems}
+              onHighlightChange={(value) => onSelectionChange?.(value)}
+              onSelect={enterPhase}
+              renderItem={(item, state) => {
+                const group = groupByValue.get(item.value);
+                if (!group) return null;
+                const details = groupDetails(group);
+                return (
+                  <Box minWidth={0}>
+                    <Text aria-hidden>{state.focused ? POINTER : ' '}</Text>
+                    <Text wrap="truncate-end">
+                      {' '}
+                      {formatWorkflowPhaseHeading(details)} · {details.progress}
+                    </Text>
+                  </Box>
+                );
+              }}
+            />
+          </Box>
+          <Box flexDirection="column" minWidth={0} width="68%">
+            <Select
+              {...selectProps}
+              isActive={keyboardActive && selectedTask !== undefined}
+              highlightedValue={selectedTask ? (selectedValue ?? null) : null}
+              items={taskItems}
+              onHighlightChange={(value) => onSelectionChange?.(value)}
+              onSelect={selectTask}
+              renderItem={renderTask}
+            />
+          </Box>
+        </Box>
+      ) : (
+        <Select
+          {...selectProps}
+          isActive={keyboardActive}
+          highlightedValue={selectedValue ?? null}
+          items={narrowItems}
+          onHighlightChange={(value) => onSelectionChange?.(value)}
+          onSelect={selectTask}
+          renderItem={(item, state) => {
+            const group = groupByValue.get(item.value);
+            return group ? (
+              <PhaseHeader
+                details={groupDetails(group)}
+                metadataColumn={false}
+              />
+            ) : (
+              renderTask(item, state)
+            );
+          }}
+        />
+      )}
+    </Box>
+  );
+}
+
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
@@ -234,6 +607,8 @@ export interface SubagentListProps {
   >;
   readonly selectedValue?: ChildListValue;
   readonly sessions?: readonly StreamView[];
+  readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly listRootSlice?: StreamSlice;
   /** Stream the list is rooted on — its row never shows a summary. */
   readonly listRootStreamId?: StreamTabId;
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
@@ -252,12 +627,9 @@ export function SubagentList(
     [sessions],
   );
   const { items, phaseHeadersByValue } = useMemo(() => {
-    const rootSession = sessions.find(
-      (session) => session.id === props.listRootStreamId,
-    );
     const entries =
-      rootSession?.slice?.category === AgentCategory.Workflow
-        ? rootSession.slice.entries
+      props.listRootSlice?.category === AgentCategory.Workflow
+        ? props.listRootSlice.entries
         : [];
     const phaseHeadings = new Map<string, WorkflowPhaseHeading>();
     const callsByPhase = new Map<string, WorkflowCallProgress[]>();
@@ -316,7 +688,7 @@ export function SubagentList(
       previousPhase = phase;
     }
     return { items: nextItems, phaseHeadersByValue: nextHeaders };
-  }, [props.listRootStreamId, sessions]);
+  }, [props.listRootSlice, props.listRootStreamId, sessions]);
   const sessionsByValue = useMemo(
     () =>
       new Map(
@@ -327,6 +699,28 @@ export function SubagentList(
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
+  const workflowRoot =
+    props.listRootSlice?.category === AgentCategory.Workflow &&
+    props.listRootSlice.entries.some((entry) => entry.role === 'workflowTask')
+      ? props.listRootSlice
+      : undefined;
+  const workflowTasks = useMemo(
+    () =>
+      workflowRoot?.entries.filter((entry) => entry.role === 'workflowTask') ??
+      [],
+    [workflowRoot],
+  );
+  const workflowTasksByValue = useMemo(
+    () =>
+      new Map(
+        workflowTasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
+      ),
+    [workflowTasks],
+  );
+  const uniqueChildTaskIndex = useMemo(
+    () => workflowChildTaskIndex(workflowTasks),
+    [workflowTasks],
+  );
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
   const selectedIndex = Math.max(
@@ -352,7 +746,18 @@ export function SubagentList(
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta) return;
-      const streamId = childListStreamId(props.selectedValue);
+      const selectedWorkflowTask = props.selectedValue
+        ? workflowTasksByValue.get(props.selectedValue)
+        : undefined;
+      const workflowChildStreamId = selectedWorkflowTask
+        ? uniqueWorkflowChildStreamId(
+            selectedWorkflowTask,
+            uniqueChildTaskIndex,
+            props.streams ?? new Map(),
+          )
+        : undefined;
+      const streamId =
+        childListStreamId(props.selectedValue) ?? workflowChildStreamId;
       if (!streamId) return;
       const pressed = input.toLowerCase();
       if (pressed === 'v') {
@@ -372,6 +777,23 @@ export function SubagentList(
     },
     { isActive: props.keyboardActive ?? false },
   );
+
+  if (workflowRoot) {
+    return (
+      <WorkflowDashboard
+        columns={columns}
+        keyboardActive={props.keyboardActive ?? false}
+        maxRows={props.maxRows}
+        onCancel={props.onCancel ?? (() => undefined)}
+        onFocusStream={props.onFocusStream}
+        onSelectionChange={props.onSelectionChange}
+        root={workflowRoot}
+        selectedValue={props.selectedValue}
+        streams={props.streams ?? new Map()}
+        uniqueChildTaskIndex={uniqueChildTaskIndex}
+      />
+    );
+  }
 
   if (items.length === 0) return null;
   // The list is deliberately separated from the input/status chrome by one

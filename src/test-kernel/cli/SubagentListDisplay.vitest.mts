@@ -15,7 +15,11 @@ import {
   type SubagentListProps,
 } from '@cli/chat/tui/panes/SubagentList';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
-import { childStreamListValue } from '@cli/chat/tui/state/childListSelection';
+import {
+  childStreamListValue,
+  workflowPhaseListValue,
+  workflowTaskListValue,
+} from '@cli/chat/tui/state/childListSelection';
 import {
   activeStreamId,
   emptySlice,
@@ -867,136 +871,364 @@ describe('CLI child list display model', () => {
     expect(output).not.toContain('map-agent');
   });
 
-  it('switches phase progress layout at the exact width boundary', async () => {
+  it('renders canonical workflow calls and switches panes at the exact boundary', async () => {
     const run = 'run' as StreamTabId;
-    const mapRetry = 'map-retry' as StreamTabId;
-    const mapAttempt = 'map-attempt' as StreamTabId;
-    const loose = 'loose' as StreamTabId;
-    const reduce = 'reduce' as StreamTabId;
-    const freeFormPhase = 'Map:review|draft';
-    const sessions: StreamView[] = [
-      {
-        id: run,
-        label: 'workflow-script',
-        active: true,
-        slice: workflowAgentSlice('run', {
-          status: STREAM_PHASE.RUNNING,
-          entries: [
-            {
-              id: 'phase-map',
-              role: 'phase',
-              text: freeFormPhase,
-              finalized: true,
-              phaseLabel: freeFormPhase,
-              phaseIndex: 0,
-              phaseTotal: 2,
-            },
-            {
-              id: 'task-map',
-              role: 'workflowTask',
-              text: 'Finished: Review map',
-              finalized: true,
-              task: {
-                id: 'review-map',
-                label: 'Review map',
-                phase: freeFormPhase,
-                status: 'completed',
-                durationMs: 1_000,
-              },
-            },
-            {
-              id: 'phase-reduce',
-              role: 'phase',
-              text: 'Reduce',
-              finalized: true,
-              phaseLabel: 'Reduce',
-              phaseIndex: 1,
-              phaseTotal: 2,
-            },
-            {
-              id: 'task-reduce',
-              role: 'workflowTask',
-              text: 'Running: Merge map',
-              finalized: false,
-              task: {
-                id: 'merge-map',
-                label: 'Merge map',
-                phase: 'Reduce',
-                status: 'running',
-              },
-            },
-          ],
+    const exactChild = 'exact-child' as StreamTabId;
+    const wrongChild = 'wrong-child' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'research-workflow',
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        {
+          id: 'phase-map',
+          role: 'phase',
+          text: 'Map',
+          finalized: true,
+          phaseLabel: 'Map',
+          phaseIndex: 0,
+          phaseTotal: 2,
+        },
+        {
+          id: 'task-planned',
+          role: 'workflowTask',
+          text: 'Planned: Duplicate',
+          finalized: false,
+          task: {
+            id: 'planned',
+            label: 'Duplicate',
+            phase: 'Map',
+            status: 'planned',
+          },
+        },
+        {
+          id: 'task-running',
+          role: 'workflowTask',
+          text: 'Running: Duplicate',
+          finalized: false,
+          task: {
+            id: 'running',
+            label: 'Duplicate',
+            phase: 'Map',
+            status: 'running',
+            childStreamId: exactChild,
+          },
+        },
+        {
+          id: 'phase-write',
+          role: 'phase',
+          text: 'Write',
+          finalized: true,
+          phaseLabel: 'Write',
+          phaseIndex: 1,
+          phaseTotal: 2,
+        },
+        {
+          id: 'task-finished',
+          role: 'workflowTask',
+          text: 'Finished: Duplicate',
+          finalized: true,
+          task: {
+            id: 'finished',
+            label: 'Duplicate',
+            phase: 'Write',
+            status: 'completed',
+            childStreamId: wrongChild,
+            model: 'terminal-model',
+            durationMs: 2_000,
+            totalCostUsd: 0.125,
+          },
+        },
+        {
+          id: 'task-cached',
+          role: 'workflowTask',
+          text: 'Saved result: Cached without child',
+          finalized: true,
+          task: {
+            id: 'cached',
+            label: 'Cached without child',
+            phase: 'Write',
+            status: 'cached',
+          },
+        },
+      ],
+    });
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [run, rootSlice],
+      [
+        exactChild,
+        workflowAgentSlice(exactChild, {
+          model: 'exact-live-model',
+          runStartedAt: Date.now() - 5_000,
+          cumulativeUsage: {
+            inputTokens: 100,
+            outputTokens: 512,
+            cost: 0.004,
+          },
         }),
-      },
-      // Phase-less rows head the list, as `groupWorkflowPhaseEntries` orders
-      // them — never between or after groups, where the header above would
-      // appear to own them.
-      { ...session(loose), label: 'unphased', parentId: run },
-      {
-        ...session(mapRetry),
-        label: 'writer-retry',
-        // Retained under the run, but promoted out of its current topology,
-        // so the projected view has no current parentId.
-        workflowPhase: freeFormPhase,
-      },
-      {
-        ...session(mapAttempt),
-        label: 'writer-attempt',
-        parentId: run,
-        workflowPhase: freeFormPhase,
-      },
-      {
-        ...session(reduce),
-        label: 'editor',
-        parentId: run,
-        workflowPhase: 'Reduce',
-      },
+      ],
+      [
+        wrongChild,
+        workflowAgentSlice(wrongChild, {
+          model: 'wrong-child-model',
+          cumulativeUsage: {
+            inputTokens: 100,
+            outputTokens: 999,
+            cost: 9,
+          },
+        }),
+      ],
+    ]);
+    const sessions: StreamView[] = [
+      { id: run, label: 'workflow-script', active: true, slice: rootSlice },
+      { ...session(exactChild), label: 'Duplicate', parentId: run },
+      { ...session(wrongChild), label: 'Duplicate', parentId: run },
     ];
 
     async function renderAtColumns(columns: number): Promise<string> {
       return renderSubagentList(
         {
           listRootStreamId: run,
+          listRootSlice: rootSlice,
           maxRows: 10,
+          selectedValue: workflowPhaseListValue('phase-map'),
           sessions,
+          streams,
         },
         columns,
-        { until: (frame) => frame.includes(freeFormPhase) },
+        { until: (frame) => frame.includes('research-workflow') },
       );
     }
 
-    const wideOutput = await renderAtColumns(60);
-    const narrowOutput = await renderAtColumns(59);
-    const wideLines = wideOutput.split('\n');
-    const wideMapHeader = wideLines.find((line) =>
-      line.includes(`${freeFormPhase} (1/2)`),
-    );
-    const wideMapRow = wideLines.find((line) => line.includes('writer-retry'));
+    const wideOutput = await renderAtColumns(100);
+    const narrowOutput = await renderAtColumns(99);
 
-    expect(wideMapHeader).toBeDefined();
-    expect(wideMapRow).toBeDefined();
-    expect(wideMapHeader?.indexOf('◆')).toBe(wideMapRow?.indexOf('●'));
-    expect(wideMapHeader?.trimEnd().endsWith('1/1')).toBe(true);
-    expect(wideMapHeader).not.toContain('(1/2) · 1/1');
-    expect(narrowOutput).toContain(`${freeFormPhase} (1/2) · 1/1`);
-    expect(narrowOutput).toContain('Reduce (2/2) · 0/1');
-    // Two attempt rows remain visible, but progress counts the one logical
-    // workflow call from the transcript rather than the retry rows.
-    expect(wideOutput.split(freeFormPhase)).toHaveLength(2);
-    expect(wideOutput).toContain('writer-retry');
-    expect(wideOutput).toContain('writer-attempt');
-    expect(wideOutput.indexOf('unphased')).toBeLessThan(
-      wideOutput.indexOf(`${freeFormPhase} (1/2)`),
+    expect(wideOutput).toContain('research-workflow · 2/4 done');
+    expect(wideOutput).toContain('Map (1/2) · 0/2');
+    expect(wideOutput).toContain('Duplicate · Planned');
+    expect(wideOutput).toContain('Duplicate · Running');
+    expect(wideOutput).toContain('exact-live-model');
+    expect(wideOutput).toContain('5s');
+    expect(wideOutput).toContain('↓512');
+    expect(wideOutput).toContain('$0.004');
+    expect(wideOutput).not.toContain('terminal-model');
+    expect(wideOutput).not.toContain('wrong-child-model');
+    expect(wideOutput).not.toContain('↓999');
+
+    expect(narrowOutput.indexOf('Map (1/2)')).toBeLessThan(
+      narrowOutput.indexOf('Duplicate · Planned'),
     );
-    expect(wideOutput.indexOf(`${freeFormPhase} (1/2)`)).toBeLessThan(
-      wideOutput.indexOf('writer-retry'),
+    expect(narrowOutput.indexOf('Duplicate · Running')).toBeLessThan(
+      narrowOutput.indexOf('Write (2/2)'),
     );
-    expect(wideOutput.indexOf('writer-retry')).toBeLessThan(
-      wideOutput.indexOf('writer-attempt'),
+    expect(narrowOutput).toContain('terminal-model');
+    expect(narrowOutput).toContain('2s');
+    expect(narrowOutput).toContain('↓999');
+    expect(narrowOutput).toContain('$0.125');
+    expect(narrowOutput).toContain('Cached without child · Saved result');
+    for (const [output, columns] of [
+      [wideOutput, 100],
+      [narrowOutput, 99],
+    ] as const) {
+      expect(output.split('\n')).toHaveLength(10);
+      expect(
+        output.split('\n').every((line) => textDisplayWidth(line) <= columns),
+      ).toBe(true);
+    }
+  });
+
+  it('collapses phase labels, synthesizes missing groups, and rejects ambiguous child facts', async () => {
+    const run = 'grouped-run' as StreamTabId;
+    const shared = 'shared-child' as StreamTabId;
+    const fallback = 'fallback-child' as StreamTabId;
+    const missing = 'missing-child' as StreamTabId;
+    const rootSlice = workflowAgentSlice(run, {
+      agent: 'grouped-workflow',
+      status: STREAM_PHASE.RUNNING,
+      entries: [
+        {
+          id: 'phase-map-a',
+          role: 'phase',
+          text: 'Map',
+          finalized: true,
+          phaseLabel: 'Map',
+          phaseIndex: 0,
+          phaseTotal: 2,
+        },
+        {
+          id: 'phase-map-b',
+          role: 'phase',
+          text: 'Map',
+          finalized: true,
+          phaseLabel: 'Map',
+        },
+        {
+          id: 'task-map',
+          role: 'workflowTask',
+          text: 'Planned: Audit',
+          finalized: false,
+          task: {
+            id: 'audit',
+            label: 'Audit',
+            phase: 'Map',
+            status: 'planned',
+          },
+        },
+        {
+          id: 'task-orphan',
+          role: 'workflowTask',
+          text: 'Planned: Synthesize',
+          finalized: false,
+          task: {
+            id: 'synthesize',
+            label: 'Synthesize',
+            phase: 'Synthesis',
+            status: 'planned',
+          },
+        },
+        {
+          id: 'task-loose',
+          role: 'workflowTask',
+          text: 'Planned: Loose',
+          finalized: false,
+          task: { id: 'loose', label: 'Loose', status: 'planned' },
+        },
+        ...['first', 'second'].map((id) => ({
+          id: `task-reused-${id}`,
+          role: 'workflowTask' as const,
+          text: `Running: Reused ${id}`,
+          finalized: false,
+          task: {
+            id: `reused-${id}`,
+            label: `Reused ${id}`,
+            status: 'running' as const,
+            childStreamId: shared,
+          },
+        })),
+        {
+          id: 'task-reused-terminal',
+          role: 'workflowTask',
+          text: 'Finished: Reused terminal',
+          finalized: true,
+          task: {
+            id: 'reused-terminal',
+            label: 'Reused terminal',
+            status: 'completed',
+            childStreamId: shared,
+            model: 'call-owned-model',
+            durationMs: 1_000,
+            totalCostUsd: 0.5,
+          },
+        },
+        {
+          id: 'task-missing',
+          role: 'workflowTask',
+          text: 'Running: Missing',
+          finalized: false,
+          task: {
+            id: 'missing',
+            label: 'Missing',
+            status: 'running',
+            childStreamId: missing,
+          },
+        },
+        {
+          id: 'task-fallback',
+          role: 'workflowTask',
+          text: 'Finished: Fallback',
+          finalized: true,
+          task: {
+            id: 'fallback',
+            label: 'Fallback',
+            status: 'completed',
+            childStreamId: fallback,
+          },
+        },
+      ],
+    });
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [run, rootSlice],
+      [
+        shared,
+        workflowAgentSlice(shared, {
+          model: 'ambiguous-model',
+          cumulativeUsage: {
+            inputTokens: 100,
+            outputTokens: 999,
+            cost: 9,
+          },
+        }),
+      ],
+      [
+        fallback,
+        workflowAgentSlice(fallback, {
+          model: 'fallback-model',
+          runStartedAt: Date.now() - 5_000,
+          cumulativeUsage: {
+            inputTokens: 100,
+            outputTokens: 321,
+            cost: 0.007,
+          },
+        }),
+      ],
+    ]);
+    const props: SubagentListProps = {
+      listRootStreamId: run,
+      listRootSlice: rootSlice,
+      maxRows: 15,
+      sessions: [],
+      streams,
+    };
+    const wideOutput = await renderSubagentList(
+      {
+        ...props,
+        selectedValue: workflowPhaseListValue('task-orphan'),
+      },
+      100,
+      { until: (frame) => frame.includes('Synthesize · Planned') },
     );
-    expect(wideOutput.indexOf('writer-attempt')).toBeLessThan(
-      wideOutput.indexOf('Reduce (2/2)'),
+    const narrowOutput = await renderSubagentList(
+      {
+        ...props,
+        selectedValue: workflowTaskListValue('task-fallback'),
+      },
+      99,
+      { until: (frame) => frame.includes('Fallback · Finished') },
     );
+
+    expect(wideOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
+    expect(wideOutput).toContain('Synthesis · 0/1');
+    expect(wideOutput).toContain('Unphased · 2/6');
+    expect(wideOutput).toContain('Synthesize · Planned');
+    expect(narrowOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
+    expect(narrowOutput).toContain('Synthesis · 0/1');
+    expect(narrowOutput).toContain('Unphased · 2/6');
+    expect(narrowOutput).toContain('Loose · Planned');
+
+    const reusedLine = narrowOutput
+      .split('\n')
+      .find((line) => line.includes('Reused first · Running'));
+    expect(reusedLine).not.toContain('ambiguous-model');
+    expect(reusedLine).not.toContain('↓999');
+    const reusedTerminalLine = narrowOutput
+      .split('\n')
+      .find((line) => line.includes('Reused terminal · Finished'));
+    expect(reusedTerminalLine).toContain('call-owned-model');
+    expect(reusedTerminalLine).toContain('1s');
+    expect(reusedTerminalLine).toContain('$0.500');
+    expect(reusedTerminalLine).not.toContain('ambiguous-model');
+    expect(reusedTerminalLine).not.toContain('↓999');
+    const missingLine = narrowOutput
+      .split('\n')
+      .find((line) => line.includes('Missing · Running'));
+    expect(missingLine).toBeDefined();
+    expect(missingLine).not.toContain('fallback-model');
+    const fallbackLine = narrowOutput
+      .split('\n')
+      .find((line) => line.includes('Fallback · Finished'));
+    expect(fallbackLine).toContain('fallback-model');
+    expect(fallbackLine).toContain('↓321');
+    expect(fallbackLine).toContain('$0.007');
+    expect(fallbackLine).not.toContain('5s');
   });
 
   // The right-aligned metadata column is the one row element `SubagentList`

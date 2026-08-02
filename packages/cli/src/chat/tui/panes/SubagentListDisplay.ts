@@ -62,6 +62,10 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
  *  and rows keep their inline elapsed, so identity is not crowded out. */
 export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
 
+/** At this width the workflow dashboard has room for independently navigable
+ * phase and task panes; below it, source-ordered tasks use the full row. */
+export const WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS = 100;
+
 /** Right-aligned metadata column for a child row: elapsed time, the number of
  *  tool calls the child has made, and its generated tokens so far (e.g.
  *  `2m 30s · 5 tool calls · ↓40k`). This is the per-agent stats summary a
