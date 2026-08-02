@@ -1208,6 +1208,72 @@ describe('completedRunArchive facade', () => {
     expect(secondPage.output).toContain('Returned message interval: [1, 2)');
   });
 
+  it('ignores non-conversation branches when the message order is unique', async () => {
+    const executionId = '0888b80888b8' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b80888b8' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b80888b8' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const shared = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
+      id: 'diagnostic-branch-shared',
+    };
+    const answer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared answer' }),
+      id: 'diagnostic-branch-answer',
+    };
+    const nextTurn = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Continued question',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          canonical,
+          [
+            shared,
+            logRow(MESSAGE_TYPES.PROGRESS_STATUS, {
+              text: 'Canonical status',
+            }),
+            answer,
+          ],
+        ],
+        [
+          continuation,
+          [
+            shared,
+            logRow(MESSAGE_TYPES.STATISTICS, {
+              text: 'Continuation statistics',
+            }),
+            answer,
+            nextTurn,
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: canonical,
+      streamIds: [canonical, continuation],
+      conversation: [
+        { role: 'user', content: 'Shared prompt' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Shared answer' }],
+        },
+        { role: 'user', content: 'Continued question' },
+      ],
+    });
+  });
+
   it('keeps the selected archive when copied-row ordering forms a cycle', async () => {
     const executionId = '0888bf0888bf' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;

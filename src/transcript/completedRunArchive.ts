@@ -536,8 +536,14 @@ async function mergedCandidateConversation(
   const successors = new Map<string, Set<string>>();
   const indegrees = new Map<string, number>();
   for (const { entries } of mergeStreams) {
+    // The endpoint promises conversation chronology. Status, statistics, and
+    // other display-only rows are projected away, so independent placement of
+    // those rows cannot make the resulting message order ambiguous.
+    const conversationEntries = entries.filter(
+      (entry) => conversationMessagesForEntry(entry).length > 0,
+    );
     let previousId: string | undefined;
-    for (const entry of entries) {
+    for (const entry of conversationEntries) {
       if (!nodes.has(entry.id)) nodes.set(entry.id, entry);
       if (!indegrees.has(entry.id)) indegrees.set(entry.id, 0);
       if (previousId && previousId !== entry.id) {
