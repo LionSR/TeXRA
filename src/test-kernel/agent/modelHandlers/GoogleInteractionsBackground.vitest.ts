@@ -73,7 +73,7 @@ function bgClient(opts: {
   getSequence: Array<Interaction | Error>;
   beforeGet?: (index: number) => void | Promise<void>;
   onCancel?: (id: string) => void | Promise<void>;
-  generateContent?: () => Promise<unknown>;
+  compaction?: () => Interaction;
   countTokens?: (params: unknown) => Promise<unknown>;
 }): { client: unknown; calls: CapturedCalls } {
   let getIdx = 0;
@@ -87,6 +87,13 @@ function bgClient(opts: {
         previous_interaction_id?: string;
         input: Step[];
       }) => {
+        if (
+          opts.compaction &&
+          params.store === false &&
+          params.stream === false
+        ) {
+          return opts.compaction();
+        }
         calls.create.push({
           store: params.store,
           background: params.background,
@@ -112,9 +119,6 @@ function bgClient(opts: {
       },
     },
     models: {
-      ...(opts.generateContent
-        ? { generateContent: opts.generateContent }
-        : {}),
       ...(opts.countTokens ? { countTokens: opts.countTokens } : {}),
     },
   };
@@ -1174,9 +1178,9 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     const { client, calls } = bgClient({
       submit: () => completedInteraction('int_1'),
       getSequence: [completedInteraction('int_1')],
-      generateContent: async () => ({
-        text: 'SUMMARY',
-        usageMetadata: { candidatesTokenCount: 5 },
+      compaction: () => ({
+        ...completedInteraction('compact', 'SUMMARY'),
+        usage: { total_output_tokens: 5 },
       }),
     });
 
