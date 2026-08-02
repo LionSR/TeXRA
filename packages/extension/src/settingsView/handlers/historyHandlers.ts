@@ -7,10 +7,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-// The `.tex` template is bundled in the extension's resources/ tree and loaded
-// as raw text by the esbuild `.tex: text` loader; it is injected into the
-// host-neutral ChatExportController so core stays free of `@resources`.
-
 import {
   getExecutionStore,
   deleteExecution,
@@ -35,6 +31,9 @@ import {
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+// Bundled in the extension's resources/ tree and loaded as raw text by the
+// esbuild `.tex: text` loader, then injected into the host-neutral
+// ChatExportController so core stays free of `@resources`.
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId } from '@shared/schemas';
@@ -159,9 +158,9 @@ export class HistoryHandlers {
       this.ctx,
       'Failed to export chat',
       async () => {
-        // HTML no longer goes through buildExportInput/ChatExportInput — it
-        // reads the execution's trace directly via assembleTrace, which has
-        // its own independent (and differently-shaped) missing-data statuses.
+        // HTML reads the execution's trace directly via assembleTrace, whose
+        // missing-data statuses are shaped differently from
+        // buildExportInput's, so it takes its own path.
         if (format === 'html') {
           await this.exportAndOpenHtml(data.historyId);
           return;

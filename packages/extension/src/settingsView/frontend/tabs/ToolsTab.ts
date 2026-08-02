@@ -90,8 +90,6 @@ export class ToolsTab extends LitElement {
         display: block;
       }
 
-      /* max-width and centering provided by .tab-content-container */
-
       .tools-summary {
         display: flex;
         align-items: center;
@@ -181,11 +179,7 @@ export class ToolsTab extends LitElement {
   };
 
   private handleToolPathProtectionToggle = (e: Event): void => {
-    const target = e.target as WaSwitch | null;
-    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-      value: Boolean(target?.checked),
-    });
+    this.postStateToggle(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED, e);
   };
 
   private handleAgentSkillsToggle = (e: Event): void => {

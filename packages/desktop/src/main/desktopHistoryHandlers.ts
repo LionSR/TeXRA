@@ -1,8 +1,6 @@
-// Node imports
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-// Local imports
 import {
   deleteAllExecutions,
   deleteExecution,

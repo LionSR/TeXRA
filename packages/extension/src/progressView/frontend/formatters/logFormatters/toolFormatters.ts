@@ -135,9 +135,9 @@ export function formatToolUseTemplate(
   });
 
   // Show output if present
-  const isWriteTool = toolDisplayKind(toolName) === 'write';
+  const displayKind = toolDisplayKind(toolName);
   const isTrivialWriteOutput =
-    isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
+    displayKind === 'write' && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   // Skip the output section when its text is already fully shown in the
   // collapsed summary title (e.g. "Replaced 1 occurrence."). Exact match
   // against the summary only — a substring test would also suppress short
@@ -151,11 +151,11 @@ export function formatToolUseTemplate(
     !isOutputInTitle &&
     toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME &&
     !isMcpToolName(toolName) &&
-    toolDisplayKind(toolName) !== 'read' &&
+    displayKind !== 'read' &&
     !isTrivialWriteOutput
   ) {
     sections.push(
-      toolDisplayKind(toolName) === 'bash' || normalizedToolName === 'codex'
+      displayKind === 'bash' || normalizedToolName === 'codex'
         ? buildTerminalSection('', outputText)
         : buildToolSection('', outputText, {
             toolName,

@@ -97,7 +97,7 @@ describe('assembleTrace', () => {
     expect(result).toEqual({ status: 'config_missing' });
   });
 
-  it('returns streamLogs_missing for a pre-#7057 execution (config exists, streamLogs never persisted)', async () => {
+  it('returns streamLogs_missing when a config exists but stream logs were never persisted', async () => {
     const executionId = 'exec-no-logs' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(config());
 

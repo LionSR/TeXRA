@@ -215,13 +215,8 @@ function collectFileReferenceCounts(
 }
 
 /**
- * Build a text content block.
- *
- * Nine sites used to hand-roll this literal with an `as ContentBlockParam`
- * cast. The cast was never needed — `citations` and `cache_control` are both
- * optional on `TextBlockParam` — it only suppressed the union inference that
- * an explicit return type resolves. Naming the constructor keeps the shape in
- * one place and keeps the unchecked cast out of the file.
+ * Build a text content block. The explicit return type resolves the union
+ * inference, so no call site needs an `as ContentBlockParam` cast.
  */
 function textBlock(text: string): ContentBlockParam {
   return { type: 'text', text };
@@ -1108,8 +1103,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
     return mediaMessage.flatMap((media): ContentBlockParam[] => {
       if (media.media_category === 'image') {
-        // for backward compatibility
-        // Always ensure media_type exists
+        // Always ensure media_type exists.
         const originalMediaType = media.media_type;
         let resolvedMediaType = originalMediaType;
         if (!resolvedMediaType) {
@@ -1524,7 +1518,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         workspaceState.resetServerToolContent();
       }
       if (text) {
-        content.push({ type: 'text', text });
+        content.push(textBlock(text));
       }
     }
 

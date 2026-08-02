@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { noopTrace } from '@agent/trace';
+import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
+import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
+import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -15,7 +18,7 @@ function responseServices({
   supportsFunctionCalling = true,
 }: {
   supportsFunctionCalling?: boolean;
-}) {
+}): Parameters<typeof responseCycleToolsForModel>[0] {
   return {
     toolRegistry: getDefaultToolRegistry(),
     modelCell: testModelCell({
@@ -35,7 +38,7 @@ function responseServices({
         { name: 'wolfram' },
       ],
     },
-  };
+  } as unknown as ResponseCycleServices;
 }
 
 describe('response cycle tool visibility', () => {
@@ -62,7 +65,7 @@ describe('response cycle tool visibility', () => {
     const tools = await withTestRunContext(
       { emit: vi.fn() },
       'response-cycle-stream',
-      async () => responseCycleToolsForModel(responseServices({}) as any),
+      async () => responseCycleToolsForModel(responseServices({})),
       services,
     );
 
@@ -75,9 +78,7 @@ describe('response cycle tool visibility', () => {
       'response-cycle-stream',
       async () =>
         responseCycleToolsForModel(
-          responseServices({
-            supportsFunctionCalling: false,
-          }) as any,
+          responseServices({ supportsFunctionCalling: false }),
         ),
     );
 
@@ -111,14 +112,11 @@ describe('response cycle tool visibility', () => {
         setOutputStreaming: vi.fn(),
       }),
       runScope: testRunScope('response-cycle-invocation'),
-      interactions: { emit: vi.fn() },
-      abortSignal: new AbortController().signal,
       setting: {
         temperature: 0,
         tools: [{ name: 'bash' }],
       },
-      streamId: 'stream-1',
-    } as any);
+    } as unknown as AgentCore);
 
     await withTestRunContext(
       { emit: vi.fn() },
@@ -127,7 +125,7 @@ describe('response cycle tool visibility', () => {
         node.run({
           messages: [],
           shouldStop: false,
-        } as any),
+        } as unknown as BaseCycleFields),
     );
 
     expect(createResponse).toHaveBeenCalledWith(

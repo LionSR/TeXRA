@@ -41,25 +41,17 @@ import {
 
 const LONG_INSTRUCTION_CHARS = 400;
 
-/** Per-item action → settings-view command carrying this item's historyId. */
-const HISTORY_ACTION_COMMANDS: Record<string, string> = {
-  delete: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
-  restore: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-  rerun: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-  'export-md': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-  'export-tex': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
-  'export-html': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
-};
-
 /** Per-item action buttons, in render order. */
-const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
-  readonly button: IconActionButtonOptions;
+const HISTORY_ACTIONS: ReadonlyArray<{
+  readonly button: IconActionButtonOptions & { readonly action: string };
+  /** Settings-view command this action posts, carrying this item's historyId. */
+  readonly command: string;
   /**
-   * Hidden when the host's registry declares this settings-view command
-   * unsupported, instead of leaving a control visible that can only produce
-   * an unavailable-command toast.
+   * Hidden when the host's registry declares `command` unsupported, instead of
+   * leaving a control visible that can only produce an unavailable-command
+   * toast. Delete renders on every host.
    */
-  readonly requiresCommand?: string;
+  readonly hideWhenUnsupported?: boolean;
   /** Rendered only for tool-use runs. */
   readonly toolUseOnly?: boolean;
 }> = [
@@ -71,6 +63,7 @@ const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
       tooltip: 'Delete this history item',
       action: 'delete',
     },
+    command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT,
   },
   {
     button: {
@@ -80,7 +73,8 @@ const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
       tooltip: "Restore this run's setup",
       action: 'restore',
     },
-    requiresCommand: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+    command: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+    hideWhenUnsupported: true,
   },
   {
     button: {
@@ -90,7 +84,8 @@ const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
       tooltip: 'Rerun this task',
       action: 'rerun',
     },
-    requiresCommand: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+    command: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+    hideWhenUnsupported: true,
   },
   {
     button: {
@@ -100,7 +95,8 @@ const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
       tooltip: 'Export as Markdown',
       action: 'export-md',
     },
-    requiresCommand: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+    command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+    hideWhenUnsupported: true,
     toolUseOnly: true,
   },
   {
@@ -111,7 +107,8 @@ const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
       tooltip: 'Export as LaTeX/PDF',
       action: 'export-tex',
     },
-    requiresCommand: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+    command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+    hideWhenUnsupported: true,
     toolUseOnly: true,
   },
   {
@@ -122,10 +119,16 @@ const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
       tooltip: 'Export as shareable HTML webpage',
       action: 'export-html',
     },
-    requiresCommand: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+    command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+    hideWhenUnsupported: true,
     toolUseOnly: true,
   },
 ];
+
+/** Clicked `data-action` → the command it posts. */
+const HISTORY_ACTION_COMMANDS: ReadonlyMap<string, string> = new Map(
+  HISTORY_ACTIONS.map((entry) => [entry.button.action, entry.command]),
+);
 
 @customElement('history-item')
 export class HistoryItemElement extends LitElement {
@@ -206,7 +209,7 @@ export class HistoryItemElement extends LitElement {
 
   private handleAction(action: string): void {
     if (!this.item) return;
-    const command = HISTORY_ACTION_COMMANDS[action];
+    const command = HISTORY_ACTION_COMMANDS.get(action);
     if (!command) return;
     postMessage(command, { historyId: this.item.id });
   }
@@ -412,14 +415,11 @@ export class HistoryItemElement extends LitElement {
             class="history-actions action-button-group"
             @click=${this.handleActionClick}
           >
-            ${HISTORY_ACTION_BUTTONS.filter(
+            ${HISTORY_ACTIONS.filter(
               (entry) =>
                 (!entry.toolUseOnly || presentation.isToolUse) &&
-                (entry.requiresCommand === undefined ||
-                  !isKnownUnsupported(
-                    this.unsupportedCommands,
-                    entry.requiresCommand,
-                  )),
+                (!entry.hideWhenUnsupported ||
+                  !isKnownUnsupported(this.unsupportedCommands, entry.command)),
             ).map((entry) => renderIconActionButton(entry.button))}
           </div>
         </div>

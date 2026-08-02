@@ -90,10 +90,8 @@ export async function runAgent(
     registerExecutionOption ?? request.executionId === undefined;
   const runSession = executeAgentOptions.session ?? defaultSession();
 
-  // Only the "fix LaTeX" VS Code actions opt in (preferHelperModel); the agent
-  // then runs on the configured helper model. A direct main-view launch keeps the
-  // model the user picked. Resolved before registerExecution so the stored record
-  // and the run agree.
+  // Resolved before registerExecution so the stored record and the run agree
+  // on the model.
   const config = preferHelperModel
     ? await applyHelperModelPreference(request.config)
     : request.config;

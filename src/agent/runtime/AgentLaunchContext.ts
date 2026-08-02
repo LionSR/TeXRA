@@ -224,11 +224,11 @@ async function inferLaunchModelHandlerCompatibilityKey(
  * what keeps a subagent's "Run:"/Init/r0/r1 subtree from orphaning in its own
  * transcript. See docs/proposals/2026-05-30-progress-grouping-refactor.md (R1).
  */
-async function beginRunStage(
+function beginRunStage(
   agentLogger: AgentTrace,
   label: string,
   instruction: string | undefined,
-): Promise<StageHandle> {
+): StageHandle {
   if (instruction) {
     logUserMessage(agentLogger, instruction);
   }
@@ -359,7 +359,7 @@ async function assembleAgentLaunchContext(
       : modelHandler.capabilities.supportsVision);
 
   const parentStage = resources.ownParentStage(
-    await beginRunStage(
+    beginRunStage(
       agentLogger,
       `Run: ${config.agent}`,
       initialMediaMayBeInserted ? undefined : initialInstruction,

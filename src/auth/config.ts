@@ -269,5 +269,5 @@ export const AUTH_CALLBACK_TIMEOUT_MS = 10 * 60 * 1000;
 /** Refresh token proactively if it expires within this threshold (30 minutes). */
 export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;
 
-/** Storage key for Supabase session in VS Code SecretStorage. */
+/** Key the stored Supabase session takes in the host's secret storage. */
 export const SUPABASE_SESSION_KEY = 'texra.supabase.session';

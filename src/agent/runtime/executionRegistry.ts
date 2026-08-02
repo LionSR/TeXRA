@@ -101,11 +101,10 @@ export type ManualCompactionRequestResult =
     };
 
 /**
- * Process-wide owner for active executions and their change listeners.
+ * Session-owned registry of active executions and their change listeners.
  *
- * This is still a singleton while AgentRun ownership is being introduced, but
- * the mutable maps and status subscription now live behind one explicit owner
- * instead of free module state.
+ * One instance belongs to each {@link SessionHandle}, which binds it to that
+ * session's event hub, approvals, and lease-release boundary.
  */
 export class ExecutionRegistry {
   /**

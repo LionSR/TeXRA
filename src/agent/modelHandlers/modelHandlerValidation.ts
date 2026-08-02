@@ -1,5 +1,3 @@
-// Third-party imports
-
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -23,6 +21,8 @@ import type {
 
 // Local imports - model handlers
 import { ModelHandler } from './ModelHandler';
+
+// Third-party imports
 import type { ModelConfig } from 'llm-zoo';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { CompletionUsage } from 'openai/resources/completions';

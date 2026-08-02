@@ -66,7 +66,6 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import {
@@ -205,9 +204,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
   it('resolves execution lineage before activating the resume stream', async () => {
     const storageError = new Error('execution metadata unavailable');
-    const interactions = {
-      emit: vi.fn(),
-    } as unknown as SessionHostInteractions;
     const snapshot = createToolUseResumeData({
       executionId: 'e8048' as ExecutionId,
       streamId: 'stream-8048' as StreamTabId,
@@ -244,7 +240,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
   });
 
-  it('preserves the historical diagnostic for a non-tool-use launch', async () => {
+  it('rejects a resumed launch that is not a tool-use agent', async () => {
     const resume = createToolUseResumeData();
     mocks.hasPersistedParent.mockResolvedValueOnce(false);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce({
@@ -264,9 +260,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('interrupts at flow attachment before substantive work starts', async () => {
     const executionId = 'e8049' as ExecutionId;
     const streamId = 'stream-8049' as StreamTabId;
-    const interactions = {
-      emit: vi.fn(),
-    } as unknown as SessionHostInteractions;
     const abortController = new AbortController();
     const context = {
       setting: { agentCategory: AgentCategory.ToolUse },

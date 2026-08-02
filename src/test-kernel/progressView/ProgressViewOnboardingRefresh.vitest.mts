@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -20,7 +18,6 @@ import {
   createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
 
-// Third-party imports
 import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({

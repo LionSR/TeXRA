@@ -169,16 +169,14 @@ function messagesOfType(
 /**
  * Regression test for https://github.com/LionSR/TeXRA/issues/7163.
  *
- * When a tool-use round is interrupted mid-flight, `ToolUseDispatchNode` used
- * to silently drop the tool_use blocks for calls that never executed —
- * persisting an assistant turn with N tool_use blocks but fewer than N
- * tool_result entries. Providers with strict tool-call pairing requirements
- * (e.g. Anthropic, and OpenAI's response-chaining mode) reject a follow-up
- * request whose history has an unpaired tool_use on resume.
+ * An assistant turn persisted with N tool_use blocks but fewer than N
+ * tool_result entries is unresumable: providers with strict tool-call pairing
+ * requirements (e.g. Anthropic, and OpenAI's response-chaining mode) reject a
+ * follow-up request whose history has an unpaired tool_use.
  *
- * Each test dispatches two tool calls in one round, interrupts the run at a
+ * Each test dispatches three tool calls in one round, interrupts the run at a
  * different point, and asserts the persisted messages contain a matching
- * tool_use/tool_result pair for *both* calls — the pairs for the calls that
+ * tool_use/tool_result pair for *every* call — the pairs for the calls that
  * never ran being synthesized "cancelled" results.
  */
 describe('ToolUseDispatchNode interruption', () => {

@@ -38,16 +38,15 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
 /**
- * Parity pins for the coordinator fold (#7487): plan approval, proposal, and
- * retry requests now travel `session.interactions` directly. The behaviors the
- * deleted coordinator layer guaranteed — first-wins resolution, replacement
- * cancellation for duplicate request ids, and per-stream cleanup — are pinned
- * here against a real production port implementation (the desktop one; it has
- * no VS Code import graph) installed into a real `SessionHandle` slot.
+ * Plan approval, proposal, and retry requests travel `session.interactions`
+ * directly. First-wins resolution, replacement cancellation for duplicate
+ * request ids, and per-stream cleanup are pinned here against a real production
+ * port implementation (the desktop one; it has no VS Code import graph)
+ * installed into a real `SessionHandle` slot.
  */
 
 const streamId = 'stream:interactions-test' as StreamTabId;
-const plan: Plan = { objective: 'Fold the coordinator layer into the port.' };
+const plan: Plan = { objective: 'Route approvals through the session port.' };
 const proposal: AgentProposal = {
   agentCategory: AgentCategory.ToolUse,
   agent: 'reviewer',
@@ -482,7 +481,7 @@ describe('session.interactions immediate capabilities', () => {
   });
 });
 
-describe('session.interactions request bookkeeping (coordinator fold)', () => {
+describe('session.interactions request bookkeeping', () => {
   it('disposes an adapter offered after terminal slot disposal', () => {
     const session = createTestSession();
     const adapter = createControllablePlanAdapter();
@@ -927,8 +926,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
         goalEnabled: false,
       });
       expect(pending).toBeDefined();
-      // The port owns display and the activation emissions the coordinator
-      // layer used to duplicate.
+      // The port owns both the display and the activation emissions.
       expect(emitted).toContain('requestEnsureProgressView');
       expect(uiEvents).toContainEqual({
         event: 'show:planApproval',

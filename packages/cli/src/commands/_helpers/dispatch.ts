@@ -1,7 +1,7 @@
 /**
  * Dispatch-time CLI helpers: argv token classification, command-tree
  * walking, flag reordering, unknown-command/-flag suggestions, and usage
- * rendering. Formerly one file per concern under `dispatch/`.
+ * rendering.
  */
 import {
   type ArgDef,

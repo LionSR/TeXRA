@@ -53,19 +53,20 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { createChildStream, getChildStreamId } from './childStream';
+import {
+  createChildStream,
+  getChildStreamId,
+  type ChildStream,
+} from './childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /**
- * Small head budget retained alongside the tail (approximates the foreground
- * checkToolResultTextLimit head:tail ratio of TOOL_RESULT_TRUNCATION_HEAD_CHARS
- * /_TAIL_CHARS, 4,000/50,000 = 8.0% — this is 1,000/12,000 ≈ 8.3%, close but
- * not identical, since the two paths have independently-sized tail budgets).
- * A long background build's first fatal error tends to sit near the top of
- * the log, well before the tail budget's trailing window; without this,
- * output that outgrows the tail silently drops that error with no way to
- * recover it from the follow-up.
+ * Small head budget retained alongside the tail, at roughly the foreground
+ * head:tail ratio. A long background build's first fatal error tends to sit
+ * near the top of the log, well before the tail budget's trailing window;
+ * without this, output that outgrows the tail silently drops that error with
+ * no way to recover it from the follow-up.
  */
 const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
 const BASH_CHILD_STREAM_PREFIX = 'bash@tool';
@@ -104,8 +105,7 @@ interface BoundedOutputCapture {
  * @param options.normalizeWhitespace When true (the default, used by the
  *   foreground path) leading whitespace is dropped and trailing whitespace is
  *   deferred so a stream that ends in blank lines is not counted or shown. The
- *   background path passes false to keep its historical raw byte-for-byte
- *   head/tail/total tracking exactly.
+ *   background path passes false and tracks head/tail/total byte-for-byte.
  */
 function createBoundedOutputCapture(
   headChars: number,
@@ -418,7 +418,7 @@ export class BashTool extends defineTool({
     });
     const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-    let childStream!: ReturnType<typeof createChildStream>;
+    let childStream!: ChildStream;
     try {
       runWithOwnership(() => {
         childStream = createChildStream(executionId, parentStreamId, {
@@ -435,10 +435,9 @@ export class BashTool extends defineTool({
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
     }
     const { childStreamId, logger } = childStream;
-    // Reuse the foreground bounded capture, but with whitespace normalization
-    // disabled so the background head/tail/total tracking stays byte-for-byte
-    // identical to its historical inline math (the two paths keep their own
-    // near-but-not-quite head/tail budgets — see the constants above).
+    // Whitespace normalization is off here: a background log is delivered
+    // verbatim, and its head/tail budgets are its own (see the constants
+    // above) rather than the foreground tool-result ones.
     const stdout = createBoundedOutputCapture(
       BACKGROUND_OUTPUT_HEAD_CHARS,
       BACKGROUND_OUTPUT_TAIL_CHARS,

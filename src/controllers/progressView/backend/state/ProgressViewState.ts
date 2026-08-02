@@ -210,7 +210,7 @@ export class ProgressViewState {
   /**
    * Compute which stream should be active given available streams (pure query).
    */
-  pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
+  private pickValidActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const current = this._prefs.get('activeStream');
     if (availableStreams.includes(current)) {
       return current;
@@ -295,8 +295,7 @@ export class ProgressViewState {
    * through here rather than assigning fields by hand. A field the patch
    * doesn't mention is preserved verbatim from `current` — callers that want
    * to clear a field (e.g. detaching a parent) do so by including that key
-   * in the patch with an explicit `undefined`, same as before this was
-   * centralized.
+   * in the patch with an explicit `undefined`.
    */
   private applyMetadataPatch(
     current: StoredStreamMetadata,

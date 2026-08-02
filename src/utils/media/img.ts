@@ -24,8 +24,6 @@ const DEFAULT_PDF_QUALITY = 300;
 /** Default maximum [width, height] in px for a rasterized PDF page. */
 const DEFAULT_PDF_MAX_SIZE: [number, number] = [1024, 1024];
 
-// ImageMagick configuration is now in toolUtils.ts
-
 /** Resolve a file path and return the absolute path, or null if not found. */
 async function resolveFile(filePath: string): Promise<string | null> {
   const absolutePath = WorkspaceFS.toAbsolute(filePath);
@@ -247,9 +245,8 @@ export async function processPdf2Png(
       throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
 
-    // Private per-conversion directory: concurrent conversions used to share
-    // one directory and each wiped every `temp_*` file on the way out, so one
-    // conversion could delete the pages another was still reading.
+    // Private per-conversion directory so the cleanup below can delete every
+    // page it holds without touching pages a concurrent conversion is reading.
     const tempDir = await createTexraTempDir('texra-pdf-conversion-');
     try {
       if (pageCount === 1) {

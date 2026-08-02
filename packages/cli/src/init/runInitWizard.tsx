@@ -194,75 +194,81 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
   };
 
   let picker: React.JSX.Element;
-  if (step === 'agent') {
-    picker = (
-      <Select
-        key={step}
-        initialIndex={initWizardDefaultAgentIndex(props.options.agents)}
-        items={props.options.agents.map((agent) => ({
-          value: agent.name,
-          label: agent.name,
-        }))}
-        onSelect={(agent) => commit({ agent })}
-        onCancel={cancel}
-      />
-    );
-  } else if (step === 'model') {
-    picker = (
-      <Select
-        key={step}
-        initialIndex={firstAvailableIndex(props.options.models)}
-        items={initWizardModelSelectItems(props.options.models)}
-        onSelect={(model) => commit({ model })}
-        onCancel={cancel}
-      />
-    );
-  } else if (step === 'approval') {
-    picker = (
-      <Select
-        key={step}
-        items={APPROVAL_POLICY_ORDER.map((policy) => ({
-          value: policy,
-          label: policy,
-          description: APPROVAL_DESCRIPTIONS[policy],
-        }))}
-        onSelect={(approvalPolicy) => commit({ approvalPolicy })}
-        onCancel={cancel}
-      />
-    );
-  } else if (step === 'output') {
-    picker = (
-      <Select
-        key={step}
-        items={CLI_OUTPUT_FORMATS.map((format) => ({
-          value: format,
-          label: format,
-          description: OUTPUT_DESCRIPTIONS[format],
-        }))}
-        onSelect={(outputFormat) => commit({ outputFormat })}
-        onCancel={cancel}
-      />
-    );
-  } else {
-    picker = (
-      <Select
-        key={step}
-        items={[
-          {
-            value: true,
-            label: 'Yes',
-            description: 'keep local config out of git',
-          },
-          {
-            value: false,
-            label: 'No',
-            description: 'leave .gitignore unchanged',
-          },
-        ]}
-        onSelect={(gitignore) => commit({ gitignore })}
-        onCancel={cancel}
-      />
-    );
+  switch (step) {
+    case 'agent':
+      picker = (
+        <Select
+          key={step}
+          initialIndex={initWizardDefaultAgentIndex(props.options.agents)}
+          items={props.options.agents.map((agent) => ({
+            value: agent.name,
+            label: agent.name,
+          }))}
+          onSelect={(agent) => commit({ agent })}
+          onCancel={cancel}
+        />
+      );
+      break;
+    case 'model':
+      picker = (
+        <Select
+          key={step}
+          initialIndex={firstAvailableIndex(props.options.models)}
+          items={initWizardModelSelectItems(props.options.models)}
+          onSelect={(model) => commit({ model })}
+          onCancel={cancel}
+        />
+      );
+      break;
+    case 'approval':
+      picker = (
+        <Select
+          key={step}
+          items={APPROVAL_POLICY_ORDER.map((policy) => ({
+            value: policy,
+            label: policy,
+            description: APPROVAL_DESCRIPTIONS[policy],
+          }))}
+          onSelect={(approvalPolicy) => commit({ approvalPolicy })}
+          onCancel={cancel}
+        />
+      );
+      break;
+    case 'output':
+      picker = (
+        <Select
+          key={step}
+          items={CLI_OUTPUT_FORMATS.map((format) => ({
+            value: format,
+            label: format,
+            description: OUTPUT_DESCRIPTIONS[format],
+          }))}
+          onSelect={(outputFormat) => commit({ outputFormat })}
+          onCancel={cancel}
+        />
+      );
+      break;
+    case 'gitignore':
+      picker = (
+        <Select
+          key={step}
+          items={[
+            {
+              value: true,
+              label: 'Yes',
+              description: 'keep local config out of git',
+            },
+            {
+              value: false,
+              label: 'No',
+              description: 'leave .gitignore unchanged',
+            },
+          ]}
+          onSelect={(gitignore) => commit({ gitignore })}
+          onCancel={cancel}
+        />
+      );
+      break;
   }
 
   return (

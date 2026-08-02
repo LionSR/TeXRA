@@ -13,6 +13,7 @@ import {
   resetCycleState,
   saveCycleDebug,
   SkippableNodeResult,
+  type CycleDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
   isContextWindowExceededStopReason,
@@ -38,22 +39,9 @@ import type { ResponseCycleServices } from './CycleServices';
 // ============================================================================
 
 /**
- * Schema for serializable response cycle fields.
- *
- * Extends BaseCycleFieldsSchema with response-specific fields for output tracking.
- *
- * ## Field Categories
- *
- * From BaseCycleFieldsSchema (shared with ToolUseRoundFlow):
- * - messages, shouldStop, endTurn, responseTimeMs, stopReason, lastError
- *
- * Response-specific fields:
- * - outputExists, outputLocation, processedResponse
- *
- * ## Serialization
- *
- * All fields here are natively serializable (structuredClone compatible).
- * Non-serializable fields (debug, responseObject) are in CycleTransientFields.
+ * Serializable response cycle fields: the base cycle fields plus this flow's
+ * output tracking. Everything here is structuredClone compatible; the
+ * non-serializable rest lives in {@link CycleTransientFields}.
  */
 const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
   /** Whether output file exists */
@@ -68,14 +56,8 @@ const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
 type CycleFields = z.infer<typeof CycleFieldsSchema>;
 
 /**
- * Transient cycle fields that are NOT serialized.
- *
- * These contain non-serializable data (unknown response objects)
- * and are regenerated each cycle execution.
- *
- * NOTE: All debug options (context and file options) are derived from
- * services/shared at each `maybeSaveDebugObject` call site. Nothing is
- * stored in shared state.
+ * Transient cycle fields that are NOT serialized. These hold non-serializable
+ * data (unknown response objects) and are regenerated each cycle execution.
  */
 interface CycleTransientFields {
   /** System prompt for model (regenerated from agent prompt each cycle) */
@@ -102,6 +84,21 @@ interface ResponsePrepResult {
   interrupted: boolean;
   exists: boolean;
   systemPrompt?: string;
+}
+
+/**
+ * Debug-file identity for one cycle. The request messages and the response are
+ * saved from different nodes and must land on the same base name and round.
+ */
+function responseDebugFileOptions(
+  shared: ResponseCycleShared,
+  continuationCount: number,
+): CycleDebugFileOptions {
+  return {
+    continuationCount,
+    baseName: 'response',
+    outputFile: shared.outputLocation.relativePath,
+  };
 }
 
 /**
@@ -141,11 +138,12 @@ class ResponsePrepNode<C> extends BaseNode<
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
 
-    await saveCycleDebug(shared.messages, 'messages', this.services, {
-      continuationCount: round.continuationCount,
-      baseName: 'response',
-      outputFile: shared.outputLocation.relativePath,
-    });
+    await saveCycleDebug(
+      shared.messages,
+      'messages',
+      this.services,
+      responseDebugFileOptions(shared, round.continuationCount),
+    );
 
     return FlowTransition.DEFAULT;
   }
@@ -172,21 +170,17 @@ interface ProcessResultCommon {
 }
 
 /**
- * Discriminated on `hasResponse`: `newResponse`/`processedResponse`/
- * `bestConnector`/`updatedLastResponse`/`updatedAccumulatedOutput` are only
- * ever set together (see the `if (newResponse)` block below), so modeling
- * them as one correlated variant instead of five independently-optional
- * fields removes the need to re-derive that correlation with separate null
- * checks in `post()`.
+ * Discriminated on `hasResponse`: `processedResponse`/`bestConnector`/
+ * `updatedAccumulatedOutput` are only ever set together, so modeling them as
+ * one correlated variant instead of independently-optional fields removes the
+ * need to re-derive that correlation with separate null checks in `post()`.
  */
 type ProcessResult =
   | (ProcessResultCommon & { hasResponse: false })
   | (ProcessResultCommon & {
       hasResponse: true;
-      newResponse: string;
       processedResponse: string;
       bestConnector: string;
-      updatedLastResponse: string;
       updatedAccumulatedOutput: string;
     });
 
@@ -233,11 +227,6 @@ export function responseCycleToolsForModel<C>(
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
- *
- * PocketFlow compliance:
- * - prep() extracts only the data needed by exec()
- * - exec() performs pure computation, no side effects
- * - post() applies all side effects (store updates)
  */
 class ResponseProcessNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -266,8 +255,11 @@ class ResponseProcessNode<C> extends BaseNode<
     });
 
     return stage.run(async () => {
+      // A host-supplied processor is applied once inside each handler's
+      // extractResponse, so this text is already in its final form.
+      // Re-applying would run non-idempotent custom replacements twice.
       const {
-        text: newResponse,
+        text: processedResponse,
         usage: responseUsage,
         stopReason,
         thinking: thinkingContent,
@@ -281,8 +273,8 @@ class ResponseProcessNode<C> extends BaseNode<
         { normalizeNullUsage: true },
       );
 
-      if (newResponse) {
-        logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
+      if (processedResponse) {
+        logger.debug(`Model response: ${processedResponse.slice(0, 100)}`);
       }
       if (prepRes.responseTimeMs != null) {
         logger.debug(
@@ -298,7 +290,10 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
-      const scratchpad = await extractScratchpad(newResponse, 'scratchpad');
+      const scratchpad = await extractScratchpad(
+        processedResponse,
+        'scratchpad',
+      );
       if (scratchpad) {
         logger.info(scratchpad, {
           messageType: MESSAGE_TYPES.SCRATCHPAD,
@@ -312,14 +307,9 @@ class ResponseProcessNode<C> extends BaseNode<
         normalizedUsage,
       };
 
-      if (!newResponse) {
+      if (!processedResponse) {
         return { kind: 'success', value: { ...common, hasResponse: false } };
       }
-
-      // A host-supplied processor is applied once inside each handler's
-      // extractResponse, so newResponse is already in its final form here.
-      // Re-applying would run non-idempotent custom replacements twice.
-      const processedResponse = newResponse;
 
       const bestConnector =
         await this.services.runScope.session.responseTextProcessing.connectResponseText(
@@ -334,10 +324,8 @@ class ResponseProcessNode<C> extends BaseNode<
         value: {
           ...common,
           hasResponse: true,
-          newResponse,
           processedResponse,
           bestConnector,
-          updatedLastResponse: processedResponse,
           updatedAccumulatedOutput,
         },
       };
@@ -381,7 +369,7 @@ class ResponseProcessNode<C> extends BaseNode<
       return FlowTransition.COMPLETE;
     }
 
-    workspace.assembly.lastResponse = result.updatedLastResponse;
+    workspace.assembly.lastResponse = result.processedResponse;
     workspace.assembly.accumulatedOutput = result.updatedAccumulatedOutput;
     shared.processedResponse = result.processedResponse;
 
@@ -442,11 +430,9 @@ class ResponseProcessNode<C> extends BaseNode<
 }
 
 /**
- * Finalizes the response cycle by recording round statistics.
- * All flow exit paths route through this node to ensure proper cleanup.
- *
- * PocketFlow pattern: Single finalization point in the flow graph.
- * No guard flags needed (graph ensures single execution).
+ * Finalizes the response cycle by recording round statistics. Every flow exit
+ * path routes through this single finalization node, so no guard flag is
+ * needed: the graph guarantees one execution.
  */
 class ResponseCycleFinalizeNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -475,11 +461,6 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
 /**
  * Evaluates the processed response to decide whether the agent should end the turn,
  * stop entirely, or enqueue a continuation request.
- *
- * PocketFlow compliance:
- * - prep() extracts only the data needed by exec()
- * - exec() performs pure computation using prepRes
- * - post() applies all side effects
  */
 class ResponseContinuationNode<C> extends BaseNode<
   ResponseCycleShared,
@@ -627,18 +608,8 @@ class ResponseContinuationNode<C> extends BaseNode<
 }
 
 /**
- * Creates a response cycle flow with services injected directly.
- *
- * The returned flow uses the services pattern:
- * - Services are passed via `setServices()` (options flattened)
- * - Only mutable state flows through the shared context
- *
- * @example
- * ```typescript
- * const flow = createResponseCycleFlow<MyContext>();
- * flow.setServices({ ...options, store });
- * await flow.run(sharedState);
- * ```
+ * Creates a response cycle flow. The caller injects {@link ResponseCycleServices}
+ * through `setServices()`; only mutable state travels in the shared context.
  */
 export function createResponseCycleFlow<C>(): Flow<
   ResponseCycleShared,
@@ -659,11 +630,8 @@ export function createResponseCycleFlow<C>(): Flow<
       shared.responseObject = response;
     },
     getPostCompactionContext: defaultPostCompactionContext,
-    getDebugFileOptions: (shared, services) => ({
-      continuationCount: services.round.continuationCount,
-      baseName: 'response',
-      outputFile: shared.outputLocation.relativePath,
-    }),
+    getDebugFileOptions: (shared, services) =>
+      responseDebugFileOptions(shared, services.round.continuationCount),
   });
   const processNode = new ResponseProcessNode<C>();
   const continuationNode = new ResponseContinuationNode<C>();

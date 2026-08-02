@@ -237,8 +237,8 @@ function mockStorage({
     ]);
   });
 
-  // KVStore now calls StorageFS.read (raw string) via the Keyv adapter;
-  // return JSON strings so the custom deserializer can parse them.
+  // KVStore reads raw strings through the Keyv adapter, so hand back JSON
+  // text for its deserializer to parse.
   vi.spyOn(StorageFS, 'read').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
 
@@ -910,9 +910,8 @@ describe('StreamLogStore load', () => {
 
     expect(affected).toEqual(['alpha']);
     expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    // endRunningGroups() defaults to RUN_OUTCOME.FAILED (#7993 step 2) — the
-    // orphan sweep's caller-classified default, not the folded 'error'
-    // EndGroupStatus string.
+    // endRunningGroups() defaults to RUN_OUTCOME.FAILED, the orphan sweep's
+    // caller-classified default.
     expect(entry?.data).toEqual({ status: RUN_OUTCOME.FAILED, endTime: 300 });
     expect(writtenSummary(storage.writes, 'alpha')).toEqual(
       settledSummary(100, 100),
@@ -1088,8 +1087,8 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     // A caller-supplied RunOutcome (e.g. restart repair's graceful-interrupt
-    // classification, #7993 step 2) reaches the row directly — no fold to
-    // the legacy 2-value EndGroupStatus.
+    // classification) reaches the row directly, with no fold to the legacy
+    // two-value EndGroupStatus.
     const affected = await store.endRunningGroupsForStreams(
       ['alpha'],
       300,
@@ -1107,12 +1106,11 @@ describe('StreamLogStore load', () => {
     });
   });
 
-  // §8.3 boundary normalization: the ONE app-side read boundary for legacy
-  // GROUP_START/GROUP_END `data.status` wire values a pre-cutover writer left
-  // on disk. Every live producer now writes canonical StreamPhase/RunOutcome
-  // values directly (#7993 step 2), so this is the backfill path for rows
-  // that were already persisted before the cutover.
-  it('normalizes legacy persisted GROUP_END status at the read boundary (#7993 step 2)', async () => {
+  // The one app-side read boundary for legacy GROUP_START/GROUP_END
+  // `data.status` wire values left on disk by a pre-cutover writer. Live
+  // producers write canonical StreamPhase/RunOutcome values directly, so this
+  // path only backfills rows persisted before the cutover.
+  it('normalizes legacy persisted GROUP_END status at the read boundary', async () => {
     const legacyStoppedEntry: StreamLogEntry = {
       seqNo: 1,
       id: 'delta-legacy-stopped',
@@ -1161,8 +1159,8 @@ describe('StreamLogStore load', () => {
       status: RUN_OUTCOME.FAILED,
       endTime: 250,
     });
-    // 'running' is string-identical to StreamPhase.RUNNING (row 1, §8.2) —
-    // passes through unnormalized, retype-only.
+    // 'running' is string-identical to StreamPhase.RUNNING, so it passes
+    // through unnormalized.
     expect(entries.find((e) => e.id === 'delta-legacy-running')?.data).toEqual({
       status: STREAM_PHASE.RUNNING,
     });

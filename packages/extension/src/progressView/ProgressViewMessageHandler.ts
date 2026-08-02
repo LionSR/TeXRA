@@ -94,6 +94,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly getOutputFiles = (stream: StreamTabId) =>
     this.provider.state.snapshots.getOutputFiles(stream);
 
+  /** The one info-notification adapter the controller ports are wired to. */
+  private readonly showInfo = async (message: string): Promise<void> => {
+    await this.host.info(message);
+  };
+
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly host: PromptHost,
@@ -183,11 +188,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
-      host: {
-        showInfo: async (message) => {
-          await this.host.info(message);
-        },
-      },
+      host: { showInfo: this.showInfo },
       session: defaultSession(),
       getRunConfig: this.getRunConfig,
       restoreRunConfig: async (config) => {
@@ -202,9 +203,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       onPolishProgress: (message) => {
         polishProgress?.report({ message });
       },
-      onPolishError: (stream, error) => {
-        void this.reportPolishError(stream, error);
-      },
+      onPolishError: (stream, error) => this.reportPolishError(stream, error),
       loadFollowUpOptions: async () => {
         const { agentOptions, modelOptions } = await loadOptions();
         return {
@@ -380,12 +379,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           getRunConfig: this.getRunConfig,
           getExecutionId: this.getExecutionId,
         },
-        executeAgent: async (request) => {
-          // Workflow actions intentionally wait for the run to finish; the
-          // command owns user-facing failure reporting, so this caller does
-          // not need the boolean launch result.
-          await this.executeValidated(request);
-        },
+        // Workflow actions intentionally wait for the run to finish.
+        executeAgent: (request) => this.executeValidated(request),
       },
       workflowFileActions: {
         state: {
@@ -443,9 +438,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             );
           },
           readFile: (file) => AbsoluteFS.read(file),
-          showInfo: async (message) => {
-            await this.host.info(message);
-          },
+          showInfo: this.showInfo,
           showError: async (message) => {
             await this.host.error(message);
           },
@@ -529,7 +522,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           },
         },
         bypass: {
-          showInfo: (message) => this.host.info(message),
+          showInfo: this.showInfo,
         },
         file: {
           openFile: async (file, line) => {
@@ -774,15 +767,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  /**
-   * Post the polish failure to the renderer, surface it, and log it. Returns
-   * the notification promise so callers can either await the dialog or let it
-   * run in the background.
-   */
-  private reportPolishError(
-    stream: StreamTabId,
-    error: unknown,
-  ): Promise<unknown> {
+  /** Post the polish failure to the renderer, surface it, and log it. */
+  private reportPolishError(stream: StreamTabId, error: unknown): void {
     const errorMsg = toErrorMessage(error);
     this.postToActiveView({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
@@ -791,11 +777,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       text: null,
       error: errorMsg,
     });
-    const shown = this.host.error(`Error polishing follow-up: ${errorMsg}`);
+    void this.host.error(`Error polishing follow-up: ${errorMsg}`);
     this.logger.error(this.channel, `Error polishing follow-up: ${errorMsg}`, {
       data: error instanceof Error ? error : undefined,
     });
-    return shown;
   }
 
   private async applyFollowUpPolishResult(
@@ -838,24 +823,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // ============================================================
 
   /**
-   * Validate and execute an agent request.
-   * Returns true if execution started, false if validation failed.
+   * Validate an agent request and run it. Both callers own their own
+   * user-facing failure reporting, so a rejected request is only logged.
    */
   private async executeValidated(
     request: ExecutionRequest,
     options: { preferHelperModel?: boolean } = {},
-  ): Promise<boolean> {
+  ): Promise<void> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
       this.logger.error(this.channel, validation.message);
-      return false;
+      return;
     }
-    const started = await this.runViewCommand<boolean>('texra.execute', [
+    await this.runViewCommand('texra.execute', [
       options.preferHelperModel
         ? { ...validation.request, preferHelperModel: true }
         : validation.request,
     ]);
-    return started === true;
   }
 
   /** Validate a request and acknowledge it once the runtime owns a run handle. */

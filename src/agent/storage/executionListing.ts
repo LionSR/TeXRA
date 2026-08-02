@@ -2,8 +2,7 @@
  * Directory-scanning execution listing.
  *
  * Derives the list of executions by scanning the `executions/` directory
- * and reading per-execution KV data (meta.json, config.json). This replaces
- * the monolithic `index.json` maintained by AgentHistoryManager.
+ * and reading per-execution KV data (meta.json, config.json).
  *
  * A storage-boundary migration handles legacy history before the scan.
  */
@@ -15,7 +14,7 @@ import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
-import { StorageFS, WorkspaceFS } from '@utils/files';
+import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -119,7 +118,7 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
  * cannot observe another host's writes or metadata updates reliably.
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  await migrateLegacyExecutionHistoryOnce(WorkspaceFS.getPath());
+  await migrateLegacyExecutionHistoryOnce();
 
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);

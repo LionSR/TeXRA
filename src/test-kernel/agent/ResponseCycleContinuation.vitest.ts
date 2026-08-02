@@ -66,9 +66,12 @@ async function runContinuationNode(
   return { prepResult, execResult, action };
 }
 
-async function processEmptyResponse(stopReason: ProviderStopReason) {
-  const shared = createShared({ responseObject: {} });
-  const services = {
+/** Services for the process node, which reads only the extracted response. */
+function createProcessServices(
+  response: { text: string; stopReason: ProviderStopReason },
+  overrides: Record<string, unknown> = {},
+): ResponseCycleServices<unknown> {
+  return {
     round: { responseTimeMs: 0 },
     workspace: AgentWorkspaceState.create(),
     logger: {
@@ -79,11 +82,18 @@ async function processEmptyResponse(stopReason: ProviderStopReason) {
     modelCell: testModelCell({
       processThinkingBlock: vi.fn(() => null),
       getStreamingConfig: vi.fn(() => false),
-      extractResponse: vi.fn(() => ({ text: '', usage: {}, stopReason })),
+      extractResponse: vi.fn(() => ({ ...response, usage: {} })),
       normalizeUsage: vi.fn(() => undefined),
     }),
+    ...overrides,
   } as unknown as ResponseCycleServices<unknown>;
-  const node = getProcessNode().setServices(services);
+}
+
+async function processEmptyResponse(stopReason: ProviderStopReason) {
+  const shared = createShared({ responseObject: {} });
+  const node = getProcessNode().setServices(
+    createProcessServices({ text: '', stopReason }),
+  );
   const prepResult = await node.prep(shared);
   const execResult = await node.exec(prepResult);
   const action = await node.post(shared, prepResult, execResult);
@@ -221,30 +231,15 @@ describe('response cycle continuation phases', () => {
     workspace.assembly.accumulatedOutput = 'left';
     workspace.assembly.lastResponse = 'left';
     const shared = createShared({ responseObject: {} });
-    const services = {
-      runScope: {
-        session: {
-          responseTextProcessing: { connectResponseText },
+    const services = createProcessServices(
+      { text: 'right', stopReason: ANTHROPIC_STOP.END_TURN },
+      {
+        runScope: {
+          session: { responseTextProcessing: { connectResponseText } },
         },
+        workspace,
       },
-      round: { responseTimeMs: 0 },
-      workspace,
-      logger: {
-        openStage: () => ({ run: (run: () => unknown) => run() }),
-        debug: vi.fn(),
-        info: vi.fn(),
-      },
-      modelCell: testModelCell({
-        processThinkingBlock: vi.fn(() => null),
-        getStreamingConfig: vi.fn(() => false),
-        extractResponse: vi.fn(() => ({
-          text: 'right',
-          usage: {},
-          stopReason: ANTHROPIC_STOP.END_TURN,
-        })),
-        normalizeUsage: vi.fn(() => undefined),
-      }),
-    } as unknown as ResponseCycleServices<unknown>;
+    );
     const node = getProcessNode().setServices(services);
 
     const prepResult = await node.prep(shared);

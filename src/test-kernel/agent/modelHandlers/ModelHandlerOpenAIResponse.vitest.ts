@@ -1170,9 +1170,8 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls = stubCompactionToLastMessage(handler, {
       tokensAfter: 1000,
     });
-    // Turn 2's live count lands between the 75% threshold (150k) and the 200k
-    // window: the stale cumulative from turn 1 (100k) would never have
-    // triggered, but the live count must.
+    // Turn 2's live pre-flight count lands between the 75% threshold (150k)
+    // and the 200k window, so compaction runs before the request goes out.
     const { client, requests, tokenCounts } = createPreflightCountingClient(
       (call) => (call === 2 ? 180000 : 1000),
     );
@@ -1235,10 +1234,9 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('recovers an unchained pre-flight overflow by compacting (no previous_response_id to drop)', async () => {
-    // cursor[bot]/claude[bot] review finding on this PR: recovery used to
-    // require hasPreviousResponseId(), so after invalidateChain() or on a
-    // non-chaining route an overflow failed hard without ever attempting
-    // compaction — a regression vs the old cumulative-threshold trigger.
+    // A non-chaining route (or one whose chain was invalidated) has no
+    // previous_response_id to drop, so overflow recovery has to reach
+    // compaction on its own rather than failing hard.
     const handler = createNonChainingHandler({
       openRouterOnly: false,
       contextWindow: 200_000,

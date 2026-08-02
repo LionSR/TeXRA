@@ -84,12 +84,21 @@ const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
   viaRelay: z.boolean().optional(),
 });
 
+/** Set-on (idempotent) delegated-work approval. */
 const EnableDelegatedWorkApprovalMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS),
-  /** The proposal whose ordinary approval message follows this command. */
+  /**
+   * The proposal whose ordinary approval message follows this command. It is
+   * excluded from the pending-request sweep because that message may carry
+   * model or agent overrides.
+   */
   initiatingProposalId: z.string().min(1),
 });
 
+/**
+ * Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
+ * inline "approve always" prompt button means "enable", never "flip".
+ */
 const EnableApprovalBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS),
   /**
@@ -312,13 +321,7 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
       PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
     ),
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
-    // Set-on (idempotent) delegated-work approval. The initiating proposal is
-    // excluded from the pending-request sweep because its ordinary approval
-    // message follows and may carry model or agent overrides.
     EnableDelegatedWorkApprovalMessageSchema,
-    // Set-on (idempotent) bypass enable, distinct from the shield's toggle: the
-    // inline "approve always" prompt button means "enable", never "flip", and
-    // grants only the kind of the prompt it came from.
     EnableApprovalBypassMessageSchema,
     BashApprovalActionMessageSchema,
     AgentProposalActionMessageSchema,

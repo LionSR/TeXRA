@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -805,18 +803,28 @@ describe('external inquiry action schema', () => {
     externalInquiryMocks.persistExternalInquiryAction.mockReset();
   });
 
-  it("requires each action variant's own fields", () => {
-    const results = [
+  it.each([
+    [
+      'submit with an answer',
       { command, action: 'submit', threadId, answer: 'Confirmed' },
-      { command, action: 'drop', threadId },
+      true,
+    ],
+    ['drop', { command, action: 'drop', threadId }, true],
+    [
+      'draft with a null draft',
       { command, action: 'draft', threadId, draft: null },
+      true,
+    ],
+    [
+      'submit without an answer',
       { command, action: 'submit', threadId },
-      { command, action: 'draft', threadId },
-    ].map(
-      (message) => ProgressViewInboundMessageSchema.safeParse(message).success,
+      false,
+    ],
+    ['draft without a draft', { command, action: 'draft', threadId }, false],
+  ])('%s parses as %s', (_name, message, valid) => {
+    expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
+      valid,
     );
-
-    expect(results).toEqual([true, true, true, false, false]);
   });
 
   it.each([

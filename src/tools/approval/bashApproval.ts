@@ -44,10 +44,10 @@ export { setBashApprovalSessionBypass, isBashApprovalBypassedForStream };
  * surface, the bash counterpart of `prepareToolEditApprovalPrompt`.
  *
  * Owning it here keeps one request-id scheme, derives the bypass affordance
- * from the stream's current bypass state instead of asserting it, and drops a
- * blank working directory so no renderer has to decide what an empty `cwd`
- * means. Pass `session` when the host owns one (extension, desktop); the CLI
- * hosts run on the default session.
+ * from the stream's current bypass state, and drops a blank working directory
+ * so no renderer has to decide what an empty `cwd` means. Pass `session` when
+ * the host owns one (extension, desktop); the CLI hosts run on the default
+ * session.
  */
 export function prepareBashApprovalPrompt(
   request: HostBashApprovalRequest,

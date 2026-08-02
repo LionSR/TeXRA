@@ -23,6 +23,7 @@ import { FlowTransition } from './FlowTransitions';
 import {
   type InvocationResult,
   RetryableInvocationNode,
+  RETRY_BACKOFF_MS,
   handleInvocationResult,
 } from './RetryState';
 
@@ -59,10 +60,7 @@ export interface ModelInvocationConfig<TShared, TServices> {
  * Only the services this node and its `RetryableInvocationNode` base class
  * actually read: the model cell (handler and live provider client), logger,
  * setting (temperature/tools), config (for `saveCycleDebug`'s log context),
- * the run scope (retry gate and debug-log identity), and the run's abort
- * signal. Picking from `AgentCore`/`BaseFlowContextInit` instead of requiring
- * the literal type keeps every existing caller, which passes the full services
- * bag, satisfying this narrower shape structurally.
+ * and the run scope (retry gate, abort signal, and debug-log identity).
  */
 type InvocationServices = Pick<
   AgentCore,
@@ -155,7 +153,7 @@ export class ModelInvocationNode<
         wireRoute,
         {
           signal,
-          baseBackoffMs: this._retryBackoffMs,
+          baseBackoffMs: RETRY_BACKOFF_MS,
           // One wire route owns transport and server-failure cooling. A second
           // ordered scope keeps model-specific limits from blocking healthy
           // sibling models on the same credential and endpoint. Relay calls

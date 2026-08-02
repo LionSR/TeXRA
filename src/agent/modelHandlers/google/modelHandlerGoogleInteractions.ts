@@ -1512,8 +1512,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     // Capture the chain anchor from the COMPLETED polled interaction (NOT the
     // submit), so the next turn chains onto a server-retained, completed id.
-    // Stateless mode invalidated the chain at entry and must not establish one.
-    if (stateful) this.finalizeChain(completed, totalStepCount, true);
+    // Stateless mode invalidated the chain at entry and must not establish one,
+    // which `finalizeChain` enforces from its own `stateful` guard.
+    this.finalizeChain(completed, totalStepCount, stateful);
     return { response: completed };
   }
 

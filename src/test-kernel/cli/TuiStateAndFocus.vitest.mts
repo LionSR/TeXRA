@@ -1,8 +1,6 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Phase 4 state + focus-cycle smoke.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { logCompactionActivity } from '@agent/trace';
@@ -179,7 +177,7 @@ afterEach(() => {
   resetCliState();
 });
 
-describe('cliState Phase 4 fields', () => {
+describe('cliState stream, focus, and child-edge fields', () => {
   it('clears foreground reference text with the session state', () => {
     openInfoPane('/help', 'reference text');
     expect(infoPane.get()).toBeDefined();
@@ -757,9 +755,9 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('borrows a focused child-list row so an active todo stays visible', () => {
-    // Codex review case: many children + one todo under the 10-row cap. The
-    // proportional split grants todos one row — too small for separator +
-    // content — so one row shifts from the ample child list instead.
+    // Many children plus one todo under the 10-row cap: the proportional
+    // split grants todos a single row, too small for separator plus content,
+    // so one row shifts from the ample child list instead.
     const allocation = allocateConversationBottomPanelRows({
       maxRows: 10,
       sessionCount: 11,
@@ -1472,8 +1470,8 @@ describe('CLI TUI row allocation', () => {
 });
 
 describe('finalizeSettledPrefix', () => {
-  const tool = (id: string, status: 'in_progress' | 'completed') =>
-    ({
+  function tool(id: string, status: 'in_progress' | 'completed') {
+    return {
       id,
       role: 'tool',
       text: '',
@@ -1489,9 +1487,11 @@ describe('finalizeSettledPrefix', () => {
         headerSummary: '',
         status,
       },
-    }) as const;
-  const assistant = (id: string, pendingEmbeddedSubagentFollowup = false) =>
-    ({
+    } as const;
+  }
+
+  function assistant(id: string, pendingEmbeddedSubagentFollowup = false) {
+    return {
       id,
       role: 'assistant',
       text: id,
@@ -1499,10 +1499,14 @@ describe('finalizeSettledPrefix', () => {
         ? { pendingEmbeddedSubagentFollowup }
         : {}),
       finalized: false,
-    }) as const;
-  const finalizedIds = (
+    } as const;
+  }
+
+  function finalizedIds(
     entries: readonly { id: string; finalized: boolean }[],
-  ) => entries.filter((entry) => entry.finalized).map((entry) => entry.id);
+  ): string[] {
+    return entries.filter((entry) => entry.finalized).map((entry) => entry.id);
+  }
 
   it('finalizes an assistant block once the model moves on to a tool call', () => {
     const out = finalizeSettledPrefix(
@@ -1554,10 +1558,8 @@ describe('finalizeSettledPrefix', () => {
 
 describe('CLI transcript state', () => {
   // Several tests below log through `createRunTrace`/`syncStreamLog`, which
-  // read and write the default session's `transcripts` store. No separate
-  // default-store export to swap in anymore (#7694) — clear it in place
-  // before every test instead, so store-backed tests don't need to repeat
-  // that reset individually.
+  // read and write the default session's `transcripts` store (#7694). Clear
+  // it in place here so store-backed tests need no reset of their own.
   beforeEach(async () => {
     await defaultSession().transcripts.clear();
   });
@@ -2288,11 +2290,10 @@ describe('CLI transcript state', () => {
   });
 
   // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
-  // must not roll the entry back to `finalized: false`. Cursor Bugbot flagged
-  // this when `entriesEqual` started comparing `finalized` — without this
-  // guard, the de-finalized entry would land in neither bucket of
-  // `splitTranscriptEntries` once status flipped to WAITING and silently
-  // disappear from the transcript.
+  // must not roll the entry back to `finalized: false`. Without this guard,
+  // the de-finalized entry lands in neither bucket of
+  // `splitTranscriptEntries` once status flips to WAITING, and silently
+  // disappears from the transcript.
   it('preserves the finalized flag through a post-finalize sync tick', () => {
     const logger = runTrace(root);
     logger.info('streaming assistant chunk', {

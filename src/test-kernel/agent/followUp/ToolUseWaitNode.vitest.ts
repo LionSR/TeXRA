@@ -144,9 +144,8 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     const prep = await node.prep(shared);
-    // No in-flow delivery site anymore — the child-run loop reads the turn
-    // facts off the flow result and delivers after suspension (see
-    // childRunLoop.ts), so the node itself carries none.
+    // The child-run loop reads the turn facts off the flow result and delivers
+    // them after suspension (see childRunLoop.ts), so the node carries none.
     expect(prep.lastResponse).toBeUndefined();
 
     const transition = await withTestRunContext(
@@ -165,11 +164,9 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('always suspends a subagent cycle even when a follow-up is already queued', async () => {
-    // The key behavior change from the old "skip suspension if a follow-up
-    // already raced in" fast path: subagent mode now suspends unconditionally
-    // and symmetrically. A follow-up already queued is the child-run loop's
-    // concern (it resumes immediately instead of genuinely waiting) — not
-    // something the flow itself should special-case.
+    // Subagent mode suspends unconditionally and symmetrically. A follow-up
+    // already queued is the child-run loop's concern (it resumes immediately
+    // instead of genuinely waiting), not something the flow special-cases.
     const shared: ToolUseRunShared = toolUseRunShared();
     const interactions = { emit: vi.fn() };
     const waitForFollowUp = vi.fn();
@@ -685,12 +682,10 @@ describe('ToolUseWaitNode', () => {
   });
 
   it('does not let a subagent drive the parent goal continuation loop', async () => {
-    // A subagent cycle always exits WAITING (never reaches the goal-
-    // continuation code path, which is gated `!isSubagent` and only
-    // reachable after the subagent-suspend branch) — the invariant this test
-    // protects (a subagent must never synthesize a continuation against the
-    // PARENT's goal) is now structural, not conditional on waitForFollowUp
-    // ever being called.
+    // A subagent cycle always exits WAITING before the goal-continuation path,
+    // which is gated `!isSubagent` and sits after the subagent-suspend branch.
+    // So a subagent can never synthesize a continuation against the PARENT's
+    // goal, structurally rather than by any check on waitForFollowUp.
     const streamId = 'wait-node-goal-subagent' as StreamTabId;
     await installPlatform();
 
@@ -920,11 +915,11 @@ describe('ToolUseWaitNode', () => {
     );
   });
 
-  // Regression: #9443. The subagent after-error stop fired before the drained
-  // batch was consumed, dropping user input the child-run loop had already
-  // taken off the queue — and skipping `post`'s error clear with it. Since
-  // consuming the batch continues immediately, an active goal must not be
-  // paused or lose its unattended bash approval first.
+  // Regression #9443: a drained batch is consumed before the subagent
+  // after-error stop, so user input the child-run loop already took off the
+  // queue reaches the model and `post` clears the error. Since consuming the
+  // batch continues immediately, an active goal must not be paused or lose its
+  // unattended bash approval first.
   it('recovers an errored goal from a drained batch without pausing it', async () => {
     const streamId = 'wait-node-error-drained-goal' as StreamTabId;
     await installPlatform();
