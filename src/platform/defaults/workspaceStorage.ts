@@ -184,10 +184,7 @@ function migrateLegacyWorkspaceStorage(
 export class WorkspaceStorageProvider implements StorageProvider {
   private readonly getWorkspacePath: () => string | undefined;
   private activeWorkspacePath: string | undefined;
-  /** Storage paths whose one-off setup (legacy rename, sidecar) already ran in
-   *  this process. `getStoragePath` is on the hot path of every storage read
-   *  and write, and neither step can change its outcome once done. */
-  private readonly preparedStoragePaths = new Set<string>();
+  private readonly initializedStoragePaths = new Set<string>();
   private workspaceChangeRollback:
     { readonly workspacePath: string | undefined } | undefined;
 
@@ -207,21 +204,14 @@ export class WorkspaceStorageProvider implements StorageProvider {
   getStoragePath(): string {
     const workspacePath = this.activeWorkspacePath;
     const storagePath = this.storagePathFor(workspacePath);
-    const firstUse = !this.preparedStoragePaths.has(storagePath);
+    if (this.initializedStoragePaths.has(storagePath)) return storagePath;
 
-    if (firstUse) {
-      // The legacy rename has to run before `mkdirSync`: it bails out once the
-      // current directory exists.
-      migrateLegacyWorkspaceStorage(this.storageRoot, workspacePath);
-    }
-
-    // Unconditional, so a directory removed underneath us comes back. When it
-    // did have to be recreated the sidecar went with it, so write it again.
-    const recreated = mkdirSync(storagePath, { recursive: true }) !== undefined;
-    if (firstUse || recreated) {
-      writeWorkspaceSidecar(storagePath, workspacePath);
-      this.preparedStoragePaths.add(storagePath);
-    }
+    // The legacy rename must precede directory creation because it stops once
+    // the current directory exists.
+    migrateLegacyWorkspaceStorage(this.storageRoot, workspacePath);
+    mkdirSync(storagePath, { recursive: true });
+    writeWorkspaceSidecar(storagePath, workspacePath);
+    this.initializedStoragePaths.add(storagePath);
     return storagePath;
   }
 
