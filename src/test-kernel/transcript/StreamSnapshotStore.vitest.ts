@@ -2104,6 +2104,76 @@ describe('StreamSnapshotStore', () => {
     expect(await store.listPersistedStreams()).not.toContain(STREAM);
   });
 
+  it('persists a retained seed-gated sidecar on a later successful flush', async () => {
+    const store = new StreamSnapshotStore();
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValue(writeError);
+
+    store.setPlan(STREAM, PLAN);
+    await expect(store.flush()).rejects.toThrow('sidecar write');
+
+    writeSpy.mockRestore();
+    await store.flush();
+
+    expect((await reloadWorkPlan()).plan).toEqual(PLAN);
+  });
+
+  it('lets a newer successful write supersede an older failed value', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError);
+    const revisedPlan: Plan = { objective: 'Use the revised draft' };
+
+    store.setPlan(STREAM, PLAN);
+    store.setPlan(STREAM, revisedPlan);
+    await store.flush();
+
+    expect(writeSpy).toHaveBeenCalledTimes(2);
+    expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
+  });
+
+  it('retains mutations made after a failed refresh', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValue(new Error('snapshot disk is full'));
+
+    store.setPlan(STREAM, PLAN);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
+    await expect(store.load([STREAM])).rejects.toThrow('3 retries');
+
+    store.setTodos(STREAM, [TODO]);
+    writeSpy.mockRestore();
+    await store.flush();
+
+    expect(await reloadWorkPlan()).toMatchObject({
+      plan: PLAN,
+      todos: [TODO],
+    });
+  });
+
+  it('does not recreate sidecars after deleting a stream with a failed write', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const writeError = new Error('snapshot disk is full');
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError);
+
+    store.setPlan(STREAM, PLAN);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledTimes(1));
+    await store.deleteStream(STREAM);
+    await store.flush();
+
+    expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+  });
+
   it('serializes same-key writes so a slow first write finishes before a queued second write starts', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
