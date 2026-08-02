@@ -99,7 +99,7 @@ export class BackgroundRunLifecycle {
   private rememberPending(
     responseId: string,
     retrieveParams?: ResponseRetrieveParamsNonStreaming,
-  ): void {
+  ): number {
     if (
       this.pendingResponseId !== responseId ||
       this.pendingDeadlineAtMs === null
@@ -108,14 +108,30 @@ export class BackgroundRunLifecycle {
     }
     this.pendingResponseId = responseId;
     this.pendingRetrieveParams = retrieveParams;
+    return this.pendingDeadlineAtMs;
   }
 
   private pollingTimeoutError(responseId: string): Error {
+    this.clearPending();
     return createOpenAIBackgroundPollingTimeoutError(
       responseId,
       BACKGROUND_MAX_DURATION_MS,
       this.deps.provider,
     );
+  }
+
+  private assertCanPoll(
+    responseId: string,
+    deadlineAtMs: number,
+    signal?: AbortSignal,
+  ): void {
+    if (signal?.aborted) {
+      this.clearPending();
+      signal.throwIfAborted();
+    }
+    if (Date.now() >= deadlineAtMs) {
+      throw this.pollingTimeoutError(responseId);
+    }
   }
 
   /**
@@ -133,12 +149,8 @@ export class BackgroundRunLifecycle {
       return null;
     }
     const retrieveParams = this.pendingRetrieveParams;
-    if (
-      this.pendingDeadlineAtMs !== null &&
-      Date.now() >= this.pendingDeadlineAtMs
-    ) {
-      throw this.pollingTimeoutError(pendingId);
-    }
+    const deadlineAtMs = this.rememberPending(pendingId, retrieveParams);
+    this.assertCanPoll(pendingId, deadlineAtMs, signal);
 
     this.logger.debug(
       `Resuming polling for pending background response ${pendingId}`,
@@ -160,6 +172,7 @@ export class BackgroundRunLifecycle {
         this.clearPending();
         throw err;
       }
+      this.assertCanPoll(pendingId, deadlineAtMs, signal);
       // Transient failures (no status / 5xx / 429 / 408) — the background
       // response is likely still alive server-side, so retain the ID and
       // rethrow so the outer retry resumes the same ID. Definitive failures
@@ -170,9 +183,7 @@ export class BackgroundRunLifecycle {
       // on a relay-wrapped 404 and loop until retries are exhausted.
       const { providerError, shouldRetainPendingResponse } =
         classifyOpenAIBackgroundResumeError(err, this.deps.provider);
-      if (shouldRetainPendingResponse) {
-        throw err;
-      }
+      if (shouldRetainPendingResponse) throw err;
       this.logger.warn(
         "Couldn't resume the pending OpenAI response; will start a new request.",
         {
@@ -186,6 +197,8 @@ export class BackgroundRunLifecycle {
       this.clearPending();
       return null;
     }
+
+    this.assertCanPoll(pendingId, deadlineAtMs, signal);
 
     // Check the status of the retrieved response
     if (this.isPending(pendingResponse)) {
@@ -250,9 +263,11 @@ export class BackgroundRunLifecycle {
     retrieveParams: ResponseRetrieveParamsNonStreaming | undefined,
     signal: AbortSignal | undefined,
   ): Promise<Response> {
-    this.rememberPending(responseId, retrieveParams);
+    const deadlineAtMs = this.rememberPending(responseId, retrieveParams);
+    this.assertCanPoll(responseId, deadlineAtMs, signal);
+    let response: Response;
     try {
-      return await client.responses.retrieve(
+      response = await client.responses.retrieve(
         responseId,
         retrieveParams,
         signal ? { signal } : undefined,
@@ -263,6 +278,7 @@ export class BackgroundRunLifecycle {
         this.clearPending();
         throw err;
       }
+      this.assertCanPoll(responseId, deadlineAtMs, signal);
       const { shouldRetainPendingResponse } =
         classifyOpenAIBackgroundResumeError(err, this.deps.provider);
       if (!shouldRetainPendingResponse) {
@@ -270,6 +286,8 @@ export class BackgroundRunLifecycle {
       }
       throw err;
     }
+    this.assertCanPoll(responseId, deadlineAtMs, signal);
+    return response;
   }
 
   /**
@@ -289,7 +307,11 @@ export class BackgroundRunLifecycle {
 
     // Track which response is being polled so retry logic can resume via
     // tryResume instead of creating a new request.
-    this.rememberPending(initialResponse.id, retrieveParams);
+    const deadlineAtMs = this.rememberPending(
+      initialResponse.id,
+      retrieveParams,
+    );
+    this.assertCanPoll(initialResponse.id, deadlineAtMs, signal);
 
     let pollStats: BackgroundPollStats | undefined;
     const polled = (await this.backgroundPoller.poll({
@@ -334,7 +356,7 @@ export class BackgroundRunLifecycle {
       extractId: (r) => r.id,
       extractStatus: (r) => r.status ?? 'unknown',
       signal,
-      deadlineAtMs: this.pendingDeadlineAtMs ?? undefined,
+      deadlineAtMs,
       resourceLabel: 'response',
       providerLabel: 'OpenAI',
       onAbort: () => this.clearPending(),
@@ -364,6 +386,7 @@ export class BackgroundRunLifecycle {
         incomplete: polled.incomplete_details ?? undefined,
       },
     });
+    this.clearPending();
     throw createOpenAIBackgroundTerminalError(polled, this.deps.provider);
   }
 }
