@@ -71,8 +71,7 @@ export async function runPackRunDir(
 
 /**
  * Delete a run's runDir. Irreversible. Used when the user discards a run
- * from the progress-view toolbar. Uses `findRunDir` so the
- * legacy `taskRuns/` location is cleaned up too.
+ * from the progress-view toolbar.
  */
 export async function runCleanRunDir(
   executionId: ExecutionId,

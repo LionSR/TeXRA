@@ -82,6 +82,24 @@ describe('VS Code shared-storage migration', () => {
         label: 'vscode-workspace-storage',
       }),
     );
+    expect(mocks.mergeLegacyStorageBucket).toHaveBeenNthCalledWith(
+      1,
+      '/legacy/workspace/taskRuns',
+      '/shared/workspace/executions',
+      expect.objectContaining({
+        label: 'vscode-workspace-storage/taskRuns',
+        mergePerChild: 'all',
+      }),
+    );
+    expect(mocks.mergeLegacyStorageBucket).toHaveBeenNthCalledWith(
+      2,
+      '/shared/workspace/taskRuns',
+      '/shared/workspace/executions',
+      expect.objectContaining({
+        label: 'shared-workspace-storage/taskRuns',
+        mergePerChild: 'all',
+      }),
+    );
     expect(mocks.warn).toHaveBeenCalledWith(
       'extension',
       expect.stringContaining('vscode-global-storage migration failed'),
