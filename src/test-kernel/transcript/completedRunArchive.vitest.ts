@@ -1432,6 +1432,41 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('recognizes a connected diagnostic-only archive as an existing execution', async () => {
+    const executionId = '0888b30888b3' as ExecutionId;
+    const first = 'aOrchestrator@old#0888b30888b3' as StreamTabId;
+    const second = 'bOrchestrator@new#0888b30888b3' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const sharedDiagnostic = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
+      id: 'shared-diagnostic-only-row',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [first, [sharedDiagnostic]],
+        [second, [sharedDiagnostic]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      streamIds: [first, second],
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(`Merged streams: ${first}, ${second}`);
+    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
+  });
+
   it('contracts a copied diagnostic bridge while preserving conversation order', async () => {
     const executionId = '0888b10888b1' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;

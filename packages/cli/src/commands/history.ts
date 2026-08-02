@@ -140,6 +140,13 @@ export async function runHistoryExport(
   if (traceResult.status !== 'ok') {
     if (traceResult.status === 'config_missing') {
       writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+    } else if (traceResult.status === 'streamId_ambiguous') {
+      writeTextStderr(
+        `Execution ${id} has several historical transcripts, but none is ` +
+          'proven canonical for trace export. Run `texra history show ' +
+          id +
+          '` to inspect the archived conversation and diagnostics.',
+      );
     } else {
       writeTextStderr(
         `Execution ${id} exists but has no stored transcript to export (it ` +

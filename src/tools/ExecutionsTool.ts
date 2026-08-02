@@ -876,6 +876,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const exists =
         meta !== null ||
         resumability.resumable ||
+        (streamIds?.length ?? 0) > 0 ||
         (candidateStreamIds?.length ?? 0) > 0;
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
@@ -887,6 +888,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           metadata: [
             'Source: none',
             'Stream: none',
+            ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
             ...(candidateStreamIds
               ? [
                   `Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`,

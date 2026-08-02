@@ -13,13 +13,18 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 import {
   cleanupTempDirs,
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { assembleTrace, StreamLogStore } from '@transcript';
+import {
+  assembleTrace,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 
 const tempDirs: string[] = [];
 
@@ -99,6 +104,25 @@ describe('assembleTrace', () => {
     const result = await assembleTrace(executionId);
 
     expect(result).toEqual({ status: 'streamLogs_missing' });
+  });
+
+  it('reports ambiguous historical sidecars instead of selecting one for trace export', async () => {
+    const executionId = 'abcde1abcde1' as ExecutionId;
+    const executionConfig = config();
+    const first = `orchestrator@old#${executionId}` as StreamTabId;
+    const second = `orchestrator@new#${executionId}` as StreamTabId;
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, executionConfig, executionId);
+    snapshots.setRunConfig(second, executionConfig, executionId);
+    await snapshots.flush();
+    await appendLogEntry(first, 'First historical transcript');
+    await appendLogEntry(second, 'Second historical transcript');
+
+    await expect(assembleTrace(executionId)).resolves.toEqual({
+      status: 'streamId_ambiguous',
+    });
   });
 
   it('resolves a child stream by executionId suffix when its id does not match the derived agent@model#executionId format', async () => {

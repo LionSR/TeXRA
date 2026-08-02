@@ -21,14 +21,18 @@ import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
   | { readonly status: 'ok'; readonly trace: TraceDocument }
-  | { readonly status: 'config_missing' | 'streamLogs_missing' };
+  | {
+      readonly status:
+        'config_missing' | 'streamId_ambiguous' | 'streamLogs_missing';
+    };
 
 /**
- * `streamLogs_missing` is the expected outcome for any execution recorded
- * before the headless-persistence fix (TeXRA#7057) — headless runs before
- * that fix never wrote a `streamLogs` file at all, so there is nothing here
- * to replay faithfully. Callers should surface that distinction rather than
- * a generic "not found".
+ * `streamId_ambiguous` means several historical sidecars claim the execution,
+ * but persisted evidence does not identify one as canonical. By contrast,
+ * `streamLogs_missing` is the expected outcome for executions recorded before
+ * the headless-persistence fix (TeXRA#7057), when no replayable transcript was
+ * written. Callers should surface both distinctions rather than reporting a
+ * generic "not found".
  */
 export async function assembleTrace(
   executionId: ExecutionId,
@@ -53,7 +57,10 @@ export async function assembleTrace(
     snapshotStore,
     streamLogStore,
   });
-  const streamId = resolved ? resolved.streamId : fallbackStreamId;
+  if (resolved && !resolved.streamId) {
+    return { status: 'streamId_ambiguous' };
+  }
+  const streamId = resolved?.streamId ?? fallbackStreamId;
   if (!streamId) return { status: 'streamLogs_missing' };
 
   const [, snapshot] = await Promise.all([

@@ -1374,6 +1374,26 @@ describe('CLI history runtime', () => {
         stderrSpy.mockRestore();
       });
 
+      it('reports ambiguous historical transcripts without selecting one', async () => {
+        mocks.assembleTrace.mockResolvedValue({
+          status: 'streamId_ambiguous',
+        });
+
+        const exitCode = await runHistoryExport(
+          makeContext('/resources'),
+          'a1' as ExecutionId,
+          'html',
+          {},
+        );
+
+        expect(exitCode).toBe(CliExitCode.Usage);
+        expect(stdout).toBe('');
+        expect(stderr).toContain(
+          'several historical transcripts, but none is proven canonical',
+        );
+        expect(stderr).toContain('texra history show a1');
+      });
+
       /** Temp resources dir holding the bundled trace-viewer assets. */
       async function makeStagedResources(prefix: string): Promise<string> {
         const resourcesPath = await makeTempDir(prefix, tempDirs);
