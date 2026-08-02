@@ -1,6 +1,6 @@
 // Standard library imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - agent
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -87,5 +87,49 @@ describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)
       warnMessages.some((m) => m.includes('broken.png')),
       'the failure should be reported through the shared policy owner',
     );
+  });
+
+  it('uploads an unreadable PDF without a page count and warns about the skipped budget check', async () => {
+    const { logger, warnMessages } = createWarningRecorder();
+
+    const attachments: ToolFileAttachment[] = [
+      {
+        path: 'corrupt.pdf',
+        mimeType: 'application/pdf',
+        bytes: new Uint8Array([1, 2, 3]),
+      },
+    ];
+
+    const client = {
+      beta: {
+        files: {
+          upload: async () => ({ id: 'file_pdf' }),
+        },
+      },
+    } as any;
+
+    const pageCounts: Array<[string, number]> = [];
+    const result = await uploadToolAttachments(
+      client,
+      attachments,
+      logger,
+      0,
+      (fileId, pageCount) => pageCounts.push([fileId, pageCount]),
+      100,
+    );
+
+    expect(
+      result.uploaded.length,
+      'an unparseable PDF still uploads so the API can enforce its own limit',
+    ).toBe(1);
+    expect(result.pageLimitExceeded.length).toBe(0);
+    expect(
+      pageCounts.length,
+      'no page count is reported when the PDF cannot be parsed',
+    ).toBe(0);
+    expect(
+      warnMessages.some((m) => m.includes('corrupt.pdf')),
+      'the skipped local page-limit check must be logged, not silent',
+    ).toBe(true);
   });
 });

@@ -589,11 +589,9 @@ describe('child stream progress events', () => {
     const handle =
       defaultSession().executions.getAgentHandleByStream(stoppedChildStreamId);
     expect(handle).toBeDefined();
-    seedStreamStatusForTest(
-      defaultSession().status,
-      stoppedChildStreamId,
-      STREAM_PHASE.CANCELLED,
-    );
+    seedStreamStatusForTest(defaultSession().status, stoppedChildStreamId, {
+      phase: STREAM_PHASE.CANCELLED,
+    });
     recorded.events.splice(0);
 
     try {

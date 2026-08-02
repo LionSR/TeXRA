@@ -746,6 +746,8 @@ describe('CLI run progress renderer', () => {
       const detach = host.attachRunProgressRenderer(events);
 
       events.emit(runConfigEvent());
+      // Out of the renderer's run-fact contract: the subscription filter keeps
+      // it away from the renderer, so only the session fact renders a line.
       events.emit({
         scope: 'run',
         streamId: 'stream-1' as StreamTabId,

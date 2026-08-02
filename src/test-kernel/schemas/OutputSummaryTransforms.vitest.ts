@@ -57,7 +57,6 @@ function roundOutput(overrides: Partial<RoundOutput> = {}): RoundOutput {
     compileFailures: [],
     xmlSummary: {
       tagContents: {},
-      documents: [],
       singleOutputFile: null,
       sourceLocation: null,
     },

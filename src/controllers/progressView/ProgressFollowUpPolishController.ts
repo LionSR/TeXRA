@@ -16,7 +16,9 @@ type UpdateFollowUpTextMessage = Extract<
 export interface ProgressFollowUpPolishInput {
   readonly stream: StreamTabId;
   readonly text: string;
-  readonly runConfig: AgentConfig | undefined;
+  /** The run's config, which the command handler resolves before dispatching:
+   *  a stream with no config never reaches the controller. */
+  readonly runConfig: AgentConfig;
 }
 
 interface ProgressFollowUpPolishTextResult {
@@ -63,10 +65,6 @@ export class ProgressFollowUpPolishController {
   async polishFollowUp(
     input: ProgressFollowUpPolishInput,
   ): Promise<ProgressFollowUpPolishResult> {
-    if (!input.runConfig) {
-      return { kind: 'skipped' };
-    }
-
     try {
       const fileContext = this.buildFileContext(input.runConfig);
       const result = await this.deps.polishText(input.text, fileContext);

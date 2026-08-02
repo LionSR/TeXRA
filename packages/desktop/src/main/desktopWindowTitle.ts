@@ -1,10 +1,5 @@
-// Node imports
 import { basename } from 'node:path';
-
-// Third-party imports
 import { type BrowserWindow } from 'electron';
-
-// Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { STREAM_PHASE } from '@shared/schemas';
 import {

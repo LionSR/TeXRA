@@ -14,6 +14,7 @@ import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
+  formatStageLabel,
   formatStreamStatusLabel,
   streamStatusDisplayKey,
   streamStatusIndicatorClass,
@@ -179,6 +180,24 @@ describe('formatPhaseStageLabel', () => {
 
   it('passes undefined through for streams without a phase', () => {
     expect(formatPhaseStageLabel(undefined)).toBeUndefined();
+  });
+});
+
+describe('formatStageLabel', () => {
+  it('labels a round stage through the round formatter', () => {
+    expect(formatStageLabel({ kind: 'round', index: 1, total: 3 })).toBe(
+      'r2/3',
+    );
+  });
+
+  it('labels a phase stage through the phase formatter', () => {
+    expect(
+      formatStageLabel({ kind: 'phase', label: 'Reduce', index: 1, total: 3 }),
+    ).toBe('Reduce 2/3');
+  });
+
+  it('passes undefined through for a stream with no stage open', () => {
+    expect(formatStageLabel(undefined)).toBeUndefined();
   });
 });
 

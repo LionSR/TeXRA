@@ -3,7 +3,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
@@ -16,29 +15,21 @@ import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
+import { countPdfPagesInBuffer } from './pdfPageCount';
+
 const CHANNEL = 'ImgUtils';
 
-/** Default DPI/density used when rasterizing a PDF page to PNG. */
-const DEFAULT_PDF_QUALITY = 300;
+/** DPI/density used when rasterizing a PDF page to PNG. */
+const PDF_RASTER_DENSITY = 300;
 
-/** Default maximum [width, height] in px for a rasterized PDF page. */
-const DEFAULT_PDF_MAX_SIZE: [number, number] = [1024, 1024];
+/** Maximum [width, height] in px for a rasterized PDF page. */
+const PDF_RASTER_MAX_SIZE: [number, number] = [1024, 1024];
 
 /** Resolve a file path and return the absolute path, or null if not found. */
 async function resolveFile(filePath: string): Promise<string | null> {
   const absolutePath = WorkspaceFS.toAbsolute(filePath);
   const exists = await AbsoluteFS.exists(absolutePath);
   return exists ? absolutePath : null;
-}
-
-/** Load a PDF and return its page count. Expects an absolute path. */
-async function loadPdfPageCount(absolutePath: string): Promise<number> {
-  const pdfBytes = AbsoluteFS.readBytesSync(absolutePath);
-  const pdfDoc = await PDFDocument.load(pdfBytes, {
-    updateMetadata: false,
-    ignoreEncryption: true,
-  });
-  return pdfDoc.getPageCount();
 }
 
 /** Remove a conversion's private temp directory and every page it holds. */
@@ -173,7 +164,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
       logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
       return 0;
     }
-    return await loadPdfPageCount(absolutePath);
+    return await countPdfPagesInBuffer(AbsoluteFS.readBytesSync(absolutePath));
   } catch (err) {
     logger.error(CHANNEL, `Error counting PDF pages: ${toErrorMessage(err)}`);
     return 0;
@@ -188,14 +179,12 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 async function singlePagePdf2Png(
   absolutePath: string,
   pageNum: number,
-  quality: number,
-  maxSize: [number, number],
   tempDir: string,
 ): Promise<string> {
   const convert = fromPath(absolutePath, {
-    density: quality,
-    width: maxSize[0],
-    height: maxSize[1],
+    density: PDF_RASTER_DENSITY,
+    width: PDF_RASTER_MAX_SIZE[0],
+    height: PDF_RASTER_MAX_SIZE[1],
     preserveAspectRatio: true,
     format: 'png',
     saveFilename: `page-${pageNum}`,
@@ -219,16 +208,13 @@ async function singlePagePdf2Png(
   return imageBuffer.toString('base64');
 }
 
-/** Pages converted when the caller does not cap the count. */
-const DEFAULT_PDF_MAX_PAGES = 100;
+/** Upper bound on the pages rasterized from one PDF. */
+const PDF_MAX_PAGES = 100;
 
-/** Process a PDF file and return base64 encoded PNG image(s). Returns null on error. */
+/** Process a PDF file and return one base64 encoded PNG per page. Returns null on error. */
 export async function processPdf2Png(
   pdfPath: string,
-  maxPages?: number,
-  quality: number = DEFAULT_PDF_QUALITY,
-  maxSize: [number, number] = DEFAULT_PDF_MAX_SIZE,
-): Promise<string | string[] | null> {
+): Promise<string[] | null> {
   try {
     const absolutePath = await resolveFile(pdfPath);
     if (!absolutePath) {
@@ -236,7 +222,9 @@ export async function processPdf2Png(
       return null;
     }
 
-    const pageCount = await loadPdfPageCount(absolutePath);
+    const pageCount = await countPdfPagesInBuffer(
+      AbsoluteFS.readBytesSync(absolutePath),
+    );
     if (pageCount === 0) {
       return null;
     }
@@ -249,32 +237,11 @@ export async function processPdf2Png(
     // page it holds without touching pages a concurrent conversion is reading.
     const tempDir = await createTexraTempDir('texra-pdf-conversion-');
     try {
-      if (pageCount === 1) {
-        return await singlePagePdf2Png(
-          absolutePath,
-          1,
-          quality,
-          maxSize,
-          tempDir,
-        );
-      }
-
-      // `??` on purpose: a null maxPages (e.g. from a .nullish() tool field)
-      // means "no limit requested" and gets the default cap, same as undefined.
-      const pagesToConvert = Math.min(
-        pageCount,
-        maxPages ?? DEFAULT_PDF_MAX_PAGES,
-      );
+      const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
       const base64Images: string[] = [];
       for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
         base64Images.push(
-          await singlePagePdf2Png(
-            absolutePath,
-            pageNum,
-            quality,
-            maxSize,
-            tempDir,
-          ),
+          await singlePagePdf2Png(absolutePath, pageNum, tempDir),
         );
       }
       logger.debug(

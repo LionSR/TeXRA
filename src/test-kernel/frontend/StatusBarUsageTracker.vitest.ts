@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - stream state
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { STREAM_PHASE } from '@shared/schemas/stream';
@@ -12,7 +13,7 @@ function trackerOverStatusPlane(): {
   status: StreamStatusMachine;
   tracker: StatusBarUsageTracker;
 } {
-  const status = new StreamStatusMachine();
+  const status = new StreamStatusMachine(new SessionEventHub());
   return { status, tracker: new StatusBarUsageTracker(status) };
 }
 

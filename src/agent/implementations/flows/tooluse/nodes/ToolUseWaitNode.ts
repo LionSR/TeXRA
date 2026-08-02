@@ -48,10 +48,9 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { session, isSubagent } = this.services;
-    const { runScope, stopAfterCycle } = useLaunchRunContext();
-    const { streamId, session: ownerSession } = runScope;
-    const { signal } = this.services.runScope;
+    const { session, isSubagent, runScope } = this.services;
+    const { streamId, session: ownerSession, signal } = runScope;
+    const { stopAfterCycle } = useLaunchRunContext();
     const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
     if (signal.aborted) {

@@ -20,7 +20,6 @@ import { LEGACY_AGENT_ALIASES } from './agentRegistryConstants';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
-const INVALID_WORKFLOW_ROUNDS = Number.NaN;
 
 interface ParsedAgentYaml {
   readonly name: string;
@@ -220,13 +219,18 @@ function scanYaml(
       settingsBlock.complete &&
       promptsBlock.complete
     ) {
-      const parsedRounds = AgentWorkflowSettingSchema.shape.rounds
-        .catch(INVALID_WORKFLOW_ROUNDS)
-        .parse(rawSettings.rounds);
-      if (!Number.isNaN(parsedRounds)) {
+      const parsedRounds = AgentWorkflowSettingSchema.shape.rounds.safeParse(
+        rawSettings.rounds,
+      );
+      if (parsedRounds.success) {
         rounds = Math.max(
-          parsedRounds,
+          parsedRounds.data,
           userRequestTemplateCount(rawPrompts.userRequest),
+        );
+      } else {
+        logger.warn(
+          CHANNEL,
+          `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`,
         );
       }
     }

@@ -183,7 +183,7 @@ describe('progress target ownership', () => {
     >;
     expect(getActiveSidebarView()).toBe(SIDEBAR_VIEWS.MAIN);
 
-    await provider.popBackToSidebar();
+    await provider.showInSidebar();
 
     expect(panel.dispose).toHaveBeenCalledTimes(1);
     expect(mainViewProvider.switchMode).toHaveBeenLastCalledWith(

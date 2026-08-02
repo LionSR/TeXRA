@@ -1,6 +1,6 @@
-// The headless CLI's `HostInteractions` implementation, plus the approval
-// surface the chat TUI and the tests import. Internal CLI callers may import
-// the focused modules under ./approval/ directly.
+// The headless CLI's `HostInteractions` implementation. Approval policy and
+// summary formatting live in the focused modules under ./approval/; import
+// those directly.
 
 import type {
   HostAgentProposalRequest,
@@ -43,24 +43,6 @@ import {
 } from './approval/approvalSummaries';
 import { summarizeApprovalEvent } from './approval/eventDispatch';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
-
-export {
-  appendCliApiSwitchHint,
-  approvalPromptAllowed,
-  askUserQuestionDenial,
-  hasCliApprovalDenied,
-  humanInputDenialFeedback,
-  immediateDecision,
-  immediateDecisionForApproval,
-  isCliApiSwitchableRetry,
-  isCliChatGptSubscriptionRetry,
-  markApprovalDenied,
-} from './approval/approvalPolicy';
-export {
-  formatAgentProposalApprovalSummary,
-  formatRetryRequestMessage,
-  formatToolEditApprovalSummary,
-} from './approval/approvalSummaries';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   readonly emit?: HostInteractions['emit'];

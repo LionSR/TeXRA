@@ -868,41 +868,6 @@ export class StreamLogStore {
     }
   }
 
-  async endRunningGroups(
-    now: number = Date.now(),
-    streamIds: readonly StreamTabId[] = [],
-    status: RunOutcome = RUN_OUTCOME.FAILED,
-  ): Promise<StreamTabId[]> {
-    this.assertWritableStore('finalize running transcript groups');
-    const streamsToLoad = new Set<StreamTabId>();
-    for (const streamId of streamIds) {
-      if (this.needsReload(streamId)) streamsToLoad.add(streamId);
-    }
-    for (const [streamId, summary] of this.summaries) {
-      if (hasSomethingRunning(summary) && this.needsReload(streamId)) {
-        streamsToLoad.add(streamId);
-      }
-    }
-
-    if (streamsToLoad.size > 0) {
-      await pMap([...streamsToLoad], (id) => this.ensureLoaded(id), {
-        concurrency: STREAM_LOG_LOAD_CONCURRENCY,
-      });
-    }
-
-    const affected = this.endRunningEntriesInLoadedLogs(now, undefined, status);
-    if (affected.length > 0) {
-      void this.save();
-    }
-    // Recovery borrowed these logs only to repair stale entries. Return them
-    // to cold storage; requestEviction waits for any repair write to finish.
-    for (const streamId of streamsToLoad) {
-      this.requestEviction(streamId);
-    }
-
-    return affected;
-  }
-
   async endRunningGroupsForStreams(
     streamIds: readonly StreamTabId[],
     now: number = Date.now(),
@@ -939,14 +904,14 @@ export class StreamLogStore {
 
   private endRunningEntriesInLoadedLogs(
     now: number,
-    streamIds?: ReadonlySet<StreamTabId>,
-    status: RunOutcome = RUN_OUTCOME.FAILED,
+    streamIds: ReadonlySet<StreamTabId>,
+    status: RunOutcome,
   ): StreamTabId[] {
     const affected: StreamTabId[] = [];
     for (const [streamId, state] of this.streams) {
       const logInstance = state.log;
       if (!logInstance) continue;
-      if (streamIds && !streamIds.has(streamId)) continue;
+      if (!streamIds.has(streamId)) continue;
       let updatedAny = false;
       for (const entry of logInstance.getRange(0, logInstance.head)) {
         if (isRunningGroupEntry(entry)) {
@@ -1117,7 +1082,7 @@ export class StreamLogStore {
     );
   }
 
-  /** Shared post-mutation bookkeeping for append/update/appendText/endRunningGroups. */
+  /** Shared post-mutation bookkeeping for append/update/appendText/group-end. */
   private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
     this.assertWritableStore('commit transcript changes');
     this.refreshSummary(streamId, logInstance);

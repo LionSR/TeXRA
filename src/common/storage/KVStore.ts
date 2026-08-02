@@ -37,8 +37,6 @@ async function withMissingFallback<T>(
 }
 
 function createStorageStore(dir: string): KeyvStoreAdapter {
-  let dirEnsured = false;
-
   return {
     opts: {},
     namespace: undefined,
@@ -60,10 +58,11 @@ function createStorageStore(dir: string): KeyvStoreAdapter {
     },
 
     async set(key: string, value: unknown): Promise<void> {
-      if (!dirEnsured) {
-        await StorageFS.ensureDir(dir);
-        dirEnsured = true;
-      }
+      // Ensured on every write, not latched once: `dir` is storage-root
+      // relative, so a cached store outlives the root it first saw (workspace
+      // switch, test temp platform) and a latch would write into a directory
+      // that no longer exists. mkdir on an existing directory is cheap.
+      await StorageFS.ensureDir(dir);
       // Keyv has already run the serializer, so StorageFS receives raw JSON.
       // Atomic: a torn flow_{id}.json on an unclean exit makes the run fail to
       // parse on resume and silently restart from scratch (losing applied edits).
@@ -82,7 +81,6 @@ function createStorageStore(dir: string): KeyvStoreAdapter {
         () => StorageFS.delete(dir, { recursive: true }),
         undefined,
       );
-      dirEnsured = false;
     },
 
     async has(key: string): Promise<boolean> {

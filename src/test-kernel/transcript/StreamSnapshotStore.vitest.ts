@@ -914,12 +914,8 @@ describe('StreamSnapshotStore', () => {
 
   it('resolves the descriptor execution id everywhere when the legacy mirror is malformed', async () => {
     await installPlatform();
-    // A per-test execution id: `getExecutionStore` caches one store per id
-    // across tests, and a reused id would inherit a handle whose directory
-    // this test's temp platform no longer has.
     const executionId = 'aa11bb22' as ExecutionId;
     const runConfig = toolUseConfig('legacy-search');
-    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(runConfig);
     await writeMetaFile(STREAM, {
       // A legacy sidecar whose top-level mirror never held a real execution id.
@@ -952,7 +948,6 @@ describe('StreamSnapshotStore', () => {
       executionId: ExecutionId,
       agent: string,
     ): Promise<void> => {
-      await StorageFS.ensureDir(resolveRunStoragePath(executionId));
       await getExecutionStore(executionId).writeConfig(toolUseConfig(agent));
       await writeMetaFile(stream, {
         executionId,
@@ -1024,7 +1019,6 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(persisted);
 
     const store = new StreamSnapshotStore();
@@ -1054,7 +1048,6 @@ describe('StreamSnapshotStore', () => {
       category: AgentCategory.Workflow,
       kind: 'workflowScript',
     });
-    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(runConfig);
 
     const store = new StreamSnapshotStore();
@@ -1084,7 +1077,6 @@ describe('StreamSnapshotStore', () => {
     store.setRunConfig(STREAM, toolUseConfig('live-search'), liveExecutionId);
     await store.flush();
 
-    await StorageFS.ensureDir(resolveRunStoragePath(foreignExecutionId));
     await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
     await writeMetaFile(STREAM, {
       executionId: foreignExecutionId,
@@ -1105,7 +1097,6 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(
       toolUseConfig('search', 'deepseekproT'),
     );
@@ -1141,7 +1132,6 @@ describe('StreamSnapshotStore', () => {
     // from the descriptor half alone: the pair still has to move together.
     const executionId = 'def456' as ExecutionId;
     const handoffConfig = toolUseConfig('handoff-search');
-    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(handoffConfig);
     await writeMetaFile(STREAM, {
       executionId,
@@ -1161,7 +1151,6 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(toolUseConfig());
 
     const store = new StreamSnapshotStore();
@@ -1187,7 +1176,6 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
-    await StorageFS.ensureDir(resolveRunStoragePath(oldExecutionId));
     await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
 
     const store = new StreamSnapshotStore();

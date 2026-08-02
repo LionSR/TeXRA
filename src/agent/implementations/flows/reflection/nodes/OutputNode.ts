@@ -231,7 +231,6 @@ export class OutputNode<C = unknown> extends Node<
       compileFailures: [],
       xmlSummary: {
         tagContents: {},
-        documents: [],
         singleOutputFile: null,
         sourceLocation: null,
       },

@@ -20,7 +20,6 @@ import {
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
 } from '@frontend/files/fileSelectionRegistry';
-import { selectFiles } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
@@ -42,10 +41,6 @@ import { BaseWebviewManager } from './BaseWebviewManager';
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
   { command: C }
->;
-
-type EditedFileSelectedMessage = MessageFor<
-  typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED
 >;
 
 type RequestEditedFileMessage = MessageFor<
@@ -112,10 +107,6 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  handleEditedFileSelected(message: EditedFileSelectedMessage): void {
-    logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
-  }
-
   async handleRequestEditedFile(
     message: RequestEditedFileMessage,
   ): Promise<void> {
@@ -150,13 +141,10 @@ export class FileManager extends BaseWebviewManager {
       return;
     }
     try {
-      const selectedFiles =
-        fileType === 'output'
-          ? await this.selectOutputFiles(currentFile)
-          : await vscode.commands.executeCommand<string[]>(
-              commands.selectCommand,
-              currentFile,
-            );
+      const selectedFiles = await vscode.commands.executeCommand<string[]>(
+        commands.selectCommand,
+        currentFile,
+      );
 
       if (selectedFiles) {
         this.postMessage({
@@ -347,37 +335,6 @@ export class FileManager extends BaseWebviewManager {
     this.postMessage({ command: setCommand, files: message.files ?? [] });
   }
 
-  private async selectOutputFiles(
-    currentInputFile?: string,
-  ): Promise<string[] | null> {
-    try {
-      const relativePaths = await selectFiles({
-        allowMany: true,
-        openLabel: 'Select Output Files',
-        filters: { 'Text files': ['tex', 'txt', 'md'] },
-        currentFile: currentInputFile,
-      });
-
-      if (relativePaths) {
-        logger.info(
-          CHANNEL,
-          `Selected output files: ${relativePaths.join(', ')}`,
-        );
-        vscode.window.showInformationMessage(
-          `Selected output files: ${relativePaths.join(', ')}`,
-        );
-      }
-      return relativePaths;
-    } catch (err) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        'Error selecting output files',
-        err,
-      );
-      return null;
-    }
-  }
-
   private postEditedFiles(files: string[], notifyWhenEmpty: boolean): void {
     if (notifyWhenEmpty && files.length === 0) {
       logger.debug(CHANNEL, 'No edited files were found during refresh.');
@@ -400,9 +357,13 @@ export class FileManager extends BaseWebviewManager {
   }
 
   /** Post show/hide getting started banner. The banner's own close button
-   * dismisses it for the session; a pre-move `ui.showGettingStartedBanner`
-   * of false still counts as a permanent opt-out (nothing writes the legacy
-   * key back), matching the login/orchestrator banners. */
+   * dismisses it for the session; a `ui.showGettingStartedBanner` of false
+   * still counts as a permanent opt-out, matching the login/orchestrator
+   * banners. The key is no longer declared in `contributes.configuration` and
+   * nothing writes it back, so this is a read-only compat arm for a
+   * settings.json that predates its removal.
+   * Retire on 2026-11-01: drop this read and let the close button be the only
+   * dismissal. */
   private postGettingStartedBanner(show: boolean): void {
     const legacyOptOut =
       getConfig<boolean>('ui.showGettingStartedBanner', true) === false;

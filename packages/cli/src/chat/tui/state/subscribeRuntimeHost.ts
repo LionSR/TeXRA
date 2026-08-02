@@ -142,93 +142,96 @@ function applyClearMissingOutputs(
   }
 }
 
-function applyDirectTuiRunEvent(
-  event: AgentEvent,
-  fallbackStreamId: StreamTabId,
-): void {
-  switch (event.type) {
-    case 'run.config':
-      applyRunConfig(event.streamId, event.config);
-      return;
-    case 'usage':
-      applyUsageUpdate(event.payload);
-      return;
-    case 'conversation.progress':
-      patchStream(fallbackStreamId, (s) => ({
-        ...s,
-        conversation: event.progress,
-      }));
-      return;
-    case 'updateTodos':
-      patchStream(event.streamId, (s) => ({
-        ...s,
-        todos: event.todos,
-      }));
-      return;
-    case 'updatePlan':
-      patchStream(event.streamId, (s) => ({
-        ...s,
-        plan: event.plan,
-      }));
-      return;
-    case 'goalPaused':
-      // Without a transcript line, an auto-paused goal is indistinguishable
-      // from a hang: the agent simply stops mid-objective.
-      appendLocalAssistantTranscript(
-        GOAL_PAUSED_TRANSCRIPT_NOTICE,
-        event.streamId,
-      );
-      return;
-    case 'addOutputFiles':
-      patchStream(event.streamId, (s) => ({
-        ...s,
-        outputFilesByRound: { ...s.outputFilesByRound, ...event.filesByRound },
-      }));
-      return;
-    case 'updateMissingOutputs':
-      patchStream(event.streamId, (s) => ({
-        ...s,
-        missingOutputsByRound: {
-          ...s.missingOutputsByRound,
-          ...event.filesByRound,
-        },
-      }));
-      return;
-    case 'updateCompileFailures':
-      patchStream(event.streamId, (s) => ({
-        ...s,
-        compileFailuresByRound: {
-          ...s.compileFailuresByRound,
-          ...event.filesByRound,
-        },
-      }));
-      return;
-    case 'stage.start':
-      if (event.kind === 'phase') {
-        applyStage(fallbackStreamId, {
-          kind: 'phase',
-          label: event.label,
-          ...(event.index !== undefined ? { index: event.index } : {}),
-          ...(event.total !== undefined && event.total > 0
-            ? { total: event.total }
-            : {}),
-        });
-        return;
-      }
-      if (event.kind !== 'round') return;
+type TuiRunFactHandlers = {
+  readonly [K in AgentEvent['type']]?: (
+    event: Extract<AgentEvent, { type: K }>,
+    fallbackStreamId: StreamTabId,
+  ) => void;
+};
+
+/**
+ * Run facts this TUI projects. The subscription filter below is derived from
+ * these keys, so the handled set and the delivered set cannot drift apart and
+ * a fact reaching the dispatch always has a handler.
+ */
+const TUI_RUN_FACT_HANDLERS = {
+  'run.config': (event) => applyRunConfig(event.streamId, event.config),
+  usage: (event) => applyUsageUpdate(event.payload),
+  'conversation.progress': (event, fallbackStreamId) =>
+    patchStream(fallbackStreamId, (s) => ({
+      ...s,
+      conversation: event.progress,
+    })),
+  updateTodos: (event) =>
+    patchStream(event.streamId, (s) => ({
+      ...s,
+      todos: event.todos,
+    })),
+  updatePlan: (event) =>
+    patchStream(event.streamId, (s) => ({
+      ...s,
+      plan: event.plan,
+    })),
+  // Without a transcript line, an auto-paused goal is indistinguishable from a
+  // hang: the agent simply stops mid-objective.
+  goalPaused: (event) =>
+    appendLocalAssistantTranscript(
+      GOAL_PAUSED_TRANSCRIPT_NOTICE,
+      event.streamId,
+    ),
+  addOutputFiles: (event) =>
+    patchStream(event.streamId, (s) => ({
+      ...s,
+      outputFilesByRound: { ...s.outputFilesByRound, ...event.filesByRound },
+    })),
+  updateMissingOutputs: (event) =>
+    patchStream(event.streamId, (s) => ({
+      ...s,
+      missingOutputsByRound: {
+        ...s.missingOutputsByRound,
+        ...event.filesByRound,
+      },
+    })),
+  updateCompileFailures: (event) =>
+    patchStream(event.streamId, (s) => ({
+      ...s,
+      compileFailuresByRound: {
+        ...s.compileFailuresByRound,
+        ...event.filesByRound,
+      },
+    })),
+  'stage.start': (event, fallbackStreamId) => {
+    if (event.kind === 'phase') {
       applyStage(fallbackStreamId, {
-        kind: 'round',
-        index: event.index ?? 0,
+        kind: 'phase',
+        label: event.label,
+        ...(event.index !== undefined ? { index: event.index } : {}),
         ...(event.total !== undefined && event.total > 0
           ? { total: event.total }
           : {}),
       });
       return;
-    case 'child.activity':
-      applySubagentRoster(event.parentStreamId, event.items);
-      return;
-  }
-}
+    }
+    if (event.kind !== 'round') return;
+    applyStage(fallbackStreamId, {
+      kind: 'round',
+      index: event.index ?? 0,
+      ...(event.total !== undefined && event.total > 0
+        ? { total: event.total }
+        : {}),
+    });
+  },
+  'child.activity': (event) =>
+    applySubagentRoster(event.parentStreamId, event.items),
+} satisfies TuiRunFactHandlers;
+
+type TuiRunFactType = keyof typeof TUI_RUN_FACT_HANDLERS;
+
+type TuiRunFactEvent = Extract<AgentEvent, { type: TuiRunFactType }>;
+
+const TUI_RUN_FACT_TYPES = Object.keys(
+  TUI_RUN_FACT_HANDLERS,
+) as TuiRunFactType[];
 
 function refreshQueuedFollowUps(
   streamId: UpdateQueuedFollowUpsPayload['streamId'],
@@ -305,24 +308,16 @@ export function attachTuiRunFactSubscription(
       if (generation !== getCliStateGeneration()) return;
       if (sessionEvent.scope !== 'run') return;
       if (isChildStreamRemoved(sessionEvent.streamId)) return;
-      applyDirectTuiRunEvent(sessionEvent.event, sessionEvent.streamId);
+      // Narrowed by the filter below; TypeScript cannot correlate a union
+      // event with its own handler slot, so the lookup is asserted once.
+      const event = sessionEvent.event as TuiRunFactEvent;
+      const handle = TUI_RUN_FACT_HANDLERS[event.type] as (
+        event: TuiRunFactEvent,
+        fallbackStreamId: StreamTabId,
+      ) => void;
+      handle(event, sessionEvent.streamId);
     },
-    {
-      scope: 'run',
-      types: [
-        'conversation.progress',
-        'updateTodos',
-        'updatePlan',
-        'addOutputFiles',
-        'updateMissingOutputs',
-        'updateCompileFailures',
-        'goalPaused',
-        'run.config',
-        'usage',
-        'stage.start',
-        'child.activity',
-      ],
-    },
+    { scope: 'run', types: TUI_RUN_FACT_TYPES },
   );
   return () => {
     detachResetHook();

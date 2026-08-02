@@ -197,11 +197,9 @@ describe('ExecutionsTool', () => {
 
     try {
       session.executions.track(handle);
-      seedStreamStatusForTest(
-        session.status,
-        childStreamId,
-        STREAM_PHASE.WAITING,
-      );
+      seedStreamStatusForTest(session.status, childStreamId, {
+        phase: STREAM_PHASE.WAITING,
+      });
       mocks.readMeta.mockResolvedValue({
         timestamp: '2026-06-15T09:36:02.345Z',
         category: 'toolUse',
@@ -266,11 +264,9 @@ describe('ExecutionsTool', () => {
 
     try {
       session.executions.track(handle);
-      seedStreamStatusForTest(
-        session.status,
-        childStreamId,
-        STREAM_PHASE.RUNNING,
-      );
+      seedStreamStatusForTest(session.status, childStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       session.snapshots.setTodos(childStreamId, [
         {
           content: 'Read live snapshot state',

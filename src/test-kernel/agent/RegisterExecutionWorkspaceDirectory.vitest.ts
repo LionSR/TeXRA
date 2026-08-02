@@ -28,7 +28,6 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
 import {
   finalizeExecution,
   registerExecution,
-  writeTerminalStatus,
 } from '@agent/storage/executionLifecycle';
 import { inspectExecutionLease } from '@agent/storage/executionLease';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -152,7 +151,11 @@ describe('execution lifecycle', () => {
       resultMeta('completed', 'Interim result.'),
     );
 
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED);
+    await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
 
     expect(mocks.writeMeta).toHaveBeenCalledWith({
       schemaVersion: 1,
@@ -164,7 +167,7 @@ describe('execution lifecycle', () => {
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });
 
-  it('rejects when terminal metadata cannot be written', async () => {
+  it('reports a failure when terminal metadata cannot be written', async () => {
     mocks.readMeta.mockResolvedValue(
       executionMeta({
         terminalStatus: EXECUTION_STATUS.COMPLETED,
@@ -174,13 +177,22 @@ describe('execution lifecycle', () => {
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Finished.'),
     );
-    mocks.writeMeta.mockRejectedValueOnce(new Error('disk full'));
+    const error = new Error('disk full');
+    mocks.writeMeta.mockRejectedValueOnce(error);
 
     const executionId = 'failed-terminal-write' as ExecutionId;
-    await expect(
-      writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED),
-    ).rejects.toThrow('disk full');
+    const result = await finalizeExecution({
+      executionId,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      flowRecord: 'preserve',
+    });
 
+    expect(result).toEqual({
+      status: 'failed',
+      error,
+      stage: 'terminal-status',
+      terminalStatusPersisted: false,
+    });
     expect(mocks.readResultMeta).not.toHaveBeenCalled();
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
   });

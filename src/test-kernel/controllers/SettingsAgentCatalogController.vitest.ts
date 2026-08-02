@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - shared
 import {
@@ -166,24 +166,29 @@ describe('SettingsAgentCatalogController', () => {
       customPresets: [persistedPreset],
     });
 
-    assert.deepEqual(await controller.applyPreset('custom-team'), {
-      ok: true,
-      preset: {
-        ...persistedPreset,
-        icon: 'bookmark',
-      },
-      unresolvedNames: ['missing'],
+    const resolved = controller.resolvePreset('custom-team');
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) throw new Error('expected the preset to resolve');
+    expect(resolved.preset).toStrictEqual({
+      ...persistedPreset,
+      icon: 'bookmark',
     });
+    expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
+    await controller.commitPresetResolution(
+      resolved.preset,
+      resolved.resolution,
+    );
+
     assert.deepEqual(enabled.workflow, ['remote:writer']);
     // Unresolved names are kept bare so the agent joins the roster the
     // moment it appears (sign-in, install) — never silently dropped.
     assert.deepEqual(enabled.toolUse, ['builtInToolUse:review', 'missing']);
   });
 
-  it('reports unknown presets without writing enabled agent state', async () => {
+  it('reports unknown presets without writing enabled agent state', () => {
     const { controller, enabled } = createController();
 
-    assert.deepEqual(await controller.applyPreset('missing'), {
+    expect(controller.resolvePreset('missing')).toStrictEqual({
       ok: false,
       reason: 'unknownPreset',
     });

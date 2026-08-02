@@ -77,11 +77,9 @@ describe('desktop process-session window title', () => {
     const waitingStream = 'stream:waiting' as StreamTabId;
     const waitingHandle = createAgentHandle('execution:waiting', waitingStream);
     try {
-      seedStreamStatusForTest(
-        session.status,
-        orphanStream,
-        STREAM_PHASE.RUNNING,
-      );
+      seedStreamStatusForTest(session.status, orphanStream, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       expect(getDesktopSessionActivity(session)).toBe('idle');
 
       session.executions.trackAgentExecution(waitingHandle, {
@@ -177,7 +175,7 @@ describe('desktop process-session window title', () => {
       seedStreamStatusForTest(
         session.status,
         'stream:orphan-update' as StreamTabId,
-        STREAM_PHASE.RUNNING,
+        { phase: STREAM_PHASE.RUNNING },
       );
       expect(view.setTitle).not.toHaveBeenCalled();
 

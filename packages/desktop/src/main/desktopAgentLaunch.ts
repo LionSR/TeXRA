@@ -1,11 +1,8 @@
-// Agent imports
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { selectAutoOpenFinalOutput } from '@agent/runtime/selectAutoOpenFinalOutput';
-
-// Shared and tool imports
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import type { RegisteredToolName } from '@tools/registry';

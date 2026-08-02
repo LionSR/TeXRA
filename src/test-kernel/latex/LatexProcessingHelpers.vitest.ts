@@ -153,7 +153,6 @@ describe('LatexMediaManager PDF compilation', () => {
       inputPaths.map(createExternalLocation),
       workspaceState,
       compilePdfConfig,
-      true,
     );
 
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledTimes(2);

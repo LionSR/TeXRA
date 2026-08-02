@@ -48,10 +48,9 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
     ).mockRejectedValue(new Error('follow-up append failed'));
     const node = new ToolUseRoundPrepNode().setServices(services);
     const shared = buildShared();
-    const interactions = { emit: vi.fn() };
 
     await expect(
-      withTestRunContext(interactions, 'test-stream', () =>
+      withTestRunContext(services.runScope, () =>
         node.post(shared, {
           interrupted: false,
           queuedFollowUps: [{ text: 'Do the thing.', origin: 'user' }],
@@ -73,23 +72,18 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
       ...buildShared(),
       currentUserInstruction: 'initial request',
     };
-    const interactions = { emit: vi.fn() };
-
-    const transition = await withTestRunContext(
-      interactions,
-      'test-stream',
-      () =>
-        node.post(shared, {
-          interrupted: false,
-          queuedFollowUps: [
-            { text: 'Do the thing.', origin: 'user' },
-            {
-              text: '<subagent-result>done</subagent-result>',
-              origin: 'subagent_result',
-            },
-          ],
-          synthetic: false,
-        }),
+    const transition = await withTestRunContext(services.runScope, () =>
+      node.post(shared, {
+        interrupted: false,
+        queuedFollowUps: [
+          { text: 'Do the thing.', origin: 'user' },
+          {
+            text: '<subagent-result>done</subagent-result>',
+            origin: 'subagent_result',
+          },
+        ],
+        synthetic: false,
+      }),
     );
 
     expect(transition).toBeDefined();
@@ -106,10 +100,9 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
     ).mockRejectedValue(new Error('boom'));
     const node = new ToolUseRoundPrepNode().setServices(services);
     const shared = buildShared();
-    const interactions = { emit: vi.fn() };
 
     await expect(
-      withTestRunContext(interactions, 'test-stream', () =>
+      withTestRunContext(services.runScope, () =>
         node.post(shared, {
           interrupted: false,
           queuedFollowUps: [{ text: 'synthesized', origin: 'user' }],

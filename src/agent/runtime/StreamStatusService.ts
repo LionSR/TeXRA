@@ -1,5 +1,5 @@
 import type { AgentTrace, StatusEvent } from '@agent/trace';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -57,27 +57,17 @@ function effectiveState(entry: StreamEntry): StreamPhaseState {
 
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
-  private eventHub: SessionEventHub;
 
   /**
-   * @param events Session hub this machine publishes canonical `status` facts
+   * @param eventHub Session hub this machine publishes canonical `status` facts
    *   on. The session constructs both and hands the hub over once, so a
    *   transition reaches every consumer on the session-fact rail no matter
-   *   which caller triggered it. Callers pass a trace only for the transcript
+   *   which caller triggered it. It is required and never rebound: a machine
+   *   publishing where nobody listens is a status plane that silently loses
+   *   every transition. Callers pass a trace only for the transcript
    *   compatibility bridge.
    */
-  constructor(events: SessionEventHub = new SessionEventHub()) {
-    this.eventHub = events;
-  }
-
-  /** Bind status publication to the owning session's fact rail. */
-  attachSessionEvents(events: SessionEventHub): void {
-    this.eventHub = events;
-  }
-
-  get sessionEvents(): SessionEventHub {
-    return this.eventHub;
-  }
+  constructor(private readonly eventHub: SessionEventHub) {}
 
   get(stream: StreamTabId): StreamPhase | undefined {
     return this.stateFor(stream)?.phase;

@@ -12,6 +12,7 @@ import {
   inspectExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
@@ -36,7 +37,7 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  STREAM_STATUS,
+  STREAM_SUBSTATE,
   type ExecutionId,
   type RunOutcome,
   type StreamTabId,
@@ -379,7 +380,9 @@ describe('runFlowWithLifecycle', () => {
     );
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.FAILED);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.FAILED,
+      });
 
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
@@ -398,7 +401,10 @@ describe('runFlowWithLifecycle', () => {
     );
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RESUMING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+        substate: STREAM_SUBSTATE.RESUMING,
+      });
 
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
@@ -421,7 +427,9 @@ describe('runFlowWithLifecycle', () => {
       scope: 'session',
     });
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
@@ -671,7 +679,9 @@ describe('runFlowWithLifecycle', () => {
     let terminalResult: AgentRunHandle['result'] | undefined;
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.COMPLETED);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.COMPLETED,
+      });
 
       const result = await runFlowWithLifecycle(
         ctx,
@@ -1082,7 +1092,9 @@ describe('runFlowWithLifecycle', () => {
     const onError = vi.fn();
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       const result = await runFlowWithLifecycle(
         ctx,
@@ -1207,7 +1219,7 @@ function finalizeFixture(slug: string): {
   return {
     executionId,
     streamId,
-    streamStatus: new StreamStatusMachine(),
+    streamStatus: new StreamStatusMachine(new SessionEventHub()),
     handle: testExecutionHandle({
       executionId,
       parentStreamId: streamId,
@@ -1245,7 +1257,9 @@ describe('finalizeRunTerminal', () => {
     );
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       const params = {
         handle,
         executions: { untrack },
@@ -1307,7 +1321,9 @@ describe('finalizeRunTerminal', () => {
     });
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
       const finalization = finalizeRunTerminal({
         handle,
         executions: { untrack },
@@ -1347,7 +1363,9 @@ describe('finalizeRunTerminal', () => {
     channelTraceMocks.warn.mockClear();
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.RUNNING);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
 
       const event = await finalizeRunTerminal({
         handle,
@@ -1399,7 +1417,9 @@ describe('finalizeRunTerminal', () => {
     channelTraceMocks.warn.mockClear();
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.CANCELLED);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.CANCELLED,
+      });
 
       const finalized = await finalizeRunTerminal({
         handle,
@@ -1447,7 +1467,9 @@ describe('finalizeRunTerminal', () => {
     channelTraceMocks.warn.mockClear();
 
     try {
-      seedStreamStatusForTest(streamStatus, streamId, STREAM_PHASE.FAILED);
+      seedStreamStatusForTest(streamStatus, streamId, {
+        phase: STREAM_PHASE.FAILED,
+      });
 
       const finalized = await finalizeRunTerminal({
         handle,

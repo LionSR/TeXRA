@@ -258,15 +258,19 @@ export type UpdateCustomAgentDirMessage = z.infer<
 // Multi-agent coordination data schema
 // ============================================================
 
-/** Outbound: backend → frontend reliability + orchestration settings */
-const UpdateSuperYoloEnabledMessageSchema = z.object({
+/**
+ * Outbound: backend → frontend reliability + orchestration settings. The wire
+ * literal stays `updateSuperYoloEnabled` for compatibility with shipped
+ * webviews, so only the schema and type carry the payload's real name.
+ */
+const UpdateReliabilityAndOrchestrationMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
   reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
 });
-export type UpdateSuperYoloEnabledMessage = z.infer<
-  typeof UpdateSuperYoloEnabledMessageSchema
+export type UpdateReliabilityAndOrchestrationMessage = z.infer<
+  typeof UpdateReliabilityAndOrchestrationMessageSchema
 >;
 
 // ============================================================
@@ -577,7 +581,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateModelSelectionMessageSchema,
   UpdateAgentSelectionMessageSchema,
   UpdateCustomAgentDirMessageSchema,
-  UpdateSuperYoloEnabledMessageSchema,
+  UpdateReliabilityAndOrchestrationMessageSchema,
   UpdateAgentModePresetsMessageSchema,
   UpdateApprovalAndSafetySettingsMessageSchema,
   UpdateAgentSkillsSettingsMessageSchema,

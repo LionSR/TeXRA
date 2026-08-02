@@ -9,7 +9,7 @@
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { NumberVscodeSetting } from '@shared/schemas/profileViewMessages';
-import type { UpdateSuperYoloEnabledMessage } from '@shared/schemas/settingsViewMessages';
+import type { UpdateReliabilityAndOrchestrationMessage } from '@shared/schemas/settingsViewMessages';
 
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 
@@ -20,7 +20,7 @@ export interface SuperYoloHandlerPorts extends SettingsStatePorts {
 
 export function buildSuperYoloMessage(
   ports: SuperYoloHandlerPorts,
-): UpdateSuperYoloEnabledMessage {
+): UpdateReliabilityAndOrchestrationMessage {
   const { workspaceState } = ports;
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,

@@ -588,6 +588,8 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 
+- **Vitest `expect` is the assertion idiom.** New and edited suites in `src/test-kernel/` assert with `expect`; do not import `node:assert`. The files still on `node:assert` are migration backlog, converted only in dedicated mechanical PRs (one file or one directory per reviewable PR, no behavior changes riding along) using the strict mapping: `assert.equal` becomes `toBe`, `assert.deepEqual` becomes `toStrictEqual` (never `toEqual`, which drops the `{a: undefined}` versus `{}` distinction), `assert.ok` becomes `toBeTruthy()`, or `toBe(true)` when the argument is already a boolean expression. Two carve-outs: `shared/stateSettings.vitest.ts` and `shared/settingsConfiguration.vitest.ts` keep `node:assert` for its per-key message argument, which names the failing settings key inside a catalog loop; and `agent/modelHandlers/ModelHandlerAnthropic.vitest.ts` and `agent/modelHandlers/ModelHandlerOpenAIResponse.vitest.ts` (about 300 sites between them) are barred from batch conversion inside a polish or refactor pass, where the mechanical diff would bury the change under review.
+
 ## Documentation
 
 - Documentation lives in `docs/` and uses Markdown. Follow existing heading levels and style.

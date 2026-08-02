@@ -11,7 +11,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
+import { appendCliApiSwitchHint } from '@cli/runtime/approval/approvalPolicy';
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
