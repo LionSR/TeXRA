@@ -136,6 +136,51 @@ describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () =>
     ).resolves.toBe('legacy');
     expect(logger.warnMessages).toHaveLength(1);
   });
+
+  it('merges colliding taskRuns without overwriting canonical execution files', async () => {
+    const legacy = await makeTempDir('texra-task-runs-', tempDirs);
+    const target = await makeTempDir('texra-executions-', tempDirs);
+    const logger = fakeLogger();
+    const executionId = 'execution-1';
+    const legacyRun = join(legacy, executionId);
+    const canonicalRun = join(target, executionId);
+
+    await mkdir(legacyRun, { recursive: true });
+    await mkdir(canonicalRun, { recursive: true });
+    await writeFile(join(legacyRun, 'result.json'), 'legacy');
+    await writeFile(join(legacyRun, 'artifact.txt'), 'artifact');
+    await writeFile(join(canonicalRun, 'result.json'), 'canonical');
+    await mkdir(join(legacyRun, 'r1'), { recursive: true });
+    await mkdir(join(canonicalRun, 'r1'), { recursive: true });
+    await writeFile(join(legacyRun, 'r1', 'output.tex'), 'legacy output');
+    await writeFile(join(legacyRun, 'r1', 'diff.pdf'), 'legacy diff');
+    await writeFile(join(canonicalRun, 'r1', 'output.tex'), 'canonical output');
+
+    await mergeLegacyStorageBucket(legacy, target, {
+      mergePerChild: 'all',
+      label: 'taskRuns',
+      logger,
+    });
+
+    await expect(
+      readFile(join(canonicalRun, 'result.json'), 'utf8'),
+    ).resolves.toBe('canonical');
+    await expect(
+      readFile(join(canonicalRun, 'artifact.txt'), 'utf8'),
+    ).resolves.toBe('artifact');
+    await expect(
+      readFile(join(canonicalRun, 'r1', 'output.tex'), 'utf8'),
+    ).resolves.toBe('canonical output');
+    await expect(
+      readFile(join(canonicalRun, 'r1', 'diff.pdf'), 'utf8'),
+    ).resolves.toBe('legacy diff');
+    await expect(
+      readFile(join(legacyRun, 'result.json'), 'utf8'),
+    ).resolves.toBe('legacy');
+    await expect(
+      readFile(join(legacyRun, 'r1', 'output.tex'), 'utf8'),
+    ).resolves.toBe('legacy output');
+  });
 });
 
 describe('mergeLegacyWorkspaceStorageBucket', () => {

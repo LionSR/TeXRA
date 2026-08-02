@@ -11,7 +11,7 @@
  */
 
 // Node imports
-import { constants, existsSync } from 'node:fs';
+import { constants, existsSync, type Dirent } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import {
   copyFile,
@@ -30,9 +30,6 @@ import { dirname, join } from 'node:path';
 // Local imports
 import { WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD } from '@platform/defaults/workspaceStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-// Node imports
-import type { Dirent } from 'node:fs';
 
 export interface LegacyDataMigrationLogger {
   info(message: string): void;
@@ -148,11 +145,12 @@ export interface MergeLegacyStorageBucketOptions {
   /**
    * Top-level directory names holding id-keyed children (e.g. `executions/`,
    * `streamData/`, where every child directory is a globally unique run or
-   * stream id). When the target bucket already has one of these — because
+   * stream id), or `all` to apply this rule recursively to every directory. When the
+   * target bucket already has one of these — because
    * another host wrote runs into the shared root first — its children are
    * merged one at a time instead of skipping the whole collection.
    */
-  readonly mergePerChild: readonly string[];
+  readonly mergePerChild: readonly string[] | 'all';
   readonly label: string;
   readonly logger: LegacyDataMigrationLogger;
 }
@@ -182,7 +180,7 @@ export async function mergeLegacyStorageBucket(
 
     const mergeChildren =
       entry.isDirectory() &&
-      mergePerChild.includes(entry.name) &&
+      (mergePerChild === 'all' || mergePerChild.includes(entry.name)) &&
       existsSync(targetPath);
     if (!mergeChildren) {
       await moveEntryIfAbsent(legacyPath, targetPath, entryLabel, logger);
@@ -192,12 +190,27 @@ export async function mergeLegacyStorageBucket(
     const children = await readLegacyDirEntries(legacyPath, logger);
     if (!children) continue;
     for (const child of children) {
-      await moveEntryIfAbsent(
-        join(legacyPath, child.name),
-        join(targetPath, child.name),
-        `${entryLabel}/${child.name}`,
-        logger,
-      );
+      const legacyChildPath = join(legacyPath, child.name);
+      const targetChildPath = join(targetPath, child.name);
+      const childLabel = `${entryLabel}/${child.name}`;
+      if (
+        mergePerChild === 'all' &&
+        child.isDirectory() &&
+        existsSync(targetChildPath)
+      ) {
+        await mergeLegacyStorageBucket(legacyChildPath, targetChildPath, {
+          mergePerChild: 'all',
+          label: childLabel,
+          logger,
+        });
+      } else {
+        await moveEntryIfAbsent(
+          legacyChildPath,
+          targetChildPath,
+          childLabel,
+          logger,
+        );
+      }
     }
   }
 }
