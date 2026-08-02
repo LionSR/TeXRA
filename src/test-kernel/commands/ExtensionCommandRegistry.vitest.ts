@@ -466,6 +466,15 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(true);
   });
 
+  it.each([null, true, 'true', { inPlace: 'true' }, { extra: true }])(
+    'texra.showProgressView rejects malformed argument %j',
+    (argument) => {
+      const actions = makeActions();
+      expect(dispatch(actions, 'texra.showProgressView', argument)).toBe(false);
+      expect(actions.showProgressView).not.toHaveBeenCalled();
+    },
+  );
+
   it('texra.setApiKey forwards parsed provider', async () => {
     const actions = makeActions();
     await expect(
