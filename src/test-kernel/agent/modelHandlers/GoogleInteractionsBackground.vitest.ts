@@ -1,10 +1,16 @@
 // Third-party imports
+import { ApiError, type Interactions } from '@google/genai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { hasManualRetryOnlyErrorMarker } from '@common/errors/sdkError/errorMetadata';
+import {
+  isProviderErrorAutoRetryable,
+  normalizeProviderError,
+} from '@common/errors/sdkErrorUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
@@ -14,9 +20,6 @@ import {
   GOOGLE_INTERACTIONS_TEST_CONFIG,
   userStep,
 } from './googleInteractionsTestUtils';
-
-// Third-party imports
-import type { Interactions } from '@google/genai';
 
 type Step = Interactions.Step;
 
@@ -67,7 +70,7 @@ interface CapturedCalls {
  */
 function bgClient(opts: {
   submit: () => Interaction;
-  getSequence: Interaction[];
+  getSequence: Array<Interaction | Error>;
   onCancel?: (id: string) => void;
   generateContent?: () => Promise<unknown>;
 }): { client: unknown; calls: CapturedCalls } {
@@ -96,6 +99,7 @@ function bgClient(opts: {
         const next =
           opts.getSequence[Math.min(getIdx, opts.getSequence.length - 1)];
         getIdx += 1;
+        if (next instanceof Error) throw next;
         return next;
       },
       cancel: async (id: string) => {
@@ -193,6 +197,16 @@ async function runWithPolls<T>(promise: Promise<T>, ticks: number): Promise<T> {
   return promise;
 }
 
+async function captureRejection(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise;
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw error;
+  }
+  throw new Error('Expected promise to reject');
+}
+
 describe('ModelHandlerGoogleInteractions background mode', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -237,6 +251,215 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get.every((id) => id === 'int_1')).toBe(true);
     expect(result.response.status).toBe('completed');
   });
+
+  it('resumes the same interaction after a transient get failure', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_resume', status: 'in_progress' }),
+      getSequence: [
+        new TypeError('fetch failed'),
+        completedInteraction('int_resume'),
+      ],
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toThrow('fetch failed');
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+
+    await expect(
+      runWithPolls(respond(handler, client, [userStep('a')]), 1),
+    ).resolves.toMatchObject({ response: { status: 'completed' } });
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_resume', 'int_resume']);
+    expect(calls.cancel).toHaveLength(0);
+  });
+
+  it('keeps the original id through a transient failure, in_progress, and completion', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_long_resume', status: 'in_progress' }),
+      getSequence: [
+        Object.assign(new Error('temporarily unavailable'), { status: 503 }),
+        { id: 'int_long_resume', status: 'in_progress' },
+        completedInteraction('int_long_resume'),
+      ],
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toThrow(
+      'temporarily unavailable',
+    );
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+
+    await runWithPolls(respond(handler, client, [userStep('a')]), 1);
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual([
+      'int_long_resume',
+      'int_long_resume',
+      'int_long_resume',
+    ]);
+    expect(calls.cancel).toHaveLength(0);
+  });
+
+  it('does not reset the original deadline when a retry resumes', async () => {
+    mockConfig();
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    const handler = createHandler();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_expire', status: 'in_progress' }),
+      getSequence: [new TypeError('fetch failed')],
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstError = captureRejection(first);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstError;
+
+    await vi.advanceTimersByTimeAsync(MAX_DURATION_MS - POLL_INTERVAL_MS);
+    const timeout = await captureRejection(
+      respond(handler, client, [userStep('a')]),
+    );
+
+    expect(timeout.message).toContain(
+      `maximum polling duration of ${MAX_DURATION_MS} ms`,
+    );
+    expect(hasManualRetryOnlyErrorMarker(timeout)).toBe(true);
+    expect(normalizeProviderError(timeout).userRetryable).toBe(true);
+    expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_expire']);
+    expect(calls.cancel).toEqual(['int_expire']);
+  });
+
+  it('treats queued as pending', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_queued', status: 'queued' }),
+      getSequence: [
+        { id: 'int_queued', status: 'queued' },
+        completedInteraction('int_queued'),
+      ],
+    });
+
+    await runWithPolls(respond(handler, client, [userStep('a')]), 2);
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_queued', 'int_queued']);
+  });
+
+  it('retains an unknown status and resumes without replacement', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_unknown', status: 'in_progress' }),
+      getSequence: [
+        { id: 'int_unknown', status: 'mystery' },
+        completedInteraction('int_unknown'),
+      ],
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toThrow(
+      /unknown status "mystery"/,
+    );
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+    await respond(handler, client, [userStep('a')]);
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_unknown', 'int_unknown']);
+  });
+
+  it('retains a known id after a non-missing 4xx retrieval failure', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const forbidden = Object.assign(new Error('request rejected'), {
+      status: 403,
+    });
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_forbidden', status: 'in_progress' }),
+      getSequence: [forbidden, completedInteraction('int_forbidden')],
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toBe(forbidden);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+    await respond(handler, client, [userStep('a')]);
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_forbidden', 'int_forbidden']);
+  });
+
+  it.each([404, 410])(
+    'clears a definitively missing interaction on HTTP %i and requires manual retry',
+    async (status) => {
+      mockConfig();
+      vi.useFakeTimers();
+      const handler = createHandler();
+      let submitCount = 0;
+      const { client, calls } = bgClient({
+        submit: () => ({
+          id: `int_missing_${++submitCount}`,
+          status: submitCount === 1 ? 'in_progress' : 'completed',
+        }),
+        getSequence: [
+          new ApiError({ message: 'gone', status }),
+          completedInteraction('unused'),
+        ],
+      });
+
+      const first = respond(handler, client, [userStep('a')]);
+      const missingPromise = captureRejection(first);
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      const missing = await missingPromise;
+
+      expect(hasManualRetryOnlyErrorMarker(missing)).toBe(true);
+      expect(normalizeProviderError(missing).userRetryable).toBe(true);
+      expect(isProviderErrorAutoRetryable(missing)).toBe(false);
+      expect(calls.create).toHaveLength(1);
+
+      await respond(handler, client, [userStep('a')]);
+      expect(calls.create).toHaveLength(2);
+    },
+  );
+
+  it.each(['failed', 'cancelled', 'incomplete', 'budget_exceeded'])(
+    'clears terminal status %s and prevents automatic replacement',
+    async (status) => {
+      mockConfig();
+      vi.useFakeTimers();
+      const handler = createHandler();
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_terminal', status: 'in_progress' }),
+        getSequence: [{ id: 'int_terminal', status }],
+      });
+
+      const response = respond(handler, client, [userStep('a')]);
+      const terminalPromise = captureRejection(response);
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      const terminal = await terminalPromise;
+
+      expect(terminal.message).toContain(`status "${status}"`);
+      expect(hasManualRetryOnlyErrorMarker(terminal)).toBe(true);
+      expect(normalizeProviderError(terminal).userRetryable).toBe(true);
+      expect(isProviderErrorAutoRetryable(terminal)).toBe(false);
+      expect(calls.create).toHaveLength(1);
+      expect(calls.get).toEqual(['int_terminal']);
+    },
+  );
 
   it('B3: captures the chain id from the polled completion (not the submit)', async () => {
     mockConfig();
@@ -291,13 +514,15 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.cancel).toEqual(['int_1']);
 
     // No leak: a fresh serial call on the same handler succeeds.
-    const { client: client2 } = bgClient({
+    const { client: client2, calls: calls2 } = bgClient({
       submit: () => completedInteraction('int_2'),
       getSequence: [completedInteraction('int_2')],
     });
     await expect(
       runWithPolls(respond(handler, client2, [userStep('b')]), 1),
     ).resolves.toBeDefined();
+    expect(calls2.create).toHaveLength(1);
+    expect(calls2.get).toHaveLength(0);
 
     // A later abort cancels ITS OWN interaction, never the earlier one: the
     // cancel target is the id captured by that poll invocation, so no handler
@@ -416,17 +641,13 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     mockConfig();
     vi.useFakeTimers();
     const handler = createHandler();
-    const { client } = bgClient({
+    const { client, calls } = bgClient({
       submit: () => ({ id: 'int_1', status: 'in_progress' }),
       getSequence: [{ id: 'int_1', status: 'in_progress' }], // never completes
     });
 
     const promise = respond(handler, client, [userStep('a')]);
-    // Assert the cap value too, so a regression in BACKGROUND_MAX_DURATION_MS
-    // (3h) is caught, not just the presence of a timeout message.
-    const rejection = expect(promise).rejects.toThrow(
-      new RegExp(`maximum polling duration of ${MAX_DURATION_MS} ms`),
-    );
+    const timeoutPromise = captureRejection(promise);
 
     // Drive well past the 3h cap (one get() recomputes elapsed time).
     const ticks = Math.ceil(MAX_DURATION_MS / POLL_INTERVAL_MS) + 2;
@@ -434,7 +655,13 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       await Promise.resolve();
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
     }
-    await rejection;
+    const timeout = await timeoutPromise;
+    expect(timeout.message).toContain(
+      `maximum polling duration of ${MAX_DURATION_MS} ms`,
+    );
+    expect(hasManualRetryOnlyErrorMarker(timeout)).toBe(true);
+    expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
+    expect(calls.cancel).toEqual(['int_1']);
   });
 
   it('B10: background (workflow) and input-token compaction (tool-use) are mutually exclusive', async () => {
