@@ -880,6 +880,18 @@ describe('toGoogleTools', () => {
     },
   );
 
+  it('rejects Google literal constraints that cannot be represented', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'numeric_literal',
+        parameters: {
+          type: 'object',
+          properties: { value: { type: 'integer', const: 1 } },
+        },
+      }),
+    ).toThrow('Google tool schemas support only string literal constraints.');
+  });
+
   it('preserves constraints attached to nested Google parameters', () => {
     const tools = toGoogleTools([
       {
