@@ -19,6 +19,7 @@ import * as logger from '@logger/logUtils';
 import { platform, type Platform } from '@platform/platform';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
+import { unique } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -131,9 +132,7 @@ async function migrateWorkspaceState(): Promise<boolean> {
     workspace.getWorkspacePath(),
     ...(workspace.getLegacyWorkspacePaths?.() ?? []),
   ];
-  const storageKeys = [
-    ...new Set(paths.map((path) => getWorkspaceStorageKey(path))),
-  ];
+  const storageKeys = unique(paths.map((path) => getWorkspaceStorageKey(path)));
 
   let migratedAll = true;
   for (const storageKey of storageKeys) {

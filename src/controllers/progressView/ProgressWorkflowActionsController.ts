@@ -6,6 +6,7 @@ import type {
   RoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
+import { unique } from '@utils/core';
 
 export interface WorkflowDiffRequest {
   agent: string;
@@ -110,8 +111,6 @@ export class ProgressWorkflowActionsController {
     config: AgentConfig,
   ): string[] {
     const generatedPaths = this.deps.state.getKnownWorkspaceOutputPaths(stream);
-    return [
-      ...new Set([...config.outputFiles, ...generatedPaths].filter(Boolean)),
-    ];
+    return unique([...config.outputFiles, ...generatedPaths].filter(Boolean));
   }
 }
