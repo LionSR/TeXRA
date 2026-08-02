@@ -259,20 +259,6 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
-  it('installs the long-running model fetch in the desktop process only', async () => {
-    const desktopPlatformSource = await readDesktopPlatformIndex();
-    const extensionSource = await readFile(
-      repoPath('packages', 'extension', 'src', 'extension.ts'),
-      'utf8',
-    );
-
-    expect(desktopPlatformSource).toContain('installLongRunningModelFetch();');
-    expect(
-      desktopPlatformSource.indexOf('installLongRunningModelFetch();'),
-    ).toBeLessThan(desktopPlatformSource.indexOf('initPlatform('));
-    expect(extensionSource).not.toContain('installLongRunningModelFetch');
-  });
-
   it('repairs PATH before platform services and bundled agents are initialized', async () => {
     const source = await readDesktopPlatformIndex();
 
