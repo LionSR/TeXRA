@@ -6,7 +6,7 @@ import {
   AgentCategorySchema,
   AgentNameSchema,
 } from '@shared/schemas/agent';
-import { OUTPUT_DOCUMENTS_TAG, OUTPUT_END_TAG } from '@shared/schemas/output';
+import { OUTPUT_END_TAG } from '@shared/schemas/output';
 
 export { AgentCategory };
 
@@ -78,10 +78,6 @@ function isNonEmptyRecord(value: unknown): boolean {
  * bundled/persisted copies do not pollute CLI stderr; a value that used to do
  * something warns, because the agent now behaves differently:
  *
- * - `documentTag`/`endTag` configured the per-agent output container; every
- *   agent now emits the fixed
- *   `<documents><document name="...">...</document></documents>` protocol (see
- *   `@shared/schemas/output`).
  * - `internal` hid an agent from launcher listings; no agent uses it and every
  *   listing now shows the full category.
  * - `requiredFiles` mapped variables to workspace-relative files; agent-bundled
@@ -97,22 +93,13 @@ function stripLegacySettingFields(input: unknown): unknown {
   const {
     outputExt: _outputExt,
     prefills: _prefills,
-    documentTag,
-    endTag,
+    documentTag: _documentTag,
+    endTag: _endTag,
     internal,
     requiredFiles,
     filePatternsContain,
     ...rest
   } = input as Record<string, unknown>;
-  const hasLegacyOutputTags = documentTag !== undefined || endTag !== undefined;
-  const usesDefaultOutputTags =
-    (documentTag === undefined || documentTag === OUTPUT_DOCUMENTS_TAG) &&
-    (endTag === undefined || endTag === OUTPUT_END_TAG);
-  if (hasLegacyOutputTags && !usesDefaultOutputTags) {
-    warnRetiredSetting(
-      'settings.documentTag/endTag are no longer configurable — every agent emits the fixed <documents><document name="..."> container. Ignoring the value from this agent definition.',
-    );
-  }
   if (internal === true) {
     warnRetiredSetting(
       'settings.internal no longer hides an agent — this agent is listed with the rest of its category.',

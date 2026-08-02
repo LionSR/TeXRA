@@ -36,15 +36,6 @@ function reconcileEnabledModels(
 ): EnabledModelReconciliation {
   const strippedSet = new Set<string>();
 
-  // One-time strip for users upgrading past version 13:
-  // - gpt54pro: default for 0.36.5-0.36.x, then removed as duplicative with gpt54.
-  // - opus46T: default before opus47T landed and superseded it.
-  if ((previousVersion ?? 0) < 13) {
-    for (const model of ['gpt54pro', 'opus46T']) {
-      if (currentModels.includes(model)) strippedSet.add(model);
-    }
-  }
-
   // Generic deprecated-model sweep for users upgrading past version 16: remove
   // models the registry now marks as deprecated so normal dropdowns stay
   // current. Introduced at version 15 (sonnet/opus tiers) and re-bumped to 16
