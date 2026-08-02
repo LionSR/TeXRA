@@ -242,6 +242,7 @@ describe('WorkflowScriptTool', () => {
         scriptPath: expect.any(Object),
       },
     });
+    expect(providerProperties?.args?.description).toContain('JSON value');
     expect(providerProperties).not.toHaveProperty('scriptInput');
     expect(providerSchema?.required).not.toContain('script');
     expect(providerSchema?.required).not.toContain('scriptPath');
@@ -275,6 +276,20 @@ describe('WorkflowScriptTool', () => {
     expect(description).toContain(
       'Omit meta.tasks when the call set is data-dependent',
     );
+    expect(
+      definition.zodSchema?.safeParse({
+        agent: 'review',
+        script,
+        args: { nested: ['text', 1, true, null] },
+      }).success,
+    ).toBe(true);
+    expect(
+      definition.zodSchema?.safeParse({
+        agent: 'review',
+        script,
+        args: ['not', 'an', 'argument', 'object'],
+      }).success,
+    ).toBe(true);
   });
 
   it('rejects invalid JSON arguments at the schema boundary', async () => {

@@ -56,8 +56,29 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     const steps = await handler.initializeMessages('PREFIX', 'REQUEST');
     expect(steps).toHaveLength(1);
     expect(steps[0].type).toBe('user_input');
-    expect(textOf(steps[0])).toContain('PREFIX');
-    expect(textOf(steps[0])).toContain('REQUEST');
+    expect(textOf(steps[0])).toBe('PREFIX\nREQUEST');
+  });
+
+  it('omits an empty prefix instead of sending an invalid text block', async () => {
+    const handler = createHandler();
+    const steps = await handler.initializeMessages('', 'What are we lacking?');
+
+    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
+    expect(content).toEqual([{ type: 'text', text: 'What are we lacking?' }]);
+  });
+
+  it('rejects an initial message with no content', async () => {
+    const handler = createHandler();
+    await expect(handler.initializeMessages(' ', '\n')).rejects.toThrow(
+      'Google messages require a non-empty user prefix, request, or attachment.',
+    );
+  });
+
+  it('rejects a follow-up round with no content', async () => {
+    const handler = createHandler();
+    await expect(handler.createRoundMessages([], ' ')).rejects.toThrow(
+      'Google follow-up messages require non-empty text or an attachment.',
+    );
   });
 
   it('createAssistantMessage builds a model_output step', () => {
@@ -66,6 +87,24 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(step.type).toBe('model_output');
     expect(textOf(step)).toBe('hi');
     expect(handler.extractAssistantText(step)).toBe('hi');
+  });
+
+  it('rejects empty text when constructing a content block', () => {
+    const handler = createHandler();
+    expect(() => handler.createAssistantMessage('')).toThrow(
+      'Google text content must not be empty.',
+    );
+  });
+
+  it('does not append an empty follow-up text block', async () => {
+    const handler = createHandler();
+    const steps: Step[] = [
+      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
+    ];
+    await handler.createUserFollowUpMessages(steps, '');
+    expect(steps).toEqual([
+      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
+    ]);
   });
 
   it('prependTextToUserMessage prepends into the trailing user_input step', () => {
@@ -94,6 +133,26 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     const content = (steps[0] as Interactions.UserInputStep).content ?? [];
     expect(content[0]?.type).toBe('image');
     expect((content[1] as Interactions.TextContent).text).toBe('caption');
+  });
+
+  it('creates a new user turn for an image-only follow-up', async () => {
+    const handler = createHandler();
+    const steps: Step[] = [
+      { type: 'user_input', content: [{ type: 'text', text: 'question' }] },
+      { type: 'model_output', content: [{ type: 'text', text: 'answer' }] },
+    ];
+    stubImageMediaLoader(handler);
+
+    await handler.createUserFollowUpMessages(steps, '');
+    await handler.addMediaToUserMessage(steps, [
+      { absolutePath: '/x/follow-up.png' } as never,
+    ]);
+
+    expect(steps).toHaveLength(3);
+    expect(steps[2]).toEqual({
+      type: 'user_input',
+      content: [{ type: 'image', data: 'aGVsbG8=', mime_type: 'image/png' }],
+    });
   });
 
   it('initializeMessages includes typed media content when mediaFiles are provided', async () => {
