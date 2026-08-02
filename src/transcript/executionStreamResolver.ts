@@ -2,7 +2,11 @@ import pMap from 'p-map';
 
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { writeLegacyExecutionStreamId } from '@agent/storage/executionLifecycle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  EXECUTION_STREAM_ID_SOURCE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StreamLogStore } from './StreamLogStore';
@@ -15,6 +19,8 @@ export interface PersistedStreamIdResolution {
   readonly source: PersistedStreamIdResolutionSource;
   /** Other persisted candidates to try when a historical primary is empty. */
   readonly fallbackStreamIds?: readonly StreamTabId[];
+  /** Exact execution matches with no persisted parent, for archive merging. */
+  readonly associatedRootStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -36,6 +42,8 @@ interface ExecutionStreamScan {
   readonly persistedStreams: StreamTabId[];
   /** Persisted streams whose sidecar `meta.json` claims this execution. */
   readonly metaMatched: StreamTabId[];
+  /** Exact execution matches that are not recorded as child streams. */
+  readonly rootMetaMatched: StreamTabId[];
 }
 
 /**
@@ -52,15 +60,23 @@ async function scanPersistedStreamsForExecution(
     persistedStreams,
     async (streamId) => ({
       streamId,
-      executionId: await snapshotStore.readPersistedExecutionId(streamId),
+      association: await snapshotStore.readPersistedStreamAssociation(streamId),
     }),
     { concurrency: META_SCAN_CONCURRENCY },
   );
   return {
     persistedStreams,
     metaMatched: scanned
-      .filter((candidate) => candidate.executionId === executionId)
+      .filter((candidate) => candidate.association.executionId === executionId)
       .map((candidate) => candidate.streamId),
+    rootMetaMatched: scanned
+      .filter(
+        (candidate) =>
+          candidate.association.executionId === executionId &&
+          candidate.association.parentStreamId === undefined,
+      )
+      .map((candidate) => candidate.streamId)
+      .toSorted(),
   };
 }
 
@@ -139,8 +155,9 @@ export async function findPersistedStreamFallbacksForExecution(
  * New executions carry this mapping in their own metadata from registration.
  * The ranked sidecar scan and suffix checks are compatibility fallbacks for
  * records created before that field existed; current records never enter that
- * branch. A unique confirmed legacy match is written through once so later
- * reads use the same constant-time metadata path as current executions.
+ * branch. Confirmed legacy matches are annotated with their provenance, but
+ * remain subject to the bounded scan because a later resume can add another
+ * root sidecar. Only birth-time registrations use the constant-time path.
  *
  * `null` means no persisted stream carries this execution. Callers that have
  * a derivable stream id own that substitution.
@@ -149,19 +166,23 @@ export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
   options: PersistedStreamIdResolverOptions = {},
 ): Promise<PersistedStreamIdResolution | null> {
-  const registeredStreamId = (await getExecutionStore(executionId).readMeta())
-    ?.streamId;
-  if (registeredStreamId) {
-    return { streamId: registeredStreamId, source: 'executionMeta' };
+  const executionMeta = await getExecutionStore(executionId).readMeta();
+  if (
+    executionMeta?.streamId &&
+    executionMeta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
+  ) {
+    return { streamId: executionMeta.streamId, source: 'executionMeta' };
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched } =
+  const { persistedStreams, metaMatched, rootMetaMatched } =
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
+    const primaryCandidates =
+      rootMetaMatched.length > 0 ? rootMetaMatched : metaMatched;
     const streamId = await pickBestLegacyMetaMatch(
-      metaMatched,
+      primaryCandidates,
       snapshotStore,
       options.streamLogStore,
     );
@@ -180,6 +201,9 @@ export async function resolvePersistedStreamIdForExecution(
       streamId,
       source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
+      ...(rootMetaMatched.length > 0
+        ? { associatedRootStreamIds: rootMetaMatched }
+        : {}),
     };
   }
 

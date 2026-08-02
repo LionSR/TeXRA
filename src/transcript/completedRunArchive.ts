@@ -102,6 +102,8 @@ export interface CompletedRunConversationReadResult {
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
   readonly streamId?: StreamTabId;
+  /** All positively associated root sidecars used for a merged archive. */
+  readonly streamIds?: readonly StreamTabId[];
 }
 
 /**
@@ -388,6 +390,86 @@ async function conversationFromStream(
 }
 
 /**
+ * Merge execution-matched root sidecars as a partial order. Each stream adds
+ * its authoritative adjacent-row constraints, while equal persisted row IDs
+ * identify copied overlap. Recorded time orders rows only when the combined
+ * stream sequences leave both choices admissible.
+ */
+async function mergedRootConversation(
+  streamLogStore: StreamLogStore,
+  streamIds: readonly StreamTabId[],
+): Promise<unknown[]> {
+  const entriesByStream = await Promise.all(
+    streamIds.map(async (streamId) => {
+      await streamLogStore.ensureLoaded(streamId);
+      return streamLogStore.get(streamId)?.toJSON() ?? [];
+    }),
+  );
+  const nodes = new Map<
+    string,
+    { readonly entry: StreamLogEntry; readonly streamIndex: number }
+  >();
+  const successors = new Map<string, Set<string>>();
+  const indegrees = new Map<string, number>();
+  for (const [streamIndex, entries] of entriesByStream.entries()) {
+    let previousId: string | undefined;
+    for (const entry of entries) {
+      if (!nodes.has(entry.id)) nodes.set(entry.id, { entry, streamIndex });
+      if (!indegrees.has(entry.id)) indegrees.set(entry.id, 0);
+      if (previousId && previousId !== entry.id) {
+        const nextIds = successors.get(previousId) ?? new Set<string>();
+        if (!nextIds.has(entry.id)) {
+          nextIds.add(entry.id);
+          successors.set(previousId, nextIds);
+          indegrees.set(entry.id, (indegrees.get(entry.id) ?? 0) + 1);
+        }
+      }
+      previousId = entry.id;
+    }
+  }
+
+  const remaining = new Set(nodes.keys());
+  const ready = new Set(
+    [...remaining].filter((id) => (indegrees.get(id) ?? 0) === 0),
+  );
+  const ordered: StreamLogEntry[] = [];
+  while (remaining.size > 0) {
+    // Contradictory copied-row orders form a cycle. Such persisted data cannot
+    // satisfy every stream; choose deterministically so archive reads remain
+    // available while preserving every compatible constraint.
+    const candidates = ready.size > 0 ? ready : remaining;
+    let nextId: string | undefined;
+    for (const id of candidates) {
+      const candidate = nodes.get(id);
+      const next = nextId ? nodes.get(nextId) : undefined;
+      if (
+        candidate &&
+        (!next ||
+          candidate.entry.timestamp < next.entry.timestamp ||
+          (candidate.entry.timestamp === next.entry.timestamp &&
+            (candidate.streamIndex < next.streamIndex ||
+              (candidate.streamIndex === next.streamIndex &&
+                candidate.entry.seqNo < next.entry.seqNo))))
+      ) {
+        nextId = id;
+      }
+    }
+    if (!nextId) break;
+    const next = nodes.get(nextId);
+    if (!next) break;
+    ordered.push(next.entry);
+    ready.delete(nextId);
+    remaining.delete(nextId);
+    for (const successorId of successors.get(nextId) ?? []) {
+      const indegree = (indegrees.get(successorId) ?? 0) - 1;
+      indegrees.set(successorId, indegree);
+      if (indegree === 0 && remaining.has(successorId)) ready.add(successorId);
+    }
+  }
+  return streamLogEntriesToConversation(ordered);
+}
+
+/**
  * Sidecar arm of the non-empty rule. Current executions normally need only
  * their registered primary. If it reconstructs empty, historical candidates
  * are tried in deterministic order before the legacy projection.
@@ -398,6 +480,34 @@ async function readSidecarConversation(
   snapshotStore: StreamSnapshotStore,
   streamLogStore: StreamLogStore,
 ): Promise<CompletedRunConversationReadResult | null> {
+  // Current executions register one canonical stream at birth; a disk-backed
+  // release/reopen regression proves resumed turns append there. Only
+  // pre-registration resolutions can represent historical split sidecars, so
+  // keep the ordinary completed-read path constant-time.
+  const rootStreamIds = resolved.associatedRootStreamIds;
+  if (rootStreamIds !== undefined) {
+    const orderedRoots = [
+      ...(rootStreamIds.includes(resolved.streamId) ? [resolved.streamId] : []),
+      ...rootStreamIds.filter((streamId) => streamId !== resolved.streamId),
+    ];
+    const conversation = await mergedRootConversation(
+      streamLogStore,
+      orderedRoots,
+    );
+    if (conversation.length > 0) {
+      return {
+        conversation,
+        source: 'streamLog',
+        streamId: orderedRoots[0],
+        ...(orderedRoots.length > 1 ? { streamIds: orderedRoots } : {}),
+      };
+    }
+    // Exact metadata established the canonical root set. An empty root
+    // conversation must fall back to the legacy execution projection, never
+    // to a child or suffix-only sidecar.
+    return null;
+  }
+
   const primaryConversation = await conversationFromStream(
     streamLogStore,
     resolved.streamId,
