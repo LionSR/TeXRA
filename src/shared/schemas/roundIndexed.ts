@@ -31,10 +31,9 @@ export type RoundIndexed<T> = { [round: number]: T[] };
  * roundIndexedEntries}) relies on the ES2015+ spec guarantee that
  * non-negative-integer-string keys enumerate in ascending numeric order —
  * that guarantee does NOT hold for negative or non-integer keys, so this is
- * a structural invariant, not just a naming convention. Enforced once, here,
- * at parse time (see {@link RoundKeyStringSchema}, used by both
- * {@link roundIndexedRecord} and {@link parsePersistedRoundIndexed}'s flat
- * arm), so downstream code never re-checks it.
+ * a structural invariant, not just a naming convention. Canonical record
+ * schemas enforce it through {@link RoundKeyStringSchema}; the persisted-file
+ * parser applies this schema directly while salvaging individual keys.
  */
 export const RoundKeySchema = z.coerce.number().int().nonnegative();
 
@@ -54,13 +53,12 @@ export const RoundNumberSchema = z.int().nonnegative();
 
 /**
  * A JSON object key that {@link RoundKeySchema} can coerce to a valid round
- * number. The SAME predicate — not a parallel regex — backs both
- * {@link roundIndexedRecord}'s key schema and {@link
- * parsePersistedRoundIndexed}'s flat-arm key schema, so a key like `"1e5"`
- * (scientific notation, which `RoundKeySchema` coerces to round `100000`) is
- * accepted or rejected identically by every round-indexed record schema in
- * the codebase instead of drifting between a strict `/^\d+$/`-style regex in
- * one place and the looser numeric coercion in another.
+ * number. It is derived from the same schema that
+ * {@link parsePersistedRoundIndexed} applies directly to each salvaged key,
+ * so a key like `"1e5"` (scientific notation, which `RoundKeySchema` coerces
+ * to round `100000`) is accepted or rejected identically by canonical record
+ * schemas and persisted-file parsing instead of drifting between a strict
+ * `/^\d+$/`-style regex in one place and looser numeric coercion in another.
  */
 export const RoundKeyStringSchema = z
   .string()
