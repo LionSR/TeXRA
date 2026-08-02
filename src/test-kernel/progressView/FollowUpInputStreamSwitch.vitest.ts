@@ -100,6 +100,17 @@ function image(fileName: string): ExtractedClipboardImage {
   };
 }
 
+describe('follow-up-input layout', () => {
+  it('uses two content-sized rows without Web Awesome auto-resize', async () => {
+    const element = createFollowUpInput('stream-layout');
+    await element.updateComplete;
+
+    const textarea = element.shadowRoot?.querySelector('wa-textarea');
+    expect(textarea?.getAttribute('rows')).toBe('2');
+    expect(textarea?.getAttribute('resize')).toBe('none');
+  });
+});
+
 describe('follow-up-input pasted-image state across stream switches', () => {
   beforeEach(() => {
     vi.clearAllMocks();

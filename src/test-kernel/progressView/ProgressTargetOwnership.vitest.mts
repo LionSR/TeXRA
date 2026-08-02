@@ -111,7 +111,6 @@ function createProvider() {
   injected.state = {
     activeStream: undefined,
     streamLogs: { keys: () => [], get: () => undefined },
-    selectableStreamNames: () => [],
   };
   injected.backend = {
     approvalHandlers: {},
