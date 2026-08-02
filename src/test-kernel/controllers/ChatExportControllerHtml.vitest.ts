@@ -18,10 +18,11 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { StreamLogStore } from '@transcript';
+import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 
 const TEMPLATE =
@@ -130,6 +131,24 @@ describe('ChatExportController.exportAsHtml', () => {
     );
 
     expect(outcome).toEqual({ status: 'streamLogs_missing' });
+  });
+
+  it('returns streamId_ambiguous when no canonical transcript timeline is proven', async () => {
+    const templatePath = await writeTemplate();
+    const executionId = 'aaa555aaa555' as ExecutionId;
+    const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const first = `orchestrator@old#${executionId}` as StreamTabId;
+    const second = `orchestrator@new#${executionId}` as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, executionConfig, executionId);
+    snapshots.setRunConfig(second, executionConfig, executionId);
+    await snapshots.flush();
+
+    const outcome = await controller.exportAsHtml(executionId, templatePath);
+
+    expect(outcome).toEqual({ status: 'streamId_ambiguous' });
   });
 
   it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {

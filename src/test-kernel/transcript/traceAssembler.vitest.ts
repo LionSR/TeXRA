@@ -106,22 +106,34 @@ describe('assembleTrace', () => {
     expect(result).toEqual({ status: 'streamLogs_missing' });
   });
 
-  it('reports ambiguous historical sidecars instead of selecting one for trace export', async () => {
-    const executionId = 'abcde1abcde1' as ExecutionId;
+  it('reports candidate-only sidecars as ambiguous without choosing the derived fallback', async () => {
+    const executionId = 'aaa444aaa444' as ExecutionId;
     const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    const derived = getStreamTabId(
+      executionConfig.agent,
+      executionConfig.model,
+      { executionId },
+    );
+    expect(derived).not.toBe(first);
+    expect(derived).not.toBe(second);
 
     const snapshots = new StreamSnapshotStore();
     snapshots.setRunConfig(first, executionConfig, executionId);
     snapshots.setRunConfig(second, executionConfig, executionId);
     await snapshots.flush();
-    await appendLogEntry(first, 'First historical transcript');
-    await appendLogEntry(second, 'Second historical transcript');
+    await appendLogEntry(first, 'first candidate');
+    await appendLogEntry(second, 'second candidate');
+    await appendLogEntry(derived, 'derived fallback must not be selected');
 
-    await expect(assembleTrace(executionId)).resolves.toEqual({
+    const result = await assembleTrace(executionId);
+
+    expect(result).toEqual({
       status: 'streamId_ambiguous',
+      candidateStreamIds: [second, first],
     });
   });
 

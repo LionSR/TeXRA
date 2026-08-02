@@ -11,7 +11,7 @@
  */
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { StreamLogStore } from './StreamLogStore';
@@ -21,9 +21,10 @@ import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
   | { readonly status: 'ok'; readonly trace: TraceDocument }
+  | { readonly status: 'config_missing' | 'streamLogs_missing' }
   | {
-      readonly status:
-        'config_missing' | 'streamId_ambiguous' | 'streamLogs_missing';
+      readonly status: 'streamId_ambiguous';
+      readonly candidateStreamIds: readonly StreamTabId[];
     };
 
 /**
@@ -58,10 +59,12 @@ export async function assembleTrace(
     streamLogStore,
   });
   if (resolved && !resolved.streamId) {
-    return { status: 'streamId_ambiguous' };
+    return {
+      status: 'streamId_ambiguous',
+      candidateStreamIds: resolved.exactExecutionCandidateStreamIds ?? [],
+    };
   }
   const streamId = resolved?.streamId ?? fallbackStreamId;
-  if (!streamId) return { status: 'streamLogs_missing' };
 
   const [, snapshot] = await Promise.all([
     streamLogStore.ensureLoaded(streamId),

@@ -6,6 +6,7 @@ import { formatChatAsMarkdown } from '@agent/export/chatExportFormatter';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
+import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -138,23 +139,30 @@ export async function runHistoryExport(
 
   const traceResult = await assembleTrace(id);
   if (traceResult.status !== 'ok') {
-    if (traceResult.status === 'config_missing') {
-      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-    } else if (traceResult.status === 'streamId_ambiguous') {
-      writeTextStderr(
-        `Execution ${id} has several historical transcripts, but none is ` +
-          'proven canonical for trace export. Run `texra history show ' +
-          id +
-          '` to inspect the archived conversation and diagnostics.',
-      );
-    } else {
-      writeTextStderr(
-        `Execution ${id} exists but has no stored transcript to export (it ` +
-          'may predate transcript persistence, or the run never produced ' +
-          'any output). Run `texra history show ' +
-          id +
-          '` to see what is available.',
-      );
+    switch (traceResult.status) {
+      case 'config_missing':
+        writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+        break;
+      case 'streamLogs_missing':
+        writeTextStderr(
+          `Execution ${id} exists but has no stored transcript to export (it ` +
+            'may predate transcript persistence, or the run never produced ' +
+            'any output). Run `texra history show ' +
+            id +
+            '` to see what is available.',
+        );
+        break;
+      case 'streamId_ambiguous':
+        writeTextStderr(
+          `Execution ${id} has multiple associated transcript sidecars ` +
+            `(${traceResult.candidateStreamIds.join(', ')}), but no canonical ` +
+            'trace timeline can be established. Run `texra history show ' +
+            id +
+            '` to see the merged conversation evidence.',
+        );
+        break;
+      default:
+        assertNever(traceResult, 'Unhandled trace assembly result');
     }
     return CliExitCode.Usage;
   }
