@@ -48,14 +48,14 @@ The main TeXRA panel includes a **Media** section for figure files. Its header c
 <p class="hero-caption">The Media group: the wand opens auto-extract options, the toolbar adds opened files / clears all / adds media files, and each row drags to reorder with a trailing trash icon.</p>
 
 - **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction.
-- **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab whose extension is a configured media type.
+- **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab whose extension is a supported media type.
 - **Clear all media files** (<wa-icon library="texra" name="trash"></wa-icon>): empty the media list.
 - **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures.
 - **Drag-and-drop** image, PDF, or audio files from anywhere onto the section.
 
 ## <wa-icon library="texra" name="file-symlink-file"></wa-icon> Supported File Types
 
-Configurable via `texra.files.included.mediaExtensions`:
+TeXRA recognizes these media types by default:
 
 <FeatureCards
   min="220px"

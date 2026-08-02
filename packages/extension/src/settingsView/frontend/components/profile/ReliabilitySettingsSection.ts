@@ -10,7 +10,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import type { NumberSetting } from '@shared/schemas/settingsViewMessages';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { clampOptional } from '@utils/core';
 
@@ -38,12 +38,9 @@ export class ReliabilitySettingsSection extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) settings: NumberVscodeSetting[] = [];
+  @property({ attribute: false }) settings: NumberSetting[] = [];
 
-  private handleSettingChange(
-    setting: NumberVscodeSetting,
-    input: WaInput,
-  ): void {
+  private handleSettingChange(setting: NumberSetting, input: WaInput): void {
     const parsed = Number(input.value);
     if (Number.isNaN(parsed)) {
       input.value = String(setting.value);
@@ -57,13 +54,13 @@ export class ReliabilitySettingsSection extends LitElement {
           Math.round((parsed - stepOrigin) / setting.step) * setting.step;
     const value = clampOptional(stepped, setting.min, setting.max);
     if (value !== parsed) input.value = String(value);
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING, {
       key: setting.key,
       value,
     });
   }
 
-  private renderSetting(setting: NumberVscodeSetting): TemplateResult {
+  private renderSetting(setting: NumberSetting): TemplateResult {
     return html`
       <div class="settings-row">
         <div class="settings-row-text">

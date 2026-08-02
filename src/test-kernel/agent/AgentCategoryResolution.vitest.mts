@@ -142,17 +142,13 @@ describe('cross-category agent resolution', () => {
     expect(stale?.entry.source).toBe('builtInToolUse');
   });
 
-  it('still resolves a non-colliding name and legacy aliases within category', () => {
+  it('resolves a non-colliding name within category', () => {
     expect(getCategoryAgent('toolUse', 'review')?.name).toBe('review');
-    // `chat` is the legacy alias for `assistant`; within tool-use it must map to
-    // the built-in tool-use assistant, never the custom workflow shadow.
-    expect(getCategoryAgent('toolUse', 'chat')?.source).toBe('builtInToolUse');
     expect(getCategoryAgent('workflow', 'assistant')?.source).toBe('custom');
   });
 
   it('keeps a wrong-category name out of category-scoped resolution', () => {
-    // `correct` is a workflow agent; getCategoryAgent (used by the legacy-alias
-    // migration) must not resolve it as tool-use.
+    // `correct` is a workflow agent and must not resolve as tool-use.
     expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
   });
 

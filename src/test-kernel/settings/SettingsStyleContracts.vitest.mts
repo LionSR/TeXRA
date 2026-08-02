@@ -10,12 +10,8 @@ const SETTINGS_PROFILE_ROOT =
   'packages/extension/src/settingsView/frontend/components/profile';
 const SETTINGS_BANNER_TABS = [
   'AccountTab.ts',
-  'GoalTab.ts',
   'LaTeXTab.ts',
-  'MemoryTab.ts',
-  'MultiAgentTab.ts',
   'ShortcutsTab.ts',
-  'ToolsTab.ts',
 ] as const;
 
 function read(relativePath: string): string {
@@ -48,7 +44,13 @@ describe('settings style contracts', () => {
     );
     expect(bannerStyles).toContain('justify-content: flex-end');
 
-    for (const tab of ['AIAgentsTab.ts', 'ModelsTab.ts']) {
+    for (const tab of [
+      'AIAgentsTab.ts',
+      'GoalTab.ts',
+      'MemoryTab.ts',
+      'ModelsTab.ts',
+      'ToolsTab.ts',
+    ]) {
       const source = read(path.join(SETTINGS_TABS_ROOT, tab));
       expect(source).not.toContain('renderSettingsBanner');
       expect(source).not.toContain('settingsBannerStyles');

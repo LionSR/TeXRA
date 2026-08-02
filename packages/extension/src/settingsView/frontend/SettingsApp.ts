@@ -73,6 +73,7 @@ import {
   customAgentDirIsDefault,
   customPresets,
   detachSubagentsOnStop,
+  editApprovalEnabled,
   gitAuthorEmail,
   gitAuthorName,
   githubTokenStatus,
@@ -105,6 +106,7 @@ import {
   spendingStatus,
   spendingStatusError,
   tier,
+  telemetryEnabled,
   toolDashboardItems,
   toolDashboardLoaded,
   toolPathProtectionEnabled,
@@ -354,11 +356,7 @@ export class SettingsApp extends SettingsAppBase {
             .spendingStatus=${spendingStatus.get()}
             .spendingStatusError=${spendingStatusError.get()}
             .quotaAutoSwitched=${quotaAutoSwitched.get()}
-            .apiAccessMode=${apiAccessMode.get()}
-            .vscodeSettingsAvailable=${!isKnownUnsupported(
-              unsupportedCommands.get(),
-              SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
-            )}
+            .telemetryEnabled=${telemetryEnabled.get()}
             @manage-provider-keys=${this.handleManageProviderKeys}
           ></account-tab>
         `;
@@ -405,9 +403,9 @@ export class SettingsApp extends SettingsAppBase {
             .items=${toolDashboardItems.get()}
             .loaded=${toolDashboardLoaded.get()}
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
+            .editApprovalEnabled=${editApprovalEnabled.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
             .agentSkillsEnabled=${agentSkillsEnabled.get()}
-            .showAgentSkillsSettings=${this.isDesktopHost}
           ></tools-tab>
         `;
       case 'ai-agents':
@@ -500,7 +498,11 @@ export class SettingsApp extends SettingsAppBase {
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(activeGroup, activePanel, goalSupported)}
+        ${this.renderSettingsNavigation(
+          activeGroup,
+          activePanel,
+          goalSupported,
+        )}
         <section
           class="settings-panel"
           role="tabpanel"

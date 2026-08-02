@@ -25,7 +25,6 @@ function makeActions(): ExtensionCommandActions {
   return {
     showSettings: vi.fn().mockResolvedValue(undefined),
     resetMainView: vi.fn().mockResolvedValue(undefined),
-    openWorkbenchSettings: vi.fn().mockReturnValue(Promise.resolve()),
     cleanBuild: vi.fn().mockResolvedValue(undefined),
     cleanOutput: vi.fn().mockResolvedValue(undefined),
     pack: vi.fn().mockResolvedValue(undefined),

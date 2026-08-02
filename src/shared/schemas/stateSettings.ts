@@ -36,6 +36,7 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { CoreSettingsShape } from '@shared/schemas/coreSettings';
+import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ============================================================================
@@ -70,12 +71,10 @@ export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 /**
  * Host-neutral catalog for **state-backed** TeXRA settings.
  *
- * Unlike {@link CoreSettingsShape} (config-tree settings that flow into the VS
- * Code `contributes.configuration` block), these keys are read from
- * WorkspaceState / GlobalState — they were deliberately migrated *out* of VS
- * Code config (see `LATEX_SETTINGS_MIGRATED`). Putting them in
- * `CoreSettingsShape` would emit phantom VS Code configuration the extension
- * never reads, so they live here as metadata-only rows instead.
+ * Unlike {@link CoreSettingsShape}, which is stored in TeXRA's shared JSON
+ * configuration, these keys are read from WorkspaceState / GlobalState. They
+ * live here as metadata rows because their persistence scope and host
+ * reachability differ from ordinary configuration.
  *
  * Each row is the single source of truth for a state-backed setting's default,
  * validation schema, description, storage slot, and the hosts that consume it.
@@ -95,7 +94,12 @@ type SettingHost = 'vscode' | 'cli' | 'desktop';
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
 export type SettingsViewSnapshot =
-  'agent-skills' | 'approval' | 'git-author' | 'latex' | 'multi-agent';
+  | 'agent-skills'
+  | 'approval'
+  | 'git-author'
+  | 'latex'
+  | 'multi-agent'
+  | 'telemetry';
 
 interface CliRuntimeReachability {
   /**
@@ -134,6 +138,8 @@ export interface StateSettingEntry {
   readonly category: string;
   /** Canonical (extension) storage slot. */
   readonly store: SettingStore;
+  /** Persistence target for config-backed settings; workspace when omitted. */
+  readonly configTarget?: 'global' | 'workspace';
   /**
    * Storage slot the CLI reads/writes when it differs from {@link store}. Only
    * the git-author keys use this today: the extension keeps them in
@@ -683,7 +689,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- Provider routing & region toggles --------------------------------------
   // Same idiom as the OpenRouter row above: every toggle stays in
-  // PROVIDER_VSCODE_SETTINGS for the extension/desktop Models tab, and the
+  // PROVIDER_SETTINGS for the Models tab, and the
   // catalog row is CLI-only so later settings-view catalog rendering does not
   // duplicate those existing controls. Label/description are reused by
   // reference from the named provider-setting consts; `.prefault()` matches
@@ -749,6 +755,68 @@ const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
 // metadata needed by the settings view's unified scalar-write boundary.
 const SETTINGS_VIEW_CORE_SETTINGS = [
   {
+    key: 'texra.latex.wrapCritiqueInAlign',
+    schema: CoreSettingsShape.latex.unwrap().shape.wrapCritiqueInAlign,
+    title: 'Wrap criticism in align environments',
+    description:
+      'Wrap bare criticism and comment commands inside align environments with intertext.',
+    category: 'latex',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
+  },
+  {
+    key: 'texra.latex.enabledReplacements',
+    schema: CoreSettingsShape.latex.unwrap().shape.enabledReplacements,
+    title: 'Literal replacement groups',
+    description: 'Enabled groups of direct LaTeX cleanup replacements.',
+    category: 'latex',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
+  },
+  {
+    key: 'texra.latex.enabledReplacementsRegex',
+    schema: CoreSettingsShape.latex.unwrap().shape.enabledReplacementsRegex,
+    title: 'Pattern replacement groups',
+    description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
+    category: 'latex',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
+  },
+  {
+    key: 'texra.latex.customReplacementsRegex',
+    schema: CoreSettingsShape.latex.unwrap().shape.customReplacementsRegex,
+    title: 'Custom pattern replacements',
+    description: 'Custom regular-expression replacements.',
+    category: 'latex',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
+  },
+  {
+    key: 'texra.latex.customReplacements',
+    schema: CoreSettingsShape.latex.unwrap().shape.customReplacements,
+    title: 'Custom literal replacements',
+    description: 'Custom direct text replacements.',
+    category: 'latex',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'latex',
+  },
+  {
+    key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
+    schema: CoreSettingsShape.toolUse.unwrap().shape.requireEditApproval,
+    title: 'Require edit approval',
+    description:
+      'Show a diff and ask for approval before an agent changes workspace files.',
+    category: 'tools',
+    store: 'config',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'approval',
+  },
+  {
     key: BASH_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireBashApproval,
     title: 'Require bash approval',
@@ -769,6 +837,18 @@ const SETTINGS_VIEW_CORE_SETTINGS = [
     store: 'config',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'agent-skills',
+  },
+  {
+    key: 'texra.telemetry.enabled',
+    schema: CoreSettingsShape.telemetry.unwrap().shape.enabled,
+    title: 'Usage telemetry',
+    description:
+      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names.',
+    category: 'account',
+    store: 'config',
+    configTarget: 'global',
+    hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'telemetry',
   },
 ] as const satisfies readonly StateSettingEntry[];
 

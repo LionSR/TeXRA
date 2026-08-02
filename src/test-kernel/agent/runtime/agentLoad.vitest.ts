@@ -25,7 +25,6 @@ import {
 } from '@agent/runtime/agentLoad';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files';
 
@@ -150,27 +149,6 @@ describe('loadAgentSettingAndPrompts', () => {
     const [, prompts] = await loadAgentSettingAndPrompts(resolution);
 
     assert.strictEqual(prompts.userRequest, 'unified variant');
-  });
-
-  it('loads legacy workflow settings that still declare outputExt', async () => {
-    const resolution = customResolution('legacy', AgentCategory.Workflow);
-
-    fileContents.set(
-      normalize(resolution.definitionPath),
-      [
-        'name: legacy',
-        'settings:',
-        '  agentCategory: workflow',
-        '  outputExt: tex',
-        'prompts:',
-        '  userRequest: fix it',
-        '',
-      ].join('\n'),
-    );
-
-    const [settings] = await loadAgentSettingAndPrompts(resolution);
-    assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
-    assert.strictEqual(Object.hasOwn(settings, 'outputExt'), false);
   });
 
   it('rejects with a wrapped error naming the path for malformed YAML', async () => {
@@ -347,40 +325,6 @@ describe('inline agent definitions', () => {
     assert.ok(resolution);
     const [settings] = await loadAgentSettingAndPrompts(resolution);
     assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
-  });
-
-  it('applies a stored tool-use override during late registration', async () => {
-    const emptyDir = await mkdtemp(path.join(tmpdir(), 'texra-empty-agents-'));
-    await useAgentDirectories(emptyDir, {
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['lateOverride'],
-    });
-    await refresh({ includeRemote: false });
-
-    registerInlineAgents([
-      {
-        name: 'lateOverride',
-        settings: { agentCategory: AgentCategory.Workflow, rounds: 3 },
-        prompts: {},
-      },
-    ]);
-
-    const entry = getAgent('inline:lateOverride');
-    assert.strictEqual(entry?.category, AgentCategory.ToolUse);
-    assert.strictEqual(entry.rounds, undefined);
-    const overriddenResolution = resolveAgentForLaunch(
-      AgentCategory.ToolUse,
-      'inline:lateOverride',
-    );
-    assert.ok(overriddenResolution);
-    const [overriddenSettings] =
-      await loadAgentSettingAndPrompts(overriddenResolution);
-    assert.strictEqual(overriddenSettings.agentCategory, AgentCategory.ToolUse);
-
-    await useAgentDirectories(emptyDir);
-    await refresh({ includeRemote: false });
-    const restored = getAgent('inline:lateOverride');
-    assert.strictEqual(restored?.category, AgentCategory.Workflow);
-    assert.strictEqual(restored.rounds, 3);
   });
 
   it('removes cleared definitions from the live registry immediately', () => {

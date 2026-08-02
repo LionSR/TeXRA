@@ -181,7 +181,7 @@ describe('desktop settings IPC', () => {
     expect(posted[0]).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
       commands: expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+        SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
       ]),
     });
     expect(
@@ -492,13 +492,13 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+        command: SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
       }),
     ).toBe(true);
     await flushAsyncWork();
 
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'No VS Code settings in the desktop app.',
+      'Desktop cannot host VS Code extensions.',
     );
     expect(onError).not.toHaveBeenCalled();
   });
@@ -513,7 +513,7 @@ describe('desktop settings IPC', () => {
 
     expect(
       settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+        command: SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
       }),
     ).toBe(true);
     await flushAsyncWork();

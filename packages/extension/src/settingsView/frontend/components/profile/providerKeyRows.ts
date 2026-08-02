@@ -21,7 +21,7 @@ const DEFAULT_PROVIDER_KEY_STATUSES: readonly ProviderKeyStatus[] =
         streaming: true,
         customEndpoint: '',
         supportsCustomEndpoint: false,
-        vscodeSettings: [],
+        providerSettings: [],
       }),
     ),
   );

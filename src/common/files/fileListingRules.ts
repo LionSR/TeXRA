@@ -1,11 +1,7 @@
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 
-import {
-  LEGACY_AUXILIARY_KEYWORDS_KEY,
-  getIncludedExtensions,
-  type ExtensionCategory,
-} from './fileTypeUtils';
+import { FILE_HANDLING_RULES } from './fileHandlingRules';
+import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
 
 export type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
 
@@ -16,9 +12,6 @@ export interface FileListSettings {
   ignoredInputFiles: string[];
   ignoredInputDirectories: string[];
   ignoredMediaDirs: string[];
-  /** Carried forward from the removed `auxiliaryKeywords` setting; folded
-   *  into the context branch of getFileListConfig for back-compat. */
-  legacyAuxiliaryKeywords: string[];
 }
 
 export interface FileListConfig {
@@ -38,8 +31,6 @@ export interface PreparedFileFilters {
   sanitizedDirs: string[];
 }
 
-type ConfigReader = (key: string, fallback: string[]) => string[];
-
 function getPathSegments(filePath: string): string[] {
   return normalizeFilePath(filePath).split('/');
 }
@@ -51,39 +42,15 @@ function normalizeList(values: readonly string[]): string[] {
     .map((value) => value.toLowerCase());
 }
 
-export function loadFileListSettings(
-  readConfig: ConfigReader,
-): FileListSettings {
-  const ignored = DEFAULT_CORE_SETTINGS.files.ignored;
+export function loadFileListSettings(): FileListSettings {
+  const { ignored } = FILE_HANDLING_RULES;
   return {
-    ignoredFileExtensions: readConfig(
-      'texra.files.ignored.fileExtensions',
-      ignored.fileExtensions,
-    ),
-    ignoredDirectories: readConfig(
-      'texra.files.ignored.directories',
-      ignored.directories,
-    ),
-    ignoredKeywords: readConfig(
-      'texra.files.ignored.keywords',
-      ignored.keywords,
-    ),
-    ignoredInputFiles: readConfig(
-      'texra.files.ignored.inputFiles',
-      ignored.inputFiles,
-    ),
-    ignoredInputDirectories: readConfig(
-      'texra.files.ignored.inputDirectories',
-      ignored.inputDirectories,
-    ),
-    ignoredMediaDirs: readConfig(
-      'texra.files.ignored.mediaDirectories',
-      ignored.mediaDirectories,
-    ),
-    // Back-compat: the auxiliaryKeywords setting was removed in this PR.
-    // Pass an empty fallback so we get [] if unset and the user's
-    // pre-rename customization if still set in their settings.json.
-    legacyAuxiliaryKeywords: readConfig(LEGACY_AUXILIARY_KEYWORDS_KEY, []),
+    ignoredFileExtensions: [...ignored.fileExtensions],
+    ignoredDirectories: [...ignored.directories],
+    ignoredKeywords: [...ignored.keywords],
+    ignoredInputFiles: [...ignored.inputFiles],
+    ignoredInputDirectories: [...ignored.inputDirectories],
+    ignoredMediaDirs: [...ignored.mediaDirectories],
   };
 }
 
@@ -115,13 +82,7 @@ export function getFileListConfig(
         extensions: getIncludedExtensions('context'),
         ignoredExtensions: settings.ignoredFileExtensions,
         ignoredDirs: settings.ignoredDirectories,
-        // Concatenate any pre-rename `auxiliaryKeywords` (model-name filters
-        // like `o1`/`gpt`/`sonnet`/...) so a user who customized that list
-        // keeps their filtering when `.cls`/`.sty` files land in Context.
-        ignoredKeywords: [
-          ...settings.ignoredKeywords,
-          ...settings.legacyAuxiliaryKeywords,
-        ],
+        ignoredKeywords: settings.ignoredKeywords,
         ignoredFiles: settings.ignoredInputFiles,
       };
     case 'media':

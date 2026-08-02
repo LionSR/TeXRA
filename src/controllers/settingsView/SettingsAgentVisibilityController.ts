@@ -48,7 +48,6 @@ export class SettingsAgentVisibilityController {
       (entry) => entry.source === input.source,
     );
     const targetKeys = new Set(sourceAgents.map((entry) => agentKeyOf(entry)));
-    const targetLegacyNames = new Set(sourceAgents.map((entry) => entry.name));
 
     const raw = this.deps.state.getEnabledAgentKeys(input.category);
     const current = raw ?? allAgents.map((entry) => agentKeyOf(entry));
@@ -61,9 +60,7 @@ export class SettingsAgentVisibilityController {
         ...[...targetKeys].filter((key) => !currentSet.has(key)),
       ];
     } else {
-      updated = current.filter(
-        (key) => !targetKeys.has(key) && !targetLegacyNames.has(key),
-      );
+      updated = current.filter((key) => !targetKeys.has(key));
     }
 
     if (

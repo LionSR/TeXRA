@@ -45,16 +45,6 @@ export const mainViewStyles: CSSResult = css`
     margin-bottom: var(--wa-space-s);
   }
 
-  .file-selection-heading {
-    margin: 0;
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    min-height: var(--height-control-compact);
-    box-sizing: border-box;
-    font-size: var(--font-size-sm);
-    font-weight: var(--wa-font-weight-normal);
-    color: var(--wa-color-text-normal);
-  }
-
   .file-selection-group {
     background: transparent;
     border: none;

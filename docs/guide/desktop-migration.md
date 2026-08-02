@@ -1,62 +1,54 @@
-# Migrating to the Desktop App
+# Shared Data Across TeXRA Apps
 
-The TeXRA desktop app is a separate host from the VS Code extension. Treat the
-first desktop launch as a fresh setup: open your project folder, sign in again,
-and reconfigure the providers and workspace settings you want to use.
+The TeXRA desktop app, VS Code extension, and command-line client use the same
+TeXRA configuration files wherever possible. Opening the same project gives
+the desktop app its workspace settings and shared TeXRA history without an
+export or migration step.
 
-The desktop app shares TeXRA's agent logic, model handlers, LaTeX processing,
-and webview UI with the extension, but it uses its own application storage and
-secure credential store. It does not read VS Code's Secret Storage, user
-settings, workspace state, or extension global storage.
+Workspace settings live in `.texra/config.json`. Global TeXRA settings and
+shared task data live under `~/.texra`. These are native TeXRA files rather than
+VS Code settings, so the three hosts read the same values.
 
-## What Carries Over
+## Shared Data
 
 Your project files remain the source of truth. If you open the same repository,
 paper folder, or Overleaf Git checkout in the desktop app, TeXRA can work with
 the same `.tex`, `.bib`, figure, and configuration files already in that
 workspace.
 
-The split below maps the boundary. Anything that lives in the project folder or
-on your machine follows you with no action; anything the VS Code extension host
-stored privately is re-entered, once, in the desktop app.
+Secure credentials remain host-specific. The extension uses VS Code Secret
+Storage, while the desktop and command-line hosts use their own secure stores.
+API keys and sign-in sessions therefore need to be added separately for now.
 
-<DesktopMigrationSplit />
+The shared subset is:
 
-After opening the project in the desktop app, verify the LaTeX tool paths and
-run a small agent task before relying on the migrated setup for production work.
+- native workspace and global values stored in TeXRA configuration, including
+  approval, telemetry, skill, model-behavior, bibliography, and selected TikZ
+  and LaTeX replacement settings;
+- shared history and execution records; and
+- project files, custom instructions, and checked-in agent definitions.
 
-## What To Reconfigure
+Agent and team rosters, tool enablement and availability, model visibility, and
+host-specific LaTeX compile and formatter preferences remain in each host's
+state. Review those controls after opening a project in another app. Provider
+API keys, account sessions, and other secrets also do not yet carry over.
 
-The amber column above is the reconfiguration checklist — provider keys, account
-and GitHub sign-in, agent and tool preferences, any LaTeX settings that lived
-only in VS Code user settings, and your execution-history archives.
-
-If a setting was committed to the workspace, keep using the committed copy. If
-it was only a personal VS Code user setting, set it again in the desktop app.
-
-## Recommended First Launch
+## Opening a Project in the Desktop App
 
 1. Install and open the desktop app.
-2. Open the same project folder you used with the VS Code extension.
-3. Sign in to TeXRA again if you use remote agents or account-backed features.
-4. Open the Models tab and set the provider API keys you want available.
-5. Review the Agents and Tools tabs and enable the same agents and approvals you
-   use in the extension.
-6. Open the LaTeX settings and confirm formatter, diff, TikZ, and tool-path
-   preferences.
-7. Run a small command, such as a short polish task or LaTeX compile check, and
+2. Open the same project folder you use with the extension or CLI.
+3. Sign in again if you use remote agents or account-backed features.
+4. Add any provider API keys needed by the desktop host.
+5. Review the shared settings and run a small command to confirm the expected
+   project configuration is active.
+6. Run a small command, such as a short polish task or LaTeX compile check, and
    confirm the output lands in the expected task storage.
 
-## Export And Import
+## Credentials
 
-Automatic export/import from the VS Code extension is deferred. Phase 7 defaults
-to explicit re-authentication and manual reconfiguration so the desktop app does
-not need access to VS Code's private storage or credentials.
-
-A future migration tool may export non-secret preferences, custom agent
-registrations, or execution-history metadata into a reviewable file. It should
-not export API keys or session tokens. Track that work separately from the first
-desktop release.
+There is no settings or history export step. A future shared credential service
+may remove the remaining need to enter secrets separately; until then, TeXRA
+does not copy API keys or session tokens between host-specific secure stores.
 
 ## Related Docs
 

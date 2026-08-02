@@ -79,60 +79,16 @@ function allPresets(
   return [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS, ...extra];
 }
 
-function identifiersEqual(
-  actual: readonly string[],
-  expected: readonly string[],
-): boolean {
-  const actualNames = new Set(actual.map(agentName));
-  const expectedNames = new Set(expected.map(agentName));
-  return (
-    actualNames.size === expectedNames.size &&
-    [...actualNames].every((name) => expectedNames.has(name))
-  );
-}
-
-/** Read the canonical selection, deriving a stable legacy value when needed. */
-export function readAgentRosterSelection(
+/** Read the canonical workspace selection. */
+function readAgentRosterSelection(
   workspaceState: StateStore,
-  presets: readonly AgentModePreset[] = [],
 ): AgentRosterSelection {
   const raw = workspaceState.get<unknown>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
-  if (raw !== undefined) return AgentRosterSelectionSchema.parse(raw);
-
-  const workflow = workspaceState.get<string[]>(
-    WorkspaceStateKey.ENABLED_AGENTS,
-  );
-  const toolUse = workspaceState.get<string[]>(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  );
-  if (workflow === undefined && toolUse === undefined) {
-    return INHERITED_AGENT_ROSTER;
-  }
-
-  const workflowKeys: AgentRosterCategorySelection =
-    workflow === undefined ? 'all' : unique(workflow);
-  const toolUseKeys: AgentRosterCategorySelection =
-    toolUse === undefined ? 'all' : unique(toolUse);
-  if (workflowKeys === 'all' && toolUseKeys === 'all') return { kind: 'all' };
-
-  const matchingPreset =
-    workflowKeys === 'all' || toolUseKeys === 'all'
-      ? undefined
-      : allPresets(presets).find(
-          (preset) =>
-            identifiersEqual(workflowKeys, preset.workflowAgents) &&
-            identifiersEqual(toolUseKeys, preset.toolUseAgents),
-        );
-  if (matchingPreset) {
-    return { kind: 'team', teamId: matchingPreset.id };
-  }
-  return {
-    kind: 'custom',
-    workflowAgentKeys: workflowKeys,
-    toolUseAgentKeys: toolUseKeys,
-  };
+  return raw === undefined
+    ? INHERITED_AGENT_ROSTER
+    : AgentRosterSelectionSchema.parse(raw);
 }
 
 function selectedIdentifiers(
@@ -166,10 +122,7 @@ export class AgentRosterController<
   }
 
   getSelection(): AgentRosterSelection {
-    return readAgentRosterSelection(
-      this.deps.workspaceState,
-      this.extraPresets(),
-    );
+    return readAgentRosterSelection(this.deps.workspaceState);
   }
 
   getDefaultTeamId(): string | undefined {
@@ -315,74 +268,10 @@ export class AgentRosterController<
 
   private async writeSelection(selection: AgentRosterSelection): Promise<void> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
-    const effective = this.resolveEffectiveSelection(parsed);
-    const previous = {
-      selection: this.deps.workspaceState.get<unknown>(
-        WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      ),
-      workflow: this.deps.workspaceState.get<unknown>(
-        WorkspaceStateKey.ENABLED_AGENTS,
-      ),
-      toolUse: this.deps.workspaceState.get<unknown>(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    };
-    const workflow = this.selectionKeys(effective, 'workflow');
-    const toolUse = this.selectionKeys(effective, 'toolUse');
-
-    // Write compatibility mirrors first and the canonical selection last. The
-    // canonical write is the commit point for current hosts.
-    try {
-      await this.deps.workspaceState.update(
-        WorkspaceStateKey.ENABLED_AGENTS,
-        workflow,
-      );
-      await this.deps.workspaceState.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        toolUse,
-      );
-      await this.deps.workspaceState.update(
-        WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-        parsed,
-      );
-    } catch (error: unknown) {
-      const rollbackWrites = [
-        {
-          key: WorkspaceStateKey.ENABLED_AGENTS,
-          value: previous.workflow,
-        },
-        {
-          key: WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-          value: previous.toolUse,
-        },
-        {
-          key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-          value: previous.selection,
-        },
-      ] as const;
-      const rollbackResults = await Promise.allSettled(
-        rollbackWrites.map(({ key, value }) =>
-          this.deps.workspaceState.update(key, value),
-        ),
-      );
-      const rollbackErrors = rollbackResults.flatMap((result, index) =>
-        result.status === 'rejected'
-          ? [
-              new Error(
-                `Failed to restore agent roster state "${rollbackWrites[index]?.key ?? 'unknown'}".`,
-                { cause: result.reason },
-              ),
-            ]
-          : [],
-      );
-      if (rollbackErrors.length > 0) {
-        throw new AggregateError(
-          [error, ...rollbackErrors],
-          'Agent roster update failed and rollback was incomplete.',
-        );
-      }
-      throw error;
-    }
+    await this.deps.workspaceState.update(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      parsed,
+    );
   }
 
   async setSelection(selection: AgentRosterSelection): Promise<void> {

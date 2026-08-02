@@ -39,11 +39,7 @@ type RunStorageOutputOverrides = Omit<OutputFileHarnessOptions, 'location'> & {
   >;
 };
 
-/**
- * Workflow config built from the shared harness, which also fills the legacy
- * `inputFile` slot so the migration into the head of `inputFiles` stays
- * covered.
- */
+/** Workflow config built from the shared harness. */
 function createFollowUpWorkflowConfig(
   overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
 ): AgentConfig {
@@ -154,9 +150,7 @@ describe('ProgressFollowUpController', () => {
     expect(plan.executeImmediately).toBe(true);
     expect(plan.config.agent).toBe('tool-agent');
     expect(plan.config.agentCategory).toBe(AgentCategory.ToolUse);
-    // The follow-up keeps the workflow's input files exactly as the run
-    // config recorded them (the harness's legacy `inputFile` slot migrates to
-    // the head of `inputFiles`, ahead of the declared 'main.tex').
+    // The follow-up keeps the workflow's input files exactly as recorded.
     expect(plan.config.inputFiles).toEqual(runConfig.inputFiles);
     expect(plan.config.outputFiles.length).toBe(0);
     expect(plan.config.instruction).toMatch(

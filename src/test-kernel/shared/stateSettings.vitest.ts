@@ -25,6 +25,7 @@ import {
   STATE_SETTING_KEYS,
   settingEnumChoices,
   settingEnumOptions,
+  settingsViewSettingByKey,
   stateSettingByKey,
   type SettingStore,
   type StateSettingEntry,
@@ -374,7 +375,7 @@ describe('state settings catalog', () => {
     //    handlers before falling back to provider defaults.
     //  - the provider routing/region toggles (Prefer Kimi Code, the China
     //    region switches, GLM Coding Plan) are CLI-only catalog rows mirroring
-    //    the extension's PROVIDER_VSCODE_SETTINGS controls, read through
+    //    the extension's PROVIDER_SETTINGS controls, read through
     //    providerConfig/ProxyConfigResolver during CLI model dispatch.
     //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
     //    dual-backend Kimi models in CLI runs.
@@ -416,7 +417,7 @@ describe('state settings catalog', () => {
 
   it('shares no keys with the config-tree catalog', () => {
     // The two catalogs must stay disjoint: a state-backed key must never reach
-    // the package.json generator via CoreSettingsShape, and a config key must
+    // the shared config schema via CoreSettingsShape, and a config key must
     // never be double-registered through the catalog.
     const coreKeys = new Set(CORE_SETTING_PATHS.map((path) => `texra.${path}`));
     for (const key of STATE_SETTING_KEYS) {
@@ -561,6 +562,20 @@ describe('settingsAccess', () => {
       effectiveValue: false,
     });
     assert.equal(readSetting(entry, stores, 'cli'), false);
+  });
+
+  it('routes telemetry writes to global configuration', async () => {
+    const { stores, config } = makeFakeSettingsStores();
+    const entry = settingsViewSettingByKey('texra.telemetry.enabled');
+    assert.ok(entry);
+
+    await writeSetting(entry, false, stores, 'extension');
+
+    assert.deepEqual(config.inspect(entry.key), {
+      globalValue: false,
+      workspaceValue: undefined,
+      effectiveValue: false,
+    });
   });
 
   it('routes CLI endpoint writes to global state', async () => {

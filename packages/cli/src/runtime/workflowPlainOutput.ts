@@ -18,12 +18,12 @@ import { assertNever } from '@utils/core';
 const WORKFLOW_PLAIN_EVENT_TYPES = [
   'run.start',
   'stage.start',
-  'workflow.task',
+  'workflow.call',
   'log',
   'result',
 ] as const satisfies readonly AgentEvent['type'][];
 
-export interface WorkflowPlainProjectionOptions {
+export interface WorkflowPlainOutputOptions {
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
@@ -51,7 +51,7 @@ interface WorkflowStreamProjection {
 
 function createWorkflowStreamProjection(
   agentName: string,
-  options: WorkflowPlainProjectionOptions,
+  options: WorkflowPlainOutputOptions,
 ): WorkflowStreamProjection {
   const openedPhases = new Set<string>();
   const pendingCalls = new Map<string, Map<string, WorkflowCallProgress>>();
@@ -106,19 +106,19 @@ function createWorkflowStreamProjection(
         case 'stage.start':
           if (event.kind === 'phase') openPhase(event.id, event);
           break;
-        case 'workflow.task':
+        case 'workflow.call':
           if (
-            event.task.phase !== undefined &&
+            event.call.phase !== undefined &&
             event.stageId !== undefined &&
             !openedPhases.has(event.stageId)
           ) {
             const pending =
               pendingCalls.get(event.stageId) ??
               new Map<string, WorkflowCallProgress>();
-            pending.set(event.logId, event.task);
+            pending.set(event.logId, event.call);
             pendingCalls.set(event.stageId, pending);
           } else {
-            writeCall(event.logId, event.task);
+            writeCall(event.logId, event.call);
           }
           break;
         case 'log':
@@ -155,9 +155,9 @@ function createWorkflowStreamProjection(
  * spinner-free text. The descriptor emitted during child activation is the
  * source of truth: ordinary workflow agents retain their usual renderer.
  */
-export function attachWorkflowPlainProjection(
+export function attachWorkflowPlainOutput(
   events: SessionEventHub,
-  options: WorkflowPlainProjectionOptions,
+  options: WorkflowPlainOutputOptions,
 ): () => void {
   const projections = new Map<StreamTabId, WorkflowStreamProjection>();
   const detachRunEvents = events.subscribe(

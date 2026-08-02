@@ -125,50 +125,6 @@ routing, so this was checked on every axis):
   falls back to message-shape inference when the key doesn't parse.
 - Zero test references; zero references anywhere outside the two deleted sites.
 
-### 3. `AgentFinalResult` field-rename — WITHDRAWN, the rename is load-bearing
-
-> **Status: withdrawn after deeper inspection.** The initial pass called this a
-> low-risk cleanup. It is not — the rename is required by the persisted contract,
-> and collapsing it would be a data-compatibility break. Recorded here so the idea
-> isn't re-proposed.
-
-`AgentFinalResult` is not merely an in-memory envelope: it **is the canonical
-persisted result format**. `resultMeta.ts:39-53` embeds `AgentFinalResultSchema`
-directly in `SubagentResultMetaSchema.result`, and `WorkflowAgentFinalResultSchema`
-in `CliWorkflowResultMetaSchema.result`. So `response`/`files` are the field names
-already written to disk in every existing run record.
-
-Renaming them to `lastResponse`/`touchedFiles` would mean every existing canonical
-record fails `ResultMetaSchema.safeParse` (strict object, unknown key) and falls
-through to `LegacyPersistedResultMetaSchema` — where it **also** fails, because
-`LegacySubagentResultMetaSchema` is derived from a `z.strictObject` that has no
-`parentExecutionId` field (`resultMeta.ts:43,114-120`). The result would be a hard
-parse throw on historical subagent records, not a graceful downgrade.
-
-The reconciler (`projectToolUseFinalTextFields`, `firstDefinedArray`) therefore
-earns its keep: it exists because the flow vocabulary (`lastResponse`/`touchedFiles`)
-and the persisted vocabulary (`response`/`files`) are genuinely two contracts, and
-legacy records in the wild carry either spelling (`LegacyAgentResultFieldsSchema`
-accepts all four names, `resultMeta.ts:88-101`). It is already correctly
-single-sourced across both builders. **Leave it alone.**
-
-The result-envelope chain is **not** redundant re-wrapping — `AgentFlowResult` →
-`AgentRuntimeFlowResult` (adds the non-terminal `WAITING` arm, 5 subagent-suspension
-sites) → `AgentFinalResult` (post-artifact envelope adding `diffs`, coerced `cost`,
-default-filled arrays; 3 real callers) are distinct lifecycle stages. Keep them.
-
-The apparent nit is narrow: `AgentFinalResult` renames
-`lastResponse`→`response` and `touchedFiles`→`files`
-(`AgentFinalResult.ts:49-52`). That rename is why
-`projectToolUseFinalTextFields` and `firstDefinedArray` exist, and it forces
-dual-name branching downstream (`storage/resultMeta.ts:201-202` branches on
-`record.response || record.lastResponse`; `nativeSubagentStrategy.ts:90` still
-emits `lastResponse`).
-
-**Do not align these field names without a versioned persisted-data migration.**
-The helpers and downstream branching must remain while historical records use
-both vocabularies.
-
 ## Surface simplification / SDK boundary formalization
 
 The de-facto public surface is already coherent — the missing piece is an

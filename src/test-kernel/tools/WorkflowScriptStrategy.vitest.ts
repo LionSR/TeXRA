@@ -440,9 +440,9 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     const logger = new TraceEmitter();
     const completedTaskCosts: number[] = [];
     logger.subscribe((event) => {
-      if (event.type === 'workflow.task' && event.task.status === 'completed') {
-        if (event.task.totalCostUsd !== undefined) {
-          completedTaskCosts.push(event.task.totalCostUsd);
+      if (event.type === 'workflow.call' && event.call.status === 'completed') {
+        if (event.call.totalCostUsd !== undefined) {
+          completedTaskCosts.push(event.call.totalCostUsd);
         }
       }
     });

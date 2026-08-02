@@ -23,7 +23,7 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 // Local imports - profile view styles and events
 import type {
   ProviderKeyStatus,
-  ProviderVscodeSetting,
+  ProviderSetting,
 } from '@shared/schemas/settingsViewMessages';
 import { createEvent } from '@shared/utils/events';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
@@ -136,12 +136,12 @@ export class ProviderKeyList extends LitElement {
     return html`
       <div class="settings-disclosure-content provider-settings">
         ${streamingToggle} ${endpointInput}
-        ${entry.vscodeSettings.map((s) => this.renderVscodeSetting(s))}
+        ${entry.providerSettings.map((s) => this.renderProviderSetting(s))}
       </div>
     `;
   }
 
-  private renderVscodeSetting(setting: ProviderVscodeSetting): TemplateResult {
+  private renderProviderSetting(setting: ProviderSetting): TemplateResult {
     const warningLink =
       setting.warningUrl && setting.warningUrlLabel
         ? html` <wa-button
@@ -169,7 +169,7 @@ export class ProviderKeyList extends LitElement {
           ?checked=${setting.value}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING, {
+            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING, {
               key: setting.key,
               value: checked,
             });
