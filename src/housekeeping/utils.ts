@@ -5,13 +5,8 @@ import * as path from 'node:path';
 import { globIterate } from 'glob';
 
 // Local imports
-import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
-import {
-  legacyWorkflowOutputStem,
-  midEraWorkflowOutputStem,
-  normalizeLegacyModel,
-} from '@shared/constants/workflowOutput';
+import { legacyWorkflowOutputStem } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -26,14 +21,9 @@ export function generateTimestamp(): string {
 }
 
 /**
- * Build glob patterns that match pre-refactor workflow output filenames
- * left over in the user's workspace. Current-layout outputs live inside
- * task-run storage (`executions/{id}/…`) and are managed per-execution, so
- * they are not scanned for here.
- *
- * Pass the raw agent identifier (with any source prefix) — the SSOT
- * helpers derive the legacy chunk form internally so the result matches
- * what pre-refactor runs wrote to disk.
+ * Build glob patterns for flat copies saved beside the source document.
+ * Current workflow outputs live in execution storage; the extension's
+ * "Save as copy" action is the sole writer of this workspace filename.
  */
 function getFilePatterns(
   base: string,
@@ -42,62 +32,9 @@ function getFilePatterns(
   numRounds: number,
 ): string[] {
   const patterns: string[] = [];
-  const legacyModel = normalizeLegacyModel(model);
-
-  // Mid-era layout: files live under `r{round}/<base>_<cleanAgent>_<model>.*`.
-  // These files can still be present in workspaces for users who upgraded
-  // from the mid-era PR; without matching patterns here, clean/pack would
-  // leave them orphaned.
-  const midEraStem = midEraWorkflowOutputStem({ base, agent, model });
-  for (let round = 0; round < numRounds; round++) {
-    patterns.push(
-      `r${round}/${midEraStem}`,
-      `r${round}/${midEraStem}_diff`,
-      `r${round}/${midEraStem}_thinking`,
-    );
-    if (round > 0) {
-      patterns.push(
-        `r${round}/${midEraStem}${buildBetweenRoundDiffSuffix(round, round - 1)}`,
-      );
-    }
-  }
 
   for (let round = 0; round < numRounds; round++) {
-    // Legacy flat layout: `<base>_<chunk>_r{round}_<normalizedModel>.*`
-    const legacyStem = legacyWorkflowOutputStem({ base, agent, model, round });
-    // Legacy stem already includes `_<normalizedModel>`; for suffix variants
-    // we reconstruct the prefix (everything up to the model token).
-    const legacyPrefix = legacyStem.slice(0, -(legacyModel.length + 1));
-    patterns.push(
-      legacyStem,
-      `${legacyStem}_diff`,
-      `${legacyPrefix}_full_${legacyModel}`,
-      `${legacyPrefix}_full_${legacyModel}_diff`,
-      `${legacyStem}_thinking`,
-    );
-    if (round > 0) {
-      const diffSuffix = buildBetweenRoundDiffSuffix(round, round - 1);
-      patterns.push(
-        `${legacyStem}${diffSuffix}`,
-        `${legacyPrefix}_full_${legacyModel}${diffSuffix}`,
-      );
-    }
-  }
-  // Legacy merge output lived next to the input and was named after the
-  // edited file (`<editedBase>_full_<model>.tex`). Requiring the `_` after
-  // `<base>` keeps siblings like `paper2_…` from matching when the target
-  // is `paper.tex`. Emit both raw and normalized-model variants so legacy
-  // merge files written with the dot-stripped model token
-  // (`paper_full_gpt45`) are discovered alongside current-legacy files
-  // (`paper_full_gpt-4.5`).
-  const mergeModels = legacyModel === model ? [model] : [model, legacyModel];
-  for (const m of mergeModels) {
-    patterns.push(
-      `${base}_full_${m}`,
-      `${base}_full_${m}_diff`,
-      `${base}_*_full_${m}`,
-      `${base}_*_full_${m}_diff`,
-    );
+    patterns.push(legacyWorkflowOutputStem({ base, agent, model, round }));
   }
   return patterns;
 }
@@ -134,8 +71,6 @@ export function resolveHousekeepingTargets(
   );
 
   const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
-  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
-  // the new clean-agent forms internally so both disk layouts are matched.
   const filePatterns = getFilePatterns(baseName, model, agent, maxRounds);
   logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 

@@ -1,5 +1,5 @@
 // Node imports
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -7,7 +7,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { runCleanSingle } from '@housekeeping/clean';
 import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
@@ -90,18 +89,10 @@ describe('filename-era workflow output grammar', () => {
     expect(pattern.test('paper1_polish_r12_gpt-45')).toBe(false);
   });
 
-  it('matches flat and mid-era housekeeping files without matching siblings', async () => {
+  it('matches flat Save as copy files without matching siblings', async () => {
     await mkdir(path.join(workspacePath, 'r1'));
-    const matching = [
-      'paper_polish_r0_gpt-45.tex',
-      'paper_polish_r0_gpt-45_diff.tex',
-      'paper_polish_r0_full_gpt-45.tex',
-      'r1/paper_polish_long_gpt-4.5.tex',
-    ];
-    const nonMatching = [
-      'paper2_polish_r0_gpt-45.tex',
-      'r1/paper2_polish_long_gpt-4.5.tex',
-    ];
+    const matching = ['paper_polish_r0_gpt-45.tex'];
+    const nonMatching = ['paper2_polish_r0_gpt-45.tex'];
     for (const relativePath of [...matching, ...nonMatching]) {
       await writeFile(path.join(workspacePath, relativePath), 'fixture');
     }
@@ -129,21 +120,5 @@ describe('filename-era workflow output grammar', () => {
     for (const relativePath of nonMatching) {
       expect(found).not.toContain(relativePath);
     }
-  });
-
-  it('deletes a file matched by overlapping legacy patterns only once', async () => {
-    const inputPath = path.join(workspacePath, 'paper.tex');
-    const relativePath = 'paper_polish_r0_full_gpt-45.tex';
-    const absolutePath = path.join(workspacePath, relativePath);
-    await writeFile(inputPath, 'source');
-    await writeFile(absolutePath, 'fixture');
-
-    await expect(
-      runCleanSingle('gpt-4.5', 'paper.tex', 'custom:polish_long'),
-    ).resolves.toEqual({ status: 'success' });
-    await expect(access(absolutePath)).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
-    await expect(access(inputPath)).resolves.toBeUndefined();
   });
 });
