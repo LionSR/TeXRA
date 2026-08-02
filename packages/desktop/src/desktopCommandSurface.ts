@@ -17,8 +17,8 @@ import {
 } from '@shared/commands/registry';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import {
-  buildDesktopSetRouteMessage,
-  type DesktopRoute,
+  DESKTOP_SHELL_COMMANDS,
+  type DesktopWorkbenchKind,
 } from './desktopShellMessages.js';
 import type { MenuItemConstructorOptions } from 'electron';
 
@@ -158,7 +158,8 @@ export interface DesktopMenuTemplateItem extends Omit<
  * main-process action set does not implement it.
  */
 export interface DesktopCommandActions {
-  showRoute(route: DesktopRoute): void;
+  showLauncher(): void;
+  openWorkbench(kind: DesktopWorkbenchKind): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
   showStream?(streamId: StreamTabId): void;
   openDesktopDocs(): void;
@@ -311,8 +312,8 @@ function action(
 }
 
 const DESKTOP_COMMAND_HANDLERS = {
-  'texra.showMainView': action((a) => a.showRoute('main')),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.showRoute('logs')),
+  'texra.showMainView': action((a) => a.showLauncher()),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.openWorkbench('logs')),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: action((a) =>
     a.toggleBottomBar(),
   ),
@@ -387,16 +388,19 @@ export function buildDesktopSettingsTabMessage(
 }
 
 /**
- * Sole owner of the two-message "open the settings surface, then select a tab"
- * sequence the main process posts. Menu/rail navigation and stream-initiated
- * navigation both route here so the two cannot drift apart.
+ * Opens the Settings workbench before selecting an optional settings tab.
+ * Main-process navigation has two consumers, so this helper keeps their
+ * message ordering identical.
  */
-export function postDesktopSettingsRoute(
+export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
   tabIndex?: SettingsTab,
   agentSubTab?: AgentCategory,
 ): void {
-  postToRenderer(buildDesktopSetRouteMessage('settings'));
+  postToRenderer({
+    command: DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH,
+    kind: 'settings',
+  });
   if (tabIndex == null) return;
   postToRenderer(buildDesktopSettingsTabMessage(tabIndex, agentSubTab));
 }

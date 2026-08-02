@@ -1,28 +1,23 @@
 import { z } from 'zod';
 
 export const DESKTOP_SHELL_COMMANDS = {
+  OPEN_WORKBENCH: 'desktop:openWorkbench',
   SAVE_FILE: 'desktop:saveFile',
-  SET_ROUTE: 'desktop:setRoute',
+  SHOW_LAUNCHER: 'desktop:showLauncher',
   TOGGLE_LAYOUT: 'desktop:toggleLayout',
 } as const;
 
-const DesktopRouteSchema = z.enum(['main', 'settings', 'logs']);
-export type DesktopRoute = z.infer<typeof DesktopRouteSchema>;
+const DesktopWorkbenchKindSchema = z.enum(['settings', 'logs']);
+export type DesktopWorkbenchKind = z.infer<typeof DesktopWorkbenchKindSchema>;
 
-export const DesktopSetRouteMessageSchema = z.object({
-  command: z.literal(DESKTOP_SHELL_COMMANDS.SET_ROUTE),
-  route: DesktopRouteSchema,
+export const DesktopOpenWorkbenchMessageSchema = z.object({
+  command: z.literal(DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH),
+  kind: DesktopWorkbenchKindSchema,
 });
 
-export type DesktopSetRouteMessage = z.infer<
-  typeof DesktopSetRouteMessageSchema
->;
-
-export function buildDesktopSetRouteMessage(
-  route: DesktopRoute,
-): DesktopSetRouteMessage {
-  return { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route };
-}
+export const DesktopShowLauncherMessageSchema = z.object({
+  command: z.literal(DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER),
+});
 
 export const DesktopSaveFileMessageSchema = z.object({
   command: z.literal(DESKTOP_SHELL_COMMANDS.SAVE_FILE),

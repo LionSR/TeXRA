@@ -25,7 +25,8 @@ import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 const mocks = createModuleMocks();
 
 interface TestDesktopShellActions {
-  showRoute: ReturnType<typeof vi.fn>;
+  showLauncher: ReturnType<typeof vi.fn>;
+  openWorkbench: ReturnType<typeof vi.fn>;
   showSettings: ReturnType<typeof vi.fn>;
   signIn: ReturnType<typeof vi.fn>;
   openAgentDirectory: ReturnType<typeof vi.fn>;
@@ -164,7 +165,8 @@ function createWindowMock(
 
 function createMainViewShellActions(): TestDesktopShellActions {
   return {
-    showRoute: vi.fn(),
+    showLauncher: vi.fn(),
+    openWorkbench: vi.fn(),
     showSettings: vi.fn(),
     signIn: vi.fn(),
     openAgentDirectory: vi.fn(),
@@ -397,7 +399,7 @@ describe('desktop main-view IPC', () => {
       command: COMMON_COMMANDS.SWITCH_VIEW,
       view: 'main',
     });
-    expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith('main');
+    expect(capabilities.shellActions.showLauncher).toHaveBeenCalledOnce();
     expect(sends).toEqual([]);
 
     sends.length = 0;
@@ -412,20 +414,18 @@ describe('desktop main-view IPC', () => {
     });
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS });
     sendFromRenderer({ command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY });
-    expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith(
-      'settings',
-    );
+    expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(1);
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
-      1,
+      2,
       SETTINGS_TAB.MODELS,
     );
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
-      2,
+      3,
       SETTINGS_TAB.AGENTS,
       AgentCategory.ToolUse,
     );
     expect(capabilities.shellActions.showSettings).toHaveBeenNthCalledWith(
-      3,
+      4,
       SETTINGS_TAB.MULTI_AGENT,
     );
     expect(capabilities.shellActions.openAgentDirectory).toHaveBeenCalledWith(

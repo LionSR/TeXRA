@@ -780,25 +780,3 @@ test('closes a bottom tab and falls back within the same pane', async () => {
   ).toBeVisible();
   await expect(page.locator('.task-conversation')).toBeVisible();
 });
-
-test('routes legacy desktop:setRoute IPC to the owning tab', async () => {
-  const { page } = launched;
-
-  // Menu items and the command palette still speak the four-route vocabulary;
-  // each route must resolve to the tab that now owns that surface.
-  await page.evaluate(() => {
-    window.postMessage({ command: 'desktop:setRoute', route: 'logs' }, '*');
-  });
-  await expect(page.locator(activeWorkbenchTab('logs'))).toBeVisible();
-  await expect(page.locator('.desktop-log-viewer')).toBeVisible();
-  await expect(page.locator('.task-conversation')).toBeVisible();
-
-  await page.evaluate(() => {
-    window.postMessage({ command: 'desktop:setRoute', route: 'main' }, '*');
-  });
-  await expect(
-    page.locator('.task-conversation-pane[data-pane="launcher"]:not([hidden])'),
-  ).toBeVisible();
-  // Returning to the launcher does not discard the inspected workbench.
-  await expect(page.locator(activeWorkbenchTab('logs'))).toBeVisible();
-});

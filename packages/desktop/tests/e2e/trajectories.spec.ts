@@ -4,7 +4,8 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
-  setRoute,
+  openWorkbench,
+  showLauncher,
   setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
@@ -65,10 +66,10 @@ async function pdfOverlayIsOpen(): Promise<boolean> {
 
 /**
  * Trajectory 1 — first launch on an empty workspace.
- * The launcher (main route) must mount without crashing the renderer.
+ * The launcher must mount without crashing the renderer.
  */
 test('first launch shows a usable launcher chrome', async () => {
-  await setRoute(launched, 'main');
+  await showLauncher(launched);
   // The workspace directory and command palette button must be reachable.
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
@@ -136,12 +137,12 @@ test('settings → memory tab mounts', async () => {
 });
 
 /**
- * Trajectory 4 — Logs view: ensure the Logs route renders the desktop log
+ * Trajectory 4 — Logs view: ensure the Logs workbench renders the desktop log
  * viewer skeleton (header + actions). The actual log content is async and
  * may be empty on a fresh run, so we only assert structural surfaces.
  */
-test('logs route renders the desktop log viewer', async () => {
-  await setRoute(launched, 'logs');
+test('logs workbench renders the desktop log viewer', async () => {
+  await openWorkbench(launched, 'logs');
   const header = launched.page.locator('.desktop-log-viewer-header');
   await expect(header).toBeVisible();
   // Header has Refresh / Copy / Export / Open Folder buttons.
