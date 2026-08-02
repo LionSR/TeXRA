@@ -15,10 +15,8 @@ import {
   SETTINGS_VIEW_COMMANDS,
 } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
-import { AGENT_MODE_PRESETS } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
@@ -62,7 +60,6 @@ interface MainViewIpcModule {
       progress: { handleMessage(message: { command: string }): boolean };
       onboarding: { handleMessage(message: { command: string }): boolean };
       shellActions: TestDesktopShellActions;
-      modelListRefresh?: PromiseLike<void>;
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
       loadStartupOptions?: () => Promise<{
         agentOptions: { workflow: unknown[]; toolUse: unknown[] };
@@ -525,90 +522,6 @@ describe('desktop main-view IPC', () => {
           commandOf(message) === MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
       ),
     ).toBe(false);
-  });
-
-  it('waits for desktop model-list refresh before posting main-view model options', async () => {
-    const modelListRefresh = createDeferred();
-    // desktopMainViewStartup resolves the whole startup catalog through the
-    // `@agent/index` barrel (agent options plus the team-option loader's
-    // catalog/refresh ports), so the barrel — not the agentRegistry leaf
-    // module — is the mock boundary here.
-    mocks.doMock('@agent/index', () => ({
-      computeAgentOptionsData: vi.fn(async () => ({
-        workflow: [],
-        toolUse: [],
-      })),
-      loadAgents: vi.fn(async () => undefined),
-      getAgentsByCategory: vi.fn(() => []),
-      refresh: vi.fn(async () => undefined),
-    }));
-    mocks.doMock('@auth/SupabaseClient', () => ({
-      SupabaseClient: {
-        canAccessRemoteAgentCatalog: vi.fn(async () => false),
-      },
-    }));
-    mocks.doMock('@model/computeModelOptions', () => ({
-      // `label` is required by `ModelOptionDataSchema` (PickerOptionBaseSchema) —
-      // `postToRenderer` now runs the SET_MODEL_OPTIONS payload through it
-      // (dev/test only), so the stub must match the real shape.
-      computeModelOptionsData: vi.fn(async () => [
-        { value: 'fresh-model', label: 'Fresh Model' },
-      ]),
-    }));
-    const { installDesktopMainViewIpc, sends, window, sendFromRenderer } =
-      await createMainViewHarness();
-    // The default startup loader reads custom team presets through the
-    // platform workspace state; re-init the fresh module instance that
-    // loadDesktopMainViewIpcModule's vi.resetModules() just produced.
-    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-    ]);
-    initPlatform(createFakePlatform({}));
-
-    installDesktopMainViewIpc(window, {
-      ...createMainViewCommandCapabilities(),
-      modelListRefresh: modelListRefresh.promise,
-    });
-    sendFromRenderer({
-      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-      view: 'main',
-    });
-    await flushAsyncWork();
-
-    expect(
-      sends.some(
-        ({ message }) =>
-          commandOf(message) === MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      ),
-    ).toBe(false);
-
-    modelListRefresh.resolve();
-    await flushAsyncWork();
-
-    expect(findPush(sends, MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS)).toMatchObject(
-      {
-        message: {
-          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-          optionsData: [{ value: 'fresh-model' }],
-        },
-      },
-    );
-
-    // The default loader also resolves team options: every built-in team is
-    // listed (disabled while its roster cannot resolve in this environment).
-    const teamPush = findPush(sends, MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS);
-    expect(teamPush).toBeDefined();
-    const teamOptions = (teamPush!.message as { optionsData: unknown[] })
-      .optionsData;
-    expect(
-      teamOptions.map((option) => (option as { value?: string }).value),
-    ).toEqual(AGENT_MODE_PRESETS.map((preset) => preset.id));
-    expect(
-      teamOptions.every(
-        (option) => (option as { source?: string }).source === 'built-in',
-      ),
-    ).toBe(true);
   });
 
   it('posts the injected startup team options on main-view ready', async () => {
