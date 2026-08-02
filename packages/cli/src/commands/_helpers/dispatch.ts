@@ -17,6 +17,7 @@ import {
   editDistance,
   typoSuggestionThreshold,
 } from '@utils/text/editDistance';
+import { toKebabCaseFlagName } from './flagCase';
 import {
   documentsNegatedBooleanForm,
   GLOBAL_ARGS,
@@ -430,13 +431,6 @@ function toStringArray(
   return Array.isArray(value) ? value : [value];
 }
 
-function kebabCaseFlagName(name: string): string {
-  return name
-    .replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replaceAll(/_+/g, '-')
-    .toLowerCase();
-}
-
 function addLongFlag(
   specs: CommandFlagSpecs,
   flagName: string,
@@ -444,7 +438,7 @@ function addLongFlag(
 ): void {
   const names = new Set([flagName]);
   if (/[A-Z_]/.test(flagName)) {
-    names.add(kebabCaseFlagName(flagName));
+    names.add(toKebabCaseFlagName(flagName));
   }
   for (const name of names) {
     specs.long.set(`--${name}`, spec);
