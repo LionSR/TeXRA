@@ -138,6 +138,8 @@ export interface StateSettingEntry {
   readonly category: string;
   /** Canonical (extension) storage slot. */
   readonly store: SettingStore;
+  /** Persistence target for config-backed settings; workspace when omitted. */
+  readonly configTarget?: 'global' | 'workspace';
   /**
    * Storage slot the CLI reads/writes when it differs from {@link store}. Only
    * the git-author keys use this today: the extension keeps them in
@@ -844,6 +846,7 @@ const SETTINGS_VIEW_CORE_SETTINGS = [
       'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names.',
     category: 'account',
     store: 'config',
+    configTarget: 'global',
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'telemetry',
   },

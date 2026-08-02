@@ -1,7 +1,7 @@
 /** Built-in file discovery rules. These are product behavior, not settings. */
-export const FILE_HANDLING_RULES = {
-  included: {
-    mediaExtensions: [
+export const FILE_HANDLING_RULES = Object.freeze({
+  included: Object.freeze({
+    mediaExtensions: Object.freeze([
       '.png',
       '.pdf',
       '.jpeg',
@@ -21,13 +21,21 @@ export const FILE_HANDLING_RULES = {
       '.mulaw',
       '.ogg',
       '.flac',
-    ],
-    inputExtensions: ['.txt', '.tex', '.md'],
-    contextExtensions: ['.txt', '.tex', '.md', '.bib', '.bbl', '.cls', '.sty'],
-    editedExtensions: ['.txt', '.tex'],
-  },
-  ignored: {
-    fileExtensions: [
+    ]),
+    inputExtensions: Object.freeze(['.txt', '.tex', '.md']),
+    contextExtensions: Object.freeze([
+      '.txt',
+      '.tex',
+      '.md',
+      '.bib',
+      '.bbl',
+      '.cls',
+      '.sty',
+    ]),
+    editedExtensions: Object.freeze(['.txt', '.tex']),
+  }),
+  ignored: Object.freeze({
+    fileExtensions: Object.freeze([
       '.pdf',
       '.bst',
       '.json',
@@ -38,10 +46,15 @@ export const FILE_HANDLING_RULES = {
       '.ts',
       '.js',
       '.yaml',
-    ],
-    inputFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
-    inputDirectories: [],
-    mediaDirectories: [
+    ]),
+    inputFiles: Object.freeze([
+      'command.tex',
+      'commands.tex',
+      'preamble.tex',
+      'yaml',
+    ]),
+    inputDirectories: Object.freeze([]),
+    mediaDirectories: Object.freeze([
       'build',
       'node_modules',
       '__pycache__',
@@ -49,8 +62,8 @@ export const FILE_HANDLING_RULES = {
       'history',
       'venv',
       'Diffs',
-    ],
-    directories: [
+    ]),
+    directories: Object.freeze([
       'build',
       'node_modules',
       '__pycache__',
@@ -64,8 +77,8 @@ export const FILE_HANDLING_RULES = {
       'miscellaneous',
       'diffs',
       'venv',
-    ],
-    keywords: [
+    ]),
+    keywords: Object.freeze([
       'Makefile',
       'template',
       '_thinking',
@@ -76,6 +89,6 @@ export const FILE_HANDLING_RULES = {
       '.egg-info',
       'venv',
       'yaml',
-    ],
-  },
-} as const;
+    ]),
+  }),
+});

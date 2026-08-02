@@ -39,7 +39,6 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 
 export type LatexdiffTempFileLocation =
   (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
-export type AgentReviewApproach = (typeof AGENT_REVIEW_APPROACHES)[number];
 
 /**
  * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the

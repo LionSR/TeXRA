@@ -25,6 +25,7 @@ import {
   STATE_SETTING_KEYS,
   settingEnumChoices,
   settingEnumOptions,
+  settingsViewSettingByKey,
   stateSettingByKey,
   type SettingStore,
   type StateSettingEntry,
@@ -561,6 +562,20 @@ describe('settingsAccess', () => {
       effectiveValue: false,
     });
     assert.equal(readSetting(entry, stores, 'cli'), false);
+  });
+
+  it('routes telemetry writes to global configuration', async () => {
+    const { stores, config } = makeFakeSettingsStores();
+    const entry = settingsViewSettingByKey('texra.telemetry.enabled');
+    assert.ok(entry);
+
+    await writeSetting(entry, false, stores, 'extension');
+
+    assert.deepEqual(config.inspect(entry.key), {
+      globalValue: false,
+      workspaceValue: undefined,
+      effectiveValue: false,
+    });
   });
 
   it('routes CLI endpoint writes to global state', async () => {
