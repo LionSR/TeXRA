@@ -58,6 +58,10 @@ import { computeUtilizationPercent } from '../support/contextUtilization';
 import { logCompactionEvent } from '../support/compactionLogging';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
+import {
+  classifyMediaEntry,
+  unknownMediaCategoryWarning,
+} from '../support/mediaClassification';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import {
   getDeclaredMaxReasoningEffort,
@@ -73,6 +77,7 @@ import { normalizeOpenAIResponseError } from './openAIResponseErrors';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
+  uploadAndRecordToolAttachments,
 } from '../utils/toolAttachmentUtils';
 import { toOpenAIResponseTools } from '../toolConversion';
 import { ModelHandler } from '../ModelHandler';
@@ -1221,9 +1226,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
       const mediaType = media.media_type ?? '';
+      const classification = classifyMediaEntry(media);
 
       if (
-        media.media_category === 'image' &&
+        classification === 'image' &&
         typeof mediaType === 'string' &&
         mediaType.startsWith('image/')
       ) {
@@ -1241,14 +1247,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // See: https://community.openai.com/t/audio-input-not-working-when-migrating-from-completions-to-responses/1364108/3
       // See: https://github.com/openai/openai-node/commit/9909fef596280fc16174679d97c3e81543c68646
       // TODO: Re-enable when OpenAI makes audio input functional
-      if (media.media_category === 'audio') {
+      if (classification === 'audio') {
         this.logger.warn(
           `Audio input received (${media.file_name}) but the Responses API does not currently support audio input. Skipping.`,
         );
         return [];
       }
 
-      if (mediaType === 'application/pdf') {
+      if (classification === 'pdf') {
         return [
           createInputText(`Document: ${media.file_name}`),
           {
@@ -1259,14 +1265,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ];
       }
 
-      if (media.media_category === 'image') {
+      if (classification === 'image') {
         this.logger.warn(
           `Skipping media ${media.file_name} with unsupported image MIME type: ${mediaType}`,
         );
         return [];
       }
 
-      this.logger.warn(`Unknown media category: ${media.media_category}`);
+      this.logger.warn(unknownMediaCategoryWarning(media));
       return [];
     });
   }
@@ -2590,34 +2596,29 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       arguments: call.raw.arguments,
     };
 
-    // Create mutable copy for adding attachmentSummary/files
-    const finalResult: ToolResult = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
+    const canUpload =
+      canUploadFiles && attachments.length > 0 && client !== undefined;
 
-    let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
-    if (canUploadFiles && attachments.length > 0 && client) {
-      // This upload occurs while assembling the next turn, outside the model
-      // invocation gate. Restore the SDK's ordinary two retries for this
-      // auxiliary request; generation requests keep maxRetries: 0.
-      uploadedAttachments = await uploadToolAttachments(
-        client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
-        attachments,
-        {
-          openRouterRouting: this.isOpenRouterRoutingEnabled(),
-          logger: this.logger,
-        },
-      );
-      if (finalResult.status === 'executed' && uploadedAttachments.length > 0) {
-        finalResult.files = uploadedAttachments.map(
-          ({ attachment, fileId }) => ({
-            path: attachment.path,
-            mimeType: attachment.mimeType,
-            description: attachment.description,
-            fileId,
-          }),
-        );
-      }
-    }
+    // This upload occurs while assembling the next turn, outside the model
+    // invocation gate. Restore the SDK's ordinary two retries for this
+    // auxiliary request; generation requests keep maxRetries: 0.
+    const { finalResult, uploadResult } = await uploadAndRecordToolAttachments(
+      result,
+      canUpload,
+      async () => ({
+        uploaded: await uploadToolAttachments(
+          client!.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
+          attachments,
+          {
+            openRouterRouting: this.isOpenRouterRoutingEnabled(),
+            logger: this.logger,
+          },
+        ),
+      }),
+    );
+    const uploadedAttachments: UploadedOpenAIResponseAttachment[] =
+      uploadResult?.uploaded ?? [];
 
     if (
       attachments.length > 0 &&
