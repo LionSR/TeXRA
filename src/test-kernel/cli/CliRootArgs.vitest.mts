@@ -816,6 +816,22 @@ describe('CLI root argument routing', () => {
     });
   });
 
+  (process.platform === 'win32' ? it : it.skip)(
+    'expands an absolute drive-letter glob',
+    async () => {
+      await withTempDir('texra-cli-drive-glob-', async (root) => {
+        await fs.mkdir(path.join(root, 'refs'));
+        await fs.writeFile(path.join(root, 'refs', 'paper.bib'), 'paper');
+        const pattern = path.join(root, 'refs', '*.bib');
+
+        expect(pattern).toMatch(/^[A-Za-z]:\\/);
+        await expect(
+          expandWorkflowInputSpecs([pattern], root),
+        ).resolves.toEqual(['refs/paper.bib']);
+      });
+    },
+  );
+
   (process.platform === 'win32' ? it.skip : it)(
     'preserves POSIX glob escapes for literal metacharacters',
     async () => {
