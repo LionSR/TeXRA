@@ -863,6 +863,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       streamId,
       streamIds,
       candidateStreamIds,
+      associatedChildStreamIds,
       conflicts,
       hasOrderingCycle,
       hasOrderingAmbiguity,
@@ -877,7 +878,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         meta !== null ||
         resumability.resumable ||
         (streamIds?.length ?? 0) > 0 ||
-        (candidateStreamIds?.length ?? 0) > 0;
+        (candidateStreamIds?.length ?? 0) > 0 ||
+        (associatedChildStreamIds?.length ?? 0) > 0;
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
@@ -892,6 +894,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             ...(candidateStreamIds
               ? [
                   `Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`,
+                ]
+              : []),
+            ...(associatedChildStreamIds
+              ? [
+                  `Associated child streams: ${associatedChildStreamIds.join(', ')}`,
                 ]
               : []),
             ...(conflicts
@@ -924,6 +931,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
         ...(candidateStreamIds
           ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
+          : []),
+        ...(associatedChildStreamIds
+          ? [`Associated child streams: ${associatedChildStreamIds.join(', ')}`]
           : []),
         ...(conflicts
           ? [

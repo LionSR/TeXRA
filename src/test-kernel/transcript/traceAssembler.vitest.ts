@@ -137,6 +137,27 @@ describe('assembleTrace', () => {
     });
   });
 
+  it('reports child-only associations separately from ambiguous archive roots', async () => {
+    const executionId = 'abcde2abcde2' as ExecutionId;
+    const executionConfig = config();
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = `bash@tool#${executionId}` as StreamTabId;
+    const secondChild = `codex@tool#${executionId}` as StreamTabId;
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstChild, executionConfig, executionId);
+    snapshots.setParentStream(firstChild, parent);
+    snapshots.setRunConfig(secondChild, executionConfig, executionId);
+    snapshots.setParentStream(secondChild, parent);
+    await snapshots.flush();
+
+    await expect(assembleTrace(executionId)).resolves.toEqual({
+      status: 'rootStream_missing',
+      associatedChildStreamIds: [firstChild, secondChild],
+    });
+  });
+
   it('resolves a child stream by executionId suffix when its id does not match the derived agent@model#executionId format', async () => {
     // Background child streams (bash/codex/claude subagents, see
     // @tools/childStream.createChildStream) use a tool-specific

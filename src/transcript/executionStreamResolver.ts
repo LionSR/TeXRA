@@ -22,6 +22,8 @@ export interface PersistedStreamIdResolution {
   readonly fallbackStreamIds?: readonly StreamTabId[];
   /** Exact-execution sidecars eligible for overlap-gated archive merging. */
   readonly exactExecutionCandidateStreamIds?: readonly StreamTabId[];
+  /** Proven child sidecars associated with the run when no archive root exists. */
+  readonly associatedChildStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -181,7 +183,7 @@ export async function resolvePersistedStreamIdForExecution(
           ? {
               exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
             }
-          : {}),
+          : { associatedChildStreamIds: metaMatched }),
       };
     }
     const suffixMatched = findExecutionSuffixMatches(

@@ -1640,6 +1640,34 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('retains existence evidence when only several proven child streams remain', async () => {
+    const executionId = '0999ce0999ce' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = 'bash@tool#0999ce0999ce' as StreamTabId;
+    const secondChild = 'codex@tool#0999ce0999ce' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstChild, runConfig('bash'), executionId);
+    snapshots.setParentStream(firstChild, parent);
+    snapshots.setRunConfig(secondChild, runConfig('codex'), executionId);
+    snapshots.setParentStream(secondChild, parent);
+    await snapshots.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+      associatedChildStreamIds: [firstChild, secondChild],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(
+      `Associated child streams: ${firstChild}, ${secondChild}`,
+    );
+    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
+  });
+
   it('reads a historical execution whose canonical stream is delegated', async () => {
     const executionId = '0999cd0999cd' as ExecutionId;
     const streamId = 'child@tool#0999cd0999cd' as StreamTabId;

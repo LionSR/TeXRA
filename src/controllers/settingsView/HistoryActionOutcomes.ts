@@ -58,6 +58,8 @@ export function htmlExportErrorMessage(
   switch (status) {
     case 'config_missing':
       return HISTORY_ITEM_NOT_FOUND_MESSAGE;
+    case 'rootStream_missing':
+      return 'No root transcript is available for trace export; this execution is represented only by delegated child streams.';
     case 'streamId_ambiguous':
       return 'Several historical transcripts match this execution, but none is proven canonical for trace export.';
     case 'streamLogs_missing':

@@ -152,6 +152,13 @@ export async function runHistoryExport(
             '` to see what is available.',
         );
         break;
+      case 'rootStream_missing':
+        writeTextStderr(
+          `Execution ${id} is represented only by delegated child transcript ` +
+            `sidecars (${traceResult.associatedChildStreamIds.join(', ')}); ` +
+            'no root transcript is available, so HTML trace export was not written.',
+        );
+        break;
       case 'streamId_ambiguous':
         writeTextStderr(
           `Execution ${id} has multiple associated transcript sidecars ` +

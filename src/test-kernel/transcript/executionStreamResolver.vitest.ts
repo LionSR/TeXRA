@@ -273,7 +273,10 @@ describe('resolvePersistedStreamIdForExecution', () => {
       resolvePersistedStreamIdForExecution(executionId, {
         snapshotStore: new StreamSnapshotStore(),
       }),
-    ).resolves.toEqual({ source: 'streamDataMeta' });
+    ).resolves.toEqual({
+      source: 'streamDataMeta',
+      associatedChildStreamIds: [firstChild, secondChild],
+    });
   });
 
   it('preserves the legacy streamData suffix fallback', async () => {

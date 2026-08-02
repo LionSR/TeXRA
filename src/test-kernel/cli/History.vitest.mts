@@ -1409,6 +1409,28 @@ describe('CLI history runtime', () => {
         expect(stderr).not.toContain('texra history show');
       });
 
+      it('reports child-only transcript associations without calling them ambiguous', async () => {
+        mocks.assembleTrace.mockResolvedValue({
+          status: 'rootStream_missing',
+          associatedChildStreamIds: ['bash@tool#a1', 'codex@tool#a1'],
+        });
+
+        const exitCode = await runHistoryExport(
+          makeContext('/resources'),
+          'a1' as ExecutionId,
+          'html',
+          {},
+        );
+
+        expect(exitCode).toBe(CliExitCode.Usage);
+        expect(stdout).toBe('');
+        expect(stderr).toContain(
+          'represented only by delegated child transcript sidecars (bash@tool#a1, codex@tool#a1)',
+        );
+        expect(stderr).toContain('HTML trace export was not written');
+        expect(stderr).not.toContain('multiple associated transcript');
+      });
+
       it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
         const resourcesPath = await makeTempDir(
           'texra-history-export-missing-src-',

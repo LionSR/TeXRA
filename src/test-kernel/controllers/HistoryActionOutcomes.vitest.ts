@@ -39,6 +39,9 @@ describe('HistoryActionOutcomes', () => {
     expect(htmlExportErrorMessage('config_missing')).toBe(
       'History item not found',
     );
+    expect(htmlExportErrorMessage('rootStream_missing')).toBe(
+      'No root transcript is available for trace export; this execution is represented only by delegated child streams.',
+    );
     expect(htmlExportErrorMessage('streamId_ambiguous')).toBe(
       'Several historical transcripts match this execution, but none is proven canonical for trace export.',
     );

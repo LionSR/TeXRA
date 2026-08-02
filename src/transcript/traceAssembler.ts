@@ -25,11 +25,16 @@ export type AssembleTraceResult =
   | {
       readonly status: 'streamId_ambiguous';
       readonly candidateStreamIds: readonly StreamTabId[];
+    }
+  | {
+      readonly status: 'rootStream_missing';
+      readonly associatedChildStreamIds: readonly StreamTabId[];
     };
 
 /**
- * `streamId_ambiguous` means several historical sidecars claim the execution,
- * but persisted evidence does not identify one as canonical. By contrast,
+ * `streamId_ambiguous` means several historical root sidecars claim the
+ * execution, but persisted evidence does not identify one as canonical.
+ * `rootStream_missing` means only proven child sidecars remain. By contrast,
  * `streamLogs_missing` is the expected outcome for executions recorded before
  * the headless-persistence fix (TeXRA#7057), when no replayable transcript was
  * written. Callers should surface both distinctions rather than reporting a
@@ -59,6 +64,12 @@ export async function assembleTrace(
     streamLogStore,
   });
   if (resolved && !resolved.streamId) {
+    if (resolved.associatedChildStreamIds) {
+      return {
+        status: 'rootStream_missing',
+        associatedChildStreamIds: resolved.associatedChildStreamIds,
+      };
+    }
     return {
       status: 'streamId_ambiguous',
       candidateStreamIds: resolved.exactExecutionCandidateStreamIds ?? [],

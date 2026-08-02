@@ -108,6 +108,8 @@ export interface CompletedRunConversationReadResult {
   readonly streamIds?: readonly StreamTabId[];
   /** Exact-execution sidecars excluded because persisted evidence is insufficient. */
   readonly candidateStreamIds?: readonly StreamTabId[];
+  /** Proven child sidecars associated with the run when no archive root exists. */
+  readonly associatedChildStreamIds?: readonly StreamTabId[];
   /** Same row ID persisted with incompatible conversation payload or state. */
   readonly conflicts?: readonly CompletedRunConversationConflict[];
   /** Overlap constraints contradicted one another. */
@@ -735,7 +737,15 @@ async function readSidecarConversation(
     return null;
   }
 
-  if (!resolved.streamId) return null;
+  if (!resolved.streamId) {
+    return resolved.associatedChildStreamIds
+      ? {
+          conversation: null,
+          source: 'none',
+          associatedChildStreamIds: resolved.associatedChildStreamIds,
+        }
+      : null;
+  }
   const primaryConversation = await conversationFromStream(
     streamLogStore,
     resolved.streamId,

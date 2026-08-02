@@ -151,6 +151,28 @@ describe('ChatExportController.exportAsHtml', () => {
     expect(outcome).toEqual({ status: 'streamId_ambiguous' });
   });
 
+  it('returns rootStream_missing when only delegated child sidecars remain', async () => {
+    const templatePath = await writeTemplate();
+    const executionId = 'aaa556aaa556' as ExecutionId;
+    const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [
+      `bash@tool#${executionId}`,
+      `codex@tool#${executionId}`,
+    ] as StreamTabId[]) {
+      snapshots.setRunConfig(streamId, executionConfig, executionId);
+      snapshots.setParentStream(streamId, parent);
+    }
+    await snapshots.flush();
+
+    const outcome = await controller.exportAsHtml(executionId, templatePath);
+
+    expect(outcome).toEqual({ status: 'rootStream_missing' });
+  });
+
   it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {
     const templatePath = await writeTemplate();
     const executionId = 'exec-full' as ExecutionId;
