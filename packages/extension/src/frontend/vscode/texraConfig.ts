@@ -117,6 +117,14 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
   ): ExtensionConfigWorkspaceTransition {
     const generation = ++this.transitionGeneration;
     const completion = this.workspaceQueue.add(async () => {
+      if (
+        this.storage.hasPendingWorkspaceStorageChange?.({
+          workspacePath: workspaceRoot,
+        }) === false
+      ) {
+        return;
+      }
+
       let previousStore: JsonStore | undefined;
       let finalized = false;
       const rollbackConfig = () => {
