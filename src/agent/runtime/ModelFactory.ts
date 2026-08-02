@@ -410,6 +410,7 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
+  assertGoogleInteractionsRoutable(config, useOpenRouter);
   const compatibilityKey = modelHandlerCompatibilityKey(
     config,
     useOpenRouter,
