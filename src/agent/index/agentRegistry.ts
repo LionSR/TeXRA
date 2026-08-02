@@ -1,7 +1,5 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import * as path from 'node:path';
-
 import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
@@ -21,7 +19,6 @@ import {
   agentKeyOf,
   agentName,
 } from '@shared/schemas/agent';
-import { unique } from '@utils/core';
 import {
   LEGACY_AGENT_ALIASES,
   LOOKUP_PRIORITY,
@@ -45,46 +42,6 @@ import type { AgentEntry, ResolvedAgent } from './agentEntry';
 const CHANNEL = 'agentRegistry';
 
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
-
-/** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
-const LEGACY_BUILTIN_PREFIX = 'builtIn:';
-const NEW_BUILTIN_PREFIX = 'builtInWorkflow:';
-
-function isLegacyBuiltInKey(k: string): boolean {
-  return (
-    k.startsWith(LEGACY_BUILTIN_PREFIX) && !k.startsWith('builtInToolUse:')
-  );
-}
-
-/**
- * Category-to-key map for the legacy visibility mirrors. Compatibility
- * migrations iterate it so the relationship is not re-encoded per function;
- * current roster selection is owned by AgentRosterController.
- */
-const ENABLED_AGENTS_STATE_KEY: Record<AgentCategory, WorkspaceStateKey> = {
-  [AgentCategory.Workflow]: WorkspaceStateKey.ENABLED_AGENTS,
-  [AgentCategory.ToolUse]: WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-};
-
-/**
- * Migrate persisted `builtIn:*` keys to `builtInWorkflow:*`.
- * Idempotent: skips a state key when it holds no legacy keys.
- */
-function migrateLegacySourceKeys(): void {
-  for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
-    const stored = platform().workspaceState.get<string[]>(stateKey, []);
-    if (!stored?.length) continue;
-    if (!stored.some(isLegacyBuiltInKey)) continue;
-
-    const migrated = stored.map((k) =>
-      isLegacyBuiltInKey(k)
-        ? NEW_BUILTIN_PREFIX + k.slice(LEGACY_BUILTIN_PREFIX.length)
-        : k,
-    );
-    void platform().workspaceState.update(stateKey, migrated);
-    logger.info(CHANNEL, `Migrated legacy builtIn keys in ${stateKey}`);
-  }
-}
 
 // =============================================================================
 // STATE
@@ -167,10 +124,8 @@ function startLoad(includeRemote: boolean, loadEpoch: number): Promise<void> {
  * immediately and are re-merged by every subsequent load or refresh.
  */
 export function registerInlineAgents(definitions: readonly unknown[]): void {
-  const toolUseOverrides = getToolUseOverrides();
   for (const entry of defineInlineAgents(definitions)) {
-    const published = applyToolUseOverride(entry, toolUseOverrides);
-    cache.set(agentKeyOf(published), published);
+    cache.set(agentKeyOf(entry), entry);
   }
 }
 
@@ -190,9 +145,6 @@ async function doLoad(
   loadEpoch: number,
 ): Promise<boolean> {
   const startTime = Date.now();
-
-  // Migrate legacy builtIn:* → builtInWorkflow:* in persisted state
-  migrateLegacySourceKeys();
 
   // Load from all sources in parallel
   const dirs = platform().agentDirectories;
@@ -222,173 +174,18 @@ async function doLoad(
     ...remoteEntries,
   ];
 
-  migrateFilenameAgentNameKeys(allEntries);
-
-  // Apply category overrides from config
-  const toolUseOverrides = getToolUseOverrides();
-
   if (loadEpoch !== epoch) return false;
 
   cache.clear();
   for (const entry of allEntries) {
-    const published = applyToolUseOverride(entry, toolUseOverrides);
-    cache.set(agentKeyOf(published), published);
+    cache.set(agentKeyOf(entry), entry);
   }
-
-  // Migrate legacy agent names (chat → assistant) in persisted visibility
-  // sets. Runs after registration so a user-defined agent that still uses
-  // the legacy name keeps its key.
-  migrateLegacyAgentNameKeys();
 
   logger.info(
     CHANNEL,
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
   return true;
-}
-
-function getToolUseOverrides(): Set<string> {
-  return new Set(
-    platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      [],
-    ),
-  );
-}
-
-/**
- * Project a config-level tool-use override onto an entry. Pure: an overridden
- * entry is returned as a new value, so publishing into the cache never mutates
- * the definition a source (inline registration, directory scan, remote catalog)
- * still owns.
- */
-function applyToolUseOverride(
-  entry: AgentEntry,
-  toolUseOverrides: ReadonlySet<string>,
-): AgentEntry {
-  if (!toolUseOverrides.has(entry.name)) return entry;
-  const { rounds: _rounds, ...rest } = entry;
-  return { ...rest, category: AgentCategory.ToolUse };
-}
-
-/**
- * Rewrite persisted enabled-agent keys whose name part is a legacy alias
- * (e.g. `chat` or `builtInToolUse:chat`) to the canonical agent name. The
- * Agents settings UI matches these keys literally, so leaving stale legacy
- * names in state would make an older host disagree with the current roster.
- * A registered agent that genuinely uses the legacy name (e.g. a custom
- * `chat`) keeps its key untouched.
- */
-function migrateLegacyAgentNameKeys(): void {
-  for (const category of [
-    AgentCategory.Workflow,
-    AgentCategory.ToolUse,
-  ] as const) {
-    rewriteEnabledAgentKeys(
-      ENABLED_AGENTS_STATE_KEY[category],
-      'Migrated legacy agent names',
-      (key) => {
-        const name = agentName(key);
-        const alias = LEGACY_AGENT_ALIASES[name];
-        if (!alias) return key;
-        if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
-          return key;
-        }
-        // Rewrite the name part to the alias target, preserving the original
-        // key's shape (bare vs source-qualified) when it resolves to an agent
-        // IN THIS LIST'S CATEGORY. Otherwise resolve the alias within the
-        // category, so the rewrite can never persist a wrong-category key, e.g.
-        // a custom workflow `assistant` shadowing the built-in tool-use one
-        // must not land in tool-use visibility state (the settings UI matches
-        // keys literally, so a cross-category key would orphan the toggle).
-        // Keep the original key when no agent of this category matches, rather
-        // than inventing one.
-        const rewritten = withAgentName(key, alias);
-        if (getAgent(rewritten)?.category === category) return rewritten;
-        const canonical = getCategoryAgent(category, alias);
-        return canonical ? agentKeyOf(canonical) : key;
-      },
-    );
-  }
-}
-
-/**
- * Apply `rewrite` to every persisted enabled-agent key in `stateKey` and persist
- * the deduplicated result when anything changed. Shared by the legacy-name and
- * filename-based migrations so the load/compare/persist/log boilerplate lives in
- * one place.
- */
-function rewriteEnabledAgentKeys(
-  stateKey: WorkspaceStateKey,
-  description: string,
-  rewrite: (key: string) => string,
-): void {
-  const stored = platform().workspaceState.get<string[]>(stateKey, []);
-  if (!stored?.length) return;
-
-  const migrated = stored.map(rewrite);
-  if (migrated.every((key, i) => key === stored[i])) return;
-
-  void platform().workspaceState.update(stateKey, unique(migrated));
-  logger.info(CHANNEL, `${description} in ${stateKey}`);
-}
-
-/**
- * Before canonical YAML names, local agents were keyed by their filename. Keep
- * persisted visibility selections alive after switching identity to `name:`.
- */
-function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
-  const currentKeys = new Set<string>();
-  const currentNames = new Set<string>();
-  for (const entry of entries) {
-    currentKeys.add(agentKeyOf(entry));
-    currentNames.add(entry.name);
-  }
-  // `null` marks an old name that several agents claim; ambiguous names are
-  // left untouched.
-  const qualified = new Map<string, string | null>();
-  const bare = new Map<string, string | null>();
-
-  for (const entry of entries) {
-    if (!entry.path) continue;
-    const oldName = path.basename(entry.path, '.yaml');
-    if (!oldName || oldName === entry.name) continue;
-
-    const oldKey = agentKey(entry.source, oldName);
-    if (!currentKeys.has(oldKey)) {
-      recordRenameTarget(qualified, oldKey, agentKeyOf(entry));
-    }
-    if (!currentNames.has(oldName)) {
-      recordRenameTarget(bare, oldName, entry.name);
-    }
-  }
-
-  for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
-    rewriteEnabledAgentKeys(
-      stateKey,
-      'Migrated filename-based agent names',
-      (key) => {
-        const name = agentName(key);
-        // A source-qualified key differs from its bare name; match it in full,
-        // otherwise map the bare name.
-        const target = key !== name ? qualified.get(key) : bare.get(name);
-        return target ?? key;
-      },
-    );
-  }
-}
-
-function recordRenameTarget(
-  targets: Map<string, string | null>,
-  oldName: string,
-  target: string,
-): void {
-  const existing = targets.get(oldName);
-  if (existing === undefined) {
-    targets.set(oldName, target);
-  } else if (existing !== target) {
-    targets.set(oldName, null);
-  }
 }
 
 /**

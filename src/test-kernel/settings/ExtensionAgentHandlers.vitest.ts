@@ -171,20 +171,9 @@ describe('extension settings AgentHandlers', () => {
       presetId: 'physicist',
     });
 
-    expect(workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      expect.arrayContaining([
-        'builtInWorkflow:correct',
-        'builtInWorkflow:polish',
-      ]),
-    );
     expect(
-      workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual(
-      expect.arrayContaining([
-        'builtInToolUse:orchestrator',
-        'custom:research',
-      ]),
-    );
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'team', teamId: 'physicist' });
     expect(refreshAfterAgentMutation).toHaveBeenCalledWith(
       'orchestrator',
       true,
@@ -262,12 +251,12 @@ describe('extension settings AgentHandlers', () => {
     });
     expect(
       update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toHaveLength(1);
     expect(
-      workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual(['remote:orchestrator']);
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'team', teamId: 'remote-team' });
   });
 
   it('does not write roster state when team preflight is cancelled', async () => {
@@ -286,9 +275,7 @@ describe('extension settings AgentHandlers', () => {
     expect(refreshAfterAgentMutation).not.toHaveBeenCalled();
     expect(
       update.mock.calls.some(
-        ([key]) =>
-          key === WorkspaceStateKey.ENABLED_AGENTS ||
-          key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toBe(false);
   });

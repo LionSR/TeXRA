@@ -271,10 +271,10 @@ describe('CLI init command', () => {
         outputFormat: 'text',
         gitignore: 'created',
         config: {
-          model: 'deepseekproT',
-          outputFormat: 'text',
-          approvalPolicy: 'ask',
-          chat: { agent: 'assistant', model: 'deepseekproT' },
+          'texra.model': 'deepseekproT',
+          'texra.outputFormat': 'text',
+          'texra.approvalPolicy': 'ask',
+          'texra.chat': { agent: 'assistant', model: 'deepseekproT' },
         },
       },
     });

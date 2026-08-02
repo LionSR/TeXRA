@@ -28,7 +28,6 @@ describe('LatexRecommendedSettingsController', () => {
       globalValues: {
         'explorer.autoRevealExclude': {
           '**/node_modules/': true,
-          'build/': true,
         },
       },
     });
@@ -54,7 +53,6 @@ describe('LatexRecommendedSettingsController', () => {
         'explorer.autoRevealExclude': {
           '**/build/': true,
           '**/node_modules/': true,
-          'build/': true,
         },
       },
     });
@@ -90,7 +88,6 @@ describe('LatexRecommendedSettingsController', () => {
       globalValues: {
         'explorer.autoRevealExclude': {
           '**/build/': true,
-          'build/': true,
         },
       },
     });
@@ -120,19 +117,6 @@ describe('LatexRecommendedSettingsController', () => {
     });
 
     assert.equal(controller.isRecommendedValueSet('outDir'), true);
-    assert.equal(controller.isRecommendedValueSet('autoRevealExclude'), true);
-  });
-
-  it('treats legacy autoRevealExclude keys as set for migration display', () => {
-    const controller = createController({
-      explicitlySet: ['explorer.autoRevealExclude'],
-      config: {
-        'explorer.autoRevealExclude': {
-          'build/': true,
-        },
-      },
-    });
-
     assert.equal(controller.isRecommendedValueSet('autoRevealExclude'), true);
   });
 

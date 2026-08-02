@@ -32,8 +32,6 @@ interface LatexRecommendedObjectSetting {
   key: string;
   value: Record<string, unknown>;
   field: LatexRecommendedSettingField;
-  /** Object keys from older TeXRA versions to migrate when writing. */
-  legacyKeys?: string[];
 }
 
 type LatexRecommendedSetting =
@@ -52,7 +50,6 @@ const LATEX_RECOMMENDED_SETTINGS: LatexRecommendedSetting[] = [
     key: 'explorer.autoRevealExclude',
     value: { '**/build/': true },
     field: 'autoRevealExclude',
-    legacyKeys: ['build/'],
   },
 ];
 
@@ -89,12 +86,8 @@ export class LatexRecommendedSettingsController {
 
     if (typeof current !== 'object' || current === null) return false;
     const currentObject = current as Record<string, unknown>;
-    return (
-      Object.entries(setting.value).every(
-        ([key, value]) => currentObject[key] === value,
-      ) ||
-      (setting.legacyKeys?.some((key) => currentObject[key] !== undefined) ??
-        false)
+    return Object.entries(setting.value).every(
+      ([key, value]) => currentObject[key] === value,
     );
   }
 
@@ -111,10 +104,6 @@ export class LatexRecommendedSettingsController {
       typeof globalValue === 'object' && globalValue !== null
         ? { ...(globalValue as Record<string, unknown>) }
         : {};
-
-    for (const legacyKey of setting.legacyKeys ?? []) {
-      delete remaining[legacyKey];
-    }
 
     if (reset) {
       for (const recommendedKey of Object.keys(setting.value)) {

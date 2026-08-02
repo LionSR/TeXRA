@@ -9,7 +9,6 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
-import { isStored } from '@test/support/settingsStoresFake';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 import { commandOf } from './desktopSettingsTestSupport';
@@ -193,9 +192,13 @@ describe('DefaultDesktopAgentSettingsController', () => {
       enabled: false,
     });
 
-    expect(workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      expect.not.arrayContaining(['builtInWorkflow:polish', 'polish']),
-    );
+    expect(
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: ['builtInWorkflow:correct'],
+      toolUseAgentKeys: 'all',
+    });
     expect(posted.map(commandOf)).toEqual(
       expect.arrayContaining([
         SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
@@ -270,20 +273,9 @@ describe('DefaultDesktopAgentSettingsController', () => {
       presetId: 'physicist',
     });
 
-    expect(workspaceState.get(WorkspaceStateKey.ENABLED_AGENTS)).toEqual(
-      expect.arrayContaining([
-        'builtInWorkflow:correct',
-        'builtInWorkflow:polish',
-      ]),
-    );
     expect(
-      workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual(
-      expect.arrayContaining([
-        'builtInToolUse:orchestrator',
-        'custom:research',
-      ]),
-    );
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'team', teamId: 'physicist' });
     expect(
       posted.find(
         (message) =>
@@ -396,17 +388,12 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
     expect(
       update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.ENABLED_AGENTS,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toHaveLength(1);
     expect(
-      update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toHaveLength(1);
-    expect(
-      workspaceState.get(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toEqual(['remote:orchestrator']);
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'team', teamId: 'remote-team' });
   });
 
   it('does not write roster state when team preflight is cancelled', async () => {
@@ -443,9 +430,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(refreshAgents).not.toHaveBeenCalled();
     expect(
       update.mock.calls.some(
-        ([key]) =>
-          key === WorkspaceStateKey.ENABLED_AGENTS ||
-          key === WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toBe(false);
   });
@@ -585,11 +570,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
 
     expect(errorMessages).toEqual(['Unknown team: missing-team']);
-    expect(isStored(workspaceState, WorkspaceStateKey.ENABLED_AGENTS)).toBe(
-      false,
-    );
     expect(
-      isStored(workspaceState, WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS),
-    ).toBe(false);
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toBeUndefined();
   });
 });

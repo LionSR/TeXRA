@@ -72,7 +72,7 @@ describe('ProgressWorkflowActionsController', () => {
 
   it('deduplicates generated outputs for pack and includes execution context', async () => {
     const config = createWorkflowConfig({
-      inputFiles: ['extra-input.tex'],
+      inputFiles: ['extra-input.tex', 'second-input.tex'],
       outputFiles: ['declared.tex', '/workspace/generated.tex'],
     });
     const { controller, fileOperations } = createProgressWorkflowActionsHarness(
@@ -94,7 +94,7 @@ describe('ProgressWorkflowActionsController', () => {
           streamId: 'stream-a',
           agent: 'correct',
           model: 'gemini31p',
-          inputFile: 'input.tex',
+          inputFile: 'extra-input.tex',
           outputFiles: [
             'declared.tex',
             '/workspace/generated.tex',
