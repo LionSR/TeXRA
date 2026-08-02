@@ -453,16 +453,30 @@ async function loadConversationStreams(
 function sharedRows(
   left: LoadedConversationStream,
   right: LoadedConversationStream,
-): { readonly overlaps: number; readonly conflictingIds: string[] } {
+): {
+  readonly overlaps: number;
+  readonly conflictingIds: string[];
+  readonly conversationConflictingIds: string[];
+} {
   let overlaps = 0;
   const conflictingIds: string[] = [];
+  const conversationConflictingIds: string[] = [];
   for (const [id, leftEntry] of left.entriesById) {
     const rightEntry = right.entriesById.get(id);
     if (!rightEntry) continue;
-    if (rowsAgree(leftEntry, rightEntry)) overlaps++;
-    else conflictingIds.push(id);
+    if (rowsAgree(leftEntry, rightEntry)) {
+      overlaps++;
+      continue;
+    }
+    conflictingIds.push(id);
+    if (
+      conversationMessagesForEntry(leftEntry).length > 0 ||
+      conversationMessagesForEntry(rightEntry).length > 0
+    ) {
+      conversationConflictingIds.push(id);
+    }
   }
-  return { overlaps, conflictingIds };
+  return { overlaps, conflictingIds, conversationConflictingIds };
 }
 
 /**
@@ -482,17 +496,18 @@ async function mergedCandidateConversation(
   const conflictStreamsById = new Map<string, Set<StreamTabId>>();
   for (const [index, left] of streams.entries()) {
     for (const right of streams.slice(index + 1)) {
-      const { overlaps, conflictingIds } = sharedRows(left, right);
-      if (conflictingIds.length > 0) {
+      const { overlaps, conflictingIds, conversationConflictingIds } =
+        sharedRows(left, right);
+      if (conversationConflictingIds.length > 0) {
         conflictingPairs.push([left.streamId, right.streamId]);
-        for (const id of conflictingIds) {
-          const conflictStreams = conflictStreamsById.get(id) ?? new Set();
-          conflictStreams.add(left.streamId);
-          conflictStreams.add(right.streamId);
-          conflictStreamsById.set(id, conflictStreams);
-        }
       }
-      if (overlaps === 0 || conflictingIds.length > 0) continue;
+      for (const id of conflictingIds) {
+        const conflictStreams = conflictStreamsById.get(id) ?? new Set();
+        conflictStreams.add(left.streamId);
+        conflictStreams.add(right.streamId);
+        conflictStreamsById.set(id, conflictStreams);
+      }
+      if (overlaps === 0 || conversationConflictingIds.length > 0) continue;
       const leftNeighbors = neighbors.get(left.streamId) ?? new Set();
       leftNeighbors.add(right.streamId);
       neighbors.set(left.streamId, leftNeighbors);

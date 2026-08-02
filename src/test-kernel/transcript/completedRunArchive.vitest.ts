@@ -1296,6 +1296,121 @@ describe('completedRunArchive facade', () => {
     expect(secondPage.output).toContain('Next offset: none');
   });
 
+  it('reports divergent diagnostic payloads without vetoing a unique conversation merge', async () => {
+    const executionId = '0888b00888b0' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b00888b0' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b00888b0' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const prompt = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Payload prompt' }),
+      id: 'payload-prompt',
+    };
+    const answer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Payload answer' }),
+      id: 'payload-answer',
+    };
+    const statistics = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, {
+        text: 'Usage branch A',
+        data: { inputTokens: 10 },
+      }),
+      id: 'divergent-statistics',
+    };
+    const followUp = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Payload continuation',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [prompt, statistics, answer]],
+        [
+          continuation,
+          [
+            prompt,
+            {
+              ...statistics,
+              text: 'Usage branch B',
+              data: { inputTokens: 20 },
+            },
+            answer,
+            followUp,
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conflicts: [
+        {
+          rowId: 'divergent-statistics',
+          streamIds: [canonical, continuation],
+        },
+      ],
+      conversation: [
+        { role: 'user', content: 'Payload prompt' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Payload answer' }],
+        },
+        { role: 'user', content: 'Payload continuation' },
+      ],
+    });
+  });
+
+  it('contracts a copied diagnostic bridge while preserving conversation order', async () => {
+    const executionId = '0888b10888b1' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b10888b1' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Before diagnostic bridge',
+    });
+    const bridge = {
+      ...logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Copied status' }),
+      id: 'copied-diagnostic-bridge',
+    };
+    const second = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'After diagnostic bridge',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [first, bridge]],
+        [continuation, [bridge, second]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conversation: [
+        { role: 'user', content: 'Before diagnostic bridge' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'After diagnostic bridge' }],
+        },
+      ],
+    });
+  });
+
   it('reports acyclic ambiguity without selecting an unproven archive', async () => {
     const executionId = '0888b70888b7' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b70888b7' as StreamTabId;
