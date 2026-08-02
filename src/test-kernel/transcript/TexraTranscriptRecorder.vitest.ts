@@ -263,9 +263,9 @@ describe('attachTranscriptRecorder workflow task state', () => {
       input: { path: 'paper.tex' },
     });
     trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'task:planned',
-      task: {
+      call: {
         id: 'planned',
         label: 'Audit later',
         status: 'planned',
@@ -328,9 +328,9 @@ describe('attachTranscriptRecorder workflow task state', () => {
     });
 
     trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'task:planned',
-      task: {
+      call: {
         id: 'planned',
         label: 'Audit later',
         status: 'skipped',
@@ -452,9 +452,9 @@ describe('attachTranscriptRecorder workflow task state', () => {
     );
 
     trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'task-card',
-      task: {
+      call: {
         id: 'audit-core',
         label: 'Audit core',
         phase: 'Audit',
@@ -462,10 +462,10 @@ describe('attachTranscriptRecorder workflow task state', () => {
       },
     });
     trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'task-card',
       stageId: 'phase-audit',
-      task: {
+      call: {
         id: 'audit-core',
         label: 'Audit core',
         phase: 'Audit',
@@ -564,9 +564,9 @@ describe('attachTranscriptRecorder record-time secret redaction', () => {
     );
 
     trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'task-card',
-      task: {
+      call: {
         id: 'audit-core',
         label: `Audit ${API_KEY}`,
         status: 'failed',

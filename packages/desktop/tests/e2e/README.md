@@ -32,7 +32,7 @@ refresh after a deliberate UI change:
 
 ## Workspace folder
 
-Each launch passes `--texra-workspace <tmpdir>` so the app doesn't pop the
+Each launch passes `--texra-workspace-path <tmpdir>` so the app doesn't pop the
 "open folder" dialog. Pass `workspacePath` to `launchTexraApp()` if a
 specific layout is required.
 

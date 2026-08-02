@@ -6,15 +6,7 @@ export interface WorkspacePathOptions {
 }
 
 const WORKSPACE_PRESENT_ARG = '--texra-has-workspace=';
-// Strip the retired separate-process flag from relaunch arguments. Electron's
-// single-instance lifecycle cannot safely host a second process that shares
-// the same profile and application state.
-const LEGACY_NEW_WINDOW_ARG = '--texra-new-window';
-const WORKSPACE_PATH_FLAGS = [
-  '--texra-workspace-path',
-  '--texra-workspace',
-] as const;
-const CANONICAL_WORKSPACE_PATH_FLAG = WORKSPACE_PATH_FLAGS[0];
+const WORKSPACE_PATH_FLAG = '--texra-workspace-path';
 export const DESKTOP_WORKSPACE_PATH_STATE_KEY = 'texra.desktop.workspacePath';
 
 export function getWorkspacePathInput(
@@ -39,7 +31,6 @@ export function withWorkspacePathArg(
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg == null) continue;
-    if (arg === LEGACY_NEW_WINDOW_ARG) continue;
     if (isDesktopProtocolUrl(arg)) continue;
     if (isWorkspacePathFlag(arg)) {
       const value = argv[index + 1];
@@ -51,7 +42,7 @@ export function withWorkspacePathArg(
     if (isWorkspacePathAssignment(arg)) continue;
     nextArgs.push(arg);
   }
-  nextArgs.push(`${CANONICAL_WORKSPACE_PATH_FLAG}=${workspacePath}`);
+  nextArgs.push(`${WORKSPACE_PATH_FLAG}=${workspacePath}`);
   return nextArgs;
 }
 
@@ -63,10 +54,6 @@ export function hasResolvedWorkspacePath(
   return flag?.slice(WORKSPACE_PRESENT_ARG.length) === '1';
 }
 
-/**
- * Parse workspace path from argv with flexible flag name support.
- * Handles both `--texra-workspace-path` and `--texra-workspace` formats.
- */
 export function parseWorkspacePathFromArgv(
   argv: readonly string[],
 ): string | undefined {
@@ -90,9 +77,9 @@ function readWorkspacePathValue(arg: string | undefined): string | undefined {
 }
 
 function isWorkspacePathFlag(arg: string): boolean {
-  return (WORKSPACE_PATH_FLAGS as readonly string[]).includes(arg);
+  return arg === WORKSPACE_PATH_FLAG;
 }
 
 function isWorkspacePathAssignment(arg: string): boolean {
-  return WORKSPACE_PATH_FLAGS.some((flag) => arg.startsWith(`${flag}=`));
+  return arg.startsWith(`${WORKSPACE_PATH_FLAG}=`);
 }

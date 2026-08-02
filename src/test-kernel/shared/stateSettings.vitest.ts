@@ -416,7 +416,7 @@ describe('state settings catalog', () => {
 
   it('shares no keys with the config-tree catalog', () => {
     // The two catalogs must stay disjoint: a state-backed key must never reach
-    // the package.json generator via CoreSettingsShape, and a config key must
+    // the shared config schema via CoreSettingsShape, and a config key must
     // never be double-registered through the catalog.
     const coreKeys = new Set(CORE_SETTING_PATHS.map((path) => `texra.${path}`));
     for (const key of STATE_SETTING_KEYS) {

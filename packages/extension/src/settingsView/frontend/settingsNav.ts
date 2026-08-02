@@ -113,7 +113,8 @@ const SETTINGS_GROUP_ICONS: Record<
   (typeof SETTINGS_TAB_GROUPS)[number]['label'],
   TeXRAIconName
 > = {
-  'Account & Access': 'key',
+  Account: 'key',
+  Models: 'brain',
   Agents: 'diagram-project',
   Capabilities: 'bolt',
   Workspace: 'folder-tree',

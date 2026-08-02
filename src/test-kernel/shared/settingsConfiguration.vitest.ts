@@ -10,6 +10,7 @@ import {
   flattenTexraSettings,
   getTexraSettingDefault,
   TEXRA_SETTING_KEYS,
+  VSCODE_CONTRIBUTED_SETTING_KEYS,
   TEXRA_SETTING_PATHS,
   TexraSettingsSchema,
 } from '@extensionSchemas/texraSettings';
@@ -47,10 +48,8 @@ const packageJson = packageRequire(
 
 function getPackageConfigurationSections(): PackageConfigurationSection[] {
   const configuration = packageJson.contributes?.configuration;
-  if (!Array.isArray(configuration)) {
-    assert.fail('package.json contributes.configuration must be an array');
-  }
-  return configuration;
+  if (configuration === undefined) return [];
+  return Array.isArray(configuration) ? configuration : [configuration];
 }
 
 function getPackageConfigurationProperties(): Record<
@@ -71,9 +70,6 @@ describe('TexraSettingsSchema', () => {
 
     assert.equal(parsed.model.compactionThresholdPercent, 75);
     assert.deepEqual(parsed.latex.customReplacements, {});
-    assert.equal(parsed.apiKeys.set, null);
-    assert.equal(parsed.apiKeys.remove, null);
-    assert.deepEqual(parsed.files.included.editedExtensions, ['.txt', '.tex']);
     assert.equal(parsed.model.useGoogleInteractionsServerState, true);
     assert.deepEqual(parsed, DEFAULT_TEXRA_SETTINGS);
   });
@@ -117,32 +113,14 @@ describe('TexraSettingsSchema', () => {
     const flat = flattenTexraSettings();
 
     assert.equal(Object.keys(flat).length, TEXRA_SETTING_PATHS.length);
-    assert.equal(flat['texra.apiKeys.set'], null);
     assert.equal(flat['texra.model.retry.maxAttempts'], 2);
   });
 
   it('covers every package.json contributed setting key', () => {
     const packageKeys = Object.keys(getPackageConfigurationProperties()).sort();
-    const schemaKeys = [...TEXRA_SETTING_KEYS].sort();
+    const schemaKeys = [...VSCODE_CONTRIBUTED_SETTING_KEYS].sort();
 
     assert.deepEqual(schemaKeys, packageKeys);
-  });
-
-  it('keeps schema defaults aligned with package.json contributions', () => {
-    const packageProperties = getPackageConfigurationProperties();
-    const defaults = flattenTexraSettings();
-
-    for (const [key, property] of Object.entries(packageProperties)) {
-      if (Object.hasOwn(property, 'default')) {
-        assert.deepEqual(
-          defaults[key as keyof typeof defaults],
-          property.default,
-          key,
-        );
-      } else if (property.type === 'null') {
-        assert.equal(defaults[key as keyof typeof defaults], null, key);
-      }
-    }
   });
 
   it('keeps provider dashboard defaults aligned with behavioral defaults', () => {
@@ -197,10 +175,6 @@ describe('TexraSettingsSchema', () => {
 
   it('returns isolated flattened setting defaults', () => {
     const defaults = flattenTexraSettings();
-    const mediaExtensions = defaults[
-      'texra.files.included.mediaExtensions'
-    ] as string[];
-    mediaExtensions.push('.mutated');
     const customReplacements = defaults[
       'texra.latex.customReplacements'
     ] as Record<string, string>;
@@ -208,12 +182,6 @@ describe('TexraSettingsSchema', () => {
 
     const nextDefaults = flattenTexraSettings();
 
-    assert.equal(
-      (
-        nextDefaults['texra.files.included.mediaExtensions'] as string[]
-      ).includes('.mutated'),
-      false,
-    );
     assert.equal(
       Object.hasOwn(
         nextDefaults['texra.latex.customReplacements'] as Record<
@@ -227,21 +195,11 @@ describe('TexraSettingsSchema', () => {
   });
 
   it('returns isolated individual setting defaults', () => {
-    const mediaExtensions = getTexraSettingDefault(
-      'files.included.mediaExtensions',
-    ) as string[];
-    mediaExtensions.push('.mutated');
     const customReplacements = getTexraSettingDefault(
       'latex.customReplacements',
     ) as Record<string, string>;
     customReplacements.mutated = 'value';
 
-    assert.equal(
-      (
-        getTexraSettingDefault('files.included.mediaExtensions') as string[]
-      ).includes('.mutated'),
-      false,
-    );
     assert.equal(
       Object.hasOwn(
         getTexraSettingDefault('latex.customReplacements') as Record<
@@ -254,69 +212,33 @@ describe('TexraSettingsSchema', () => {
     );
   });
 
-  it('regenerates package.json contributions from schema metadata', () => {
-    const sections = getPackageConfigurationSections();
-
-    assert.deepEqual(buildTexraPackageConfiguration(sections), sections);
+  it('does not contribute TeXRA settings to VS Code', () => {
+    assert.deepEqual(VSCODE_CONTRIBUTED_SETTING_KEYS, []);
+    assert.deepEqual(getPackageConfigurationSections(), []);
   });
 
-  it('removes stale generated package schema fields during regeneration', () => {
-    const sections = getPackageConfigurationSections();
-    // `order` and `editPresentation` are VS Code-presentation-only fields that
-    // stay hand-maintained in package.json (not in the generator allowlist), so
-    // they must survive regeneration. `enum` is generated, so a stale value not
-    // present in the schema must be removed (compactionThresholdPercent is a
-    // plain number with no enum).
-    const sectionWithStaleField = {
-      ...sections[0],
-      properties: {
-        ...sections[0].properties,
-        'texra.model.compactionThresholdPercent': {
-          ...sections[0].properties?.['texra.model.compactionThresholdPercent'],
-          order: 999,
-          enum: [75],
+  it('removes former TeXRA settings while preserving unrelated settings', () => {
+    const [regenerated] = buildTexraPackageConfiguration([
+      {
+        title: 'Mixed settings',
+        properties: {
+          'texra.latex.wrapCritiqueInAlign': { type: 'boolean' },
+          'anotherExtension.enabled': { type: 'boolean', default: true },
         },
       },
-    };
-
-    const [regenerated] = buildTexraPackageConfiguration([
-      sectionWithStaleField,
-      ...sections.slice(1),
     ]);
-    const regeneratedProperty =
-      regenerated.properties?.['texra.model.compactionThresholdPercent'];
 
-    assert.equal(regeneratedProperty?.order, 999);
-    assert.equal(Object.hasOwn(regeneratedProperty ?? {}, 'enum'), false);
-  });
-
-  it('pairs every enum setting with one description per enum value', () => {
-    const packageProperties = getPackageConfigurationProperties();
-
-    for (const [key, property] of Object.entries(packageProperties)) {
-      const enumValues = property.enum;
-      if (!Array.isArray(enumValues)) {
-        continue;
-      }
-      const enumDescriptions = property.enumDescriptions;
-      assert.ok(
-        Array.isArray(enumDescriptions),
-        `${key} declares enum but no enumDescriptions`,
-      );
-      assert.equal(
-        (enumDescriptions as unknown[]).length,
-        enumValues.length,
-        key,
-      );
-    }
+    assert.deepEqual(regenerated, {
+      title: 'Mixed settings',
+      properties: {
+        'anotherExtension.enabled': { type: 'boolean', default: true },
+      },
+    });
   });
 
   it('rejects unknown texra package configuration keys', () => {
-    const sections = getPackageConfigurationSections();
     const sectionWithUnknownTexraKey = {
-      ...sections[0],
       properties: {
-        ...sections[0].properties,
         'texra.removed.setting': {
           type: 'boolean',
           default: false,
@@ -325,11 +247,7 @@ describe('TexraSettingsSchema', () => {
     };
 
     assert.throws(
-      () =>
-        buildTexraPackageConfiguration([
-          sectionWithUnknownTexraKey,
-          ...sections.slice(1),
-        ]),
+      () => buildTexraPackageConfiguration([sectionWithUnknownTexraKey]),
       /unknown setting key: texra\.removed\.setting/,
     );
   });
