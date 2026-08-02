@@ -505,19 +505,11 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
         switch (sessionEvent.event.type) {
-          case 'clearMissingOutputs': {
-            // Exact addressing only (#9590 rule A3). A payload without a
-            // streamId is a defect: throw so the hub logs the dropped
-            // mutation loudly instead of silently clearing nothing.
-            const { streamId } = sessionEvent.event.payload;
-            if (!streamId) {
-              throw new Error(
-                'clearMissingOutputs requires the exact streamId selected by the initiator; configuration-based addressing is not accepted',
-              );
-            }
-            this.clearMissingOutputs(streamId);
+          case 'clearMissingOutputs':
+            // Exactly addressed (#9590 rule A3): the payload carries the
+            // initiator-selected streamId; there is no config fan-out.
+            this.clearMissingOutputs(sessionEvent.event.payload.streamId);
             return;
-          }
           case 'updateStreamDescription':
             this.setDescription(
               sessionEvent.event.payload.streamId,

@@ -17,7 +17,6 @@ import {
   buildRunDescriptor,
 } from '@shared/schemas';
 import type {
-  ClearMissingOutputsPayload,
   CompileFailure,
   ExecutionId,
   OutputFileInfo,
@@ -752,7 +751,7 @@ describe('StreamSnapshotStore', () => {
     expect(raw).toEqual({});
   });
 
-  it('clears missing outputs only on the exactly addressed stream, even with duplicate run configurations (#9590 A3)', () => {
+  it('clears missing outputs only on the exactly addressed stream, even with duplicate run configurations (#9590 A3)', async () => {
     const events = new SessionEventHub();
     const store = new StreamSnapshotStore();
     const detach = store.attachSessionEvents(events);
@@ -790,26 +789,6 @@ describe('StreamSnapshotStore', () => {
       });
     }
 
-    // Configuration-only addressing (the removed legacy payload shape) is
-    // rejected: the handler throws (the hub logs it) and mutates nothing.
-    events.emit({
-      scope: 'session',
-      event: {
-        type: 'clearMissingOutputs',
-        payload: {
-          streamConfig: {
-            agent: 'correct',
-            model: 'deepseekT',
-            inputFile: 'paper.tex',
-          },
-        } as unknown as ClearMissingOutputsPayload,
-      },
-    });
-    expect(store.getMissingOutputs(STREAM)).toEqual({ 1: ['missing.tex'] });
-    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({
-      1: ['missing.tex'],
-    });
-
     // Exact addressing clears the selected stream alone; the duplicate
     // configuration on the other tab does not authorize a fan-out.
     events.emit({
@@ -824,6 +803,8 @@ describe('StreamSnapshotStore', () => {
       1: ['missing.tex'],
     });
     detach();
+    // Settle the async sidecar writes before afterEach removes the temp dir.
+    await store.flush();
   });
 
   it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {

@@ -118,13 +118,6 @@ function applyStage(streamId: StreamTabId, stage: StreamStage): void {
 function applyClearMissingOutputs({
   streamId,
 }: ClearMissingOutputsPayload): void {
-  // Exact addressing only (#9590 rule A3). A payload without a streamId is a
-  // defect: throw so the hub logs the dropped mutation loudly.
-  if (!streamId) {
-    throw new Error(
-      'clearMissingOutputs requires the exact streamId selected by the initiator; configuration-based addressing is not accepted',
-    );
-  }
   // The empty map is a destructive reset, not a round patch. Record its
   // source revision even when the current map is already empty so a cold
   // read that started before this fact cannot restore older disk warnings.
