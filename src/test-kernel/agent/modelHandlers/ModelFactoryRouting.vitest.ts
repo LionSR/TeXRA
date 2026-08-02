@@ -541,6 +541,9 @@ describe('OpenAI model handler routing', () => {
     vi.stubEnv('CI', '1');
 
     vi.resetModules();
+    await installPlatform({
+      globalState: { 'texra.useOpenRouter': true },
+    });
     const passingFactory = await import('@agent/runtime/ModelFactory');
     expect(
       passingFactory.modelHandlerCompatibilityKey(
@@ -549,6 +552,16 @@ describe('OpenAI model handler routing', () => {
         false,
       ),
     ).toBe('ModelHandlerValidation');
+
+    const validationHandler = await passingFactory.createModelHandler({
+      ...modelConfig(ModelProvider.GOOGLE),
+      requiresInteractionsAPI: true,
+    } as ModelConfig);
+    try {
+      expect(validationHandler.constructor.name).toBe('ModelHandlerValidation');
+    } finally {
+      validationHandler.dispose();
+    }
 
     vi.stubEnv('TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG', '');
     vi.resetModules();

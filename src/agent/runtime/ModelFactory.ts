@@ -186,17 +186,14 @@ function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
 }
 
 /**
- * Fail loudly when an Interactions-only model is selected while OpenRouter is
- * active — OpenRouter cannot proxy Interactions, so silently routing it through
- * the OpenRouter handler would be wrong (spec §6.3). Called from
+ * Fail loudly when an Interactions-only model resolves to OpenRouter —
+ * OpenRouter cannot proxy Interactions, so silently routing it through the
+ * OpenRouter handler would be wrong (spec §6.3). Called from
  * `createModelHandler` only (the live-routing path that actually instantiates a
  * handler), keeping the routing predicate pure.
  */
-function assertGoogleInteractionsRoutable(
-  config: ModelConfig,
-  useOpenRouter: boolean,
-): void {
-  if (modelRequiresInteractionsAPI(config) && useOpenRouter) {
+function assertGoogleInteractionsRoutable(config: ModelConfig): void {
+  if (modelRequiresInteractionsAPI(config)) {
     throw new Error(
       `Model ${config.name} requires the Google Interactions API, which cannot be used through OpenRouter. Disable OpenRouter or select a different model.`,
     );
@@ -410,7 +407,6 @@ export async function createModelHandler(
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
-  assertGoogleInteractionsRoutable(config, useOpenRouter);
   const compatibilityKey = modelHandlerCompatibilityKey(
     config,
     useOpenRouter,
@@ -419,6 +415,9 @@ export async function createModelHandler(
     // instead of re-resolving it.
     false,
   );
+  if (compatibilityKey === 'ModelHandlerOpenRouterNative') {
+    assertGoogleInteractionsRoutable(config);
+  }
 
   return createModelHandlerForResolvedCompatibilityKey(
     config,
