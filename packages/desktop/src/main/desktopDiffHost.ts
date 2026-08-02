@@ -71,8 +71,6 @@ export function createDesktopDiffHost(
       additions: lineChanges.added,
       deletions: lineChanges.removed,
       language: monacoLanguageForFilePath(proposed.filePath),
-      originalPath: original.filePath,
-      proposedPath: proposed.filePath,
     });
     if (shownInRenderer) return { original, proposed, title };
 
