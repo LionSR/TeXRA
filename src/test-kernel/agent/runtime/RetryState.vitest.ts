@@ -52,6 +52,7 @@ import {
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { setIncludedModelAccess } from '@model/includedModelAccess';
 import {
+  MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
@@ -533,7 +534,11 @@ describe('RetryState', () => {
             (row) =>
               isObject(row.data) && row.data.kind === 'model_retry_lifecycle',
           )
-          .every((row) => row.verbose === true),
+          .every(
+            (row) =>
+              row.verbose === false &&
+              row.messageType === MESSAGE_TYPES.INTERNAL,
+          ),
       ).toBe(true);
       expect(new Set(diagnostics.map((data) => data.operationId)).size).toBe(1);
       expect(
@@ -548,6 +553,125 @@ describe('RetryState', () => {
     } finally {
       recorder.unsubscribe();
       clearStreamStatusForTest(session.status, streamId);
+    }
+  });
+
+  it('counts client preparation failures as retry attempts', async () => {
+    await installPlatform({
+      config: { 'texra.model.retry.maxAttempts': 0 },
+    });
+    const streamId = 'retry-client-preparation' as StreamTabId;
+    const logger = new TraceEmitter();
+    const events: Record<string, unknown>[] = [];
+    logger.subscribe((event) => {
+      if (
+        event.type === 'domain' &&
+        event.key === 'modelRetryLifecycle' &&
+        isObject(event.data)
+      ) {
+        events.push(event.data);
+      }
+    });
+    const getClient = vi
+      .fn<() => Promise<unknown>>()
+      .mockRejectedValueOnce(new Error('client preparation failed'))
+      .mockResolvedValue({});
+    const session = sessionWithInteractions(
+      {
+        requestRetry: async () => ({ action: 'retry' as const }),
+        cancel: () => {},
+      },
+      new StreamStatusMachine(),
+    );
+
+    class ClientPreparationRetryNode extends ExposedRetryNode {
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(async () => 'recovered');
+      }
+    }
+
+    const node = new ClientPreparationRetryNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: {
+        getClient,
+        rebind: async () => undefined,
+        route: 'api-key',
+      },
+    });
+
+    try {
+      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
+
+      await expect(node._exec(undefined)).resolves.toBe('recovered');
+
+      expect(
+        events.map((event) => [event.event, event.attemptOrdinal]),
+      ).toEqual([
+        ['attempt_started', 1],
+        ['attempt_failed', 1],
+        ['retry_decision_requested', 1],
+        ['retry_decided', 1],
+        ['attempt_started', 2],
+        ['attempt_succeeded', 2],
+      ]);
+      expect(getClient).toHaveBeenCalledTimes(2);
+    } finally {
+      clearStreamStatusForTest(session.status, streamId);
+    }
+  });
+
+  it('records a resolved result rejected by the concrete boundary as failed', async () => {
+    const streamId = 'retry-invalid-result' as StreamTabId;
+    const logger = new TraceEmitter();
+    const events: Record<string, unknown>[] = [];
+    logger.subscribe((event) => {
+      if (
+        event.type === 'domain' &&
+        event.key === 'modelRetryLifecycle' &&
+        isObject(event.data)
+      ) {
+        events.push(event.data);
+      }
+    });
+    const session = createTestSession();
+
+    class InvalidResultNode extends ExposedRetryNode {
+      protected override isSuccessfulInvocationResult(
+        result: unknown,
+      ): boolean {
+        return Boolean(result);
+      }
+
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(async () => '');
+      }
+    }
+
+    const node = new InvalidResultNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: testRetryModelCell(undefined, 'api-key'),
+    });
+
+    try {
+      await expect(node._exec(undefined)).resolves.toBe('');
+      expect(events.map((event) => event.event)).toEqual([
+        'attempt_started',
+        'attempt_failed',
+      ]);
+      expect(events.at(-1)).toMatchObject({
+        attemptOrdinal: 1,
+        failureKind: 'invalid_result',
+      });
+    } finally {
+      session.dispose();
     }
   });
 

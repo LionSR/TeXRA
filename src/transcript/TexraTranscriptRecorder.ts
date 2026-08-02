@@ -590,6 +590,16 @@ export function attachTranscriptRecorder(
 
         case 'domain': {
           // Subscribers that care about specific keys can switch on event.key.
+          if (event.key === 'modelRetryLifecycle') {
+            appendLog({
+              groupId: event.stageId,
+              messageType: MESSAGE_TYPES.INTERNAL,
+              text: 'Model retry lifecycle',
+              data: event.data,
+              verbose: false,
+            });
+            return;
+          }
           // filesLoaded has a richer payload shape; format the text accordingly.
           if (event.key === 'filesLoaded') {
             const payload = event.data as

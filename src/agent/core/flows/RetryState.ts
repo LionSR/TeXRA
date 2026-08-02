@@ -132,6 +132,11 @@ export abstract class RetryableInvocationNode<
 
   protected abstract getOperationName(): string;
 
+  /** Whether a resolved provider result is valid at the concrete boundary. */
+  protected isSuccessfulInvocationResult(_result: unknown): boolean {
+    return true;
+  }
+
   clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
@@ -141,7 +146,7 @@ export abstract class RetryableInvocationNode<
     return cloned;
   }
 
-  /** Persist a compact, normally hidden diagnostic row on the run trace. */
+  /** Emit compact diagnostic data for durable, non-presentational recording. */
   private logRetryLifecycle(
     event: RetryLifecycleEvent,
     details: Record<string, unknown> = {},
@@ -149,8 +154,8 @@ export abstract class RetryableInvocationNode<
     const lifecycle = this._retryLifecycle;
     if (!lifecycle) return;
     const { runScope, modelCell } = this.services;
-    this.services.logger.info('Model retry lifecycle', {
-      verbose: true,
+    this.services.logger.domain({
+      key: 'modelRetryLifecycle',
       data: {
         kind: 'model_retry_lifecycle',
         event,
@@ -167,6 +172,27 @@ export abstract class RetryableInvocationNode<
         ...details,
       },
     });
+  }
+
+  /** Record the concrete boundary's classification without changing its result. */
+  private recordResolvedAttempt<T>(
+    result: T,
+    attemptSource: RetryAttemptSource,
+    details: Record<string, unknown> = {},
+  ): T {
+    if (this.isSuccessfulInvocationResult(result)) {
+      this.logRetryLifecycle('attempt_succeeded', {
+        decisionSource: attemptSource,
+        ...details,
+      });
+    } else {
+      this.logRetryLifecycle('attempt_failed', {
+        decisionSource: attemptSource,
+        failureKind: 'invalid_result',
+        ...details,
+      });
+    }
+    return result;
   }
 
   /**
@@ -222,43 +248,8 @@ export abstract class RetryableInvocationNode<
   protected async invokeWithRelayRecovery<T>(
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
-    if (this._persistent401Error) {
-      throw this._persistent401Error;
-    }
-
     const services = this.services;
     const signal = services.runScope.signal;
-
-    // Build (or reuse) the client this attempt will run on before reading the
-    // credential route it captured: a run that has just switched models holds
-    // no client yet, and an absent route would skip the relay refresh below.
-    await services.modelCell.getClient();
-
-    // Proactive relay token refresh before the request. Only relay-route
-    // clients present a relay session token, so only they consult the expiry
-    // clock — personal-key / openrouter / subscription clients must never
-    // rebuild for a credential the call doesn't use.
-    const includedAccess = includedModelAccess();
-    if (
-      services.modelCell.route === 'relay' &&
-      includedAccess.isAccessTokenExpiringSoon()
-    ) {
-      // Threshold-gated and mutex-deduped: refreshes the session (updating
-      // tokenExpiresAt) only when actually near expiry. For a configured CI
-      // relay token this is a cache-only read with no side effects.
-      await includedAccess.getAccessToken();
-      // Rebuild only when the token actually rotated — rebuilding with the
-      // same JWT changes nothing, and is exactly the loop this branch caused.
-      if (!includedAccess.isAccessTokenExpiringSoon()) {
-        await rebindClient(
-          services.modelCell,
-          services.logger,
-          'proactive pre-invocation',
-          signal,
-        );
-      }
-    }
-
     const lifecycle = this._retryLifecycle;
     if (lifecycle) lifecycle.attemptOrdinal += 1;
     const attemptSource = lifecycle?.nextAttemptSource ?? 'automatic';
@@ -271,11 +262,42 @@ export abstract class RetryableInvocationNode<
     });
 
     try {
+      if (this._persistent401Error) {
+        throw this._persistent401Error;
+      }
+
+      // Build (or reuse) the client this attempt will run on before reading
+      // the credential route it captured. Client preparation is part of the
+      // retry attempt and must therefore remain inside this lifecycle guard.
+      await services.modelCell.getClient();
+
+      // Proactive relay token refresh before the request. Only relay-route
+      // clients present a relay session token, so only they consult the expiry
+      // clock — personal-key / openrouter / subscription clients must never
+      // rebuild for a credential the call doesn't use.
+      const includedAccess = includedModelAccess();
+      if (
+        services.modelCell.route === 'relay' &&
+        includedAccess.isAccessTokenExpiringSoon()
+      ) {
+        // Threshold-gated and mutex-deduped: refreshes the session (updating
+        // tokenExpiresAt) only when actually near expiry. For a configured CI
+        // relay token this is a cache-only read with no side effects.
+        await includedAccess.getAccessToken();
+        // Rebuild only when the token actually rotated — rebuilding with the
+        // same JWT changes nothing, and is exactly the loop this branch caused.
+        if (!includedAccess.isAccessTokenExpiringSoon()) {
+          await rebindClient(
+            services.modelCell,
+            services.logger,
+            'proactive pre-invocation',
+            signal,
+          );
+        }
+      }
+
       const result = await operation(signal);
-      this.logRetryLifecycle('attempt_succeeded', {
-        decisionSource: attemptSource,
-      });
-      return result;
+      return this.recordResolvedAttempt(result, attemptSource);
     } catch (err) {
       const formatted = normalizeProviderError(err);
       // Reactive 401 recovery: refresh token (single-flighted at the auth
@@ -293,11 +315,9 @@ export abstract class RetryableInvocationNode<
             operation,
             signal,
           );
-          this.logRetryLifecycle('attempt_succeeded', {
-            decisionSource: attemptSource,
+          return this.recordResolvedAttempt(result, attemptSource, {
             credentialRefresh: true,
           });
-          return result;
         } catch (retryErr) {
           const retryFormatted = normalizeProviderError(retryErr);
           this.logRetryLifecycle('attempt_failed', {
