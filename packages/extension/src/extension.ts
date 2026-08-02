@@ -76,10 +76,7 @@ import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import {
-  canonicalizeWorkspacePath,
-  createNodeWorkspace,
-} from '@platform/defaults/nodeWorkspace';
+import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
@@ -160,12 +157,7 @@ export async function activate(context: vscode.ExtensionContext) {
   }
   const rawWorkspacePath = () =>
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const workspace = createNodeWorkspace(rawWorkspacePath, () => {
-    const rawPath = rawWorkspacePath();
-    return rawPath && rawPath !== canonicalizeWorkspacePath(rawPath)
-      ? [rawPath]
-      : [];
-  });
+  const workspace = createNodeWorkspace(rawWorkspacePath);
   const workspaceRoot = workspace.getWorkspacePath();
   if (!workspaceRoot) return;
 
@@ -332,8 +324,6 @@ export async function activate(context: vscode.ExtensionContext) {
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
         hasAnyUsableSetupCredential().catch(() => false),
-        // listExecutions() owns legacy migration and filters invalid storage
-        // entries, so extension and CLI backfill classify history identically.
         listExecutions().then(
           (entries) => entries.length > 0,
           () => false,
