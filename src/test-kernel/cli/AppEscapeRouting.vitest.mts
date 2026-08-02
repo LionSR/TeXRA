@@ -308,20 +308,36 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('resolves deferred child back before an arrow key', async () => {
+  it.each([
+    ['Up', '\u001B[A'],
+    ['Down', '\u001B[B'],
+    ['Right', '\u001B[C'],
+    ['Left', '\u001B[D'],
+  ])('resolves deferred child back before %s', async (_name, arrowInput) => {
     seedChildHierarchy();
+    setStreamStatusInCliState({
+      streamId: CHILD,
+      status: STREAM_PHASE.COMPLETED,
+    });
     focusStream(CHILD);
     const onInterruptStream = vi.fn();
-    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+    const onSubmit = vi.fn();
+    const { instance, stdin } = await renderApp({
+      ...appProps(onInterruptStream),
+      onSubmit,
+    });
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write(ESC);
       await sleep(50);
-      stdin.write('\u001B[A');
+      stdin.write(arrowInput);
       await waitFor(() => activeStreamId.get() === ROOT);
+      stdin.write('\r');
+      await sleep(30);
 
       expect(onInterruptStream).not.toHaveBeenCalled();
+      expect(onSubmit).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -501,8 +517,14 @@ describe('App foreground Escape ownership', () => {
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('\u001b[B');
-      stdin.write('\u001b[A');
+      for (const arrowInput of [
+        '\u001B[A',
+        '\u001B[B',
+        '\u001B[C',
+        '\u001B[D',
+      ]) {
+        stdin.write(arrowInput);
+      }
       await sleep(30);
 
       expect(stdout.output).not.toContain('Session selection active.');
