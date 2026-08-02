@@ -76,6 +76,13 @@ describe('AgentRosterForm', () => {
     ]);
   });
 
+  it('resolves bare custom-roster names to catalog keys', () => {
+    const selected = selectedAgentKeys(['assistant', 'custom:review'], agents);
+
+    expect(selected).toEqual(['builtInToolUse:assistant', 'custom:review']);
+    expect(buildChatDefaultAgentItems(agents, selected)).toHaveLength(3);
+  });
+
   it('windows long roster lists to the available terminal rows', () => {
     expect(
       agentRosterSelectWindow({ availableRows: 10, itemCount: 20 }),

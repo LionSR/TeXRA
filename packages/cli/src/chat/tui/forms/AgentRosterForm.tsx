@@ -17,7 +17,11 @@ import {
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import { platform } from '@platform/platform';
-import { agentKeyOf, type AgentCategory } from '@shared/schemas/agent';
+import {
+  agentKeyOf,
+  agentMatchesIdentifier,
+  type AgentCategory,
+} from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
@@ -82,7 +86,16 @@ export function selectedAgentKeys(
   agents: readonly AgentEntry[],
 ): readonly string[] {
   if (selection === 'all') return agents.map(agentKeyOf);
-  return selection;
+  return [
+    ...new Set(
+      selection.map((identifier) => {
+        const agent = agents.find((candidate) =>
+          agentMatchesIdentifier(candidate, identifier),
+        );
+        return agent ? agentKeyOf(agent) : identifier;
+      }),
+    ),
+  ];
 }
 
 function selectionSizeLabel(
