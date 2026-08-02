@@ -144,6 +144,8 @@ interface StatusBarChildListInput {
 
 interface StatusBarShortcutsInput {
   readonly agentSelectionAvailable?: boolean;
+  /** True when bare Escape can focus the active stream's immediate parent. */
+  readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
   /** True when Alt/Esc-1..9 has at least one stream target. */
@@ -532,6 +534,7 @@ function statusBarBindingsText(
   {
     agentSelectionAvailable = false,
     childNavigationAvailable = false,
+    parentNavigationAvailable = false,
     streamFocusAvailable = false,
     modifierLabel = defaultShortcutModifierLabel(),
     shiftEnterNewline = false,
@@ -543,6 +546,7 @@ function statusBarBindingsText(
   const memoKey = [
     agentSelectionAvailable,
     childNavigationAvailable,
+    parentNavigationAvailable,
     streamFocusAvailable,
     modifierLabel,
     shiftEnterNewline,
@@ -553,6 +557,9 @@ function statusBarBindingsText(
   if (memoKey === lastBindingsKey) return lastBindingsText;
   const childList = childNavigationAvailable
     ? keyHintText({ key: 'Tab', action: 'children' })
+    : undefined;
+  const parentBack = parentNavigationAvailable
+    ? keyHintText({ key: 'Esc', action: 'back' })
     : undefined;
   const streamFocus = streamFocusAvailable
     ? keyHintText({
@@ -592,6 +599,16 @@ function statusBarBindingsText(
     ]),
     setupControlsOnly &&
       statusBarBindingRow([fullOutput, agent, model, api, newline, ctrlC]),
+    childNavigationAvailable &&
+      statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
+    childNavigationAvailable &&
+      statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
+    childNavigationAvailable &&
+      transcriptAvailable &&
+      statusBarBindingRow([childList, fullOutput, ctrlC]),
+    parentNavigationAvailable &&
+      transcriptAvailable &&
+      statusBarBindingRow([fullOutput, ctrlC]),
     setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
     statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
     statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
@@ -600,9 +617,15 @@ function statusBarBindingsText(
     childNavigationAvailable &&
       statusBarBindingRow([childList, fullOutput, ctrlC]),
     transcriptAvailable && statusBarBindingRow([childList, fullOutput, ctrlC]),
+    parentNavigationAvailable && ctrlC,
     childNavigationAvailable && childList,
     transcriptAvailable && statusBarBindingRow([fullOutput, ctrlC]),
-  ];
+  ].map((candidate) =>
+    parentBack && candidate
+      ? statusBarBindingRow([parentBack, candidate])
+      : candidate,
+  );
+  if (parentBack) candidates.push(parentBack);
 
   const text =
     candidates.find(
