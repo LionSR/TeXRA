@@ -386,7 +386,7 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
 }
 
 /**
- * Build the SDK-native function schema used by Generate Content. Unlike
+ * Build the SDK-native function schema used by Google token counting. Unlike
  * `parametersJsonSchema`, `parameters` is normalized locally by @google/genai
  * and does not invoke Google's server-side JSON-Schema flattening path.
  */
