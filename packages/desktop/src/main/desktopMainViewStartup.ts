@@ -23,7 +23,6 @@ async function defaultGetAuthStatus(): Promise<MainViewAuthStatus> {
 
 export interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
-  modelListRefresh?: PromiseLike<void>;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadOptions?: () => Promise<MainViewStartupOptions>;
   onAsyncError?: (error: unknown) => void;
@@ -31,7 +30,6 @@ export interface DesktopMainViewStartupOptions {
 
 export function createDesktopMainViewStartup({
   renderer,
-  modelListRefresh,
   getAuthStatus,
   loadOptions,
   onAsyncError,
@@ -39,7 +37,6 @@ export function createDesktopMainViewStartup({
   const startupController = new MainViewStartupController({
     getConfig,
     loadOptions: async () => {
-      await modelListRefresh;
       if (loadOptions != null) return loadOptions();
       const [
         agentOptions,
