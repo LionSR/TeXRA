@@ -716,8 +716,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     const content: Content[] = [
       ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
       ...(await this.buildLabelledMedia(mediaFiles, 'initial')),
-      ...(userRequest.trim() ? [this.textMedia(userRequest)] : []),
     ];
+    if (userRequest.trim()) {
+      const separator = content.length > 0 ? '\n' : '';
+      content.push(this.textMedia(`${separator}${userRequest}`));
+    }
 
     return [{ type: 'user_input', content } satisfies UserInputStep];
   }
