@@ -64,6 +64,7 @@ const CONFIG = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
   workingDirectory: '/workspace',
 });
+const GOOGLE_CONFIG: AgentConfig = { ...CONFIG, model: 'gemini35f' };
 const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
@@ -500,6 +501,29 @@ describe('retrieveSessionResumeData', () => {
     });
 
     expect(resume.parentStreamId).toBe(parentStreamId);
+  });
+
+  it('rejects a Google record without persisted handler identity', async () => {
+    const executionId = 'abc124' as ExecutionId;
+    const streamId = 'chat@gemini35f#abc124' as StreamTabId;
+    const shared = {
+      messages: [
+        {
+          type: 'user_input',
+          content: [{ type: 'text', text: 'Continue.' }],
+        },
+      ],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices('gemini35f'),
+    };
+    await writeFlowRecord(executionId, shared);
+
+    await expect(
+      retrieveSessionResumeData(streamId, executionId, GOOGLE_CONFIG),
+    ).rejects.toThrow(
+      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
+    );
+    expect((await readFlowRecord(executionId))?.shared).toEqual(shared);
   });
 
   it('normalizes legacy nested conversation shared state for tool-use resume', async () => {
