@@ -19,6 +19,7 @@ import {
   loadWorkspaceCliConfig,
   parseCliConfigValues,
   resolveConfiguredAgent,
+  resolveKnownCliModelId,
   type CliConfigValues,
 } from './cliConfig';
 import {
@@ -115,7 +116,7 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   );
   const mostRecent = candidates[0];
   if (!mostRecent) return {};
-  return { model: mostRecent.agentConfig.model };
+  return { model: resolveKnownCliModelId(mostRecent.agentConfig.model) };
 }
 
 function deriveSource(sources: {
