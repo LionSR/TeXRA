@@ -134,38 +134,6 @@ function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
 }
 
-/** Remove text blocks that the Interactions API rejects as missing content. */
-function omitEmptyTextContent<T extends Content>(content: readonly T[]): T[] {
-  return content.filter(
-    (item) => !isTextContent(item) || Boolean(item.text?.trim()),
-  );
-}
-
-/** Also normalize transcripts restored from storage at the API boundary. */
-function omitEmptyTextContentFromSteps(steps: readonly Step[]): Step[] {
-  return steps.map((step) => {
-    if (step.type === 'user_input' || step.type === 'model_output') {
-      return {
-        ...step,
-        content: omitEmptyTextContent(step.content ?? []),
-      } satisfies UserInputStep | ModelOutputStep;
-    }
-    if (step.type === 'thought' && step.summary) {
-      return {
-        ...step,
-        summary: omitEmptyTextContent(step.summary),
-      } satisfies ThoughtStep;
-    }
-    if (step.type === 'function_result' && Array.isArray(step.result)) {
-      return {
-        ...step,
-        result: omitEmptyTextContent(step.result),
-      } satisfies FunctionResultStep;
-    }
-    return step;
-  });
-}
-
 /**
  * Steps the CLIENT contributes and must (re)send: the user's turns and tool
  * results. Under `previous_interaction_id` chaining the model-generated steps
@@ -722,6 +690,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       content.push(this.textMedia(`${separator}${userRequest}`));
     }
 
+    if (content.length === 0) {
+      throw new Error(
+        'Google messages require a non-empty user prefix, request, or attachment.',
+      );
+    }
+
     return [{ type: 'user_input', content } satisfies UserInputStep];
   }
 
@@ -735,6 +709,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
     ];
 
+    if (content.length === 0) {
+      throw new Error(
+        'Google follow-up messages require non-empty text or an attachment.',
+      );
+    }
+
     messages.push({ type: 'user_input', content } satisfies UserInputStep);
     return messages;
   }
@@ -743,6 +723,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     messages: Step[],
     userMessage: string,
   ): Promise<Step[]> {
+    if (!userMessage.trim()) return messages;
     const last = messages.at(-1);
     if (last?.type === 'user_input') {
       (last.content ??= []).push(this.textMedia(userMessage));
@@ -770,6 +751,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   }
 
   protected textMedia(text: string): TextContent {
+    if (!text) {
+      throw new Error('Google text content must not be empty.');
+    }
     return { type: 'text', text };
   }
 
@@ -1290,11 +1274,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // completes. Filtering to client-input steps fixes both the tool-round 400
     // and the text-round assistant-turn re-send.
     const shouldSendAll = !stateful || this.chainedInteractionId === null;
-    const inputSteps = omitEmptyTextContentFromSteps(
-      shouldSendAll
-        ? base
-        : base.slice(this.sentStepCount).filter(isClientInputStep),
-    );
+    const inputSteps = shouldSendAll
+      ? base
+      : base.slice(this.sentStepCount).filter(isClientInputStep);
     const previousId =
       stateful && !shouldSendAll
         ? (this.chainedInteractionId ?? undefined)
@@ -2074,8 +2056,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   /**
    * Convert generic tool definitions to Interactions `FunctionT[]`.
    *
-   * Reuses the Google-specific bounded schema conversion and feeds its output
-   * into `FunctionT.parameters` — the
+   * Generates Google's finite OpenAPI schema and feeds it directly into
+   * `FunctionT.parameters` — the
    * chat `toGoogleTools` wrapper (`[{ functionDeclarations }]`) is NOT reused.
    */
   private toInteractionsTools(defs: ToolDefinition[]): FunctionT[] {
