@@ -931,6 +931,26 @@ describe('toGoogleTools', () => {
     );
   });
 
+  it.each(['default', 'example'] as const)(
+    'rejects refs in Google properties named %s',
+    (propertyName) => {
+      expect(() =>
+        convertGoogleToolSchema({
+          name: 'named_property_reference',
+          parameters: {
+            type: 'object',
+            properties: {
+              [propertyName]: { $ref: '#/$defs/value' },
+            },
+            $defs: { value: { type: 'string' } },
+          },
+        }),
+      ).toThrow(
+        'Google tool "named_property_reference" must use a finite parameter schema without references.',
+      );
+    },
+  );
+
   it('rejects referenced external Google schemas instead of flattening them', () => {
     expect(() =>
       convertGoogleToolSchema({
