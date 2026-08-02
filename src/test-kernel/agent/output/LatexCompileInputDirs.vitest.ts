@@ -38,7 +38,9 @@ import {
 } from './compileCheckTestUtils';
 
 const mocks = vi.hoisted(() => ({
-  compileLatex2Pdf: vi.fn(async () => ({ ok: true })),
+  compileLatex2Pdf: vi.fn(
+    async (): Promise<{ ok: boolean; logTail?: string }> => ({ ok: true }),
+  ),
   hasLatexCompiler: vi.fn(async () => true),
   publishCompiledPdfArtifact: vi.fn(async () => null),
 }));
@@ -306,6 +308,38 @@ describe('workflow LaTeX compile input directories', () => {
       expect.objectContaining({
         data: expect.objectContaining({ error: publishError }),
       }),
+    );
+  });
+
+  it('keeps a failed latexdiff compiler transcript out of the warning message', async () => {
+    const executionId = 'latexdiff-compile-failure';
+    await initLatexPlatform({});
+    const trace = spiedTrace();
+    const logTail = 'LaTeX compiler transcript that should remain diagnostic';
+    mocks.compileLatex2Pdf.mockResolvedValueOnce({ ok: false, logTail });
+
+    await createDiffCompiler(executionId, trace).compileDiffIfSuccessful(
+      { success: true, diffFileName: 'main-diff.tex' },
+      runStorageFile(executionId, path.join('r1', 'main.tex')),
+      {
+        absolutePath: path.join(runDir(executionId), 'diff', 'r2'),
+        relativePath: path.join('diff', 'r2'),
+        executionId,
+      },
+      2,
+      runStorageFile(executionId, path.join('r2', 'main.tex')),
+      '-diff',
+    );
+
+    expect(trace.warn).toHaveBeenCalledWith(
+      'Failed to compile latexdiff PDF: main-diff.tex',
+      expect.objectContaining({
+        data: expect.objectContaining({ logTail }),
+      }),
+    );
+    expect(trace.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining(logTail),
+      expect.anything(),
     );
   });
 });
