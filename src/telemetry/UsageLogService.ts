@@ -111,7 +111,7 @@ function isTelemetryEnabledBySetting(): boolean {
 
   const configured = platform().config.inspect<unknown>(
     TELEMETRY_ENABLED_KEY,
-  )?.globalValue;
+  )?.effectiveValue;
   const raw =
     configured === undefined
       ? DEFAULT_CORE_SETTINGS.telemetry.enabled

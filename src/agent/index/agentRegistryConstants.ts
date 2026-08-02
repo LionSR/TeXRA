@@ -1,4 +1,4 @@
-/** Source priorities and legacy aliases for the agent registry. */
+/** Source priorities for the agent registry. */
 
 import type { AgentSource } from '@shared/schemas/agent';
 
@@ -27,11 +27,3 @@ export const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'builtInToolUse',
   'builtInWorkflow',
 ];
-
-/**
- * Legacy agent-name aliases — keep prior configs, histories, delegation calls,
- * and inherited references working when a built-in agent is renamed.
- */
-export const LEGACY_AGENT_ALIASES: Record<string, string> = {
-  chat: 'assistant',
-};

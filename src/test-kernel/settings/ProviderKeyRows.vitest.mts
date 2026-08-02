@@ -57,7 +57,7 @@ describe('settings provider key rows', () => {
         streaming: false,
         customEndpoint: 'https://example.invalid',
         supportsCustomEndpoint: true,
-        vscodeSettings: [],
+        providerSettings: [],
       },
     ];
 

@@ -109,9 +109,7 @@ export function createStubDesktopCredentialSettingsController(
       setProviderStreaming: noOp,
       setProviderEndpoint: noOp,
       setGlobalStreaming: noOp,
-      setProviderVscodeSetting: unsupported(
-        'VS Code provider settings are not applicable in the desktop app.',
-      ),
+      setProviderSetting: noOp,
       openExternalUrl: noOp,
     },
     chatGptHandlers: {

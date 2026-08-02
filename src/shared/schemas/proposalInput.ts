@@ -8,8 +8,8 @@
  *
  * It lives in the schema layer (not the renderer) because it encodes domain
  * knowledge rather than presentation: which delegation tools map to which agent
- * category, the `extractFigures` / `extractTikz` shorthand → `toolConfig`
- * mapping, and the legacy file-field migration. The renderer-side
+ * category and the `extractFigures` / `extractTikz` shorthand → `toolConfig`
+ * mapping. The renderer-side
  * `proposalInputStore` is a thin registry over this parser.
  *
  * The schemas here are deliberately lenient: the LLM may omit fields the

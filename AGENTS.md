@@ -154,6 +154,17 @@ frozen deep-import lists, not another lint rule.
 
 - **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
 
+### Testing discipline
+
+Tests are production maintenance work. Add them when they protect a consequential
+current contract, a difficult invariant, or a reproduced defect. Do not create
+tests for speculative abstractions, trivial data plumbing, implementation details,
+or compatibility behavior that the product does not intend to preserve. Prefer a
+small behavioral test at the true boundary over repeated unit tests of pass-through
+layers. When code or a historical format is retired, delete tests and fixtures that
+exist only for that retired behavior instead of rewriting them around the new
+implementation.
+
 ### Zod v4 Schema Patterns
 
 This project uses Zod v4. Follow these idiomatic patterns:
@@ -273,6 +284,11 @@ Any parameter with an obvious default should be optional with that default appli
 
 TeXRA has a short compatibility window. Do not preserve an old internal format
 indefinitely merely because a parser or migration already exists.
+
+TeXRA is an early-stage product. Prefer one small, current design over preserving
+historical behavior that materially increases maintenance cost. Breaking an old
+internal format is acceptable when no current public contract or demonstrated
+user need justifies the additional system.
 
 - Compatibility code may be removed three months after the replacement ships.
   Record the introduction date and intended retirement condition beside every

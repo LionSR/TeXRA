@@ -31,7 +31,7 @@ import { AgentModePresetSchema } from '../agentPresets';
 import { AgentSkillsEnabledSchema } from '../agentSkills';
 import { ModelAvailabilityFieldsSchema } from '../mainView/state';
 import {
-  NumberVscodeSettingSchema,
+  NumberSettingSchema,
   UpdateProfileMessageSchema,
 } from '../profileViewMessages';
 import { StreamTabIdSchema } from '../identifiers';
@@ -268,7 +268,7 @@ export type UpdateCustomAgentDirMessage = z.infer<
  */
 const UpdateReliabilityAndOrchestrationMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED),
-  reliabilitySettings: z.array(NumberVscodeSettingSchema).prefault([]),
+  reliabilitySettings: z.array(NumberSettingSchema).prefault([]),
   allowOrchestratorKill: z.boolean().prefault(true),
   detachSubagentsOnStop: z.boolean().prefault(false),
 });

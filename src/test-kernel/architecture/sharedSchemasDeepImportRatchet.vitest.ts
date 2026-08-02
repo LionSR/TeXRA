@@ -755,7 +755,7 @@ describe('@shared/schemas deep-import ratchet', () => {
       semantics: '',
       surface: {
         [specifier]: {
-          type: ['NumberVscodeSetting', 'RuntimeSchema'],
+          type: ['NumberSetting', 'RuntimeSchema'],
           value: ['RuntimeSchema'],
         },
       },
@@ -764,7 +764,7 @@ describe('@shared/schemas deep-import ratchet', () => {
     };
     const fixtureCurrent: PublishedSurface = {
       [specifier]: {
-        type: ['NumberVscodeSetting', 'RuntimeSchema'],
+        type: ['NumberSetting', 'RuntimeSchema'],
         value: [],
       },
     };
@@ -779,16 +779,16 @@ describe('@shared/schemas deep-import ratchet', () => {
     const surface = publishedSurface(moduleMemo);
 
     expect(surface['@shared/schemas/profileViewMessages']?.type).toContain(
-      'NumberVscodeSetting',
+      'NumberSetting',
     );
     expect(surface['@shared/schemas/profileViewMessages']?.value).not.toContain(
-      'NumberVscodeSetting',
+      'NumberSetting',
     );
     expect(surface['@shared/schemas/settingsViewMessages']?.type).toContain(
-      'NumberVscodeSetting',
+      'NumberSetting',
     );
     expect(surface['@shared/schemas/commonViewMessages']?.type).not.toContain(
-      'NumberVscodeSetting',
+      'NumberSetting',
     );
     expect(surface['@shared/schemas/commonViewMessages']?.value).toContain(
       'ThemeSchema',
@@ -811,7 +811,7 @@ describe('@shared/schemas deep-import ratchet', () => {
         surface,
         '@shared/schemas/profileViewMessages',
         {
-          name: 'NumberVscodeSetting',
+          name: 'NumberSetting',
           requestedSpace: 'ordinary',
         },
         moduleMemo,

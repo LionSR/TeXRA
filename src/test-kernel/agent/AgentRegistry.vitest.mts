@@ -16,7 +16,6 @@ import {
   invalidateRemoteAgentsAfterSignOut,
   loadAgents,
   refresh,
-  resolveAgentKey,
 } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
@@ -90,10 +89,9 @@ async function initPlatformWithState(
   );
 }
 
-describe('agent registry legacy aliases', () => {
+describe('agent registry', () => {
   beforeAll(async () => {
-    // Real bundled agent YAMLs on disk, so the test exercises the actual
-    // rename (chat → assistant) rather than synthetic fixtures.
+    // Use the real bundled agent YAMLs rather than synthetic fixtures.
     await initPlatformWithState({});
     useAgentDirectories();
     await refresh({ includeRemote: false });
@@ -104,25 +102,10 @@ describe('agent registry legacy aliases', () => {
     expect(getVisibleAgent('toolUse', 'no-such-agent')).toBeUndefined();
   });
 
-  it('resolves the legacy chat identifier to the assistant entry', () => {
-    const entry = getAgent('chat');
-    expect(entry?.name).toBe('assistant');
-    expect(getAgent('assistant')?.name).toBe('assistant');
-    expect(resolveAgentKey('chat', AgentCategory.ToolUse)).toBe(
-      'builtInToolUse:assistant',
-    );
-  });
-
   it('exposes workflow round counts from local agent YAML', () => {
     expect(getAgent('polish')?.rounds).toBe(2);
     expect(getAgent('correct')?.rounds).toBe(1);
     expect(getAgent('assistant')?.rounds).toBeUndefined();
-  });
-
-  it('resolves source-qualified legacy keys', () => {
-    expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
-    expect(getAgent('builtInToolUse:assistant')?.name).toBe('assistant');
-    expect(getAgent('custom:no-such-agent')).toBeUndefined();
   });
 
   it('treats lookup category as priority, not a filter', () => {
