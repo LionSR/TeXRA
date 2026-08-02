@@ -110,34 +110,31 @@ function isTelemetryEnabledBySetting(): boolean {
   if (isTelemetryDisabledByEnv()) return false;
 
   const inspection = platform().config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
+  const configuredValues = [
+    inspection?.globalValue,
+    inspection?.workspaceValue,
+  ].filter((value) => value !== undefined);
+  // `.texra/config.json` is hand-edited and JsonConfigProvider hands back raw
+  // JSON. Validate each present scope before applying consent precedence: a
+  // valid global `true` must not hide a mistyped project-local `"false"` and
+  // quietly enable the thing the user likely meant to switch off.
+  const malformed = configuredValues.find(
+    (value) => typeof value !== 'boolean',
+  );
+  if (malformed !== undefined) {
+    logger.warn(
+      CHANNEL,
+      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`,
+    );
+    return false;
+  }
   // Either scope may opt out. In particular, a checked-in project `true` must
   // not reverse a user-wide privacy choice, while the CLI still honours a
   // project-local `false` when no global value is present.
-  if (
-    inspection?.globalValue === false ||
-    inspection?.workspaceValue === false
-  ) {
-    return false;
-  }
-  const configured =
-    inspection?.globalValue !== undefined
-      ? inspection.globalValue
-      : inspection?.workspaceValue;
-  const raw =
-    configured === undefined
-      ? DEFAULT_CORE_SETTINGS.telemetry.enabled
-      : configured;
-  if (typeof raw === 'boolean') return raw;
-  // `.texra/config.json` is hand-edited and JsonConfigProvider hands back raw
-  // JSON, so a mistyped `"false"` would arrive as a truthy string and quietly
-  // re-enable the very thing the user tried to switch off. Treat any non-boolean
-  // as opted out and say so. Failing closed is safe here precisely because plan
-  // accounting does not go through this gate.
-  logger.warn(
-    CHANNEL,
-    `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof raw}); treating optional usage logging as disabled`,
-  );
-  return false;
+  if (configuredValues.includes(false)) return false;
+  return configuredValues.length > 0
+    ? true
+    : DEFAULT_CORE_SETTINGS.telemetry.enabled;
 }
 
 /** Why optional usage logging is off, or `null` when it is on. */

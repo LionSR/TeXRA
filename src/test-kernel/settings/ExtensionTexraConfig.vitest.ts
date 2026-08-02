@@ -18,6 +18,7 @@ import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 
 // Local imports - platform
 import type { StorageProvider } from '@platform/interfaces';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 function createStorage(
   workspaceStorage: string,
@@ -87,6 +88,75 @@ describe.skipIf(process.platform === 'win32')('extension TeXRA config', () => {
       workspaceValue: undefined,
       effectiveValue: 23119,
     });
+  });
+
+  it('waits for workspace storage to commit before rebinding fallback config', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
+    const firstWorkspace = join(tempDir, 'first');
+    readOnlyWorkspace = join(tempDir, 'second');
+    const storageRoot = join(tempDir, 'storage');
+    await Promise.all([
+      mkdir(join(firstWorkspace, '.texra'), { recursive: true }),
+      mkdir(readOnlyWorkspace),
+      mkdir(storageRoot),
+    ]);
+    await writeFile(
+      join(firstWorkspace, '.texra', 'config.json'),
+      '{"texra.bib.zoteroPort": 24001}\n',
+    );
+    await chmod(readOnlyWorkspace, 0o500);
+
+    let workspaceRoot = firstWorkspace;
+    const storage = new WorkspaceStorageProvider(
+      storageRoot,
+      () => workspaceRoot,
+    );
+    const config = await createExtensionTexraConfig(storage, workspaceRoot);
+
+    workspaceRoot = readOnlyWorkspace;
+    await expect(config.rebindWorkspace(workspaceRoot)).rejects.toThrow(
+      'before the workspace storage change commits',
+    );
+    expect(config.get('texra.bib.zoteroPort')).toBe(24001);
+
+    expect(storage.commitWorkspaceStorageChange()).toBe(true);
+    const secondInternalConfig = join(storage.getStoragePath(), 'config.json');
+    await config.rebindWorkspace(workspaceRoot);
+    storage.finalizeWorkspaceStorageChange();
+    await config.update('texra.bib.zoteroPort', 25000);
+
+    await expect(readFile(secondInternalConfig, 'utf8')).resolves.toContain(
+      '25000',
+    );
+  });
+
+  it('returns isolated copies of mutable schema defaults', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'texra-extension-config-'));
+    const workspace = join(tempDir, 'project');
+    const internalStorage = join(tempDir, 'internal');
+    const globalStorage = join(tempDir, 'global');
+    await Promise.all([
+      mkdir(workspace),
+      mkdir(internalStorage),
+      mkdir(globalStorage),
+    ]);
+
+    const config = await createExtensionTexraConfig(
+      createStorage(internalStorage, globalStorage),
+      workspace,
+    );
+    const key = 'texra.latex.enabledReplacements';
+    const first = config.get<string[]>(key);
+    const inspection = config.inspect<string[]>(key);
+
+    first.push('mutated');
+    inspection?.defaultValue?.push('mutated-default');
+    inspection?.effectiveValue?.push('mutated-effective');
+
+    expect(config.get<string[]>(key)).not.toContain('mutated');
+    expect(config.get<string[]>(key)).not.toContain('mutated-default');
+    expect(config.get<string[]>(key)).not.toContain('mutated-effective');
+    expect(inspection?.defaultValue).not.toBe(inspection?.effectiveValue);
   });
 
   it('rebinds reads and writes when the workspace folder changes', async () => {
