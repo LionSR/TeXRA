@@ -145,6 +145,28 @@ interface ResponseFinalizeContext {
   readonly compactedMessages: ResponseInputItem[] | undefined;
 }
 
+/**
+ * Shape returned by {@link ModelHandlerOpenAIResponse.buildResponseBaseParams}
+ * (the BUILD phase): the fields shared by token counting and the final API
+ * call, before the EXECUTE phase layers on `max_output_tokens`, `store`, and
+ * the transport-specific flags. `input` is narrowed to `ResponseInputItem[]`
+ * (rather than `ResponseCreateParamsBase`'s `string | ResponseInput`) because
+ * this handler always builds it from `newMessages`, and token counting reads
+ * it back as an array.
+ */
+type OpenAIResponseBaseParams = Omit<
+  Pick<
+    ResponseCreateParamsBase,
+    | 'model'
+    | 'input'
+    | 'instructions'
+    | 'previous_response_id'
+    | 'tools'
+    | 'reasoning'
+  >,
+  'input'
+> & { input: ResponseInputItem[] };
+
 type ServerToolContentBlock = ResponseFunctionWebSearch | ResponseReasoningItem;
 
 /**
@@ -1455,6 +1477,210 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return true;
   }
 
+  /**
+   * Phase 1: BUILD - Construct the shared base request parameters (including
+   * the reasoning config) used by both token counting and the API call.
+   * Extracted from {@link createResponseImpl} verbatim.
+   */
+  private buildResponseBaseParams(args: {
+    newMessages: ResponseInputItem[];
+    systemPrompt: string | undefined;
+    convertedTools: ReturnType<typeof toOpenAIResponseTools> | undefined;
+  }): OpenAIResponseBaseParams {
+    const { newMessages, systemPrompt, convertedTools } = args;
+
+    const rawEffort = this.capabilities.supportsReasoning
+      ? this.getEffectiveReasoningEffort()
+      : undefined;
+    const reasoningEffort = rawEffort
+      ? toOpenAIReasoningEffort(
+          rawEffort,
+          getDeclaredMaxReasoningEffort(this.config.capabilities),
+        )
+      : undefined;
+    // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
+    // and select pro execution via `reasoning.mode` on the request.
+    const reasoningMode = this.capabilities.reasoningMode;
+    const reasoning: Reasoning | undefined =
+      reasoningEffort || reasoningMode
+        ? {
+            ...(reasoningEffort && { effort: reasoningEffort }),
+            ...(reasoningMode && { mode: reasoningMode }),
+          }
+        : undefined;
+
+    return {
+      model: this.config.fullName,
+      input: newMessages,
+      ...(systemPrompt && { instructions: systemPrompt }),
+      ...(this.supportsResponseChaining &&
+        this.chainState.getPreviousResponseId() && {
+          previous_response_id: this.chainState.getPreviousResponseId(),
+        }),
+      ...(convertedTools?.length && { tools: convertedTools }),
+      ...(reasoning && { reasoning }),
+    };
+  }
+
+  /**
+   * Phase 4: EXECUTE - Build the final request params and dispatch through
+   * the WebSocket / streaming / non-streaming transport paths, including the
+   * shared error recovery for all three. Extracted from
+   * {@link createResponseImpl} verbatim; it is the tail of that method, so it
+   * returns the final {@link CreateResponseResult} directly.
+   */
+  private async dispatchOpenAIResponseExecution(args: {
+    baseParams: OpenAIResponseBaseParams;
+    maxOutputTokens: number;
+    convertedTools: ReturnType<typeof toOpenAIResponseTools> | undefined;
+    finalTool: CreateResponseOptions<ResponseInputItem, OpenAI>['finalTool'];
+    useBackgroundResponses: boolean;
+    useWebSocket: boolean;
+    useStreaming: boolean;
+    temperature: number;
+    client: OpenAI;
+    signal: AbortSignal | undefined;
+    effectiveMessages: ResponseInputItem[];
+    compactedThisCall: boolean;
+    compactedMessages: ResponseInputItem[] | undefined;
+    requestOptions: CreateResponseOptions<ResponseInputItem, OpenAI>;
+  }): Promise<CreateResponseResult<Response, ResponseInputItem>> {
+    const {
+      baseParams,
+      maxOutputTokens,
+      convertedTools,
+      finalTool,
+      useBackgroundResponses,
+      useWebSocket,
+      useStreaming,
+      temperature,
+      client,
+      signal,
+      effectiveMessages,
+      compactedThisCall,
+      compactedMessages,
+      requestOptions,
+    } = args;
+
+    // Phase 4: EXECUTE - Build final params and make the API call
+    const parallelToolCalls = getConfig<boolean>(
+      'texra.model.openaiParallelToolCalls',
+      DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
+    );
+    const params: ResponseCreateParamsBase = {
+      ...baseParams,
+      max_output_tokens: maxOutputTokens,
+      store: this.storesResponsesServerSide,
+      // llm-zoo's Fast tier maps to the SDK's current priority wire value.
+      ...(this.config.serviceTier === 'fast' && {
+        service_tier: 'priority',
+      }),
+      ...(convertedTools?.length && {
+        tool_choice: finalTool
+          ? ({ type: 'function', name: finalTool.name } as const)
+          : ('auto' as const),
+        parallel_tool_calls: parallelToolCalls,
+      }),
+    };
+
+    if (useBackgroundResponses) {
+      this.logger.debug(
+        'Submitting OpenAI Responses request in background mode.',
+        {
+          data: {
+            model: this.config.fullName,
+            previousResponseId:
+              this.chainState.getPreviousResponseId() ?? undefined,
+          },
+        },
+      );
+      params.background = true;
+    }
+
+    if (!this.isOReasoningModel) {
+      params.temperature = temperature;
+    }
+
+    // Include web search sources in response when native web search is enabled.
+    // This is set outside the tools block because deep research models use
+    // native web search even when no explicit tools are passed.
+    if (this.capabilities.supportsNativeWebSearch) {
+      params.include = ['web_search_call.action.sources'];
+    }
+
+    // Stateless (store:false) backends keep no server-side reasoning, so request
+    // encrypted reasoning blobs to replay in the next turn's input for cross-turn
+    // reasoning continuity (matching the Codex CLI / OpenCode). The store:true
+    // path retains reasoning via previous_response_id and must not replay it.
+    if (
+      !this.storesResponsesServerSide &&
+      this.capabilities.supportsReasoning
+    ) {
+      params.include = [
+        ...(params.include ?? []),
+        'reasoning.encrypted_content',
+      ];
+    }
+
+    // Extend reasoning with summary option for API call (not needed for token counting)
+    if (this.capabilities.supportsReasoning) {
+      const isGpt5 = isGpt5ModelName(this.config.name);
+      const includeSummary =
+        !isGpt5 ||
+        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
+      if (includeSummary) {
+        params.reasoning = {
+          ...(params.reasoning as Reasoning),
+          summary: 'auto',
+        };
+      }
+    }
+
+    const finalizeContext: ResponseFinalizeContext = {
+      effectiveMessagesLength: effectiveMessages.length,
+      compactedThisCall,
+      compactedMessages,
+    };
+
+    // Wrap execution in a try/catch so the error handler can recover from an
+    // invalid/expired previous_response_id or a context-window overflow.
+    try {
+      // WebSocket transport: persistent connection for lower-latency tool-use loops
+      if (useWebSocket) {
+        return await this.executeWebSocketPath(
+          params,
+          client,
+          signal,
+          finalizeContext,
+        );
+      }
+
+      if (useStreaming) {
+        return await this.executeStreamingPath(
+          params,
+          client,
+          signal,
+          finalizeContext,
+        );
+      }
+
+      // Non-streaming path
+      return await this.executeNonStreamingPath(
+        params,
+        client,
+        signal,
+        useBackgroundResponses,
+        finalizeContext,
+      );
+    } catch (error) {
+      return await this.handleCreateResponseError(
+        error,
+        requestOptions,
+        compactedThisCall,
+      );
+    }
+  }
+
   protected override async createResponseImpl(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
@@ -1637,39 +1863,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Build shared params used by both token counting and API call
-
-    const rawEffort = this.capabilities.supportsReasoning
-      ? this.getEffectiveReasoningEffort()
-      : undefined;
-    const reasoningEffort = rawEffort
-      ? toOpenAIReasoningEffort(
-          rawEffort,
-          getDeclaredMaxReasoningEffort(this.config.capabilities),
-        )
-      : undefined;
-    // Pro-mode registry entries (GPT-5.6 Pro) share the base model's wire id
-    // and select pro execution via `reasoning.mode` on the request.
-    const reasoningMode = this.capabilities.reasoningMode;
-    const reasoning: Reasoning | undefined =
-      reasoningEffort || reasoningMode
-        ? {
-            ...(reasoningEffort && { effort: reasoningEffort }),
-            ...(reasoningMode && { mode: reasoningMode }),
-          }
-        : undefined;
-
-    // Phase 1: BUILD - Construct provider-specific request parameters
-    const baseParams = {
-      model: this.config.fullName,
-      input: newMessages,
-      ...(systemPrompt && { instructions: systemPrompt }),
-      ...(this.supportsResponseChaining &&
-        this.chainState.getPreviousResponseId() && {
-          previous_response_id: this.chainState.getPreviousResponseId(),
-        }),
-      ...(convertedTools?.length && { tools: convertedTools }),
-      ...(reasoning && { reasoning }),
-    };
+    const baseParams = this.buildResponseBaseParams({
+      newMessages,
+      systemPrompt,
+      convertedTools,
+    });
 
     let maxOutputTokens = this.getEffectiveMaxOutputTokens();
     maxOutputTokens = this.applyChainedOutputTokenBudget(maxOutputTokens);
@@ -1750,123 +1948,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return this.createResponseImpl(options);
     }
 
-    // Phase 4: EXECUTE - Build final params and make the API call
-    const parallelToolCalls = getConfig<boolean>(
-      'texra.model.openaiParallelToolCalls',
-      DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
-    );
-    const params: ResponseCreateParamsBase = {
-      ...baseParams,
-      max_output_tokens: maxOutputTokens,
-      store: this.storesResponsesServerSide,
-      // llm-zoo's Fast tier maps to the SDK's current priority wire value.
-      ...(this.config.serviceTier === 'fast' && {
-        service_tier: 'priority',
-      }),
-      ...(convertedTools?.length && {
-        tool_choice: finalTool
-          ? ({ type: 'function', name: finalTool.name } as const)
-          : ('auto' as const),
-        parallel_tool_calls: parallelToolCalls,
-      }),
-    };
-
-    if (useBackgroundResponses) {
-      this.logger.debug(
-        'Submitting OpenAI Responses request in background mode.',
-        {
-          data: {
-            model: this.config.fullName,
-            previousResponseId:
-              this.chainState.getPreviousResponseId() ?? undefined,
-          },
-        },
-      );
-      params.background = true;
-    }
-
-    if (!this.isOReasoningModel) {
-      params.temperature = temperature;
-    }
-
-    // Include web search sources in response when native web search is enabled.
-    // This is set outside the tools block because deep research models use
-    // native web search even when no explicit tools are passed.
-    if (this.capabilities.supportsNativeWebSearch) {
-      params.include = ['web_search_call.action.sources'];
-    }
-
-    // Stateless (store:false) backends keep no server-side reasoning, so request
-    // encrypted reasoning blobs to replay in the next turn's input for cross-turn
-    // reasoning continuity (matching the Codex CLI / OpenCode). The store:true
-    // path retains reasoning via previous_response_id and must not replay it.
-    if (
-      !this.storesResponsesServerSide &&
-      this.capabilities.supportsReasoning
-    ) {
-      params.include = [
-        ...(params.include ?? []),
-        'reasoning.encrypted_content',
-      ];
-    }
-
-    // Extend reasoning with summary option for API call (not needed for token counting)
-    if (this.capabilities.supportsReasoning) {
-      const isGpt5 = isGpt5ModelName(this.config.name);
-      const includeSummary =
-        !isGpt5 ||
-        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
-      if (includeSummary) {
-        params.reasoning = {
-          ...(params.reasoning as Reasoning),
-          summary: 'auto',
-        };
-      }
-    }
-
-    const finalizeContext: ResponseFinalizeContext = {
-      effectiveMessagesLength: effectiveMessages.length,
+    return this.dispatchOpenAIResponseExecution({
+      baseParams,
+      maxOutputTokens,
+      convertedTools,
+      finalTool,
+      useBackgroundResponses,
+      useWebSocket,
+      useStreaming,
+      temperature,
+      client,
+      signal,
+      effectiveMessages,
       compactedThisCall,
       compactedMessages,
-    };
-
-    // Wrap execution in a try/catch so the error handler can recover from an
-    // invalid/expired previous_response_id or a context-window overflow.
-    try {
-      // WebSocket transport: persistent connection for lower-latency tool-use loops
-      if (useWebSocket) {
-        return await this.executeWebSocketPath(
-          params,
-          client,
-          signal,
-          finalizeContext,
-        );
-      }
-
-      if (useStreaming) {
-        return await this.executeStreamingPath(
-          params,
-          client,
-          signal,
-          finalizeContext,
-        );
-      }
-
-      // Non-streaming path
-      return await this.executeNonStreamingPath(
-        params,
-        client,
-        signal,
-        useBackgroundResponses,
-        finalizeContext,
-      );
-    } catch (error) {
-      return await this.handleCreateResponseError(
-        error,
-        options,
-        compactedThisCall,
-      );
-    }
+      requestOptions: options,
+    });
   }
 
   /**
