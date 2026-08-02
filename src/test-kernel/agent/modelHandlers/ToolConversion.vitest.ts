@@ -721,6 +721,38 @@ describe('toGoogleTools', () => {
     expect(params).not.toHaveProperty('additionalProperties');
   });
 
+  it('preserves exclusive integer bounds on both Google surfaces', () => {
+    const definition = {
+      name: 'bounded_values',
+      zodSchema: z.strictObject({
+        integer: z.int().positive().lt(10),
+        number: z.number().positive().lt(10),
+      }),
+    };
+    const interactionParams = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentParams = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const parameters of [interactionParams, generateContentParams]) {
+      expect(parameters.properties.integer).toStrictEqual({
+        type: 'integer',
+        minimum: 1,
+        maximum: 9,
+      });
+      // Number bounds have no adjacent representable value in Google's
+      // supported subset, so retain their inclusive bounds without shifting.
+      expect(parameters.properties.number).toStrictEqual({
+        type: 'number',
+        minimum: 0,
+        maximum: 10,
+      });
+    }
+  });
+
   it('generates finite schemas for the scientific review tool roster', () => {
     const reviewTools = resolveToolDefinitions([
       'wolfram',
@@ -753,6 +785,12 @@ describe('toGoogleTools', () => {
         expect(serialized, definition.name).not.toContain('"type":"null"');
         expect(serialized, definition.name).not.toContain('$ref');
         expect(serialized, definition.name).not.toContain('$defs');
+        if (definition.name === 'arxiv_search') {
+          const parameters = schema as {
+            properties: Record<string, Record<string, unknown>>;
+          };
+          expect(parameters.properties.maxResults.minimum).toBe(1);
+        }
       }
     }
   });
