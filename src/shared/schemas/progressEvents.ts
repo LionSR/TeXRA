@@ -82,22 +82,14 @@ export interface UpdateCompileFailuresPayload extends StreamScopedPayload {
 }
 
 /**
- * Clear the "missing outputs" marker. Either target a specific tab via
- * `streamId`, or clear every workflow tab whose taskState matches the
- * given `streamConfig` (for command-palette pack/clean which has no
- * stream context).
+ * Clear the "missing outputs" marker on exactly one tab. The initiator
+ * selects the `StreamTabId` it acted on; agent/model/config identity is
+ * query/display data, not command authorization, so configuration-based
+ * fan-out addressing does not exist (#9590 rule A3).
  */
-export type ClearMissingOutputsPayload =
-  | { streamId: StreamTabId; streamConfig?: undefined }
-  | {
-      streamId?: undefined;
-      streamConfig: {
-        agent: string;
-        model: string;
-        inputFile: string;
-        outputFiles?: readonly string[];
-      };
-    };
+export interface ClearMissingOutputsPayload {
+  streamId: StreamTabId;
+}
 
 /** Usage is storage-key scoped: tool-use can resume → multiple runs per tab. */
 export interface UpdateStreamUsagePayload {

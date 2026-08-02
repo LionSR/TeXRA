@@ -196,9 +196,7 @@ export function createChatSessionController(
   // projecting status, output, and approval-related facts after the root
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
-  disposers.push(
-    attachTuiRunFactSubscription(runtimeSession.events, snapshotStore),
-  );
+  disposers.push(attachTuiRunFactSubscription(runtimeSession.events));
 
   // Shared prelude of the three run-starting paths (start, resume,
   // follow-up-wake resume): resolve the model-keyed session context and

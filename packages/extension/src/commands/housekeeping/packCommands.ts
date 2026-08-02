@@ -79,7 +79,11 @@ export async function handlePack(config: PackConfig): Promise<void> {
     result = await runWorkspacePack();
   }
   showPackResult(result, inputFile);
-  emitClearMissingOutputs(config);
+  // Exactly addressed (#9590 A3): clear only the tab the caller selected.
+  // Config-only invocations have no stream context and clear nothing.
+  if (!config.skipProgressViewClear && config.streamId) {
+    emitClearMissingOutputs(config.streamId);
+  }
 }
 
 export async function handlePackSingle(
@@ -89,7 +93,8 @@ export async function handlePackSingle(
 ): Promise<void> {
   const result = await runPackSingle(model, inputFile, agent);
   showPackResult(result, inputFile);
-  emitClearMissingOutputs({ agent, model, inputFile, outputFiles: [] });
+  // No missing-outputs clear: these invocations have no stream context, and
+  // configuration-based fan-out to look-alike tabs was removed (#9590 A3).
 }
 
 export async function handlePackMultiple(
@@ -100,10 +105,4 @@ export async function handlePackMultiple(
 ): Promise<void> {
   const result = await runPackMultiple(model, inputFile, agent, inputFiles);
   showPackResult(result, inputFile);
-  emitClearMissingOutputs({
-    agent,
-    model,
-    inputFile,
-    outputFiles: inputFiles,
-  });
 }
