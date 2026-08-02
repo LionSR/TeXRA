@@ -35,7 +35,6 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 /**
  * Config-derived run details: undefined until the stream's `RunConfig`
  * snapshot resolves (see `applySnapshotMetadata`), at which point `kind` and
