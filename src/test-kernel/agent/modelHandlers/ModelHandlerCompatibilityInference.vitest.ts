@@ -17,10 +17,13 @@ describe('model handler compatibility inference', () => {
 
   it.each([
     {
-      name: 'infers the legacy Google GenAI handler from Content transcripts',
+      name: 'infers Google Interactions from step transcripts',
       model: 'gemini35f',
-      message: { role: 'user', parts: [{ text: 'continue' }] },
-      expected: 'ModelHandlerGoogleGenAI',
+      message: {
+        type: 'user_input',
+        content: [{ type: 'text', text: 'continue' }],
+      },
+      expected: 'ModelHandlerGoogleInteractions',
     },
     {
       name: 'infers OpenRouter for Google chat transcripts without a stored key',
@@ -59,8 +62,8 @@ describe('model handler compatibility inference', () => {
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         messages: [
           {
-            role: 'user',
-            parts: [{ text: 'continue' }],
+            type: 'user_input',
+            content: [{ type: 'text', text: 'continue' }],
           },
         ],
         stateSlices: {
@@ -70,7 +73,7 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBe('ModelHandlerGoogleGenAI');
+    ).toBe('ModelHandlerGoogleInteractions');
     expect(info).not.toHaveBeenCalled();
   });
 
@@ -80,8 +83,8 @@ describe('model handler compatibility inference', () => {
         modelId: 'gemini35f',
         messages: [
           {
-            role: 'user',
-            parts: [{ text: 'continue' }],
+            type: 'user_input',
+            content: [{ type: 'text', text: 'continue' }],
           },
         ],
         stateSlices: {
@@ -91,7 +94,7 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBe('ModelHandlerGoogleGenAI');
+    ).toBe('ModelHandlerGoogleInteractions');
     expect(info).not.toHaveBeenCalled();
   });
 
@@ -113,6 +116,22 @@ describe('model handler compatibility inference', () => {
   it('does not log when inference is inconclusive', () => {
     expect(
       inferAndLogPersistedModelHandlerCompatibilityKey('gpt54', [], logger),
+    ).toBeUndefined();
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it('does not infer a handler for retired Google Content transcripts', () => {
+    expect(
+      inferAndLogPersistedModelHandlerCompatibilityKey(
+        'gemini35f',
+        [
+          {
+            role: 'user',
+            parts: [{ text: 'continue' }],
+          } as ProviderMessage,
+        ],
+        logger,
+      ),
     ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });

@@ -27,16 +27,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return isObject(value) ? value : undefined;
 }
 
-function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
-  const record = asRecord(message);
-  if (!record || 'type' in record) return false;
-  const role = record.role;
-  if (role !== 'user' && role !== 'model' && role !== 'system') {
-    return false;
-  }
-  return Array.isArray(record.parts);
-}
-
 function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
   const type = asRecord(message)?.type;
   return (
@@ -77,9 +67,6 @@ export function inferPersistedModelHandlerCompatibilityKey(
     return 'ModelHandlerOpenRouterNative';
   }
   if (modelConfig?.provider !== ModelProvider.GOOGLE) return undefined;
-  if (messages.some(isGoogleGenAIContentMessage)) {
-    return 'ModelHandlerGoogleGenAI';
-  }
   if (messages.some(isGoogleInteractionsStepMessage)) {
     return 'ModelHandlerGoogleInteractions';
   }
