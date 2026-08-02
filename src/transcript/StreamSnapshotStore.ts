@@ -89,8 +89,8 @@ const CHANNEL = 'StreamSnapshotStore';
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
-/** Bound shutdown retries when storage remains unavailable. */
-const MAX_FLUSH_WRITE_RETRIES = 3;
+/** Bound retries for writes that remain dirty. */
+const MAX_DIRTY_WRITE_RETRIES = 3;
 
 /**
  * The run facts this store subscribes to, and the single source of truth for
@@ -317,7 +317,7 @@ interface StreamRecord {
   // refresh/seed/mutate for it.
   seeded: boolean;
   seedChain: Promise<void> | undefined;
-  /** Distinguishes a refresh from later refreshes without changing on follow-ups. */
+  /** Incremented for each refresh attempt; seed-gated mutations do not change it. */
   seedRefreshGeneration: number;
 
   // -- Overlays: patches applied eagerly to memory while a seed is in flight,
@@ -1785,6 +1785,9 @@ export class StreamSnapshotStore {
     chainKey: string,
     write: DirtySidecarWrite,
   ): Promise<void> {
+    // A newer write or staged deletion can revoke this retry before it enters
+    // the per-key queue. Only the current dirty owner may recreate that queue.
+    if (this.dirtyWrites.get(chainKey) !== write) return;
     await this.queueWrite(write.stream, write.key, write.value);
     if (this.dirtyWrites.get(chainKey) === write) {
       this.dirtyWrites.delete(chainKey);
@@ -1833,7 +1836,9 @@ export class StreamSnapshotStore {
     for (const [key, mutex] of this.writeMutexes) {
       if (!key.startsWith(prefix)) continue;
       const dirty = this.dirtyWrites.get(key);
-      if (dirty && deletionState) {
+      // Writes buffered after staging began are newer than every dirty write
+      // sampled here, so they retain ownership of the staged value.
+      if (dirty && deletionState && !deletionState.writes.has(dirty.key)) {
         deletionState.writes.set(dirty.key, dirty.value);
       }
       this.dirtyWrites.delete(key);
@@ -1854,7 +1859,7 @@ export class StreamSnapshotStore {
   private async retryDirtyWrites(stream?: StreamTabId): Promise<void> {
     await this.waitForWrites(stream);
 
-    for (let attempt = 0; attempt < MAX_FLUSH_WRITE_RETRIES; attempt++) {
+    for (let attempt = 0; attempt < MAX_DIRTY_WRITE_RETRIES; attempt++) {
       const dirty = this.dirtyWriteEntries(stream);
       if (dirty.length === 0) return;
       await Promise.allSettled(
@@ -1867,7 +1872,7 @@ export class StreamSnapshotStore {
     const remaining = this.dirtyWriteEntries(stream).length;
     if (remaining > 0) {
       throw new Error(
-        `Sidecar writes remain dirty after ${MAX_FLUSH_WRITE_RETRIES} retries; ` +
+        `Sidecar writes remain dirty after ${MAX_DIRTY_WRITE_RETRIES} retries; ` +
           `${remaining} sidecar write(s) remain dirty.`,
       );
     }
