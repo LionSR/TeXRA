@@ -164,9 +164,9 @@ jobs:
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
 
-  # TODO(windows-ci): add windows-latest after #9409 is complete. The latest
-  # full-matrix run in #9503 found 70 failures across CLI, desktop, storage,
-  # tools, and path handling, so Windows cannot yet be a gating runner.
+  # TODO(windows-ci): restore the full windows-latest matrix after its remaining
+  # failures are fixed. The focused job below keeps CLI input path handling
+  # covered on Windows without running unrelated failing suites.
   test:
     name: kernel tests (linux, shard ${{ matrix.shard }}/2)
     needs: changes
@@ -203,6 +203,35 @@ jobs:
       # shards exist because a single runner can't go wider than that.
       - name: Kernel tests
         run: pnpm run test --maxWorkers=2 --shard=${{ matrix.shard }}/2
+
+  cli-workflow-inputs-windows:
+    name: CLI workflow input paths (Windows)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test CLI workflow input paths
+        run: pnpm exec vitest run --config vitest.config.mjs src/test-kernel/cli/CliRootArgs.vitest.mts
 
   build:
     name: build artifacts (linux)
@@ -407,6 +436,7 @@ jobs:
       - checks
       - guidance-refs
       - test
+      - cli-workflow-inputs-windows
       - build
       - webview-smoke
       - runtime-validation
@@ -416,9 +446,10 @@ jobs:
     steps:
       - name: Require validation jobs success
         run: |
-          # On code PRs the checks/test/build/webview-smoke jobs gate; on
-          # docs-only PRs they are skipped and the lightweight docs build gates
-          # instead; on the nightly schedule only runtime-validation runs.
+          # On code PRs the checks/test/build/webview-smoke and focused Windows
+          # jobs gate; on docs-only PRs they are skipped and the lightweight docs
+          # build gates instead; on the nightly schedule only runtime-validation
+          # runs.
           # Require whichever ran.
           #
           # `changes` must itself succeed (never skip): if it fails, every
@@ -438,6 +469,7 @@ jobs:
           for result in \
             'checks:${{ needs.checks.result }}' \
             'test:${{ needs.test.result }}' \
+            'cli-workflow-inputs-windows:${{ needs.cli-workflow-inputs-windows.result }}' \
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
             'runtime-validation:${{ needs.runtime-validation.result }}' \
