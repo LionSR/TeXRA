@@ -65,7 +65,7 @@ The sync script does **not** upload Storage objects — only metadata rows. Uplo
 # From the repo root (with supabase CLI authenticated):
 for agent in apply criticize devise elevate enhance generic humanize logic notation verifyFix; do
   folder=$(jq -r ".agents[\"$agent\"].folder" docs/supabase/remote-agents.config.json)
-  supabase storage cp "prompts/agents/remote/${agent}.yaml" "ss:///remote-agents/${folder}/${agent}.yaml" --project-ref <PROJECT-REF>
+  supabase storage cp "prompts/agents/remote/${agent}.yaml" "ss:///agent-configs/${folder}/${agent}.yaml" --project-ref <PROJECT-REF>
 done
 ```
 
@@ -139,7 +139,7 @@ for agent in apply criticize devise elevate enhance generic logic notation verif
   fi
 
   folder=$(jq -er --arg agent "$agent" '.agents[$agent].folder' docs/supabase/remote-agents.config.json)
-  supabase storage rm "ss:///remote-agents/${folder}/${agent}_multiple.yaml" --project-ref <PROJECT-REF>
+  supabase storage rm "ss:///agent-configs/${folder}/${agent}_multiple.yaml" --project-ref <PROJECT-REF>
 done
 ```
 
