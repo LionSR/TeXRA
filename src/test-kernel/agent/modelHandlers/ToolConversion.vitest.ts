@@ -859,9 +859,9 @@ describe('toGoogleTools', () => {
     });
   });
 
-  it.each(['oneOf', 'allOf'] as const)(
-    'rejects unsupported nested Google %s combinators',
-    (combinator) => {
+  it.each(['oneOf', 'allOf', 'not'] as const)(
+    'rejects unsupported nested Google %s constraints',
+    (constraint) => {
       expect(() =>
         convertGoogleToolSchema({
           name: 'combined_input',
@@ -869,16 +869,41 @@ describe('toGoogleTools', () => {
             type: 'object',
             properties: {
               value: {
-                [combinator]: [{ type: 'string' }, { type: 'number' }],
+                [constraint]:
+                  constraint === 'not'
+                    ? { const: 'reserved' }
+                    : [{ type: 'string' }, { type: 'number' }],
               },
             },
           },
         }),
       ).toThrow(
-        'Google tool schemas do not support nested oneOf or allOf combinators.',
+        'Google tool schemas do not support nested oneOf, allOf, or not constraints.',
       );
     },
   );
+
+  it('preserves raw numeric exclusive integer bounds exactly', () => {
+    const schema = convertGoogleToolSchema({
+      name: 'bounded_integer',
+      parameters: {
+        type: 'object',
+        properties: {
+          value: {
+            type: 'integer',
+            exclusiveMinimum: 3,
+            exclusiveMaximum: 10,
+          },
+        },
+      },
+    }) as { properties: Record<string, Record<string, unknown>> };
+
+    expect(schema.properties.value).toMatchObject({
+      type: 'integer',
+      minimum: 4,
+      maximum: 9,
+    });
+  });
 
   it('rejects Google literal constraints that cannot be represented', () => {
     expect(() =>

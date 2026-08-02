@@ -282,9 +282,13 @@ const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>(
 function toGoogleOpenApiSchemaNode(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toGoogleOpenApiSchemaNode);
   if (!isSchemaObject(value)) return value;
-  if (Object.hasOwn(value, 'oneOf') || Object.hasOwn(value, 'allOf')) {
+  if (
+    Object.hasOwn(value, 'oneOf') ||
+    Object.hasOwn(value, 'allOf') ||
+    Object.hasOwn(value, 'not')
+  ) {
     throw new Error(
-      'Google tool schemas do not support nested oneOf or allOf combinators.',
+      'Google tool schemas do not support nested oneOf, allOf, or not constraints.',
     );
   }
   if (
@@ -322,10 +326,20 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
   // Google has no exclusive-bound fields, but integer exclusivity can be
   // represented exactly with the adjacent inclusive integer.
   if (value.type === 'integer') {
-    if (value.exclusiveMinimum === true && typeof value.minimum === 'number') {
+    if (typeof value.exclusiveMinimum === 'number') {
+      converted.minimum = Math.floor(value.exclusiveMinimum) + 1;
+    } else if (
+      value.exclusiveMinimum === true &&
+      typeof value.minimum === 'number'
+    ) {
       converted.minimum = Math.floor(value.minimum) + 1;
     }
-    if (value.exclusiveMaximum === true && typeof value.maximum === 'number') {
+    if (typeof value.exclusiveMaximum === 'number') {
+      converted.maximum = Math.ceil(value.exclusiveMaximum) - 1;
+    } else if (
+      value.exclusiveMaximum === true &&
+      typeof value.maximum === 'number'
+    ) {
       converted.maximum = Math.ceil(value.maximum) - 1;
     }
   }
