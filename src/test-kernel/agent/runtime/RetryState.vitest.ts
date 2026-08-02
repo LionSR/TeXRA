@@ -866,6 +866,84 @@ describe('RetryState', () => {
     expect(refreshSignal?.aborted).toBe(false);
   });
 
+  it('records the relay 401 before a successful reactive recovery', async () => {
+    const streamId = 'retry-relay-refresh-diagnostics' as StreamTabId;
+    const logger = new TraceEmitter();
+    const events: Record<string, unknown>[] = [];
+    logger.subscribe((event) => {
+      if (
+        event.type === 'domain' &&
+        event.key === 'modelRetryLifecycle' &&
+        isObject(event.data)
+      ) {
+        events.push(event.data);
+      }
+    });
+    const session = createTestSession();
+    const rebind = vi.fn(async () => undefined);
+    SupabaseClient.setAuthProvider(createAuthTokenProvider());
+    const unauthorized = Object.assign(new Error('relay token expired'), {
+      status: 401,
+    });
+    const operation = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(unauthorized)
+      .mockResolvedValueOnce('recovered');
+
+    class ReactiveRecoveryNode extends ExposedRetryNode {
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(operation);
+      }
+    }
+
+    const node = new ReactiveRecoveryNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: testRetryModelCell(rebind, 'relay'),
+    });
+
+    try {
+      await expect(node._exec(undefined)).resolves.toBe('recovered');
+      expect(
+        events.map((event) => ({
+          event: event.event,
+          attemptOrdinal: event.attemptOrdinal,
+          statusCode: event.statusCode,
+          recoveryPending: event.recoveryPending,
+          credentialRefresh: event.credentialRefresh,
+        })),
+      ).toEqual([
+        {
+          event: 'attempt_started',
+          attemptOrdinal: 1,
+          statusCode: undefined,
+          recoveryPending: undefined,
+          credentialRefresh: undefined,
+        },
+        {
+          event: 'attempt_failed',
+          attemptOrdinal: 1,
+          statusCode: 401,
+          recoveryPending: true,
+          credentialRefresh: true,
+        },
+        {
+          event: 'attempt_succeeded',
+          attemptOrdinal: 1,
+          statusCode: undefined,
+          recoveryPending: undefined,
+          credentialRefresh: true,
+        },
+      ]);
+      expect(operation).toHaveBeenCalledTimes(2);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('keeps node-level auto-retry for transient stream failures', () => {
     const node = createModelInvocationNode();
     const streamError = new Error('stream closed after response started');

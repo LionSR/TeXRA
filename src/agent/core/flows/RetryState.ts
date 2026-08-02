@@ -309,6 +309,15 @@ export abstract class RetryableInvocationNode<
         isUnauthorizedProviderError(formatted) &&
         !this._hasAttemptedTokenRefresh
       ) {
+        this.logRetryLifecycle('attempt_failed', {
+          decisionSource: attemptSource,
+          credentialRefresh: true,
+          recoveryPending: true,
+          userRetryable: formatted.userRetryable,
+          statusCode: formatted.statusCode,
+          provider: formatted.provider,
+          isRelayError: formatted.isRelayError,
+        });
         try {
           const result = await this.attemptRelay401Recovery(
             err,
