@@ -63,7 +63,7 @@ import {
   formatToolResultAsText,
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
-import { convertToolSchema, toGoogleTools } from '../toolConversion';
+import { convertGoogleToolSchema, toGoogleTools } from '../toolConversion';
 import type { GoogleMediaSource } from './googleHandlerShared';
 
 // Interactions SDK aliases (public surface; the SDK re-exports these under the
@@ -682,10 +682,19 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
     const content: Content[] = [
-      this.textMedia(userPrefix),
+      ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
       ...(await this.buildLabelledMedia(mediaFiles, 'initial')),
-      this.textMedia(`\n${userRequest}`),
     ];
+    if (userRequest.trim()) {
+      const separator = content.length > 0 ? '\n' : '';
+      content.push(this.textMedia(`${separator}${userRequest}`));
+    }
+
+    if (content.length === 0) {
+      throw new Error(
+        'Google messages require a non-empty user prefix, request, or attachment.',
+      );
+    }
 
     return [{ type: 'user_input', content } satisfies UserInputStep];
   }
@@ -697,8 +706,14 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   ): Promise<Step[]> {
     const content: Content[] = [
       ...(await this.buildLabelledMedia(mediaFiles, 'followUp')),
-      this.textMedia(userMessage),
+      ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
     ];
+
+    if (content.length === 0) {
+      throw new Error(
+        'Google follow-up messages require non-empty text or an attachment.',
+      );
+    }
 
     messages.push({ type: 'user_input', content } satisfies UserInputStep);
     return messages;
@@ -708,6 +723,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     messages: Step[],
     userMessage: string,
   ): Promise<Step[]> {
+    if (!userMessage.trim()) return messages;
     const last = messages.at(-1);
     if (last?.type === 'user_input') {
       (last.content ??= []).push(this.textMedia(userMessage));
@@ -735,6 +751,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   }
 
   protected textMedia(text: string): TextContent {
+    if (!text) {
+      throw new Error('Google text content must not be empty.');
+    }
     return { type: 'text', text };
   }
 
@@ -1132,12 +1151,14 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     mediaFiles: FileLocation[],
   ): Promise<MediaAttachmentKind[]> {
     if (!mediaFiles.length || !this.supportsFileUploads()) return [];
-    const lastUser = messages.findLast(
-      (s): s is UserInputStep => s.type === 'user_input',
-    );
-    if (!lastUser) return [];
     const media = await this.createMediaForRound(mediaFiles, 'insert');
     if (media.length === 0) return [];
+    const trailing = messages.at(-1);
+    const lastUser =
+      trailing?.type === 'user_input' && messages.length > this.sentStepCount
+        ? trailing
+        : ({ type: 'user_input', content: [] } satisfies UserInputStep);
+    if (lastUser !== trailing) messages.push(lastUser);
     (lastUser.content ??= []).unshift(...media);
     return this.consumeInsertedAttachmentKinds('insert');
   }
@@ -2097,8 +2118,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   /**
    * Convert generic tool definitions to Interactions `FunctionT[]`.
    *
-   * Reuses the wire-agnostic `convertToolSchema` (JSON-Schema flatten +
-   * `$schema` strip) and feeds its output into `FunctionT.parameters` — the
+   * Generates Google's finite OpenAPI schema and feeds it directly into
+   * `FunctionT.parameters` — the
    * chat `toGoogleTools` wrapper (`[{ functionDeclarations }]`) is NOT reused.
    */
   private toInteractionsTools(defs: ToolDefinition[]): FunctionT[] {
@@ -2106,7 +2127,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       type: 'function',
       name: d.name,
       description: d.description,
-      parameters: convertToolSchema(d) ?? undefined,
+      parameters: convertGoogleToolSchema(d) ?? undefined,
     }));
   }
 }
