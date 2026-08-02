@@ -654,8 +654,10 @@ describe('toGoogleTools', () => {
 
     const tools = toGoogleTools(defs);
     const tool = tools[0] as GeminiTool;
-    const params = tool.functionDeclarations?.[0]
-      .parametersJsonSchema as Record<string, unknown>;
+    const params = tool.functionDeclarations?.[0].parameters as Record<
+      string,
+      unknown
+    >;
 
     assert.equal(params.type, 'object');
     assert.equal(params.oneOf, undefined);
@@ -675,5 +677,42 @@ describe('toGoogleTools', () => {
     assert.ok(properties.status);
     // Only command is required by every branch.
     assert.deepEqual(params.required, ['command']);
+  });
+
+  it('removes null-only union branches from optional Google parameters', () => {
+    const tools = toGoogleTools([
+      {
+        name: 'optional_input',
+        zodSchema: z.strictObject({
+          query: z.string().nullish(),
+          count: z.number().positive().nullish(),
+        }),
+      },
+    ]);
+    const params = (tools[0] as GeminiTool).functionDeclarations?.[0]
+      .parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    expect(params.properties.query).toStrictEqual({ type: 'string' });
+    expect(params.properties.count).toStrictEqual({ type: 'number' });
+    expect(params).not.toHaveProperty('additionalProperties');
+  });
+
+  it('bounds recursive JSON values before Google flattens the schema', () => {
+    const tools = toGoogleTools([
+      {
+        name: 'json_input',
+        zodSchema: z.strictObject({ value: z.json().nullish() }),
+      },
+    ]);
+    const declaration = (tools[0] as GeminiTool).functionDeclarations?.[0];
+    const params = declaration?.parameters as Record<string, unknown>;
+    const serialized = JSON.stringify(params);
+
+    expect(serialized.includes('$ref')).toBe(false);
+    expect(serialized.includes('$defs')).toBe(false);
+    expect(serialized.length < 1_000).toBe(true);
+    expect(declaration?.parametersJsonSchema).toBe(undefined);
   });
 });

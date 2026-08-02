@@ -63,7 +63,7 @@ import {
   formatToolResultAsText,
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
-import { convertToolSchema, toGoogleTools } from '../toolConversion';
+import { convertGoogleToolSchema, toGoogleTools } from '../toolConversion';
 import type { GoogleMediaSource } from './googleHandlerShared';
 
 // Interactions SDK aliases (public surface; the SDK re-exports these under the
@@ -132,6 +132,38 @@ const COUNTABLE_MEDIA_RESOLUTION_BY_LEVEL: Partial<
  */
 function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
+}
+
+/** Remove text blocks that the Interactions API rejects as missing content. */
+function omitEmptyTextContent<T extends Content>(content: readonly T[]): T[] {
+  return content.filter(
+    (item) => !isTextContent(item) || Boolean(item.text?.trim()),
+  );
+}
+
+/** Also normalize transcripts restored from storage at the API boundary. */
+function omitEmptyTextContentFromSteps(steps: readonly Step[]): Step[] {
+  return steps.map((step) => {
+    if (step.type === 'user_input' || step.type === 'model_output') {
+      return {
+        ...step,
+        content: omitEmptyTextContent(step.content ?? []),
+      } satisfies UserInputStep | ModelOutputStep;
+    }
+    if (step.type === 'thought' && step.summary) {
+      return {
+        ...step,
+        summary: omitEmptyTextContent(step.summary),
+      } satisfies ThoughtStep;
+    }
+    if (step.type === 'function_result' && Array.isArray(step.result)) {
+      return {
+        ...step,
+        result: omitEmptyTextContent(step.result),
+      } satisfies FunctionResultStep;
+    }
+    return step;
+  });
 }
 
 /**
@@ -682,9 +714,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
     const content: Content[] = [
-      this.textMedia(userPrefix),
+      ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
       ...(await this.buildLabelledMedia(mediaFiles, 'initial')),
-      this.textMedia(`\n${userRequest}`),
+      ...(userRequest.trim() ? [this.textMedia(userRequest)] : []),
     ];
 
     return [{ type: 'user_input', content } satisfies UserInputStep];
@@ -697,7 +729,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   ): Promise<Step[]> {
     const content: Content[] = [
       ...(await this.buildLabelledMedia(mediaFiles, 'followUp')),
-      this.textMedia(userMessage),
+      ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
     ];
 
     messages.push({ type: 'user_input', content } satisfies UserInputStep);
@@ -1255,9 +1287,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // completes. Filtering to client-input steps fixes both the tool-round 400
     // and the text-round assistant-turn re-send.
     const shouldSendAll = !stateful || this.chainedInteractionId === null;
-    const inputSteps = shouldSendAll
-      ? base
-      : base.slice(this.sentStepCount).filter(isClientInputStep);
+    const inputSteps = omitEmptyTextContentFromSteps(
+      shouldSendAll
+        ? base
+        : base.slice(this.sentStepCount).filter(isClientInputStep),
+    );
     const previousId =
       stateful && !shouldSendAll
         ? (this.chainedInteractionId ?? undefined)
@@ -2037,8 +2071,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   /**
    * Convert generic tool definitions to Interactions `FunctionT[]`.
    *
-   * Reuses the wire-agnostic `convertToolSchema` (JSON-Schema flatten +
-   * `$schema` strip) and feeds its output into `FunctionT.parameters` — the
+   * Reuses the Google-specific bounded schema conversion and feeds its output
+   * into `FunctionT.parameters` — the
    * chat `toGoogleTools` wrapper (`[{ functionDeclarations }]`) is NOT reused.
    */
   private toInteractionsTools(defs: ToolDefinition[]): FunctionT[] {
@@ -2046,7 +2080,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       type: 'function',
       name: d.name,
       description: d.description,
-      parameters: convertToolSchema(d) ?? undefined,
+      parameters: convertGoogleToolSchema(d) ?? undefined,
     }));
   }
 }

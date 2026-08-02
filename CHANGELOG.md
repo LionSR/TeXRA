@@ -56,6 +56,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Google models accept ordinary prompts and complex tool sets reliably** —
+  the Interactions API no longer receives empty text blocks, and Google tool
+  declarations use its supported schema representation instead of failing
+  during server-side schema processing.
 - **OpenAI background responses keep one polling deadline across retries** —
   reconnecting to the same response no longer restarts its three-hour polling
   window. Once that window expires, TeXRA stops automatic retries and permits
