@@ -207,6 +207,27 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('treats a second bare Escape as fresh after lifecycle focus advances', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      finishNestedHierarchyAndFocusRoot();
+      await waitFor(() => activeStreamId.get() === ROOT);
+      stdin.write(ESC);
+      await waitFor(() => onInterruptStream.mock.calls.length === 1);
+
+      expect(onInterruptStream).toHaveBeenCalledWith(ROOT);
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('discards delayed child back when the child is promoted', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
@@ -222,6 +243,27 @@ describe('App foreground Escape ownership', () => {
 
       expect(activeStreamId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('treats a second Escape as fresh after topology invalidates the pending action', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      setParentStream(CHILD, null);
+      stdin.write(ESC);
+      await waitFor(() => onInterruptStream.mock.calls.length === 1);
+
+      expect(activeStreamId.get()).toBe(CHILD);
+      expect(onInterruptStream).toHaveBeenCalledWith(CHILD);
     } finally {
       instance.unmount();
     }
