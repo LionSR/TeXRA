@@ -118,6 +118,19 @@ export interface CompletedRunConversationReadResult {
   readonly hasOrderingAmbiguity?: boolean;
 }
 
+/** Whether completed-run storage proves a conversation or transcript association exists. */
+export function hasCompletedRunConversationEvidence(
+  result: CompletedRunConversationReadResult,
+): boolean {
+  return (
+    (result.conversation?.length ?? 0) > 0 ||
+    result.streamId !== undefined ||
+    (result.streamIds?.length ?? 0) > 0 ||
+    (result.candidateStreamIds?.length ?? 0) > 0 ||
+    (result.associatedStreamIds?.length ?? 0) > 0
+  );
+}
+
 interface CompletedRunConversationConflict {
   readonly rowId: string;
   readonly streamIds: readonly StreamTabId[];

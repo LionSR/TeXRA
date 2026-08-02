@@ -125,13 +125,17 @@ export async function findPersistedStreamFallbacksForExecution(
   options: PersistedStreamIdResolverOptions = {},
 ): Promise<StreamTabId[]> {
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched } =
+  const { persistedStreams, mergeCandidateMetaMatched, childMetaMatched } =
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
+  const excludedChildren = new Set(childMetaMatched);
   const suffixMatched = findExecutionSuffixMatches(
     [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
     executionId,
-  );
-  return orderedFallbacks(primary, [...metaMatched, ...suffixMatched]);
+  ).filter((candidate) => !excludedChildren.has(candidate));
+  return orderedFallbacks(primary, [
+    ...mergeCandidateMetaMatched,
+    ...suffixMatched,
+  ]);
 }
 
 /**

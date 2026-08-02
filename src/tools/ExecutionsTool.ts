@@ -56,6 +56,7 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
+  hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
   readCompletedRunTodos,
   resolvePersistedStreamIdForExecution,
@@ -857,6 +858,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     limit: number,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
+    const conversationResult = await readCompletedRunConversation(executionId);
     const {
       conversation,
       source,
@@ -867,7 +869,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       conflicts,
       hasOrderingCycle,
       hasOrderingAmbiguity,
-    } = await readCompletedRunConversation(executionId);
+    } = conversationResult;
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
@@ -877,10 +879,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       const exists =
         meta !== null ||
         resumability.resumable ||
-        streamId !== undefined ||
-        (streamIds?.length ?? 0) > 0 ||
-        (candidateStreamIds?.length ?? 0) > 0 ||
-        (associatedStreamIds?.length ?? 0) > 0;
+        hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }

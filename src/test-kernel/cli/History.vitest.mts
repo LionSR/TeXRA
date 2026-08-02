@@ -14,7 +14,13 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
 const mocks = vi.hoisted(() => ({
@@ -89,7 +95,11 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { StreamSnapshotStore, type TraceDocument } from '@transcript';
+import {
+  StreamLogStore,
+  StreamSnapshotStore,
+  type TraceDocument,
+} from '@transcript';
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
@@ -376,6 +386,57 @@ describe('CLI history runtime', () => {
       executionId,
     );
     await snapshots.flush();
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+
+    await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
+      id: executionId,
+      status: 'unknown',
+      conversationPreview: null,
+    });
+    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
+      status: 'incomplete',
+    });
+  });
+
+  it('treats children-only associations as incomplete markdown export evidence', async () => {
+    const executionId = 'a11ce6a11ce6' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [
+      `bash@tool#${executionId}`,
+      `codex@tool#${executionId}`,
+    ] as StreamTabId[]) {
+      snapshots.setRunConfig(streamId, config, executionId);
+      snapshots.setParentStream(streamId, parent);
+    }
+    await snapshots.flush();
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+
+    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
+      status: 'incomplete',
+    });
+  });
+
+  it('finds a sole diagnostic-only exact root in CLI history details', async () => {
+    const executionId = 'a11ce7a11ce7' as ExecutionId;
+    const root = `orchestrator@model#${executionId}` as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, config, executionId);
+    await snapshots.flush();
+    const logs = await StreamLogStore.open();
+    logs.append(root, {
+      id: 'diagnostic-only-root',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Root status only',
+    });
+    await logs.flush();
     mocks.readConfig.mockResolvedValue(null);
     mocks.readMeta.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);

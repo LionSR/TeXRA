@@ -21,7 +21,10 @@ import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
-import { readCompletedRunConversation } from '@transcript';
+import {
+  hasCompletedRunConversationEvidence,
+  readCompletedRunConversation,
+} from '@transcript';
 
 import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
 import {
@@ -167,10 +170,7 @@ export async function readCliHistoryDetails(
   ]);
   const conversation = conversationResult.conversation;
   const hasTranscriptEvidence =
-    conversationResult.streamId !== undefined ||
-    (conversationResult.streamIds?.length ?? 0) > 0 ||
-    (conversationResult.candidateStreamIds?.length ?? 0) > 0 ||
-    (conversationResult.associatedStreamIds?.length ?? 0) > 0;
+    hasCompletedRunConversationEvidence(conversationResult);
   const resumeData =
     resumability.resumable && config
       ? await readCliToolUseResumeDataForListing(id, config)
@@ -258,17 +258,11 @@ export type CliHistoryExportInputResult =
 export async function readCliHistoryExportInput(
   id: ExecutionId,
 ): Promise<CliHistoryExportInputResult> {
-  const { meta, config, conversation, exportInput } =
+  const { meta, config, conversation, hasTranscriptEvidence, exportInput } =
     await loadChatExportInput(id);
   if (exportInput) return { status: 'ok', exportInput };
-  if (!meta && !config && !conversation) {
-    const transcript = await readCompletedRunConversation(id);
-    const hasTranscriptEvidence =
-      transcript.streamId !== undefined ||
-      (transcript.streamIds?.length ?? 0) > 0 ||
-      (transcript.candidateStreamIds?.length ?? 0) > 0 ||
-      (transcript.associatedStreamIds?.length ?? 0) > 0;
-    if (!hasTranscriptEvidence) return { status: 'not_found' };
+  if (!meta && !config && !conversation && !hasTranscriptEvidence) {
+    return { status: 'not_found' };
   }
   return { status: 'incomplete' };
 }

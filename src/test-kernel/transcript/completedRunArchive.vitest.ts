@@ -67,6 +67,7 @@ import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
+  EXECUTION_STREAM_ID_SOURCE,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -1724,6 +1725,70 @@ describe('completedRunArchive facade', () => {
     });
     expect(endpoint.output).toContain('Ordering cycle detected: yes');
     expect(endpoint.output).not.toContain('Merged streams:');
+  });
+
+  it('never falls back from an empty registered root to an explicit child', async () => {
+    const executionId = '0999ca0999ca' as ExecutionId;
+    const root = 'orchestrator@model#0999ca0999ca' as StreamTabId;
+    const child = 'child@tool#0999ca0999ca' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date().toISOString(),
+      streamId: root,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+    });
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(child, runConfig('child'), executionId);
+    snapshots.setParentStream(child, root);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(root);
+    logs.append(
+      child,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+    });
+
+    const legacy = [{ role: 'user', content: 'Legacy root prompt' }];
+    await getExecutionStore(executionId).write('conversation', legacy);
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: legacy,
+      source: 'legacyKV',
+    });
+  });
+
+  it('preserves a sole diagnostic-only exact root as execution evidence', async () => {
+    const executionId = '0999cb0999cb' as ExecutionId;
+    const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      root,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+      streamId: root,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain('Conversation (0 messages)');
+    expect(endpoint.output).toContain(`Stream: ${root}`);
   });
 
   it('never substitutes child conversation rows for empty confirmed roots', async () => {
