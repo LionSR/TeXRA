@@ -89,7 +89,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import type { TraceDocument } from '@transcript';
+import { StreamSnapshotStore, type TraceDocument } from '@transcript';
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
@@ -360,6 +360,31 @@ describe('CLI history runtime', () => {
     await expect(
       readCliHistoryDetails('dead' as ExecutionId),
     ).resolves.toBeNull();
+  });
+
+  it('treats candidate-only sidecar associations as a found execution', async () => {
+    const executionId = 'a11ce5a11ce5' as ExecutionId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(
+      `orchestrator@old#${executionId}` as StreamTabId,
+      config,
+      executionId,
+    );
+    snapshots.setRunConfig(
+      `orchestrator@new#${executionId}` as StreamTabId,
+      config,
+      executionId,
+    );
+    await snapshots.flush();
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+
+    await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
+      id: executionId,
+      status: 'unknown',
+      conversationPreview: null,
+    });
   });
 
   it('treats full-only conversation data as a found execution', async () => {

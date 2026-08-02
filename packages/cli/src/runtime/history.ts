@@ -166,6 +166,11 @@ export async function readCliHistoryDetails(
     deriveResumability(id),
   ]);
   const conversation = conversationResult.conversation;
+  const hasTranscriptEvidence =
+    conversationResult.streamId !== undefined ||
+    (conversationResult.streamIds?.length ?? 0) > 0 ||
+    (conversationResult.candidateStreamIds?.length ?? 0) > 0 ||
+    (conversationResult.associatedStreamIds?.length ?? 0) > 0;
   const resumeData =
     resumability.resumable && config
       ? await readCliToolUseResumeDataForListing(id, config)
@@ -193,7 +198,8 @@ export async function readCliHistoryDetails(
     !config &&
     !conversationPreview &&
     !fullConversation &&
-    !resumeData
+    !resumeData &&
+    !hasTranscriptEvidence
   ) {
     return null;
   }
