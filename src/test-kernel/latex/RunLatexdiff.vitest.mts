@@ -181,15 +181,14 @@ describe('normalizeRunLatexdiffOutputsByRound', () => {
     ).toEqual({ 1: [valid] });
   });
 
-  it('treats a record with any non-integer round key as legacy-shaped, salvaging nothing when it is not run-nested either', () => {
-    // Mirrors parsePersistedRoundIndexed's whole-file legacy fallback: a
-    // non-integer key routes the record to the run-nested arm, and since
-    // this payload isn't actually nested per-run data, nothing salvages.
+  it('drops non-integer round keys while retaining valid rounds', () => {
+    const valid = createOutputFile({ round: 1 });
+
     expect(
       normalizeRunLatexdiffOutputsByRound({
         '1.5': [createOutputFile({ round: 1.5 })],
-        1: [createOutputFile({ round: 1 })],
+        1: [valid],
       }),
-    ).toBeNull();
+    ).toEqual({ 1: [valid] });
   });
 });
