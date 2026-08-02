@@ -26,7 +26,7 @@ import {
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream } from '@tools/contextHelpers';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { emptyResult, executed } from '@tools/core/result';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -321,7 +321,10 @@ function execList(): ToolResult {
     .map((b) => b.key);
   const all = [...repoKeys, ...prKeys, ...issueKeys];
   if (all.length === 0) {
-    return emptyResult('No active subscriptions on this stream.');
+    return executed(
+      'No active subscriptions on this stream.',
+      'No active subscriptions on this stream.',
+    );
   }
   return executed(
     all.map((k) => `- ${k}`).join('\n'),

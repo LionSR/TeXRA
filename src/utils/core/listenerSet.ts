@@ -7,7 +7,6 @@
  * runtime and host-interaction layers.
  */
 export interface ListenerSet<T extends (...args: never[]) => void> {
-  readonly size: number;
   add(listener: T): () => void;
   clear(): void;
   [Symbol.iterator](): IterableIterator<T>;
@@ -18,9 +17,6 @@ export function createListenerSet<
 >(): ListenerSet<T> {
   const listeners = new Set<T>();
   return {
-    get size() {
-      return listeners.size;
-    },
     add: (listener) => {
       listeners.add(listener);
       return () => {
