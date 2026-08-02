@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { hasMagic } from 'glob';
 import stripAnsi from 'strip-ansi';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -37,6 +38,7 @@ import {
   expandWorkflowInputSpecs,
   hasMixedStdinWorkflowInputSpecs,
   isMaterializedStdinWorkflowInputPath,
+  workflowInputGlobOptionsForTests,
 } from '@cli/runtime/workflowInputs';
 import {
   resolveWorkflowOutput,
@@ -775,6 +777,74 @@ describe('CLI root argument routing', () => {
       await expect(
         expandWorkflowInputSpecs([path.join(root, '*.bib')], root, '--context'),
       ).resolves.toEqual(['a.bib', 'b.bib']);
+    });
+  });
+
+  it('selects platform-specific backslash glob semantics', () => {
+    const pattern = String.raw`refs\*.bib`;
+
+    expect(hasMagic(pattern, workflowInputGlobOptionsForTests('win32'))).toBe(
+      true,
+    );
+    expect(hasMagic(pattern, workflowInputGlobOptionsForTests('linux'))).toBe(
+      false,
+    );
+  });
+
+  it('expands host-native globs for both --input and --context', async () => {
+    await withTempDir('texra-cli-native-glob-', async (root) => {
+      await fs.mkdir(path.join(root, 'refs'));
+      await fs.writeFile(path.join(root, 'refs', 'zeta.bib'), 'zeta');
+      await fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha');
+      await fs.writeFile(path.join(root, 'refs', 'notes.md'), 'notes');
+      const pattern = path.join('refs', '*.bib');
+
+      await expect(
+        expandRunInputs([pattern], [pattern], root),
+      ).resolves.toEqual({
+        inputFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
+        contextFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
+      });
+    });
+  });
+
+  (process.platform === 'win32' ? it.skip : it)(
+    'preserves POSIX glob escapes for literal metacharacters',
+    async () => {
+      await withTempDir('texra-cli-escaped-glob-', async (root) => {
+        await fs.mkdir(path.join(root, 'refs'));
+        await fs.writeFile(path.join(root, 'refs', '[ab]-one.bib'), 'literal');
+        await fs.writeFile(path.join(root, 'refs', 'a-one.bib'), 'class match');
+
+        await expect(
+          expandWorkflowInputSpecs([String.raw`refs/\[ab]-*.bib`], root),
+        ).resolves.toEqual(['refs/[ab]-one.bib']);
+      });
+    },
+  );
+
+  it('detects brace-only workflow globs', async () => {
+    await withTempDir('texra-cli-brace-glob-', async (root) => {
+      await fs.mkdir(path.join(root, 'refs'));
+      await fs.writeFile(path.join(root, 'refs', 'beta.bib'), 'beta');
+      await fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha');
+
+      await expect(
+        expandWorkflowInputSpecs(['refs/{alpha,beta}.bib'], root),
+      ).resolves.toEqual(['refs/alpha.bib', 'refs/beta.bib']);
+    });
+  });
+
+  it('attributes unmatched globs to the original input or context flag', async () => {
+    await withTempDir('texra-cli-unmatched-glob-', async (root) => {
+      const pattern = path.join('missing refs', '*.bib');
+
+      await expect(
+        expandWorkflowInputSpecs([`  ${pattern}  `], root),
+      ).rejects.toThrow(`--input: no files matched: ${pattern}`);
+      await expect(
+        expandWorkflowInputSpecs([`  ${pattern}  `], root, '--context'),
+      ).rejects.toThrow(`--context: no files matched: ${pattern}`);
     });
   });
 
