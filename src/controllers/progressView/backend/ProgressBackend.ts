@@ -6,6 +6,7 @@ import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteracti
 import {
   defaultSession,
   type SessionHandle,
+  type WorkspaceStorageTransitionHooks,
 } from '@agent/runtime/SessionHandle';
 import {
   WebviewBridge,
@@ -330,12 +331,16 @@ export class ProgressBackend {
   }
 
   /** Replace session stores and presentation caches after a workspace move. */
-  reloadAfterStorageRootChange(): Promise<void> {
+  reloadAfterStorageRootChange(
+    transitionHooks?: WorkspaceStorageTransitionHooks,
+  ): Promise<void> {
     const reload = async () => {
       let sessionReloadError: unknown;
       let storageRootReplaced = false;
       try {
-        storageRootReplaced = await this.session.reloadAfterStorageRootChange();
+        storageRootReplaced = transitionHooks
+          ? await this.session.reloadAfterStorageRootChange(transitionHooks)
+          : await this.session.reloadAfterStorageRootChange();
       } catch (error) {
         sessionReloadError = error;
       }
