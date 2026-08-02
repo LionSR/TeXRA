@@ -92,7 +92,6 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
       useIncludedAccess: () => false,
       getUserTier: () => undefined,
     },
-    modelListRefresh: Promise.resolve(),
     onCredentialChanged: noOp,
     onError: () => undefined,
   });
