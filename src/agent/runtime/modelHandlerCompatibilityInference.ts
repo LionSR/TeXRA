@@ -2,7 +2,7 @@ import { ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import {
-  normalizeProviderMessages,
+  ProviderMessageArraySchema,
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import {
@@ -89,17 +89,11 @@ function currentModelFromRawSharedState(
   );
 }
 
-function unwrapSharedState(shared: unknown): Record<string, unknown> | null {
-  const record = asRecord(shared);
-  if (!record) return null;
-  return asRecord(record.state) ?? record;
-}
-
 export function inferPersistedFlowModelHandlerCompatibilityKey(
   model: string,
   shared: unknown,
 ): ModelHandlerCompatibilityKey | undefined {
-  const record = unwrapSharedState(shared);
+  const record = asRecord(shared);
   if (!record) return undefined;
 
   const parsedKey = ModelHandlerCompatibilityKeySchema.nullish().safeParse(
@@ -107,14 +101,11 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   );
   if (parsedKey.success && parsedKey.data) return parsedKey.data;
 
-  // The union in `normalizeProviderMessages` already tries `record` as a bare
-  // messages array, then `record.messages`, then `record.conversation` — one
-  // call covers all three legacy shapes.
-  const messages = normalizeProviderMessages(record);
-  if (!messages) return undefined;
+  const messages = ProviderMessageArraySchema.safeParse(record.messages);
+  if (!messages.success) return undefined;
 
   return inferPersistedModelHandlerCompatibilityKey(
     currentModelFromRawSharedState(record) ?? model,
-    messages,
+    messages.data,
   );
 }

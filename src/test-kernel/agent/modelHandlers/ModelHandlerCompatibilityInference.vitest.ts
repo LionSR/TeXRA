@@ -88,7 +88,7 @@ describe('model handler compatibility inference', () => {
     expect(
       inferPersistedFlowModelHandlerCompatibilityKey('gemini35f', {
         modelHandlerCompatibilityKey: 'ModelHandlerOpenRouterNative',
-        conversation: [
+        messages: [
           {
             role: 'user',
             parts: [{ text: 'continue' }],
