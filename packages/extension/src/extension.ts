@@ -37,7 +37,7 @@ import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
-  configureLatexSettings,
+  initializeLatexSupport,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
@@ -506,7 +506,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setTimeout(() => void configureLatexSettings(), 0);
+  setTimeout(() => void initializeLatexSupport(), 0);
   const mainViewProvider = registerCommands(context);
   // Wire the two sidebar surfaces to each other before anything can invoke a
   // placement command: `texra.showProgressView` is registered above and is
