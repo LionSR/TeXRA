@@ -71,6 +71,7 @@ interface CapturedCalls {
 function bgClient(opts: {
   submit: () => Interaction;
   getSequence: Array<Interaction | Error>;
+  beforeGet?: (index: number) => void | Promise<void>;
   onCancel?: (id: string) => void | Promise<void>;
   generateContent?: () => Promise<unknown>;
   countTokens?: (params: unknown) => Promise<unknown>;
@@ -97,6 +98,7 @@ function bgClient(opts: {
       },
       get: async (id: string) => {
         calls.get.push(id);
+        await opts.beforeGet?.(getIdx);
         const next =
           opts.getSequence[Math.min(getIdx, opts.getSequence.length - 1)];
         getIdx += 1;
@@ -490,6 +492,119 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.create).toHaveLength(1);
     expect(calls.get).toEqual(['int_expire']);
     expect(calls.cancel).toEqual(['int_expire']);
+  });
+
+  it.each([
+    {
+      outcome: completedInteraction('int_late'),
+      outcomeLabel: 'returns',
+    },
+    { outcome: new TypeError('late failure'), outcomeLabel: 'rejects' },
+  ])(
+    'rejects a resumed retrieval that $outcomeLabel after the original deadline',
+    async ({ outcome }) => {
+      mockConfig();
+      const startedAt = new Date('2026-08-01T00:00:00.000Z');
+      vi.useFakeTimers({ now: startedAt });
+      const handler = createHandler();
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_late', status: 'in_progress' }),
+        getSequence: [new TypeError('fetch failed'), outcome],
+        beforeGet: (index) => {
+          if (index === 1) {
+            vi.setSystemTime(startedAt.getTime() + MAX_DURATION_MS);
+          }
+        },
+      });
+
+      const first = respond(handler, client, [userStep('a')]);
+      const firstError = captureRejection(first);
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      await firstError;
+
+      vi.setSystemTime(startedAt.getTime() + MAX_DURATION_MS - 1);
+      const timeout = await captureRejection(
+        respond(handler, client, [userStep('a')]),
+      );
+
+      expect(timeout.message).toContain(
+        `maximum polling duration of ${MAX_DURATION_MS} ms`,
+      );
+      expect(hasManualRetryOnlyErrorMarker(timeout)).toBe(true);
+      expect(calls.create).toHaveLength(1);
+      expect(calls.get).toEqual(['int_late', 'int_late']);
+      expect(calls.cancel).toEqual(['int_late']);
+    },
+  );
+
+  it.each([
+    {
+      outcome: completedInteraction('int_late_abort'),
+      outcomeLabel: 'returns',
+    },
+    { outcome: new TypeError('late failure'), outcomeLabel: 'rejects' },
+  ])(
+    'cancels when a resumed retrieval $outcomeLabel after user abort',
+    async ({ outcome }) => {
+      mockConfig();
+      vi.useFakeTimers();
+      const handler = createHandler();
+      const controller = new AbortController();
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_late_abort', status: 'in_progress' }),
+        getSequence: [new TypeError('fetch failed'), outcome],
+        beforeGet: (index) => {
+          if (index === 1) controller.abort();
+        },
+      });
+
+      const first = respond(handler, client, [userStep('a')]);
+      const firstError = captureRejection(first);
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      await firstError;
+
+      await expect(
+        respond(handler, client, [userStep('a')], controller.signal),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      await Promise.resolve();
+
+      expect(calls.create).toHaveLength(1);
+      expect(calls.get).toEqual(['int_late_abort', 'int_late_abort']);
+      expect(calls.cancel).toEqual(['int_late_abort']);
+    },
+  );
+
+  it('cancels before resumed retrieval when token counting observes abort', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let countCalls = 0;
+    const countTokens = vi.fn(async () => {
+      countCalls += 1;
+      if (countCalls === 2) controller.abort();
+      return { totalTokens: 1 };
+    });
+    const handler = createHandler(AgentCategory.Workflow, true);
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_abort_before_resume', status: 'in_progress' }),
+      getSequence: [new TypeError('fetch failed')],
+      countTokens,
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstError = captureRejection(first);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstError;
+
+    await expect(
+      respond(handler, client, [userStep('a')], controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    await Promise.resolve();
+
+    expect(countTokens).toHaveBeenCalledTimes(2);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_abort_before_resume']);
+    expect(calls.cancel).toEqual(['int_abort_before_resume']);
   });
 
   it('clears a pre-aborted pending interaction before token counting', async () => {
