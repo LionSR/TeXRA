@@ -131,6 +131,72 @@ describe('AgentRosterController', () => {
     });
   });
 
+  it('preserves a bare same-name agent when disabling another source', async () => {
+    const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
+      workflow: [],
+      toolUse: [
+        { category: 'toolUse', source: 'custom', name: 'review' },
+        { category: 'toolUse', source: 'remote', name: 'review' },
+      ],
+    };
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        kind: 'custom',
+        workflowAgentKeys: [],
+        toolUseAgentKeys: ['review', 'remote:review', 'future-reviewer'],
+      },
+    });
+    const roster = controller(workspaceState, {
+      getAgents: (category) => duplicateAgents[category],
+    });
+
+    await roster.setAgentEnabled({
+      category: 'toolUse',
+      source: 'remote',
+      name: 'review',
+      enabled: false,
+    });
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['review', 'future-reviewer'],
+    });
+  });
+
+  it('enables an exact source beside a bare same-name agent', async () => {
+    const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
+      workflow: [],
+      toolUse: [
+        { category: 'toolUse', source: 'custom', name: 'review' },
+        { category: 'toolUse', source: 'remote', name: 'review' },
+      ],
+    };
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        kind: 'custom',
+        workflowAgentKeys: [],
+        toolUseAgentKeys: ['review'],
+      },
+    });
+    const roster = controller(workspaceState, {
+      getAgents: (category) => duplicateAgents[category],
+    });
+
+    await roster.setAgentEnabled({
+      category: 'toolUse',
+      source: 'remote',
+      name: 'review',
+      enabled: true,
+    });
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['review', 'remote:review'],
+    });
+  });
+
   it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
     const inheritedState = new FakeStateStore();
     const inherited = controller(inheritedState, {

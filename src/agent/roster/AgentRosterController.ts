@@ -349,15 +349,17 @@ export class AgentRosterController<
         input.category,
       );
       const key = agentKeyOf(input);
-      const index = target.findIndex((candidate) =>
-        agentMatchesIdentifier(input, candidate),
-      );
+      const matchesTarget = (candidate: string): boolean => {
+        const resolved = this.resolveEntry(input.category, candidate);
+        return resolved !== undefined && agentKeyOf(resolved) === key;
+      };
+      const index = target.findIndex(matchesTarget);
       const alreadyEnabled = index >= 0;
       if (input.enabled === alreadyEnabled) return;
       if (input.enabled && index < 0) target.push(key);
       if (!input.enabled && index >= 0) {
         const remaining = target.filter(
-          (candidate) => !agentMatchesIdentifier(input, candidate),
+          (candidate) => !matchesTarget(candidate),
         );
         target.splice(0, target.length, ...remaining);
       }
