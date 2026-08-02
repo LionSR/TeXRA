@@ -107,13 +107,14 @@ const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.WORKFLOW_TASK,
 ]);
 
-// Roles a workflow-agent stream keeps when it projects an operational feed
-// instead of a model transcript.
+// Canonical dashboard rows retained when a workflow stream is compacted.
 const WORKFLOW_DASHBOARD_ROLES = new Set<ConversationEntry['role']>([
   'phase',
   'workflowTask',
 ]);
 
+// Roles a workflow-agent stream keeps when it projects an operational feed
+// instead of a model transcript.
 const WORKFLOW_OPERATIONAL_ROLES = new Set<ConversationEntry['role']>([
   'error',
   'media',
