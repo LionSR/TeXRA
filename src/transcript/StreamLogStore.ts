@@ -18,6 +18,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { formatResultCount } from '@utils/text/stringUtils';
 
+import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
@@ -106,12 +107,14 @@ interface StreamWriterOwnership {
 
 /**
  * Every per-stream field that shares the resident stream lifecycle, keyed by
- * stream id in ONE map (`streams`). Because every field for a stream lives on
- * the same object, dropping a stream's resident state is one
- * `streams.delete(id)` — every field disappears with it BY CONSTRUCTION, which
- * is what lets `forgetStreamState` / `forgetAllStreamState` be a single
- * delete/clear. When an individual field is cleared, `pruneStreamState`
- * removes the record once no field remains, so an idle stream holds no memory.
+ * stream id in ONE map (`streams`, a {@link ResidentStreamRegistry}) instead
+ * of parallel hand-synced maps/sets. Because every field for a stream lives
+ * on the same object, dropping a stream's resident state is one
+ * `streams.delete(id)` — every field disappears with it BY CONSTRUCTION,
+ * which is what lets `forgetStreamState` / `forgetAllStreamState` collapse to
+ * a single delete/clear. When an individual field is cleared,
+ * `pruneStreamState` removes the record once no field remains, preserving
+ * the old "absent from every collection" memory footprint.
  *
  * `summaries` (deliberately OUTLIVES per-stream eviction so sidebar metadata
  * survives when heavy `log` entries are dropped) and `writeTombstones` (a
@@ -246,7 +249,10 @@ export class StreamLogStore {
    * {@link StreamState}. `summaries`, `writeTombstones`, and `dirtyIds` are
    * deliberately kept separate because they do not share this lifecycle.
    */
-  private readonly streams = new Map<StreamTabId, StreamState>();
+  private readonly streams = new ResidentStreamRegistry<
+    StreamTabId,
+    StreamState
+  >(() => ({}));
   /**
    * Streams with unsaved changes awaiting `executeWrite`, kept as a dedicated
    * set (not a `StreamState` field) so the `save()` hot path can test
@@ -302,12 +308,7 @@ export class StreamLogStore {
   // empty-record prune, and the two multi-caller iterations are factored out.
 
   private ensureStreamState(streamId: StreamTabId): StreamState {
-    let state = this.streams.get(streamId);
-    if (!state) {
-      state = {};
-      this.streams.set(streamId, state);
-    }
-    return state;
+    return this.streams.getOrCreate(streamId);
   }
 
   /**
@@ -318,18 +319,16 @@ export class StreamLogStore {
    * below already keep its record alive.
    */
   private pruneStreamState(streamId: StreamTabId): void {
-    const s = this.streams.get(streamId);
-    if (
-      s &&
-      s.log === undefined &&
-      !s.pendingRelease &&
-      !s.flushing &&
-      !s.loadFailed &&
-      s.pendingLoad === undefined &&
-      s.writer === undefined
-    ) {
-      this.streams.delete(streamId);
-    }
+    this.streams.pruneIfEmpty(
+      streamId,
+      (s) =>
+        s.log === undefined &&
+        !s.pendingRelease &&
+        !s.flushing &&
+        !s.loadFailed &&
+        s.pendingLoad === undefined &&
+        s.writer === undefined,
+    );
   }
 
   /** Snapshot of streams with unsaved changes (list form of `dirtyIds`). */
