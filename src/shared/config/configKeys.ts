@@ -1,16 +1,10 @@
 /**
  * Shared TeXRA configuration key helpers.
  *
- * Hosts store settings as flat keys. Both `texra.<key>` and bare `<key>` are
- * accepted on read for legacy compatibility; writes use the canonical prefixed
- * form unless a legacy bare key already exists.
+ * Hosts store settings as flat `texra.<key>` entries. Callers may pass either
+ * spelling to the configuration API; storage always uses the canonical key.
  */
 const TEXRA_PREFIX = 'texra.';
-
-export interface ConfigKeyValueStore {
-  has(key: string): boolean;
-  get<T>(key: string): T | undefined;
-}
 
 export interface ConfigWatcherDisposable {
   dispose(): void;
@@ -24,15 +18,12 @@ export function canonicalConfigKey(key: string): string {
   return `${TEXRA_PREFIX}${stripPrefix(key)}`;
 }
 
-export function configKeyVariants(key: string): string[] {
-  const unprefixed = stripPrefix(key);
-  return [`${TEXRA_PREFIX}${unprefixed}`, unprefixed];
-}
-
 function keyMatchesChange(key: string, changedKey: string): boolean {
-  return configKeyVariants(key).some(
-    (candidate) =>
-      changedKey === candidate || changedKey.startsWith(`${candidate}.`),
+  const watchedKey = canonicalConfigKey(key);
+  const canonicalChangedKey = canonicalConfigKey(changedKey);
+  return (
+    canonicalChangedKey === watchedKey ||
+    canonicalChangedKey.startsWith(`${watchedKey}.`)
   );
 }
 
@@ -55,16 +46,6 @@ function watcherMatches(
     return watcherKey.some((item) => keyMatchesChange(item, changedKey));
   }
   return false;
-}
-
-export function firstStoredValue<T>(
-  store: ConfigKeyValueStore,
-  keys: readonly string[],
-): T | undefined {
-  for (const candidate of keys) {
-    if (store.has(candidate)) return store.get<T>(candidate);
-  }
-  return undefined;
 }
 
 export function createWatcherRegistry(): {

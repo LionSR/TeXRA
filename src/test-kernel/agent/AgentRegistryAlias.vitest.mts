@@ -1,7 +1,5 @@
 // Node imports
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -21,10 +19,8 @@ import {
   resolveAgentKey,
 } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -94,37 +90,11 @@ async function initPlatformWithState(
   );
 }
 
-/** Create a temp custom-agent directory holding the given YAML files. */
-async function createCustomAgentDir(
-  files: Record<string, readonly string[]>,
-): Promise<string> {
-  const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-  for (const [relativePath, lines] of Object.entries(files)) {
-    const filePath = resolve(customDir, relativePath);
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, `${lines.join('\n')}\n`);
-  }
-  return customDir;
-}
-
-function enabledToolUseAgents(): string[] | undefined {
-  return platform().workspaceState.get<string[]>(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-  );
-}
-
 describe('agent registry legacy aliases', () => {
   beforeAll(async () => {
     // Real bundled agent YAMLs on disk, so the test exercises the actual
     // rename (chat → assistant) rather than synthetic fixtures.
-    // Pre-seed legacy keys to exercise the load-time state migration.
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-        'chat',
-        'builtInToolUse:chat',
-        'review',
-      ],
-    });
+    await initPlatformWithState({});
     useAgentDirectories();
     await refresh({ includeRemote: false });
   });
@@ -329,14 +299,7 @@ describe('agent registry legacy aliases', () => {
   });
 
   it('includes remote agents in launcher options after local-only startup load', async () => {
-    const originalEnabledToolUseAgents = enabledToolUseAgents();
-
     try {
-      await platform().workspaceState.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        ['orchestrator', 'research', 'review'],
-      );
-
       await refresh({ includeRemote: false });
       expect(
         getVisibleAgents('toolUse').map((agent) => agent.name),
@@ -348,24 +311,14 @@ describe('agent registry legacy aliases', () => {
         'orchestrator',
       );
     } finally {
-      await platform().workspaceState.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        originalEnabledToolUseAgents,
-      );
       await refresh({ includeRemote: false });
     }
   });
 
   it('includes remote agents in launcher options after pending local-only startup load', async () => {
-    const originalEnabledToolUseAgents = enabledToolUseAgents();
-
     const builtInToolUseDir = createDeferred<void>();
 
     try {
-      await platform().workspaceState.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        ['orchestrator', 'research', 'review'],
-      );
       useAgentDirectories({
         builtInToolUse: async () => {
           await builtInToolUseDir.promise;
@@ -386,251 +339,8 @@ describe('agent registry legacy aliases', () => {
       );
     } finally {
       builtInToolUseDir.resolve();
-      await platform().workspaceState.update(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-        originalEnabledToolUseAgents,
-      );
       useAgentDirectories();
       await refresh({ includeRemote: false });
     }
-  });
-
-  it('migrates persisted legacy keys at load time', () => {
-    // Stale chat keys would desync the Agents settings UI (which matches
-    // keys literally) from picker visibility — loadAgents rewrites them.
-    expect(enabledToolUseAgents()).toEqual([
-      'assistant',
-      'builtInToolUse:assistant',
-      'review',
-    ]);
-  });
-
-  it('keeps assistant visible for workspaces that opted into chat', async () => {
-    await platform().workspaceState.update(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ['chat'],
-    );
-
-    const visible = getVisibleAgents('toolUse').map((a) => a.name);
-    expect(visible).toContain('assistant');
-    expect(getVisibleAgent('toolUse', 'chat')?.name).toBe('assistant');
-  });
-
-  it('drops workflow round metadata when category is overridden to tool-use', async () => {
-    await platform().workspaceState.update(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ['polish'],
-    );
-    await refresh({ includeRemote: false });
-
-    const entry = getAgent('polish');
-    expect(entry?.category).toBe(AgentCategory.ToolUse);
-    expect(entry?.rounds).toBeUndefined();
-  });
-
-  it('preserves bare custom chat while migrating qualified built-in chat keys', async () => {
-    const customDir = await createCustomAgentDir({
-      'chat.yaml': [
-        'name: chat',
-        'description: Custom chat agent',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: Custom chat agent.',
-      ],
-    });
-
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-        'chat',
-        'builtInToolUse:chat',
-      ],
-    });
-    useAgentDirectories({ custom: async () => customDir });
-
-    await refresh({ includeRemote: false });
-
-    expect(enabledToolUseAgents()).toEqual([
-      'chat',
-      'builtInToolUse:assistant',
-    ]);
-    expect(getAgent('chat')?.source).toBe('custom');
-    expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
-
-    // Visible resolution must agree with getAgent: the bare name picks the
-    // custom agent, while the qualified key names the renamed built-in.
-    expect(getVisibleAgent('toolUse', 'chat')?.source).toBe('custom');
-    expect(getVisibleAgent('toolUse', 'builtInToolUse:chat')?.name).toBe(
-      'assistant',
-    );
-  });
-
-  it('refuses to map a source-qualified legacy alias onto a namesake shadow', async () => {
-    // A custom tool-use `assistant` outranks the built-in namesake, so it is
-    // the only `assistant` left in the visible roster. `builtInToolUse:chat`
-    // aliases to the *built-in* assistant specifically, so it must resolve to
-    // nothing rather than fall back onto the custom entry that merely shares
-    // the name.
-    const customDir = await createCustomAgentDir({
-      'assistant.yaml': [
-        'name: assistant',
-        'description: Custom tool-use agent shadowing a built-in name.',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: Custom tool-use assistant.',
-      ],
-    });
-
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['custom:assistant'],
-    });
-    useAgentDirectories({ custom: async () => customDir });
-
-    await refresh({ includeRemote: false });
-
-    expect(getVisibleAgent('toolUse', 'assistant')?.source).toBe('custom');
-    expect(getVisibleAgent('toolUse', 'builtInToolUse:chat')).toBeUndefined();
-  });
-
-  it('migrates a cross-source legacy key to the canonical key in its category', async () => {
-    // A stale `builtInWorkflow:chat` in the tool-use list aliases to
-    // `assistant`, which only exists as a built-in tool-use agent. Rewriting
-    // only the name part would yield `builtInWorkflow:assistant`, a dangling
-    // key; the migration resolves the alias within the list's category and
-    // persists the canonical `builtInToolUse:assistant` instead.
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInWorkflow:chat'],
-    });
-    useAgentDirectories();
-
-    await refresh({ includeRemote: false });
-
-    const migrated = enabledToolUseAgents();
-    expect(migrated).toEqual(['builtInToolUse:assistant']);
-    // The migrated key must resolve — no dangling enabled entry.
-    expect(getAgent(migrated![0]!)?.name).toBe('assistant');
-  });
-
-  it('migrates within category when a custom agent shadows a built-in name', async () => {
-    // Collision: a custom *workflow* `assistant` shadows the built-in tool-use
-    // `assistant`. A category-blind fallback would pick the custom workflow
-    // entry by source priority and wrongly persist `custom:assistant` into the
-    // tool-use list. Migration must resolve within each list's own category.
-    const customDir = await createCustomAgentDir({
-      'assistant.yaml': [
-        'name: assistant',
-        'description: Custom workflow agent shadowing a built-in name.',
-        'settings:',
-        '  agentCategory: workflow',
-        'prompts:',
-        '  systemPrompt: Custom workflow assistant.',
-      ],
-    });
-
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInWorkflow:chat'],
-      [WorkspaceStateKey.ENABLED_AGENTS]: ['remote:chat'],
-    });
-    useAgentDirectories({ custom: async () => customDir });
-
-    await refresh({ includeRemote: false });
-
-    // Tool-use list → the tool-use assistant, never the custom workflow shadow.
-    expect(enabledToolUseAgents()).toEqual(['builtInToolUse:assistant']);
-    // Workflow list → the custom workflow assistant (its own category).
-    expect(
-      platform().workspaceState.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS),
-    ).toEqual(['custom:assistant']);
-  });
-
-  it('migrates persisted filename-based custom agent keys to YAML names', async () => {
-    const customDir = await createCustomAgentDir({
-      'Readable Helper.yaml': [
-        'name: helper',
-        'description: Custom helper agent',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: Custom helper agent.',
-      ],
-    });
-
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-        'custom:Readable Helper',
-        'Readable Helper',
-        'review',
-      ],
-    });
-    useAgentDirectories({ custom: async () => customDir });
-
-    await refresh({ includeRemote: false });
-
-    expect(enabledToolUseAgents()).toEqual([
-      'custom:helper',
-      'helper',
-      'review',
-    ]);
-    expect(getAgent('custom:helper')?.path).toBe(
-      resolve(customDir, 'Readable Helper.yaml'),
-    );
-    expect(getVisibleAgents('toolUse').map((entry) => entry.name)).toContain(
-      'helper',
-    );
-  });
-
-  it('leaves ambiguous filename-based custom keys unmigrated', async () => {
-    const customDir = await createCustomAgentDir({
-      'first/Readable Helper.yaml': [
-        'name: helper-one',
-        'description: First custom helper agent',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: First custom helper agent.',
-      ],
-      'second/Readable Helper.yaml': [
-        'name: helper-two',
-        'description: Second custom helper agent',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools: []',
-        'prompts:',
-        '  systemPrompt: Second custom helper agent.',
-      ],
-    });
-    const firstDir = resolve(customDir, 'first');
-    const secondDir = resolve(customDir, 'second');
-
-    await initPlatformWithState({
-      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
-        'custom:Readable Helper',
-        'Readable Helper',
-        'review',
-      ],
-    });
-    useAgentDirectories({ custom: async () => customDir });
-
-    await refresh({ includeRemote: false });
-
-    expect(enabledToolUseAgents()).toEqual([
-      'custom:Readable Helper',
-      'Readable Helper',
-      'review',
-    ]);
-    expect(getAgent('custom:helper-one')?.path).toBe(
-      resolve(firstDir, 'Readable Helper.yaml'),
-    );
-    expect(getAgent('custom:helper-two')?.path).toBe(
-      resolve(secondDir, 'Readable Helper.yaml'),
-    );
-    expect(getVisibleAgents('toolUse').map((entry) => entry.name)).not.toEqual(
-      expect.arrayContaining(['helper-one', 'helper-two']),
-    );
   });
 });

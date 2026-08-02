@@ -38,7 +38,6 @@ import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
   configureLatexSettings,
-  migrateLatexConfigToStorage,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
@@ -368,10 +367,6 @@ export async function activate(context: vscode.ExtensionContext) {
   // still matters: copyDefaultAgents populates the built-in directories,
   // registerAgentDirectoryRoots exposes them, and loadAgents scans them.
   await Promise.all([
-    // Per-key idempotent copy of LaTeX/compile/diff settings from VS Code
-    // config to TeXRA workspace storage. Safe to run on every activation —
-    // a key already in workspaceSM is left untouched.
-    migrateLatexConfigToStorage(),
     (async () => {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);

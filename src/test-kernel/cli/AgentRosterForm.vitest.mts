@@ -76,12 +76,6 @@ describe('AgentRosterForm', () => {
     ]);
   });
 
-  it('resolves legacy bare selections to the catalog identity', () => {
-    expect(selectedAgentKeys(['assistant'], agents)).toEqual([
-      'builtInToolUse:assistant',
-    ]);
-  });
-
   it('windows long roster lists to the available terminal rows', () => {
     expect(
       agentRosterSelectWindow({ availableRows: 10, itemCount: 20 }),

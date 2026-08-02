@@ -76,7 +76,7 @@ describe('SettingsAgentVisibilityController', () => {
         workflow: [
           'builtInWorkflow:correct',
           'custom:customWriter',
-          'remoteWriter',
+          'remote:remoteWriter',
         ],
       },
     });

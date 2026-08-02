@@ -18,11 +18,7 @@ export enum WorkspaceStateKey {
   /** Consolidated progress-view preferences. */
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
 
-  // Agent visibility (migrated from VS Code config)
-  ENABLED_AGENTS = 'texra.enabledAgents',
-  ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
-  /** Canonical workspace agent-roster selection. Legacy enabled-agent arrays
-   * remain compatibility mirrors and are ignored when this key is present. */
+  // Agent visibility
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
@@ -60,14 +56,6 @@ export enum WorkspaceStateKey {
   LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
   LATEXDIFF_CHANGES_ONLY = 'texra.latexdiff.changesOnly',
   LATEX_FORMATTER = 'texra.latex.formatter',
-  /**
-   * One-shot per-workspace marker for the legacy `texra.*` config migration.
-   * Set after `migrateLatexConfigToStorage()` runs; subsequent activations
-   * skip the migration entirely. This is what distinguishes "key never
-   * migrated" (no marker) from "user explicitly reset via UI" (marker set,
-   * key absent) so reset-to-default isn't silently undone on next start.
-   */
-  LATEX_SETTINGS_MIGRATED = 'texra.latexSettingsMigrated',
 }
 
 export enum GlobalStateKey {
