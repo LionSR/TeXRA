@@ -67,12 +67,44 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     expect(content).toEqual([{ type: 'text', text: 'What are we lacking?' }]);
   });
 
+  it('rejects an initial message with no content', async () => {
+    const handler = createHandler();
+    await expect(handler.initializeMessages(' ', '\n')).rejects.toThrow(
+      'Google messages require a non-empty user prefix, request, or attachment.',
+    );
+  });
+
+  it('rejects a follow-up round with no content', async () => {
+    const handler = createHandler();
+    await expect(handler.createRoundMessages([], ' ')).rejects.toThrow(
+      'Google follow-up messages require non-empty text or an attachment.',
+    );
+  });
+
   it('createAssistantMessage builds a model_output step', () => {
     const handler = createHandler();
     const step = handler.createAssistantMessage('hi');
     expect(step.type).toBe('model_output');
     expect(textOf(step)).toBe('hi');
     expect(handler.extractAssistantText(step)).toBe('hi');
+  });
+
+  it('rejects empty text when constructing a content block', () => {
+    const handler = createHandler();
+    expect(() => handler.createAssistantMessage('')).toThrow(
+      'Google text content must not be empty.',
+    );
+  });
+
+  it('does not append an empty follow-up text block', async () => {
+    const handler = createHandler();
+    const steps: Step[] = [
+      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
+    ];
+    await handler.createUserFollowUpMessages(steps, '');
+    expect(steps).toEqual([
+      { type: 'user_input', content: [{ type: 'text', text: 'body' }] },
+    ]);
   });
 
   it('prependTextToUserMessage prepends into the trailing user_input step', () => {
