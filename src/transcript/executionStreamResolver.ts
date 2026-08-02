@@ -133,9 +133,11 @@ export async function findPersistedStreamFallbacksForExecution(
  * root sidecar. Only birth-time registrations use the constant-time path.
  *
  * `null` means no persisted stream carries this execution. A resolution with
- * no `streamId` exposes exact-execution candidates whose canonical owner is
- * unproven; callers must not substitute one of them. Callers that receive
- * `null` and have a derivable stream id own that compatibility substitution.
+ * no `streamId` means persisted associations exist but prove no canonical
+ * archive root; when unproven roots exist, they are exposed as exact-execution
+ * candidates. Callers must not substitute a candidate or proven child.
+ * Callers that receive `null` and have a derivable stream id own that
+ * compatibility substitution.
  */
 export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
@@ -154,22 +156,32 @@ export async function resolvePersistedStreamIdForExecution(
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
-    const primaryCandidates =
-      mergeCandidateMetaMatched.length > 0
-        ? mergeCandidateMetaMatched
-        : metaMatched;
+    // A sole delegated stream can itself be the historical execution being
+    // resolved. Several proven children, however, are not competing archive
+    // roots and must never enter overlap-gated merging.
+    const soleDelegatedStream =
+      mergeCandidateMetaMatched.length === 0 && metaMatched.length === 1
+        ? metaMatched[0]
+        : undefined;
     const streamId =
-      primaryCandidates.length === 1 ? primaryCandidates[0] : undefined;
+      mergeCandidateMetaMatched.length === 1
+        ? mergeCandidateMetaMatched[0]
+        : soleDelegatedStream;
     if (metaMatched.length === 1 && streamId) {
       await writeLegacyExecutionStreamId(executionId, streamId);
     }
     if (!streamId) {
-      // Exact execution metadata associates every candidate with this run, but
-      // missing parent metadata does not prove which one owns the archive.
-      // Data presence and lexical order are not canonical-ownership evidence.
+      // Exact execution metadata associates every root candidate with this
+      // run, but missing parent metadata does not prove which root owns the
+      // archive. Data presence and lexical order are not canonical-ownership
+      // evidence. When every match is a proven child there are no candidates.
       return {
         source: 'streamDataMeta',
-        exactExecutionCandidateStreamIds: primaryCandidates,
+        ...(mergeCandidateMetaMatched.length > 0
+          ? {
+              exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
+            }
+          : {}),
       };
     }
     const suffixMatched = findExecutionSuffixMatches(

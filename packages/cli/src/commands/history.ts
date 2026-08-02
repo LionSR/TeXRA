@@ -156,9 +156,8 @@ export async function runHistoryExport(
         writeTextStderr(
           `Execution ${id} has multiple associated transcript sidecars ` +
             `(${traceResult.candidateStreamIds.join(', ')}), but no canonical ` +
-            'trace timeline can be established. Run `texra history show ' +
-            id +
-            '` to see the merged conversation evidence.',
+            'trace timeline can be established, so HTML trace export was ' +
+            'not written.',
         );
         break;
       default:
