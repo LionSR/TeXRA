@@ -369,7 +369,6 @@ export const buttonStyles: CSSResult = css`
      composers. The accessible label carries the host-specific verb; the
      visible affordance is deliberately identical. */
   .action-icon-button.composer-primary-action {
-    --control-size: var(--control-size-l);
     margin-left: auto;
   }
 
