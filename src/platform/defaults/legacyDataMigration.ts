@@ -126,7 +126,7 @@ export async function moveEntryIfAbsent(
   }
 }
 
-export async function readLegacyDirEntries(
+async function readLegacyDirEntries(
   legacyDir: string,
   logger: LegacyDataMigrationLogger,
 ): Promise<Dirent[] | undefined> {

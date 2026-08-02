@@ -48,6 +48,9 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **Agent reviews now choose their own scope and depth** — the saved controls
+  for including untracked files or submodules and choosing a quick or thorough
+  approach have been removed. Reviews inspect the relevant change set directly.
 - **Tool-use flow results use `response` and `files` consistently** — consumers
   of `@texra-ai/agent` and CLI JSON output should replace `lastResponse` with
   `response` and `touchedFiles` with `files`.

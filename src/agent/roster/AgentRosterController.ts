@@ -80,7 +80,7 @@ function allPresets(
 }
 
 /** Read the canonical workspace selection. */
-export function readAgentRosterSelection(
+function readAgentRosterSelection(
   workspaceState: StateStore,
 ): AgentRosterSelection {
   const raw = workspaceState.get<unknown>(
