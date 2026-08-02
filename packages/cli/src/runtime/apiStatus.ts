@@ -57,15 +57,35 @@ export interface CliModelAccessOverview {
   readonly lines: readonly string[];
 }
 
+interface CliAccessSnapshot {
+  readonly access: CliModelAccessStatus;
+  readonly profile: CliAuthProfile;
+  readonly personalKeyProviders: readonly string[];
+}
+
+/** Read the account, route, and credential facts once for every renderer. */
+async function loadCliAccessSnapshot(
+  apiMode: ApiAccessMode,
+  options: { readonly includePersonalKeys?: boolean } = {},
+): Promise<CliAccessSnapshot> {
+  const [access, profile, configuredPersonalKeyProviders] = await Promise.all([
+    readCliModelAccessStatus(apiMode),
+    getCliAuthProfile(),
+    options.includePersonalKeys ? personalKeyProviders() : Promise.resolve([]),
+  ]);
+  return {
+    access: { ...access, texraSignedIn: profile.authenticated },
+    profile,
+    personalKeyProviders: configuredPersonalKeyProviders,
+  };
+}
+
 /** Read both account sessions and the effective model-access route. */
 export async function loadCliModelAccessOverview(
   options: { readonly apiMode?: ApiAccessMode } = {},
 ): Promise<CliModelAccessOverview> {
   const apiMode = options.apiMode ?? getCliApiMode();
-  const [access, profile] = await Promise.all([
-    readCliModelAccessStatus(apiMode),
-    getCliAuthProfile(),
-  ]);
+  const { access, profile } = await loadCliAccessSnapshot(apiMode);
   const lines = [
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
     `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
@@ -78,26 +98,22 @@ export async function loadCliModelAccessOverview(
   ];
   if (profile.note) lines.push(profile.note);
   return {
-    access: { ...access, texraSignedIn: profile.authenticated },
+    access,
     lines,
   };
 }
 
 /**
- * Warn when a provider key is present at the same time as a relay sign-in: the
- * active `--api-mode` / `/api` setting decides which is actually used, so a
- * stale env key can silently shadow a fresh login (a documented footgun in
- * comparable CLIs). Returns `undefined` unless both credential paths exist.
+ * Format the neutral personal-key inventory from the canonical access facts.
  */
-export function formatApiKeyShadowWarning(
-  authenticated: boolean,
+export function formatPersonalApiKeysLine(
   personalKeyProviders: readonly string[],
 ): string | undefined {
-  if (!authenticated || personalKeyProviders.length === 0) return undefined;
+  if (personalKeyProviders.length === 0) return undefined;
   const providers = personalKeyProviders
     .map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider)
     .join(', ');
-  return `available: included TeXRA access; personal API keys: ${providers}`;
+  return `personal API keys: ${providers}`;
 }
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
@@ -144,8 +160,6 @@ async function personalKeyProviders(): Promise<string[]> {
 export interface CliApiStatus {
   /** Compact lines used by the launcher. */
   readonly lines: readonly string[];
-  /** API account facts appended to the detailed account overview. */
-  readonly detailLines: readonly string[];
 }
 
 export interface LoadCliApiStatusOptions {
@@ -153,55 +167,55 @@ export interface LoadCliApiStatusOptions {
   readonly includeActionHint?: boolean;
 }
 
+async function loadIncludedUsageLine(
+  profile: CliAuthProfile,
+): Promise<string | undefined> {
+  if (!profile.authenticated || !profile.tier) return undefined;
+  // Usage reads usage_logs via PostgREST with a session token; a relay-scoped
+  // CI token cannot read it, while a session alongside that token can.
+  const canReadUsage =
+    profile.credentialSource !== 'relayToken' ||
+    (await getCliSessionAccessToken()) !== null;
+  if (!canReadUsage) {
+    return 'included usage: not available with a CI relay token (run `texra login` to view usage)';
+  }
+  try {
+    const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
+    return formatRelayUsageStatus(
+      await fetchRelayUsageSummary({ tier: usageTier }),
+    );
+  } catch (error: unknown) {
+    return `included usage: unavailable (${toErrorMessage(error)})`;
+  }
+}
+
 export async function loadCliApiStatus(
   options: LoadCliApiStatusOptions = {},
 ): Promise<CliApiStatus> {
   const mode = options.apiMode ?? getCliApiMode();
-  const profile = await getCliAuthProfile();
+  const snapshot = await loadCliAccessSnapshot(mode, {
+    includePersonalKeys: true,
+  });
+  const { personalKeyProviders: configuredPersonalKeyProviders, profile } =
+    snapshot;
   let authLine = formatCliAuthStatusLine(profile);
-  const configuredPersonalKeyProviders =
-    options.includeActionHint === true || profile.authenticated
-      ? await personalKeyProviders()
-      : [];
   const hasPersonalKey = configuredPersonalKeyProviders.length > 0;
   const actionHint = options.includeActionHint
     ? formatCliApiStatusActionHint(mode, profile, { hasPersonalKey })
     : undefined;
 
-  const shadowWarning = formatApiKeyShadowWarning(
-    profile.authenticated,
+  const personalKeysLine = formatPersonalApiKeysLine(
     configuredPersonalKeyProviders,
   );
   const supplementalLines = [
-    ...(shadowWarning ? [shadowWarning] : []),
+    ...(personalKeysLine ? [personalKeysLine] : []),
     ...(profile.note ? [profile.note] : []),
   ];
-  const detailLines = [...supplementalLines];
   if (profile.authenticated && profile.tier) {
-    detailLines.push(`tier: ${profile.tier}`);
-    // Usage reads usage_logs via PostgREST with a session token; a
-    // relay-scoped CI token cannot read it. Explain the limitation (same as
-    // `texra auth usage`) instead of surfacing a generic fetch error — but a
-    // session alongside the env token can still read its own usage.
-    const canReadUsage =
-      profile.credentialSource !== 'relayToken' ||
-      (await getCliSessionAccessToken()) !== null;
-    let usage: string;
-    if (!canReadUsage) {
-      usage =
-        'included usage: not available with a CI relay token (run `texra login` to view usage)';
-    } else {
-      try {
-        const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
-        usage = formatRelayUsageStatus(
-          await fetchRelayUsageSummary({ tier: usageTier }),
-        );
-      } catch (error: unknown) {
-        usage = `included usage: unavailable (${toErrorMessage(error)})`;
-      }
+    const usage = await loadIncludedUsageLine(profile);
+    if (usage) {
+      authLine = `${authLine} · ${usage}`;
     }
-    detailLines.push(usage);
-    authLine = `${authLine} · ${usage}`;
   }
 
   return {
@@ -211,8 +225,48 @@ export async function loadCliApiStatus(
       ...supplementalLines,
       ...(actionHint ? [actionHint] : []),
     ],
-    detailLines,
   };
+}
+
+function formatPreferenceState(
+  state: 'off' | 'on',
+  missingCredential: 'key' | 'sign-in' | undefined,
+): string {
+  const label = state === 'on' ? 'On' : 'Off';
+  if (state === 'off' || missingCredential === undefined) return label;
+  return `${label} (${missingCredential === 'key' ? 'key' : 'sign in'} required)`;
+}
+
+/** Render the detailed account view once from the canonical access facts. */
+export async function loadCliDetailedAccountStatusLines(options: {
+  readonly apiMode: ApiAccessMode;
+}): Promise<string[]> {
+  const {
+    access,
+    personalKeyProviders: providers,
+    profile,
+  } = await loadCliAccessSnapshot(options.apiMode, {
+    includePersonalKeys: true,
+  });
+  const chatGpt = formatPreferenceState(
+    access.preferences.chatGpt,
+    access.chatGptSignedIn ? undefined : 'sign-in',
+  );
+  const kimiCode = formatPreferenceState(
+    access.preferences.kimiCode,
+    access.kimiCodeKeySet === true ? undefined : 'key',
+  );
+  const lines = [
+    `Model access: ChatGPT ${chatGpt} · Kimi Code ${kimiCode} · fallback ${formatCliModelAccessRoute(access.apiFallback)}`,
+    `Accounts: ChatGPT ${access.chatGptSignedIn ? (access.chatGptAccountLabel ?? 'signed in') : 'signed out'} · TeXRA ${profile.authenticated ? (profile.accountLabel ?? 'signed in') : 'signed out'}`,
+    formatPersonalApiKeysLine(providers) ?? 'personal API keys: none',
+  ];
+  if (profile.note) lines.push(profile.note);
+  if (profile.authenticated && profile.tier) {
+    const usage = await loadIncludedUsageLine(profile);
+    lines.push(`tier: ${profile.tier}${usage ? ` · ${usage}` : ''}`);
+  }
+  return lines;
 }
 
 export async function loadCliApiStatusLines(
