@@ -178,6 +178,8 @@ export type StreamStage =
 
 export interface StreamSlice {
   readonly streamId: StreamTabId;
+  /** Canonical agent name captured from this stream's `run.config`. */
+  readonly agent?: string | undefined;
   /** Model identity captured from setTaskState for this specific stream. */
   readonly model?: string | undefined;
   /** Agent category for this stream (`toolUse` / `workflow` / …), captured
@@ -271,6 +273,7 @@ export const NO_BYPASS: BypassState = {
 export function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
+    agent: undefined,
     model: undefined,
     category: undefined,
     status: undefined,
