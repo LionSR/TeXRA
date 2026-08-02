@@ -58,26 +58,16 @@ export const TOOL_USE_STATUS = {
 
 const ToolUseStatusSchema = z.enum(TOOL_USE_STATUS);
 
-export const ToolUseLogSchema = z
-  .object({
-    toolName: z.string().optional(),
-    input: z.unknown().optional(),
-    output: z.unknown().optional(),
-    summary: z.string().optional(),
-    error: z.string().optional(),
-    isError: z.boolean().optional(),
-    userInstruction: z.string().optional(),
-    status: ToolUseStatusSchema.optional(),
-    // Legacy persisted payloads stored the tool name under `tool` instead of
-    // `toolName`. Accept it on input and fold it into `toolName` here so
-    // resumed/replayed streams keep tool-specific headers, icons, and file
-    // links; downstream code (both hosts) reads the canonical `toolName` only.
-    tool: z.string().optional(),
-  })
-  .transform(({ tool, ...rest }) => ({
-    ...rest,
-    toolName: rest.toolName ?? tool,
-  }));
+export const ToolUseLogSchema = z.object({
+  toolName: z.string().optional(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+  summary: z.string().optional(),
+  error: z.string().optional(),
+  isError: z.boolean().optional(),
+  userInstruction: z.string().optional(),
+  status: ToolUseStatusSchema.optional(),
+});
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
 const NormalizedToolUseSchema = z.object({
