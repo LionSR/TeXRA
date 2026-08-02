@@ -49,6 +49,7 @@ import {
 } from './state/approvalQueue';
 import {
   isEscapeInput,
+  isUnhandledControlInput,
   metaChordInput,
   rewriteKittyEnterInput,
 } from './input/inputKeys';
@@ -62,6 +63,7 @@ import {
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
+  focusStream,
   rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
@@ -117,7 +119,7 @@ function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
 // away instead of leaving it queued behind other streams' items. The root
 // row also owns session-wide (stream-less) approvals.
 function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
-  activeStreamIdSignal.set(streamId);
+  focusStream(streamId);
   promoteApprovalsForStream(streamId, {
     includeSessionWide: streamId === rootStreamIdSignal.get(),
   });
@@ -411,6 +413,7 @@ export function App(props: AppProps): React.JSX.Element {
     });
   const pendingEscapeInterrupt = useRef<
     | {
+        readonly parentStreamId: StreamTabId | undefined;
         readonly streamId: StreamTabId;
         readonly timer: ReturnType<typeof setTimeout>;
       }
@@ -480,13 +483,56 @@ export function App(props: AppProps): React.JSX.Element {
       });
   };
 
-  const scheduleEscapeInterrupt = (streamId: StreamTabId) => {
+  const appOwnsEscape = (): boolean => {
+    const state = escapeInterruptStateRef.current;
+    return appEscapeInterruptActive({
+      inputDisabled: state.inputDisabled,
+      reverseSearchOpen: state.reverseSearchOpen,
+      runPending: true,
+      slashPaletteOpen: state.slashPaletteOpen,
+    });
+  };
+
+  const bareEscapeActive = (streamId: StreamTabId): boolean => {
+    const state = escapeInterruptStateRef.current;
+    return (
+      appOwnsEscape() &&
+      (parentStreamSignal.get().has(streamId) ||
+        state.canInterruptStream(streamId))
+    );
+  };
+
+  const handleBareEscape = (streamId: StreamTabId): boolean => {
+    if (
+      activeStreamIdSignal.get() !== streamId ||
+      !bareEscapeActive(streamId)
+    ) {
+      return false;
+    }
+    const parentId = parentStreamSignal.get().get(streamId);
+    if (parentId !== undefined) {
+      focusStreamAndPromoteApprovals(parentId);
+      return true;
+    }
+    return triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
+  };
+
+  const handlePendingBareEscape = (
+    streamId: StreamTabId,
+    parentStreamId: StreamTabId | undefined,
+  ): boolean => {
+    if (parentStreamSignal.get().get(streamId) !== parentStreamId) return false;
+    return handleBareEscape(streamId);
+  };
+
+  const scheduleBareEscape = (streamId: StreamTabId) => {
     clearPendingEscapeInterrupt();
+    const parentStreamId = parentStreamSignal.get().get(streamId);
     const timer = setTimeout(() => {
       pendingEscapeInterrupt.current = undefined;
-      triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
+      handlePendingBareEscape(streamId, parentStreamId);
     }, ESC_META_CHORD_INTERRUPT_DELAY_MS);
-    pendingEscapeInterrupt.current = { streamId, timer };
+    pendingEscapeInterrupt.current = { parentStreamId, streamId, timer };
   };
 
   // Single App-level keyboard entry point. Ink broadcasts every keystroke to all
@@ -497,17 +543,50 @@ export function App(props: AppProps): React.JSX.Element {
     const pendingEscape = pendingEscapeInterrupt.current;
     if (pendingEscape !== undefined) {
       clearPendingEscapeInterrupt();
-      if (
-        !key.ctrl &&
-        !key.tab &&
-        !isEscapeInput(input, key) &&
-        input.length > 0
-      ) {
-        if (handleMetaShortcut(input)) return;
-        triggerEscapeInterrupt(
-          escapeInterruptStateRef.current,
+      if (isEscapeInput(input, key)) {
+        const previousStreamId = activeStreamIdSignal.get();
+        const handledPendingEscape = handlePendingBareEscape(
           pendingEscape.streamId,
+          pendingEscape.parentStreamId,
         );
+        const currentStreamId = activeStreamIdSignal.get();
+        if (
+          currentStreamId === undefined ||
+          (handledPendingEscape && currentStreamId === previousStreamId) ||
+          !bareEscapeActive(currentStreamId)
+        ) {
+          return;
+        }
+        if (
+          shouldDeferEscapeInterruptForMetaChord({
+            shortcutModifierLabel: defaultShortcutModifierLabel(),
+            streamFocusAvailable: sessionViews.length > 0,
+          })
+        ) {
+          scheduleBareEscape(currentStreamId);
+        } else {
+          handleBareEscape(currentStreamId);
+        }
+        return;
+      }
+      const arrowInput =
+        key.upArrow || key.downArrow || key.leftArrow || key.rightArrow;
+      if (!key.ctrl && !key.tab && (input.length > 0 || arrowInput)) {
+        if (appOwnsEscape() && handleMetaShortcut(input)) return;
+        const inputWasDisabled = inputDisabled;
+        const handled = handlePendingBareEscape(
+          pendingEscape.streamId,
+          pendingEscape.parentStreamId,
+        );
+        const printableInput =
+          input.length > 0 &&
+          !key.meta &&
+          !key.return &&
+          metaChordInput(input, key) === undefined &&
+          [...input].every((character) => !isUnhandledControlInput(character));
+        if (handled && inputWasDisabled && printableInput) {
+          inputBarRef.current?.appendInput(input);
+        }
         return;
       }
     }
@@ -574,28 +653,20 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Escape interrupts an active run.
-    if (
-      isEscapeInput(input, key) &&
-      activeStreamId !== undefined &&
-      appEscapeInterruptActive({
-        inputDisabled: escapeInterruptStateRef.current.inputDisabled,
-        reverseSearchOpen: escapeInterruptStateRef.current.reverseSearchOpen,
-        runPending:
-          escapeInterruptStateRef.current.canInterruptStream(activeStreamId),
-        slashPaletteOpen: escapeInterruptStateRef.current.slashPaletteOpen,
-      })
-    ) {
+    // Bare Escape walks to the immediate parent before falling back to the
+    // root run's existing interruption behavior.
+    if (isEscapeInput(input, key) && activeStreamId !== undefined) {
+      if (!bareEscapeActive(activeStreamId)) return;
       if (
         shouldDeferEscapeInterruptForMetaChord({
           shortcutModifierLabel: defaultShortcutModifierLabel(),
           streamFocusAvailable: sessionViews.length > 0,
         })
       ) {
-        scheduleEscapeInterrupt(activeStreamId);
+        scheduleBareEscape(activeStreamId);
         return;
       }
-      triggerEscapeInterrupt(escapeInterruptStateRef.current, activeStreamId);
+      handleBareEscape(activeStreamId);
     }
   });
 
@@ -618,9 +689,6 @@ export function App(props: AppProps): React.JSX.Element {
               disabled={inputDisabled}
               history={props.history}
               keyboardActive={!childListFocused}
-              onFocusChildList={
-                focusShortcutsActive ? focusChildList : undefined
-              }
             />
             <StatusBar
               agentSelectionAvailable={rootRunStartAvailable}
