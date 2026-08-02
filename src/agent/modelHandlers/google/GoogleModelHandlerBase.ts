@@ -29,12 +29,10 @@ import { tagGoogleSdkError } from './googleSdkError';
 import type { GoogleGenAI } from '@google/genai';
 
 /**
- * Shared base for the two Google handlers ({@link ModelHandlerGoogleGenAI} chat
- * SDK path and {@link ModelHandlerGoogleInteractions} Interactions path). Both
- * speak the same `GoogleGenAI` SDK, so the client cache, the media-attachment
- * pipeline, the capability getters, and the batched tool-result contract live
- * here; only the wire shapes differ, and the subclass supplies those through
- * {@link buildMedia} / {@link textMedia} / {@link thinkingLevelConfig}.
+ * Shared Google handler mechanics. The client cache, media-attachment pipeline,
+ * capability getters, and batched tool-result contract live here; the
+ * Interactions handler supplies its wire shapes through {@link buildMedia},
+ * {@link textMedia}, and {@link thinkingLevelConfig}.
  *
  * Generic over the same wire types as {@link ModelHandler} (`M`/`U`/`T`/`Resp`/
  * `Media`) plus `TLevel` — the SDK's `thinking_level` representation (the
@@ -50,8 +48,7 @@ export abstract class GoogleModelHandlerBase<
   TLevel = unknown,
 > extends ModelHandler<M, U, T, GoogleGenAI, Resp, Media> {
   /**
-   * Inline-vs-uploaded media threshold for the Google File API; 20 MiB for both
-   * handlers.
+   * Inline-vs-uploaded media threshold for the Google File API: 20 MiB.
    */
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
@@ -109,10 +106,9 @@ export abstract class GoogleModelHandlerBase<
   }
 
   /**
-   * Google passes the system prompt per-call (`systemInstruction` for chat,
-   * `system_instruction` for Interactions) rather than storing it in `messages`
-   * (see each handler's `initializeMessages`) — the round flow must resupply it
-   * on every invocation.
+   * Google passes the system prompt per call as `system_instruction` rather
+   * than storing it in `messages`, so the round flow must resupply it on every
+   * invocation.
    */
   override get requiresPerCallSystemPrompt(): boolean {
     return true;
