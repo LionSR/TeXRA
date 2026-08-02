@@ -177,7 +177,7 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
   {
     type: 'media',
     label: 'Media',
-    icon: 'device-camera-video',
+    icon: 'video',
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',
     selectListLabel: 'Add media files',

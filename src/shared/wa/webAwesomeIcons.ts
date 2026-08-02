@@ -285,8 +285,13 @@ let isRegistered = false;
  * icon names (e.g. in localStorage, settings files, or telemetry events that
  * may still reference the old names). The static migration handled the source
  * code; this map handles data that lives outside the repo.
+ *
+ * Canonical names first shipped in extension v0.39.10 on 2026-07-29. Retain
+ * these aliases through 2026-10-29; remove them only after supported persisted
+ * and external extension icon names can no longer contain the legacy spellings
+ * tracked in #6981.
  */
-export const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
+const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
   Object.freeze({
     close: 'xmark',
     diff: 'code-compare',
