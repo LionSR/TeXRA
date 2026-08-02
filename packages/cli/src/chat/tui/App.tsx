@@ -481,13 +481,28 @@ export function App(props: AppProps): React.JSX.Element {
       });
   };
 
-  const handleBareEscape = (streamId: StreamTabId): void => {
+  const bareEscapeActive = (streamId: StreamTabId): boolean => {
+    const state = escapeInterruptStateRef.current;
+    return (
+      appEscapeInterruptActive({
+        inputDisabled: state.inputDisabled,
+        reverseSearchOpen: state.reverseSearchOpen,
+        runPending: true,
+        slashPaletteOpen: state.slashPaletteOpen,
+      }) &&
+      (parentStreamSignal.get().has(streamId) ||
+        state.canInterruptStream(streamId))
+    );
+  };
+
+  const handleBareEscape = (streamId: StreamTabId): boolean => {
+    if (!bareEscapeActive(streamId)) return false;
     const parentId = parentStreamSignal.get().get(streamId);
     if (parentId !== undefined) {
       focusStreamAndPromoteApprovals(parentId);
-      return;
+      return true;
     }
-    triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
+    return triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
   };
 
   const scheduleBareEscape = (streamId: StreamTabId) => {
@@ -507,12 +522,28 @@ export function App(props: AppProps): React.JSX.Element {
     const pendingEscape = pendingEscapeInterrupt.current;
     if (pendingEscape !== undefined) {
       clearPendingEscapeInterrupt();
-      if (
-        !key.ctrl &&
-        !key.tab &&
-        !isEscapeInput(input, key) &&
-        input.length > 0
-      ) {
+      if (isEscapeInput(input, key)) {
+        if (!handleBareEscape(pendingEscape.streamId)) return;
+        const currentStreamId = activeStreamIdSignal.get();
+        if (
+          currentStreamId === undefined ||
+          !bareEscapeActive(currentStreamId)
+        ) {
+          return;
+        }
+        if (
+          shouldDeferEscapeInterruptForMetaChord({
+            shortcutModifierLabel: defaultShortcutModifierLabel(),
+            streamFocusAvailable: sessionViews.length > 0,
+          })
+        ) {
+          scheduleBareEscape(currentStreamId);
+        } else {
+          handleBareEscape(currentStreamId);
+        }
+        return;
+      }
+      if (!key.ctrl && !key.tab && input.length > 0) {
         if (handleMetaShortcut(input)) return;
         handleBareEscape(pendingEscape.streamId);
         return;
@@ -584,15 +615,7 @@ export function App(props: AppProps): React.JSX.Element {
     // Bare Escape walks to the immediate parent before falling back to the
     // root run's existing interruption behavior.
     if (isEscapeInput(input, key) && activeStreamId !== undefined) {
-      const parentId = parentStream.get(activeStreamId);
-      const interruptActive = appEscapeInterruptActive({
-        inputDisabled: escapeInterruptStateRef.current.inputDisabled,
-        reverseSearchOpen: escapeInterruptStateRef.current.reverseSearchOpen,
-        runPending:
-          escapeInterruptStateRef.current.canInterruptStream(activeStreamId),
-        slashPaletteOpen: escapeInterruptStateRef.current.slashPaletteOpen,
-      });
-      if (parentId === undefined && !interruptActive) return;
+      if (!bareEscapeActive(activeStreamId)) return;
       if (
         shouldDeferEscapeInterruptForMetaChord({
           shortcutModifierLabel: defaultShortcutModifierLabel(),
