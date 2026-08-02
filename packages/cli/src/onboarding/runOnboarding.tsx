@@ -20,6 +20,7 @@ import { type SupabaseSession } from '@auth/SupabaseSession';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { type CodexSession } from '@auth/codex';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
@@ -674,22 +675,13 @@ function RelayProgressFrame(props: {
   readonly children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color="cyan"
+      title={props.title ?? 'Sign in · Researcher Access'}
+      footer={<LoadingIndicator label={props.spinnerLabel} />}
     >
-      <Text bold color="cyan">
-        {props.title ?? 'Sign in · Researcher Access'}
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        {props.children}
-      </Box>
-      <Box marginTop={1}>
-        <LoadingIndicator label={props.spinnerLabel} />
-      </Box>
-    </Box>
+      <Box flexDirection="column">{props.children}</Box>
+    </BorderedPanel>
   );
 }
 
