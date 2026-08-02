@@ -176,11 +176,6 @@ export class UsagePanel extends LitElement {
         margin-left: auto;
       }
 
-      .run-summary__label {
-        font-weight: var(--font-weight-medium);
-        color: var(--color-text-secondary);
-      }
-
       :is(.run-summary__value, .context-state__value) {
         color: var(--wa-color-text-normal);
       }
@@ -285,7 +280,6 @@ export class UsagePanel extends LitElement {
 
     return html`
       ${waIcon('chart-pie')}
-      <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         ${join(visible.map(renderTokenStat), ' · ')} ·
         ${this.renderCostRoute(cost)}
