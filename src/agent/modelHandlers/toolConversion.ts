@@ -277,19 +277,32 @@ type _GoogleSchemaKeysAreExhaustive = AssertNever<
 const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>(
   GOOGLE_OPENAPI_SCHEMA_KEY_LIST,
 );
+const GOOGLE_SCHEMA_CONVERSION_KEYS = new Set([
+  'additionalProperties',
+  'const',
+  'deprecated',
+  'exclusiveMaximum',
+  'exclusiveMinimum',
+  'readOnly',
+  'writeOnly',
+]);
 
 /** Keep only the OpenAPI subset represented by the Google SDK's Schema type. */
 function toGoogleOpenApiSchemaNode(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toGoogleOpenApiSchemaNode);
   if (!isSchemaObject(value)) return value;
-  if (
-    Object.hasOwn(value, 'oneOf') ||
-    Object.hasOwn(value, 'allOf') ||
-    Object.hasOwn(value, 'not')
-  ) {
+  const unsupportedKey = Object.keys(value).find(
+    (key) =>
+      !GOOGLE_OPENAPI_SCHEMA_KEYS.has(key) &&
+      !GOOGLE_SCHEMA_CONVERSION_KEYS.has(key),
+  );
+  if (unsupportedKey) {
     throw new Error(
-      'Google tool schemas do not support nested oneOf, allOf, or not constraints.',
+      `Google tool schemas do not support the "${unsupportedKey}" keyword.`,
     );
+  }
+  if (Array.isArray(value.type)) {
+    throw new Error('Google tool schemas require a single scalar type.');
   }
   if (
     (value.const !== undefined && typeof value.const !== 'string') ||
