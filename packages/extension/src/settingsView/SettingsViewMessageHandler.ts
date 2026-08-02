@@ -26,11 +26,11 @@ import { SettingsProfileKeyController } from '@controllers/settingsView/Settings
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
 } from '@frontend/latex/inlineCriticism';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import {
@@ -75,6 +75,7 @@ import {
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildApprovalSettingsMessage } from '@shared/settingsView/handlers/approvalHandlers';
 import { buildAgentSkillsSettingsMessage } from '@shared/settingsView/handlers/agentSkillsHandlers';
+import { buildTelemetrySettingsMessage } from '@shared/settingsView/handlers/telemetrySettingsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -322,7 +323,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private createHandlerRegistry(): SettingsViewInboundHandlerRegistry {
     return {
       webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
-      openVscodeSettings: () => this.openVscodeSettings(),
       getMemoryData: () =>
         this.withActiveWebview((w) => this.sendMemoryData(w)),
       getMemoryPreview: (message) => this.handleGetMemoryPreview(message),
@@ -556,6 +556,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.sendAgentSkillsSettings(webview),
+      this.sendTelemetrySettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
@@ -679,6 +680,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
+  private async sendTelemetrySettings(webview: vscode.Webview): Promise<void> {
+    await webview.postMessage(buildTelemetrySettingsMessage(platform().config));
+  }
+
   /**
    * Generic write path for catalog-backed settings-view rows.
    */
@@ -746,21 +751,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       case 'multi-agent':
         await this.withActiveWebview((w) => this.sendSuperYoloEnabled(w));
         break;
+      case 'telemetry':
+        await this.withActiveWebview((w) => this.sendTelemetrySettings(w));
+        break;
       default:
         assertNever(snapshot, 'Unhandled settings-view snapshot');
     }
-  }
-
-  // ============================================================
-  // Navigation handler implementations
-  // ============================================================
-
-  private async openVscodeSettings(): Promise<void> {
-    await safeExecuteCommand(
-      'workbench.action.openSettings',
-      ['@ext:texra-ai.texra'],
-      this.viewName,
-    );
   }
 
   // ============================================================

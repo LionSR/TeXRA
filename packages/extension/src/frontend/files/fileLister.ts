@@ -10,7 +10,6 @@ import {
 } from '@common/files/fileListingRules';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig, watchConfig } from '@utils/config/configUtils';
 
 import { getFilesRecursively } from './listing';
 
@@ -19,7 +18,6 @@ const CHANNEL = 'FileLister';
 export class FileLister {
   public static initialize(context: vscode.ExtensionContext): void {
     getFileLister();
-    watchConfig(context, 'texra.files', () => getFileLister().refresh());
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() =>
         getFileLister().refresh(),
@@ -28,11 +26,11 @@ export class FileLister {
   }
 
   private workspacePath = WorkspaceFS.getPath();
-  private settings = loadFileListSettings(getConfig);
+  private settings = loadFileListSettings();
 
   public refresh(): void {
     this.workspacePath = WorkspaceFS.getPath();
-    this.settings = loadFileListSettings(getConfig);
+    this.settings = loadFileListSettings();
   }
 
   public async list(fileType: ListableFileType): Promise<string[]> {

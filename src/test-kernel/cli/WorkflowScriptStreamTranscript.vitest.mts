@@ -158,9 +158,9 @@ describe('CLI workflow-script child-stream transcript', () => {
       ['extension', 'Audit extension'],
     ] as const) {
       runTrace.trace.emit({
-        type: 'workflow.task',
+        type: 'workflow.call',
         logId: `${id}-task`,
-        task: { id, label, status: 'planned' },
+        call: { id, label, status: 'planned' },
       });
     }
     syncStreamLog(STREAM_ID);
@@ -185,9 +185,9 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(staticEntries(plannedItems)).toHaveLength(0);
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'core-task',
-      task: {
+      call: {
         id: 'core',
         label: 'Audit core',
         status: 'completed',
@@ -221,9 +221,9 @@ describe('CLI workflow-script child-stream transcript', () => {
   it('keeps a running task replaceable when cancellation precedes bridge cleanup', async () => {
     const runTrace = openRunTrace(STREAM_ID);
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'cancelled-running-task',
-      task: {
+      call: {
         id: 'cancelled-running',
         label: 'Audit cancellation',
         status: 'running',
@@ -248,9 +248,9 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(staticEntries(staticItems)).toEqual([]);
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'cancelled-running-task',
-      task: {
+      call: {
         id: 'cancelled-running',
         label: 'Audit cancellation',
         status: 'failed',
@@ -287,9 +287,9 @@ describe('CLI workflow-script child-stream transcript', () => {
   it('keeps a cold-rebuilt planned task replaceable until not-reached cleanup settles it', async () => {
     const runTrace = openRunTrace(STREAM_ID);
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'cancelled-planned-task',
-      task: {
+      call: {
         id: 'cancelled-planned',
         label: 'Audit later',
         status: 'planned',
@@ -318,9 +318,9 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(staticEntries(staticItems)).toEqual([]);
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'cancelled-planned-task',
-      task: {
+      call: {
         id: 'cancelled-planned',
         label: 'Audit later',
         status: 'skipped',
@@ -384,10 +384,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       input: { path: 'paper.tex' },
     });
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'cancel-plan',
       stageId: phase.id,
-      task: {
+      call: {
         id: 'cancel-plan',
         label: 'Audit after cancellation',
         phase: 'Cancellation audit',
@@ -457,10 +457,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     ).not.toHaveProperty('settlementSeqNo');
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'cancel-plan',
       stageId: phase.id,
-      task: {
+      call: {
         id: 'cancel-plan',
         label: 'Audit after cancellation',
         phase: 'Cancellation audit',
@@ -522,9 +522,9 @@ describe('CLI workflow-script child-stream transcript', () => {
       ['scripts', 'Audit scripts'],
     ] as const) {
       runTrace.trace.emit({
-        type: 'workflow.task',
+        type: 'workflow.call',
         logId: `${id}-task`,
-        task: {
+        call: {
           id,
           label,
           phase: 'Repository audit',
@@ -559,9 +559,9 @@ describe('CLI workflow-script child-stream transcript', () => {
     );
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'core-task',
-      task: {
+      call: {
         id: 'core',
         label: 'Audit core',
         phase: 'Repository audit',
@@ -649,10 +649,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     syncStreamLog(STREAM_ID);
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'dynamic-task',
       stageId: phase.id,
-      task: {
+      call: {
         id: 'dynamic',
         label: 'Inspect generated target',
         phase: 'Dynamic audit',
@@ -665,10 +665,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(runningOutput).not.toContain('Finished: Inspect generated target');
 
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'dynamic-task',
       stageId: phase.id,
-      task: {
+      call: {
         id: 'dynamic',
         label: 'Inspect generated target',
         phase: 'Dynamic audit',
@@ -886,9 +886,9 @@ describe('CLI workflow-script child-stream transcript', () => {
   it('updates one visible task record from planned to completed', async () => {
     const runTrace = openRunTrace(STREAM_ID);
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'introduction-task',
-      task: {
+      call: {
         id: 'introduction',
         label: 'Draft introduction',
         phase: 'Draft sections',
@@ -908,10 +908,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       kind: 'phase',
     });
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'introduction-task',
       stageId: phase.id,
-      task: {
+      call: {
         id: 'introduction',
         label: 'Draft introduction',
         phase: 'Draft sections',
@@ -919,10 +919,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       },
     });
     runTrace.trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'introduction-task',
       stageId: phase.id,
-      task: {
+      call: {
         id: 'introduction',
         label: 'Draft introduction',
         phase: 'Draft sections',

@@ -1,5 +1,5 @@
 // Local imports
-import type { RegexReplacementCategory as RegexReplacementCategoryName } from '@shared/schemas/coreSettings';
+import type { RegexReplacementCategory as RegexReplacementCategoryName } from '@shared/constants/latex';
 
 import { RegexReplacementCategory, ReplacementFunction } from './types';
 import {

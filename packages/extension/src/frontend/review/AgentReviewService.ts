@@ -15,7 +15,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -40,10 +39,8 @@ import {
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import * as logger from '@logger/logUtils';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   AgentReviewRunController,
@@ -230,14 +227,6 @@ class AgentReviewServiceImpl {
     if (!this.reviewRuns.isCurrent(run)) return;
     const collected = await collectReviewDiff({
       cwd,
-      includeUntracked: getConfig<boolean>(
-        'agentReview.includeUntrackedFiles',
-        true,
-      ),
-      includeSubmodules: getConfig<boolean>(
-        'agentReview.includeSubmodules',
-        true,
-      ),
       baseRef: options.baseRef,
       baseDescription: options.baseDescription,
       baseBranch: options.baseBranch,
@@ -301,16 +290,9 @@ class AgentReviewServiceImpl {
         changedFiles,
         diff,
         truncated,
-        approach:
-          options.approach ??
-          getValidatedConfig(
-            'agentReview.approach',
-            z.enum(AGENT_REVIEW_APPROACHES),
-            'quick',
-          ),
+        approach: options.approach ?? 'quick',
         userInstructions: options.userInstructions,
       });
-      const model = getConfig<string>('agentReview.model', '').trim();
       const config = AgentConfigSchema.parse({
         agent: REVIEW_AGENT,
         // changeReviewer is a tool-use agent; set the category explicitly so
@@ -322,7 +304,6 @@ class AgentReviewServiceImpl {
         // tool calls (read_file, grep, bash) to the repository root, which
         // may sit above the opened workspace folder.
         workingDirectory: repoRoot,
-        ...(model ? { model } : {}),
       });
 
       // Run the reviewer session directly (the `texra.execute` path minus

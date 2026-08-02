@@ -29,13 +29,6 @@ export interface DesktopOnboardingIpcOptions {
    * and the secrets read can involve disk/network I/O.
    */
   hasCredential: () => boolean | Promise<boolean>;
-  /**
-   * Resolves once the host's one-shot first-run backfill has settled. The first
-   * funnel derivation waits for it so a returning veteran isn't transiently
-   * pushed into State 1 (firing `selectSetupAgent`) before the backfill marks
-   * them `done`. Optional: when absent, refreshes derive immediately.
-   */
-  readyGate?: Promise<void>;
   /** Post SET_SELECTED_AGENT to the renderer when entering State 1. */
   selectSetupAgent: () => Promise<void>;
   /** Launch the setup conversation when the user clicks "Run Setup". */
@@ -83,11 +76,6 @@ export function createDesktopOnboardingIpc(
   }
 
   async function runOnboardingFunnelRefresh(): Promise<void> {
-    // Wait for the host's first-run backfill to settle before the first
-    // derivation; resolves instantly on every subsequent refresh.
-    if (options.readyGate) {
-      await options.readyGate.catch(() => undefined);
-    }
     const hasCredential = await Promise.resolve(options.hasCredential()).catch(
       () => false,
     );

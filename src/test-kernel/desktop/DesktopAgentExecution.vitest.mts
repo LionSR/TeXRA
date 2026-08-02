@@ -2535,9 +2535,8 @@ describe('DesktopProgressBridge', () => {
       );
       const { initializeDesktopProcessStores } =
         await import('@desktop/main/desktopProcessStores');
-      const processStores = await initializeDesktopProcessStores({
-        session: processSession,
-      });
+      const processStores =
+        await initializeDesktopProcessStores(processSession);
       await processSession.waitUntilReady();
       const { stores: sessionStores } = processStores;
       const disposeResumeHandler = processResumeOwner.attach({

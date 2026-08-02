@@ -64,7 +64,7 @@ import {
 } from '@frontend/comments/inlineComments';
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
-import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
+import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -217,12 +217,16 @@ export async function activate(context: vscode.ExtensionContext) {
     workspacePath: () => workspace.getWorkspacePath(),
   });
   await migrateLegacyVscodeStorage(context, storage);
+  const config = await createExtensionTexraConfig(
+    storage,
+    workspace.getWorkspacePath(),
+  );
   // Shared by the `Platform` tool-availability port and the setup platform's
   // extensions port, which both answer the same question.
   const isVscodeExtensionInstalled = (id: string) =>
     vscode.extensions.getExtension(id) !== undefined;
   initPlatform({
-    config: new VscodeConfigProvider(),
+    config,
     globalState: context.globalState,
     workspaceState: workspaceSM,
     fs: nodeFilesystem,

@@ -10,13 +10,8 @@ import {
 } from '@common/files/fileListingRules';
 
 describe('shared file-listing rules', () => {
-  it('builds input configs from shared include and ignore settings', () => {
-    const settings = loadFileListSettings((key, fallback) => {
-      if (key === 'texra.files.ignored.inputDirectories') {
-        return ['drafts'] as typeof fallback;
-      }
-      return fallback;
-    });
+  it('builds input configs from the product file-handling rules', () => {
+    const settings = loadFileListSettings();
 
     const config = getFileListConfig('input', settings);
 
@@ -25,7 +20,6 @@ describe('shared file-listing rules', () => {
       ignoredFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
     });
     expect(config?.ignoredDirs).toContain('node_modules');
-    expect(config?.ignoredDirs).toContain('drafts');
   });
 
   it('normalizes filters once and applies file and directory rules', () => {

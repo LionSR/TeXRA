@@ -48,12 +48,12 @@ function workflowCallEvent(
   events: readonly AgentEvent[],
   label: string,
   status: WorkflowCallProgress['status'],
-): Extract<AgentEvent, { type: 'workflow.task' }> | undefined {
+): Extract<AgentEvent, { type: 'workflow.call' }> | undefined {
   return events.find(
-    (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
-      event.type === 'workflow.task' &&
-      event.task.label === label &&
-      event.task.status === status,
+    (event): event is Extract<AgentEvent, { type: 'workflow.call' }> =>
+      event.type === 'workflow.call' &&
+      event.call.label === label &&
+      event.call.status === status,
   );
 }
 
@@ -63,13 +63,13 @@ function workflowCallEvent(
  */
 function latestWorkflowCallEvents(
   events: readonly AgentEvent[],
-): Extract<AgentEvent, { type: 'workflow.task' }>[] {
+): Extract<AgentEvent, { type: 'workflow.call' }>[] {
   const byLogId = new Map<
     string,
-    Extract<AgentEvent, { type: 'workflow.task' }>
+    Extract<AgentEvent, { type: 'workflow.call' }>
   >();
   for (const event of events) {
-    if (event.type === 'workflow.task') byLogId.set(event.logId, event);
+    if (event.type === 'workflow.call') byLogId.set(event.logId, event);
   }
   return [...byLogId.values()];
 }
@@ -114,16 +114,16 @@ return await agent('Inspect', { id: 'inspect' })`,
     // One stable, phase-derived stage across the whole lifecycle: the card is
     // classified into its phase group when it is planned and never moves.
     expect(planned).toMatchObject({
-      type: 'workflow.task',
+      type: 'workflow.call',
       stageId: phaseId,
     });
     expect(running).toMatchObject({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: planned?.logId,
       stageId: phaseId,
     });
     expect(completed).toMatchObject({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: planned?.logId,
       stageId: phaseId,
     });
@@ -180,7 +180,7 @@ return await agent('Run one', { id: 'used' })`,
     expect(workflowCallEvent(events, 'Unused task', 'skipped')).toMatchObject({
       logId: unusedPlanned?.logId,
       stageId: unusedPlanned?.stageId,
-      task: {
+      call: {
         reason: 'not-reached',
       },
     });
@@ -213,7 +213,7 @@ return await agent('Run one', { id: 'used' })`,
     const writeId = stageId(events, 'Write');
     expect(workflowCallEvent(events, 'Later task', 'skipped')).toMatchObject({
       stageId: writeId,
-      task: { reason: 'not-reached' },
+      call: { reason: 'not-reached' },
     });
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -255,7 +255,7 @@ return await agent('Run loose', { id: 'loose' })`,
         stageId: undefined,
       });
       expect(
-        workflowCallEvent(events, 'Loose task', status)?.task.phase,
+        workflowCallEvent(events, 'Loose task', status)?.call.phase,
       ).toBeUndefined();
     }
 
@@ -267,7 +267,7 @@ return await agent('Run loose', { id: 'loose' })`,
     expect(
       workflowPhaseCallProgress(
         latest.flatMap((event) =>
-          event.task.phase === 'Research' ? [event.task] : [],
+          event.call.phase === 'Research' ? [event.call] : [],
         ),
       ),
     ).toEqual({ done: 0, total: 0 });
@@ -297,7 +297,7 @@ return await agent('Run loose', { id: 'loose' })`,
     const researchId = stageId(events, 'Research');
     expect(workflowCallEvent(events, 'Loose task', 'failed')).toMatchObject({
       stageId: undefined,
-      task: { phase: undefined, error: 'model unavailable' },
+      call: { phase: undefined, error: 'model unavailable' },
     });
     expect(events).toContainEqual({
       type: 'stage.end',
@@ -329,7 +329,7 @@ return await agent('Run refused', { id: 'refused' })`,
     ).rejects.toThrow(/agent-call cap/);
 
     expect(workflowCallEvent(events, 'Refused audit', 'failed')).toMatchObject({
-      task: {
+      call: {
         error: expect.stringContaining('agent-call cap'),
       },
     });
@@ -392,9 +392,9 @@ ${body}`,
         'completed',
       );
 
-      expect(firstRunning?.task.id).toBe('call-0');
+      expect(firstRunning?.call.id).toBe('call-0');
       expect(firstCompleted?.logId).toBe(firstRunning?.logId);
-      expect(secondRunning?.task.id).toBe('call-1');
+      expect(secondRunning?.call.id).toBe('call-1');
       expect(secondCompleted?.logId).toBe(secondRunning?.logId);
       expect(firstRunning?.logId).not.toBe(secondRunning?.logId);
     },
@@ -423,7 +423,7 @@ return await agent('Read', { phase: 'Review' })`;
     const phaseId = stageId(events, 'Review');
     expect(runner).not.toHaveBeenCalled();
     expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
-      type: 'workflow.task',
+      type: 'workflow.call',
       stageId: phaseId,
     });
     expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
@@ -496,7 +496,7 @@ return await agent('Review the argument', { id: 'review-task' })`;
         workflowCallEvent(events, 'Review argument', status),
       ).toMatchObject({
         logId: planned?.logId,
-        task: {
+        call: {
           id: 'review-task',
           label: 'Review argument',
           phase: 'Review',
@@ -524,13 +524,13 @@ return await agent('Second')`;
       getCallCostUsd: (index) => callCosts.get(index),
     });
 
-    expect(workflowCallEvent(events, 'First', 'completed')?.task).toMatchObject(
+    expect(workflowCallEvent(events, 'First', 'completed')?.call).toMatchObject(
       {
         totalCostUsd: 0.05,
       },
     );
     expect(
-      workflowCallEvent(events, 'Second', 'completed')?.task,
+      workflowCallEvent(events, 'Second', 'completed')?.call,
     ).toMatchObject({
       totalCostUsd: 0.05,
     });
@@ -546,7 +546,7 @@ return await agent('Second')`;
     });
 
     expect(
-      workflowCallEvent(replay.events, 'First', 'cached')?.task,
+      workflowCallEvent(replay.events, 'First', 'cached')?.call,
     ).not.toHaveProperty('totalCostUsd');
   });
 
@@ -567,7 +567,7 @@ return await agent('Draft')`,
       onActivity: (line) => activities.push(line),
     });
 
-    expect(workflowCallEvent(events, 'Draft', 'completed')?.task).toMatchObject(
+    expect(workflowCallEvent(events, 'Draft', 'completed')?.call).toMatchObject(
       {
         model: 'deepseekT',
         childStreamId: 'draft@deepseekT#abcdef',
@@ -576,8 +576,8 @@ return await agent('Draft')`,
       },
     );
     const draftEvents = events.filter(
-      (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
-        event.type === 'workflow.task' && event.task.label === 'Draft',
+      (event): event is Extract<AgentEvent, { type: 'workflow.call' }> =>
+        event.type === 'workflow.call' && event.call.label === 'Draft',
     );
     const logIds = new Set(draftEvents.map((event) => event.logId));
     expect(logIds.size).toBe(1);
@@ -654,7 +654,7 @@ return await agent('Late skip')`,
     await run;
 
     expect(
-      workflowCallEvent(events, 'Late skip', 'skipped')?.task,
+      workflowCallEvent(events, 'Late skip', 'skipped')?.call,
     ).toMatchObject({
       reason: 'user',
       model: 'kimiK2',
@@ -682,9 +682,9 @@ return await agent('Unsuccessful')`,
 
     const phaseId = stageId(events, 'Analysis');
     expect(workflowCallEvent(events, 'Unsuccessful', 'failed')).toMatchObject({
-      type: 'workflow.task',
+      type: 'workflow.call',
       stageId: phaseId,
-      task: {
+      call: {
         error: 'model unavailable',
       },
     });
@@ -742,7 +742,7 @@ return await pending`,
 
     const completion = workflowCallEvent(events, 'before phase', 'completed');
     expect(completion).toMatchObject({
-      type: 'workflow.task',
+      type: 'workflow.call',
       stageId: undefined,
     });
     expect(completion).not.toMatchObject({ stageId: stageId(events, 'Later') });
@@ -769,7 +769,7 @@ return await agent('Abort', { phase: 'Execution' })`,
     const phaseId = stageId(events, 'Execution');
     expect(workflowCallEvent(events, 'Abort', 'failed')).toMatchObject({
       stageId: phaseId,
-      task: {
+      call: {
         error: 'fatal runner error',
         model: 'abort-model',
         durationMs: expect.any(Number),
@@ -824,7 +824,7 @@ return 'guest success'`,
       const phaseId = stageId(events, 'Execution');
       expect(workflowCallEvent(events, 'Orphaned', 'failed')).toMatchObject({
         stageId: phaseId,
-        task: {
+        call: {
           error: 'The workflow ended before this call completed.',
           totalCostUsd: 0.03,
           childStreamId: 'orphaned@model#abcdef',
