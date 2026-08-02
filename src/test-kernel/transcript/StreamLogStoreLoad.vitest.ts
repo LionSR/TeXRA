@@ -792,7 +792,13 @@ describe('StreamLogStore load', () => {
     expect(store.get('alpha')?.size).toBe(2);
   });
 
-  it('salvages valid fields from partially corrupt summaries', async () => {
+  it('rebuilds from the authoritative log when a summary field has the wrong type', async () => {
+    // `hasRunningGroup: 'bad'` is exactly the case a per-field `.catch()`
+    // would silently coerce to `undefined` (not running) instead of failing
+    // the whole parse — masking a crash-recovery flag that should have
+    // triggered the orphan-recovery sweep. The summary schema has no
+    // per-field `.catch()`, so a malformed field invalidates the whole
+    // cached summary and falls back to the log, like malformed JSON does.
     const storage = mockStorage({
       logs: {
         alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
@@ -808,10 +814,13 @@ describe('StreamLogStore load', () => {
 
     const store = await StreamLogStore.open();
 
-    expect(storage.fullLogReads()).toBe(0);
+    expect(storage.fullLogReads()).toBe(1);
     expect(store.keys()).toEqual(['alpha']);
     expect(store.getFirstTimestamp('alpha')).toBe(200);
-    expect(store.getLastTimestamp('alpha')).toBeUndefined();
+    expect(store.getLastTimestamp('alpha')).toBe(250);
+    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+      settledSummary(200, 250),
+    );
   });
 
   it('rebuilds malformed summary JSON from the authoritative stream log', async () => {

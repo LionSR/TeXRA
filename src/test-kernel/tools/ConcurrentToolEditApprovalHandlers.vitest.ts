@@ -116,6 +116,8 @@ describe('Concurrent session tool edit approval handlers', () => {
     assert.strictEqual(seenByB.length, 1);
     assert.strictEqual(seenByB[0]?.path, 'b.tex');
 
+    assert.ok(resultA.accepted);
+    assert.ok(resultB.accepted);
     assert.strictEqual(resultA.appliedContent, 'from-a');
     assert.strictEqual(resultB.appliedContent, 'from-b');
   });
