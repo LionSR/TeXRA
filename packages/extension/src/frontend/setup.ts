@@ -17,18 +17,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
-// Local imports - VS Code configuration
-import {
-  isVscodeHostConfigExplicitlySet,
-  updateVscodeHostConfig,
-} from './vscode/vscodeHostConfig';
-
-/**
- * Version number for LaTeX-related VS Code config setup.
- * Increment this when changing which settings are auto-configured.
- */
-const LATEX_CONFIG_VERSION = 2;
-
 /**
  * Reconciles bundled agents in global storage from packaged resources.
  *
@@ -146,10 +134,8 @@ export async function refreshCustomAgentRoot(): Promise<void> {
   }
 }
 
-/**
- * Configure LaTeX-related workspace settings if LaTeX Workshop extension is installed
- */
-export async function configureLatexSettings(): Promise<void> {
+/** Prepare the host environment and recommend LaTeX Workshop when useful. */
+export async function initializeLatexSupport(): Promise<void> {
   // Extend process.env.PATH with common TeX installation directories so that
   // child processes spawned by other extensions (e.g., LaTeX Workshop) can
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
@@ -179,49 +165,11 @@ export async function configureLatexSettings(): Promise<void> {
       if (await workspaceContainsLatexFiles()) {
         await promptLatexWorkshopInstall();
       }
-      return;
     }
-
-    const storedVersion = globalSM.get<number>(
-      GlobalStateKey.LATEX_CONFIG_VERSION,
-    );
-    if (storedVersion === LATEX_CONFIG_VERSION) {
-      return;
-    }
-
-    logger.info(
-      'extension',
-      'LaTeX Workshop extension detected, configuring settings',
-    );
-
-    if (!isVscodeHostConfigExplicitlySet('[latex]')) {
-      await updateVscodeHostConfig(
-        '[latex]',
-        { 'editor.wordWrap': 'on' },
-        'global',
-      );
-    }
-
-    if (
-      !vscode.env.appName?.toLowerCase().includes('windsurf') &&
-      !isVscodeHostConfigExplicitlySet('workbench.activityBar.location')
-    ) {
-      await updateVscodeHostConfig(
-        'workbench.activityBar.location',
-        'default',
-        'global',
-      );
-      logger.info('extension', 'Activity bar location set to default');
-    }
-
-    await globalSM.update(
-      GlobalStateKey.LATEX_CONFIG_VERSION,
-      LATEX_CONFIG_VERSION,
-    );
   } catch (err) {
     logger.error(
       'extension',
-      `Error configuring LaTeX settings: ${toErrorMessage(err)}`,
+      `Error initializing LaTeX support: ${toErrorMessage(err)}`,
     );
   }
 }
