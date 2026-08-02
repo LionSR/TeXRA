@@ -109,9 +109,20 @@ function isTelemetryEnabledBySetting(): boolean {
   // has not initialized its platform yet.
   if (isTelemetryDisabledByEnv()) return false;
 
-  const configured = platform().config.inspect<unknown>(
-    TELEMETRY_ENABLED_KEY,
-  )?.effectiveValue;
+  const inspection = platform().config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
+  // Either scope may opt out. In particular, a checked-in project `true` must
+  // not reverse a user-wide privacy choice, while the CLI still honours a
+  // project-local `false` when no global value is present.
+  if (
+    inspection?.globalValue === false ||
+    inspection?.workspaceValue === false
+  ) {
+    return false;
+  }
+  const configured =
+    inspection?.globalValue !== undefined
+      ? inspection.globalValue
+      : inspection?.workspaceValue;
   const raw =
     configured === undefined
       ? DEFAULT_CORE_SETTINGS.telemetry.enabled
