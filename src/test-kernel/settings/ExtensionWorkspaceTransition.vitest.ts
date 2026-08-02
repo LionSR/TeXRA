@@ -190,6 +190,43 @@ describe.skipIf(process.platform === 'win32')(
       tempDir = undefined;
     });
 
+    it('ignores folder changes that keep the active workspace root unchanged', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
+      const workspace = join(tempDir, 'project');
+      const storageRoot = join(tempDir, 'storage');
+      await Promise.all([createProject(workspace, 24001), mkdir(storageRoot)]);
+
+      const storage = new WorkspaceStorageProvider(
+        storageRoot,
+        () => workspace,
+      );
+      const config = await createExtensionTexraConfig(storage, workspace);
+      const storageCommit = vi.spyOn(storage, 'commitWorkspaceStorageChange');
+      const configReplacement = vi.spyOn(config, 'replaceWorkspaceStore');
+      const listener = vi.fn();
+      config.watch('texra.bib.zoteroPort', listener);
+      const provider = new ProgressViewProvider(
+        {
+          storageUri: { fsPath: join(tempDir, 'extension-storage') },
+        } as unknown as vscode.ExtensionContext,
+        config,
+        { getWorkspacePath: () => workspace } as never,
+      );
+
+      mocks.workspaceListeners[0]?.();
+      await config.update('texra.bib.zoteroPort', 25000);
+
+      expect(mocks.backend.reloadAfterStorageRootChange).not.toHaveBeenCalled();
+      expect(storageCommit).not.toHaveBeenCalled();
+      expect(configReplacement).not.toHaveBeenCalled();
+      expect(mocks.showErrorMessage).not.toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledOnce();
+      await expect(
+        readFile(join(workspace, '.texra', 'config.json'), 'utf8'),
+      ).resolves.toContain('25000');
+      provider.dispose();
+    });
+
     it('blocks workspace writes across storage and config commit windows while allowing global writes', async () => {
       tempDir = await mkdtemp(join(tmpdir(), 'texra-workspace-transition-'));
       const firstWorkspace = join(tempDir, 'first');
@@ -223,6 +260,7 @@ describe.skipIf(process.platform === 'win32')(
 
       workspaceRoot = secondWorkspace;
       mocks.workspaceListeners[0]?.();
+      mocks.workspaceListeners[0]?.();
       let workspaceWriteFinished = false;
       const workspaceWrite = config
         .update('texra.bib.zoteroPort', 25000)
@@ -247,6 +285,7 @@ describe.skipIf(process.platform === 'win32')(
 
       configCommit.resolve();
       await workspaceWrite;
+      expect(mocks.backend.reloadAfterStorageRootChange).toHaveBeenCalledOnce();
       await expect(
         readFile(join(secondWorkspace, '.texra', 'config.json'), 'utf8'),
       ).resolves.toContain('25000');
