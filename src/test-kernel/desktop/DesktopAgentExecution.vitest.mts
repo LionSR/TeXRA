@@ -195,6 +195,14 @@ function seedBridgeFollowUp(
   followUps.release(lease, 'recoverable');
 }
 
+type HousekeepingMocks = {
+  runPackRunDir: ReturnType<typeof vi.fn>;
+  runCleanRunDir: ReturnType<typeof vi.fn>;
+  runPack: ReturnType<typeof vi.fn>;
+  runCleanSingle: ReturnType<typeof vi.fn>;
+  runCleanMultiple: ReturnType<typeof vi.fn>;
+};
+
 type CreateBridgeOptions = {
   kvStoreBacking?: Map<string, unknown>;
   kvRead?: (key: string) => Promise<unknown> | unknown;
@@ -220,6 +228,7 @@ type CreateBridgeOptions = {
   observeRendererMessage?: (message: unknown) => void;
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
   loggerErrorSpy?: ReturnType<typeof vi.fn<AgentTrace['error']>>;
+  housekeeping?: HousekeepingMocks;
 };
 
 type ProgressMessage = {
@@ -358,6 +367,9 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@controllers/mainView/MainViewExecutionController', () => ({
     prepareMainViewExecutionRequest: vi.fn(),
   }));
+  if (options.housekeeping) {
+    mocks.doMock('@housekeeping', () => options.housekeeping!);
+  }
   const { StreamLogStore, StreamSnapshotStore } = await import('@transcript');
   const createProgressSnapshotStore = (): ProgressSnapshotStore =>
     new StreamSnapshotStore();
@@ -593,6 +605,75 @@ function workflowConfig(): AgentConfig {
     model: 'deepseekproT',
     agentCategory: AgentCategory.Workflow,
     toolConfig: DEFAULT_TOOL_CONFIG,
+  });
+}
+
+function workflowFileOperationConfig(): AgentConfig {
+  return WorkflowAgentConfigSchema.parse({
+    ...workflowConfig(),
+    inputFiles: ['paper.tex'],
+    outputFiles: ['paper_revised.tex'],
+  });
+}
+
+function createHousekeepingMocks(): HousekeepingMocks {
+  const success = async () => ({ status: 'success' as const });
+  return {
+    runPackRunDir: vi.fn(success),
+    runCleanRunDir: vi.fn(success),
+    runPack: vi.fn(success),
+    runCleanSingle: vi.fn(success),
+    runCleanMultiple: vi.fn(success),
+  };
+}
+
+async function createWorkflowFileOperationBridge(
+  streamId: StreamTabId,
+  options: {
+    executionId?: ExecutionId;
+    showErrorMessage?: CreateBridgeOptions['showErrorMessage'];
+  } = {},
+): Promise<{ bridge: TestableBridge; housekeeping: HousekeepingMocks }> {
+  const housekeeping = createHousekeepingMocks();
+  const bridge = await createBridge([], {
+    housekeeping,
+    canonicalStreamIds: [streamId],
+    ...(options.showErrorMessage && {
+      showErrorMessage: options.showErrorMessage,
+    }),
+    configureProgressSnapshotStore: (store) => {
+      store.setRunConfig(
+        streamId,
+        workflowFileOperationConfig(),
+        options.executionId,
+      );
+    },
+  });
+  return { bridge, housekeeping };
+}
+
+async function invokeWorkflowFileOperation(
+  bridge: TestableBridge,
+  streamId: StreamTabId,
+  operation: 'pack' | 'clean',
+): Promise<void> {
+  if (operation === 'pack') {
+    const runOperation = assertSupported(
+      bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.PACK_STREAM],
+    );
+    await runOperation({
+      command: PROGRESS_VIEW_COMMANDS.PACK_STREAM,
+      stream: streamId,
+    });
+    return;
+  }
+
+  const runOperation = assertSupported(
+    bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.CLEAN_STREAM],
+  );
+  await runOperation({
+    command: PROGRESS_VIEW_COMMANDS.CLEAN_STREAM,
+    stream: streamId,
   });
 }
 
@@ -2105,6 +2186,72 @@ describe('DesktopProgressBridge', () => {
       }),
     );
   });
+
+  it('packs an identified execution only through its run directory', async () => {
+    const streamId = 'stream-pack' as StreamTabId;
+    const executionId = 'ec-a11' as ExecutionId;
+    const { bridge, housekeeping } = await createWorkflowFileOperationBridge(
+      streamId,
+      { executionId },
+    );
+
+    await invokeWorkflowFileOperation(bridge, streamId, 'pack');
+
+    expect(housekeeping.runPackRunDir).toHaveBeenCalledOnce();
+    expect(housekeeping.runPackRunDir).toHaveBeenCalledWith(
+      executionId,
+      'proofreader',
+      'deepseekproT',
+      'paper.tex',
+    );
+    expect(housekeeping.runCleanRunDir).not.toHaveBeenCalled();
+    expect(housekeeping.runPack).not.toHaveBeenCalled();
+    expect(housekeeping.runCleanSingle).not.toHaveBeenCalled();
+    expect(housekeeping.runCleanMultiple).not.toHaveBeenCalled();
+  });
+
+  it('cleans an identified execution only through its run directory', async () => {
+    const streamId = 'stream-clean' as StreamTabId;
+    const executionId = 'ec-c1ea' as ExecutionId;
+    const { bridge, housekeeping } = await createWorkflowFileOperationBridge(
+      streamId,
+      { executionId },
+    );
+
+    await invokeWorkflowFileOperation(bridge, streamId, 'clean');
+
+    expect(housekeeping.runCleanRunDir).toHaveBeenCalledOnce();
+    expect(housekeeping.runCleanRunDir).toHaveBeenCalledWith(executionId);
+    expect(housekeeping.runPackRunDir).not.toHaveBeenCalled();
+    expect(housekeeping.runPack).not.toHaveBeenCalled();
+    expect(housekeeping.runCleanSingle).not.toHaveBeenCalled();
+    expect(housekeeping.runCleanMultiple).not.toHaveBeenCalled();
+  });
+
+  it.each(['pack', 'clean'] as const)(
+    'rejects %s without an execution identity before any file operation',
+    async (operation) => {
+      const streamId = `stream-missing-${operation}` as StreamTabId;
+      const showErrorMessage = vi.fn(async () => undefined);
+      const { bridge, housekeeping } = await createWorkflowFileOperationBridge(
+        streamId,
+        {
+          showErrorMessage,
+        },
+      );
+
+      await invokeWorkflowFileOperation(bridge, streamId, operation);
+
+      expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+        `Missing execution identity for ${operation}.`,
+      );
+      expect(housekeeping.runPackRunDir).not.toHaveBeenCalled();
+      expect(housekeeping.runCleanRunDir).not.toHaveBeenCalled();
+      expect(housekeeping.runPack).not.toHaveBeenCalled();
+      expect(housekeeping.runCleanSingle).not.toHaveBeenCalled();
+      expect(housekeeping.runCleanMultiple).not.toHaveBeenCalled();
+    },
+  );
 
   it('resumes canonical streams using sidecar execution ids', async () => {
     const executionId = 'abc123';
