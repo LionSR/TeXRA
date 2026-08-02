@@ -11,9 +11,10 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas
 import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
+import { designTokens } from '@shared/styles';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
@@ -22,12 +23,6 @@ import { formatCostUsd } from '@utils/text/stringUtils';
 // Local imports - progress view
 import { ELEMENT_IDS } from '../constants';
 import type { ContextStateData } from '../store';
-
-/**
- * Default compaction threshold (%) — must match
- * DEFAULT_COMPACTION_THRESHOLD_PERCENT in contextManagementConstants.ts.
- */
-const COMPACTION_THRESHOLD = 75;
 
 type UsageRouteBadge = {
   label: string;
@@ -337,10 +332,10 @@ export class UsagePanel extends LitElement {
           <span
             id="usage-compaction-tick"
             class="context-gauge__tick"
-            style=${styleMap({ left: `${COMPACTION_THRESHOLD}%` })}
+            style=${styleMap({ left: `${DEFAULT_COMPACTION_THRESHOLD_PERCENT}%` })}
           ></span>
           <wa-tooltip for="usage-compaction-tick"
-            >Compaction at ${COMPACTION_THRESHOLD}%</wa-tooltip
+            >Compaction at ${DEFAULT_COMPACTION_THRESHOLD_PERCENT}%</wa-tooltip
           >
         </span>
         <span class="context-state__value">
