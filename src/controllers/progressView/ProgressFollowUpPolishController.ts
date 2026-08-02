@@ -73,7 +73,12 @@ export class ProgressFollowUpPolishController {
       if (result.success) {
         return {
           kind: 'updated',
-          update: this.createUpdate(input.stream, 'polished', result.text),
+          update: {
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+            stream: input.stream,
+            kind: 'polished',
+            text: result.text,
+          },
         };
       }
       if (!result.error) {
@@ -81,9 +86,7 @@ export class ProgressFollowUpPolishController {
       }
       return {
         kind: 'failed',
-        update: this.createUpdate(input.stream, 'polishError', null, {
-          error: result.error,
-        }),
+        update: this.createPolishErrorUpdate(input.stream, result.error),
         userMessage: result.error,
       };
     } catch (error) {
@@ -91,9 +94,7 @@ export class ProgressFollowUpPolishController {
       const logMessage = `Error polishing follow-up: ${errorMsg}`;
       return {
         kind: 'exception',
-        update: this.createUpdate(input.stream, 'polishError', null, {
-          error: errorMsg,
-        }),
+        update: this.createPolishErrorUpdate(input.stream, errorMsg),
         userMessage: logMessage,
         logMessage,
         ...(error instanceof Error && { logData: error }),
@@ -123,18 +124,16 @@ export class ProgressFollowUpPolishController {
     return context;
   }
 
-  private createUpdate(
+  private createPolishErrorUpdate(
     stream: StreamTabId,
-    kind: 'polished' | 'polishError',
-    text: string | null,
-    options: { readonly error?: string } = {},
+    error: string,
   ): UpdateFollowUpTextMessage {
     return {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
       stream,
-      kind,
-      text,
-      ...(options.error && { error: options.error }),
+      kind: 'polishError',
+      text: null,
+      error,
     };
   }
 }

@@ -30,7 +30,10 @@ async function installPlatform(
   await installFakePlatform({ workspacePath: '/workspace', files });
   detachHostInteractions();
   detachHostInteractions = defaultSession().useHostInteractions({
-    requestToolEditApproval: async () => ({ accepted: true }),
+    requestToolEditApproval: async (request) => ({
+      accepted: true,
+      appliedContent: request.proposedContent,
+    }),
     cancel: () => undefined,
   });
 }

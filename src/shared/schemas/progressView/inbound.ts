@@ -12,7 +12,10 @@ import {
 } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
-import { SwitchViewMessageSchema } from '../commonViewMessages';
+import {
+  SwitchViewMessageSchema,
+  WebviewReadyMessageSchema,
+} from '../commonViewMessages';
 import { commandOnly } from '../messageFactories';
 import {
   ExternalInquiryThreadIdSchema,
@@ -278,7 +281,7 @@ const GettingStartedActionMessageSchema = z.object({
 export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
-    commandOnly(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY),
+    WebviewReadyMessageSchema,
     SwitchViewMessageSchema,
     ThemeSetMessageSchema,
     DebugModeSetMessageSchema,
