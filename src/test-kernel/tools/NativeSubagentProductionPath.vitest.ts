@@ -75,6 +75,7 @@ const tempDirs: string[] = [];
 let session: SessionHandle;
 let childId: ExecutionId | undefined;
 let resumedStreams: StreamTabId[];
+let completedResumes: StreamTabId[];
 
 interface ScriptedTurn {
   readonly text: string;
@@ -145,13 +146,15 @@ async function resumePersistedStream(
   if (!config) return false;
   const resume = await retrieveSessionResumeData(streamId, executionId, config);
   if (!resume || resume.type !== 'toolUse') return false;
-  return resumeQueuedToolUseFromResumeData(streamId, resume, {
+  const resumed = await resumeQueuedToolUseFromResumeData(streamId, resume, {
     session,
     recovery,
     onError: (error) => {
       throw error;
     },
   });
+  completedResumes.push(streamId);
+  return resumed;
 }
 
 async function integrationPlatform(): Promise<Platform> {
@@ -170,7 +173,7 @@ function inlineAgent(name: string) {
   };
 }
 
-async function waitForReport(
+async function waitForPersistedResult(
   executionId: ExecutionId,
   expectedText: string,
 ): Promise<void> {
@@ -178,6 +181,11 @@ async function waitForReport(
     async () => {
       const report = await getExecutionStore(executionId).readReport();
       expect(report).toContain(expectedText);
+      await expect(
+        getExecutionStore(executionId).readResultMeta(),
+      ).resolves.toMatchObject({
+        result: { response: expectedText },
+      });
     },
     { timeout: 10_000 },
   );
@@ -200,6 +208,7 @@ describe('native subagent production delivery path', () => {
     session = new SessionHandle({ transcripts: await StreamLogStore.open() });
     childId = undefined;
     resumedStreams = [];
+    completedResumes = [];
   });
 
   afterEach(async () => {
@@ -289,13 +298,8 @@ describe('native subagent production delivery path', () => {
     const executionId = childExecutionId(launch.output);
     childId = executionId;
 
-    await waitForReport(executionId, 'Result A.');
-    await expect(
-      getExecutionStore(executionId).readResultMeta(),
-    ).resolves.toMatchObject({
-      result: { response: 'Result A.' },
-    });
-    await vi.waitFor(() => expect(parentTurns).toHaveLength(1), {
+    await waitForPersistedResult(executionId, 'Result A.');
+    await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
       timeout: 10_000,
     });
 
@@ -314,13 +318,8 @@ describe('native subagent production delivery path', () => {
     expect(resumed.status).toBe('executed');
     expect(resumed.summary).toContain('Follow-up queued');
 
-    await waitForReport(executionId, 'Result B.');
-    await expect(
-      getExecutionStore(executionId).readResultMeta(),
-    ).resolves.toMatchObject({
-      result: { response: 'Result B.' },
-    });
-    await vi.waitFor(() => expect(parentTurns).toHaveLength(0), {
+    await waitForPersistedResult(executionId, 'Result B.');
+    await vi.waitFor(() => expect(completedResumes).toHaveLength(2), {
       timeout: 10_000,
     });
 
@@ -370,5 +369,7 @@ describe('native subagent production delivery path', () => {
       ]),
     );
     expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(parentTurns).toHaveLength(0);
   }, 30_000);
 });
