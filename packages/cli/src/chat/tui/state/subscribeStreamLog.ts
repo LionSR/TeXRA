@@ -109,12 +109,22 @@ const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
 
 // Roles a workflow-agent stream keeps when it projects an operational feed
 // instead of a model transcript.
+const WORKFLOW_DASHBOARD_ROLES = new Set<ConversationEntry['role']>([
+  'phase',
+  'workflowTask',
+]);
+
 const WORKFLOW_OPERATIONAL_ROLES = new Set<ConversationEntry['role']>([
   'error',
   'media',
   'phase',
   'tool',
+  'workflowTask',
 ]);
+
+// Compact inactive streams must not retain an unbounded operational transcript,
+// but the dashboard needs canonical phase/call identity while a child is open.
+const MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES = 2_000;
 
 const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.THINKING,
@@ -744,9 +754,9 @@ export function syncStreamLog(
 
   patchStream(streamId, (slice, lifecycle) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
+    const workflowStream = slice.category === AgentCategory.Workflow;
     const workflowOperationalOnly =
-      slice.category === AgentCategory.Workflow &&
-      !isFullLogChildStream(streamId);
+      workflowStream && !isFullLogChildStream(streamId);
     const syntheticEntries = slice.entries.filter(
       (entry) =>
         entry.synthetic &&
@@ -768,7 +778,14 @@ export function syncStreamLog(
         workflowOperationalOnly &&
         messageType === MESSAGE_TYPES.DEFAULT &&
         phaseGroupData(entry) !== null;
-      if (!transcriptCandidate && !workflowDefaultLog && !workflowPhaseHeader) {
+      const workflowCall =
+        workflowOperationalOnly && messageType === MESSAGE_TYPES.WORKFLOW_TASK;
+      if (
+        !transcriptCandidate &&
+        !workflowDefaultLog &&
+        !workflowPhaseHeader &&
+        !workflowCall
+      ) {
         continue;
       }
       const rendered = renderLogEntry(
@@ -850,10 +867,22 @@ export function syncStreamLog(
       lifecycle.status !== undefined &&
       !isActivePhase(lifecycle.status);
 
-    // A stream projected compactly keeps only its synthetic rows, which are
-    // carried over untouched, so identity settles whether anything moved. The
-    // full projection rebuilds entries, so it compares content field by field.
-    const nextEntries = projectFullTranscript ? next : syntheticEntries;
+    // A compact workflow keeps only its bounded canonical dashboard rows plus
+    // synthetic operational rows. Ordinary inactive streams retain the prior
+    // synthetic-only behavior.
+    const compactWorkflowDashboardIds = new Set(
+      next
+        .filter((entry) => WORKFLOW_DASHBOARD_ROLES.has(entry.role))
+        .slice(-MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES)
+        .map((entry) => entry.id),
+    );
+    const compactEntries = workflowStream
+      ? next.filter(
+          (entry) =>
+            entry.synthetic || compactWorkflowDashboardIds.has(entry.id),
+        )
+      : syntheticEntries;
+    const nextEntries = projectFullTranscript ? next : compactEntries;
     const entriesUnchanged =
       slice.entries.length === nextEntries.length &&
       slice.entries.every((entry, index) => {
