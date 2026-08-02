@@ -857,7 +857,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     limit: number,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const { conversation, source, streamId } =
+    const { conversation, source, streamId, streamIds } =
       await readCompletedRunConversation(executionId);
 
     if (!conversation) {
@@ -892,6 +892,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       metadata: [
         `Source: ${source}`,
         `Stream: ${streamId ?? 'none'}`,
+        ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],
