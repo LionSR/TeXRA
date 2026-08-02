@@ -61,28 +61,6 @@ export interface CliModelAccessOverview {
   readonly lines: readonly string[];
 }
 
-interface CliAccessSnapshot {
-  readonly access: CliModelAccessStatus;
-  readonly profile: CliAuthProfile;
-  readonly personalKeyProviders: readonly string[];
-}
-
-/** Read the route-owned facts used by the detailed account renderer once. */
-async function loadCliAccessSnapshot(
-  apiMode: ApiAccessMode,
-): Promise<CliAccessSnapshot> {
-  const [access, profile, configuredPersonalKeyProviders] = await Promise.all([
-    readCliModelAccessStatus(apiMode),
-    getCliAuthProfile(),
-    personalKeyProviders(),
-  ]);
-  return {
-    access: { ...access, texraSignedIn: profile.authenticated },
-    profile,
-    personalKeyProviders: configuredPersonalKeyProviders,
-  };
-}
-
 /** Read both account sessions and the effective model-access route. */
 export async function loadCliModelAccessOverview(
   options: { readonly apiMode?: ApiAccessMode } = {},
@@ -236,11 +214,11 @@ export async function loadCliApiStatus(
 export async function loadCliDetailedAccountStatusLines(options: {
   readonly apiMode: ApiAccessMode;
 }): Promise<string[]> {
-  const {
-    access,
-    personalKeyProviders: providers,
-    profile,
-  } = await loadCliAccessSnapshot(options.apiMode);
+  const [access, profile, providers] = await Promise.all([
+    readCliModelAccessStatus(options.apiMode),
+    getCliAuthProfile(),
+    personalKeyProviders(),
+  ]);
   const includedUsage =
     access.apiFallback === 'included'
       ? await loadIncludedUsageLine(profile)
