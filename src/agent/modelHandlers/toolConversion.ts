@@ -235,7 +235,7 @@ export function convertGoogleToolSchema(
 // exclusiveMaximum, and multipleOf are deliberately absent: the SDK does not
 // represent them (and independently drops additionalProperties). The original
 // Zod schema remains authoritative when TeXRA validates a returned tool call.
-const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>([
+const GOOGLE_OPENAPI_SCHEMA_KEY_LIST = [
   'anyOf',
   'default',
   'description',
@@ -258,7 +258,16 @@ const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>([
   'required',
   'title',
   'type',
-] as const satisfies readonly (keyof GeminiSchema)[]);
+] as const satisfies readonly (keyof GeminiSchema)[];
+
+type AssertNever<T extends never> = T;
+type _GoogleSchemaKeysAreExhaustive = AssertNever<
+  Exclude<keyof GeminiSchema, (typeof GOOGLE_OPENAPI_SCHEMA_KEY_LIST)[number]>
+>;
+
+const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>(
+  GOOGLE_OPENAPI_SCHEMA_KEY_LIST,
+);
 
 /** Keep only the OpenAPI subset represented by the Google SDK's Schema type. */
 function toGoogleOpenApiSchemaNode(value: unknown): unknown {

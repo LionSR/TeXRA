@@ -726,6 +726,8 @@ describe('toGoogleTools', () => {
       name: 'bounded_values',
       zodSchema: z.strictObject({
         integer: z.int().positive().lt(10),
+        aboveFraction: z.int().gt(1.2).max(10),
+        belowNegativeFraction: z.int().min(-10).lt(-1.2),
         number: z.number().positive().lt(10),
       }),
     };
@@ -742,6 +744,16 @@ describe('toGoogleTools', () => {
         type: 'integer',
         minimum: 1,
         maximum: 9,
+      });
+      expect(parameters.properties.aboveFraction).toStrictEqual({
+        type: 'integer',
+        minimum: 2,
+        maximum: 10,
+      });
+      expect(parameters.properties.belowNegativeFraction).toStrictEqual({
+        type: 'integer',
+        minimum: -10,
+        maximum: -2,
       });
       // Number bounds have no adjacent representable value in Google's
       // supported subset, so retain their inclusive bounds without shifting.
