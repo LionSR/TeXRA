@@ -60,11 +60,7 @@ type WaitNodeModelHandlerOverrides = Omit<
 type WaitNodeServiceOverrides = Partial<
   Pick<
     ToolUseServices,
-    | 'checkInterruption'
-    | 'isSubagent'
-    | 'onFollowUpConsumed'
-    | 'onIdle'
-    | 'runScope'
+    'isSubagent' | 'onFollowUpConsumed' | 'onIdle' | 'runScope'
   >
 > & {
   fileService?: Partial<ToolUseServices['fileService']>;
@@ -80,7 +76,6 @@ function createWaitNodeServices(
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
   return {
     runScope: testRunScope('test-stream'),
-    checkInterruption: () => false,
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
       ...fileService,
@@ -291,7 +286,9 @@ describe('ToolUseWaitNode', () => {
     const interactions = { emit: vi.fn() };
 
     const services = createWaitNodeServices({
-      checkInterruption: () => true,
+      runScope: testRunScope('test-stream', {
+        signal: AbortSignal.abort(),
+      }),
       isSubagent: true,
     });
 

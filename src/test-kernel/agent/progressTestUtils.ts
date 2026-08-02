@@ -435,6 +435,7 @@ export function testRunScope(
   streamId: string,
   options: {
     session?: SessionHandle;
+    signal?: AbortSignal;
     interactions?:
       SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>;
   } = {},
@@ -445,6 +446,7 @@ export function testRunScope(
     executionId: 'deadbeef' as ExecutionId,
     agentName: 'test-agent',
     session: options.session ?? sessionWithInteractions(interactions),
+    signal: options.signal ?? new AbortController().signal,
   });
 }
 

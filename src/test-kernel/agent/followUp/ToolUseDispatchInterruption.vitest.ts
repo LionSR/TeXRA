@@ -50,9 +50,11 @@ function createRoundFixture(abortOn: 'tool-call-extraction' | 'tool-b') {
   }));
 
   const services = {
-    ...baseRoundServices('ToolUseDispatchInterruption'),
-    abortSignal: controller.signal,
-    checkInterruption: () => controller.signal.aborted,
+    ...baseRoundServices(
+      'ToolUseDispatchInterruption',
+      'test-stream',
+      controller.signal,
+    ),
     modelCell: testModelCell(
       roundModelHandler({
         createResponse,

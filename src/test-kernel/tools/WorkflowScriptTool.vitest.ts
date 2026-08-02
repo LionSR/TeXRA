@@ -96,6 +96,7 @@ function parentContext(stopAfterCycle = false): LaunchRunContext {
       streamId,
       agentName: 'orchestrator',
       session: { id: 'workflow-script-test' } as never,
+      signal: new AbortController().signal,
     },
   };
 }

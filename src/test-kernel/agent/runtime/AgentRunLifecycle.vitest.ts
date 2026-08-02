@@ -195,7 +195,7 @@ describe('runFlowWithLifecycle', () => {
         await vi.advanceTimersByTimeAsync(15_000);
 
         expect(handle.executionLeaseLost).toBe(true);
-        expect(handle.hasPendingInterrupt).toBe(true);
+        expect(ctx.runScope.signal.aborted).toBe(true);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
@@ -643,7 +643,7 @@ describe('runFlowWithLifecycle', () => {
           switchModel: vi.fn().mockResolvedValue(undefined),
           interrupt,
         };
-        handle.attachToolUseFlow(flowContext);
+        handle.attachToolUseFlow(flowContext, ctx.runScope.signal);
         expect(interrupt).toHaveBeenCalledOnce();
         handle.detachToolUseFlow(flowContext);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
@@ -676,7 +676,7 @@ describe('runFlowWithLifecycle', () => {
       const result = await runFlowWithLifecycle(
         ctx,
         async (handle) => {
-          expect(handle.hasPendingInterrupt).toBe(true);
+          expect(ctx.runScope.signal.aborted).toBe(true);
           throw new DOMException('Request aborted', 'AbortError');
         },
         {

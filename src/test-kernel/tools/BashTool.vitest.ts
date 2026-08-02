@@ -165,7 +165,7 @@ function roundServices(opts: {
   abortSignal?: AbortSignal;
 }): ToolUseRoundServices<OpenAI> {
   return {
-    runScope: testRunScope(opts.streamId),
+    runScope: testRunScope(opts.streamId, { signal: opts.abortSignal }),
     modelCell: testModelCell(new BashMockHandler(testModelConfig)),
     config: testModelConfig as any,
     setting: {
@@ -184,8 +184,6 @@ function roundServices(opts: {
     logger: opts.logger,
     fileService: new TaskRunFileService('deadbeef'),
     toolRegistry: opts.toolRegistry,
-    abortSignal: opts.abortSignal ?? new AbortController().signal,
-    checkInterruption: () => false,
     onRoundFinalized: () => {},
     run: AgentRunStateSnapshotSchema.parse({}),
     workspace: AgentWorkspaceState.create(),
