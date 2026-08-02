@@ -6,7 +6,7 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
-  setRoute,
+  showLauncher,
   setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
@@ -74,7 +74,7 @@ test('startup team chooser screenshot', async ({}, testInfo) => {
 });
 
 test('launcher screenshot', async ({}, testInfo) => {
-  await setRoute(launched, 'main');
+  await showLauncher(launched);
   await launched.page.screenshot({
     path: getScreenshotPath(testInfo, 'launcher.png'),
     fullPage: false,
@@ -93,7 +93,7 @@ test('settings screenshot', async ({}, testInfo) => {
 });
 
 test('command palette opens and dismisses', async () => {
-  await setRoute(launched, 'main');
+  await showLauncher(launched);
   // A prior screenshot can leave Settings in the workbench. Hide the workbench
   // so this check exercises the conversation-header command affordance.
   const closeWorkbench = launched.page.locator('.task-workbench-close');

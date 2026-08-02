@@ -28,8 +28,8 @@ const DESKTOP_DISPATCH_CASES: ReadonlyArray<
     args: readonly unknown[],
   ]
 > = [
-  ['texra.showMainView', 'showRoute', ['main']],
-  ['texra.desktop.showLogs', 'showRoute', ['logs']],
+  ['texra.showMainView', 'showLauncher', []],
+  ['texra.desktop.showLogs', 'openWorkbench', ['logs']],
   ['texra.showDashboard', 'showSettings', []],
   ['texra.mainView.reset', 'resetMainView', []],
   ['texra.desktop.toggleBottomBar', 'toggleBottomBar', []],
@@ -53,11 +53,12 @@ function makeDesktopActions(): MockedDesktopActions {
   return {
     openDesktopDocs: vi.fn(),
     openLogFolder: vi.fn(),
+    openWorkbench: vi.fn(),
     openWorkspaceFolder: vi.fn(),
     resetMainView: vi.fn(),
     saveFile: vi.fn(),
     showFirstRunWalkthrough: vi.fn(),
-    showRoute: vi.fn(),
+    showLauncher: vi.fn(),
     showSettings: vi.fn(),
     showStream: vi.fn(),
     toggleBottomBar: vi.fn(),
@@ -256,7 +257,7 @@ describe('desktop command surface', () => {
     const modelsItem = submenu.find((item) => item.label === 'Show Models');
     launcherItem?.click?.();
     modelsItem?.click?.();
-    expect(actions.showRoute).toHaveBeenCalledWith('main');
+    expect(actions.showLauncher).toHaveBeenCalledOnce();
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
 
     const helpMenu = menu.find((item) => item.label === 'Help');
