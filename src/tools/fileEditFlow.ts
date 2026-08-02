@@ -12,7 +12,7 @@ import { countOccurrences } from '@tools/utils';
 import {
   appendApprovalDiffNote,
   requestAndWriteApprovedEdit,
-  type ToolEditApprovalResult,
+  type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 
@@ -197,7 +197,7 @@ export function replaceLiteralMatches({
 }
 
 interface AppliedFileEdit {
-  approval: ToolEditApprovalResult;
+  approval: AcceptedToolEditApprovalResult;
   appliedContent: string;
   baseContent: string;
 }

@@ -190,17 +190,11 @@ export class ToolEditApprovalController {
       if (!entry.isSettled()) {
         void this.runAction(entry, () => this.publishPromptWhenVisible(entry));
       }
-      const result = await settlement;
-
       // `requestToolEditApproval` derives userPatch, lineChanges, and startLine
-      // from the content this returns, so an accepted result only owes it the
-      // content the user actually approved.
-      if (result.accepted && result.appliedContent == null) {
-        throw new Error(
-          'Tool edit approval settled without the current proposed content.',
-        );
-      }
-      return result;
+      // from the content this returns; `ToolEditApprovalResult` requires
+      // `appliedContent` on acceptance, so every settle() call below already
+      // supplies it.
+      return await settlement;
     } finally {
       this.requests.delete(requestId);
       await preview.dispose();

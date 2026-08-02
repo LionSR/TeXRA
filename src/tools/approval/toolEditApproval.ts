@@ -202,8 +202,13 @@ export async function requestToolEditApproval(
   const streamId = preparedRequest.streamId ?? undefined;
   const isStreamBypassed =
     streamId && session.approvals.toolEdit.bypass.isBypassed(streamId);
+  const acceptProposedAsIs = (): ToolEditApprovalResult =>
+    finalizeApprovalResult(
+      { accepted: true, appliedContent: preparedRequest.proposedContent },
+      preparedRequest,
+    );
   if (!approvalsEnabled || isStreamBypassed) {
-    return finalizeApprovalResult({ accepted: true }, preparedRequest);
+    return acceptProposedAsIs();
   }
 
   return session.approvals.toolEdit.enqueue(streamId ?? undefined, {
@@ -217,7 +222,7 @@ export async function requestToolEditApproval(
       }
       return finalizeApprovalResult(await hostInteraction, preparedRequest);
     },
-    bypassed: () => finalizeApprovalResult({ accepted: true }, preparedRequest),
+    bypassed: acceptProposedAsIs,
   });
 }
 
@@ -229,7 +234,7 @@ function finalizeApprovalResult(
     return result;
   }
 
-  const appliedContent = result.appliedContent ?? request.proposedContent;
+  const { appliedContent } = result;
   const userPatch =
     result.userPatch ??
     computeUserPatch(request.proposedContent, appliedContent);
@@ -249,11 +254,16 @@ function finalizeApprovalResult(
   };
 }
 
+/** The `accepted: true` branch of {@link ToolEditApprovalResult}. */
+export type AcceptedToolEditApprovalResult = Extract<
+  ToolEditApprovalResult,
+  { accepted: true }
+>;
+
 export function getApprovedContent(
-  approval: ToolEditApprovalResult,
-  fallback: string,
+  approval: AcceptedToolEditApprovalResult,
 ): string {
-  return approval.appliedContent ?? fallback;
+  return approval.appliedContent;
 }
 
 function formatUnifiedApprovalUserDiff(
@@ -355,7 +365,7 @@ export function buildApprovalRejectedResult(
 }
 
 interface WrittenApprovedEdit extends WriteApprovedContentResult {
-  approval: ToolEditApprovalResult;
+  approval: AcceptedToolEditApprovalResult;
 }
 
 /**
@@ -402,7 +412,7 @@ export async function requestAndWriteApprovedEdit(request: {
   const written = await writeApprovedContent(
     path,
     originalContent,
-    getApprovedContent(approval, proposedContent),
+    getApprovedContent(approval),
   );
   return { approval, ...written };
 }
