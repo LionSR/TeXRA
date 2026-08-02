@@ -27,43 +27,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return isObject(value) ? value : undefined;
 }
 
-function isGoogleGenAIContentMessage(message: ProviderMessage): boolean {
-  const record = asRecord(message);
-  if (!record || 'type' in record) return false;
-  const role = record.role;
-  if (role !== 'user' && role !== 'model' && role !== 'system') {
-    return false;
-  }
-  return Array.isArray(record.parts);
-}
-
-function isGoogleInteractionsStepMessage(message: ProviderMessage): boolean {
-  const type = asRecord(message)?.type;
-  return (
-    type === 'user_input' ||
-    type === 'model_output' ||
-    type === 'thought' ||
-    type === 'function_call' ||
-    type === 'function_result'
-  );
-}
-
-function isOpenRouterChatMessage(message: ProviderMessage): boolean {
-  const record = asRecord(message);
-  if (!record || 'type' in record || 'parts' in record) return false;
-  const role = record.role;
-  return (
-    (role === 'system' ||
-      role === 'user' ||
-      role === 'assistant' ||
-      role === 'tool') &&
-    'content' in record
-  );
-}
-
 export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
-  messages: readonly ProviderMessage[],
+  _messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
   if (isRuntimeModel(model)) return 'ModelHandlerVscodeLm';
 
@@ -76,16 +42,12 @@ export function inferPersistedModelHandlerCompatibilityKey(
   if (modelConfig?.provider === ModelProvider.COPILOT) {
     return 'ModelHandlerOpenRouterNative';
   }
-  if (modelConfig?.provider !== ModelProvider.GOOGLE) return undefined;
-  if (messages.some(isGoogleGenAIContentMessage)) {
-    return 'ModelHandlerGoogleGenAI';
+  if (modelConfig?.provider === ModelProvider.GOOGLE) {
+    throw new Error(
+      'Persisted Google sessions without a model-handler identity cannot be resumed.',
+    );
   }
-  if (messages.some(isGoogleInteractionsStepMessage)) {
-    return 'ModelHandlerGoogleInteractions';
-  }
-  return messages.some(isOpenRouterChatMessage)
-    ? 'ModelHandlerOpenRouterNative'
-    : undefined;
+  return undefined;
 }
 
 export function inferAndLogPersistedModelHandlerCompatibilityKey(
