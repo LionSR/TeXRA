@@ -45,7 +45,6 @@ import {
   buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
-  type LegacyInstructionEntry,
   type OutputFileInfo,
   type RunDescriptor,
   type Plan,
@@ -78,7 +77,6 @@ import {
 import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,
-  readLegacyInstruction as readLegacyInstructionFromDisk,
   readMeta,
   readStreamData,
   type StreamData,
@@ -1487,8 +1485,8 @@ export class StreamSnapshotStore {
   }
 
   private writeMeta(stream: StreamTabId, next: StreamTabMeta): void {
-    // activeRunId is legacy and never re-written. Persist every explicitly-set
-    // field (`!== undefined`, not falsy) so on-disk and in-memory never diverge
+    // Persist every explicitly-set field (`!== undefined`, not falsy) so
+    // on-disk and in-memory never diverge
     // — e.g. clearing a description to "" must round-trip, not silently vanish.
     const file: StreamTabMeta = {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
@@ -1652,24 +1650,6 @@ export class StreamSnapshotStore {
    */
   async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
     return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
-  }
-
-  /**
-   * Archived pre-#3061 per-run instruction text, if this stream still has
-   * one on disk. See {@link readLegacyInstruction} (streamSnapshotRead.ts)
-   * for why this stays supported. Read-only; never seeds or writes memory.
-   * Uses the in-memory `meta` once seeded (the caller's normal `load()`
-   * ordering) but falls back to a disk read so this is also safe to call
-   * standalone, before a stream has been seeded.
-   */
-  async readLegacyInstruction(
-    stream: StreamTabId,
-  ): Promise<LegacyInstructionEntry | null> {
-    const record = this.records.get(stream);
-    const meta = record?.seeded
-      ? record.meta
-      : (await readStreamData(this.kv(stream))).meta;
-    return readLegacyInstructionFromDisk(this.kv(stream), meta);
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
@@ -2027,7 +2007,6 @@ export class StreamSnapshotStore {
       usage: record?.usage ?? new Map(),
       usageUnparsed: record?.usageUnparsed ?? new Map(),
       workPlan: this.getWorkPlan(streamId),
-      legacyKeys: [],
     });
   }
 
@@ -2198,7 +2177,7 @@ export class StreamSnapshotStore {
     return { config, descriptor };
   }
 
-  /** Seed the in-memory accumulators for one stream + migrate legacy once. */
+  /** Seed the in-memory accumulators for one stream. */
   private async applyStreamData(
     stream: StreamTabId,
     data: StreamData,
@@ -2207,13 +2186,7 @@ export class StreamSnapshotStore {
     const record = this.getOrCreateRecord(stream);
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
-    // Seeded with `data.legacyKeys` unconditionally (unlike the overlay
-    // additions below, which are gated on that overlay actually being
-    // present): a legacy key with no corresponding overlay data still gets
-    // an empty-object write in `writeMergedSidecars`, which is harmless —
-    // disk readers (`parsePersistedRoundIndexed` and friends) treat an absent
-    // sidecar and an empty-object one identically.
-    const sidecarsToWrite = new Set<string>(data.legacyKeys);
+    const sidecarsToWrite = new Set<string>();
 
     record.outputFiles = data.outputFiles;
     record.missingOutputs = data.missingOutputs;

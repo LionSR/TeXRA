@@ -23,13 +23,7 @@ vi.mock('@tools/goal', async (importOriginal) => {
 
 import { getExecutionStore } from '@agent/storage';
 import * as logger from '@logger/logUtils';
-import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import { type ExecutionId, type StreamTabId } from '@shared/schemas';
 import {
   executionLeasePath,
   writeForeignLease,
@@ -753,6 +747,7 @@ describe('ProgressBackend', () => {
 
     const second = await createPersistentRecordingBackend();
     try {
+      await second.session.waitUntilReady();
       await second.backend.state.load();
 
       expect(second.backend.state.streamLogs.has(stream)).toBe(true);
@@ -764,135 +759,5 @@ describe('ProgressBackend', () => {
     } finally {
       await second.backend.state.clearAll();
     }
-  });
-
-  // Workflow tabs created before the one-run-per-tab refactor (#3061,
-  // 2026-04-19) may only have their initial user message recorded in the
-  // archived `legacyInstructions.json` / `runInstructions.json` sidecar, not
-  // in the stream log itself. There is no retention policy or GC for
-  // `streamData/`, so those tabs are still supported today and must still
-  // hydrate that message at load().
-  describe('legacy per-run instruction backfill (pre-#3061 tabs)', () => {
-    async function seedPersistedLogWithoutUserMessage(
-      backend: ReturnType<typeof createIsolatedRecordingBackend>['backend'],
-      stream: StreamTabId,
-    ): Promise<void> {
-      // A prior session's log has entries, but (as with pre-#3061 tabs) never
-      // recorded a user-message entry for the run's initial instruction.
-      backend.state.streamLogs.append(stream, {
-        id: `${stream}-compile-log`,
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1_700_000_000_000,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'Compiling document...',
-      });
-      await backend.state.streamLogs.flush();
-    }
-
-    it('hydrates the initial user message from legacyInstructions.json', async () => {
-      const stream = 'polish@gpt#legacy01' as StreamTabId;
-      const legacyText = 'Polish the introduction section for clarity.';
-      const { backend } = await createPersistentRecordingBackend();
-
-      try {
-        await seedPersistedLogWithoutUserMessage(backend, stream);
-
-        const dir = streamDataDir(stream);
-        await StorageFS.ensureDir(dir);
-        await StorageFS.write(
-          path.join(dir, 'legacyInstructions.json'),
-          JSON.stringify({
-            'run-1': { text: legacyText, timestamp: 1_699_999_999_000 },
-          }),
-        );
-
-        await backend.state.load();
-
-        const log = backend.state.streamLogs.get(stream);
-        expect(log).toBeDefined();
-        const entries = log!.getRange(0, log!.head);
-        expect(
-          entries.some(
-            (entry) =>
-              entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
-              entry.text === legacyText,
-          ),
-        ).toBe(true);
-      } finally {
-        await backend.state.clearAll();
-      }
-    });
-
-    it('falls back to the older runInstructions.json key (never migrated on disk)', async () => {
-      const stream = 'polish@gpt#legacy02' as StreamTabId;
-      const legacyText = 'Rewrite the abstract to lead with the contribution.';
-      const { backend } = await createPersistentRecordingBackend();
-
-      try {
-        await seedPersistedLogWithoutUserMessage(backend, stream);
-
-        const dir = streamDataDir(stream);
-        await StorageFS.ensureDir(dir);
-        // Pre-#3061 on-disk key; some tabs never went through the
-        // legacyInstructions.json rename. No on-disk migration is expected —
-        // the read falls back to this key directly.
-        await StorageFS.write(
-          path.join(dir, 'runInstructions.json'),
-          JSON.stringify({ 'run-1': { text: legacyText } }),
-        );
-
-        await backend.state.load();
-
-        const log = backend.state.streamLogs.get(stream);
-        expect(log).toBeDefined();
-        const entries = log!.getRange(0, log!.head);
-        expect(
-          entries.some(
-            (entry) =>
-              entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
-              entry.text === legacyText,
-          ),
-        ).toBe(true);
-        // Read-only fallback: the older file is left in place, untouched.
-        expect(
-          await StorageFS.exists(path.join(dir, 'runInstructions.json')),
-        ).toBe(true);
-      } finally {
-        await backend.state.clearAll();
-      }
-    });
-
-    it('does not duplicate the backfilled message on a second load()', async () => {
-      const stream = 'polish@gpt#legacy03' as StreamTabId;
-      const legacyText = 'Tighten the related-work section.';
-      const { backend } = await createPersistentRecordingBackend();
-
-      try {
-        await seedPersistedLogWithoutUserMessage(backend, stream);
-
-        const dir = streamDataDir(stream);
-        await StorageFS.ensureDir(dir);
-        await StorageFS.write(
-          path.join(dir, 'legacyInstructions.json'),
-          JSON.stringify({ 'run-1': { text: legacyText } }),
-        );
-
-        await backend.state.load();
-        await backend.state.load();
-
-        const log = backend.state.streamLogs.get(stream);
-        const matches = log!
-          .getRange(0, log!.head)
-          .filter(
-            (entry) =>
-              entry.messageType === MESSAGE_TYPES.USER_MESSAGE &&
-              entry.text === legacyText,
-          );
-        expect(matches).toHaveLength(1);
-      } finally {
-        await backend.state.clearAll();
-      }
-    });
   });
 });

@@ -43,7 +43,7 @@ import type { DiffProgressReporter, DiffRunOutcome } from './types';
 export function normalizeRunLatexdiffOutputsByRound(
   value: unknown,
 ): RoundIndexed<OutputFileInfo> | null {
-  const { rounds } = parsePersistedRoundIndexed(
+  const rounds = parsePersistedRoundIndexed(
     'latexdiffOutputsByRound',
     value,
     OutputFileInfoSchema,
