@@ -50,13 +50,19 @@ function createSummaryKv(): KVStore {
 
 type StreamLogListener = (streamId: StreamTabId) => void;
 
+// No per-field `.catch()`: this schema covers the crash-recovery flags
+// (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowTask`)
+// that `hasSomethingRunning()` gates orphan recovery on. A `.catch()` here
+// would silently turn a malformed field into `undefined` (recovery skipped)
+// instead of failing the whole `safeParse`, which routes through the
+// existing "ignore cache, rebuild from stream log" fallback in `readSummary`.
 const StreamLogSummarySchema = z.object({
-  firstTimestamp: z.number().finite().optional().catch(undefined),
-  lastTimestamp: z.number().finite().optional().catch(undefined),
-  hasRunningGroup: z.boolean().optional().catch(undefined),
-  hasRunningStreamingText: z.boolean().optional().catch(undefined),
+  firstTimestamp: z.number().finite().optional(),
+  lastTimestamp: z.number().finite().optional(),
+  hasRunningGroup: z.boolean().optional(),
+  hasRunningStreamingText: z.boolean().optional(),
   // Legacy persisted key retained for existing summary sidecars.
-  hasNonterminalWorkflowTask: z.boolean().optional().catch(undefined),
+  hasNonterminalWorkflowTask: z.boolean().optional(),
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
@@ -148,16 +154,34 @@ interface StreamState {
   writer?: StreamWriterOwnership;
 }
 
-function summaryOf(logInstance: StreamLog): StreamLogSummary {
+/**
+ * Shared projection into {@link StreamLogSummary}, fed either by a resident
+ * `StreamLog`'s getters (`summaryOf`) or by a raw entries scan
+ * (`summarizeEntries`). Keeping the field list here means a new derived flag
+ * is added once instead of in two hand-synced call sites.
+ */
+interface SummarySource {
+  readonly firstTimestamp: number | undefined;
+  readonly lastTimestamp: number | undefined;
+  readonly hasRunningGroup: boolean;
+  readonly hasRunningStreamingText: boolean;
+  readonly hasNonterminalWorkflowCall: boolean;
+}
+
+function toSummary(source: SummarySource): StreamLogSummary {
   return {
-    firstTimestamp: logInstance.firstTimestamp,
-    lastTimestamp: logInstance.lastTimestamp,
-    hasRunningGroup: logInstance.hasRunningGroup,
-    hasRunningStreamingText: logInstance.hasRunningStreamingText,
-    ...(logInstance.hasNonterminalWorkflowCall
+    firstTimestamp: source.firstTimestamp,
+    lastTimestamp: source.lastTimestamp,
+    hasRunningGroup: source.hasRunningGroup,
+    hasRunningStreamingText: source.hasRunningStreamingText,
+    ...(source.hasNonterminalWorkflowCall
       ? { hasNonterminalWorkflowTask: true }
       : {}),
   };
+}
+
+function summaryOf(logInstance: StreamLog): StreamLogSummary {
+  return toSummary(logInstance);
 }
 
 /**
@@ -1261,15 +1285,15 @@ export class StreamLogStore {
   private summarizeEntries(
     entries: readonly StreamLogEntry[],
   ): StreamLogSummary {
-    return {
+    return toSummary({
       firstTimestamp: entries[0]?.timestamp,
       lastTimestamp: entries.at(-1)?.timestamp,
       hasRunningGroup: entries.some(isRunningGroupEntry),
       hasRunningStreamingText: entries.some(isRunningStreamingTextEntry),
-      ...(entries.some((entry) => nonterminalWorkflowCall(entry) !== undefined)
-        ? { hasNonterminalWorkflowTask: true }
-        : {}),
-    };
+      hasNonterminalWorkflowCall: entries.some(
+        (entry) => nonterminalWorkflowCall(entry) !== undefined,
+      ),
+    });
   }
 
   private parsePersistedSummary(value: unknown): StreamLogSummary | undefined {

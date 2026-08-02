@@ -151,7 +151,10 @@ describe('accept_run_files progress events', () => {
     stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
 
-    testApprovalHandler = async () => ({ accepted: true });
+    testApprovalHandler = async (request) => ({
+      accepted: true,
+      appliedContent: request.proposedContent,
+    });
 
     const result = await runAccept(
       tool,
@@ -181,7 +184,10 @@ describe('accept_run_files progress events', () => {
     });
     const write = stubWorkspaceFiles(false, '');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
-    testApprovalHandler = async () => ({ accepted: true });
+    testApprovalHandler = async (request) => ({
+      accepted: true,
+      appliedContent: request.proposedContent,
+    });
 
     const result = await tool.call({
       execution_id: executionId,
@@ -211,7 +217,7 @@ describe('accept_run_files progress events', () => {
     testApprovalHandler = async (request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
-      return { accepted: true };
+      return { accepted: true, appliedContent: request.proposedContent };
     };
 
     const result = await runAccept(tool, [
@@ -237,9 +243,9 @@ describe('accept_run_files progress events', () => {
     const write = stubWorkspaceFiles(true, 'same content');
     vi.spyOn(AbsoluteFS, 'isFile').mockResolvedValue(false);
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('same content');
-    testApprovalHandler = async () => {
+    testApprovalHandler = async (request) => {
       approvals++;
-      return { accepted: true };
+      return { accepted: true, appliedContent: request.proposedContent };
     };
 
     const result = await runAccept(tool, [
@@ -264,9 +270,9 @@ describe('accept_run_files progress events', () => {
         FileType.SymbolicLink | FileType.File,
     });
     const write = stubWorkspaceFiles(true, '');
-    testApprovalHandler = async () => {
+    testApprovalHandler = async (request) => {
       approvals++;
-      return { accepted: true };
+      return { accepted: true, appliedContent: request.proposedContent };
     };
 
     const result = await runAccept(tool, [

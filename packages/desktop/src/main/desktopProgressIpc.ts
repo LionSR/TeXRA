@@ -108,16 +108,16 @@ export function createDesktopProgressIpc(
       const result = ProgressViewInboundMessageSchema.safeParse(message);
       if (!result.success) return false;
 
-      const command = result.data.command;
       // WEBVIEW_READY and pass-through commands return false so sibling
       // handlers in the chain still receive them.
-      if (command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
-        if (message.view !== 'progress') return false;
+      if (result.data.command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
+        if (result.data.view !== 'progress') return false;
         withProgress((progress) => {
           void progress.completeWebviewReady().catch(reportAsyncError);
         });
         return false;
       }
+      const command = result.data.command;
       if (passThroughCommands.has(command)) return false;
 
       withProgress((progress) => {
