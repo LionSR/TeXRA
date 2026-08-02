@@ -413,7 +413,10 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   }
 
   public override isBackgroundModeActive(): boolean {
-    return this.useBackgroundMode(this.serverStateEnabled());
+    return (
+      this.pendingBackgroundInteraction !== null ||
+      this.useBackgroundMode(this.serverStateEnabled())
+    );
   }
 
   /**
@@ -1250,7 +1253,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // active, getStreamingConfig() already returns false, so useStreaming is
     // false and the streaming/non-streaming branches stay byte-identical when
     // background is off.
-    const useBackground = this.useBackgroundMode(stateful);
+    // A known remote interaction takes precedence over current settings: once
+    // submitted, disabling background or server state must not replace it with a
+    // foreground create. New submissions still obey the normal eligibility gate.
+    const useBackground =
+      this.pendingBackgroundInteraction !== null ||
+      this.useBackgroundMode(stateful);
     // super.getStreamingConfig() (not this.) — the override would recompute
     // background mode (extra config reads) when we already know useBackground.
     const useStreaming = !useBackground && super.getStreamingConfig();
@@ -1416,9 +1424,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     requestOptions: InteractionsRequestOptions,
     signal: AbortSignal | undefined,
   ): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
-    // Background REQUIRES server-side state — defense-in-depth assertion of the
-    // gate invariant (the gate already returns false when !stateful).
-    if (!stateful) {
+    const pending = this.pendingBackgroundInteraction;
+    // A NEW background submission requires server-side state. A known pending
+    // interaction was already submitted with store:true and must still be
+    // retrieved if the setting changed while its poll was being retried.
+    if (!stateful && !pending) {
       throw new Error(
         'Background mode requires server-side state (store:true); refusing to ' +
           'submit a background interaction in stateless mode.',
@@ -1426,7 +1436,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     }
 
     let initial: GoogleGenAIInteraction;
-    const pending = this.pendingBackgroundInteraction;
     if (pending) {
       if (Date.now() >= pending.deadlineAtMs) {
         this.pendingBackgroundInteraction = null;
@@ -1474,7 +1483,14 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     // Capture the chain anchor from the COMPLETED polled interaction (NOT the
     // submit), so the next turn chains onto a server-retained, completed id.
-    this.finalizeChain(completed, totalStepCount, stateful);
+    // If server state was disabled while this interaction was pending, discard
+    // the old chain instead: a later re-enable must full-resend rather than skip
+    // over intervening stateless turns.
+    if (stateful) {
+      this.finalizeChain(completed, totalStepCount, true);
+    } else {
+      this.invalidateChain();
+    }
     return { response: completed };
   }
 
