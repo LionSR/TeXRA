@@ -709,6 +709,21 @@ describe('CLI TUI row allocation', () => {
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
+
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 3,
+        childListFocused: true,
+        minimumSessionPanelRows: 3,
+        todosPlanContentRows: 0,
+        transcriptRows: 2,
+      }),
+    ).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
   });
 
   it('keeps the child list collapsed until it receives focus', () => {
@@ -2127,7 +2142,7 @@ describe('CLI transcript state', () => {
     expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
   });
 
-  it('updates dormant workflow latest lines while keeping entries compact', () => {
+  it('updates dormant workflow summaries while retaining only dashboard rows', () => {
     activeStreamId.set(root);
     patchStream(child1, (slice) => ({
       ...slice,
@@ -2173,7 +2188,13 @@ describe('CLI transcript state', () => {
 
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'Checking dormant lemmas',
-      entries: [],
+      entries: [
+        {
+          id: 'dormant-review-phase',
+          role: 'phase',
+          phaseLabel: 'Checking dormant lemmas',
+        },
+      ],
     });
 
     logger.error('Dormant audit failed', {
@@ -2184,9 +2205,104 @@ describe('CLI transcript state', () => {
     const slice = streams.get().get(child1);
     expect(slice).toMatchObject({
       latestLine: 'Dormant audit failed',
-      entries: [],
+      entries: [
+        {
+          id: 'dormant-review-phase',
+          role: 'phase',
+        },
+      ],
     });
     expect(JSON.stringify(slice)).not.toContain('raw dormant workflow prose');
+  });
+
+  it('bounds dormant workflow dashboard rows while preserving source order', () => {
+    activeStreamId.set(root);
+    patchStream(child1, (slice) => ({
+      ...slice,
+      category: AgentCategory.Workflow,
+      entries: [
+        {
+          id: 'synthetic-compact-workflow-error',
+          role: 'error',
+          text: 'Synthetic compact workflow error',
+          finalized: true,
+          synthetic: true,
+          syntheticKind: 'local',
+          syntheticAfterSeq: 0,
+          syntheticAfterSettlementSeqNo: 0,
+        },
+      ],
+    }));
+    const logger = runTrace(child1);
+    logger.openStage('Old phase', {
+      id: 'compact-old-phase',
+      kind: 'phase',
+    });
+    for (let index = 0; index < 2_002; index += 1) {
+      logger.info(`Task ${index}`, {
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: `task-${index}`,
+          label: `Task ${index}`,
+          phase: 'Old phase',
+          status: 'cached',
+        },
+      });
+      if (index === 1_000) {
+        logger.info('Compact operational prose', {
+          messageType: MESSAGE_TYPES.DEFAULT,
+        });
+        logger.info('Compact tool activity', {
+          messageType: MESSAGE_TYPES.TOOL_USE,
+          data: {
+            toolName: 'grep',
+            input: { pattern: 'boundary' },
+            output: 'done',
+            summary: 'Compact operational tool summary',
+            status: 'completed',
+          },
+        });
+        logger.error('Compact operational failure', {
+          messageType: MESSAGE_TYPES.ERROR,
+        });
+      }
+    }
+    logger.openStage('New phase', {
+      id: 'compact-new-phase',
+      kind: 'phase',
+    });
+
+    syncStreamLog(child1);
+
+    const entries = streamEntries(child1);
+    const dashboardEntries = entries.filter((entry) => !entry.synthetic);
+    expect(dashboardEntries).toHaveLength(2_000);
+    expect(dashboardEntries[0]).toMatchObject({
+      role: 'workflowTask',
+      task: { id: 'task-3' },
+    });
+    expect(dashboardEntries.at(-2)).toMatchObject({
+      role: 'workflowTask',
+      task: { id: 'task-2001' },
+    });
+    expect(dashboardEntries.at(-1)).toMatchObject({
+      id: 'compact-new-phase',
+      role: 'phase',
+      phaseLabel: 'New phase',
+    });
+    expect(
+      dashboardEntries
+        .filter((entry) => entry.role === 'workflowTask')
+        .map((entry) => entry.task.id),
+    ).toEqual(Array.from({ length: 1_999 }, (_, index) => `task-${index + 3}`));
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        id: 'synthetic-compact-workflow-error',
+        synthetic: true,
+      }),
+    );
+    expect(JSON.stringify(entries)).not.toContain('Compact operational');
+    expect(JSON.stringify(entries)).not.toContain('compact-old-phase');
   });
 
   it('keeps the runtime description while the latest line follows the transcript', () => {
@@ -3090,6 +3206,7 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)).toMatchObject({
+        agent: 'search',
         model: 'kimi26T',
         category: AgentCategory.ToolUse,
         files: {

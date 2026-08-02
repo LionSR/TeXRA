@@ -93,6 +93,7 @@ function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
         sameStringList(s.files?.[key] ?? [], files[key]),
       );
     if (
+      s.agent === config.agent &&
       s.model === config.model &&
       s.category === config.agentCategory &&
       sameFiles
@@ -101,6 +102,7 @@ function applyRunConfig(streamId: StreamTabId, config: AgentConfig): void {
     }
     return {
       ...s,
+      agent: config.agent,
       model: config.model,
       category: config.agentCategory,
       files,

@@ -15,7 +15,7 @@ import {
 // Local imports - shared runtime
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import type { StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
@@ -41,6 +41,7 @@ import { InfoPane } from './panes/InfoPane';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
+import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from './panes/SubagentListDisplay';
 import { orderedStaticTranscriptEntries } from './panes/transcriptEntries';
 import {
   currentApproval,
@@ -91,6 +92,9 @@ import {
 import {
   childListStreamId,
   childStreamListValue,
+  isWorkflowTaskListValue,
+  workflowPhaseListValue,
+  workflowTaskListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
   type ChildListValue,
@@ -303,12 +307,76 @@ export function App(props: AppProps): React.JSX.Element {
     }
     return executionIds;
   }, [childStreamEntries, sessionViews, streams]);
-  const childListValues = useMemo<readonly ChildListValue[]>(
-    () => sessionViews.map((session) => childStreamListValue(session.id)),
-    [sessionViews],
+  const workflowDashboardRoot =
+    childListTarget.slice?.category === AgentCategory.Workflow &&
+    childListTarget.slice.entries.some((entry) => entry.role === 'workflowTask')
+      ? childListTarget.slice
+      : undefined;
+  const workflowDashboardTasks = useMemo(
+    () =>
+      workflowDashboardRoot?.entries.filter(
+        (entry) => entry.role === 'workflowTask',
+      ) ?? [],
+    [workflowDashboardRoot],
   );
+  const workflowTasksByValue = useMemo(
+    () =>
+      new Map(
+        workflowDashboardTasks.map((entry) => [
+          workflowTaskListValue(entry.id),
+          entry,
+        ]),
+      ),
+    [workflowDashboardTasks],
+  );
+  const workflowChildTaskIndex = useMemo(() => {
+    const index = new Map<
+      StreamTabId,
+      (typeof workflowDashboardTasks)[number] | null
+    >();
+    for (const entry of workflowDashboardTasks) {
+      const childStreamId = entry.task.childStreamId;
+      if (childStreamId === undefined) continue;
+      index.set(childStreamId, index.has(childStreamId) ? null : entry);
+    }
+    return index;
+  }, [workflowDashboardTasks]);
+  const childListValues = useMemo<readonly ChildListValue[]>(() => {
+    if (!workflowDashboardRoot) {
+      return sessionViews.map((session) => childStreamListValue(session.id));
+    }
+    const groupValues: ChildListValue[] = [];
+    const seenPhases = new Set<string>();
+    for (const entry of workflowDashboardRoot.entries) {
+      if (entry.role !== 'phase' && entry.role !== 'workflowTask') continue;
+      const phase =
+        entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
+      const key = phase === undefined ? 'unphased' : `phase:${phase}`;
+      if (seenPhases.has(key)) continue;
+      seenPhases.add(key);
+      groupValues.push(workflowPhaseListValue(entry.id));
+    }
+    const taskValues = workflowDashboardTasks.map((entry) =>
+      workflowTaskListValue(entry.id),
+    );
+    return columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS
+      ? [...groupValues, ...taskValues]
+      : taskValues;
+  }, [columns, sessionViews, workflowDashboardRoot, workflowDashboardTasks]);
   const childListAvailable = childListValues.length > 0;
-  const selectedChildStreamId = childListStreamId(selectedChildValue);
+  const selectedWorkflowTask = selectedChildValue
+    ? workflowTasksByValue.get(selectedChildValue)
+    : undefined;
+  const selectedWorkflowChildStreamId =
+    selectedWorkflowTask?.task.childStreamId;
+  const selectedWorkflowChildUnique =
+    selectedWorkflowChildStreamId !== undefined &&
+    streams.has(selectedWorkflowChildStreamId) &&
+    workflowChildTaskIndex.get(selectedWorkflowChildStreamId) ===
+      selectedWorkflowTask;
+  const selectedChildStreamId =
+    childListStreamId(selectedChildValue) ??
+    (selectedWorkflowChildUnique ? selectedWorkflowChildStreamId : undefined);
   const selectedChildKind =
     selectedChildStreamId !== undefined ? 'stream' : undefined;
   const selectedChildKillable =
@@ -324,24 +392,45 @@ export function App(props: AppProps): React.JSX.Element {
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
-      activeStreamId,
+      activeStreamId: workflowDashboardRoot ? undefined : activeStreamId,
       values: childListValues,
     });
-  }, [activeStreamId, childListValues]);
+  }, [activeStreamId, childListValues, workflowDashboardRoot]);
   // Stream focus can also move through lifecycle completion or a numeric
   // accelerator. Align the selected row before the changed frame is painted;
   // ordinary row reconciliation still preserves manual list selection.
   useLayoutEffect(() => {
     if (childListActiveStreamRef.current === activeStreamId) return;
     childListActiveStreamRef.current = activeStreamId;
-    if (activeStreamId) {
-      dispatchChildListSelection({
-        kind: 'syncActiveStream',
-        streamId: activeStreamId,
-        values: childListValues,
-      });
+    if (!activeStreamId) return;
+    if (workflowDashboardRoot) {
+      if (activeStreamId === workflowDashboardRoot.streamId) return;
+      const matchingTask = workflowChildTaskIndex.get(activeStreamId);
+      if (matchingTask) {
+        dispatchChildListSelection({
+          kind: 'highlight',
+          value: workflowTaskListValue(matchingTask.id),
+        });
+      } else {
+        dispatchChildListSelection({
+          kind: 'syncActiveStream',
+          streamId: activeStreamId,
+          values: childListValues,
+        });
+      }
+      return;
     }
-  }, [activeStreamId, childListValues]);
+    dispatchChildListSelection({
+      kind: 'syncActiveStream',
+      streamId: activeStreamId,
+      values: childListValues,
+    });
+  }, [
+    activeStreamId,
+    childListValues,
+    workflowChildTaskIndex,
+    workflowDashboardRoot,
+  ]);
   useEffect(() => {
     if (!childListAvailable && childListFocused) {
       dispatchChildListSelection({ kind: 'blur' });
@@ -356,10 +445,17 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
-  const focusSession = useCallback((streamId: StreamTabId) => {
-    dispatchChildListSelection({ kind: 'focusStream', streamId });
-    focusStreamAndPromoteApprovals(streamId);
-  }, []);
+  const focusSession = useCallback(
+    (streamId: StreamTabId) => {
+      if (isWorkflowTaskListValue(selectedChildValue)) {
+        dispatchChildListSelection({ kind: 'blur' });
+      } else {
+        dispatchChildListSelection({ kind: 'focusStream', streamId });
+      }
+      focusStreamAndPromoteApprovals(streamId);
+    },
+    [selectedChildValue],
+  );
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     formBusy,
@@ -512,6 +608,13 @@ export function App(props: AppProps): React.JSX.Element {
     const parentId = parentStreamSignal.get().get(streamId);
     if (parentId !== undefined) {
       focusStreamAndPromoteApprovals(parentId);
+      if (
+        selectedWorkflowChildUnique &&
+        selectedWorkflowChildStreamId === streamId &&
+        workflowDashboardRoot?.streamId === parentId
+      ) {
+        dispatchChildListSelection({ kind: 'focus' });
+      }
       return true;
     }
     return triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
