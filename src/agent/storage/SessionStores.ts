@@ -277,7 +277,7 @@ export class SessionStores {
     );
   }
 
-  /** Persisted sidecar id, falling back to the id encoded in the stream name. */
+  /** Persisted run-descriptor id, falling back to the stream-name id. */
   private async persistedOrDerivedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
