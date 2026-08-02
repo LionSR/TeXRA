@@ -262,6 +262,11 @@ export function convertGoogleToolSchema(
   ) as JSONSchemaObject;
 }
 
+// This mirrors @google/genai's Schema interface. Validation-only JSON Schema
+// keywords such as additionalProperties, exclusiveMinimum,
+// exclusiveMaximum, and multipleOf are deliberately absent: the SDK does not
+// represent them (and independently drops additionalProperties). The original
+// Zod schema remains authoritative when TeXRA validates a returned tool call.
 const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set([
   'anyOf',
   'default',

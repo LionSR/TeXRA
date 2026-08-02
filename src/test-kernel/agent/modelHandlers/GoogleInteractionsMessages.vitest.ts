@@ -56,8 +56,7 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     const steps = await handler.initializeMessages('PREFIX', 'REQUEST');
     expect(steps).toHaveLength(1);
     expect(steps[0].type).toBe('user_input');
-    expect(textOf(steps[0])).toContain('PREFIX');
-    expect(textOf(steps[0])).toContain('REQUEST');
+    expect(textOf(steps[0])).toBe('PREFIX\nREQUEST');
   });
 
   it('omits an empty prefix instead of sending an invalid text block', async () => {
