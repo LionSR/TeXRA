@@ -187,16 +187,15 @@ export async function runReflectionFlow<C = unknown>(
   const kv = getExecutionStore(executionId);
 
   const flowRecord = await readPersistedFlowRecord(kv, executionId);
-  // Boundary hydration: the one place a freshly-read persisted record
-  // (possibly written by an older build, hence the legacy todos/plan
-  // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
-  // `RoundPersistedFlow`'s own per-step revalidation uses
-  // ReflectionFlowStateCanonicalSchema instead — see its constructor call
-  // below — since by then `shared` is always this run's own canonical
-  // toSnapshot() output, never a legacy shape.
-  const isResume = flowRecord !== null;
 
   if (flowRecord) {
+    // Boundary hydration: the one place a freshly-read persisted record
+    // (possibly written by an older build, hence the legacy todos/plan
+    // fallback in AgentWorkspaceStateSnapshotSchema) is parsed. Downstream,
+    // `RoundPersistedFlow`'s own per-step revalidation uses
+    // ReflectionFlowStateCanonicalSchema instead — see its constructor call
+    // below — since by then `shared` is always this run's own canonical
+    // toSnapshot() output, never a legacy shape.
     const validated = ReflectionFlowStateSchema.safeParse(flowRecord.shared);
     if (!validated.success) {
       throw new PersistedFlowStateError(executionId, 'invalid-shared', {
@@ -313,7 +312,7 @@ export async function runReflectionFlow<C = unknown>(
   };
   pf.setServices(services);
 
-  if (isResume) {
+  if (flowRecord) {
     logger.debug('Resuming reflection flow from persistence');
     await seedResumedConversationSidecar(
       runSession.transcripts,

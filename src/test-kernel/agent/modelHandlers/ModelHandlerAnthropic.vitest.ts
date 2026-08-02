@@ -50,8 +50,8 @@ import type {
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-// Real node fs is required because the prefill tests write and read files in
-// os.tmpdir().
+// Real node fs is required because the output-initialization tests write and
+// read files in os.tmpdir().
 setupPlatform({}, { fs: nodeFilesystem });
 
 afterEach(() => {
@@ -423,18 +423,6 @@ interface AnthropicFileEstimateTarget {
   ): Promise<number>;
 }
 
-function fileReferenceMessages(...fileIds: string[]): MessageParam[] {
-  return [
-    {
-      role: 'user',
-      content: fileIds.map((fileId) => ({
-        type: 'document',
-        source: { type: 'file', file_id: fileId },
-      })) as unknown as ContentBlockParam[],
-    },
-  ];
-}
-
 function createFileEstimateHarness(...fileIds: string[]): {
   target: AnthropicFileEstimateTarget;
   messages: MessageParam[];
@@ -442,7 +430,15 @@ function createFileEstimateHarness(...fileIds: string[]): {
   const handler = createAnthropicHandler({ supportsNativePdf: true });
   return {
     target: handler as unknown as AnthropicFileEstimateTarget,
-    messages: fileReferenceMessages(...fileIds),
+    messages: [
+      {
+        role: 'user',
+        content: fileIds.map((fileId) => ({
+          type: 'document',
+          source: { type: 'file', file_id: fileId },
+        })) as unknown as ContentBlockParam[],
+      },
+    ],
   };
 }
 
@@ -2515,11 +2511,9 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
       handler.createResponse({ client, messages, temperature: 0 }),
       (err: unknown) => {
         assert.ok(err instanceof Error, 'expected an Error to be thrown');
-        // The fix under test: once message_start was actually received, the
-        // pre-message_start wrap guard must not fire and clobber a more
-        // specific, more accurate error (previously this mislabeled the
-        // message_stop-guard error as "closed before message_start", even
-        // though message_start diagnostics showed it had, in fact, started).
+        // Once message_start was actually received, the pre-message_start
+        // wrap guard must not fire and clobber the more specific
+        // message_stop-guard error with "closed before message_start".
         assert.ok(
           !/Stream closed before message_start/.test((err as Error).message),
           `expected the original message_stop-guard error to survive unwrapped, got: ${(err as Error).message}`,

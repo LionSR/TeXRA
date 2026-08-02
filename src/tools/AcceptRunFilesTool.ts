@@ -29,7 +29,6 @@ import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
-  getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { AbsoluteFS, WorkspaceFS, createWorkspaceLocation } from '@utils/files';
@@ -111,9 +110,7 @@ Parameters map directly to subagent-result delivery attributes:
 
     // Verify execution exists — run dir may not exist in workspace storage mode
     if ((await findExistingRunStoragePath(executionId)) === undefined) {
-      const exists = await getExecutionStore(executionId as ExecutionId).exists(
-        'meta',
-      );
+      const exists = await getExecutionStore(executionId).exists('meta');
       if (!exists) {
         throw new ToolError(
           `Run not found: ${executionId}. Use /executions to list available executions.`,
@@ -222,11 +219,10 @@ Parameters map directly to subagent-result delivery attributes:
         continue;
       }
 
-      const finalContent = getApprovedContent(approval);
       await writeApprovedContent(
         entry.original,
         entry.originalContent,
-        finalContent,
+        approval.appliedContent,
       );
 
       const action = entry.destExists ? 'replaced' : 'created';

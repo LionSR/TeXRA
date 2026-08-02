@@ -97,9 +97,7 @@ export function buildClaudeUsageStats(usage: ClaudeTurnUsage): TokenUsageStats {
 
 /** Narrow an SDK-sourced value to a plain record, the way every built-in
  *  tool's `input` arrives per the tool-use protocol (a no-argument call still
- *  sends `{}`, never a bare primitive or `null`). Shared so the guard is
- *  written once and `buildClaudeToolUseLog` and `describeToolInput` can't
- *  drift apart on what counts as "object-shaped". */
+ *  sends `{}`, never a bare primitive or `null`). */
 function isToolRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';
 }

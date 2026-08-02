@@ -51,10 +51,9 @@ function expectParseWarning(
   );
 }
 
-// Regression for the executionKvFiles leak fix: isReservedKvKeyName is now
-// the single owner of the reserved single-value-key + `child-` prefix
-// vocabulary, exported so callers walking a run directory (e.g.
-// `src/tools/executions/executionKvFiles.ts`) recognize it without
+// `isReservedKvKeyName` is the single owner of the reserved single-value-key
+// and `child-` prefix vocabulary, exported so callers walking a run directory
+// (e.g. `src/tools/executions/executionKvFiles.ts`) recognize it without
 // re-deriving their own copy.
 describe('isReservedKvKeyName', () => {
   it.each([
@@ -317,11 +316,10 @@ describe('ExecutionKVStore meta read shims', () => {
     });
   });
 
-  // `meta.outcome` is the only writer of "how did this run end". These pin the
-  // case a repair pass used to fix up with a second write after the fact: a run
-  // that ends after its last turn wrote an interim envelope (interrupted
-  // between turns, stopped while suspended, failed by restart repair) now reads
-  // back through the owning fact instead.
+  // `meta.outcome` is the only writer of "how did this run end". A run that
+  // ends after its last turn wrote an interim envelope (interrupted between
+  // turns, stopped while suspended, failed by restart repair) reads back
+  // through that owning fact.
   it('supersedes an interim result outcome with the durable cancelled outcome', async () => {
     const id = 'terminal-outcome-supersedes-interim' as ExecutionId;
     const interim = {
@@ -700,7 +698,7 @@ describe('ExecutionKVStore meta read shims', () => {
   });
 });
 
-describe('ExecutionKVStore loud typed reads (#6966 bullet 5)', () => {
+describe('ExecutionKVStore loud typed reads', () => {
   it('warns when config is malformed instead of silently returning null', async () => {
     const id = 'bad-config' as ExecutionId;
     const warnSpy = mockWarn();

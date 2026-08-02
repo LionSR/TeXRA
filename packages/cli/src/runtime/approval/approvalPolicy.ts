@@ -163,8 +163,8 @@ function parseApprovalAnswer(answer: string): ParsedApprovalAnswer {
 
 /**
  * Queue a CLI prompt against the context's serial prompt queue. Exposed so the
- * inquiry/user-question handlers can interleave their own multi-step prompts
- * with approval prompts without overlapping reads from a single stdin.
+ * user-question handler can interleave its own per-question prompts with
+ * approval prompts without overlapping reads from a single stdin.
  */
 export function queueCliApprovalQuestion(
   context: CliContext,
@@ -184,8 +184,10 @@ export function immediateDecision(
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }
 
-/** Retry requests caused by exhausted credentials or auth failures retain
- *  their approval-denied classification even when yolo denies another batch. */
+/** Retry requests caused by exhausted credentials or auth failures. They are
+ *  denied under every policy that cannot prompt, and keep the approval-denied
+ *  classification so the run reports the credential failure rather than a
+ *  generic policy denial. */
 function isCredentialRetryRequest(
   event: CliDecisionApprovalEvent,
   payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],

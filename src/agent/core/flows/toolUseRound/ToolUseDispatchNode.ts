@@ -609,17 +609,17 @@ export class ToolUseDispatchNode<C> extends Node<
     // For handlers that carry provider-side reasoning across multiple parallel
     // calls, batch all tool calls into a single message to preserve thought
     // signatures / reasoning_content.
-    const modelHandler = this.services.modelCell.handler;
-    const shouldBatch =
-      allResults.length > 1 &&
-      modelHandler.requiresBatchedParallelToolResults &&
-      modelHandler.createBatchedToolUseFollowUpMessages !== undefined;
-
+    //
     // Called through `modelHandler.` (not an extracted local reference) so
     // provider implementations that read `this` internally (e.g. Google,
     // OpenAI) keep their receiver bound.
-    if (shouldBatch && modelHandler.createBatchedToolUseFollowUpMessages) {
-      const client = await this.services.modelCell.getClient();
+    const modelHandler = this.services.modelCell.handler;
+    const client = await this.services.modelCell.getClient();
+    if (
+      allResults.length > 1 &&
+      modelHandler.requiresBatchedParallelToolResults &&
+      modelHandler.createBatchedToolUseFollowUpMessages
+    ) {
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages(
           allResults.map((execResult) => ({
@@ -633,7 +633,6 @@ export class ToolUseDispatchNode<C> extends Node<
         );
       shared.messages.push(...followUpMsgs);
     } else {
-      const client = await this.services.modelCell.getClient();
       for (const [index, execResult] of allResults.entries()) {
         const { sanitizedResult, attachments } = execResult.extracted;
         const followUpMsgs = await modelHandler.createToolUseFollowUpMessages(

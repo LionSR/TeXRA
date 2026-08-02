@@ -113,18 +113,15 @@ export class ResponseCycleNode<C = unknown> extends Node<
           lastError: cycleShared.lastError,
         };
       }
-      // A round is `cancelled` only when the run was genuinely interrupted —
-      // sourced from the authoritative interrupt signal, the same one
-      // `RoundPersistedFlow` already uses for its run-outcome, round-loop, and
+      // A round is `cancelled` only when the run was genuinely interrupted,
+      // read from the authoritative interrupt signal — the same one
+      // `RoundPersistedFlow` uses for its run-outcome, round-loop, and
       // step-loop decisions (resolveOutcome / shouldContinueNextRound /
-      // executeRoundSteps). The previous `shouldStop && !endTurn` proxy
-      // conflated three distinct cases — genuine interrupt, empty response, and
-      // a completed response whose stop reason wasn't recognized as end-of-turn
-      // — so any non-interrupt stop without `endTurn` discarded an
-      // already-written round (e.g. a token/continuation-limit stop carrying
-      // real output, or any provider whose terminal reason isn't yet mapped to
-      // the canonical end-turn vocabulary). The `!endTurn` guard preserves a
-      // cleanly-finished round even if an interrupt races in at completion.
+      // executeRoundSteps). Any other stop (empty response, a stop reason not
+      // recognized as end-of-turn, a token/continuation limit carrying real
+      // output) keeps the round it already wrote. The `!endTurn` guard
+      // preserves a cleanly-finished round even if an interrupt races in at
+      // completion.
       if (this.services.runScope.signal.aborted && !cycleShared.endTurn) {
         return { outcome: 'cancelled' };
       }

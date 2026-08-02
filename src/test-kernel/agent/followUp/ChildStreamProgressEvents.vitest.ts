@@ -84,6 +84,12 @@ function startCodexChild(executionId: ExecutionId, description: string) {
   });
 }
 
+/**
+ * Run `run` with a run-scope subscriber attached to the default session hub.
+ * Creating or finalizing a child stream activates it, and the hub asserts a
+ * run-scope subscriber is already attached at that point; the recorded events
+ * themselves are not asserted here.
+ */
 function withSessionEventRecording<T>(run: () => T): T {
   const recorded = recordSessionEvents(defaultSession().events);
   try {

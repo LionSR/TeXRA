@@ -15,7 +15,7 @@
 
 export enum WorkspaceStateKey {
   AGENT_HISTORY = 'texra.agentHistory',
-  /** Consolidated progress view preferences (replaces individual keys) */
+  /** Consolidated progress-view preferences. */
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
 
   // Agent visibility (migrated from VS Code config)

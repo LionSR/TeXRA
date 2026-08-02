@@ -280,6 +280,10 @@ export async function finalizeRunTerminal(
   return { event, terminalStatusPersisted };
 }
 
+/** Failures finalizeFailedRun already logged, published, and wrapped; the
+ *  outer catch rethrows these untouched instead of finalizing them again. */
+const finalizedRunFailures = new WeakSet<Error>();
+
 /**
  * Recover a run's carried failure as an `Error`, so the one failure path below
  * classifies and logs a reported failure exactly as it does an exception that
@@ -290,10 +294,6 @@ export async function finalizeRunTerminal(
  * `undefined` when it was, keeping `normalizeProviderError` from reading a
  * wrong relay verdict off the retry-state shape.
  */
-/** Failures finalizeFailedRun already logged, published, and wrapped; the
- *  outer catch rethrows these untouched instead of finalizing them again. */
-const finalizedRunFailures = new WeakSet<Error>();
-
 function toFlowFailureError(error: RetryErrorInfo): Error {
   const failure = new Error(error.message);
   attachProviderError(failure, error);
@@ -314,10 +314,15 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
     streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
-      'lifecycle',
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
       options,
     ) ||
-    streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', options);
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.RESUME,
+      options,
+    );
   if (transitioned || streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
     return;
   }
@@ -375,13 +380,13 @@ function transitionStopBeforeRunStart(ctx: AgentLaunchContext): void {
     streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
-      'resume',
+      STREAM_TRANSITION_CAUSE.RESUME,
       options,
     ) &&
     streamStatus.transition(
       streamId,
       STREAM_PHASE.CANCELLED,
-      'user-stop',
+      STREAM_TRANSITION_CAUSE.USER_STOP,
       options,
     );
   if (recorded) return;

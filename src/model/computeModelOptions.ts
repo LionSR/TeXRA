@@ -209,12 +209,10 @@ type UnavailableAvailabilityKind = {
     : K;
 }[ModelAvailabilityKind];
 
-/** Everything an unavailable-reason builder needs to reconstruct the exact
- *  wording `getModelUnavailableReason` used to hand-roll per branch. */
+/** Everything an unavailable-reason builder needs to word its message. */
 interface UnavailableReasonContext {
   readonly model: string;
   readonly config: ModelConfig;
-  readonly ctx: ModelAvailabilityContext;
   readonly reason: UnavailableReason | undefined;
 }
 
@@ -232,7 +230,7 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   'provider-unavailable': ({ model }) =>
     `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
-  'missing-key': ({ model, config, ctx, reason }) => {
+  'missing-key': ({ model, config, reason }) => {
     if (reason === 'openrouter-missing-key') {
       return `Model "${model}" requires an OpenRouter API key.`;
     }
@@ -575,7 +573,6 @@ export async function getModelUnavailableReason(
   return UNAVAILABLE_REASON_BUILDERS[kind]({
     model,
     config,
-    ctx,
     reason: availability.reason,
   });
 }

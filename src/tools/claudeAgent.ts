@@ -91,7 +91,7 @@ import {
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
 
-// Third-party imports
+// Third-party type imports (import/order places these after local imports)
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk';
 
 let _configModule: typeof import('./claudeAgentConfig.js') | null = null;

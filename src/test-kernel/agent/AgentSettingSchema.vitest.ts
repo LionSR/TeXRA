@@ -13,6 +13,21 @@ import {
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { REPO_ROOT } from '@test/support/repoScan';
 
+/**
+ * Run `parse` with `console.warn` silenced and report how many deprecation
+ * warnings it fired. The count is read before `mockRestore()`, which implies
+ * `mockReset()` and would clear `mock.calls` first.
+ */
+function withWarningCount<T>(parse: () => T): { result: T; warnings: number } {
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const result = parse();
+    return { result, warnings: warnSpy.mock.calls.length };
+  } finally {
+    warnSpy.mockRestore();
+  }
+}
+
 describe('AgentSettingSchema', () => {
   it('strips legacy workflow outputExt without exposing it in settings', () => {
     const setting = AgentSettingSchema.parse({
@@ -38,24 +53,18 @@ describe('AgentSettingSchema', () => {
       expectedWarnings: 1,
     },
   ])('$scenario', ({ documentTag, endTag, expectedWarnings }) => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    let setting!: ReturnType<typeof AgentSettingSchema.parse>;
-    let warningCount = 0;
-    try {
-      setting = AgentSettingSchema.parse({
+    const { result: setting, warnings } = withWarningCount(() =>
+      AgentSettingSchema.parse({
         agentCategory: AgentCategory.Workflow,
         documentTag,
         endTag,
-      });
-      warningCount = warnSpy.mock.calls.length;
-    } finally {
-      warnSpy.mockRestore();
-    }
+      }),
+    );
 
     expect(setting.agentCategory).toBe(AgentCategory.Workflow);
     expect(Object.hasOwn(setting, 'documentTag')).toBe(false);
     expect(Object.hasOwn(setting, 'endTag')).toBe(false);
-    expect(warningCount).toBe(expectedWarnings);
+    expect(warnings).toBe(expectedWarnings);
   });
 
   it.each([
@@ -74,23 +83,17 @@ describe('AgentSettingSchema', () => {
       expectedWarnings: 0,
     },
   ])('$scenario', ({ legacy, expectedWarnings }) => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    let setting!: ReturnType<typeof AgentSettingSchema.parse>;
-    let warningCount = 0;
-    try {
-      setting = AgentSettingSchema.parse({
+    const { result: setting, warnings } = withWarningCount(() =>
+      AgentSettingSchema.parse({
         agentCategory: AgentCategory.Workflow,
         ...legacy,
-      });
-      warningCount = warnSpy.mock.calls.length;
-    } finally {
-      warnSpy.mockRestore();
-    }
+      }),
+    );
 
     for (const key of Object.keys(legacy)) {
       expect(Object.hasOwn(setting, key)).toBe(false);
     }
-    expect(warningCount).toBe(expectedWarnings);
+    expect(warnings).toBe(expectedWarnings);
   });
 
   it('regression #7497: public remote agent YAML no longer carries documentTag/endTag', () => {
@@ -102,20 +105,13 @@ describe('AgentSettingSchema', () => {
     const files = readdirSync(dir).filter((name) => name.endsWith('.yaml'));
     expect(files.length).toBeGreaterThan(0);
 
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    let callCountAfterParsing: number;
-    try {
+    const { warnings } = withWarningCount(() => {
       for (const file of files) {
         const raw = yaml.parse(readFileSync(resolve(dir, file), 'utf8'));
         AgentDefinitionSchema.parse(raw);
       }
-    } finally {
-      // Read the call count before mockRestore(), which clears .mock.calls
-      // (it implies mockReset()) — asserting after restore would always pass.
-      callCountAfterParsing = warnSpy.mock.calls.length;
-      warnSpy.mockRestore();
-    }
-    expect(callCountAfterParsing).toBe(0);
+    });
+    expect(warnings).toBe(0);
   });
 });
 

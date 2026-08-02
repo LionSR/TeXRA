@@ -147,9 +147,9 @@ describe('DefaultDesktopAgentSettingsController', () => {
   it('implements the custom-agent management commands', () => {
     const { handlers } = createControllerFixture().controller;
 
-    // These were `unsupported(...)` placeholders until the custom-agent
-    // create/copy/delete flows and the remote prompt viewer were ported from
-    // the extension, so assert they are real handlers now.
+    // The desktop owns the custom-agent create/copy/delete flows and the
+    // remote prompt viewer, so none of them may be an `unsupported(...)`
+    // placeholder.
     expect(
       [
         handlers.createAgent,

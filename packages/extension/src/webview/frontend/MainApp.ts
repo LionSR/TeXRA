@@ -142,9 +142,9 @@ export class MainApp extends MainAppBase {
 
   constructor() {
     super();
-    // Per-mount slate: state and persistence runtime live at module scope
-    // (see mainViewState.ts), so a remount in the same JS context (tests,
-    // hot reload) must reset them like fresh instance fields used to.
+    // Per-mount slate: state and the persistence runtime live at module scope
+    // (see mainViewState.ts) and outlive the element, so a remount in the same
+    // JS context (tests, hot reload) starts by clearing them.
     resetMainViewState();
     resetPersistenceRuntime();
     this.fileStateContextValue = fileStateContext$.get();
@@ -256,7 +256,7 @@ export class MainApp extends MainAppBase {
     }
   }
 
-  private onViewTabShow = (event: WaTabShowEvent): void => {
+  private readonly onViewTabShow = (event: WaTabShowEvent): void => {
     if (event.detail.name !== 'progress') return;
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'progress' });
     const tabs = event.currentTarget as MutableWaTabGroup;
@@ -265,11 +265,11 @@ export class MainApp extends MainAppBase {
     });
   };
 
-  private onOpenDashboard = (): void => {
+  private readonly onOpenDashboard = (): void => {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view: 'dashboard' });
   };
 
-  private onPopOutProgress = (): void => {
+  private readonly onPopOutProgress = (): void => {
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, {
       view: 'progress',
       openInEditor: true,
@@ -366,9 +366,6 @@ export class MainApp extends MainAppBase {
       ? FILE_SELECT_CONFIGS.filter((config) => config.type === 'media')
       : FILE_SELECT_CONFIGS;
 
-    const akb = apiKeyBanner$.get();
-    const acb = agentConfigBanner$.get();
-    const db = dependencyBanner$.get();
     const sf = singleFiles$.get();
     const fo = fileOptions$.get();
     const files = multiFiles$.get();
@@ -436,9 +433,9 @@ export class MainApp extends MainAppBase {
 
     const banners = html`
       <banner-group
-        .apiKeyBanner=${akb}
-        .agentConfigBanner=${acb}
-        .dependencyBanner=${db}
+        .apiKeyBanner=${apiKeyBanner$.get()}
+        .agentConfigBanner=${agentConfigBanner$.get()}
+        .dependencyBanner=${dependencyBanner$.get()}
         .gettingStartedVisible=${
           gettingStartedVisible$.get() && !gettingStartedDismissed$.get()
         }

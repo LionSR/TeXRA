@@ -67,10 +67,9 @@ const DEFAULT_GROUP_MESSAGE_WINDOW = 400;
 const GROUP_MESSAGE_WINDOW_STEP = 400;
 
 /**
- * Maps group status to a steady wa-icon name.
- * `TaskGroup.status` is the native `StreamPhase`/`RunOutcome` vocabulary
- * (#7993 step 3) — `CANCELLED` now renders distinctly from `COMPLETED`
- * instead of folding into one neutral "stopped" icon.
+ * Maps a group's `StreamPhase`/`RunOutcome` status to a steady wa-icon name.
+ * Each terminal phase gets its own icon; an unrecognized status renders as
+ * running.
  */
 function getStatusIcon(status: string): TeXRAIconName {
   switch (status) {
@@ -257,11 +256,9 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * Play sound when a run group completes. The former stopped status folded
-   * `completed`/`cancelled` into one neutral bucket; the native
-   * `TaskGroup.status` (#7993 step 3) keeps them apart, so this checks both
-   * terminal-but-not-failed phases to preserve the prior "stopped" trigger
-   * byte-for-byte — a failed round still does not play the sound.
+   * Play the completion sound when a workflow round group leaves `running` for
+   * a terminal phase other than `failed`: a finished or cancelled round chimes,
+   * a failed one does not.
    */
   private checkForCompletedRuns(): void {
     const nextStatuses = new Map<string, string>();
@@ -566,6 +563,8 @@ export class TaskGroupList extends LitElement {
 
   private renderTerminalOutput(): TemplateResult {
     const tailText = processTerminalText(this.terminalBuffer.tail);
+    // Single-line templates: a wrapped `<pre>` would put the reflowed
+    // whitespace inside the preformatted block.
     const committedClass = 'terminal-pre terminal-pre--committed';
     const tailClass = 'terminal-pre terminal-pre--tail';
     const committed = html`<pre class=${committedClass}></pre>`;

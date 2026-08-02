@@ -10,16 +10,10 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-useLitComponentTestDom(() =>
-  Promise.all([
-    import('@progressView/frontend/formatters/logFormatters/toolFormatters'),
-    import('@progressView/frontend/formatters/logFormatters/bannerFormatters'),
-    import('@progressView/frontend/formatters/logFormatters/messageFormatters'),
-  ]),
-);
+useLitComponentTestDom();
 
-// Loaded after useLitComponentTestDom's beforeAll installs the jsdom globals
-// these modules touch at import time.
+// Imported in a `beforeAll` registered after useLitComponentTestDom's, so the
+// jsdom globals these modules touch at import time are already installed.
 let formatToolUseTemplate: typeof import('@progressView/frontend/formatters/logFormatters/toolFormatters').formatToolUseTemplate;
 let formatLogEntry: typeof import('@progressView/frontend/formatters').formatLogEntry;
 let getToolTimeoutMs: typeof import('@progressView/frontend/formatters/logFormatters/toolFormatters/helpers').getToolTimeoutMs;

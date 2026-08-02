@@ -428,11 +428,9 @@ export function resolveCliHistoryStatus(input: {
   readonly terminalStatus?: string;
   readonly resumable: boolean;
 }): string {
+  if (input.resumable) return CLI_HISTORY_RESUMABLE_STATUS;
   // An absent terminal status means the run never reached its terminal write
   // (crash, kill, old build) — never report that as 'completed'.
-  if (input.resumable) {
-    return CLI_HISTORY_RESUMABLE_STATUS;
-  }
   return input.terminalStatus ?? 'unknown';
 }
 

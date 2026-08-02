@@ -242,11 +242,8 @@ describe('CLI conversation transcript splitting', () => {
     }
   });
 
-  // Regression: pending tool rows must render after preceding live
-  // assistant text, not before. The previous renderer used a separate
-  // `pendingTools` bucket that always sat above the live region, so a
-  // model emitting prose before a tool call appeared as
-  // user → tool → assistant text on screen.
+  // One pending bucket in stream order: a model that emits prose before a
+  // tool call must render as assistant text then tool row, not the reverse.
   it('keeps pending entries in stream order so tool rows trail prior text', () => {
     const user = entry('u1', 'user', 'do a thing', true);
     const assistant = entry('a1', 'assistant', 'sure, running…', false);
@@ -1352,13 +1349,6 @@ function sliceWithEntries(
   return { ...emptySlice(streamId), entries, ...init };
 }
 
-function streamsFromEntries(
-  streamId: StreamTabId,
-  entries: readonly ConversationEntry[],
-): ReadonlyMap<StreamTabId, StreamSlice> {
-  return new Map([[streamId, sliceWithEntries(streamId, entries)]]);
-}
-
 /** Static scrollback for a single-stream transcript of `entries`. */
 function staticItems(
   entries: readonly ConversationEntry[],
@@ -1375,7 +1365,7 @@ function staticItems(
     meta: SESSION_META,
     printRequests: options.printRequests,
     scrollbackStreamId: STREAM_ID,
-    streams: streamsFromEntries(STREAM_ID, entries),
+    streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
     width: options.width,
   });
 }

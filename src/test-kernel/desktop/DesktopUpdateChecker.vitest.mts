@@ -31,6 +31,8 @@ describe('desktop update checker', () => {
     const release: DesktopLatestRelease = {
       version: '0.40.0',
     };
+    const CURRENT_VERSION = '0.39.3';
+    const DAY_MS = 24 * 60 * 60 * 1000;
     let checkForDesktopUpdate: DesktopUpdateCheckerModule['checkForDesktopUpdate'];
     let globalState: FakeStateStore;
 
@@ -41,60 +43,51 @@ describe('desktop update checker', () => {
       globalState = new FakeStateStore();
     });
 
-    it('skips entirely for unpackaged (dev) runs', async () => {
-      let fetchCalls = 0;
-      let notifyCalls = 0;
-
-      await checkForDesktopUpdate({
-        currentVersion: '0.39.3',
-        globalState,
-        isPackaged: false,
-        notify: () => {
-          notifyCalls += 1;
-        },
-        fetchRelease: async () => {
-          fetchCalls += 1;
-          return release;
-        },
-      });
-
-      expect(fetchCalls).toBe(0);
-      expect(notifyCalls).toBe(0);
-    });
-
-    it('skips entirely when TEXRA_NO_UPDATE_CHECK is set', async () => {
-      let fetchCalls = 0;
-
-      await checkForDesktopUpdate({
-        currentVersion: '0.39.3',
-        globalState,
-        isPackaged: true,
-        env: { TEXRA_NO_UPDATE_CHECK: '1' },
-        notify: () => {},
-        fetchRelease: async () => {
-          fetchCalls += 1;
-          return release;
-        },
-      });
-
-      expect(fetchCalls).toBe(0);
-    });
-
-    it('notifies once when a newer release is found, and persists the notified version', async () => {
-      const notified: DesktopLatestRelease[] = [];
-
-      await checkForDesktopUpdate({
-        currentVersion: '0.39.3',
+    /** One check with the packaged, update-enabled defaults these cases share. */
+    function runCheck(
+      overrides: Partial<CheckForDesktopUpdateOptions> = {},
+    ): Promise<void> {
+      return checkForDesktopUpdate({
+        currentVersion: CURRENT_VERSION,
         globalState,
         isPackaged: true,
         env: {},
-        notify: (r) => {
-          notified.push(r);
-        },
+        notify: () => {},
         fetchRelease: async () => release,
+        ...overrides,
       });
+    }
 
-      expect(notified).toEqual([release]);
+    function lastCheckedAt(): number | undefined {
+      return globalState.get(
+        GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
+      );
+    }
+
+    it('skips entirely for unpackaged (dev) runs', async () => {
+      const notify = vi.fn();
+      const fetchRelease = vi.fn(async () => release);
+
+      await runCheck({ isPackaged: false, notify, fetchRelease });
+
+      expect(fetchRelease).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('skips entirely when TEXRA_NO_UPDATE_CHECK is set', async () => {
+      const fetchRelease = vi.fn(async () => release);
+
+      await runCheck({ env: { TEXRA_NO_UPDATE_CHECK: '1' }, fetchRelease });
+
+      expect(fetchRelease).not.toHaveBeenCalled();
+    });
+
+    it('notifies once when a newer release is found, and persists the notified version', async () => {
+      const notify = vi.fn();
+
+      await runCheck({ notify });
+
+      expect(notify).toHaveBeenCalledExactlyOnceWith(release);
       expect(
         globalState.get(
           GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
@@ -103,125 +96,68 @@ describe('desktop update checker', () => {
     });
 
     it('does not notify when the latest release is not newer', async () => {
-      let notifyCalls = 0;
+      const notify = vi.fn();
 
-      await checkForDesktopUpdate({
-        currentVersion: '0.40.0',
-        globalState,
-        isPackaged: true,
-        env: {},
-        notify: () => {
-          notifyCalls += 1;
-        },
-        fetchRelease: async () => release,
-      });
+      await runCheck({ currentVersion: release.version, notify });
 
-      expect(notifyCalls).toBe(0);
+      expect(notify).not.toHaveBeenCalled();
     });
 
     it('throttles repeated checks within the same day', async () => {
-      let fetchCalls = 0;
+      const fetchRelease = vi.fn(async () => release);
       // A realistic epoch timestamp: on the very first check ever,
       // `lastCheckedAt` defaults to 0, and this must be far enough past that
       // default to *not* be throttled (matching a real first launch).
       let nowMs = Date.UTC(2026, 0, 1);
-
-      const run = () =>
-        checkForDesktopUpdate({
-          currentVersion: '0.39.3',
-          globalState,
-          isPackaged: true,
-          env: {},
-          notify: () => {},
-          now: () => nowMs,
-          fetchRelease: async () => {
-            fetchCalls += 1;
-            return release;
-          },
-        });
+      const run = () => runCheck({ now: () => nowMs, fetchRelease });
 
       await run();
-      expect(fetchCalls).toBe(1);
+      expect(fetchRelease).toHaveBeenCalledTimes(1);
 
       // Same process, ten minutes later: still throttled.
       nowMs += 10 * 60 * 1000;
       await run();
-      expect(fetchCalls).toBe(1);
+      expect(fetchRelease).toHaveBeenCalledTimes(1);
 
       // A full day later: throttle window has elapsed.
-      nowMs += 24 * 60 * 60 * 1000;
+      nowMs += DAY_MS;
       await run();
-      expect(fetchCalls).toBe(2);
+      expect(fetchRelease).toHaveBeenCalledTimes(2);
     });
 
     it('does not re-notify for a release version already notified', async () => {
-      let notifyCalls = 0;
+      const notify = vi.fn();
       let nowMs = Date.UTC(2026, 0, 1);
-
-      const run = () =>
-        checkForDesktopUpdate({
-          currentVersion: '0.39.3',
-          globalState,
-          isPackaged: true,
-          env: {},
-          notify: () => {
-            notifyCalls += 1;
-          },
-          now: () => nowMs,
-          fetchRelease: async () => release,
-        });
+      const run = () => runCheck({ now: () => nowMs, notify });
 
       await run();
-      expect(notifyCalls).toBe(1);
+      expect(notify).toHaveBeenCalledTimes(1);
 
       // Next day, same latest release: throttle window elapsed so it fetches
       // again, but must not re-notify for a version already announced.
-      nowMs += 24 * 60 * 60 * 1000;
+      nowMs += DAY_MS;
       await run();
-      expect(notifyCalls).toBe(1);
+      expect(notify).toHaveBeenCalledTimes(1);
     });
 
     it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
-      let fetchCalls = 0;
       const nowMs = Date.UTC(2026, 0, 1);
+      // `undefined` is how a network or API failure reaches the checker.
+      const failingFetch = vi.fn(async () => undefined);
 
-      await checkForDesktopUpdate({
-        currentVersion: '0.39.3',
-        globalState,
-        isPackaged: true,
-        env: {},
-        notify: () => {},
-        now: () => nowMs,
-        fetchRelease: async () => {
-          fetchCalls += 1;
-          return undefined; // simulates a network/API failure
-        },
-      });
+      await runCheck({ now: () => nowMs, fetchRelease: failingFetch });
 
-      expect(fetchCalls).toBe(1);
-      expect(
-        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
-      ).toBeUndefined();
+      expect(failingFetch).toHaveBeenCalledOnce();
+      expect(lastCheckedAt()).toBeUndefined();
 
       // Immediately "relaunching" (same day) must retry rather than being
       // throttled for a full 24h off the back of the earlier failure.
-      await checkForDesktopUpdate({
-        currentVersion: '0.39.3',
-        globalState,
-        isPackaged: true,
-        env: {},
-        notify: () => {},
-        now: () => nowMs + 1000,
-        fetchRelease: async () => {
-          fetchCalls += 1;
-          return release;
-        },
-      });
+      const retriedFetch = vi.fn(async () => release);
 
-      expect(fetchCalls).toBe(2);
-      expect(
-        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
-      ).toBe(nowMs + 1000);
+      await runCheck({ now: () => nowMs + 1000, fetchRelease: retriedFetch });
+
+      expect(retriedFetch).toHaveBeenCalledOnce();
+      expect(lastCheckedAt()).toBe(nowMs + 1000);
     });
 
     it('treats an empty release tag as a failed fetch', async () => {
@@ -233,89 +169,50 @@ describe('desktop update checker', () => {
         })) as unknown as typeof fetch,
       );
 
-      await checkForDesktopUpdate({
-        currentVersion: '0.39.3',
-        globalState,
-        isPackaged: true,
-        env: {},
-        notify: () => {},
-      });
+      // No `fetchRelease`: this drives the real GitHub fetch path.
+      await runCheck({ fetchRelease: undefined });
 
-      expect(
-        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
-      ).toBeUndefined();
+      expect(lastCheckedAt()).toBeUndefined();
     });
 
     it('does not persist the throttle stamp when notification fails', async () => {
       const nowMs = Date.UTC(2026, 0, 1);
-      let notifyCalls = 0;
-
-      const run = (notify: () => void | Promise<void>) =>
-        checkForDesktopUpdate({
-          currentVersion: '0.39.3',
-          globalState,
-          isPackaged: true,
-          env: {},
-          notify,
-          now: () => nowMs,
-          fetchRelease: async () => release,
-        });
-
-      await expect(
-        run(() => {
-          notifyCalls += 1;
-          throw new Error('dialog failed');
-        }),
-      ).rejects.toThrow('dialog failed');
-      expect(
-        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
-      ).toBeUndefined();
-
-      await run(() => {
-        notifyCalls += 1;
+      let dialogFails = true;
+      const notify = vi.fn(() => {
+        if (dialogFails) throw new Error('dialog failed');
       });
-      expect(notifyCalls).toBe(2);
-      expect(
-        globalState.get(GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT),
-      ).toBe(nowMs);
+
+      await expect(runCheck({ now: () => nowMs, notify })).rejects.toThrow(
+        'dialog failed',
+      );
+      expect(lastCheckedAt()).toBeUndefined();
+
+      dialogFails = false;
+      await runCheck({ now: () => nowMs, notify });
+
+      expect(notify).toHaveBeenCalledTimes(2);
+      expect(lastCheckedAt()).toBe(nowMs);
     });
 
     it('coalesces concurrent checks into one fetch and notification', async () => {
-      let fetchCalls = 0;
-      let firstNotifyCalls = 0;
-      let secondNotifyCalls = 0;
       let resolveFetch: ((value: DesktopLatestRelease) => void) | undefined;
       const pendingRelease = new Promise<DesktopLatestRelease>((resolve) => {
         resolveFetch = resolve;
       });
-      const options = {
-        currentVersion: '0.39.3',
-        globalState,
-        isPackaged: true,
-        env: {},
-        notify: () => {
-          firstNotifyCalls += 1;
-        },
-        fetchRelease: async () => {
-          fetchCalls += 1;
-          return pendingRelease;
-        },
-      };
+      const fetchRelease = vi.fn(() => pendingRelease);
+      const firstNotify = vi.fn();
+      const secondNotify = vi.fn();
 
-      const first = checkForDesktopUpdate(options);
-      const second = checkForDesktopUpdate({
-        ...options,
-        notify: () => {
-          secondNotifyCalls += 1;
-        },
-      });
-      expect(fetchCalls).toBe(1);
+      const first = runCheck({ notify: firstNotify, fetchRelease });
+      const second = runCheck({ notify: secondNotify, fetchRelease });
+      expect(fetchRelease).toHaveBeenCalledOnce();
 
       resolveFetch?.(release);
       await Promise.all([first, second]);
-      expect(fetchCalls).toBe(1);
-      expect(firstNotifyCalls).toBe(0);
-      expect(secondNotifyCalls).toBe(1);
+
+      expect(fetchRelease).toHaveBeenCalledOnce();
+      expect(firstNotify).not.toHaveBeenCalled();
+      expect(secondNotify).toHaveBeenCalledOnce();
     });
   });
 });

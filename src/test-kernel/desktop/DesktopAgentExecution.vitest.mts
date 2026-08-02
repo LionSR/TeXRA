@@ -970,9 +970,8 @@ describe('DesktopProgressBridge', () => {
 
     messages.length = 0;
     // The request must stay pending until the renderer settles it, so don't
-    // await the promise here — awaiting the old auto-cancel was exactly the
-    // behavior that terminated runs with "Retry cancelled by user" without ever
-    // asking.
+    // await the promise here: an auto-cancel would terminate the run with
+    // "Retry cancelled by user" without ever asking.
     const pending = bridgeInteractions(bridge).requestRetry?.({
       requestId: 'retry-host-interaction',
       streamId: 'stream-retry' as StreamTabId,
@@ -2346,8 +2345,8 @@ describe('DesktopProgressBridge', () => {
       useMultipleOutputs: false,
       toolConfig: DEFAULT_TOOL_CONFIG,
     });
-    // The port now emits the ensure-view/activation events the coordinator
-    // layer used to duplicate; settle them before snapshotting messages.
+    // The port emits its own ensure-view/activation events; settle them
+    // before snapshotting messages.
     await settleProgressEvents();
     messages.length = 0;
 

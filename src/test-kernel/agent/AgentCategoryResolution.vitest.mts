@@ -32,13 +32,13 @@ function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
 }
 
 /**
- * Regression: a custom *workflow* agent named `assistant` collides with the
- * bundled *tool-use* `assistant`. Validation resolves through the category-aware
- * `getVisibleAgent`, but the launch historically re-resolved via the
- * category-blind `getAgent` (source priority: custom > … > builtInToolUse), so
- * it picked the wrong (workflow) entry and the run failed with a category
- * mismatch. The fix carries the validated entry's *source* to launch, which
- * resolves the exact `(source, name)` key — so launch can never diverge.
+ * A custom *workflow* agent named `assistant` collides with the bundled
+ * *tool-use* `assistant`. Validation resolves through the category-aware
+ * `getVisibleAgent`; a category-blind resolver would answer the same name with
+ * the custom workflow entry (source priority: custom > … > builtInToolUse) and
+ * the run would fail with a category mismatch. Launch therefore carries the
+ * validated entry's *source* and resolves the exact `(source, name)` key, so
+ * it cannot diverge from what validation accepted.
  */
 describe('cross-category agent resolution', () => {
   beforeAll(async () => {
@@ -83,8 +83,8 @@ describe('cross-category agent resolution', () => {
   });
 
   it('demonstrates the divergence the category-scoped resolver closes', () => {
-    // Category-blind resolution (the old launch path) picks the custom workflow
-    // entry by source priority…
+    // Category-blind resolution picks the custom workflow entry by source
+    // priority…
     expect(resolveAgent('assistant')?.entry.source).toBe('custom');
     expect(resolveAgent('assistant')?.entry.category).toBe('workflow');
 

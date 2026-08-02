@@ -122,7 +122,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.USE_OPENROUTER]: false,
   [GlobalStateKey.KIMI_CODE_PREFER]: false,
   // Region defaults mirror the PROVIDER_REGISTRY `region.default` facts the
-  // `regionSet()` getter reads (now via `readPlatformSetting`).
+  // `regionSet()` getter reads through `readPlatformSetting`.
   [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
   [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
   [GlobalStateKey.MINIMAX_USE_CHINA]: false,
@@ -256,9 +256,8 @@ describe('state settings catalog', () => {
   });
 
   it('drives the LaTeX tab enum option labels from catalog metadata', () => {
-    // Locks the catalog wording the extension's LaTeXTab now composes its
-    // <wa-select> labels from, so the displayed options stay byte-identical to
-    // the previously hand-listed arrays.
+    // Locks the catalog wording the extension's LaTeXTab composes its
+    // <wa-select> labels from.
     const mathMarkup = entryByKey(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP);
     const mathMarkupLabels = (settingEnumOptions(mathMarkup) ?? []).map(
       (value, index) => {
@@ -519,8 +518,6 @@ describe('core settings host split', () => {
     }
   });
 });
-
-// --- accessor round-trip ----------------------------------------------------
 
 describe('settingsAccess', () => {
   it('reads the default when the key is absent', () => {

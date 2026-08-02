@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
@@ -26,7 +26,8 @@ vi.mock('@frontend/latex/inlineCriticism', () => ({
   pushManualCriticism: mocks.pushManualCriticism,
 }));
 
-function createRuntimeHost() {
+/** The caller-supplied presentation host `emit` routes interaction events to. */
+function createPresentationSink() {
   return { emit: vi.fn() };
 }
 
@@ -66,7 +67,7 @@ function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
  * has to find the requests `show()` recorded.
  */
 function createInteractions(options: {
-  presentationSink?: ReturnType<typeof createRuntimeHost>;
+  presentationSink?: ReturnType<typeof createPresentationSink>;
   setApprovalBypassState?: (update: HostApprovalBypassStateUpdate) => void;
   session: SessionHandle;
 }) {
@@ -76,7 +77,7 @@ function createInteractions(options: {
     handlers,
     toolEditApprovals,
     interactions: createExtensionHostInteractions({
-      interactions: options.presentationSink ?? createRuntimeHost(),
+      interactions: options.presentationSink ?? createPresentationSink(),
       session: options.session,
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () =>
@@ -97,8 +98,8 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 }
 
 describe('createExtensionHostInteractions', () => {
-  it('forwards emit to the caller-supplied runtime host (#9251)', () => {
-    const presentationSink = createRuntimeHost();
+  it('forwards emit to the caller-supplied presentation host (#9251)', () => {
+    const presentationSink = createPresentationSink();
     const session = createTestSession();
     const { interactions } = createInteractions({ presentationSink, session });
 
@@ -277,7 +278,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('shows and resolves plan approvals through existing handlers', async () => {
-    const presentationSink = createRuntimeHost();
+    const presentationSink = createPresentationSink();
     const session = createTestSession();
     const sessionEvents = recordSessionEvents(session);
     const { handlers, interactions } = createInteractions({
@@ -440,7 +441,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('cancels pending retry requests for a removed stream', async () => {
-    const presentationSink = createRuntimeHost();
+    const presentationSink = createPresentationSink();
     const { handlers, interactions } = createInteractions({
       presentationSink,
       session: createTestSession(),
@@ -557,7 +558,7 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('shows external inquiries without waiting for a user decision', async () => {
-    const presentationSink = createRuntimeHost();
+    const presentationSink = createPresentationSink();
     const { handlers, interactions } = createInteractions({
       presentationSink,
       session: createTestSession(),

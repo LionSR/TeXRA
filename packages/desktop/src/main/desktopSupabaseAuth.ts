@@ -303,6 +303,8 @@ export function createDesktopSupabaseAuth(
     activeAttempt = attempt;
     onAttempt?.(attempt);
     try {
+      // Drain the commit queue before claiming the attempt, so a callback still
+      // storing or clearing a session finishes against the attempt it owns.
       await runAuthCommit(async () => {});
       if (!ownsAttempt(attempt)) return;
 

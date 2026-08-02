@@ -106,6 +106,29 @@ function testRetryModelCell(
   return { getClient: async () => ({}), rebind, route };
 }
 
+/** Every retry-node scenario's services; cases override what they drive. */
+function retryServices(
+  streamId: StreamTabId,
+  {
+    session,
+    signal,
+    ...overrides
+  }: Partial<TestRetryServices> & {
+    session?: SessionHandle;
+    signal?: AbortSignal;
+  } = {},
+): TestRetryServices {
+  return {
+    config: { model: 'openai:test' },
+    runScope: testRunScope(streamId, { session, signal }),
+    streamId,
+    interactions: new SessionHostInteractions(),
+    logger: noopTrace,
+    modelCell: testRetryModelCell(),
+    ...overrides,
+  };
+}
+
 class ExposedRetryNode extends RetryableInvocationNode<
   unknown,
   TestRetryServices
@@ -170,14 +193,13 @@ function createRetryNode(
       new StreamStatusMachine(),
     );
   const streamStatus = session.status;
-  const node = new ExposedRetryNode().setServices({
-    config: { model: 'copilot:sonnet46' },
-    runScope: testRunScope(streamId, { session }),
-    streamId,
-    interactions: new SessionHostInteractions(),
-    logger: noopTrace,
-    modelCell: testRetryModelCell(rebind, route),
-  });
+  const node = new ExposedRetryNode().setServices(
+    retryServices(streamId, {
+      config: { model: 'copilot:sonnet46' },
+      session,
+      modelCell: testRetryModelCell(rebind, route),
+    }),
+  );
   return { node, session, streamStatus, requestRetry };
 }
 
@@ -455,14 +477,13 @@ describe('RetryState', () => {
       }
     }
 
-    const node = new DiagnosticRetryNode().setServices({
-      config: { model: 'openai:test' },
-      runScope: testRunScope(streamId, { session }),
-      streamId,
-      interactions: new SessionHostInteractions(),
-      logger,
-      modelCell: testRetryModelCell(undefined, 'api-key'),
-    });
+    const node = new DiagnosticRetryNode().setServices(
+      retryServices(streamId, {
+        session,
+        logger,
+        modelCell: testRetryModelCell(undefined, 'api-key'),
+      }),
+    );
 
     try {
       seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
@@ -593,18 +614,17 @@ describe('RetryState', () => {
       }
     }
 
-    const node = new ClientPreparationRetryNode().setServices({
-      config: { model: 'openai:test' },
-      runScope: testRunScope(streamId, { session }),
-      streamId,
-      interactions: new SessionHostInteractions(),
-      logger,
-      modelCell: {
-        getClient,
-        rebind: async () => undefined,
-        route: 'api-key',
-      },
-    });
+    const node = new ClientPreparationRetryNode().setServices(
+      retryServices(streamId, {
+        session,
+        logger,
+        modelCell: {
+          getClient,
+          rebind: async () => undefined,
+          route: 'api-key',
+        },
+      }),
+    );
 
     try {
       seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
@@ -663,14 +683,13 @@ describe('RetryState', () => {
       }
     }
 
-    const node = new InvalidResultNode().setServices({
-      config: { model: 'openai:test' },
-      runScope: testRunScope(streamId, { session }),
-      streamId,
-      interactions: new SessionHostInteractions(),
-      logger,
-      modelCell: testRetryModelCell(undefined, 'api-key'),
-    });
+    const node = new InvalidResultNode().setServices(
+      retryServices(streamId, {
+        session,
+        logger,
+        modelCell: testRetryModelCell(undefined, 'api-key'),
+      }),
+    );
 
     try {
       await expect(node._exec(undefined)).resolves.toBe('');
@@ -763,14 +782,9 @@ describe('RetryState', () => {
 
     vi.useFakeTimers();
     try {
-      const node = new StatuslessServerErrorNode().setServices({
-        config: { model: 'openai:test' },
-        runScope: testRunScope('retry-delay' as StreamTabId),
-        streamId: 'retry-delay' as StreamTabId,
-        interactions: new SessionHostInteractions(),
-        logger: noopTrace,
-        modelCell: testRetryModelCell(),
-      });
+      const node = new StatuslessServerErrorNode().setServices(
+        retryServices('retry-delay' as StreamTabId),
+      );
       const retry = node._exec(undefined);
       const delayMs = RETRY_BACKOFF_SECONDS * 1000;
 
@@ -810,16 +824,11 @@ describe('RetryState', () => {
       // mid-backoff must abandon the pending retry instead of waking up to
       // another attempt.
       const runController = new AbortController();
-      const node = new InterruptibleBackoffNode().setServices({
-        config: { model: 'openai:test' },
-        runScope: testRunScope('retry-interrupt' as StreamTabId, {
+      const node = new InterruptibleBackoffNode().setServices(
+        retryServices('retry-interrupt' as StreamTabId, {
           signal: runController.signal,
         }),
-        streamId: 'retry-interrupt' as StreamTabId,
-        interactions: new SessionHostInteractions(),
-        logger: noopTrace,
-        modelCell: testRetryModelCell(),
-      });
+      );
       const retry = node._exec(undefined);
       await vi.advanceTimersByTimeAsync(0);
       expect(node.attempts).toBe(1);
@@ -908,14 +917,13 @@ describe('RetryState', () => {
       }
     }
 
-    const node = new ReactiveRecoveryNode().setServices({
-      config: { model: 'openai:test' },
-      runScope: testRunScope(streamId, { session }),
-      streamId,
-      interactions: new SessionHostInteractions(),
-      logger,
-      modelCell: testRetryModelCell(rebind, 'relay'),
-    });
+    const node = new ReactiveRecoveryNode().setServices(
+      retryServices(streamId, {
+        session,
+        logger,
+        modelCell: testRetryModelCell(rebind, 'relay'),
+      }),
+    );
 
     try {
       await expect(node._exec(undefined)).resolves.toBe('recovered');

@@ -605,25 +605,6 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
-  it('does not finalize a classified run failure a second time', async () => {
-    const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const request = baseRequest();
-    mocks.runAgent.mockImplementationOnce(
-      async (_request: unknown, options: { readonly onRun?: () => void }) => {
-        options.onRun?.();
-        throw new AgentError('provider boom');
-      },
-    );
-
-    await expect(executeCliRequest(request, cliContext())).resolves.toEqual({
-      ok: false,
-      exitCode: CliExitCode.AgentError,
-    });
-
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
-    expect(mocks.close).toHaveBeenCalledTimes(1);
-  });
-
   it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
@@ -650,7 +631,7 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
-  it('resolves a classified run failure to a non-zero exit code without rethrowing', async () => {
+  it('resolves a classified run failure to a non-zero exit code without rethrowing or finalizing again', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = baseRequest();
     mocks.runAgent.mockImplementationOnce(

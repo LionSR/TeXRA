@@ -41,15 +41,14 @@ const LEGACY_BACKFILL_CONCURRENCY = 32;
 const migrationsByWorkspace = new Map<string | undefined, Promise<void>>();
 let migrationPlatform: Platform | undefined;
 
-export async function migrateLegacyExecutionHistoryOnce(
-  workspacePath: string | undefined,
-): Promise<void> {
+export async function migrateLegacyExecutionHistoryOnce(): Promise<void> {
   const currentPlatform = platform();
   if (currentPlatform !== migrationPlatform) {
     migrationPlatform = currentPlatform;
     migrationsByWorkspace.clear();
   }
 
+  const workspacePath = currentPlatform.workspace.getWorkspacePath();
   const inFlight = migrationsByWorkspace.get(workspacePath);
   if (inFlight) return inFlight;
 

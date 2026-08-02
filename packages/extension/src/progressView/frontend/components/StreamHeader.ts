@@ -32,7 +32,6 @@ import {
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
@@ -42,7 +41,11 @@ import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
 // Local imports - progress view constants
-import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
+import {
+  ELEMENT_IDS,
+  TOOLBAR_BUTTONS,
+  type ProgressToolbarButton,
+} from '../constants';
 import { archivedContext } from '../contexts/streamContexts';
 import { ProgressEvents } from '../events';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
@@ -50,17 +53,6 @@ import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
 } from '../formatters/progressBadgeFormatter';
-
-interface ToolbarButton {
-  id: string;
-  icon: string;
-  command: string;
-  title: string;
-  titleActive?: string;
-  className?: string;
-  disabled?: boolean;
-  isToggle?: boolean;
-}
 
 /**
  * Buttons enabled while a run is active (running / waiting / resuming): stop
@@ -362,51 +354,49 @@ export class StreamHeader extends LitElement {
     // tooltip nodes between the buttons would break those selectors —
     // `renderIconActionButtonParts` keeps them apart, and each anchors by
     // `for=${btn.id}` within this shadow root.
-    const toolbarButtonViews = (toolbarButtons as ToolbarButton[]).map(
-      (btn) => {
-        const { disabled: computedDisabled, hidden } = this.getButtonState(
-          btn,
-          enabledButtons,
-          hasExecutionId,
-        );
-        // Read-only trace-viewer export: no toolbar action reaches a live
-        // backend — the onClick below re-checks `disabled` before
-        // dispatching, so this one flag both looks and behaves inert.
-        const disabled = this.archived || computedDisabled;
-        const isActive = Boolean(
-          btn.isToggle &&
-          (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
-            ? this.superYoloActive
-            : this.yoloActive),
-        );
-        const tooltipText =
-          isActive && btn.titleActive ? btn.titleActive : btn.title;
-        const className = [
-          btn.className,
-          hidden ? 'toolbar-button--hidden' : undefined,
-          isActive ? 'is-active' : undefined,
-        ]
-          .filter(Boolean)
-          .join(' ');
-        const { button, tooltip } = renderIconActionButtonParts({
-          id: btn.id,
-          icon: btn.icon as TeXRAIconName,
-          label: tooltipText,
-          tooltip: tooltipText,
-          className,
-          size: 'm',
-          disabled,
-          ariaHidden: hidden,
-          onClick: () => {
-            if (disabled) return;
-            this.dispatchEvent(
-              ProgressEvents.toolbarCommand({ command: btn.command }),
-            );
-          },
-        });
-        return { id: btn.id, hidden, button, tooltip };
-      },
-    );
+    const toolbarButtonViews = toolbarButtons.map((btn) => {
+      const { disabled: computedDisabled, hidden } = this.getButtonState(
+        btn,
+        enabledButtons,
+        hasExecutionId,
+      );
+      // Read-only trace-viewer export: no toolbar action reaches a live
+      // backend — the onClick below re-checks `disabled` before
+      // dispatching, so this one flag both looks and behaves inert.
+      const disabled = this.archived || computedDisabled;
+      const isActive = Boolean(
+        btn.isToggle &&
+        (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
+          ? this.superYoloActive
+          : this.yoloActive),
+      );
+      const tooltipText =
+        isActive && btn.titleActive ? btn.titleActive : btn.title;
+      const className = [
+        btn.className,
+        hidden ? 'toolbar-button--hidden' : undefined,
+        isActive ? 'is-active' : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const { button, tooltip } = renderIconActionButtonParts({
+        id: btn.id,
+        icon: btn.icon,
+        label: tooltipText,
+        tooltip: tooltipText,
+        className,
+        size: 'm',
+        disabled,
+        ariaHidden: hidden,
+        onClick: () => {
+          if (disabled) return;
+          this.dispatchEvent(
+            ProgressEvents.toolbarCommand({ command: btn.command }),
+          );
+        },
+      });
+      return { id: btn.id, hidden, button, tooltip };
+    });
 
     return html`
       <div class="log-header">
@@ -460,7 +450,7 @@ export class StreamHeader extends LitElement {
   }
 
   private getButtonState(
-    button: ToolbarButton,
+    button: ProgressToolbarButton,
     enabledButtons: ReadonlySet<string> | undefined,
     hasExecutionId: boolean,
   ): { disabled: boolean; hidden: boolean } {

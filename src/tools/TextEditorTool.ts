@@ -600,11 +600,11 @@ export class TextEditorTool extends defineTool({
   }
 
   /**
-   * Resolve the history owned by the active execution. With no run context,
-   * tests and one-shot manual calls share the legacy empty execution scope.
+   * Resolve the history owned by the active execution. Calls made with no run
+   * context share one unnamed execution scope.
    */
-  private currentExecutionId(): string {
-    return getRunContextExecutionId(tryUseRunContext()) ?? '';
+  private currentExecutionId(context = tryUseRunContext()): string {
+    return getRunContextExecutionId(context) ?? '';
   }
 
   /** `afterWrite` callback recording pre-edit content for undo, only when the write actually changed the file. */
@@ -620,7 +620,7 @@ export class TextEditorTool extends defineTool({
 
   private addToHistory(filePath: string, content: string): void {
     const context = tryUseRunContext();
-    const executionId = getRunContextExecutionId(context) ?? '';
+    const executionId = this.currentExecutionId(context);
     const isNewExecution = !this.fileHistory.hasExecution(executionId);
     this.fileHistory.push(
       executionId,

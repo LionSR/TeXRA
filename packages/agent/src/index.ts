@@ -3,7 +3,6 @@ import { createChannelTrace, type AgentEvent } from '@agent/trace';
 import type { AgentRunHandle as RuntimeAgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions as RuntimeHostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
 // Local imports - runtime
@@ -112,7 +111,7 @@ class AgentRunStream implements AgentRun {
     if (this.interruptPending) handle.interrupt();
   }
 
-  attachEvents(session: SessionHandle): void {
+  attachEvents(session: RuntimeSessionHandle): void {
     this.detachEvents = session.events.subscribe(
       (event) => {
         if (

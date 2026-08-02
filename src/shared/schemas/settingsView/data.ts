@@ -355,9 +355,9 @@ const UpdateToolDashboardMessageSchema = z.object({
 // Approval settings data schema
 // ============================================================
 
-/** Outbound: backend → frontend approval settings */
 /**
- * Outbound snapshot for workspace execution permissions and safety.
+ * Outbound: backend → frontend snapshot of workspace execution permissions
+ * and safety.
  *
  * The command string predates the Codex, Claude, and tool-path controls it now
  * carries. Keep that stable wire discriminator while naming the schema by its
@@ -498,20 +498,20 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
+const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
+
+const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
+
 /**
- * LaTeX/compile/diff configuration values, persisted in workspace storage.
- * Migrated from VS Code `texra.*` configuration. The frontend tab edits these
- * directly; the backend persists them via `workspaceSM`.
+ * LaTeX/compile/diff configuration values, persisted in workspace storage. The
+ * frontend tab edits these directly; the backend persists them via
+ * `workspaceSM`.
  *
  * Each property is optional so the UI can render either the user-set value
  * (when defined) or the documented default (when undefined). Numeric ranges
  * and enum values come from `@shared/constants/latex` so this schema, the UI,
  * and the runtime readers all stay in lockstep.
  */
-const LatexFormatterSchema = z.enum(LATEX_FORMATTER_VALUES);
-
-const LatexdiffMathMarkupSchema = z.enum(LATEXDIFF_MATH_MARKUP_VALUES);
-
 export const LatexConfigValuesSchema = z.object({
   workflowAutoCompile: z.boolean().optional(),
   workflowAutoCompileTimeoutMs: z

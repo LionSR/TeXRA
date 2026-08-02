@@ -439,9 +439,8 @@ describe('ExecutionsTool', () => {
     });
   });
 
-  // Regression for #7300: the advertised /executions/{id}/todos endpoint used
-  // to read legacy KV directly, so it could disagree with the completed
-  // summary above once a run's task list only lived in the sidecar.
+  // The advertised /executions/{id}/todos endpoint must resolve a task list
+  // exactly as the completed summary above does, sidecar first (#7300).
   it('agrees with the completed summary when reading /executions/{id}/todos', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
@@ -462,31 +461,6 @@ describe('ExecutionsTool', () => {
 
       expect(result.output).toContain('Read the sidecar work plan');
       expect(result.output).not.toContain('Read the old KV todo');
-      expect(mocks.readTodos).not.toHaveBeenCalled();
-    });
-  });
-
-  it('uses sidecar todos for a completed summary without consulting legacy KV', async () => {
-    await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      await writeSidecarTodos(executionId, [
-        {
-          content: 'Authoritative sidecar todo',
-          status: 'pending',
-          activeForm: 'Reading the authoritative sidecar todo',
-        },
-      ]);
-      mockCompletedExecution();
-      mocks.readTodos.mockResolvedValue([
-        { content: 'Legacy KV todo', status: 'completed' },
-      ]);
-
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}`,
-      });
-
-      expect(result.output).toContain('Authoritative sidecar todo');
-      expect(result.output).not.toContain('Legacy KV todo');
       expect(mocks.readTodos).not.toHaveBeenCalled();
     });
   });
@@ -534,11 +508,8 @@ describe('ExecutionsTool', () => {
     });
   });
 
-  // Regression for the executionKvFiles leak fix: isKVFile now derives its
-  // vocabulary from ExecutionKVStore's reserved keys and persistedFlow's
-  // FLOW_KEY_PREFIX instead of a hand-copied literal set, so exercise the
-  // real /executions/{id}/files listing to prove every reserved KV filename
-  // (including the child- and flow_ prefixes) is still filtered out.
+  // Exercises the real listing so every reserved KV filename — including the
+  // child- and flow_ prefixed ones — stays out of the model-facing view.
   it('filters internal KV metadata files out of /executions/{id}/files', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
@@ -574,11 +545,9 @@ describe('ExecutionsTool', () => {
     });
   });
 
-  // Regression for a bug caught in review of the leak fix above: every real
-  // KV entry is written as `{key}.json` (KVStore.keyToPath always appends
-  // the suffix), so a generated file whose *basename* happens to collide
-  // with a reserved key name — but has no `.json` extension — must not be
-  // swept up by isKVFile.
+  // Every real KV entry is written as `{key}.json` (KVStore.keyToPath always
+  // appends the suffix), so a generated file whose basename collides with a
+  // reserved key name but carries no `.json` extension stays visible.
   it('keeps extensionless generated files named like reserved KV keys', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;

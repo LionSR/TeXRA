@@ -542,8 +542,8 @@ describe('CLI root argument routing', () => {
   it('rejects a literal --input file that does not exist', async () => {
     await withTempDir('texra-cli-inputs-', async (root) => {
       const missing = path.join(root, 'no-such.tex');
-      // Pure path (no glob magic, not a directory) — previously this was
-      // returned as-is and the workflow ran until the agent ENOENT'd.
+      // A pure path (no glob magic, not a directory) is validated here rather
+      // than handed to the workflow to fail on later with a raw ENOENT.
       await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
         /--input: file not found/,
       );
@@ -766,10 +766,9 @@ describe('CLI root argument routing', () => {
   });
 
   it('expands a glob --context spec the same way --input does', async () => {
-    // `texra run -c '<glob>'` previously stuffed the literal glob string into
-    // the AgentConfig and failed late with raw ENOENT (exit 1). Routing
-    // through expandWorkflowInputSpecs gives it the same expansion semantics
-    // as `--input` (and surfaces missing-path errors as Usage / exit 2).
+    // `texra run -c '<glob>'` routes through expandWorkflowInputSpecs, so it
+    // has the same expansion semantics as `--input` and surfaces missing-path
+    // errors as Usage (exit 2) instead of a late raw ENOENT.
     await withTempDir('texra-cli-ctx-', async (root) => {
       await fs.writeFile(path.join(root, 'a.bib'), 'a');
       await fs.writeFile(path.join(root, 'b.bib'), 'b');

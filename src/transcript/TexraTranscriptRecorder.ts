@@ -589,7 +589,6 @@ export function attachTranscriptRecorder(
         }
 
         case 'domain': {
-          // Subscribers that care about specific keys can switch on event.key.
           if (event.key === 'modelRetryLifecycle') {
             appendLog({
               groupId: event.stageId,
@@ -635,9 +634,8 @@ export function attachTranscriptRecorder(
           return;
 
         case 'result':
-          // The terminal outcome is consumed by hosts via `session.onResult`.
-          // The transcript already reflects completion through `stage.end`, so it
-          // adds no row here (keeps transcript output unchanged).
+          // The terminal outcome is consumed by hosts via `session.onResult`,
+          // and the transcript already reflects completion through `stage.end`.
           return;
 
         case 'run.start':
@@ -647,8 +645,8 @@ export function attachTranscriptRecorder(
           return;
 
         case 'child.activity':
-          // Stage 3a child facts replace legacy progress events for UI badges;
-          // they were not transcript rows before.
+          // Child facts drive host UI badges through the session plane, not
+          // transcript rows.
           return;
 
         default: {

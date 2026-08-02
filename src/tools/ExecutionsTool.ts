@@ -110,9 +110,7 @@ import { formatSizedEntryLines } from './executions/fileListingFormat';
 /**
  * Single source of truth for the virtual resource paths this tool serves.
  * Both the tool `description` and the "Unknown path" error render from this
- * list, so the two can no longer drift — previously the error omitted the
- * `/{path}` sub-reads and the `subscribe`/`unsubscribe` actions the
- * description documented.
+ * list, so the two cannot drift.
  */
 const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
   [
@@ -167,6 +165,11 @@ const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
     },
   ];
 
+/** Renders the catalog as a bulleted `- <path> - <summary>` list. */
+const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
+  ({ path: resourcePath, summary }) => `- ${resourcePath} - ${summary}`,
+).join('\n');
+
 function getRunningTodos(
   session: SessionHandle,
   handle: ExecutionHandle,
@@ -175,11 +178,6 @@ function getRunningTodos(
     ? session.snapshots.getWorkPlan(handle.childStreamId).todos
     : [];
 }
-
-/** Renders the catalog as a bulleted `- <path> - <summary>` list. */
-const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
-  ({ path: resourcePath, summary }) => `- ${resourcePath} - ${summary}`,
-).join('\n');
 
 // ============================================================================
 // Background command output
@@ -992,9 +990,6 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;
     const out: string[] = [
-      // `process` rather than a hardcoded `bash`: the category is what the
-      // guard above actually verified, and it stays true if another tool ever
-      // registers a process-kind execution.
       `Output for ${executionId} (process, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
     ];
 
