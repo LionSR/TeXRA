@@ -43,9 +43,10 @@ All notable changes to this project will be documented in this file.
 #### Breaking Changes
 
 - **Google sessions now use the current conversation service exclusively** —
-  the obsolete Google compatibility toggle has been removed. Sessions created
-  with the retired mode remain readable but cannot be resumed; start a new
-  session to continue with a Google model.
+  the obsolete Google compatibility toggle has been removed. Older Google
+  sessions saved without their conversation-service identity remain readable
+  but cannot be resumed, including affected Interactions, previous-mode, and
+  Google-through-OpenRouter sessions; start a new session to continue.
 - **Tool-use flow results use `response` and `files` consistently** — consumers
   of `@texra-ai/agent` and CLI JSON output should replace `lastResponse` with
   `response` and `touchedFiles` with `files`.
