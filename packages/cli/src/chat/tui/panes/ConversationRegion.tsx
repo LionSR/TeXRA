@@ -8,7 +8,7 @@ import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { type StreamTabId } from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -32,6 +32,7 @@ import {
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
 import { SubagentList } from './SubagentList';
+import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from './SubagentListDisplay';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
@@ -173,19 +174,43 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
+  const workflowDashboardEntries =
+    snapshot.childListTarget.slice?.category === AgentCategory.Workflow
+      ? snapshot.childListTarget.slice.entries.filter(
+          (entry) => entry.role === 'phase' || entry.role === 'workflowTask',
+        )
+      : [];
+  const workflowTaskCount = workflowDashboardEntries.filter(
+    (entry) => entry.role === 'workflowTask',
+  ).length;
+  const workflowPhaseKeys = new Set(
+    workflowDashboardEntries.map((entry) => {
+      const phase =
+        entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
+      return phase === undefined ? 'unphased' : `phase:${phase}`;
+    }),
+  );
+  const workflowPhaseCount = workflowPhaseKeys.size;
+  const sessionPanelItemCount =
+    workflowTaskCount > 0
+      ? 1 +
+        (columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS
+          ? Math.max(workflowPhaseCount, workflowTaskCount)
+          : workflowPhaseCount + workflowTaskCount)
+      : snapshot.sessionViews.length;
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
-    sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
+    sessionCount: foregroundOpen ? 0 : sessionPanelItemCount,
     childListFocused: snapshot.childListFocused,
     todosPlanContentRows,
     transcriptRows,
   });
   const conversationRows = transcriptRows - bottomPanelBudget;
-  const childListHasRows = snapshot.sessionViews.length > 0;
+  const childListHasRows = sessionPanelItemCount > 0;
   const childListVisible = childListHasRows && subagentRows > 1;
   useLayoutEffect(() => {
     if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
@@ -259,8 +284,10 @@ export function ConversationRegion({
               onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
+              listRootSlice={snapshot.childListTarget.slice}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
+              streams={snapshot.streams}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />

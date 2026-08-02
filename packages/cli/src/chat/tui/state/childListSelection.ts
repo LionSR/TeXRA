@@ -1,7 +1,11 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-export type ChildListValue = `stream:${string}` | `phase:${number}`;
+export type ChildListValue =
+  | `stream:${string}`
+  | `phase:${number}`
+  | `workflowPhase:${string}`
+  | `workflowTask:${string}`;
 
 export function childStreamListValue(streamId: StreamTabId): ChildListValue {
   return `stream:${streamId}`;
@@ -11,6 +15,14 @@ export function childStreamListValue(streamId: StreamTabId): ChildListValue {
  *  avoids encoding a free-form phase label into a delimiter-based key. */
 export function childPhaseListValue(ordinal: number): ChildListValue {
   return `phase:${ordinal}`;
+}
+
+export function workflowPhaseListValue(entryId: string): ChildListValue {
+  return `workflowPhase:${entryId}`;
+}
+
+export function workflowTaskListValue(entryId: string): ChildListValue {
+  return `workflowTask:${entryId}`;
 }
 
 export function childListStreamId(
