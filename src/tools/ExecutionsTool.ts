@@ -857,8 +857,16 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     limit: number,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const { conversation, source, streamId, streamIds } =
-      await readCompletedRunConversation(executionId);
+    const {
+      conversation,
+      source,
+      streamId,
+      streamIds,
+      candidateStreamIds,
+      conflicts,
+      hasOrderingCycle,
+      hasOrderingAmbiguity,
+    } = await readCompletedRunConversation(executionId);
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
@@ -893,6 +901,20 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         `Source: ${source}`,
         `Stream: ${streamId ?? 'none'}`,
         ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+        ...(candidateStreamIds
+          ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
+          : []),
+        ...(conflicts
+          ? [
+              `Conflicting row IDs: ${conflicts
+                .map(({ rowId }) => rowId)
+                .join(', ')}`,
+            ]
+          : []),
+        ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
+        ...(hasOrderingAmbiguity
+          ? ['Complete chronology established: no']
+          : []),
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],

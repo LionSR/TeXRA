@@ -117,6 +117,32 @@ function logRow(
   };
 }
 
+async function persistRows(
+  executionId: ExecutionId,
+  rowsByStream: ReadonlyMap<
+    StreamTabId,
+    readonly Parameters<StreamLogStore['append']>[1][]
+  >,
+): Promise<void> {
+  const logs = await StreamLogStore.open();
+  for (const [streamId, rows] of rowsByStream) {
+    const writer = logs.acquireWriter(streamId, executionId);
+    try {
+      for (const row of rows) writer.appendSettled(row);
+    } finally {
+      writer.close();
+    }
+  }
+  await logs.flush();
+  for (const streamId of rowsByStream.keys()) logs.requestEviction(streamId);
+
+  const reopened = await StreamLogStore.openReadOnly();
+  for (const streamId of rowsByStream.keys()) {
+    await reopened.ensureLoaded(streamId);
+    expect(reopened.get(streamId)).toBeDefined();
+  }
+}
+
 /** Write the sidecar fixture: transcript rows + snapshot meta/todos. */
 async function writeSidecarFixture(
   executionId: ExecutionId,
@@ -749,6 +775,145 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('does not merge a disjoint exact-execution sidecar with missing parent metadata', async () => {
+    const executionId = '0888ba0888ba' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888ba0888ba' as StreamTabId;
+    const ambiguousChild = 'zOrchestrator@new#0888ba0888ba' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      ambiguousChild,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          canonical,
+          [
+            {
+              ...logRow(MESSAGE_TYPES.USER_MESSAGE, {
+                text: 'Canonical question',
+              }),
+              timestamp: 9000,
+            },
+          ],
+        ],
+        [
+          ambiguousChild,
+          [
+            {
+              ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+                text: 'Unproven child answer',
+              }),
+              // A reversed clock cannot order a disconnected sidecar.
+              timestamp: 1000,
+            },
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: canonical,
+      candidateStreamIds: [ambiguousChild],
+      conversation: [{ role: 'user', content: 'Canonical question' }],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain(
+      `Ambiguous candidate streams: ${ambiguousChild}`,
+    );
+    expect(endpoint.output).not.toContain('Unproven child answer');
+  });
+
+  it('reports conflicting copied text, role, and status instead of silently deduplicating', async () => {
+    const executionId = '0888bd0888bd' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888bd0888bd' as StreamTabId;
+    const conflicting = 'zOrchestrator@new#0888bd0888bd' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(conflicting, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const copiedText = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Canonical answer' }),
+      id: 'copied-text',
+    };
+    const copiedRole = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, {
+        text: 'Role-sensitive prompt',
+        data: { archivedRole: 'user' },
+      }),
+      id: 'copied-role',
+    };
+    const copiedStatus = {
+      ...logRow(MESSAGE_TYPES.TOOL_USE, {
+        data: {
+          toolName: 'read_file',
+          input: { path: 'proof.tex' },
+          output: 'Proof text',
+          status: 'completed',
+        },
+      }),
+      id: 'copied-status',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [copiedText, copiedRole, copiedStatus]],
+        [
+          conflicting,
+          [
+            { ...copiedText, text: 'Conflicting answer' },
+            { ...copiedRole, data: { archivedRole: 'system' } },
+            {
+              ...copiedStatus,
+              data: {
+                toolName: 'read_file',
+                input: { path: 'proof.tex' },
+                output: 'Proof text',
+                status: 'failed',
+              },
+            },
+          ],
+        ],
+      ]),
+    );
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toMatchObject({
+      source: 'streamLog',
+      streamId: canonical,
+      candidateStreamIds: [conflicting],
+      conflicts: [
+        { rowId: 'copied-role', streamIds: [canonical, conflicting] },
+        { rowId: 'copied-status', streamIds: [canonical, conflicting] },
+        { rowId: 'copied-text', streamIds: [canonical, conflicting] },
+      ],
+    });
+    expect(result.conversation).toContainEqual({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Canonical answer' }],
+    });
+    expect(JSON.stringify(result.conversation)).not.toContain(
+      'Conflicting answer',
+    );
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain(
+      'Conflicting row IDs: copied-role, copied-status, copied-text',
+    );
+  });
+
   it('merges matched roots, excluding children and only deduplicating row identity', async () => {
     const executionId = '0888bb0888bb' as ExecutionId;
     const firstRoot = 'aOrchestrator@old#0888bb0888bb' as StreamTabId;
@@ -861,6 +1026,124 @@ describe('completedRunArchive facade', () => {
         },
       ],
     });
+  });
+
+  it('merges transitive overlaps while reporting a disconnected candidate across pages', async () => {
+    const executionId = '0888be0888be' as ExecutionId;
+    const streams = ['a', 'b', 'c', 'd', 'z'].map(
+      (name) => `orchestrator@${name}#0888be0888be` as StreamTabId,
+    );
+    const [streamA, streamB, streamC, streamD, disconnected] = streams;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of streams) {
+      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    }
+    await snapshots.flush();
+
+    const rows = ['A', 'B', 'C', 'D', 'E'].map((text) => ({
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text }),
+      id: `transitive-${text.toLowerCase()}`,
+    }));
+    const disconnectedRow = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Disconnected' }),
+      timestamp: 1,
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [streamA, [rows[0], rows[1]]],
+        [streamB, [rows[1], rows[2]]],
+        [streamC, [rows[2], rows[3]]],
+        [streamD, [rows[3], rows[4]]],
+        [disconnected, [disconnectedRow]],
+      ]),
+    );
+
+    const archived = await readCompletedRunConversation(executionId);
+    expect(archived).toEqual({
+      source: 'streamLog',
+      streamId: streamA,
+      streamIds: [streamA, streamB, streamC, streamD],
+      candidateStreamIds: [disconnected],
+      conversation: ['A', 'B', 'C', 'D', 'E'].map((content) => ({
+        role: 'user',
+        content,
+      })),
+    });
+
+    const firstPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 0,
+      limit: 2,
+    });
+    const secondPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 2,
+      limit: 3,
+    });
+    for (const page of [firstPage, secondPage]) {
+      expect(page.output).toContain(
+        `Merged streams: ${streamA}, ${streamB}, ${streamC}, ${streamD}`,
+      );
+      expect(page.output).toContain(
+        `Ambiguous candidate streams: ${disconnected}`,
+      );
+      expect(page.output).not.toContain('Disconnected');
+    }
+    const pagedOutput = `${firstPage.output}\n${secondPage.output}`;
+    for (const text of ['A', 'B', 'C', 'D', 'E']) {
+      expect(pagedOutput.split(`\n${text}\n</message>`)).toHaveLength(2);
+    }
+  });
+
+  it('keeps the selected archive when copied-row ordering forms a cycle', async () => {
+    const executionId = '0888bf0888bf' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;
+    const contradictory = 'bOrchestrator@new#0888bf0888bf' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      contradictory,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const first = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First' }),
+      id: 'cycle-first',
+    };
+    const second = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second' }),
+      id: 'cycle-second',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [first, second]],
+        [contradictory, [second, first]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: canonical,
+      candidateStreamIds: [contradictory],
+      hasOrderingCycle: true,
+      conversation: [
+        { role: 'user', content: 'First' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Second' }],
+        },
+      ],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain('Ordering cycle detected: yes');
+    expect(endpoint.output).not.toContain('Merged streams:');
   });
 
   it('never substitutes child conversation rows for empty confirmed roots', async () => {

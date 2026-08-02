@@ -89,7 +89,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     expect(resolved).toEqual({
       streamId,
       source: 'streamDataMeta',
-      associatedRootStreamIds: [streamId],
+      exactExecutionCandidateStreamIds: [streamId],
     });
   });
 
@@ -177,7 +177,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     expect(resolved).toEqual({
       streamId,
       source: 'streamDataMeta',
-      associatedRootStreamIds: [streamId],
+      exactExecutionCandidateStreamIds: [streamId],
     });
     await expect(
       getExecutionStore(executionId).readMeta(),
@@ -202,7 +202,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId,
       source: 'streamDataMeta',
       fallbackStreamIds: [resumedStream],
-      associatedRootStreamIds: [streamId, resumedStream],
+      exactExecutionCandidateStreamIds: [streamId, resumedStream],
     });
   });
 
@@ -227,7 +227,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId: secondStream,
       source: 'streamDataMeta',
       fallbackStreamIds: [firstStream],
-      associatedRootStreamIds: [firstStream, secondStream],
+      exactExecutionCandidateStreamIds: [firstStream, secondStream],
     });
   });
 
@@ -256,7 +256,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamId: logStream,
       source: 'streamDataMeta',
       fallbackStreamIds: [workPlanStream],
-      associatedRootStreamIds: [workPlanStream, logStream],
+      exactExecutionCandidateStreamIds: [workPlanStream, logStream],
     });
     expect(
       (await getExecutionStore(executionId).readMeta())?.streamId,
