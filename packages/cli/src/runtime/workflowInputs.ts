@@ -26,6 +26,15 @@ const STDIN_TEMP_PREFIX = 'texra-stdin-';
 const STDIN_TEMP_DIR_PATTERN = /^texra-stdin-\d+-[A-Za-z0-9]{6}$/;
 export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 
+export function workflowInputGlobOptions(
+  platform: NodeJS.Platform,
+): Readonly<{ magicalBraces: true; windowsPathsNoEscape: boolean }> {
+  return {
+    magicalBraces: true,
+    windowsPathsNoEscape: platform === 'win32',
+  };
+}
+
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.isAbsolute(candidate)
     ? path.resolve(candidate)
@@ -210,23 +219,9 @@ async function expandWorkflowInputSpec(
         normalizeCliInputPathForRun(match, cwd, flagLabel, options),
       );
 
-  if (hasMagic(trimmed)) {
-    const isAbsolute = path.isAbsolute(trimmed);
-    const matches = await glob(trimmed.replaceAll('\\', '/'), {
-      cwd: isAbsolute ? undefined : cwd,
-      absolute: isAbsolute,
-      nodir: true,
-    });
-    if (matches.length === 0) {
-      throw new CliUsageError(`No input files matched: ${trimmed}`);
-    }
-    return normalizeMatches(matches);
-  }
-
   const absolutePath = resolveAgainstCwd(trimmed, cwd);
-  // Only treat true missing-path errors as "file not found"; other failures
-  // (EACCES, EIO, ...) are environment problems, not Usage errors, and must
-  // propagate so the user sees the real cause.
+  // Prefer an exact existing path even when its valid filename contains glob
+  // syntax. Windows glob mode deliberately has no backslash escape channel.
   let stats: Stats | null = null;
   try {
     stats = await fs.stat(absolutePath);
@@ -235,6 +230,22 @@ async function expandWorkflowInputSpec(
       throw error;
     }
   }
+
+  const globOptions = workflowInputGlobOptions(process.platform);
+  if (!stats && hasMagic(trimmed, globOptions)) {
+    const isAbsolute = path.isAbsolute(trimmed);
+    const matches = await glob(trimmed, {
+      cwd: isAbsolute ? undefined : cwd,
+      absolute: isAbsolute,
+      nodir: true,
+      ...globOptions,
+    });
+    if (matches.length === 0) {
+      throw new CliUsageError(`${flagLabel}: no files matched: ${trimmed}`);
+    }
+    return normalizeMatches(matches);
+  }
+
   if (stats?.isDirectory()) {
     // Validate the directory itself before globbing its contents.
     void normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
