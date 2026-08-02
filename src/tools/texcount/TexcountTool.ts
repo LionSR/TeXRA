@@ -49,13 +49,10 @@ export class TexcountTool extends defineTool({
     });
 
     if (!output) {
-      const errorMessage =
+      throw new ToolError(
         errors.join('\n') ||
-        'texcount did not return any output. Ensure the files exist.';
-      return {
-        status: 'error',
-        error: errorMessage,
-      };
+          'texcount did not return any output. Ensure the files exist.',
+      );
     }
 
     return {

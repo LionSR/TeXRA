@@ -32,6 +32,7 @@ import {
   getDelegationAgents,
   getDelegationAgentsForScope,
 } from '@tools/delegationAgentAvailability';
+import { errorResult, executed } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -115,18 +116,16 @@ function proposalResultToToolResult(
       const feedbackLine = feedback
         ? `\nUser feedback: ${feedback}`
         : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
-      return {
-        status: 'error',
-        summary: `User rejected delegation to '${agentName}'`,
-        error: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
-      };
+      return errorResult(
+        `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
+        { summary: `User rejected delegation to '${agentName}'` },
+      );
     }
     case 'setup':
-      return {
-        status: 'executed',
-        summary: `User opened '${agentName}' for editing`,
-        output: `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
-      };
+      return executed(
+        `Delegation opened for editing. The user will run it manually when ready.\nYour delegation was: ${echo}`,
+        `User opened '${agentName}' for editing`,
+      );
     case 'approve':
       return null;
   }
@@ -185,11 +184,12 @@ export async function proposeAndExecute(
         agentCategory: proposal.agentCategory,
       });
     } catch (err) {
-      return {
-        status: 'error',
-        summary: `Approved model override '${result.model}' is not available`,
-        error: `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
-      };
+      return errorResult(
+        `Cannot launch with model '${result.model}': ${toErrorMessage(err)} Re-propose the delegation.`,
+        {
+          summary: `Approved model override '${result.model}' is not available`,
+        },
+      );
     }
   }
   const agentOverride =
@@ -203,11 +203,12 @@ export async function proposeAndExecute(
   // carry a malformed value. Fail fast so the orchestrator sees the problem
   // synchronously instead of after an async launch.
   if (agentOverride && !resolvedAgentOverride) {
-    return {
-      status: 'error',
-      summary: `Approved agent override '${agentOverride}' is not available`,
-      error: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
-    };
+    return errorResult(
+      `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+      {
+        summary: `Approved agent override '${agentOverride}' is not available`,
+      },
+    );
   }
 
   const effective = {
