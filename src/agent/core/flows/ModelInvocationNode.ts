@@ -85,6 +85,14 @@ export class ModelInvocationNode<
     return this._config.operationName;
   }
 
+  protected override isSuccessfulInvocationResult(result: unknown): boolean {
+    const invocationResult =
+      result as InvocationResult<BaseInvocationSuccessData>;
+    return (
+      invocationResult.kind === 'success' && Boolean(invocationResult.response)
+    );
+  }
+
   protected override isBackgroundModeActive(): boolean {
     return (
       this._config.backgroundModeAware === true &&

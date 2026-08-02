@@ -334,6 +334,9 @@ async function requestRetryInteraction(
   // Written before any path that can produce a credential-changing decision:
   // only the modal and the auto-switch produce one, and both run after this.
   let promptRequest: TuiRetryRequest = request;
+  const retryDecision: { source: 'human' | 'automatic' } = {
+    source: 'human',
+  };
 
   const immediate = immediateDecisionForApproval(
     'showRetryRequest',
@@ -387,6 +390,7 @@ async function requestRetryInteraction(
         );
       }
       if (autoSwitch) {
+        retryDecision.source = 'automatic';
         reservation.settle(autoSwitch);
         return;
       }
@@ -435,7 +439,13 @@ async function requestRetryInteraction(
     // A cancel landing while the last preparation step was already resolving
     // has no await left to reject, so the entry's own state decides.
     if (reservation.signal.aborted) return { action: 'cancel' };
-    return { action: 'retry', feedback: decision.userMessage };
+    return {
+      action: 'retry',
+      feedback: decision.userMessage,
+      ...(retryDecision.source === 'automatic'
+        ? { decisionSource: retryDecision.source }
+        : {}),
+    };
   } catch (error) {
     if (reservation.signal.aborted) return { action: 'cancel' };
     return { action: 'deny', reason: toErrorMessage(error) };

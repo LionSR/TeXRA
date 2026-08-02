@@ -40,9 +40,13 @@ function applyEntry(
   streamLogs: StreamLogs,
   streamState: StreamState,
 ): EntryResult {
-  // This is a live CLI/TUI signal, not progress history. Drop it before
-  // indexing so invisible lifecycle markers cannot consume timeline windows.
-  if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
+  // These records are persisted for diagnostics or live CLI/TUI state, not
+  // progress presentation. Drop them before invisible rows consume timeline
+  // windows or fall through to the default log formatter.
+  if (
+    entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY ||
+    entry.messageType === MESSAGE_TYPES.INTERNAL
+  ) {
     return { logChanged: false, stateChanged: false };
   }
 
