@@ -84,9 +84,10 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
   },
   [ModelProvider.GOOGLE]: {
     load: async () =>
-      (await import('@agent/modelHandlers/google/modelHandlerGoogleGenAI'))
-        .ModelHandlerGoogleGenAI,
-    compatibilityKey: 'ModelHandlerGoogleGenAI',
+      (
+        await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions')
+      ).ModelHandlerGoogleInteractions,
+    compatibilityKey: 'ModelHandlerGoogleInteractions',
   },
   [ModelProvider.DEEPSEEK]: {
     load: async () =>
@@ -170,26 +171,36 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
 }
 
 /**
- * Check if the Google Interactions API should be used for this config.
- *
- * Routes to the default, actively-developed Interactions handler unless
- * `texra.model.useGoogleInteractionsAPI` (default on) is off; the chat/
- * `generateContent` GenAI handler is the feature-frozen fallback (#7097).
- * OpenRouter can NOT proxy Interactions, so an active OpenRouter proxy always
- * returns false — the GenAI handler (or OpenRouter) remains the fallback in
- * that case too. This is a PURE predicate (never throws), so key-derivation
- * callers (history restore, `modelSwitchDisabledReason`) stay exception-free —
- * matching `requiresOpenAIResponsesAPI`'s contract.
+ * Whether a model is pinned to the Interactions API. `requiresInteractionsAPI`
+ * is a future per-model opt-in (parallel to `requiresResponsesAPI`); it is not
+ * yet on the external llm-zoo ModelConfig, so read it defensively. v0 registers
+ * no model with it set.
  */
-export function shouldUseGoogleInteractionsAPI(
+function modelRequiresInteractionsAPI(config: ModelConfig): boolean {
+  return (
+    config.provider === ModelProvider.GOOGLE &&
+    !config.openRouterOnly &&
+    (config as { requiresInteractionsAPI?: boolean })
+      .requiresInteractionsAPI === true
+  );
+}
+
+/**
+ * Fail loudly when an Interactions-only model is selected while OpenRouter is
+ * active — OpenRouter cannot proxy Interactions, so silently routing it through
+ * the OpenRouter handler would be wrong (spec §6.3). Called from
+ * `createModelHandler` only (the live-routing path that actually instantiates a
+ * handler), keeping the routing predicate pure.
+ */
+function assertGoogleInteractionsRoutable(
   config: ModelConfig,
   useOpenRouter: boolean,
-): boolean {
-  if (config.provider !== ModelProvider.GOOGLE || config.openRouterOnly) {
-    return false;
+): void {
+  if (modelRequiresInteractionsAPI(config) && useOpenRouter) {
+    throw new Error(
+      `Model ${config.name} requires the Google Interactions API, which cannot be used through OpenRouter. Disable OpenRouter or select a different model.`,
+    );
   }
-  if (useOpenRouter) return false;
-  return getConfig<boolean>('texra.model.useGoogleInteractionsAPI', true);
 }
 
 /** Check if OpenAI Responses API should be used for this config. */
@@ -268,9 +279,6 @@ export function modelHandlerCompatibilityKey(
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
-  }
-  if (shouldUseGoogleInteractionsAPI(config, useOpenRouter)) {
-    return 'ModelHandlerGoogleInteractions';
   }
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
@@ -587,16 +595,6 @@ async function createModelHandlerForResolvedCompatibilityKey(
       return finalizeModelHandler(
         new ModelHandlerOpenAIResponse(config, responseTextProcessing),
         'ModelHandlerOpenAIResponse',
-      );
-    }
-
-    case 'ModelHandlerGoogleInteractions': {
-      logger.debug(CHANNEL, 'Using Google Interactions API Handler');
-      const { ModelHandlerGoogleInteractions } =
-        await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
-      return finalizeModelHandler(
-        new ModelHandlerGoogleInteractions(config, responseTextProcessing),
-        'ModelHandlerGoogleInteractions',
       );
     }
 

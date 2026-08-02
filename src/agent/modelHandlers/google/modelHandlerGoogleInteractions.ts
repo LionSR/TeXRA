@@ -249,11 +249,8 @@ interface PendingStepBuffer {
 /**
  * Handler for Google models using the @google/genai Interactions API.
  *
- * Default, actively developed handler, shipped behind the
- * `texra.model.useGoogleInteractionsAPI` flag (default on).
- * {@link ModelHandlerGoogleGenAI} (chat / generateContent) is the
- * feature-frozen stateless fallback for when the flag is off — see
- * modelHandlers/README.md for the division of labor.
+ * The direct Google handler. Google models routed through OpenRouter use the
+ * OpenRouter handler instead.
  *
  * STATEFUL by default (`store: true`): server-side conversation state via
  * `previous_interaction_id` chaining — each round sends only the Steps appended
@@ -499,7 +496,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     resolution?: MediaResolution;
   } {
     // Interactions DocumentContent currently has no resolution field, so PDF
-    // resolution cannot mirror generateContent until the SDK exposes it.
+    // resolution cannot be selected until the SDK exposes it.
     if (this.isGemini3Model() && mimeType.startsWith('image/')) {
       return { resolution: 'high' };
     }
@@ -1830,8 +1827,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   /**
    * Client-side conversation compaction (system-prompt-swap summarization) via
    * the shared {@link ModelHandler.runClientCompaction} scaffold. Mirrors the
-   * chat handlers: summarize the conversation body through the chat
-   * `generateContent` endpoint and replace it with a single user summary step.
+   * other handlers: summarize the conversation body through a stateless
+   * Interactions request and replace it with a single user summary step.
    */
   private async compactConversation(
     client: GoogleGenAI,
@@ -1845,23 +1842,30 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       tokensBefore,
       async (conversationMessages, compactionSystemPrompt) => {
         const transcript = this.stepsToTextTranscript(conversationMessages);
-        const contents = [
-          createUserContent(`${compactionSystemPrompt}\n\n${transcript}`),
-        ];
-        const summary = await client.models.generateContent({
-          model: this.config.fullName,
-          contents,
-          config: {
-            ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
-            maxOutputTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-            temperature: 0,
-            abortSignal: signal,
+        const summary = await client.interactions.create(
+          {
+            model: this.config.fullName,
+            input: [
+              {
+                type: 'user_input',
+                content: [
+                  this.textMedia(`${compactionSystemPrompt}\n\n${transcript}`),
+                ],
+              },
+            ],
+            store: false,
+            stream: false,
+            ...(systemPrompt ? { system_instruction: systemPrompt } : {}),
+            generation_config: {
+              max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+            },
           },
-        });
+          this.interactionsRequestOptions(signal),
+        );
         return {
-          summaryText: summary.text?.trim() ?? '',
+          summaryText: this.extractResponse(summary, '').text.trim(),
           outputTokens:
-            summary.usageMetadata?.candidatesTokenCount ??
+            summary.usage?.total_output_tokens ??
             CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
         };
       },
