@@ -11,6 +11,7 @@ import {
   EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
+  REQUIRED_CATALOG_CONTRIBUTES,
   withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 
@@ -59,13 +60,11 @@ function assertEntryExists(entries, entryPath, failures) {
 }
 
 function assertCatalogContributesShipped(manifest, failures) {
-  // Release guard: withoutCatalogDerivedContributes() below deletes these
-  // catalog-derived subtrees before the snapshot comparison, so a build that
-  // shipped them missing or empty would still pass the comparison. release.yml's
-  // publish job runs only this script (not the catalog vitests), so assert the
-  // shipped subtrees are present and non-empty here before trimming them.
+  // Release guard: withoutCatalogDerivedContributes() below deletes the
+  // catalog-derived subtrees before comparison. Commands and keybindings must
+  // remain non-empty; configuration may be absent when all settings are native.
   const contributes = manifest.contributes;
-  for (const key of CATALOG_DERIVED_CONTRIBUTES) {
+  for (const key of REQUIRED_CATALOG_CONTRIBUTES) {
     const value = contributes?.[key];
     const nonEmpty = Array.isArray(value)
       ? value.length > 0
