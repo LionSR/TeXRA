@@ -42,15 +42,12 @@ export function canonicalizeWorkspacePath(workspacePath: string): string {
 
 export function createNodeWorkspace(
   getRoot: () => string | undefined = () => process.cwd(),
-  getLegacyRoots?: () => readonly string[],
 ): WorkspaceProvider {
   return {
     getWorkspacePath(): string | undefined {
       const root = getRoot();
       return root ? canonicalizeWorkspacePath(root) : undefined;
     },
-
-    ...(getLegacyRoots && { getLegacyWorkspacePaths: getLegacyRoots }),
 
     asRelativePath(filePath: string): string {
       const rawRoot = getRoot();

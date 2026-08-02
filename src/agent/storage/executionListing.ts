@@ -3,8 +3,6 @@
  *
  * Derives the list of executions by scanning the `executions/` directory
  * and reading per-execution KV data (meta.json, config.json).
- *
- * A storage-boundary migration handles legacy history before the scan.
  */
 
 import pMap from 'p-map';
@@ -24,7 +22,6 @@ import {
   inspectExecutionLease,
   runWithInactiveExecutionLease,
 } from './executionLease';
-import { migrateLegacyExecutionHistoryOnce } from './legacyExecutionHistoryMigration';
 
 const CHANNEL = 'ExecutionListing';
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
@@ -56,7 +53,7 @@ export type ExecutionListingEntry =
     })
   | (ExecutionListingBase & {
       kind: 'incomplete';
-      /** Preserved metadata for legacy rows whose config is absent. */
+      /** Preserved metadata for rows whose config is absent. */
       runtimeCategory?: string;
     });
 
@@ -118,8 +115,6 @@ function listExecutionDirs(entries: [string, number][]): ExecutionId[] {
  * cannot observe another host's writes or metadata updates reliably.
  */
 export async function listExecutions(): Promise<ExecutionListingEntry[]> {
-  await migrateLegacyExecutionHistoryOnce();
-
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
 
