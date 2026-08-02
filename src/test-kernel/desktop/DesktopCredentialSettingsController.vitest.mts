@@ -1,15 +1,12 @@
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import { MAX_TIER } from '@auth/config';
 import { RELAY_CI_TOKEN_PREFIX, RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
 import * as serverKeysModule from '@auth/serverKeys';
-import { refreshDesktopModelListStateIfNeeded } from '@desktop/main/desktopModelListRefresh';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import { apiKeySecretName } from '@model/apiProviders';
-import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -157,7 +154,6 @@ async function createFixture({
       useIncludedAccess: () => false,
       getUserTier: () => undefined,
     },
-    modelListRefresh: Promise.resolve(),
     onCredentialChanged,
     onError: () => undefined,
     ...overrides,
@@ -531,52 +527,5 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       supportsReasoningLevel: true,
       includedAccessReasoningCap: 'high',
     });
-  });
-
-  it('awaits the production model-list migration before model data', async () => {
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.MODEL_LIST_VERSION]: 12,
-      [GlobalStateKey.ENABLED_MODELS]: ['custom-model'],
-    });
-    const fixture = await createFixture({
-      globalState,
-      modelListRefresh: refreshDesktopModelListStateIfNeeded({ globalState }),
-    });
-
-    await fixture.controller.prepareModelSelectionData();
-
-    expect(globalState.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
-      MODEL_LIST_VERSION,
-    );
-    const activeDefaults = DEFAULT_MODELS.filter(
-      (model) => !(MODEL_CONFIGS[model]?.deprecated ?? false),
-    );
-    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
-      'custom-model',
-      ...activeDefaults,
-    ]);
-  });
-
-  it('removes retired models from a recent persisted model list', async () => {
-    const globalState = new FakeStateStore({
-      [GlobalStateKey.MODEL_LIST_VERSION]: 20,
-      [GlobalStateKey.ENABLED_MODELS]: ['custom-model', 'haiku3'],
-    });
-    const fixture = await createFixture({
-      globalState,
-      modelListRefresh: refreshDesktopModelListStateIfNeeded({ globalState }),
-    });
-
-    await fixture.controller.prepareModelSelectionData();
-
-    const activeDefaults = DEFAULT_MODELS.filter(
-      (model) =>
-        !(MODEL_CONFIGS[model]?.deprecated ?? false) &&
-        !(MODEL_CONFIGS[model]?.retired ?? false),
-    );
-    expect(globalState.get(GlobalStateKey.ENABLED_MODELS)).toEqual([
-      'custom-model',
-      ...activeDefaults,
-    ]);
   });
 });

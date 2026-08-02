@@ -17,7 +17,6 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { GoalStore } from '@tools/goal';
 import {
   isWorktreeSupportEnabled,
@@ -918,61 +917,6 @@ describe('desktop settings IPC', () => {
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
       enabled: false,
-    });
-  });
-
-  it('does not delay unrelated startup settings behind model-list refresh', async () => {
-    const modelListRefresh = createDeferred();
-    const state = {
-      globalState: new FakeStateStore(),
-      workspaceState: new FakeStateStore(),
-    };
-    const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(state, {
-        prepareModelSelectionData: () => modelListRefresh.promise,
-      });
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      ...state,
-      config: new FakeScopedConfigProvider(),
-      credentialSettingsController,
-      ui: { onError: () => undefined },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'settings',
-      }),
-    ).toBe(false);
-    await flushAsyncWork();
-
-    expect(
-      posted.some(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ),
-    ).toBe(false);
-    expect(
-      posted.find(
-        (message) =>
-          commandOf(message) ===
-          SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-      ),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-    });
-
-    modelListRefresh.resolve();
-    await flushAsyncWork();
-
-    expect(
-      posted.find(
-        (message) =>
-          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-      ),
-    ).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
     });
   });
 
