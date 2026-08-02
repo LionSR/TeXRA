@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Google models handle prompts and tool-enabled tasks reliably** — requests
+  no longer fail when a prompt has no prefix or when complex tool sets are
+  enabled.
 - **OpenAI background responses keep one polling deadline across retries** —
   reconnecting to the same response no longer restarts its three-hour polling
   window. Once that window expires, TeXRA stops automatic retries and permits
