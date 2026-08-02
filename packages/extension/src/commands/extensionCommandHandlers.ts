@@ -61,15 +61,10 @@ const CreateAgentWithAIArgsSchema = z.tuple([AgentCategorySchema.optional()]);
  */
 const ShowAgentsArgsSchema = z.tuple([AgentCategorySchema.optional()]);
 
-/**
- * Optional `{ inPlace }` argument for `texra.showProgressView`. The
- * legacy registration accepted any argument shape and only honoured the
- * `inPlace` boolean — `z.unknown()` here preserves that best-effort
- * semantics so callers passing `null`, booleans, or stringified flags
- * still open the progress view (just without the in-place flag) instead
- * of being rejected by the dispatcher as unhandled.
- */
-const ShowProgressViewArgsSchema = z.tuple([z.unknown().optional()]);
+/** Optional placement argument for `texra.showProgressView`. */
+const ShowProgressViewArgsSchema = z.tuple([
+  z.strictObject({ inPlace: z.boolean().optional() }).optional(),
+]);
 
 /** Positional arguments for opening a comparison between two files. */
 const CompareCommandArgsSchema = z
@@ -343,13 +338,8 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
   'texra.showProgressView': definedHandler(
     ShowProgressViewArgsSchema,
-    (actions: ExtensionCommandActions, parsed?: unknown) => {
-      const inPlace =
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        (parsed as { inPlace?: unknown }).inPlace === true;
-      return awaitTrue(actions.showProgressView(inPlace));
-    },
+    (actions: ExtensionCommandActions, options?: { inPlace?: boolean }) =>
+      awaitTrue(actions.showProgressView(options?.inPlace ?? false)),
   ),
   'texra.setApiKey': definedHandler(
     SetApiKeyArgsSchema,
