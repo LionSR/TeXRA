@@ -1,5 +1,6 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
@@ -158,6 +159,40 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
 
     expect(calls[0]?.generation_config?.tool_choice).toBe('submit_output');
     expect(handler.supportsForcedToolChoice).toBe(true);
+  });
+
+  it('sends only Google-supported numeric constraints', async () => {
+    const handler = createHandler();
+    const calls: CreateParams[] = [];
+    const client = fakeClient(
+      [completedEvent('int_schema', 'completed', [])],
+      calls,
+    );
+
+    await handler.createResponse({
+      client: client as never,
+      messages: [
+        { type: 'user_input', content: [{ type: 'text', text: 'count' }] },
+      ],
+      temperature: 0,
+      tools: [
+        {
+          name: 'positive_count',
+          zodSchema: z.strictObject({ count: z.number().positive() }),
+        },
+      ],
+    });
+
+    const interactionTool = calls[0]?.tools?.[0] as
+      { parameters?: unknown } | undefined;
+    const parameters = interactionTool?.parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    expect(parameters.properties.count).toStrictEqual({
+      type: 'number',
+      minimum: 0,
+    });
+    expect(JSON.stringify(parameters)).not.toContain('exclusiveMinimum');
   });
 
   it('accumulates parallel arguments_delta chunks and extracts tool calls', async () => {
