@@ -70,6 +70,23 @@ describe('agent skills workspace guard', () => {
     );
   });
 
+  it('writes user-wide telemetry in an empty VS Code window', async () => {
+    const handler = createHarness();
+
+    await handler.updateStateSetting('texra.telemetry.enabled', false);
+
+    expect(mocks.showLoggedInfoMessage).not.toHaveBeenCalled();
+    expect(mocks.writeSetting).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'texra.telemetry.enabled',
+        configTarget: 'global',
+      }),
+      false,
+      expect.any(Object),
+    );
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('telemetry');
+  });
+
   it('surfaces write failures and restores the owning snapshot', async () => {
     const handler = createHarness();
     const error = new Error('write failed');

@@ -699,7 +699,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       await this.postStateSettingSnapshot(write.entry.settingsViewSnapshot);
       return;
     }
-    if (write.entry.store === 'config' && !WorkspaceFS.getPath()) {
+    if (
+      write.entry.store === 'config' &&
+      write.entry.configTarget !== 'global' &&
+      !WorkspaceFS.getPath()
+    ) {
       void showLoggedInfoMessage(
         this.channel,
         `Open a workspace folder before changing the “${write.entry.title ?? write.entry.key}” setting.`,
