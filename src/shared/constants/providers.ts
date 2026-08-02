@@ -401,13 +401,6 @@ export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
   anthropic: [],
   google: [
     {
-      key: 'texra.model.useGoogleInteractionsAPI',
-      label: 'Use Interactions API',
-      description:
-        'Use the Google Interactions API instead of Generate Content when available.',
-      defaultValue: true,
-    },
-    {
       key: 'texra.model.useGoogleInteractionsServerState',
       label: 'Server-side conversation state',
       description:
