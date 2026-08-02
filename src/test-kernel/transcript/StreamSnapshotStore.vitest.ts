@@ -751,6 +751,62 @@ describe('StreamSnapshotStore', () => {
     expect(raw).toEqual({});
   });
 
+  it('clears missing outputs only on the exactly addressed stream, even with duplicate run configurations (#9590 A3)', async () => {
+    const events = new SessionEventHub();
+    const store = new StreamSnapshotStore();
+    const detach = store.attachSessionEvents(events);
+    // Two look-alike tabs: identical agent/model/input configuration. Only
+    // the initiator-selected StreamTabId may be mutated.
+    const duplicateConfig = AgentConfigSchema.parse({
+      agent: 'correct',
+      model: 'deepseekT',
+      agentCategory: AgentCategory.Workflow,
+      inputFiles: ['paper.tex'],
+    });
+    const executions: Record<string, ExecutionId> = {
+      [STREAM]: 'a1b2c3d4' as ExecutionId,
+      [OTHER_STREAM]: 'd4c3b2a1' as ExecutionId,
+    };
+    for (const stream of [STREAM, OTHER_STREAM]) {
+      events.emit({
+        scope: 'run',
+        streamId: stream,
+        event: {
+          type: 'run.config',
+          streamId: stream,
+          executionId: executions[stream],
+          config: duplicateConfig,
+        },
+      });
+      events.emit({
+        scope: 'run',
+        streamId: stream,
+        event: {
+          type: 'updateMissingOutputs',
+          streamId: stream,
+          filesByRound: { 1: ['missing.tex'] },
+        },
+      });
+    }
+
+    // Exact addressing clears the selected stream alone; the duplicate
+    // configuration on the other tab does not authorize a fan-out.
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'clearMissingOutputs',
+        payload: { streamId: STREAM },
+      },
+    });
+    expect(store.getMissingOutputs(STREAM)).toEqual({});
+    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({
+      1: ['missing.tex'],
+    });
+    detach();
+    // Settle the async sidecar writes before afterEach removes the temp dir.
+    await store.flush();
+  });
+
   it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
     const prior = compileFailure('prior.tex', 0);
     const next = compileFailure('next.tex', 1);
