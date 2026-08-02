@@ -6,6 +6,8 @@
  */
 import pDefer, { type DeferredPromise } from 'p-defer';
 
+import { onAbort } from '@utils/core';
+
 /** Preserves visible follow-up provenance across queueing and resume replay. */
 type VisibleFollowUpQueueItemOrigin = 'user' | 'subagent_result';
 type FollowUpQueueItemOrigin = VisibleFollowUpQueueItemOrigin | 'synthetic';
@@ -113,15 +115,12 @@ export class FollowUpQueue {
     }
     const d = pDefer<FollowUpQueueItem | null>();
     this.deferred = d;
-    const onAbort = (): void => {
+    const detach = onAbort(signal, () => {
       if (this.deferred !== d) return;
       this.deferred = null;
       d.resolve(null);
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    return d.promise.finally(() =>
-      signal.removeEventListener('abort', onAbort),
-    );
+    });
+    return d.promise.finally(detach);
   }
 
   /**
