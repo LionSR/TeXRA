@@ -140,9 +140,11 @@ describe('CLI child list interaction', () => {
     }
   });
 
-  it('skips disabled phase headers during arrow navigation', async () => {
+  it('skips disabled phase headers and clamps at selectable boundaries', async () => {
     const { ink, React } = await loadInk();
+    const onCancel = vi.fn();
     const onFocusStream = vi.fn();
+    const onSelectionChange = vi.fn();
     let selected = childStreamListValue(root);
 
     function Harness() {
@@ -154,9 +156,10 @@ describe('CLI child list interaction', () => {
         keyboardActive: true,
         listRootStreamId: root,
         maxRows: 5,
-        onCancel: vi.fn(),
+        onCancel,
         onFocusStream,
         onSelectionChange: (next: ChildListValue) => {
+          onSelectionChange(next);
           selected = next;
           setValue(next);
         },
@@ -184,11 +187,24 @@ describe('CLI child list interaction', () => {
           stdout.output.includes('◆ Map:review|draft'),
       );
       expect(stdout.output).toContain('◆ Map:review|draft');
+      stdin.write('\u001B[A');
+      stdin.write('\u001B[A');
+      await sleep(30);
+      expect(selected).toBe(childStreamListValue(root));
+      expect(onSelectionChange).not.toHaveBeenCalled();
+
       stdin.write('\u001B[B');
       await waitFor(() => selected === childStreamListValue(child));
+      expect(onSelectionChange).toHaveBeenCalledOnce();
+      stdin.write('\u001B[B');
+      stdin.write('\u001B[B');
+      await sleep(30);
+      expect(selected).toBe(childStreamListValue(child));
+      expect(onSelectionChange).toHaveBeenCalledOnce();
+      expect(onCancel).not.toHaveBeenCalled();
+
       stdin.write('\r');
       await waitFor(() => onFocusStream.mock.calls.length === 1);
-
       expect(onFocusStream).toHaveBeenCalledWith(child);
     } finally {
       instance.unmount();
@@ -234,7 +250,7 @@ describe('CLI child list interaction', () => {
     }
   });
 
-  it('hands focus back to the input instead of wrapping past the last row', async () => {
+  it('clamps repeated ↓ presses at the last row without cancelling', async () => {
     const { ink, React } = await loadInk();
     const onCancel = vi.fn();
     const onSelectionChange = vi.fn();
@@ -253,16 +269,19 @@ describe('CLI child list interaction', () => {
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('[B');
-      await waitFor(() => onCancel.mock.calls.length === 1);
+      stdin.write('\u001b[B');
+      stdin.write('\u001b[B');
+      stdin.write('\u001b[B');
+      await sleep(30);
 
+      expect(onCancel).not.toHaveBeenCalled();
       expect(onSelectionChange).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
   });
 
-  it('clamps instead of wrapping when ↑ is pressed at the first row', async () => {
+  it('clamps repeated ↑ presses at the first row without cancelling', async () => {
     const { ink, React } = await loadInk();
     const onCancel = vi.fn();
     const onSelectionChange = vi.fn();
@@ -281,7 +300,9 @@ describe('CLI child list interaction', () => {
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('[A');
+      stdin.write('\u001b[A');
+      stdin.write('\u001b[A');
+      stdin.write('\u001b[A');
       // No state change to await for a no-op; give the event loop a turn.
       await sleep(30);
 
