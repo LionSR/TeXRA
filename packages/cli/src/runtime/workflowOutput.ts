@@ -29,29 +29,115 @@ function joinCwdRelative(target: string, cwd: string): string {
   return path.isAbsolute(target) ? target : path.join(cwd, target);
 }
 
+type OutputPathStats = Pick<Awaited<ReturnType<typeof fs.stat>>, 'isDirectory'>;
+
+interface OutputPathProbeDependencies {
+  readonly stat: (target: string) => Promise<OutputPathStats>;
+  readonly lstat: (
+    target: string,
+  ) => Promise<OutputPathStats & { isSymbolicLink(): boolean }>;
+  readonly dirname: (target: string) => string;
+}
+
+const outputPathProbeDefaults: OutputPathProbeDependencies = {
+  stat: fs.stat,
+  lstat: fs.lstat,
+  dirname: path.dirname,
+};
+
+function parentFileUsageError(
+  target: string,
+  flagLabel: '--output' | '--output-dir',
+): CliUsageError {
+  return new CliUsageError(
+    flagLabel === '--output-dir'
+      ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+      : `--output: a parent path component is a file: ${target}`,
+  );
+}
+
+function danglingSymlinkUsageError(
+  target: string,
+  candidate: string,
+  flagLabel: '--output' | '--output-dir',
+): CliUsageError {
+  if (candidate === target) {
+    return new CliUsageError(
+      `${flagLabel} is a dangling symbolic link: ${target}`,
+    );
+  }
+  return new CliUsageError(
+    flagLabel === '--output-dir'
+      ? `--output-dir cannot be created (a parent path component is a dangling symbolic link): ${target}`
+      : `--output: a parent path component is a dangling symbolic link: ${target}`,
+  );
+}
+
 /**
  * Stat `target` for the output-path guards. Returns `null` when the path
- * doesn't exist yet (the workflow will create it). `ENOTDIR` (a parent path
- * component is a file) is surfaced as a Usage error here so callers don't
- * have to repeat it. Other stat errors propagate with their real cause.
+ * doesn't exist yet and its nearest existing ancestor is a directory. Some
+ * platforms report a file ancestor as ENOENT rather than ENOTDIR, so missing
+ * paths are checked upward. Other stat errors propagate with their real cause.
  */
 async function probeOutputPath(
   target: string,
   flagLabel: '--output' | '--output-dir',
-): Promise<Awaited<ReturnType<typeof fs.stat>> | null> {
-  try {
-    return await fs.stat(target);
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error)) return null;
-    if (isNotADirectoryError(error)) {
-      throw new CliUsageError(
-        flagLabel === '--output-dir'
-          ? `--output-dir is not a directory (a parent path component is a file): ${target}`
-          : `--output: a parent path component is a file: ${target}`,
-      );
+  dependencies: OutputPathProbeDependencies = outputPathProbeDefaults,
+): Promise<OutputPathStats | null> {
+  const { stat, lstat, dirname } = dependencies;
+  let candidate = target;
+  while (true) {
+    let stats: OutputPathStats;
+    try {
+      stats = await stat(candidate);
+    } catch (error: unknown) {
+      if (isNotADirectoryError(error)) {
+        throw parentFileUsageError(target, flagLabel);
+      }
+      if (!isFileNotFoundError(error)) throw error;
+
+      try {
+        const linkStats = await lstat(candidate);
+        if (!linkStats.isSymbolicLink()) {
+          stats = linkStats;
+        } else {
+          try {
+            stats = await stat(candidate);
+          } catch (retryError: unknown) {
+            if (isFileNotFoundError(retryError)) {
+              throw danglingSymlinkUsageError(target, candidate, flagLabel);
+            }
+            throw retryError;
+          }
+        }
+      } catch (lstatError: unknown) {
+        if (lstatError instanceof CliUsageError) throw lstatError;
+        if (isNotADirectoryError(lstatError)) {
+          throw parentFileUsageError(target, flagLabel);
+        }
+        if (!isFileNotFoundError(lstatError)) throw lstatError;
+
+        const parent = dirname(candidate);
+        if (parent === candidate) throw lstatError;
+        candidate = parent;
+        continue;
+      }
     }
-    throw error;
+
+    if (candidate === target) return stats;
+    if (!stats.isDirectory()) {
+      throw parentFileUsageError(target, flagLabel);
+    }
+    return null;
   }
+}
+
+export async function probeOutputPathForTests(
+  target: string,
+  flagLabel: '--output' | '--output-dir',
+  dependencies: OutputPathProbeDependencies,
+): Promise<void> {
+  await probeOutputPath(target, flagLabel, dependencies);
 }
 
 /** `--output-dir <path>` must point at a directory (or not exist yet). */
