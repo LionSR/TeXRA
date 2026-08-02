@@ -16,7 +16,11 @@ import type {
   Tool as AnthropicTool,
   ToolUnion,
 } from '@anthropic-ai/sdk/resources/messages';
-import type { Tool as GeminiTool, FunctionDeclaration } from '@google/genai';
+import type {
+  Tool as GeminiTool,
+  FunctionDeclaration,
+  Schema as GeminiSchema,
+} from '@google/genai';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
@@ -162,6 +166,160 @@ export function convertToolSchema(
   }
   if (!schema) return null;
   return stripDollarSchema(flattenTopLevelUnion(schema));
+}
+
+function isSchemaObject(value: unknown): value is JSONSchemaObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Resolve a local JSON Pointer against a schema root. */
+function resolveLocalSchemaRef(root: JSONSchemaObject, ref: string): unknown {
+  if (!ref.startsWith('#/')) return undefined;
+  return ref
+    .slice(2)
+    .split('/')
+    .map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))
+    .reduce<unknown>((value, part) => {
+      if (!isSchemaObject(value) && !Array.isArray(value)) return undefined;
+      return value[part as keyof typeof value];
+    }, root);
+}
+
+/**
+ * Reduce a general JSON Schema to the simpler form accepted reliably by
+ * Google's function-calling endpoints.
+ *
+ * Optional properties do not need a separate null branch in the model-facing
+ * schema: omission expresses absence, while runtime Zod validation continues
+ * to accept explicit null. Local references are expanded once; a recursive
+ * edge becomes an unconstrained value so Google's server does not attempt to
+ * flatten an unbounded schema such as `z.json()`.
+ */
+function simplifyGoogleSchemaNode(
+  value: unknown,
+  root: JSONSchemaObject,
+  resolvingRefs: ReadonlySet<string>,
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      simplifyGoogleSchemaNode(item, root, resolvingRefs),
+    );
+  }
+  if (!isSchemaObject(value)) return value;
+
+  const ref = typeof value.$ref === 'string' ? value.$ref : undefined;
+  if (ref) {
+    if (resolvingRefs.has(ref)) return {};
+    const target = resolveLocalSchemaRef(root, ref);
+    if (target !== undefined) {
+      return simplifyGoogleSchemaNode(
+        target,
+        root,
+        new Set([...resolvingRefs, ref]),
+      );
+    }
+  }
+
+  const anyOf = Array.isArray(value.anyOf) ? value.anyOf : undefined;
+  if (anyOf) {
+    const nonNull = anyOf.filter(
+      (branch) => !isSchemaObject(branch) || branch.type !== 'null',
+    );
+    if (nonNull.length === 1 && nonNull.length !== anyOf.length) {
+      const simplified = simplifyGoogleSchemaNode(
+        nonNull[0],
+        root,
+        resolvingRefs,
+      );
+      if (isSchemaObject(simplified)) {
+        const { anyOf: _anyOf, ...siblings } = value;
+        return { ...simplified, ...siblings };
+      }
+      return simplified;
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== '$defs' && key !== '$schema')
+      .map(([key, child]) => [
+        key,
+        simplifyGoogleSchemaNode(child, root, resolvingRefs),
+      ]),
+  );
+}
+
+/** Convert a tool schema to Google's bounded function-declaration subset. */
+export function convertGoogleToolSchema(
+  def: ToolDefinition,
+): JSONSchemaObject | null {
+  const schema = convertToolSchema(def);
+  if (!schema) return null;
+  return simplifyGoogleSchemaNode(
+    schema,
+    schema,
+    new Set(),
+  ) as JSONSchemaObject;
+}
+
+const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set([
+  'anyOf',
+  'default',
+  'description',
+  'enum',
+  'example',
+  'format',
+  'items',
+  'maxItems',
+  'maxLength',
+  'maxProperties',
+  'maximum',
+  'minItems',
+  'minLength',
+  'minProperties',
+  'minimum',
+  'nullable',
+  'pattern',
+  'properties',
+  'propertyOrdering',
+  'required',
+  'title',
+  'type',
+]);
+
+/** Keep only the OpenAPI subset represented by the Google SDK's Schema type. */
+function toGoogleOpenApiSchemaNode(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toGoogleOpenApiSchemaNode);
+  if (!isSchemaObject(value)) return value;
+
+  const converted: JSONSchemaObject = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (!GOOGLE_OPENAPI_SCHEMA_KEYS.has(key)) continue;
+    if (key === 'properties' && isSchemaObject(child)) {
+      converted.properties = Object.fromEntries(
+        Object.entries(child).map(([name, schema]) => [
+          name,
+          toGoogleOpenApiSchemaNode(schema),
+        ]),
+      );
+      continue;
+    }
+    converted[key] = toGoogleOpenApiSchemaNode(child);
+  }
+  return converted;
+}
+
+/**
+ * Build the SDK-native function schema used by Generate Content. Unlike
+ * `parametersJsonSchema`, `parameters` is normalized locally by @google/genai
+ * and does not invoke Google's server-side JSON-Schema flattening path.
+ */
+function convertGoogleFunctionParameters(
+  def: ToolDefinition,
+): GeminiSchema | null {
+  const schema = convertGoogleToolSchema(def);
+  if (!schema) return null;
+  return toGoogleOpenApiSchemaNode(schema) as GeminiSchema;
 }
 
 /**
@@ -374,7 +532,7 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parametersJsonSchema: convertToolSchema(d) ?? undefined,
+    parameters: convertGoogleFunctionParameters(d) ?? undefined,
   }));
 
   return [{ functionDeclarations: declarations }];
