@@ -35,7 +35,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkErrorUtils';
-import { hasManualRetryOnlyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
@@ -1356,7 +1355,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       if (
         stateful &&
         this.chainedInteractionId !== null &&
-        !hasManualRetryOnlyErrorMarker(error) &&
         isStaleInteractionChainError(error)
       ) {
         this.logger.debug(
@@ -1443,8 +1441,14 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     let initial: GoogleGenAIInteraction;
     if (pending) {
+      if (signal?.aborted) {
+        if (this.clearPendingBackgroundInteraction(pending.id)) {
+          void this.cancelBackgroundInteraction(client, pending.id);
+        }
+        signal.throwIfAborted();
+      }
       if (Date.now() >= pending.deadlineAtMs) {
-        this.pendingBackgroundInteraction = null;
+        this.clearPendingBackgroundInteraction(pending.id);
         await this.cancelBackgroundInteraction(client, pending.id);
         throw this.createBackgroundTimeoutError(pending.id);
       }
@@ -1480,9 +1484,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       }
     }
 
+    const lifecycle = pending ?? this.pendingBackgroundInteraction;
     const completed = await this.pollBackgroundInteraction(
       client,
       initial,
+      lifecycle?.id,
+      lifecycle?.deadlineAtMs,
       requestOptions,
       signal,
     );
@@ -1500,18 +1507,19 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     );
   }
 
-  private clearPendingBackgroundInteraction(interactionId: string): void {
-    if (this.pendingBackgroundInteraction?.id === interactionId) {
-      this.pendingBackgroundInteraction = null;
-    }
+  private clearPendingBackgroundInteraction(interactionId: string): boolean {
+    if (this.pendingBackgroundInteraction?.id !== interactionId) return false;
+    this.pendingBackgroundInteraction = null;
+    return true;
   }
 
   private createManualBackgroundError(message: string, cause?: unknown): Error {
-    const error = new Error(
+    const error: Error & { provider?: string } = new Error(
       message,
       cause === undefined ? undefined : { cause },
     );
-    Object.assign(error, { provider: this.config.provider });
+    // Synthetic lifecycle errors have no SDK instance for sdkErrorTagger to map.
+    error.provider = this.config.provider;
     attachManualRetryOnlyError(error);
     return error;
   }
@@ -1538,21 +1546,23 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     } catch (error) {
       this.sdkErrorTagger(error, this.config.provider);
       if (isUserAbort(error)) {
-        const shouldCancel =
-          this.pendingBackgroundInteraction?.id === interactionId;
-        this.clearPendingBackgroundInteraction(interactionId);
-        if (shouldCancel) {
-          await this.cancelBackgroundInteraction(client, interactionId);
+        if (this.clearPendingBackgroundInteraction(interactionId)) {
+          void this.cancelBackgroundInteraction(client, interactionId);
         }
         throw error;
       }
 
       const status = detectStatusCode(error);
-      if (status === 404 || status === 410) {
+      if (
+        status === 404 ||
+        status === 410 ||
+        isStaleInteractionChainError(error)
+      ) {
         this.clearPendingBackgroundInteraction(interactionId);
         throw this.createManualBackgroundError(
-          `Google Interactions background interaction ${interactionId} is no longer available ` +
-            `(HTTP ${status}). Retry explicitly to start a new interaction.`,
+          `Google Interactions background interaction ${interactionId} is no longer available` +
+            `${status === undefined ? '' : ` (HTTP ${status})`}. ` +
+            'Retry explicitly to start a new interaction.',
           error,
         );
       }
@@ -1572,10 +1582,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   private async pollBackgroundInteraction(
     client: GoogleGenAI,
     initial: GoogleGenAIInteraction,
+    lifecycleInteractionId: string | undefined,
+    deadlineAtMs: number | undefined,
     requestOptions: InteractionsRequestOptions,
     signal: AbortSignal | undefined,
   ): Promise<GoogleGenAIInteraction> {
-    const interactionId = initial.id;
+    const interactionId = lifecycleInteractionId ?? initial.id;
     if (typeof interactionId !== 'string') {
       // No id ⇒ cannot poll. Trust the submit response (its status drives
       // finalizeChain, which invalidates the chain if not 'completed').
@@ -1598,16 +1610,17 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
             id,
             sig ? this.interactionsRequestOptions(sig) : requestOptions,
           ),
-        extractId: (r) => r.id,
+        extractId: () => interactionId,
         extractStatus: (r) => r.status ?? 'unknown',
         signal,
-        deadlineAtMs: this.pendingBackgroundInteraction?.deadlineAtMs,
+        deadlineAtMs,
         resourceLabel: 'interaction',
         providerLabel: 'Google Interactions',
         onAbort: () => {
-          this.clearPendingBackgroundInteraction(interactionId);
-          // Fire-and-forget cancel; do NOT await inside the listener.
-          void this.cancelBackgroundInteraction(client, interactionId);
+          if (this.clearPendingBackgroundInteraction(interactionId)) {
+            // Fire-and-forget cancel; do NOT await inside the listener.
+            void this.cancelBackgroundInteraction(client, interactionId);
+          }
         },
         formatTimeoutError: () => {
           timedOut = true;
@@ -1666,12 +1679,10 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     // The SDK status union is open. An unrecognized value does not prove the
     // remote job is terminal, so retain its identity and fail closed.
-    const error = new Error(
+    throw this.createManualBackgroundError(
       `Google Interactions background interaction ${interactionId} returned ` +
         `unknown status "${status}"; refusing to submit a replacement.`,
     );
-    Object.assign(error, { provider: this.config.provider });
-    throw error;
   }
 
   /** Cancel the in-flight background interaction (best-effort; swallow errors). */

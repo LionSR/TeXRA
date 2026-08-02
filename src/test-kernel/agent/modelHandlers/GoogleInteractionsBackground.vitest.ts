@@ -71,7 +71,7 @@ interface CapturedCalls {
 function bgClient(opts: {
   submit: () => Interaction;
   getSequence: Array<Interaction | Error>;
-  onCancel?: (id: string) => void;
+  onCancel?: (id: string) => void | Promise<void>;
   generateContent?: () => Promise<unknown>;
 }): { client: unknown; calls: CapturedCalls } {
   let getIdx = 0;
@@ -104,7 +104,7 @@ function bgClient(opts: {
       },
       cancel: async (id: string) => {
         calls.cancel.push(id);
-        opts.onCancel?.(id);
+        await opts.onCancel?.(id);
         return {};
       },
     },
@@ -281,6 +281,42 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.cancel).toHaveLength(0);
   });
 
+  it('clears the submitted lifecycle id when resumed completion returns a different id', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const messages = [userStep('a')];
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_submitted', status: 'in_progress' }),
+      getSequence: [
+        new TypeError('fetch failed'),
+        completedInteraction('int_returned'),
+      ],
+    });
+
+    const first = respond(handler, client, messages);
+    const firstRejection = expect(first).rejects.toThrow('fetch failed');
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+    await respond(handler, client, messages);
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_submitted', 'int_submitted']);
+    expect(calls.cancel).toHaveLength(0);
+
+    const { client: nextClient, calls: nextCalls } = bgClient({
+      submit: () => completedInteraction('int_next'),
+      getSequence: [completedInteraction('int_submitted')],
+    });
+    messages.push(userStep('b'));
+    await respond(handler, nextClient, messages);
+
+    expect(nextCalls.create).toHaveLength(1);
+    expect(nextCalls.create[0].previousId).toBe('int_returned');
+    expect(nextCalls.get).toHaveLength(0);
+    expect(nextCalls.cancel).toHaveLength(0);
+  });
+
   it('resumes a pending interaction when background is disabled and preserves its chain', async () => {
     let background = true;
     mockConfig({ background: () => background });
@@ -451,6 +487,91 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.cancel).toEqual(['int_expire']);
   });
 
+  it('lets an already-aborted signal win over pending expiry without awaiting cancel', async () => {
+    mockConfig();
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    const handler = createHandler();
+    let releaseCancel!: () => void;
+    const cancelPending = new Promise<void>((resolve) => {
+      releaseCancel = resolve;
+    });
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_abort_expired', status: 'in_progress' }),
+      getSequence: [new TypeError('fetch failed')],
+      onCancel: () => cancelPending,
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toThrow('fetch failed');
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+    await vi.advanceTimersByTimeAsync(MAX_DURATION_MS - POLL_INTERVAL_MS);
+
+    const controller = new AbortController();
+    controller.abort();
+    let settled = false;
+    let caught: unknown;
+    const retry = respond(
+      handler,
+      client,
+      [userStep('a')],
+      controller.signal,
+    ).catch((error: unknown) => {
+      settled = true;
+      caught = error;
+    });
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    const settledBeforeCancel = settled;
+    releaseCancel();
+    await retry;
+
+    expect(settledBeforeCancel).toBe(true);
+    expect(caught).toMatchObject({ name: 'AbortError' });
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_abort_expired']);
+    expect(calls.cancel).toEqual(['int_abort_expired']);
+  });
+
+  it('rethrows a retrieval abort without awaiting best-effort cancel', async () => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    let releaseCancel!: () => void;
+    const cancelPending = new Promise<void>((resolve) => {
+      releaseCancel = resolve;
+    });
+    const retrievalAbort = new DOMException('stopped', 'AbortError');
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_retrieval_abort', status: 'in_progress' }),
+      getSequence: [new TypeError('fetch failed'), retrievalAbort],
+      onCancel: () => cancelPending,
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const firstRejection = expect(first).rejects.toThrow('fetch failed');
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+
+    let settled = false;
+    let caught: unknown;
+    const retry = respond(handler, client, [userStep('a')]).catch(
+      (error: unknown) => {
+        settled = true;
+        caught = error;
+      },
+    );
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    const settledBeforeCancel = settled;
+    releaseCancel();
+    await retry;
+
+    expect(settledBeforeCancel).toBe(true);
+    expect(caught).toBe(retrievalAbort);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_retrieval_abort', 'int_retrieval_abort']);
+    expect(calls.cancel).toEqual(['int_retrieval_abort']);
+  });
+
   it('treats queued as pending', async () => {
     mockConfig();
     vi.useFakeTimers();
@@ -469,7 +590,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get).toEqual(['int_queued', 'int_queued']);
   });
 
-  it('retains an unknown status and resumes without replacement', async () => {
+  it('retains an unknown status but requires manual retry before another poll', async () => {
     mockConfig();
     vi.useFakeTimers();
     const handler = createHandler();
@@ -482,15 +603,22 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
 
     const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toThrow(
-      /unknown status "mystery"/,
-    );
+    const unknownPromise = captureRejection(first);
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
-    await respond(handler, client, [userStep('a')]);
+    const unknown = await unknownPromise;
 
+    expect(unknown.message).toMatch(/unknown status "mystery"/);
+    expect(hasManualRetryOnlyErrorMarker(unknown)).toBe(true);
+    expect(normalizeProviderError(unknown).provider).toBe('google');
+    expect(isProviderErrorAutoRetryable(unknown)).toBe(false);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_unknown']);
+    expect(calls.cancel).toHaveLength(0);
+
+    await respond(handler, client, [userStep('a')]);
     expect(calls.create).toHaveLength(1);
     expect(calls.get).toEqual(['int_unknown', 'int_unknown']);
+    expect(calls.cancel).toHaveLength(0);
   });
 
   it('retains a known id after a non-missing 4xx retrieval failure', async () => {
@@ -558,6 +686,60 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(calls.cancel).toHaveLength(0);
     },
   );
+
+  it.each([
+    {
+      label: 'SDK INVALID_ARGUMENT previous_interaction_id error',
+      error: Object.assign(
+        new ApiError({
+          message: 'Invalid previous_interaction_id int_stale',
+          status: 400,
+        }),
+        { code: 'INVALID_ARGUMENT' },
+      ),
+    },
+    {
+      label: 'SDK FAILED_PRECONDITION expired interaction error',
+      error: Object.assign(
+        new ApiError({
+          message: 'Interaction int_stale is expired',
+          status: 400,
+        }),
+        { code: 'FAILED_PRECONDITION' },
+      ),
+    },
+  ])('clears pending identity for a $label', async ({ error }) => {
+    mockConfig();
+    vi.useFakeTimers();
+    const handler = createHandler();
+    let submitCount = 0;
+    const { client, calls } = bgClient({
+      submit: () => {
+        submitCount += 1;
+        return submitCount === 1
+          ? { id: 'int_stale', status: 'in_progress' }
+          : completedInteraction('int_after_stale');
+      },
+      getSequence: [error],
+    });
+
+    const first = respond(handler, client, [userStep('a')]);
+    const stalePromise = captureRejection(first);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    const stale = await stalePromise;
+
+    expect(hasManualRetryOnlyErrorMarker(stale)).toBe(true);
+    expect(normalizeProviderError(stale).provider).toBe('google');
+    expect(isProviderErrorAutoRetryable(stale)).toBe(false);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_stale']);
+    expect(calls.cancel).toHaveLength(0);
+
+    await respond(handler, client, [userStep('a')]);
+    expect(calls.create).toHaveLength(2);
+    expect(calls.get).toEqual(['int_stale']);
+    expect(calls.cancel).toHaveLength(0);
+  });
 
   it.each(['failed', 'cancelled', 'incomplete', 'budget_exceeded'])(
     'clears terminal status %s and prevents automatic replacement',
