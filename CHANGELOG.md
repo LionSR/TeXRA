@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.40.0] - 2026-08-02
 
 ### CLI
 
@@ -18,6 +18,17 @@ All notable changes to this project will be documented in this file.
 - **Automatic CLI runs stop after their model retry limit** — automatic
   approval mode no longer restarts another full retry sequence when every
   configured attempt has failed.
+- **Escape backs out of nested agents one level at a time** — leaving a child
+  now returns to its immediate parent before Escape can interrupt the root run.
+- **Background workflow task lists start collapsed** — background plans take up
+  less terminal space until their task details are needed.
+
+### Extension (VS Code) and Desktop
+
+#### Improvements
+
+- **The follow-up composer is larger and resizable** — it starts at six lines
+  and can be resized vertically for longer instructions.
 
 ### Desktop
 
@@ -76,6 +87,11 @@ All notable changes to this project will be documented in this file.
   `view_range` with `offset` and `limit`. Responses report the returned message
   interval and next offset.
 
+#### Improvements
+
+- **OpenAI Fast models use the priority service tier** — their requests now ask
+  OpenAI for priority processing instead of the standard service tier.
+
 #### Bug Fixes
 
 - **Failed latexdiff builds no longer flood the workflow log** — the visible
@@ -84,6 +100,9 @@ All notable changes to this project will be documented in this file.
 - **Google models handle prompts and tool-enabled tasks reliably** — requests
   no longer fail when a prompt has no prefix or when complex tool sets are
   enabled.
+- **Google background interactions resume across transient retries** — TeXRA
+  reconnects to the existing interaction instead of losing its in-progress
+  response.
 - **OpenAI background responses keep one polling deadline across retries** —
   reconnecting to the same response no longer restarts its three-hour polling
   window. Once that window expires, TeXRA stops automatic retries and permits
@@ -92,6 +111,9 @@ All notable changes to this project will be documented in this file.
   accepts zero to five additional attempts after the initial request. Invalid
   stored values fall back to the documented default instead of creating an
   arbitrarily long automatic retry sequence.
+- **Stop requests are not lost between runtime stages** — interrupting as one
+  stage finishes now also cancels the next model or tool operation instead of
+  allowing the run to continue.
 - **Runs that overflow the model context window say so** — instead of a generic
   failure message, the run now reports that the conversation exceeds the
   model's context window and suggests starting a new session or reducing
@@ -111,6 +133,12 @@ All notable changes to this project will be documented in this file.
   transcript history loaded only to repair stale run state is released again
   after the repair is saved, instead of remaining in memory for the rest of
   the session.
+- **Workspace switches apply settings and storage together** — a session can no
+  longer observe the new workspace with stale settings or storage from the
+  previous one during the transition.
+- **Snapshot save failures surface without losing queued updates** — writes stop
+  after bounded retries and report the failure while preserving pending updates
+  and their order for recovery.
 - **Install in Terminal now offers a command your machine can run** — the Codex
   and Claude Code cards offer the Homebrew command where Homebrew is present
   and Claude Code's Windows installer on Windows, instead of a global npm
