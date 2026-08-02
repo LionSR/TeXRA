@@ -89,6 +89,8 @@ const CHANNEL = 'StreamSnapshotStore';
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
+/** Bound shutdown retries when storage remains unavailable. */
+const MAX_FLUSH_WRITE_RETRIES = 3;
 
 /**
  * The run facts this store subscribes to, and the single source of truth for
@@ -331,6 +333,12 @@ interface StreamRecord {
 type StagedDeletionPhase = 'live' | 'transitioning' | 'staged' | 'unavailable';
 type StagedRecoveryOutcome = 'discarded' | 'restored' | 'unchanged';
 
+interface DirtySidecarWrite {
+  stream: StreamTabId;
+  key: string;
+  value: unknown;
+}
+
 interface DeletionStateBase {
   writes: Map<string, unknown>;
   /** Namespace authority and whether failed ownership may mirror writes. */
@@ -387,6 +395,8 @@ export class StreamSnapshotStore {
 
   // -- Per (stream, category) serialized write locks -------------------------
   private readonly writeMutexes = new Map<string, Mutex>();
+  /** Latest ordinary sidecar value not yet confirmed durable, by write lock. */
+  private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
 
   private hasAuthoritativeStreamSet = false;
 
@@ -624,6 +634,8 @@ export class StreamSnapshotStore {
   private async readSeed(stream: StreamTabId, version: number): Promise<void> {
     if (this.streamVersion(stream) !== version) return;
     if (this.records.get(stream)?.seeded) return;
+    await this.retryDirtyWrites(stream);
+    if (this.streamVersion(stream) !== version) return;
     const data = await readStreamData(this.kv(stream));
     if (this.streamVersion(stream) !== version) return;
     await this.applyStreamData(stream, data);
@@ -980,13 +992,16 @@ export class StreamSnapshotStore {
   evict(stream: StreamTabId): void {
     this.records.evict(stream);
     for (const key of [...this.writeMutexes.keys()]) {
-      if (key.startsWith(`${stream}::`)) this.writeMutexes.delete(key);
+      if (!key.startsWith(`${stream}::`)) continue;
+      this.writeMutexes.delete(key);
+      this.dirtyWrites.delete(key);
     }
   }
 
   evictAll(): void {
     this.records.evictAll();
     this.writeMutexes.clear();
+    this.dirtyWrites.clear();
     for (const state of this.deletionStates.values()) {
       if (state.kind === 'staging') state.resolveSettled();
     }
@@ -1751,13 +1766,26 @@ export class StreamSnapshotStore {
     key: string,
     value: unknown,
   ): void {
-    void this.queueWrite(stream, key, value).catch((err: unknown) =>
+    const chainKey = `${stream}::${key}`;
+    const write = { stream, key, value } satisfies DirtySidecarWrite;
+    this.dirtyWrites.set(chainKey, write);
+    void this.persistDirtyWrite(chainKey, write).catch((err: unknown) =>
       logger.warn(
         CHANNEL,
-        `Failed to persist ${key}.json for stream ${stream}; sidecar may be stale.`,
+        `Failed to persist ${key}.json for stream ${stream}; sidecar remains dirty.`,
         { data: err },
       ),
     );
+  }
+
+  private async persistDirtyWrite(
+    chainKey: string,
+    write: DirtySidecarWrite,
+  ): Promise<void> {
+    await this.queueWrite(write.stream, write.key, write.value);
+    if (this.dirtyWrites.get(chainKey) === write) {
+      this.dirtyWrites.delete(chainKey);
+    }
   }
 
   /** Queue a sidecar write and expose its completion to transactional callers. */
@@ -1780,11 +1808,17 @@ export class StreamSnapshotStore {
     });
   }
 
-  private async flushWritesForStream(stream: StreamTabId): Promise<void> {
-    const prefix = `${stream}::`;
+  private writeBelongsToStream(
+    chainKey: string,
+    stream?: StreamTabId,
+  ): boolean {
+    return stream === undefined || chainKey.startsWith(`${stream}::`);
+  }
+
+  private async waitForWrites(stream?: StreamTabId): Promise<void> {
     await Promise.all(
       [...this.writeMutexes]
-        .filter(([key]) => key.startsWith(prefix))
+        .filter(([chainKey]) => this.writeBelongsToStream(chainKey, stream))
         .map(([, mutex]) => mutex.waitForUnlock()),
     );
   }
@@ -1792,34 +1826,119 @@ export class StreamSnapshotStore {
   private cancelPendingWritesForStream(stream: StreamTabId): Promise<void>[] {
     const prefix = `${stream}::`;
     const pending: Promise<void>[] = [];
+    const deletionState = this.deletionStates.get(stream);
     for (const [key, mutex] of this.writeMutexes) {
       if (!key.startsWith(prefix)) continue;
+      const dirty = this.dirtyWrites.get(key);
+      if (dirty && deletionState) {
+        deletionState.writes.set(dirty.key, dirty.value);
+      }
+      this.dirtyWrites.delete(key);
       pending.push(mutex.waitForUnlock());
       this.writeMutexes.delete(key);
     }
     return pending;
   }
 
+  private dirtyWriteEntries(
+    stream?: StreamTabId,
+  ): [string, DirtySidecarWrite][] {
+    return [...this.dirtyWrites].filter(([chainKey]) =>
+      this.writeBelongsToStream(chainKey, stream),
+    );
+  }
+
+  private async retryDirtyWrites(stream?: StreamTabId): Promise<void> {
+    await this.waitForWrites(stream);
+
+    for (let attempt = 0; attempt < MAX_FLUSH_WRITE_RETRIES; attempt++) {
+      const dirty = this.dirtyWriteEntries(stream);
+      if (dirty.length === 0) return;
+      await Promise.allSettled(
+        dirty.map(([chainKey, write]) =>
+          this.persistDirtyWrite(chainKey, write),
+        ),
+      );
+    }
+
+    const remaining = this.dirtyWriteEntries(stream).length;
+    if (remaining > 0) {
+      throw new Error(
+        `Snapshot flush failed after ${MAX_FLUSH_WRITE_RETRIES} retries; ` +
+          `${remaining} sidecar write(s) remain dirty.`,
+      );
+    }
+  }
+
+  private unseenSeedChains(
+    completed: ReadonlySet<Promise<void>>,
+  ): Promise<void>[] {
+    return [...this.records.values()]
+      .map((record) => record.seedChain)
+      .filter(
+        (chain): chain is Promise<void> =>
+          chain !== undefined && !completed.has(chain),
+      );
+  }
+
+  private async drainSeedChains(
+    completed: Set<Promise<void>>,
+    failures: unknown[],
+  ): Promise<void> {
+    while (true) {
+      const seeds = this.unseenSeedChains(completed);
+      if (seeds.length === 0) return;
+      for (const seed of seeds) completed.add(seed);
+      for (const result of await Promise.allSettled(seeds)) {
+        if (result.status === 'rejected') failures.push(result.reason);
+      }
+    }
+  }
+
   /** Await deferred (seed-gated) mutations, then all in-flight writes. */
   async flush(): Promise<void> {
-    await Promise.all(
-      [...this.records.values()]
-        .map((record) => record.seedChain)
-        .filter((chain): chain is Promise<void> => chain !== undefined),
+    const failures: unknown[] = [];
+    const completedSeeds = new Set<Promise<void>>();
+
+    // Seed work can rebind a record's chain while an earlier chain is awaited.
+    // Reach seed quiescence before taking the one deletion-recovery snapshot.
+    await this.drainSeedChains(completedSeeds, failures);
+
+    const recoveries = await pMap(
+      [...this.deletionStates],
+      async ([stream, state]) => {
+        try {
+          if (state.kind !== 'staging') {
+            await this.recoverFailedRollback(stream, state);
+          }
+          return { status: 'fulfilled' } as const;
+        } catch (reason) {
+          return { status: 'rejected', reason } as const;
+        }
+      },
+      { concurrency: SEED_IO_CONCURRENCY },
     );
-    try {
-      await pMap(
-        [...this.deletionStates],
-        ([stream, state]) =>
-          state.kind === 'staging'
-            ? Promise.resolve('unchanged' as const)
-            : this.recoverFailedRollback(stream, state),
-        { concurrency: SEED_IO_CONCURRENCY },
-      );
-    } finally {
-      await Promise.all(
-        [...this.writeMutexes.values()].map((mutex) => mutex.waitForUnlock()),
-      );
+    for (const result of recoveries) {
+      if (result.status === 'rejected') failures.push(result.reason);
+    }
+
+    // Recovery and ordinary writes may allow another seed-gated mutation to
+    // start. Drain those chains and their writes, but do not rerun recovery or
+    // duplicate a failure from the recovery snapshot above.
+    while (true) {
+      await this.drainSeedChains(completedSeeds, failures);
+      try {
+        await this.retryDirtyWrites();
+      } catch (error) {
+        failures.push(error);
+        break;
+      }
+      if (this.unseenSeedChains(completedSeeds).length === 0) break;
+    }
+
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(failures, 'Snapshot flush failed');
     }
   }
 
@@ -1934,16 +2053,26 @@ export class StreamSnapshotStore {
   private refreshSeed(stream: StreamTabId): Promise<void> {
     const version = this.streamVersion(stream);
     const existing = this.records.get(stream);
+    const wasSeeded = existing?.seeded ?? false;
     if (existing) existing.seeded = false;
-    const prev = existing?.seedChain ?? Promise.resolve();
-    const next = prev.then(async () => {
+    const prev =
+      existing?.seedChain?.catch(() => undefined) ?? Promise.resolve();
+    const work = prev.then(async () => {
       if (this.streamVersion(stream) !== version) return;
-      await this.flushWritesForStream(stream);
+      await this.retryDirtyWrites(stream);
       if (this.streamVersion(stream) !== version) return;
       this.invalidateKvHandles(stream);
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
       await this.applyStreamData(stream, data);
+    });
+    const next = work.catch((error: unknown) => {
+      const record = this.records.get(stream);
+      if (record?.seedChain === next) {
+        record.seedChain = undefined;
+        record.seeded = wasSeeded;
+      }
+      throw error;
     });
     this.getOrCreateRecord(stream).seedChain = next;
     return next;
