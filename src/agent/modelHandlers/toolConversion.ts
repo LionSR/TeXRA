@@ -287,6 +287,15 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
       'Google tool schemas do not support nested oneOf or allOf combinators.',
     );
   }
+  if (
+    (value.const !== undefined && typeof value.const !== 'string') ||
+    (Array.isArray(value.enum) &&
+      value.enum.some((entry) => typeof entry !== 'string'))
+  ) {
+    throw new Error(
+      'Google tool schemas support only string literal constraints.',
+    );
+  }
 
   const converted: JSONSchemaObject = {};
   if (typeof value.const === 'string' && !Array.isArray(value.enum)) {
