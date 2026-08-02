@@ -894,6 +894,39 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('reads a historical execution whose canonical stream is delegated', async () => {
+    const executionId = '0999cd0999cd' as ExecutionId;
+    const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
+    const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('bash'), executionId);
+    snapshots.setParentStream(streamId, parentStreamId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Delegated question' }),
+    );
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Delegated answer' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId,
+      conversation: [
+        { role: 'user', content: 'Delegated question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Delegated answer' }],
+        },
+      ],
+    });
+  });
+
   it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {
     const executionId = 'eee555eee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#eee555eee555' as StreamTabId;

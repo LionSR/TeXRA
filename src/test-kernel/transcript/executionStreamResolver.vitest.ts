@@ -159,11 +159,12 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
   });
 
-  it('retains a sidecar scan fallback for execution records predating streamId', async () => {
+  it('scans execution records whose stream-id provenance predates registration', async () => {
     const executionId = 'abc666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc666' as StreamTabId;
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date().toISOString(),
+      streamId,
     });
 
     const store = new StreamSnapshotStore();

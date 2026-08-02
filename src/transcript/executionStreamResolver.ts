@@ -168,8 +168,7 @@ export async function resolvePersistedStreamIdForExecution(
   const executionMeta = await getExecutionStore(executionId).readMeta();
   if (
     executionMeta?.streamId &&
-    executionMeta.streamIdSource !==
-      EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION
+    executionMeta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
   ) {
     return { streamId: executionMeta.streamId, source: 'executionMeta' };
   }
@@ -201,7 +200,9 @@ export async function resolvePersistedStreamIdForExecution(
       streamId,
       source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
-      associatedRootStreamIds: rootMetaMatched,
+      ...(rootMetaMatched.length > 0
+        ? { associatedRootStreamIds: rootMetaMatched }
+        : {}),
     };
   }
 

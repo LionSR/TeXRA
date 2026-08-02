@@ -71,7 +71,7 @@ export const EXECUTION_STREAM_ID_SOURCE = {
   REGISTRATION: 'registration',
   LEGACY_RESOLUTION: 'legacyResolution',
 } as const;
-export const ExecutionStreamIdSourceSchema = z.enum(EXECUTION_STREAM_ID_SOURCE);
+const ExecutionStreamIdSourceSchema = z.enum(EXECUTION_STREAM_ID_SOURCE);
 
 /** Execution metadata stored alongside config at launch time. */
 const ExecutionMetaBaseSchema = z.object({
