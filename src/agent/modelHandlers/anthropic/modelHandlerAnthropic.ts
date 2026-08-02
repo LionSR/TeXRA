@@ -68,11 +68,16 @@ import {
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
+import {
+  classifyMediaEntry,
+  unknownMediaCategoryWarning,
+} from '../support/mediaClassification';
 import { toAnthropicTools } from '../toolConversion';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
+  uploadAndRecordToolAttachments,
   wipeBuffer,
 } from '../utils/toolAttachmentUtils';
 import { tagAnthropicSdkError } from './anthropicSdkError';
@@ -1104,81 +1109,83 @@ export class ModelHandlerAnthropic extends ModelHandler<
       `Creating media content for ${mediaMessage.length} items for Anthropic`,
     );
     return mediaMessage.flatMap((media): ContentBlockParam[] => {
-      if (media.media_category === 'image') {
-        // Always ensure media_type exists.
-        const originalMediaType = media.media_type;
-        let resolvedMediaType = originalMediaType;
-        if (!resolvedMediaType) {
-          // Default to image/png since PDFs from TikZ are converted to PNG
-          this.logger.warn(
-            `No media_type found for image ${media.file_name}, defaulting to image/png`,
-          );
-          resolvedMediaType = 'image/png';
-        }
+      const classification = classifyMediaEntry(media);
 
-        // Check for native PDF support
-        const isPdf =
-          this.capabilities.supportsNativePdf &&
-          originalMediaType === 'application/pdf';
-        const descriptionBlock = {
-          type: 'text',
-          text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
-          citations: null,
-        } satisfies TextBlockParam;
-
-        if (isPdf) {
-          const documentBlock = {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: media.data,
-            },
-            title: media.file_name,
-          } satisfies BetaRequestDocumentBlock;
-          return [descriptionBlock, documentBlock];
-        }
-
-        let imageMediaType: Base64ImageSource['media_type'];
-        if (isSupportedImageMediaType(resolvedMediaType)) {
-          imageMediaType = resolvedMediaType;
-        } else {
-          if (resolvedMediaType !== 'image/png') {
-            this.logger.warn(
-              'Unsupported image media type, defaulting to image/png',
-              {
-                data: {
-                  mediaType: resolvedMediaType,
-                  fileName: media.file_name,
-                },
-              },
-            );
-          }
-          imageMediaType = 'image/png';
-        }
-
-        const imageBlock = {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: imageMediaType,
-            data: media.data,
-          },
-        } satisfies BetaImageBlockParam;
-
-        return [descriptionBlock, imageBlock];
-      } else if (media.media_category === 'audio') {
+      if (classification === 'audio') {
         // Anthropic doesn't explicitly support native audio input yet
         this.logger.warn(
           `Audio input received (${media.file_name}) but native audio is not currently supported by the Anthropic handler. Skipping.`,
         );
         return []; // Return empty array to skip audio
-      } else {
-        this.logger.warn(
-          `Unknown media category for Anthropic: ${media.media_category}`,
-        );
+      }
+
+      if (classification === 'unsupported') {
+        this.logger.warn(unknownMediaCategoryWarning(media));
         return [];
       }
+
+      // classification is 'image' or 'pdf' - for backward compatibility,
+      // always ensure media_type exists
+      const originalMediaType = media.media_type;
+      let resolvedMediaType = originalMediaType;
+      if (!resolvedMediaType) {
+        // Default to image/png since PDFs from TikZ are converted to PNG
+        this.logger.warn(
+          `No media_type found for image ${media.file_name}, defaulting to image/png`,
+        );
+        resolvedMediaType = 'image/png';
+      }
+
+      // Check for native PDF support
+      const isPdf =
+        classification === 'pdf' && this.capabilities.supportsNativePdf;
+      const descriptionBlock = {
+        type: 'text',
+        text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
+        citations: null,
+      } satisfies TextBlockParam;
+
+      if (isPdf) {
+        const documentBlock = {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: media.data,
+          },
+          title: media.file_name,
+        } satisfies BetaRequestDocumentBlock;
+        return [descriptionBlock, documentBlock];
+      }
+
+      let imageMediaType: Base64ImageSource['media_type'];
+      if (isSupportedImageMediaType(resolvedMediaType)) {
+        imageMediaType = resolvedMediaType;
+      } else {
+        if (resolvedMediaType !== 'image/png') {
+          this.logger.warn(
+            'Unsupported image media type, defaulting to image/png',
+            {
+              data: {
+                mediaType: resolvedMediaType,
+                fileName: media.file_name,
+              },
+            },
+          );
+        }
+        imageMediaType = 'image/png';
+      }
+
+      const imageBlock = {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: imageMediaType,
+          data: media.data,
+        },
+      } satisfies BetaImageBlockParam;
+
+      return [descriptionBlock, imageBlock];
     });
   }
 
@@ -1609,46 +1616,33 @@ export class ModelHandlerAnthropic extends ModelHandler<
     attachments: ToolFileAttachment[],
   ): Promise<ContentBlockParam> {
     // Result is already sanitized by source - use the passed attachments
-    // Create mutable copy with explicit type to avoid type assertions later
-    const sanitizedResult: ToolResult = { ...result };
-    const canUploadFiles = this.supportsToolResultFileUpload;
+    const canUpload =
+      this.supportsToolResultFileUpload && attachments.length > 0;
 
-    let uploadedAttachments: UploadedAnthropicAttachment[] = [];
-    const unsupportedAttachments: ToolFileAttachment[] = [];
-    const pageLimitExceeded: ToolFileAttachment[] = [];
-
-    if (canUploadFiles && attachments.length > 0) {
-      // This upload occurs while assembling the next turn, outside the model
-      // invocation gate. Restore the SDK's ordinary two retries for this
-      // auxiliary request; generation requests keep maxRetries: 0.
-      const uploadResult = await uploadToolAttachments(
-        client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
-        attachments,
-        this.logger,
-        this.getTrackedPdfPageCount(),
-        (fileId, pageCount) =>
-          this.uploadedPdfPageCounts.set(fileId, pageCount),
-        this.getMaxPdfPages(),
+    // This upload occurs while assembling the next turn, outside the model
+    // invocation gate. Restore the SDK's ordinary two retries for this
+    // auxiliary request; generation requests keep maxRetries: 0.
+    const { finalResult: sanitizedResult, uploadResult } =
+      await uploadAndRecordToolAttachments(result, canUpload, () =>
+        uploadToolAttachments(
+          client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
+          attachments,
+          this.logger,
+          this.getTrackedPdfPageCount(),
+          (fileId, pageCount) =>
+            this.uploadedPdfPageCounts.set(fileId, pageCount),
+          this.getMaxPdfPages(),
+        ),
       );
-      uploadedAttachments = uploadResult.uploaded;
-      unsupportedAttachments.push(...uploadResult.unsupported);
-      pageLimitExceeded.push(...uploadResult.pageLimitExceeded);
 
-      if (
-        sanitizedResult.status === 'executed' &&
-        uploadedAttachments.length > 0
-      ) {
-        // Store uploaded file info with fileId (Anthropic-specific extension)
-        // Type assertion needed because FileReference doesn't include fileId
-        sanitizedResult.files = uploadedAttachments.map(
-          ({ attachment, fileId }) => ({
-            path: attachment.path,
-            mimeType: attachment.mimeType,
-            description: attachment.description,
-            fileId, // Anthropic-specific: retained for potential future reference
-          }),
-        ) as typeof sanitizedResult.files;
-      }
+    const uploadedAttachments: UploadedAnthropicAttachment[] =
+      uploadResult?.uploaded ?? [];
+    const unsupportedAttachments: ToolFileAttachment[] = [];
+    const pageLimitExceeded: ToolFileAttachment[] =
+      uploadResult?.pageLimitExceeded ?? [];
+
+    if (canUpload) {
+      unsupportedAttachments.push(...(uploadResult?.unsupported ?? []));
     } else if (attachments.length > 0) {
       unsupportedAttachments.push(...attachments);
     }
