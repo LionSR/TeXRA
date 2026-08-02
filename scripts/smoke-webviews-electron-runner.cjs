@@ -364,6 +364,147 @@ function createSmokeWindow(errors) {
   return window;
 }
 
+async function assertProgressComposerLayout(window, view) {
+  return window.webContents.executeJavaScript(
+    `
+      (async () => {
+        function findDeep(selector, root = document) {
+          const direct = root.querySelector?.(selector);
+          if (direct) return direct;
+          for (const element of root.querySelectorAll?.('*') ?? []) {
+            const found = element.shadowRoot ? findDeep(selector, element.shadowRoot) : null;
+            if (found) return found;
+          }
+          return null;
+        }
+
+        const composer = findDeep('follow-up-input');
+        const dock = findDeep('.conversation-composer-dock');
+        const conversationLog = findDeep('.conversation-log');
+        const webAwesomeTextarea = composer?.shadowRoot?.querySelector('wa-textarea');
+        if (webAwesomeTextarea?.updateComplete) await webAwesomeTextarea.updateComplete;
+        const textarea = webAwesomeTextarea?.shadowRoot?.querySelector('textarea');
+        const wrapper = webAwesomeTextarea?.shadowRoot?.querySelector('.textarea');
+
+        const missing = [
+          ['follow-up-input', composer],
+          ['composer dock', dock],
+          ['conversation log', conversationLog],
+          ['wa-textarea', webAwesomeTextarea],
+          ['native textarea', textarea],
+          ['textarea wrapper', wrapper],
+        ]
+          .filter(([, element]) => !element)
+          .map(([label]) => label);
+        if (missing.length > 0) {
+          throw new Error(\`${view.name} missing composer layout elements: \${missing.join(', ')}\`);
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const style = getComputedStyle(textarea);
+        const lineHeight = Number.parseFloat(style.lineHeight);
+        const paddingBlock =
+          Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+        const minHeight = Number.parseFloat(style.minHeight);
+        const maxHeight = Number.parseFloat(style.maxHeight);
+        const expectedMinHeight = 6 * lineHeight + paddingBlock;
+        const expectedMaxHeight = Math.max(
+          minHeight,
+          Math.min(window.innerHeight * 0.32, 240),
+        );
+        const initialTextareaRect = textarea.getBoundingClientRect();
+        const initialWrapperRect = wrapper.getBoundingClientRect();
+
+        if (webAwesomeTextarea.rows !== 6 || textarea.rows !== 6) {
+          throw new Error(
+            \`${view.name} composer rows did not propagate: host=\${webAwesomeTextarea.rows} native=\${textarea.rows}\`,
+          );
+        }
+        if (webAwesomeTextarea.resize !== 'vertical' || style.resize !== 'vertical') {
+          throw new Error(
+            \`${view.name} composer is not vertically resizable: host=\${webAwesomeTextarea.resize} native=\${style.resize}\`,
+          );
+        }
+        if (Math.abs(minHeight - expectedMinHeight) > 3) {
+          throw new Error(
+            \`${view.name} composer minimum is not six lines: min=\${minHeight.toFixed(1)}px expected=\${expectedMinHeight.toFixed(1)}px\`,
+          );
+        }
+        if (initialTextareaRect.height < minHeight - 1) {
+          throw new Error(
+            \`${view.name} native textarea rendered below its minimum: rendered=\${initialTextareaRect.height.toFixed(1)}px min=\${minHeight.toFixed(1)}px\`,
+          );
+        }
+        if (maxHeight > 241 || Math.abs(maxHeight - expectedMaxHeight) > 3) {
+          throw new Error(
+            \`${view.name} composer max-height cap is incorrect: max=\${maxHeight.toFixed(1)}px expected=\${expectedMaxHeight.toFixed(1)}px\`,
+          );
+        }
+        if (Math.abs(initialWrapperRect.height - initialTextareaRect.height) > 2) {
+          throw new Error(
+            \`${view.name} Web Awesome wrapper is not synchronized initially: wrapper=\${initialWrapperRect.height.toFixed(1)}px textarea=\${initialTextareaRect.height.toFixed(1)}px\`,
+          );
+        }
+
+        textarea.style.height = '1000px';
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
+        );
+        const cappedTextareaRect = textarea.getBoundingClientRect();
+        const cappedWrapperRect = wrapper.getBoundingClientRect();
+        if (cappedTextareaRect.height > maxHeight + 1) {
+          throw new Error(
+            \`${view.name} native textarea exceeded its cap: rendered=\${cappedTextareaRect.height.toFixed(1)}px max=\${maxHeight.toFixed(1)}px\`,
+          );
+        }
+        if (Math.abs(cappedWrapperRect.height - cappedTextareaRect.height) > 2) {
+          throw new Error(
+            \`${view.name} Web Awesome wrapper lost sync after resize: wrapper=\${cappedWrapperRect.height.toFixed(1)}px textarea=\${cappedTextareaRect.height.toFixed(1)}px\`,
+          );
+        }
+
+        const viewportWidth = document.documentElement.clientWidth;
+        const viewportHeight = document.documentElement.clientHeight;
+        const composerRect = composer.getBoundingClientRect();
+        const dockRect = dock.getBoundingClientRect();
+        const logRect = conversationLog.getBoundingClientRect();
+        if (
+          composerRect.left < -1 ||
+          composerRect.right > viewportWidth + 1 ||
+          composerRect.width < 250
+        ) {
+          throw new Error(
+            \`${view.name} composer is unusable at narrow width: [\${composerRect.left.toFixed(1)}, \${composerRect.right.toFixed(1)}] in \${viewportWidth}px\`,
+          );
+        }
+        if (
+          dockRect.top < -1 ||
+          dockRect.bottom > viewportHeight + 1 ||
+          dockRect.height > viewportHeight * 0.55 ||
+          logRect.height < 100
+        ) {
+          throw new Error(
+            \`${view.name} composer consumed the short viewport: dock=\${dockRect.height.toFixed(1)}px log=\${logRect.height.toFixed(1)}px viewport=\${viewportHeight}px\`,
+          );
+        }
+
+        return {
+          lineHeight,
+          logHeight: logRect.height,
+          maxHeight,
+          minHeight,
+          renderedHeight: cappedTextareaRect.height,
+          viewportHeight,
+          viewportWidth,
+          wrapperHeight: cappedWrapperRect.height,
+        };
+      })();
+    `,
+    true,
+  );
+}
+
 async function assertToolEditApprovalLayout(window, view) {
   return window.webContents.executeJavaScript(
     `
@@ -449,6 +590,15 @@ async function assertViewSpecificLayout(window, view) {
   const assertions = Array.isArray(view.assertions) ? view.assertions : [];
   for (const assertion of assertions) {
     switch (assertion) {
+      case 'progressComposerLayout': {
+        const result = await assertProgressComposerLayout(window, view);
+        console.log(
+          `Verified ${view.name} progress composer layout: ${JSON.stringify(
+            result,
+          )}`,
+        );
+        break;
+      }
       case 'toolEditApprovalLayout': {
         const result = await assertToolEditApprovalLayout(window, view);
         console.log(
