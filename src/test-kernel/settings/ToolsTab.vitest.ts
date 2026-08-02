@@ -55,21 +55,13 @@ describe('tools-tab availability summary', () => {
     mocks.postMessage.mockClear();
   });
 
-  it('uses an accessible Web Awesome progress ring', async () => {
+  it('shows the available count without a decorative progress ring', async () => {
     const element = await mount([
       tool('ready', 'available'),
       tool('missing', 'not-found'),
     ]);
-    const ring = element.shadowRoot?.querySelector('wa-progress-ring');
-
-    expect(ring).not.toBeNull();
-    expect((ring as { value?: number }).value).toBe(50);
-    expect((ring as { label?: string }).label).toBe('1 of 2 tools available');
-    expect(
-      element.shadowRoot?.querySelector('.tools-health-ring svg'),
-    ).toBeNull();
-    expect(element.shadowRoot?.textContent).toContain('1 available');
-    expect(element.shadowRoot?.textContent).toContain('1 need setup');
+    expect(element.shadowRoot?.querySelector('wa-progress-ring')).toBeNull();
+    expect(element.shadowRoot?.textContent).toContain('1/2 available');
   });
 
   it('reports complete availability without a missing-state label', async () => {
@@ -77,21 +69,11 @@ describe('tools-tab availability summary', () => {
       tool('first', 'available'),
       tool('second', 'available'),
     ]);
-    const ring = element.shadowRoot?.querySelector('wa-progress-ring');
-
-    expect((ring as { value?: number }).value).toBe(100);
-    expect((ring as { label?: string }).label).toBe('2 of 2 tools available');
-    expect(element.shadowRoot?.textContent).not.toContain('need setup');
-  });
-
-  it('leaves the VS Code setting as the extension editable surface', async () => {
-    const element = await mount([]);
-
-    expect(element.shadowRoot?.textContent).not.toContain('Agent Skills');
+    expect(element.shadowRoot?.textContent).toContain('2/2 available');
   });
 
   it('renders and updates the shared agent-skills switch', async () => {
-    const element = await mount([], { showAgentSkillsSettings: true });
+    const element = await mount([]);
     const skillSwitch = element.shadowRoot?.querySelector<
       HTMLElement & { checked?: boolean }
     >('wa-switch[aria-label="Make skills available to tool-use agents"]');

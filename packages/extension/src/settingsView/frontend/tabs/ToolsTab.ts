@@ -1,24 +1,19 @@
 /** Tool dashboard showing tool status and installation guides. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/progress-ring/progress-ring.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
+import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -84,7 +79,6 @@ export class ToolsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -93,46 +87,17 @@ export class ToolsTab extends LitElement {
       .tools-summary {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-s);
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-      }
-
-      .tools-health-ring {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-      }
-
-      .tools-health-ring wa-progress-ring {
-        --size: 36px;
-        --track-width: 4px;
-        --track-color: var(--wa-color-surface-border);
-        --indicator-color: var(--color-status-ok);
-      }
-
-      .tools-health-labels {
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-3xs);
-      }
-
-      .tools-summary-stat {
-        display: flex;
-        align-items: center;
         gap: var(--wa-space-2xs);
-      }
-
-      .tools-summary-stat wa-icon {
         font-size: var(--font-size-sm);
-      }
-
-      .tools-stat-available {
         color: var(--color-status-ok);
       }
 
-      .tools-stat-missing {
-        color: var(--color-status-error);
+      .tools-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--wa-space-s);
+        margin-bottom: var(--wa-space-xs);
       }
 
       .category-section {
@@ -158,9 +123,9 @@ export class ToolsTab extends LitElement {
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
+  @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
   @property({ type: Boolean }) agentSkillsEnabled = true;
-  @property({ attribute: false }) showAgentSkillsSettings = false;
 
   private handleRecheck(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
@@ -176,6 +141,10 @@ export class ToolsTab extends LitElement {
 
   private handleBashApprovalToggle = (e: Event): void => {
     this.postStateToggle(BASH_APPROVAL_CONFIG_KEY, e);
+  };
+
+  private handleEditApprovalToggle = (e: Event): void => {
+    this.postStateToggle(TOOL_EDIT_APPROVAL_CONFIG_KEY, e);
   };
 
   private handleToolPathProtectionToggle = (e: Event): void => {
@@ -198,37 +167,59 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         ${renderSettingsSectionHeading({ icon: opts.icon, title: opts.title })}
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">${opts.label}</span>
-              <span class="settings-row-help">${opts.description}</span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label=${opts.label}
-              ?checked=${opts.checked}
-              @change=${opts.onChange}
-            ></wa-switch>
-          </div>
+        <div class="settings-section">${this.renderToggleRow(opts)}</div>
+      </div>
+    `;
+  }
+
+  private renderToggleRow(opts: {
+    label: string;
+    description: string;
+    checked: boolean;
+    onChange: (event: Event) => void;
+  }): TemplateResult {
+    return html`
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
         </div>
+        <wa-switch
+          class="settings-row-control"
+          aria-label=${opts.label}
+          ?checked=${opts.checked}
+          @change=${opts.onChange}
+        ></wa-switch>
       </div>
     `;
   }
 
   private renderApprovalSettings(): TemplateResult {
-    return this.renderToggleSection({
-      icon: 'shield',
-      title: 'Approval & safety',
-      label: 'Require approval for shell commands and agent sessions',
-      description: 'Pause before potentially consequential local actions.',
-      checked: this.bashApprovalEnabled,
-      onChange: this.handleBashApprovalToggle,
-    });
+    return html`
+      <div class="category-section">
+        ${renderSettingsSectionHeading({
+          icon: 'shield',
+          title: 'Approval & safety',
+        })}
+        <div class="settings-section">
+          ${this.renderToggleRow({
+            label: 'Approve workspace edits',
+            description: 'Review a diff before an agent changes files.',
+            checked: this.editApprovalEnabled,
+            onChange: this.handleEditApprovalToggle,
+          })}
+          ${this.renderToggleRow({
+            label: 'Approve shell commands',
+            description: 'Pause before an agent runs a shell command.',
+            checked: this.bashApprovalEnabled,
+            onChange: this.handleBashApprovalToggle,
+          })}
+        </div>
+      </div>
+    `;
   }
 
-  private renderAgentSkillsSettings(): TemplateResult | typeof nothing {
-    if (!this.showAgentSkillsSettings) return nothing;
+  private renderAgentSkillsSettings(): TemplateResult {
     return this.renderToggleSection({
       icon: 'robot',
       title: 'Agent skills',
@@ -261,40 +252,14 @@ export class ToolsTab extends LitElement {
     if (items.length === 0) return nothing;
 
     let available = 0;
-    let missing = 0;
     for (const item of items) {
       if (item.status === 'available') available++;
-      else if (item.status === 'not-found') missing++;
     }
 
     const total = items.length;
-    const availablePercent = (available / total) * 100;
-    const availabilityLabel = `${available} of ${total} tools available`;
-
-    return html`
-      <div class="tools-summary">
-        <div class="tools-health-ring">
-          <wa-progress-ring
-            .value=${availablePercent}
-            .label=${availabilityLabel}
-          ></wa-progress-ring>
-          <div class="tools-health-labels">
-            <span class="tools-summary-stat tools-stat-available">
-              ${waIcon('check')} ${available} available
-            </span>
-            ${
-              missing > 0
-                ? html`
-                    <span class="tools-summary-stat tools-stat-missing">
-                      ${waIcon('triangle-exclamation')} ${missing} need setup
-                    </span>
-                  `
-                : nothing
-            }
-          </div>
-        </div>
-      </div>
-    `;
+    return html`<div class="tools-summary">
+      ${waIcon('check')} ${available}/${total} available
+    </div>`;
   }
 
   private renderCategory(
@@ -355,21 +320,16 @@ export class ToolsTab extends LitElement {
 
     return html`
       <div class="tools-container tab-content-container">
-        ${renderSettingsBanner({
-          id: 'tool-availability-banner',
-          icon: 'screwdriver-wrench',
-          title: 'Tool availability',
-          description:
-            'Monitor local capabilities and configure the tools agents may use.',
-          detail: this.renderSummary(items),
-          actions: renderLabeledActionButton({
+        <div class="tools-toolbar">
+          ${this.renderSummary(items)}
+          ${renderLabeledActionButton({
             icon: 'rotate-right',
             text: 'Re-check',
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () => this.handleRecheck(),
-          }),
-        })}
+          })}
+        </div>
         ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.flatMap((cat) => {
           const catItems = groups.get(cat);

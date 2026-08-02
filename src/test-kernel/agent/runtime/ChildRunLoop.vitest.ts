@@ -54,10 +54,7 @@ vi.mock('@tools/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-import {
-  WORKFLOW_JOURNAL_KEY_FORMAT,
-  type WorkflowJournalEntry,
-} from '@agent/workflowScript';
+import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import {
   startChildRunLoop,
   type ChildRunPorts,
@@ -1032,7 +1029,6 @@ describe('childRunLoop E2E fixtures', () => {
     ): WorkflowJournalEntry => ({
       index,
       key,
-      keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
       result: {
         category: 'workflow',
         outcome: 'completed',

@@ -154,6 +154,17 @@ frozen deep-import lists, not another lint rule.
 
 - **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
 
+### Testing discipline
+
+Tests are production maintenance work. Add them when they protect a consequential
+current contract, a difficult invariant, or a reproduced defect. Do not create
+tests for speculative abstractions, trivial data plumbing, implementation details,
+or compatibility behavior that the product does not intend to preserve. Prefer a
+small behavioral test at the true boundary over repeated unit tests of pass-through
+layers. When code or a historical format is retired, delete tests and fixtures that
+exist only for that retired behavior instead of rewriting them around the new
+implementation.
+
 ### Zod v4 Schema Patterns
 
 This project uses Zod v4. Follow these idiomatic patterns:
@@ -269,15 +280,45 @@ See: https://platform.openai.com/docs/guides/structured-outputs
 
 Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required. A required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior (for example, "every command except X"), verify it against the actual dispatch table whenever either changes; the two can drift independently. Evidence: the memory tool once required `path` for `view`, so every fresh session rendered an error card until the model retried; the fix's own description string then misdescribed `rename` until review caught it.
 
-**Backward compatibility with legacy formats**
+**Compatibility and format retirement**
 
-When evolving persisted or wire data formats:
+TeXRA has a short compatibility window. Do not preserve an old internal format
+indefinitely merely because a parser or migration already exists.
 
-- Use `z.union()` with `.transform()` to handle multiple formats in one schema
-- Put the new format first in the union (Zod tries members in order)
-- The legacy member transforms into the canonical structure
-- Handle legacy at the entry point using `safeParse`, not scattered fallbacks in consumers
-- One canonical format for all downstream code; never branch on format version
+TeXRA is an early-stage product. Prefer one small, current design over preserving
+historical behavior that materially increases maintenance cost. Breaking an old
+internal format is acceptable when no current public contract or demonstrated
+user need justifies the additional system.
+
+- Compatibility code may be removed three months after the replacement ships.
+  Record the introduction date and intended retirement condition beside every
+  temporary reader, alias, migration, or compatibility writer.
+- The desktop application has not had a public release. Desktop state always
+  adopts the current format directly; do not add desktop migration machinery.
+- CLI and TUI workflow-agent rosters and workflow-script checkpoints use only
+  their current schemas. Do not infer current state from old agent arrays,
+  rewrite old agent identifiers, write compatibility mirrors, or translate old
+  workflow journal versions.
+- New native settings begin with the current defaults. Do not import retired VS
+  Code settings or accept parallel prefixed and unprefixed on-disk spellings.
+  API helpers may canonicalize a caller-supplied key, but persisted JSON has one
+  spelling.
+- When a compatibility path is retired, delete its schemas, transforms,
+  branches, comments, fixtures, and compatibility-specific tests together. Do
+  not add new tests whose only purpose is to preserve a retired format.
+- Exceptions require a current public protocol or an explicit retention rule
+  for released user data. State the protected surface and retirement condition
+  in the code; “backward compatibility” alone is not a justification.
+
+For a format still inside its supported window, normalize it once at the
+storage or wire boundary:
+
+- Use `z.union()` with `.transform()` to handle the supported formats.
+- Put the current format first in the union.
+- Transform older input into one canonical structure.
+- Handle compatibility at the entry point using `safeParse`, not scattered
+  fallbacks in consumers.
+- Downstream code must never branch on the old format version.
 
 ```typescript
 // Canonical format (new)

@@ -455,16 +455,23 @@ const harnessFollowUpQueue =
 for (const followUp of QUEUED_FOLLOW_UPS) {
   harnessFollowUpQueue.enqueue({ text: followUp });
 }
-if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
+if (
+  process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
+  process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+) {
   await platform().workspaceState.update(
-    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-    HARNESS_VISIBLE_TOOL_USE_AGENTS,
-  );
-}
-if (process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined) {
-  await platform().workspaceState.update(
-    WorkspaceStateKey.ENABLED_AGENTS,
-    HARNESS_VISIBLE_WORKFLOW_AGENTS,
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    {
+      kind: 'custom',
+      workflowAgentKeys:
+        process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+          ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+          : 'all',
+      toolUseAgentKeys:
+        process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+          ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+          : 'all',
+    },
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
@@ -1400,9 +1407,9 @@ function seedRunningWorkflow(): void {
     total: 1,
   });
   runTrace.trace.emit({
-    type: 'workflow.task',
+    type: 'workflow.call',
     logId: 'harness-workflow-running-task-a',
-    task: {
+    call: {
       id: 'proofread-a',
       label: 'Proofread paper A',
       phase: 'Proofread',
@@ -1411,9 +1418,9 @@ function seedRunningWorkflow(): void {
     stageId: phaseStage.id,
   });
   runTrace.trace.emit({
-    type: 'workflow.task',
+    type: 'workflow.call',
     logId: 'harness-workflow-running-task-b',
-    task: {
+    call: {
       id: 'proofread-b',
       label: 'Proofread paper B',
       phase: 'Proofread',

@@ -134,6 +134,41 @@ function isTextContent(content: Content): content is TextContent {
   return content.type === 'text';
 }
 
+/** Remove text blocks that the Interactions API rejects as missing content. */
+function omitEmptyTextContent<T extends Content>(content: readonly T[]): T[] {
+  return content.filter(
+    (item) => !isTextContent(item) || Boolean(item.text?.trim()),
+  );
+}
+
+/**
+ * Normalize text-bearing steps at the external API boundary. This also covers
+ * transcripts restored from storage before this invariant was introduced.
+ */
+function omitEmptyTextContentFromSteps(steps: readonly Step[]): Step[] {
+  return steps.map((step) => {
+    if (step.type === 'user_input' || step.type === 'model_output') {
+      return {
+        ...step,
+        content: omitEmptyTextContent(step.content ?? []),
+      } satisfies UserInputStep | ModelOutputStep;
+    }
+    if (step.type === 'thought' && step.summary) {
+      return {
+        ...step,
+        summary: omitEmptyTextContent(step.summary),
+      } satisfies ThoughtStep;
+    }
+    if (step.type === 'function_result' && Array.isArray(step.result)) {
+      return {
+        ...step,
+        result: omitEmptyTextContent(step.result),
+      } satisfies FunctionResultStep;
+    }
+    return step;
+  });
+}
+
 /**
  * Steps the CLIENT contributes and must (re)send: the user's turns and tool
  * results. Under `previous_interaction_id` chaining the model-generated steps
@@ -1277,9 +1312,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // completes. Filtering to client-input steps fixes both the tool-round 400
     // and the text-round assistant-turn re-send.
     const shouldSendAll = !stateful || this.chainedInteractionId === null;
-    const inputSteps = shouldSendAll
-      ? base
-      : base.slice(this.sentStepCount).filter(isClientInputStep);
+    const inputSteps = omitEmptyTextContentFromSteps(
+      shouldSendAll
+        ? base
+        : base.slice(this.sentStepCount).filter(isClientInputStep),
+    );
     const previousId =
       stateful && !shouldSendAll
         ? (this.chainedInteractionId ?? undefined)

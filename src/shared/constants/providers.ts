@@ -260,11 +260,11 @@ export const DEFAULT_HELPER_MODEL = 'deepseek';
 export const DEFAULT_AGENT_MODEL = 'gemini35f';
 
 /**
- * Zod schema for a VS Code boolean setting surfaced per provider (without runtime value).
- * This is the single source of truth — ProviderVscodeSettingSchema in
+ * Zod schema for a boolean setting surfaced per provider (without runtime value).
+ * This is the single source of truth — ProviderSettingSchema in
  * profileViewMessages.ts extends this with a `value` field for runtime state.
  */
-export const ProviderVscodeSettingDefSchema = z.object({
+export const ProviderSettingDefSchema = z.object({
   key: z.string(),
   label: z.string(),
   description: z.string(),
@@ -273,15 +273,12 @@ export const ProviderVscodeSettingDefSchema = z.object({
   warningUrl: z.string().optional(),
   warningUrlLabel: z.string().optional(),
   /**
-   * When set, the setting is backed by globalSM (extension global state)
-   * instead of VS Code's workspace configuration.
+   * When set, the setting is backed by shared state rather than configuration.
    */
   globalStateKey: z.string().optional(),
 });
 
-export type ProviderVscodeSettingDef = z.infer<
-  typeof ProviderVscodeSettingDefSchema
->;
+export type ProviderSettingDef = z.infer<typeof ProviderSettingDefSchema>;
 
 export const USE_OPENROUTER_PROVIDER_SETTING = {
   key: GlobalStateKey.USE_OPENROUTER,
@@ -289,19 +286,19 @@ export const USE_OPENROUTER_PROVIDER_SETTING = {
   description:
     'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key. Note: OpenRouter bypasses Included Access — your OpenRouter key is always used directly.',
   globalStateKey: GlobalStateKey.USE_OPENROUTER,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
 // Named exports for the global-state-backed provider toggles below, so the CLI
 // state-setting catalog (`stateSettings.ts`) can reuse their label/description
 // by reference instead of copying strings that would drift. Anything without a
-// named export here is a VS Code config-tree setting the extension owns alone.
+// named export here is a config-backed setting.
 export const DASHSCOPE_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.DASHSCOPE_USE_CHINA,
   label: 'Qwen China Region (Bailian)',
   description:
     'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
   globalStateKey: GlobalStateKey.DASHSCOPE_USE_CHINA,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
 export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.MINIMAX_USE_CHINA,
@@ -313,7 +310,7 @@ export const MINIMAX_USE_CHINA_PROVIDER_SETTING = {
   warningUrl: 'https://platform.minimax.io/',
   warningUrlLabel: 'Get API key',
   globalStateKey: GlobalStateKey.MINIMAX_USE_CHINA,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
 export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.MOONSHOT_USE_CHINA,
@@ -326,7 +323,7 @@ export const MOONSHOT_USE_CHINA_PROVIDER_SETTING = {
   warningUrl: 'https://platform.moonshot.ai/console',
   warningUrlLabel: 'International console',
   globalStateKey: GlobalStateKey.MOONSHOT_USE_CHINA,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
 export const GLM_USE_CHINA_PROVIDER_SETTING = {
   key: GlobalStateKey.GLM_USE_CHINA,
@@ -337,7 +334,7 @@ export const GLM_USE_CHINA_PROVIDER_SETTING = {
   warningUrl: 'https://open.bigmodel.cn/',
   warningUrlLabel: 'BigModel console',
   globalStateKey: GlobalStateKey.GLM_USE_CHINA,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
 export const GLM_CODING_PLAN_PROVIDER_SETTING = {
   key: GlobalStateKey.GLM_CODING_PLAN,
@@ -347,7 +344,7 @@ export const GLM_CODING_PLAN_PROVIDER_SETTING = {
   warningUrl: 'https://z.ai/subscribe',
   warningUrlLabel: 'Subscribe',
   globalStateKey: GlobalStateKey.GLM_CODING_PLAN,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
 export const KIMI_CODE_PREFER_PROVIDER_SETTING = {
   key: GlobalStateKey.KIMI_CODE_PREFER,
@@ -356,13 +353,10 @@ export const KIMI_CODE_PREFER_PROVIDER_SETTING = {
     'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
   defaultValue: false,
   globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
-} satisfies ProviderVscodeSettingDef;
+} satisfies ProviderSettingDef;
 
-/** VS Code config settings to surface per provider in the Models tab. */
-export const PROVIDER_VSCODE_SETTINGS: Record<
-  string,
-  ProviderVscodeSettingDef[]
-> = {
+/** Settings surfaced per canonical provider id in the Models tab. */
+export const PROVIDER_SETTINGS: Record<string, ProviderSettingDef[]> = {
   openai: [
     {
       key: 'texra.model.gpt5ReasoningSummary',
@@ -425,11 +419,8 @@ export const PROVIDER_VSCODE_SETTINGS: Record<
   minimax: [MINIMAX_USE_CHINA_PROVIDER_SETTING],
   moonshot: [MOONSHOT_USE_CHINA_PROVIDER_SETTING],
   glm: [GLM_USE_CHINA_PROVIDER_SETTING, GLM_CODING_PLAN_PROVIDER_SETTING],
-  // Keyed lowercase: getProviderVscodeSettings looks these up by
-  // `provider.toLowerCase()`, so the camelCase `kimiCode` provider id resolves
-  // here as `kimicode`. (The other entries' ids are already lowercase.)
-  kimicode: [KIMI_CODE_PREFER_PROVIDER_SETTING],
-  openrouter: [USE_OPENROUTER_PROVIDER_SETTING],
+  kimiCode: [KIMI_CODE_PREFER_PROVIDER_SETTING],
+  openRouter: [USE_OPENROUTER_PROVIDER_SETTING],
 };
 
 // ============================================================================

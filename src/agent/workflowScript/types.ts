@@ -176,29 +176,11 @@ export type WorkflowAgentRunner = (
   invocation: WorkflowAgentInvocation,
 ) => Promise<unknown>;
 
-/** Hash semantics carried by each journal entry across checkpoint migrations. */
-export const WORKFLOW_JOURNAL_KEY_FORMAT = {
-  LEGACY_V1: 'legacy-v1',
-  DEPENDENCY_AWARE_V3: 'dependency-aware-v3',
-} as const;
-
-export const WorkflowJournalKeyFormatSchema = z.enum(
-  WORKFLOW_JOURNAL_KEY_FORMAT,
-);
-type WorkflowJournalKeyFormat = z.infer<typeof WorkflowJournalKeyFormatSchema>;
-
 /** One completed agent() call, cached for resume. */
 export interface WorkflowJournalEntry {
   index: number;
-  /**
-   * Stable call hash interpreted according to `keyFormat`. Current entries
-   * exclude display labels and phases and include host-resolved dependency
-   * fingerprints; migrated v1 entries include presentation fields. A mismatch
-   * forces a live re-run.
-   */
+  /** Stable call hash including host-resolved dependency fingerprints. */
   key: string;
-  /** Hash semantics used to verify and migrate this persisted entry. */
-  keyFormat: WorkflowJournalKeyFormat;
   result: unknown;
 }
 

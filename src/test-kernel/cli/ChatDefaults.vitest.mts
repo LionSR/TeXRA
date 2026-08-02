@@ -126,8 +126,8 @@ describe('CLI chat defaults', () => {
 
   it('ignores non-llm-zoo model ids in workspace defaults', async () => {
     const workspace = await workspaceWithConfig({
-      agent: 'assistant',
-      model: 'claude-opus-4-7',
+      'texra.agent': 'assistant',
+      'texra.model': 'claude-opus-4-7',
     });
 
     await expect(
@@ -143,9 +143,9 @@ describe('CLI chat defaults', () => {
 
   it('uses command-specific workspace defaults below environment overrides', async () => {
     const workspace = await workspaceWithConfig({
-      agent: 'generic',
-      model: 'gpt55',
-      chat: { agent: 'assistant', model: 'deepseekT' },
+      'texra.agent': 'generic',
+      'texra.model': 'gpt55',
+      'texra.chat': { agent: 'assistant', model: 'deepseekT' },
     });
 
     await expect(
@@ -172,6 +172,21 @@ describe('CLI chat defaults', () => {
       source: 'mixed',
       agentSource: 'builtin-default',
       modelSource: 'history',
+    });
+  });
+
+  it('ignores a history model that the CLI cannot run', async () => {
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('research', { model: 'Copilot GPT-4o' }),
+    ]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({
+      agent: 'assistant',
+      model: 'deepseekproT',
+      source: 'builtin',
+      modelSource: 'builtin-default',
     });
   });
 
@@ -253,7 +268,7 @@ describe('CLI chat defaults', () => {
 
   it('ignores simplifier from configured chat default tiers', async () => {
     const workspace = await workspaceWithConfig({
-      chat: { agent: 'simplifier', model: 'sonnet46T' },
+      'texra.chat': { agent: 'simplifier', model: 'sonnet46T' },
     });
 
     await expect(
@@ -266,8 +281,8 @@ describe('CLI chat defaults', () => {
     });
 
     mockedReadJson.mockResolvedValueOnce({
-      agent: 'simplifier',
-      model: 'sonnet46T',
+      'texra.agent': 'simplifier',
+      'texra.model': 'sonnet46T',
     });
     await expect(
       resolveChatDefaults({
@@ -308,7 +323,7 @@ describe('CLI chat defaults', () => {
 
   it('skips workspace, user, and history I/O when explicit overrides resolve agent and model', async () => {
     const workspace = await workspaceWithConfig({
-      chat: { agent: 'assistant', model: 'sonnet46T' },
+      'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
     });
 
     await expect(
@@ -331,7 +346,7 @@ describe('CLI chat defaults', () => {
 
   it('keeps default-tier loading when only the model is directly resolved', async () => {
     const workspace = await workspaceWithConfig({
-      chat: { agent: 'assistant', model: 'sonnet46T' },
+      'texra.chat': { agent: 'assistant', model: 'sonnet46T' },
     });
 
     await expect(

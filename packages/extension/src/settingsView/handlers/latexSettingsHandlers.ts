@@ -10,6 +10,13 @@ import { workspaceSM } from '@common/state';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import {
+  getVscodeHostConfig,
+  inspectVscodeHostConfig,
+  isVscodeHostConfigExplicitlySet,
+  updateVscodeHostConfig,
+} from '@frontend/vscode/vscodeHostConfig';
+import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   SETTINGS_VIEW_CMD,
@@ -20,12 +27,6 @@ import {
   normalizePlatform,
 } from '@shared/constants/latex';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  getConfig,
-  inspectConfig,
-  isConfigExplicitlySet,
-  updateConfig,
-} from '@utils/config/configUtils';
 import {
   checkToolInstalled,
   detectPackageManager,
@@ -42,10 +43,10 @@ export class LatexSettingsHandlers {
   private readonly recommendedSettingsController =
     new LatexRecommendedSettingsController({
       config: {
-        getConfig: (key) => getConfig<unknown>(key),
+        getConfig: (key) => getVscodeHostConfig<unknown>(key),
         getGlobalValue: (key) =>
-          inspectConfig<Record<string, unknown>>(key)?.globalValue,
-        isExplicitlySet: (key) => isConfigExplicitlySet(key),
+          inspectVscodeHostConfig<Record<string, unknown>>(key)?.globalValue,
+        isExplicitlySet: isVscodeHostConfigExplicitlySet,
       },
     });
 
@@ -98,10 +99,7 @@ export class LatexSettingsHandlers {
           field: data.field,
           reset: data.reset ?? false,
         })) {
-          await updateConfig(key, value, {
-            target: 'global',
-            prefix: false,
-          });
+          await updateVscodeHostConfig(key, value, 'global');
         }
 
         await this.ctx.withActiveWebview((w) =>
@@ -130,8 +128,9 @@ export class LatexSettingsHandlers {
    */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      this.configPersistenceController.buildConfigMessage((key) =>
-        workspaceSM.get(key),
+      this.configPersistenceController.buildConfigMessage(
+        (key) => workspaceSM.get(key),
+        platform().config,
       ),
     );
   }

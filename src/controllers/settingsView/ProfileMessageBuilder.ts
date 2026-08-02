@@ -33,7 +33,7 @@ import { getGlobalStreaming } from '@utils/config/providerConfig';
 export interface BuildProfileMessageDeps {
   /**
    * Build the provider key statuses. Host-specific: the extension fills
-   * `vscodeSettings` from VS Code config; desktop returns them empty.
+   * `providerSettings` supplied by the active host.
    */
   getProviderKeyStatuses: () => Promise<ProviderKeyStatus[]>;
 }

@@ -25,14 +25,12 @@ function configProvider() {
 }
 
 /**
- * Gets a configuration value from VS Code settings.
+ * Gets a value from the host's native TeXRA configuration.
  *
  * Path conventions:
- * - Use dot notation without the 'texra' prefix (e.g., 'agents', 'api.engine')
- * - The function will automatically try multiple namespaces:
- *   1. The path as given (for non-texra configs like 'latex.latexindentConfig')
- *   2. Under the 'texra' namespace
- *   3. With explicit 'texra.' prefix
+ * - Use dot notation with or without the canonical `texra.` prefix.
+ * - Host settings such as `latex-workshop.*` must use the host adapter rather
+ *   than this shared configuration path.
  *
  * @param path Configuration path (e.g., 'agents' or 'api.engine')
  * @param defaultValue Optional default value if configuration is not found
@@ -80,12 +78,11 @@ export function getValidatedConfig<T>(
 }
 
 /**
- * Updates a configuration value in VS Code settings.
+ * Updates a value in the host's native TeXRA configuration.
  *
  * Path conventions:
- * - Use dot notation without the 'texra' prefix for extension settings
- *   (e.g., 'agents', 'api.engine')
- * - Non-extension settings should set `prefix` to false and pass the full key
+ * - Use dot notation with or without the canonical `texra.` prefix.
+ * - `prefix: false` is retained for callers that already pass a canonical key.
  *
  * @param path Configuration path
  * @param value The value to set
@@ -111,18 +108,10 @@ export async function updateConfig<T>(
 }
 
 /**
- * Inspect a configuration key to retrieve its raw global/workspace/folder values
- * (without VS Code defaults). Returns `undefined` if the key is not registered.
- */
-export function inspectConfig<T = unknown>(key: string) {
-  return configProvider()?.inspect<T>(key);
-}
-
-/**
  * Checks if a configuration setting has been explicitly set by the user
  * (global, workspace, or workspace folder), rather than using defaults.
  */
-export function isConfigExplicitlySet(key: string): boolean {
+function isConfigExplicitlySet(key: string): boolean {
   return configProvider()?.isExplicitlySet(key) ?? false;
 }
 

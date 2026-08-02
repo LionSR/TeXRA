@@ -30,7 +30,7 @@ const DESKTOP_DISPATCH_CASES: ReadonlyArray<
 > = [
   ['texra.showMainView', 'showRoute', ['main']],
   ['texra.desktop.showLogs', 'showRoute', ['logs']],
-  ['texra.openSettings', 'showSettings', []],
+  ['texra.showDashboard', 'showSettings', []],
   ['texra.mainView.reset', 'resetMainView', []],
   ['texra.desktop.toggleBottomBar', 'toggleBottomBar', []],
   ['texra.desktop.toggleSidePanel', 'toggleSidePanel', []],
@@ -238,7 +238,7 @@ describe('desktop command surface', () => {
       'Show Launcher',
       'Show Logs',
       'Open Logs Folder',
-      'Open TeXRA Settings',
+      'Settings',
       'Toggle Summary Bar',
       'Toggle Bottom Bar',
       'Toggle Side Panel',

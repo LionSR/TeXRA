@@ -80,16 +80,6 @@ describe('getToolFlags', () => {
     }
   });
 
-  it('still honors the pre-merge texra.debug.saveInputPrompt key', async () => {
-    try {
-      fakeConfig.set('texra.debug.saveInputPrompt', true);
-      const flags = getToolFlags(baseConfig, baseSetting, basePrompt);
-      expect(flags.PRINT_INPUT_PROMPT).toBe(true);
-    } finally {
-      await fakeConfig.update('texra.debug.saveInputPrompt', undefined);
-    }
-  });
-
   it('derives round count from additional userRequest entries', () => {
     const prompt: AgentPrompt = {
       ...basePrompt,
@@ -252,8 +242,7 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.ALL_CONTEXTS).toBe(
       '<document name="context.tex">\npresent context\n</document>',
     );
-    expect(vars.REFERENCE_FILES).toEqual(['context.tex']);
-    expect(vars.LIST_OF_ALL_REFERENCES).toBe('context.tex');
+    expect(vars.CONTEXT_FILES).toEqual(['context.tex']);
     expect(vars.LIST_OF_ALL_CONTEXTS).toBe('context.tex');
     expect(vars.CONTEXT_FILE).toBe('context.tex');
     expect(vars.CONTEXT_CONTENT).toBe('present context');

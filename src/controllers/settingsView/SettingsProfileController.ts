@@ -2,12 +2,12 @@ import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   ApiAccessMode,
-  NumberVscodeSetting,
+  NumberSetting,
   ProviderKeyStatus,
-  ProviderVscodeSetting,
+  ProviderSetting,
   UpdateProfileMessage,
 } from '@shared/schemas/profileViewMessages';
-import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
+import type { ProviderSettingDef } from '@shared/constants/providers';
 import {
   DEFAULT_CORE_SETTINGS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -15,7 +15,7 @@ import {
 } from '@shared/schemas/coreSettings';
 import { buildProfileMessage } from './ProfileMessageBuilder';
 
-type SettingsReliabilitySetting = Omit<NumberVscodeSetting, 'value'> & {
+type SettingsReliabilitySetting = Omit<NumberSetting, 'value'> & {
   defaultValue: number;
   schema?: {
     safeParse(value: unknown): { success: boolean };
@@ -47,7 +47,7 @@ const SETTINGS_RELIABILITY_SETTINGS: readonly SettingsReliabilitySetting[] = [
 
 export type SettingsProfileConfigValue = boolean | number;
 
-export type ProviderVscodeSettingUpdateResult =
+export type ProviderSettingUpdateResult =
   | { kind: 'updated'; affectsModelAvailability: boolean }
   | { kind: 'rejected'; key: string };
 
@@ -59,10 +59,7 @@ export interface ApiAccessModeUpdate {
 export interface SettingsProfileControllerDeps {
   readonly globalState: StateStore;
   readonly providerIds: readonly string[];
-  readonly providerVscodeSettings: Record<
-    string,
-    readonly ProviderVscodeSettingDef[]
-  >;
+  readonly providerSettings: Record<string, readonly ProviderSettingDef[]>;
   readonly providerDisplayNames: Record<string, string>;
   readonly providerKeyUrls: Record<string, string>;
   loadProviderKeyStatuses(): Promise<
@@ -80,7 +77,7 @@ export interface SettingsProfileControllerDeps {
 }
 
 export class SettingsProfileController {
-  private readonly providerSettingsByKey: Map<string, ProviderVscodeSettingDef>;
+  private readonly providerSettingsByKey: Map<string, ProviderSettingDef>;
   private readonly reliabilitySettingsByKey = new Map(
     SETTINGS_RELIABILITY_SETTINGS.map((setting) => [setting.key, setting]),
   );
@@ -90,7 +87,7 @@ export class SettingsProfileController {
     // appear under multiple providers, and the original lookup resolved to
     // the first match.
     this.providerSettingsByKey = new Map();
-    for (const setting of Object.values(deps.providerVscodeSettings).flat()) {
+    for (const setting of Object.values(deps.providerSettings).flat()) {
       if (!this.providerSettingsByKey.has(setting.key)) {
         this.providerSettingsByKey.set(setting.key, setting);
       }
@@ -103,7 +100,7 @@ export class SettingsProfileController {
     });
   }
 
-  getReliabilitySettings(): NumberVscodeSetting[] {
+  getReliabilitySettings(): NumberSetting[] {
     return SETTINGS_RELIABILITY_SETTINGS.map((definition) => {
       const { defaultValue, schema, ...setting } = definition;
       const configuredValue = this.deps.getConfig<number>(
@@ -151,10 +148,10 @@ export class SettingsProfileController {
     return { mode, openRouterDisabled };
   }
 
-  async setProviderVscodeSetting(input: {
+  async setProviderSetting(input: {
     key: string;
     value: SettingsProfileConfigValue;
-  }): Promise<ProviderVscodeSettingUpdateResult> {
+  }): Promise<ProviderSettingUpdateResult> {
     const providerSetting = this.providerSettingsByKey.get(input.key);
     const reliabilitySetting = this.reliabilitySettingsByKey.get(input.key);
     if (
@@ -187,9 +184,7 @@ export class SettingsProfileController {
   }
 
   /**
-   * Map every provider id to its `ProviderKeyStatus`. `vscodeSettings` is the
-   * one host-specific field: the VS Code extension fills it from config while
-   * the desktop app leaves it empty.
+   * Map every canonical provider id to its key status and native controls.
    */
   private async getProviderKeyStatuses(): Promise<ProviderKeyStatus[]> {
     const secretStatuses = await this.deps.loadProviderKeyStatuses();
@@ -201,12 +196,12 @@ export class SettingsProfileController {
       streaming: this.deps.getProviderStreaming(provider),
       customEndpoint: this.deps.getProviderEndpoint(provider),
       supportsCustomEndpoint: this.deps.supportsCustomEndpoint(provider),
-      vscodeSettings: this.getProviderVscodeSettings(provider),
+      providerSettings: this.getProviderSettings(provider),
     }));
   }
 
-  private getProviderVscodeSettings(provider: string): ProviderVscodeSetting[] {
-    const defs = this.deps.providerVscodeSettings[provider.toLowerCase()];
+  private getProviderSettings(provider: string): ProviderSetting[] {
+    const defs = this.deps.providerSettings[provider];
     if (!defs) return [];
     return defs.map((def) => ({
       ...def,

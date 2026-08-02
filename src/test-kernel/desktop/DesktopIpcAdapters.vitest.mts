@@ -10,7 +10,6 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
@@ -35,8 +34,8 @@ type OnboardingHarnessOptions = Partial<
 };
 
 // The WEBVIEW_READY / run-setup handlers trigger refreshOnboardingFunnel as a
-// fire-and-forget task whose chain (readyGate → credential probe →
-// selectSetupAgent → guarded kickoffSetup → re-derive) is several awaits deep.
+// fire-and-forget task whose chain (credential probe → selectSetupAgent →
+// guarded kickoffSetup → re-derive) is several awaits deep.
 // Drain via macrotask boundaries rather than counting microtask hops: each
 // setTimeout(0) lets the entire pending microtask queue — and any
 // setTimeout(0)-scheduled credential probe — settle, so this stays correct if
@@ -605,40 +604,6 @@ describe('desktop IPC adapters', () => {
     // interleave and clobber `previousFunnelState`.
     expect(funnelStates.at(-1)).toBe('setup');
     expect(selectSetupAgent).toHaveBeenCalledOnce();
-  });
-
-  it('defers the first funnel derivation until the readyGate resolves', async () => {
-    const readyGate = createDeferred();
-    // A returning veteran: credential present but firstRunDone not yet written.
-    // Before the backfill settles this derives 'setup'; the gate must hold the
-    // first derivation so the renderer never sees the transient State 1.
-    const selectSetupAgent = vi.fn(async () => {});
-    const { onboarding, postToRenderer, state } = await createOnboardingHarness(
-      {
-        readyGate: readyGate.promise,
-        hasCredential: () => true,
-        selectSetupAgent,
-      },
-    );
-
-    expect(
-      onboarding.handleMessage({
-        command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'main',
-      }),
-    ).toBe(false);
-    await flushAsync();
-    // Gate still closed → no funnel pushed, no setup-agent selection yet.
-    expect(postToRenderer).not.toHaveBeenCalled();
-    expect(selectSetupAgent).not.toHaveBeenCalled();
-
-    // Backfill marks the veteran done, then opens the gate.
-    void state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
-    readyGate.resolve();
-    await flushAsync();
-
-    expectLastFunnelState(postToRenderer, 'done');
-    expect(selectSetupAgent).not.toHaveBeenCalled();
   });
 
   it('serves desktop log snapshots and copy/export actions', async () => {

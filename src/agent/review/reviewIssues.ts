@@ -12,13 +12,10 @@
 import { randomUUID } from 'node:crypto';
 
 // Local imports
-import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
 import { normalizeFilePath } from '@utils/core';
 
 export const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
 export type ReviewSeverity = (typeof REVIEW_SEVERITIES)[number];
-
-export type ReviewApproach = (typeof AGENT_REVIEW_APPROACHES)[number];
 
 export interface ReviewIssue {
   /** Stable id assigned at store time; used by tree items, diagnostics, and commands. */
@@ -83,26 +80,18 @@ export interface ReviewInstructionInput {
   changedFiles: string[];
   diff: string;
   truncated: boolean;
-  approach: ReviewApproach;
   /** Optional free-text focus supplied per run via the "Find Issues" options. */
   userInstructions?: string;
 }
 
-const QUICK_GUIDANCE =
-  'This is a QUICK review: judge primarily from the diff and verify only your strongest suspicions with tools before reporting.';
-
-const THOROUGH_GUIDANCE =
-  'This is a THOROUGH review: read every changed file in full, grep for callers of changed symbols, and pull `diagnostics` for each changed file before deciding what to report.';
-
 /**
- * Build the instruction for a `changeReviewer` tool-use session. The diff is
- * embedded so the review honors the user's untracked/submodule settings;
- * untracked files appear as synthesized `new file (untracked)` entries.
+ * Build the instruction for a `changeReviewer` tool-use session. The diff and
+ * changed-file list give the reviewer the change set while leaving the review
+ * depth and supporting tool use to the model.
  */
 export function buildReviewInstruction(input: ReviewInstructionInput): string {
   const sections = [
-    `Review the working tree's diff with the ${input.baseDescription}.`,
-    input.approach === 'thorough' ? THOROUGH_GUIDANCE : QUICK_GUIDANCE,
+    `Review the working tree's diff with the ${input.baseDescription}. Decide which files and surrounding code must be inspected to assess the changes reliably.`,
   ];
   if (input.userInstructions) {
     sections.push(
