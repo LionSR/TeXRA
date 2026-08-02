@@ -123,7 +123,7 @@ describe('LOG_DELTA text deltas', () => {
     expect(finalized && isStreamingTextLogMessage(finalized)).toBe(false);
   });
 
-  it('drops compaction activity before progress-log indexing', () => {
+  it('drops non-presentational records before progress-log indexing', () => {
     const getState = seedWorkflowStream();
     const activityEntry = (
       id: string,
@@ -147,6 +147,16 @@ describe('LOG_DELTA text deltas', () => {
       streamId: STREAM_ID,
       entries: [
         activityEntry('compaction-start', 'started'),
+        {
+          seqNo: 2,
+          id: 'internal-diagnostic',
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp: 100,
+          messageType: MESSAGE_TYPES.INTERNAL,
+          text: 'hidden diagnostic',
+          verbose: false,
+        },
         modelResponseEntry('visible', 'completed'),
         activityEntry('compaction-finish', 'finished'),
       ],
