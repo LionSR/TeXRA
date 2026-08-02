@@ -14,7 +14,7 @@ const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
 
 export interface LaunchOptions {
   /**
-   * Workspace path to inject via `--texra-workspace`. If omitted, a fresh
+   * Workspace path to inject via `--texra-workspace-path`. If omitted, a fresh
    * temp directory is created so the app does not pop the "open folder"
    * dialog at startup.
    */
@@ -76,7 +76,7 @@ export async function launchTexraApp(
     options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
 
   const app = await electron.launch({
-    args: [MAIN_ENTRY, '--texra-workspace', workspacePath],
+    args: [MAIN_ENTRY, '--texra-workspace-path', workspacePath],
     cwd: PACKAGE_ROOT,
     env: {
       ...process.env,

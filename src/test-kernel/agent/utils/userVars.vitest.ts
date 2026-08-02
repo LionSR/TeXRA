@@ -252,8 +252,7 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.ALL_CONTEXTS).toBe(
       '<document name="context.tex">\npresent context\n</document>',
     );
-    expect(vars.REFERENCE_FILES).toEqual(['context.tex']);
-    expect(vars.LIST_OF_ALL_REFERENCES).toBe('context.tex');
+    expect(vars.CONTEXT_FILES).toEqual(['context.tex']);
     expect(vars.LIST_OF_ALL_CONTEXTS).toBe('context.tex');
     expect(vars.CONTEXT_FILE).toBe('context.tex');
     expect(vars.CONTEXT_CONTENT).toBe('present context');

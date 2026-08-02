@@ -334,17 +334,11 @@ Several map onto already-tracked standing items (noted).
    single-purpose and correct. Keep all of it. (Record: this is a candidate the
    fan-out surfaced that fully dissolved under verification.)
 
-7. **`AgentFlowResult` → `AgentFinalResult` two-schema rename + a third builder**
-   _(LOW; reviewed-train — record only)_. `buildAgentFinalResult`
-   (`AgentFinalResult.ts:133-166`) `.pick()`s the flow schema and renames
-   `lastResponse→response` / `touchedFiles→files`, and
-   `storage/resultMeta.ts:235` `buildLegacyAgentFinalResult` is a third
-   constructor of the same shape. One logical result is defined/rebuilt in three
-   places; the rename layer is avoidable churn **if** the flow result had used
-   the canonical names, collapsible when the legacy persisted shape can be
-   dropped. Crosses `storage/` + a schema change with tests → reviewed-train.
-   (The shared projection helper `projectToolUseFinalTextFields` is legitimately
-   2-caller — keep.) _(The two sibling candidates an earlier draft listed here —
+7. **`AgentFlowResult` → `AgentFinalResult` result construction**
+   _(resolved)_. The retired persisted-result decoder and its third result
+   builder were removed; storage now accepts only the canonical result schema.
+   The live flow-to-final projection remains the single lifecycle boundary.
+   _(The two sibling candidates an earlier draft listed here —
    `inferAndLogPersistedModelHandlerCompatibilityKey` and the helper-model
    precedence duplication — have been resolved elsewhere in this doc and are
    **not** open reviewed-train work: the former is a 4-caller tested helper kept

@@ -50,6 +50,7 @@ const { packageCommandContributions, commandKeybindings } = commandCatalog;
 
 function getConfigurationSections(packageJson) {
   const configuration = packageJson.contributes?.configuration;
+  if (configuration === undefined) return [];
   if (!Array.isArray(configuration)) {
     throw new Error('package.json contributes.configuration must be an array');
   }
@@ -63,18 +64,22 @@ function normalizeLineEndings(text) {
 const check = process.argv.includes('--check');
 const packageText = await readFile(packagePath, 'utf8');
 const packageJson = JSON.parse(packageText);
-// Spread preserves each key's existing position in `contributes`; only the
-// three catalog-derived values are regenerated in place.
+const configuration = buildTexraPackageConfiguration(
+  getConfigurationSections(packageJson),
+);
+const contributes = {
+  ...packageJson.contributes,
+  commands: packageCommandContributions,
+  keybindings: commandKeybindings,
+};
+if (configuration.length === 0) {
+  delete contributes.configuration;
+} else {
+  contributes.configuration = configuration;
+}
 const nextPackageJson = {
   ...packageJson,
-  contributes: {
-    ...packageJson.contributes,
-    configuration: buildTexraPackageConfiguration(
-      getConfigurationSections(packageJson),
-    ),
-    commands: packageCommandContributions,
-    keybindings: commandKeybindings,
-  },
+  contributes,
 };
 const nextPackageText = `${JSON.stringify(nextPackageJson, null, 2)}\n`;
 

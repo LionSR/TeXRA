@@ -10,6 +10,7 @@ import { workspaceSM } from '@common/state';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexRecommendedSettingsController } from '@controllers/settingsView/LatexRecommendedSettingsController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
+import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   SETTINGS_VIEW_CMD,
@@ -130,8 +131,9 @@ export class LatexSettingsHandlers {
    */
   async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      this.configPersistenceController.buildConfigMessage((key) =>
-        workspaceSM.get(key),
+      this.configPersistenceController.buildConfigMessage(
+        (key) => workspaceSM.get(key),
+        platform().config,
       ),
     );
   }

@@ -2,6 +2,13 @@
 import { z } from 'zod';
 
 import {
+  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
+  DEFAULT_ENABLED_REPLACEMENTS,
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+} from '@shared/constants/latex';
+
+import {
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentSkillsSettingsSchema,
 } from './agentSkills';
@@ -10,10 +17,9 @@ import {
  * Core (host-neutral) TeXRA settings.
  *
  * These settings apply to any host that integrates the TeXRA core — VS Code
- * extension, Electron desktop, or CLI. The VS Code host layers its own
- * extension-only settings on top via `vscodeSettings.ts`; the CLI exposes only
- * the shared enums + a flat-key list from `cliSettings.ts` rather than a
- * layered schema; the Electron desktop host has no extension settings today.
+ * extension, Electron desktop, or CLI. All three hosts read them from the
+ * TeXRA-owned JSON configuration; host-specific schemas may add controls that
+ * do not represent runtime configuration.
  *
  * Per the project's split policy: a setting belongs in Core if any host could
  * plausibly implement it, even if only one host implements it today. Truly
@@ -22,44 +28,15 @@ import {
  * extension schema, when one exists.
  */
 
-const NON_REGEX_REPLACEMENT_CATEGORIES = [
-  'latex_spacing',
-  'equations',
-  'sections',
-  'latex_forbidden_commands',
-  'characters',
-  'font_commands',
-  'latex_xml',
-  'unicode',
-  'html_entities',
-  'latexdiff',
-  'gptness',
-  'personal_style',
-  'max_style',
-] as const;
-
-const REGEX_REPLACEMENT_CATEGORIES = [
-  'fenced_latex_blocks',
-  'inline_math',
-  'parentheses',
-  'latexdiff_markup',
-  'equation_style',
-  'equation_macros',
-  'personal_style_contextual',
-  'max_style_regex',
-] as const;
-
 export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
   'sameDirectory',
   'workspaceTemp',
 ] as const;
 
 export const AGENT_REVIEW_APPROACHES = ['quick', 'thorough'] as const;
+export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
+  'texra.toolUse.requireEditApproval';
 
-export type NonRegexReplacementCategory =
-  (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number];
-export type RegexReplacementCategory =
-  (typeof REGEX_REPLACEMENT_CATEGORIES)[number];
 export type LatexdiffTempFileLocation =
   (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
 export type AgentReviewApproach = (typeof AGENT_REVIEW_APPROACHES)[number];
@@ -103,94 +80,6 @@ export const DEFAULT_CORE_SETTINGS = {
   chatgptCodex: {
     preferSubscription: false,
   },
-  files: {
-    included: {
-      mediaExtensions: [
-        '.png',
-        '.pdf',
-        '.jpeg',
-        '.jpg',
-        '.gif',
-        '.heic',
-        '.heif',
-        '.webp',
-        '.wav',
-        '.m4a',
-        '.mp3',
-        '.aiff',
-        '.aac',
-        '.opus',
-        '.l16',
-        '.alaw',
-        '.mulaw',
-        '.ogg',
-        '.flac',
-      ],
-      inputExtensions: ['.txt', '.tex', '.md'],
-      contextExtensions: [
-        '.txt',
-        '.tex',
-        '.md',
-        '.bib',
-        '.bbl',
-        '.cls',
-        '.sty',
-      ],
-      editedExtensions: ['.txt', '.tex'],
-    },
-    ignored: {
-      fileExtensions: [
-        '.pdf',
-        '.bst',
-        '.json',
-        '.py',
-        '.ipynb',
-        '.png',
-        '.vsix',
-        '.ts',
-        '.js',
-        '.yaml',
-      ],
-      inputFiles: ['command.tex', 'commands.tex', 'preamble.tex', 'yaml'],
-      inputDirectories: [],
-      mediaDirectories: [
-        'build',
-        'node_modules',
-        '__pycache__',
-        'versions',
-        'history',
-        'venv',
-        'Diffs',
-      ],
-      directories: [
-        'build',
-        'node_modules',
-        '__pycache__',
-        'figures',
-        'media',
-        'figs',
-        'versions',
-        'history',
-        'stuff',
-        'draft',
-        'miscellaneous',
-        'diffs',
-        'venv',
-      ],
-      keywords: [
-        'Makefile',
-        'template',
-        '_thinking',
-        '_diff',
-        'draw',
-        'versions',
-        'history',
-        '.egg-info',
-        'venv',
-        'yaml',
-      ],
-    },
-  },
   maxImageDimension: 2000,
   bib: {
     defaultPath: '',
@@ -213,32 +102,12 @@ export const DEFAULT_CORE_SETTINGS = {
       '\\end{document}',
     includeWorkspaceInTexinputs: true,
     wrapCritiqueInAlign: true,
-    enabledReplacements: [
-      'latex_spacing',
-      'equations',
-      'sections',
-      'latex_forbidden_commands',
-      'characters',
-      'font_commands',
-      'latex_xml',
-      'unicode',
-      'html_entities',
-      'latexdiff',
-      'gptness',
-    ] satisfies NonRegexReplacementCategory[],
-    enabledReplacementsRegex: [
-      'fenced_latex_blocks',
-      'inline_math',
-      'parentheses',
-      'latexdiff_markup',
-      'equation_style',
-      'personal_style_contextual',
-    ] satisfies RegexReplacementCategory[],
+    enabledReplacements: DEFAULT_ENABLED_REPLACEMENTS,
+    enabledReplacementsRegex: DEFAULT_ENABLED_REGEX_REPLACEMENTS,
     customReplacementsRegex: {},
     customReplacements: {},
   },
   latexdiff: {
-    pictureEnvironments: '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*',
     tempFileLocation: 'sameDirectory' as LatexdiffTempFileLocation,
   },
   git: {
@@ -246,10 +115,6 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   agentReview: {
     runOnCommit: false,
-    includeSubmodules: true,
-    includeUntrackedFiles: true,
-    approach: 'quick' as AgentReviewApproach,
-    model: '',
   },
   audio: {
     soxPath: '',
@@ -384,58 +249,6 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
-  files: z
-    .strictObject({
-      included: z
-        .strictObject({
-          mediaExtensions: stringArray(
-            DEFAULT_CORE_SETTINGS.files.included.mediaExtensions,
-            'File extensions to include when searching for media files',
-          ),
-          inputExtensions: stringArray(
-            DEFAULT_CORE_SETTINGS.files.included.inputExtensions,
-            'File extensions to include when searching for input files',
-          ),
-          contextExtensions: stringArray(
-            DEFAULT_CORE_SETTINGS.files.included.contextExtensions,
-            'File extensions to include when searching for context files',
-          ),
-          editedExtensions: stringArray(
-            DEFAULT_CORE_SETTINGS.files.included.editedExtensions,
-            'File extensions to include when searching for edited files',
-          ),
-        })
-        .prefault(DEFAULT_CORE_SETTINGS.files.included),
-      ignored: z
-        .strictObject({
-          fileExtensions: stringArray(
-            DEFAULT_CORE_SETTINGS.files.ignored.fileExtensions,
-            'File extensions to ignore when listing text files',
-          ),
-          inputFiles: stringArray(
-            DEFAULT_CORE_SETTINGS.files.ignored.inputFiles,
-            'Files to ignore when listing input, sample, and edited files',
-          ),
-          inputDirectories: stringArray(
-            DEFAULT_CORE_SETTINGS.files.ignored.inputDirectories,
-            'Additional directories to ignore when listing input and edited files',
-          ),
-          mediaDirectories: stringArray(
-            DEFAULT_CORE_SETTINGS.files.ignored.mediaDirectories,
-            'Directories to ignore in the figure path',
-          ),
-          directories: stringArray(
-            DEFAULT_CORE_SETTINGS.files.ignored.directories,
-            'Directories to ignore when listing files',
-          ),
-          keywords: stringArray(
-            DEFAULT_CORE_SETTINGS.files.ignored.keywords,
-            'Keywords to ignore when selecting files',
-          ),
-        })
-        .prefault(DEFAULT_CORE_SETTINGS.files.ignored),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.files),
   maxImageDimension: numberField(
     DEFAULT_CORE_SETTINGS.maxImageDimension,
     'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
@@ -500,10 +313,6 @@ export const CoreSettingsShape = {
     .prefault(DEFAULT_CORE_SETTINGS.latex),
   latexdiff: z
     .strictObject({
-      pictureEnvironments: stringField(
-        DEFAULT_CORE_SETTINGS.latexdiff.pictureEnvironments,
-        'Regular expression pattern for environments to be treated as pictures. These environments will be processed as a unit without internal differencing.',
-      ),
       tempFileLocation: z
         .enum(LATEXDIFF_TEMP_FILE_LOCATIONS)
         .describe(
@@ -532,30 +341,6 @@ export const CoreSettingsShape = {
       runOnCommit: boolField(
         DEFAULT_CORE_SETTINGS.agentReview.runOnCommit,
         'Automatically review your changes for issues after each commit.',
-      ),
-      includeSubmodules: boolField(
-        DEFAULT_CORE_SETTINGS.agentReview.includeSubmodules,
-        'Include changes from Git submodules in the review.',
-      ),
-      includeUntrackedFiles: boolField(
-        DEFAULT_CORE_SETTINGS.agentReview.includeUntrackedFiles,
-        'Include untracked files (new files not yet added to Git) in the review.',
-      ),
-      approach: z
-        .enum(AGENT_REVIEW_APPROACHES)
-        .describe(
-          'Choose between quick or more thorough, higher-cost analysis.',
-        )
-        .meta({
-          enumDescriptions: [
-            'The reviewer verifies only its strongest suspicions with tools — fast and cheap.',
-            'The reviewer reads every changed file in full, checks callers, and pulls diagnostics before reporting — deeper, higher-cost analysis.',
-          ],
-        })
-        .prefault(DEFAULT_CORE_SETTINGS.agentReview.approach),
-      model: stringField(
-        DEFAULT_CORE_SETTINGS.agentReview.model,
-        'Model id for the review session (e.g. a stronger model for thorough reviews). Leave empty to use the default agent model.',
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.agentReview),
@@ -665,16 +450,6 @@ export const CORE_SETTING_PATHS = [
   'model.gpt5ReasoningSummary',
   'model.retry.maxAttempts',
   'chatgptCodex.preferSubscription',
-  'files.included.mediaExtensions',
-  'files.included.inputExtensions',
-  'files.included.contextExtensions',
-  'files.included.editedExtensions',
-  'files.ignored.fileExtensions',
-  'files.ignored.inputFiles',
-  'files.ignored.inputDirectories',
-  'files.ignored.mediaDirectories',
-  'files.ignored.directories',
-  'files.ignored.keywords',
   'maxImageDimension',
   'bib.defaultPath',
   'bib.zoteroPort',
@@ -688,14 +463,9 @@ export const CORE_SETTING_PATHS = [
   'latex.enabledReplacementsRegex',
   'latex.customReplacementsRegex',
   'latex.customReplacements',
-  'latexdiff.pictureEnvironments',
   'latexdiff.tempFileLocation',
   'git.numberOfCommitsToShow',
   'agentReview.runOnCommit',
-  'agentReview.includeSubmodules',
-  'agentReview.includeUntrackedFiles',
-  'agentReview.approach',
-  'agentReview.model',
   'audio.soxPath',
   'logger.debugMode',
   'telemetry.enabled',
@@ -705,7 +475,7 @@ export const CORE_SETTING_PATHS = [
   'toolUse.requireBashApproval',
 ] as const satisfies readonly LeafPaths<CoreSettings>[];
 
-type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
+export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
 
 // Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
 type _AssertCorePathsExhaustive = AssertNever<
@@ -715,11 +485,9 @@ type _AssertCorePathsExhaustive = AssertNever<
 /**
  * Which hosts actually read each Core setting, keyed by the file that reads it.
  *
- * The split matters because `.texra/config.json` is shared by the CLI and the
- * desktop app while the VS Code extension keeps its configuration in
- * `.vscode/settings.json`. A setting only the extension reads is inert in
- * `.texra/config.json`, so the CLI's unknown-key warning must report it rather
- * than accept it silently.
+ * The split matters because `.texra/config.json` is shared by all three hosts,
+ * but a setting only the extension reads is still inert in the CLI. The CLI's
+ * unknown-key warning must report such a key rather than accept it silently.
  *
  * This mirrors the `cliConsumer` discipline {@link STATE_SETTINGS} enforces in
  * `stateSettings.ts`. State-backed settings additionally carry
@@ -753,20 +521,6 @@ export const CLI_CORE_SETTING_CONSUMERS = {
   ],
   'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
   'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
-  'src/common/files/fileTypeUtils.ts': [
-    'files.included.mediaExtensions',
-    'files.included.inputExtensions',
-    'files.included.contextExtensions',
-    'files.included.editedExtensions',
-  ],
-  'src/common/files/fileListingRules.ts': [
-    'files.ignored.fileExtensions',
-    'files.ignored.inputFiles',
-    'files.ignored.inputDirectories',
-    'files.ignored.mediaDirectories',
-    'files.ignored.directories',
-    'files.ignored.keywords',
-  ],
   'src/utils/media/img.ts': ['maxImageDimension'],
   'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
   'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],
@@ -783,9 +537,6 @@ export const CLI_CORE_SETTING_CONSUMERS = {
     'latex.enabledReplacementsRegex',
     'latex.customReplacementsRegex',
     'latex.customReplacements',
-  ],
-  'src/latex/latexdiff/diffCommandExecutor.ts': [
-    'latexdiff.pictureEnvironments',
   ],
   'src/tools/approval/latexPreview.ts': ['latexdiff.tempFileLocation'],
   // Only the extension's git commands read the commit count, but the setup
@@ -809,12 +560,6 @@ const EXTENSION_ONLY_CONSUMER_FILES = {
   ],
   'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts': [
     'agentReview.runOnCommit',
-  ],
-  'packages/extension/src/frontend/review/AgentReviewService.ts': [
-    'agentReview.includeSubmodules',
-    'agentReview.includeUntrackedFiles',
-    'agentReview.approach',
-    'agentReview.model',
   ],
 } as const satisfies Readonly<Record<string, readonly CoreSettingPath[]>>;
 

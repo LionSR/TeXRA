@@ -2,32 +2,21 @@
  * Working-tree diff collection for the local agent review feature.
  *
  * Computes the diff of the working tree against the repository's main
- * branch (merge-base), optionally inlining submodule changes and
- * synthesizing pseudo-diffs for untracked files, so the whole change set
- * fits in one reviewable text blob.
+ * branch (merge-base), using Git's ordinary diff semantics so the review
+ * policy is not encoded as a collection-time switch.
  *
  * Host-neutral: uses simple-git for git operations; no vscode.
  */
 
 // Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import simpleGit, { type SimpleGit } from 'simple-git';
 
-// Local imports
-import {
-  isADirectoryError,
-  isFileNotFoundError,
-  isNotADirectoryError,
-} from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import { makeMachineGitEnv } from '@utils/system/platformPaths';
-import { splitContentLines, splitOutputLines } from '@utils/text/stringUtils';
+import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { normalizeReviewFilePath } from './reviewIssues';
@@ -37,17 +26,12 @@ const GIT_TIMEOUT_MS = 30_000;
 /** Branch names probed when origin/HEAD is not configured. */
 const BASE_BRANCH_CANDIDATES = ['main', 'master', 'trunk', 'develop'];
 
-const MAX_UNTRACKED_FILES = 25;
-const MAX_UNTRACKED_FILE_LINES = 400;
-const MAX_UNTRACKED_FILE_BYTES = 200 * 1024;
 /** Overall cap on the diff text sent to the model (~40k tokens). */
 const MAX_REVIEW_DIFF_CHARS = 160_000;
 
 export interface CollectReviewDiffOptions {
   /** Any path inside the repository; the diff always covers the whole repo. */
   cwd: string;
-  includeUntracked: boolean;
-  includeSubmodules: boolean;
   /**
    * Explicit base for commit-triggered reviews. When omitted, the collector
    * reviews the current working tree against the main branch.
@@ -104,10 +88,6 @@ async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
 }
 
 /** True when the content looks binary (NUL byte in the leading bytes). */
-function isProbablyBinary(content: Uint8Array): boolean {
-  return content.subarray(0, 8000).includes(0);
-}
-
 /**
  * True when `file` belongs to the collected change set. Prefix matches keep
  * issues inside changed submodules, whose diff entries name the submodule
@@ -286,124 +266,6 @@ async function resolveOnBaseBranch(
 }
 
 /**
- * Synthesize a unified-diff-style entry for an untracked file so it can be
- * reviewed alongside tracked changes. Binary and oversized content degrades
- * to a one-line marker — the file's presence is often the issue (caches,
- * databases, build artifacts), not its bytes.
- */
-export function buildUntrackedFileDiff(
-  relativePath: string,
-  content: Uint8Array,
-): string {
-  const header = `diff --git a/${relativePath} b/${relativePath}\nnew file (untracked)\n`;
-  if (isProbablyBinary(content)) {
-    return `${header}Binary file ${relativePath} added\n`;
-  }
-
-  // TextDecoder (not Buffer) keeps this module runnable on any modern
-  // runtime, matching the host-neutral contract in the file header.
-  const text = new TextDecoder().decode(
-    content.subarray(0, MAX_UNTRACKED_FILE_BYTES),
-  );
-  const lines = splitContentLines(text);
-  if (lines.length === 0) {
-    return `${header}(empty file)\n`;
-  }
-
-  const shown = lines.slice(0, MAX_UNTRACKED_FILE_LINES);
-  const body = shown.map((line) => `+${line}`).join('\n');
-  const truncatedNotice =
-    lines.length > shown.length || content.length > MAX_UNTRACKED_FILE_BYTES
-      ? `\n[... ${relativePath} truncated]`
-      : '';
-  return `${header}--- /dev/null\n+++ b/${relativePath}\n@@ -0,0 +1,${shown.length} @@\n${body}${truncatedNotice}\n`;
-}
-
-/**
- * Collect pseudo-diffs for untracked files. Returns null when the listing
- * command itself fails — silently treating that as "no untracked files"
- * would drop exactly the content (secrets, artifacts) the review exists
- * to catch. An empty listing (no untracked files) is a normal result.
- */
-async function collectUntrackedDiffs(
-  sg: SimpleGit,
-  repoRoot: string,
-): Promise<{ diff: string; files: string[] } | null> {
-  const listing = await rawGit(sg, [
-    'ls-files',
-    '--others',
-    '--exclude-standard',
-  ]);
-  if (listing === null) return null;
-
-  const untracked = splitOutputLines(listing);
-  const included = untracked.slice(0, MAX_UNTRACKED_FILES);
-  const contents = await Promise.all(
-    included.map(async (file) => {
-      const filePath = path.join(repoRoot, file);
-      // One byte beyond the cap so buildUntrackedFileDiff still detects
-      // and marks truncation for oversized files.
-      for (const isRetry of [false, true]) {
-        try {
-          const content = await platform().fs.readFileChunk(
-            filePath,
-            0,
-            MAX_UNTRACKED_FILE_BYTES + 1,
-          );
-          return { file, content };
-        } catch (error) {
-          if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
-            // The path disappeared after Git listed it, so there is no
-            // evidence left for this review to collect.
-            return undefined;
-          }
-          if (isADirectoryError(error)) {
-            try {
-              const { type } = await platform().fs.stat(filePath);
-              // A real directory means the listed file was replaced. A file
-              // or symlink may have reappeared, so retry its read once.
-              if (isDirectory(type) && !isSymlink(type)) return undefined;
-              if (!isRetry) continue;
-            } catch (recheckError) {
-              if (
-                isFileNotFoundError(recheckError) ||
-                isNotADirectoryError(recheckError)
-              ) {
-                // The path disappeared again while its type was rechecked.
-                return undefined;
-              }
-              throw new Error(
-                `Could not inspect untracked path "${file}": ${toErrorMessage(recheckError)}`,
-                { cause: recheckError },
-              );
-            }
-          }
-          throw new Error(
-            `Could not read untracked file "${file}": ${toErrorMessage(error)}`,
-            { cause: error },
-          );
-        }
-      }
-      throw new Error(`Could not read untracked file "${file}"`);
-    }),
-  );
-
-  const sections: string[] = [];
-  const files: string[] = [];
-  for (const entry of contents) {
-    if (!entry) continue;
-    sections.push(buildUntrackedFileDiff(entry.file, entry.content));
-    files.push(entry.file);
-  }
-  if (untracked.length > included.length) {
-    sections.push(
-      `[... ${untracked.length - included.length} more untracked files omitted]\n`,
-    );
-  }
-  return { diff: sections.join('\n'), files };
-}
-
-/**
  * Collect the reviewable diff. By default this compares the working tree
  * against the merge-base with the main branch. Commit-triggered callers can
  * pass an explicit base ref when they already know the previous HEAD.
@@ -414,8 +276,6 @@ async function collectUntrackedDiffs(
 export async function collectReviewDiff(
   options: CollectReviewDiffOptions,
 ): Promise<CollectReviewDiffResult> {
-  const { includeUntracked, includeSubmodules } = options;
-
   let sg: SimpleGit;
   try {
     sg = makeGit(options.cwd);
@@ -476,45 +336,24 @@ export async function collectReviewDiff(
     }
   }
 
-  const submoduleFlag = includeSubmodules
-    ? '--submodule=diff'
-    : '--ignore-submodules=all';
-  let collected: [
-    string | null,
-    string | null,
-    Awaited<ReturnType<typeof collectUntrackedDiffs>>,
-  ];
+  let collected: [string | null, string | null];
   try {
     collected = await Promise.all([
-      rawGit(sgRoot, ['diff', '--no-color', submoduleFlag, baseRef, '--']),
-      rawGit(sgRoot, ['diff', '--name-only', submoduleFlag, baseRef, '--']),
-      includeUntracked
-        ? collectUntrackedDiffs(sgRoot, repoRoot)
-        : Promise.resolve({ diff: '', files: [] }),
+      rawGit(sgRoot, ['diff', '--no-color', baseRef, '--']),
+      rawGit(sgRoot, ['diff', '--name-only', baseRef, '--']),
     ]);
   } catch (error) {
     return { ok: false, reason: toErrorMessage(error) };
   }
-  const [diffText, nameOnly, untracked] = collected;
+  const [diffText, nameOnly] = collected;
   // A failed name-only diff must fail the collection too: issue reports are
   // validated against `changedFiles`, so an empty list alongside real diff
   // text would reject every finding as outside the change set.
   if (diffText === null || nameOnly === null) {
     return { ok: false, reason: `git diff against ${baseRef} failed.` };
   }
-  if (untracked === null) {
-    return {
-      ok: false,
-      reason: 'Listing untracked files failed (git ls-files).',
-    };
-  }
-
   const changedFiles = splitOutputLines(nameOnly);
   let combined = diffText;
-  if (untracked.diff) {
-    combined = combined ? `${combined}\n${untracked.diff}` : untracked.diff;
-    changedFiles.push(...untracked.files);
-  }
 
   let truncated = false;
   if (combined.length > MAX_REVIEW_DIFF_CHARS) {

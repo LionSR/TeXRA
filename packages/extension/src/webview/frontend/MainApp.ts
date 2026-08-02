@@ -559,8 +559,7 @@ export class MainApp extends MainAppBase {
           ${setupCard} ${instructionPanel} ${banners}
 
           <wa-divider></wa-divider>
-          <section class="file-selection" aria-labelledby="filesHeading">
-            <h2 id="filesHeading" class="file-selection-heading">Files</h2>
+          <section class="file-selection" aria-label="Files">
             ${fileSelectionGroup}
           </section>
         </div>

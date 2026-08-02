@@ -7,6 +7,7 @@
 import type { ConfigProvider } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DEFAULT_TOOL_PATH_PROTECTION_ENABLED } from '@shared/schemas/stateSettings';
+import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { UpdateApprovalAndSafetySettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
@@ -46,6 +47,10 @@ export function buildApprovalSettingsMessage(
 
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+    editApprovalEnabled: config.get<boolean>(
+      TOOL_EDIT_APPROVAL_CONFIG_KEY,
+      true,
+    ),
     bashApprovalEnabled: config.get<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
     toolPathProtectionEnabled: workspaceState.get<boolean>(
       WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,

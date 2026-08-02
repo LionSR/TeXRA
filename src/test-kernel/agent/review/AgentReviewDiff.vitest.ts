@@ -1,12 +1,5 @@
 // Node imports
-import {
-  mkdir,
-  mkdtemp,
-  realpath,
-  rm,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -15,22 +8,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
-  buildUntrackedFileDiff,
   collectReviewDiff,
   isPathInChangeSet,
   listBaseBranchCandidates,
   type CollectReviewDiffOptions,
 } from '@agent/review/reviewDiff';
-import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() }, { fs: nodeFilesystem });
-
-function fsError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code });
-}
 
 describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
@@ -40,41 +27,6 @@ describe('isPathInChangeSet', () => {
     expect(isPathInChangeSet(changed, 'vendor/lib.c')).toBe(true);
     expect(isPathInChangeSet(changed, 'unrelated.ts')).toBe(false);
     expect(isPathInChangeSet(changed, 'vendored.ts')).toBe(false);
-  });
-});
-
-describe('buildUntrackedFileDiff', () => {
-  it('renders text content as an added-lines pseudo-diff', () => {
-    const diff = buildUntrackedFileDiff('notes.txt', Buffer.from('one\ntwo\n'));
-    expect(diff).toContain('diff --git a/notes.txt b/notes.txt');
-    expect(diff).toContain('new file (untracked)');
-    expect(diff).toContain('@@ -0,0 +1,2 @@');
-    expect(diff).toContain('+one\n+two');
-  });
-
-  it('marks binary content without dumping bytes', () => {
-    const diff = buildUntrackedFileDiff(
-      'store/index.db',
-      Buffer.from([0x53, 0x51, 0x00, 0x69]),
-    );
-    expect(diff).toContain('Binary file store/index.db added');
-    expect(diff).not.toContain('@@');
-  });
-
-  it('marks empty files', () => {
-    expect(buildUntrackedFileDiff('empty.txt', Buffer.alloc(0))).toContain(
-      '(empty file)',
-    );
-  });
-
-  it('truncates very long files', () => {
-    const content = Buffer.from(
-      Array.from({ length: 600 }, (_, i) => `line ${i}`).join('\n'),
-    );
-    const diff = buildUntrackedFileDiff('big.txt', content);
-    expect(diff).toContain('+line 399');
-    expect(diff).not.toContain('+line 400');
-    expect(diff).toContain('[... big.txt truncated]');
   });
 });
 
@@ -107,31 +59,17 @@ describe('collectReviewDiff (real git repository)', () => {
     await rm(repo, { recursive: true, force: true });
   });
 
-  function failUntrackedRead(file: string, error: Error): void {
-    const fs = platform().fs;
-    const readFileChunk = fs.readFileChunk.bind(fs);
-    vi.spyOn(fs, 'readFileChunk').mockImplementation(
-      async (filePath, offset, length) => {
-        if (path.basename(filePath) === file) throw error;
-        return readFileChunk(filePath, offset, length);
-      },
-    );
-  }
-
   /** Runs `collectReviewDiff` against the fixture repo. */
-  async function collectDiff(
-    options: Partial<CollectReviewDiffOptions> & { includeUntracked: boolean },
-  ) {
+  async function collectDiff(options: Partial<CollectReviewDiffOptions> = {}) {
     return collectReviewDiff({
       cwd: repo,
-      includeSubmodules: true,
       ...options,
     });
   }
 
   /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
   async function collectDiffOrFail(
-    options: Partial<CollectReviewDiffOptions> & { includeUntracked: boolean },
+    options: Partial<CollectReviewDiffOptions> = {},
   ) {
     const result = await collectDiff(options);
     expect(result.ok).toBe(true);
@@ -139,117 +77,19 @@ describe('collectReviewDiff (real git repository)', () => {
     return result.value;
   }
 
-  it('diffs a feature branch against main and includes untracked files', async () => {
+  it('diffs a feature branch against main using ordinary Git semantics', async () => {
     await git('checkout', '-b', 'feature');
     await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
     await writeFile(path.join(repo, 'scratch.txt'), 'untracked content\n');
 
-    const value = await collectDiffOrFail({ includeUntracked: true });
+    const value = await collectDiffOrFail();
     expect(value.baseDescription).toBe('main branch (main)');
     expect(value.diff).toContain('-original line');
     expect(value.diff).toContain('+changed line');
-    expect(value.diff).toContain('+untracked content');
-    expect(value.changedFiles).toEqual(['paper.tex', 'scratch.txt']);
+    expect(value.diff).not.toContain('untracked content');
+    expect(value.changedFiles).toEqual(['paper.tex']);
     expect(value.truncated).toBe(false);
     expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
-  });
-
-  it.each(['ENOENT', 'FileNotFound', 'ENOTDIR'])(
-    'omits an untracked file that disappears with %s during collection',
-    async (code) => {
-      await writeFile(path.join(repo, 'vanished.txt'), 'temporary\n');
-      failUntrackedRead(
-        'vanished.txt',
-        fsError(code, 'untracked file disappeared'),
-      );
-
-      const value = await collectDiffOrFail({ includeUntracked: true });
-
-      expect(value.diff).toBe('');
-      expect(value.changedFiles).toEqual([]);
-    },
-  );
-
-  it('fails clearly when an untracked file cannot be read', async () => {
-    await writeFile(path.join(repo, 'secret.txt'), 'sensitive\n');
-    failUntrackedRead(
-      'secret.txt',
-      fsError('EACCES', 'untracked file is unreadable'),
-    );
-
-    const result = await collectDiff({ includeUntracked: true });
-
-    expect(result).toEqual({
-      ok: false,
-      reason:
-        'Could not read untracked file "secret.txt": untracked file is unreadable',
-    });
-  });
-
-  it('omits an untracked file replaced by a directory during collection', async () => {
-    const replacedPath = path.join(repo, 'replaced.txt');
-    await writeFile(replacedPath, 'temporary\n');
-    const fs = platform().fs;
-    const readFileChunk = fs.readFileChunk.bind(fs);
-    vi.spyOn(fs, 'readFileChunk').mockImplementation(
-      async (filePath, offset, length) => {
-        if (path.basename(filePath) === 'replaced.txt') {
-          await rm(filePath);
-          await mkdir(filePath);
-          throw fsError('EISDIR', 'untracked file became a directory');
-        }
-        return readFileChunk(filePath, offset, length);
-      },
-    );
-
-    const value = await collectDiffOrFail({ includeUntracked: true });
-
-    expect(value.diff).toBe('');
-    expect(value.changedFiles).toEqual([]);
-  });
-
-  it('includes an untracked file that reappears during the type recheck', async () => {
-    const replacedPath = path.join(repo, 'reappeared.txt');
-    await writeFile(replacedPath, 'temporary\n');
-    const fs = platform().fs;
-    const readFileChunk = fs.readFileChunk.bind(fs);
-    let firstRead = true;
-    vi.spyOn(fs, 'readFileChunk').mockImplementation(
-      async (filePath, offset, length) => {
-        if (path.basename(filePath) === 'reappeared.txt' && firstRead) {
-          firstRead = false;
-          await rm(filePath);
-          await mkdir(filePath);
-          await rm(filePath, { recursive: true });
-          await writeFile(filePath, 'current evidence\n');
-          throw fsError('EISDIR', 'untracked file briefly became a directory');
-        }
-        return readFileChunk(filePath, offset, length);
-      },
-    );
-
-    const value = await collectDiffOrFail({ includeUntracked: true });
-
-    expect(value.diff).toContain('+current evidence');
-    expect(value.changedFiles).toEqual(['reappeared.txt']);
-  });
-
-  it('does not hide an untracked symlink to a directory', async () => {
-    const target = path.join(repo, 'target-dir');
-    await mkdir(target);
-    await symlink(target, path.join(repo, 'linked-dir'));
-    failUntrackedRead(
-      'linked-dir',
-      fsError('EISDIR', 'untracked path resolves to a directory'),
-    );
-
-    const result = await collectDiff({ includeUntracked: true });
-
-    expect(result).toEqual({
-      ok: false,
-      reason:
-        'Could not read untracked file "linked-dir": untracked path resolves to a directory',
-    });
   });
 
   it('ignores inherited interactive git environment variables', async () => {
@@ -261,30 +101,13 @@ describe('collectReviewDiff (real git repository)', () => {
       await git('checkout', '-b', 'feature');
       await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
 
-      await collectDiffOrFail({ includeUntracked: false });
+      await collectDiffOrFail();
     } finally {
       if (previousPager === undefined) delete process.env.PAGER;
       else process.env.PAGER = previousPager;
       if (previousEditor === undefined) delete process.env.EDITOR;
       else process.env.EDITOR = previousEditor;
     }
-  });
-
-  it('caps oversized untracked files at a bounded prefix with a truncation marker', async () => {
-    await git('checkout', '-b', 'feature');
-    // Larger than MAX_UNTRACKED_FILE_BYTES (200 KB); only a prefix may load.
-    await writeFile(
-      path.join(repo, 'big.txt'),
-      `start-of-big-file\n${'x'.repeat(300 * 1024)}\n`,
-    );
-
-    const value = await collectDiffOrFail({ includeUntracked: true });
-    expect(value.diff).toContain('+start-of-big-file');
-    // The 200 KB per-file prefix exceeds the overall diff cap, so the
-    // global truncation applies and the result stays bounded.
-    expect(value.truncated).toBe(true);
-    expect(value.diff).toContain('[... diff truncated for review]');
-    expect(value.diff.length).toBeLessThan(200 * 1024);
   });
 
   it('falls back to the origin remote-tracking branch when no local main exists', async () => {
@@ -295,7 +118,7 @@ describe('collectReviewDiff (real git repository)', () => {
     await git('branch', '-D', 'main');
     await writeFile(path.join(repo, 'paper.tex'), 'changed line\n');
 
-    const value = await collectDiffOrFail({ includeUntracked: false });
+    const value = await collectDiffOrFail();
     expect(value.baseDescription).toBe('main branch (origin/main)');
     expect(value.diff).toContain('+changed line');
   });
@@ -303,29 +126,22 @@ describe('collectReviewDiff (real git repository)', () => {
   it('resolves the repository root when run from a subdirectory', async () => {
     await git('checkout', '-b', 'feature');
     await mkdir(path.join(repo, 'sub'));
-    await writeFile(path.join(repo, 'sub', 'note.txt'), 'untracked content\n');
+    await writeFile(path.join(repo, 'sub', 'note.txt'), 'original\n');
+    await git('add', '.');
+    await git('commit', '-m', 'add subdirectory');
+    await writeFile(path.join(repo, 'sub', 'note.txt'), 'changed\n');
 
     const value = await collectDiffOrFail({
       cwd: path.join(repo, 'sub'),
-      includeUntracked: true,
     });
     expect(await realpath(value.repoRoot)).toBe(await realpath(repo));
     expect(value.changedFiles).toEqual(['sub/note.txt']);
   });
 
-  it('omits untracked files when disabled', async () => {
-    await git('checkout', '-b', 'feature');
-    await writeFile(path.join(repo, 'scratch.txt'), 'untracked content\n');
-
-    const value = await collectDiffOrFail({ includeUntracked: false });
-    expect(value.diff).toBe('');
-    expect(value.changedFiles).toEqual([]);
-  });
-
   it('reviews uncommitted changes when on the main branch', async () => {
     await writeFile(path.join(repo, 'paper.tex'), 'edited on main\n');
 
-    const value = await collectDiffOrFail({ includeUntracked: false });
+    const value = await collectDiffOrFail();
     expect(value.baseDescription).toContain('uncommitted changes');
     expect(value.diff).toContain('+edited on main');
   });
@@ -334,7 +150,7 @@ describe('collectReviewDiff (real git repository)', () => {
     await writeFile(path.join(repo, 'paper.tex'), 'committed on main\n');
     await git('commit', '-am', 'second');
 
-    const value = await collectDiffOrFail({ includeUntracked: false });
+    const value = await collectDiffOrFail();
     expect(value.baseDescription).toContain('latest commit');
     expect(value.diff).toContain('+committed on main');
     expect(value.diff).toContain('-original line');
@@ -352,7 +168,6 @@ describe('collectReviewDiff (real git repository)', () => {
     await writeFile(path.join(repo, 'paper.tex'), 'feature line\n');
 
     const value = await collectDiffOrFail({
-      includeUntracked: false,
       baseBranch: 'develop',
     });
     // Merge-base with develop is the initial commit, so develop's own work
@@ -372,7 +187,6 @@ describe('collectReviewDiff (real git repository)', () => {
     await git('commit', '-am', 'second unpushed');
 
     const value = await collectDiffOrFail({
-      includeUntracked: false,
       baseBranch: 'origin/main',
     });
     expect(value.baseDescription).toBe('branch origin/main');
@@ -384,7 +198,6 @@ describe('collectReviewDiff (real git repository)', () => {
   it('fails clearly when the chosen base branch does not exist', async () => {
     await git('checkout', '-b', 'feature');
     const result = await collectDiff({
-      includeUntracked: false,
       baseBranch: 'no-such-branch',
     });
     expect(result.ok).toBe(false);
@@ -403,7 +216,6 @@ describe('collectReviewDiff (real git repository)', () => {
     await writeFile(path.join(repo, 'notes.txt'), 'dirty after commit\n');
 
     const value = await collectDiffOrFail({
-      includeUntracked: false,
       baseRef: previousHead,
       baseDescription: 'previous commit on main',
     });
@@ -415,14 +227,14 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   it('reports no changes on main with a clean tree and no parent commit', async () => {
-    const value = await collectDiffOrFail({ includeUntracked: false });
+    const value = await collectDiffOrFail();
     expect(value.diff).toBe('');
   });
 
   it('fails with a reason outside a git repository', async () => {
     const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
     try {
-      const result = await collectDiff({ cwd: plain, includeUntracked: true });
+      const result = await collectDiff({ cwd: plain });
       expect(result).toEqual({
         ok: false,
         reason: 'The workspace is not a git repository.',
