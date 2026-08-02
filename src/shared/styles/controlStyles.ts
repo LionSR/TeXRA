@@ -365,6 +365,37 @@ export const buttonStyles: CSSResult = css`
     color: var(--color-error);
   }
 
+  /* Primary composer action shared by the initial request and follow-up
+     composers. The accessible label carries the host-specific verb; the
+     visible affordance is deliberately identical. */
+  .action-icon-button.composer-primary-action {
+    --control-size: var(--control-size-l);
+    margin-left: auto;
+  }
+
+  .action-icon-button.composer-primary-action::part(base) {
+    border-radius: var(--wa-border-radius-circle);
+    background: var(--wa-color-text-normal);
+    color: var(--wa-color-surface-default);
+  }
+
+  .action-icon-button.composer-primary-action::part(base):hover {
+    background: color-mix(
+      in srgb,
+      var(--wa-color-text-normal) 86%,
+      var(--wa-color-surface-default)
+    );
+    color: var(--wa-color-surface-default);
+  }
+
+  .action-icon-button.composer-primary-action[disabled]::part(base):is(
+      :hover,
+      :active
+    ) {
+    background: var(--wa-color-text-normal);
+    color: var(--wa-color-surface-default);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     :is(
         .btn-primary,

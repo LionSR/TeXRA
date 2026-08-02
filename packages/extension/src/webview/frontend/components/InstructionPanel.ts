@@ -751,28 +751,17 @@ export class InstructionPanel extends LitElement {
               </wa-select>
             </div>
           </div>
-          <wa-button
-            id="executeButton"
-            class="execute-button btn-primary"
-            appearance="filled"
-            variant="brand"
-            ?disabled=${!this.canExecute(session)}
-            aria-label=${this.desktopHost ? 'Send request' : 'Run agent'}
-            @click=${this.handleExecute}
-          >
-            ${
-              this.desktopHost
-                ? waIcon('paper-plane', { slot: 'start' })
-                : waIcon('play', { slot: 'start' })
-            }
-            <span class="execute-button__label">
-              ${this.desktopHost ? 'Send' : 'Run'}
-            </span>
-            ${this.desktopHost ? html`<kbd class="execute-button__key">↵</kbd>` : nothing}
-          </wa-button>
-          <wa-tooltip for="executeButton">
-            ${this.executeTooltip(session)}
-          </wa-tooltip>
+          ${renderIconActionButton({
+            id: 'executeButton',
+            icon: 'arrow-up',
+            label: this.desktopHost ? 'Send request' : 'Run agent',
+            tooltip: this.executeTooltip(session),
+            className: 'composer-primary-action',
+            appearance: 'filled',
+            size: 'l',
+            disabled: !this.canExecute(session),
+            onClick: this.handleExecute,
+          })}
         </div>
         <div class="visually-hidden" aria-live="polite">
           ${session.statusAnnouncement}

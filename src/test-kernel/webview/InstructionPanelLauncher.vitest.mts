@@ -285,15 +285,14 @@ describe('instruction-panel launcher', () => {
       expect(events).toEqual([{ type: 'team-settings', detail: null }]);
     });
 
-    it('labels the execute button "Run" and the model picker "Lead model"', async () => {
+    it('labels the execute action and the lead model picker', async () => {
       const element = await mountPanel(TEAM_SESSION);
 
       expect(
-        query<HTMLElement>(
-          element,
-          '.execute-button__label',
-        )?.textContent?.trim(),
-      ).toBe('Run');
+        query<HTMLElement>(element, '#executeButton')?.getAttribute(
+          'aria-label',
+        ),
+      ).toBe('Run agent');
       expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
         'Lead model',
       );
@@ -301,15 +300,14 @@ describe('instruction-panel launcher', () => {
   });
 
   describe('agent launcher labels', () => {
-    it('labels the execute button "Run" and the model picker "Model"', async () => {
+    it('labels the execute action and the model picker', async () => {
       const element = await mountPanel(makeSession());
 
       expect(
-        query<HTMLElement>(
-          element,
-          '.execute-button__label',
-        )?.textContent?.trim(),
-      ).toBe('Run');
+        query<HTMLElement>(element, '#executeButton')?.getAttribute(
+          'aria-label',
+        ),
+      ).toBe('Run agent');
       expect(query(element, '#model')?.getAttribute('aria-label')).toBe(
         'Model',
       );
