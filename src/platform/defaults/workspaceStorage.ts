@@ -215,17 +215,26 @@ export class WorkspaceStorageProvider implements StorageProvider {
     return storagePath;
   }
 
-  hasPendingWorkspaceStorageChange(): boolean {
+  hasPendingWorkspaceStorageChange(target?: {
+    workspacePath: string | undefined;
+  }): boolean {
+    const targetWorkspacePath = target
+      ? target.workspacePath
+      : this.getWorkspacePath();
     return (
       this.storagePathFor(this.activeWorkspacePath) !==
-      this.storagePathFor(this.getWorkspacePath())
+      this.storagePathFor(targetWorkspacePath)
     );
   }
 
-  commitWorkspaceStorageChange(): boolean {
-    const workspacePath = this.getWorkspacePath();
+  commitWorkspaceStorageChange(target?: {
+    workspacePath: string | undefined;
+  }): boolean {
+    const targetWorkspacePath = target
+      ? target.workspacePath
+      : this.getWorkspacePath();
     if (
-      this.storagePathFor(workspacePath) ===
+      this.storagePathFor(targetWorkspacePath) ===
       this.storagePathFor(this.activeWorkspacePath)
     ) {
       return false;
@@ -236,7 +245,7 @@ export class WorkspaceStorageProvider implements StorageProvider {
     this.workspaceChangeRollback = {
       workspacePath: this.activeWorkspacePath,
     };
-    this.activeWorkspacePath = workspacePath;
+    this.activeWorkspacePath = targetWorkspacePath;
     return true;
   }
 
