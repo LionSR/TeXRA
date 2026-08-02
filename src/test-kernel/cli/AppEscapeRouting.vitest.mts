@@ -207,6 +207,26 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('discards delayed child back when the child is promoted', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      setParentStream(CHILD, null);
+      await sleep(600);
+
+      expect(activeStreamId.get()).toBe(CHILD);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('does not apply failed-chord child back after a foreground pane opens', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
@@ -232,6 +252,62 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('preserves a printable failed chord when back enables parent input', async () => {
+    seedChildHierarchy();
+    setStreamStatusInCliState({
+      streamId: CHILD,
+      status: STREAM_PHASE.COMPLETED,
+    });
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const onSubmit = vi.fn();
+    const { instance, stdin } = await renderApp({
+      ...appProps(onInterruptStream),
+      onSubmit,
+    });
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      stdin.write('q');
+      await waitFor(() => activeStreamId.get() === ROOT);
+      stdin.write('\r');
+      await waitFor(() => onSubmit.mock.calls.length === 1);
+
+      expect(onSubmit).toHaveBeenCalledWith('q', undefined);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('does not duplicate a printable failed chord from enabled input', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const onSubmit = vi.fn();
+    const { instance, stdin } = await renderApp({
+      ...appProps(onInterruptStream),
+      onSubmit,
+    });
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      stdin.write('q');
+      await waitFor(() => activeStreamId.get() === ROOT);
+      stdin.write('\r');
+      await waitFor(() => onSubmit.mock.calls.length === 1);
+
+      expect(onSubmit).toHaveBeenCalledWith('q', undefined);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('discards failed-chord child back after lifecycle focus advances', async () => {
     seedChildHierarchy();
     focusStream(GRANDCHILD);
@@ -248,6 +324,27 @@ describe('App foreground Escape ownership', () => {
       await sleep(50);
 
       expect(activeStreamId.get()).toBe(ROOT);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('discards failed-chord child back when the child is promoted', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      setParentStream(CHILD, null);
+      stdin.write('x');
+      await sleep(50);
+
+      expect(activeStreamId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();

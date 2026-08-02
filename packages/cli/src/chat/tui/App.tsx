@@ -49,6 +49,7 @@ import {
 } from './state/approvalQueue';
 import {
   isEscapeInput,
+  isUnhandledControlInput,
   metaChordInput,
   rewriteKittyEnterInput,
 } from './input/inputKeys';
@@ -412,6 +413,7 @@ export function App(props: AppProps): React.JSX.Element {
     });
   const pendingEscapeInterrupt = useRef<
     | {
+        readonly parentStreamId: StreamTabId | undefined;
         readonly streamId: StreamTabId;
         readonly timer: ReturnType<typeof setTimeout>;
       }
@@ -515,13 +517,22 @@ export function App(props: AppProps): React.JSX.Element {
     return triggerEscapeInterrupt(escapeInterruptStateRef.current, streamId);
   };
 
+  const handlePendingBareEscape = (
+    streamId: StreamTabId,
+    parentStreamId: StreamTabId | undefined,
+  ): boolean => {
+    if (parentStreamSignal.get().get(streamId) !== parentStreamId) return false;
+    return handleBareEscape(streamId);
+  };
+
   const scheduleBareEscape = (streamId: StreamTabId) => {
     clearPendingEscapeInterrupt();
+    const parentStreamId = parentStreamSignal.get().get(streamId);
     const timer = setTimeout(() => {
       pendingEscapeInterrupt.current = undefined;
-      handleBareEscape(streamId);
+      handlePendingBareEscape(streamId, parentStreamId);
     }, ESC_META_CHORD_INTERRUPT_DELAY_MS);
-    pendingEscapeInterrupt.current = { streamId, timer };
+    pendingEscapeInterrupt.current = { parentStreamId, streamId, timer };
   };
 
   // Single App-level keyboard entry point. Ink broadcasts every keystroke to all
@@ -534,7 +545,14 @@ export function App(props: AppProps): React.JSX.Element {
       clearPendingEscapeInterrupt();
       if (isEscapeInput(input, key)) {
         const previousStreamId = activeStreamIdSignal.get();
-        if (!handleBareEscape(pendingEscape.streamId)) return;
+        if (
+          !handlePendingBareEscape(
+            pendingEscape.streamId,
+            pendingEscape.parentStreamId,
+          )
+        ) {
+          return;
+        }
         const currentStreamId = activeStreamIdSignal.get();
         if (
           currentStreamId === undefined ||
@@ -557,7 +575,19 @@ export function App(props: AppProps): React.JSX.Element {
       }
       if (!key.ctrl && !key.tab && input.length > 0) {
         if (appOwnsEscape() && handleMetaShortcut(input)) return;
-        handleBareEscape(pendingEscape.streamId);
+        const inputWasDisabled = inputDisabled;
+        const handled = handlePendingBareEscape(
+          pendingEscape.streamId,
+          pendingEscape.parentStreamId,
+        );
+        const printableInput =
+          !key.meta &&
+          !key.return &&
+          metaChordInput(input, key) === undefined &&
+          [...input].every((character) => !isUnhandledControlInput(character));
+        if (handled && inputWasDisabled && printableInput) {
+          inputBarRef.current?.appendInput(input);
+        }
         return;
       }
     }
