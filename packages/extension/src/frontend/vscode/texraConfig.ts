@@ -5,6 +5,9 @@ import * as path from 'node:path';
 // Third-party imports
 import PQueue from 'p-queue';
 
+// Local imports - agent
+import type { WorkspaceStorageTransitionHooks } from '@agent/runtime/SessionHandle';
+
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
 
@@ -12,7 +15,7 @@ import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local imports - platform
-import type { StorageProvider } from '@platform/interfaces';
+import type { ConfigTarget, StorageProvider } from '@platform/interfaces';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
@@ -62,8 +65,15 @@ async function openWorkspaceConfigStore(
   return JsonStore.open(internalConfigPath);
 }
 
+export interface ExtensionConfigWorkspaceTransition {
+  readonly generation: number;
+  readonly completion: Promise<void>;
+}
+
 export class ExtensionTexraConfig extends JsonConfigProvider {
-  private readonly rebindQueue = new PQueue({ concurrency: 1 });
+  private transitionGeneration = 0;
+  private failedTransitionGeneration: number | undefined;
+  private readonly workspaceQueue = new PQueue({ concurrency: 1 });
 
   constructor(
     private readonly storage: StorageProvider,
@@ -73,20 +83,82 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
     super({ workspace: workspaceStore, global: globalStore });
   }
 
-  /** Follow VS Code after its workspace-storage replacement has committed. */
-  rebindWorkspace(workspaceRoot: string | undefined): Promise<void> {
-    return this.rebindQueue.add(async () => {
-      if (this.storage.hasPendingWorkspaceStorageChange?.()) {
+  override async update<T>(
+    key: string,
+    value: T,
+    target: ConfigTarget = 'workspace',
+  ): Promise<void> {
+    if (target === 'global') {
+      await super.update(key, value, target);
+      return;
+    }
+
+    const generation = this.transitionGeneration;
+    await this.workspaceQueue.add(async () => {
+      if (this.failedTransitionGeneration === generation) {
         throw new Error(
-          'Cannot rebind TeXRA settings before the workspace storage change commits.',
+          `Cannot update workspace settings because workspace transition ${generation} failed. Retry the workspace change or restart TeXRA.`,
         );
       }
-      const workspaceStore = await openWorkspaceConfigStore(
-        workspaceRoot,
-        path.join(this.storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
-      );
-      this.replaceWorkspaceStore(workspaceStore);
+      await super.update(key, value, target);
+    });
+  }
+
+  /** Capture and serialize a complete storage/config workspace transition. */
+  enqueueWorkspaceTransition(
+    workspaceRoot: string | undefined,
+    reloadStorage: (hooks: WorkspaceStorageTransitionHooks) => Promise<void>,
+  ): ExtensionConfigWorkspaceTransition {
+    const generation = ++this.transitionGeneration;
+    const completion = this.workspaceQueue.add(async () => {
+      if (
+        this.storage.hasPendingWorkspaceStorageChange?.({
+          workspacePath: workspaceRoot,
+        }) === false
+      ) {
+        return;
+      }
+
+      let previousStore: JsonStore | undefined;
+      let finalized = false;
+      const rollbackConfig = () => {
+        if (previousStore) {
+          this.replaceWorkspaceStore(previousStore);
+          previousStore = undefined;
+        }
+      };
+
+      try {
+        await reloadStorage({
+          workspacePath: workspaceRoot,
+          afterStorageCommit: async () => {
+            const workspaceStore = await openWorkspaceConfigStore(
+              workspaceRoot,
+              path.join(this.storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
+            );
+            previousStore = this.replaceWorkspaceStore(workspaceStore);
+          },
+          afterStorageRollback: rollbackConfig,
+          afterStorageFinalize: () => {
+            previousStore = undefined;
+            finalized = true;
+          },
+        });
+        if (!finalized) {
+          throw new Error(
+            `Workspace transition ${generation} completed without finalizing storage and configuration.`,
+          );
+        }
+      } catch (error) {
+        if (!finalized) {
+          rollbackConfig();
+          this.failedTransitionGeneration = generation;
+        }
+        throw error;
+      }
     }) as Promise<void>;
+
+    return { generation, completion };
   }
 }
 
