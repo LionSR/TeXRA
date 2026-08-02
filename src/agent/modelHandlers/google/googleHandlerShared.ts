@@ -47,7 +47,8 @@ interface ResolveGoogleClientParams {
  * keys (auth tokens expire ~30 mins) and caching for non-expiring personal keys.
  *
  * The client is built without `retryOptions` so that only the flow-level retry
- * loop (`RetryState.getNodeRetryConfig`) governs the user's retry budget; see
+ * loop (`RetryState`'s `getNodeMaxRetries`/`RETRY_BACKOFF_MS`) governs the
+ * user's retry budget; see
  * the note in `createClient` for why passing any value there is worse than
  * passing none.
  */
