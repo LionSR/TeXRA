@@ -213,17 +213,34 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Alt-s subagents');
   });
 
-  it('advertises bare-Escape back only when an immediate parent exists', () => {
-    const child = buildStatusBarDisplay(
+  it('prioritizes Esc back at the narrowest width where it fits', () => {
+    const display = buildStatusBarDisplay(
       statusInput({
-        width: 100,
+        width: 10,
         shortcuts: { parentNavigationAvailable: true },
       }),
     );
-    const topLevel = buildStatusBarDisplay(statusInput({ width: 100 }));
 
-    expect(child.bindings).toContain('Esc back');
-    expect(topLevel.bindings).not.toContain('Esc back');
+    expect(display.bindings).toBe('Esc back');
+  });
+
+  it('omits Esc back at the same bounded width without a parent', () => {
+    const display = buildStatusBarDisplay(statusInput({ width: 10 }));
+
+    expect(display.bindings).toBe('Ctrl-C exit');
+    expect(display.bindings).not.toContain('Esc back');
+  });
+
+  it('falls back to Ctrl-C when a tiny terminal cannot fit Esc back', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        width: 9,
+        shortcuts: { parentNavigationAvailable: true },
+      }),
+    );
+
+    expect(display.bindings).toBe('Ctrl-C exit');
+    expect(display.bindings).not.toContain('Esc back');
   });
 
   it('advertises list-owned keys while the child list has focus', () => {
