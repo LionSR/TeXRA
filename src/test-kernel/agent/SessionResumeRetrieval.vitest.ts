@@ -305,11 +305,13 @@ async function runPersistedFlow(
     input: Object.freeze({ MODEL: config.model }),
     transient: {},
   };
+  const abortController = new AbortController();
   const runScope = createRunScope({
     streamId,
     executionId,
     agentName: config.agent,
     session,
+    signal: abortController.signal,
   });
   const modelCell = createTaggedModelCell(
     ACTIVE_COMPATIBILITY_KEY,
@@ -321,7 +323,6 @@ async function runPersistedFlow(
     modelCell,
     stopAfterCycle: options.stopAfterCycle,
   });
-  let interrupted = false;
   const hostAttachment = attachment && {
     attach: (flowContext: ToolUseSetupContext): void =>
       attachment.attach?.(flowContext),
@@ -341,11 +342,7 @@ async function runPersistedFlow(
           userVarChannels,
           modelCell,
           onModelChanged: () => {},
-          checkInterruption: () => interrupted,
-          onInterrupt: () => {
-            interrupted = true;
-          },
-          abortSignal: new AbortController().signal,
+          interrupt: () => abortController.abort(),
           onRoundFinalized: () => {},
           ...(resume !== undefined && { resume }),
           drainedFollowUps: options.drainedFollowUps,

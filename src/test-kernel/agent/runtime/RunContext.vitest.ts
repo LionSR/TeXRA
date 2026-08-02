@@ -25,6 +25,7 @@ describe('RunContext', () => {
       executionId: 'live-model-execution' as ExecutionId,
       agentName: 'test-agent',
       session: {} as SessionHandle,
+      signal: new AbortController().signal,
     });
     const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
     const context = createRunContext({ runScope, modelCell });
@@ -58,6 +59,7 @@ describe('RunContext', () => {
       agentName: 'scoped-agent',
       workingDirectory: '/tmp/scoped-worktree',
       session: {} as SessionHandle,
+      signal: new AbortController().signal,
     });
     const context = createRunContext({
       runScope,

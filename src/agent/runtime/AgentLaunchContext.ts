@@ -77,6 +77,8 @@ export interface AgentLaunchContext extends AgentCore {
   storageKey: StorageKey;
   parentStage: StageHandle;
   attachedMemoryMisses: AttachedMemoryMiss[];
+  /** Abort the sticky signal published on {@link AgentCore.runScope}. */
+  interrupt: () => void;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -384,6 +386,7 @@ async function assembleAgentLaunchContext(
 
   const agentPath = path.dirname(resolution.definitionPath);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
+  const runAbortController = new AbortController();
   const runScope = createRunScope({
     streamId,
     executionId,
@@ -391,6 +394,7 @@ async function assembleAgentLaunchContext(
     workingDirectory,
     delegationAgentScope: fullConfig.delegationAgentScope,
     session,
+    signal: runAbortController.signal,
   });
   const buildVars = () =>
     buildUserVars(
@@ -440,6 +444,7 @@ async function assembleAgentLaunchContext(
     attachedMemoryMisses,
     usageMonitor,
     runScope,
+    interrupt: () => runAbortController.abort(),
     initialUserMessageForTranscript: initialMediaMayBeInserted
       ? initialInstruction
       : undefined,

@@ -40,7 +40,7 @@ vi.mock('@agent/core/flows/ResponseCycleFlow', () => ({
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import type { AgentFileLocation } from '@shared/schemas';
-import { reflectionFlowShared } from './progressTestUtils';
+import { reflectionFlowShared, testRunScope } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';
 
 const outputLocation: AgentFileLocation = {
@@ -50,7 +50,7 @@ const outputLocation: AgentFileLocation = {
 };
 
 function makeNode(options: {
-  checkInterruption: () => boolean;
+  signal?: AbortSignal;
   logger?: {
     error: ReturnType<typeof vi.fn>;
     debug: ReturnType<typeof vi.fn>;
@@ -59,7 +59,7 @@ function makeNode(options: {
 }): ResponseCycleNode {
   return new ResponseCycleNode().setServices({
     getOutputFileLocation: async () => outputLocation,
-    checkInterruption: options.checkInterruption,
+    runScope: testRunScope('response-cycle', { signal: options.signal }),
     modelCell: testModelCell({
       initializeOutputAndPrefill: async () => [false, []],
       clearCompactionRequest: options.clearCompactionRequest ?? vi.fn(),
@@ -70,8 +70,10 @@ function makeNode(options: {
   } as unknown as ReflectionServices);
 }
 
-async function runCycle(checkInterruption: () => boolean) {
-  const node = makeNode({ checkInterruption });
+async function runCycle(interrupted: boolean) {
+  const node = makeNode({
+    signal: interrupted ? AbortSignal.abort() : undefined,
+  });
   const prep = await node.prep(reflectionFlowShared());
   return node.exec(prep);
 }
@@ -93,7 +95,7 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.shouldStop = true;
     flowState.endTurn = false;
 
-    const result = await runCycle(() => false);
+    const result = await runCycle(false);
 
     expect(result.outcome).toBe('completed');
   });
@@ -102,7 +104,7 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.shouldStop = true;
     flowState.endTurn = false;
 
-    const result = await runCycle(() => true);
+    const result = await runCycle(true);
 
     expect(result.outcome).toBe('cancelled');
   });
@@ -111,7 +113,7 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.shouldStop = true;
     flowState.endTurn = true;
 
-    const result = await runCycle(() => true);
+    const result = await runCycle(true);
 
     expect(result.outcome).toBe('completed');
     if (result.outcome === 'completed') {
@@ -126,7 +128,7 @@ describe('ResponseCycleNode outcome classification', () => {
     const clearCompactionRequest = vi.fn();
 
     const node = makeNode({
-      checkInterruption: () => true,
+      signal: AbortSignal.abort(),
       clearCompactionRequest,
     });
     const prep = await node.prep(reflectionFlowShared());
@@ -147,7 +149,6 @@ describe('ResponseCycleNode outcome classification', () => {
     };
     const clearCompactionRequest = vi.fn();
     const node = makeNode({
-      checkInterruption: () => false,
       clearCompactionRequest,
     });
     const prep = await node.prep(reflectionFlowShared());
@@ -165,7 +166,7 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: true,
     };
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode({ checkInterruption: () => false, logger });
+    const node = makeNode({ logger });
     const shared = reflectionFlowShared();
     const prep = await node.prep(shared);
 
@@ -186,7 +187,7 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: false,
     };
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode({ checkInterruption: () => false, logger });
+    const node = makeNode({ logger });
     const shared = reflectionFlowShared();
     const prep = await node.prep(shared);
 
@@ -198,7 +199,7 @@ describe('ResponseCycleNode outcome classification', () => {
 
   it('logs an outer cycle exception where it becomes structured state', async () => {
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode({ checkInterruption: () => false, logger });
+    const node = makeNode({ logger });
     const shared = reflectionFlowShared();
     const prep = await node.prep(shared);
 

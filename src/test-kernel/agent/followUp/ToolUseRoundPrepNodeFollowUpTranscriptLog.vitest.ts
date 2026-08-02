@@ -13,7 +13,6 @@ function buildServices(
 ): ToolUseRoundServices<unknown> {
   return {
     runScope: testRunScope('test-stream'),
-    checkInterruption: () => false,
     config: { model: 'deepseekT', agent: 'chat' } as never,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     onRoundFinalized: () => {},

@@ -23,7 +23,7 @@ import { createRunTrace, StreamLogStore } from '@transcript';
 import { delay } from '@utils/core';
 
 // Local file imports
-import { withTestRunContext } from './progressTestUtils';
+import { testRunScope, withTestRunContext } from './progressTestUtils';
 import { testModelCell } from './modelCellTestUtils';
 
 interface DispatchProbe {
@@ -92,7 +92,9 @@ function dispatchHarness(opts: HarnessOptions) {
     }),
     logger: runTrace.trace,
     toolRegistry: new MapToolRegistry(opts.tools),
-    abortSignal: opts.abortSignal ?? new AbortController().signal,
+    runScope: testRunScope('dispatch-parallel', {
+      signal: opts.abortSignal,
+    }),
     onRoundFinalized: () => {},
     modelCell: testModelCell({
       requiresBatchedParallelToolResults: false,

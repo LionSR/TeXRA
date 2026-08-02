@@ -435,7 +435,16 @@ export async function runFlowWithLifecycle(
   // `track()` emits `child.activity` synchronously, so anything assigned
   // later (e.g. from `onRun`) misses the parent's first roster snapshot.
   if (options?.workflowPhase) handle.workflowPhase = options.workflowPhase;
-  handle.enablePendingInterrupt();
+  const runInterruptHandler = {
+    interrupt(): void {
+      ctx.interrupt();
+      session.interactions.cancel({
+        streamId,
+        cause: 'Run interrupted.',
+      });
+    },
+  };
+  const detachRunInterrupt = handle.attachInterruptHandler(runInterruptHandler);
   session.executions.track(handle);
   let leaseLost = false;
   let keepLeaseWatcher = false;
@@ -621,7 +630,7 @@ export async function runFlowWithLifecycle(
     // set stream status themselves. Either branch leaves the stream carrying
     // this run's own phase, which is what makes the terminal phase a verdict
     // about this run rather than whatever the last one left behind.
-    if (handle.hasPendingInterrupt) {
+    if (ctx.runScope.signal.aborted) {
       transitionStopBeforeRunStart(ctx);
     } else {
       transitionRunStart(ctx);
@@ -630,7 +639,10 @@ export async function runFlowWithLifecycle(
     try {
       result = await runner(handle, lifecycleControl);
     } finally {
-      handle.closePendingInterruptWindow();
+      // Once the runner settles there is no live run operation left to abort.
+      // Refuse later stops while terminal persistence completes, matching the
+      // registry contract that an interrupt target represents live work.
+      detachRunInterrupt();
     }
     if (isWaitingFlowResult(result)) {
       keepLeaseWatcher = true;
@@ -725,6 +737,7 @@ export async function runFlowWithLifecycle(
     if (err instanceof Error && finalizedRunFailures.has(err)) throw err;
     return await finalizeFailedRun(err, undefined);
   } finally {
+    detachRunInterrupt();
     if (!keepLeaseWatcher) stopWatchingLease();
     // Settle every host interaction this run left pending. The lifecycle owns
     // it for both flows: a run that ends with an approval still on screen must

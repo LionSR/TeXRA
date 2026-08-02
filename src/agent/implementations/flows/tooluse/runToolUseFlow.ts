@@ -65,6 +65,8 @@ import type { ToolUseServices } from './ToolUseServices';
 export interface RunToolUseFlowInput<
   C = unknown,
 > extends BaseFlowContextInit<C> {
+  /** Abort this run's sticky signal. */
+  interrupt: () => void;
   setting: AgentToolUseSetting;
   /** Canonical shared state and the persisted value observed during retrieval. */
   resume?: Readonly<{ shared: PreparedShared; sourceShared: unknown }>;
@@ -171,10 +173,10 @@ export async function runToolUseFlow<C = unknown>(
   toolRegistry?: IToolRegistry,
   attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
-  const { logger, setting, onInterrupt } = input;
+  const { logger, setting } = input;
   const runContext = useLaunchRunContext();
   const { runScope } = runContext;
-  const { streamId, executionId, session: runSession } = runScope;
+  const { streamId, executionId, session: runSession, signal } = runScope;
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
@@ -365,7 +367,7 @@ export async function runToolUseFlow<C = unknown>(
       return services.modelCell.modelId;
     },
     interrupt(): void {
-      onInterrupt?.();
+      input.interrupt();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
       sessionLifecycle.interrupt(inResumeStartupWindow ? 'preserve' : 'clear');
     },
@@ -437,7 +439,7 @@ export async function runToolUseFlow<C = unknown>(
     attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
-    if (input.checkInterruption()) {
+    if (signal.aborted) {
       preserveResumeRecord = input.resume !== undefined;
       earlyResult = { outcome };
       throw startupInterruption;
@@ -447,7 +449,7 @@ export async function runToolUseFlow<C = unknown>(
     const flowRecord = await readPersistedFlowRecord(kv, executionId);
     // Cancellation can also arrive while the recovery read is pending. Do not
     // start a migration or repair write after that handoff.
-    if (input.checkInterruption()) {
+    if (signal.aborted) {
       persistenceRecoveryPending = false;
       preserveResumeRecord = input.resume !== undefined;
       earlyResult = { outcome };
@@ -567,7 +569,7 @@ export async function runToolUseFlow<C = unknown>(
       try {
         finalAction = await pf.run(shared);
       } catch (error: unknown) {
-        if (input.checkInterruption()) {
+        if (signal.aborted) {
           shared = (await pf.getShared()) ?? shared;
           await pf.prepareForFollowUp(shared);
         }
@@ -578,7 +580,7 @@ export async function runToolUseFlow<C = unknown>(
       // original object. Without this, reads of lastError, messages, etc. below
       // would always see the stale initial values.
       shared = (await pf.getShared()) ?? shared;
-      if (finalAction !== FlowTransition.WAITING || input.checkInterruption()) {
+      if (finalAction !== FlowTransition.WAITING || signal.aborted) {
         break;
       }
 
@@ -607,12 +609,11 @@ export async function runToolUseFlow<C = unknown>(
     if (finalAction === FlowTransition.WAITING && !shared.lastError) {
       outcome = STREAM_PHASE.WAITING;
     } else {
-      const cancelled =
-        input.checkInterruption() || Boolean(shared.userCancelledRetry);
+      const cancelled = signal.aborted || Boolean(shared.userCancelledRetry);
       outcome = deriveRunOutcome({
         failed: Boolean(shared.lastError),
         // A retry the user declined ends the run without leaving a
-        // `lastError` behind. Counting only `checkInterruption()` here
+        // `lastError` behind. Counting only the run signal here
         // reported that run as COMPLETED while the `finally` below still
         // preserved its record as resumable — a success that is also
         // resumable. `userCancelledRetry` survives only when it is why the
@@ -646,7 +647,7 @@ export async function runToolUseFlow<C = unknown>(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
-    } else if (flowRunStarted && input.checkInterruption()) {
+    } else if (flowRunStarted && signal.aborted) {
       preservationReason = 'Flow record preserved after user interruption';
     } else if (shared.userCancelledRetry) {
       preservationReason =

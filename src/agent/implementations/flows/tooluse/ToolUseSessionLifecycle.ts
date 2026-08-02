@@ -51,9 +51,9 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   }
 
   async waitForFollowUp(
-    checkInterruption: () => boolean,
+    signal: AbortSignal,
   ): Promise<FollowUpQueueBatch | null> {
-    const batch = await this.followUps.waitAndDrainAll(checkInterruption);
+    const batch = await this.followUps.waitAndDrainAll(signal);
     if (batch?.synthetic) {
       this.syntheticFollowUpPending = false;
     }
