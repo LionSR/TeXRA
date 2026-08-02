@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
+  convertGoogleToolSchema,
   toAnthropicTools,
   toGoogleTools,
   toOpenAITools,
   toOpenAIResponseTools,
 } from '@agent/modelHandlers/toolConversion';
 import type { ToolDefinition } from '@model/ToolDefinition';
+import { resolveToolDefinitions } from '@tools/registry';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';
@@ -651,8 +653,10 @@ describe('toGoogleTools', () => {
 
     const tools = toGoogleTools(defs);
     const tool = tools[0] as GeminiTool;
-    const params = tool.functionDeclarations?.[0]
-      .parametersJsonSchema as Record<string, unknown>;
+    const params = tool.functionDeclarations?.[0].parameters as Record<
+      string,
+      unknown
+    >;
 
     expect(params.type).toBe('object');
     expect(params.oneOf).toBe(undefined);
@@ -672,5 +676,445 @@ describe('toGoogleTools', () => {
     expect(properties.status).toBeTruthy();
     // Only command is required by every branch.
     expect(params.required).toStrictEqual(['command']);
+  });
+
+  it('generates optional Google parameters directly in OpenAPI form', () => {
+    const definition = {
+      name: 'optional_input',
+      zodSchema: z.strictObject({
+        query: z.string().nullish(),
+        count: z.number().positive().nullish(),
+      }),
+    };
+    const interactionParams = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    expect(interactionParams.properties.query).toStrictEqual({
+      nullable: true,
+      type: 'string',
+    });
+    expect(interactionParams.properties.count).toStrictEqual({
+      nullable: true,
+      type: 'number',
+      minimum: 0,
+    });
+    expect(JSON.stringify(interactionParams)).not.toContain('anyOf');
+
+    const tools = toGoogleTools([definition]);
+    const params = (tools[0] as GeminiTool).functionDeclarations?.[0]
+      .parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    expect(params.properties.query).toStrictEqual({
+      nullable: true,
+      type: 'string',
+    });
+    expect(params.properties.count).toStrictEqual({
+      nullable: true,
+      type: 'number',
+      minimum: 0,
+    });
+    expect(params).not.toHaveProperty('additionalProperties');
+  });
+
+  it('preserves exclusive integer bounds on both Google surfaces', () => {
+    const definition = {
+      name: 'bounded_values',
+      zodSchema: z.strictObject({
+        integer: z.int().positive().lt(10),
+        aboveFraction: z.int().gt(1.2).max(10),
+        belowNegativeFraction: z.int().min(-10).lt(-1.2),
+        number: z.number().positive().lt(10),
+      }),
+    };
+    const interactionParams = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentParams = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const parameters of [interactionParams, generateContentParams]) {
+      expect(parameters.properties.integer).toStrictEqual({
+        type: 'integer',
+        minimum: 1,
+        maximum: 9,
+      });
+      expect(parameters.properties.aboveFraction).toStrictEqual({
+        type: 'integer',
+        minimum: 2,
+        maximum: 10,
+      });
+      expect(parameters.properties.belowNegativeFraction).toStrictEqual({
+        type: 'integer',
+        minimum: -10,
+        maximum: -2,
+      });
+      // Number bounds have no adjacent representable value in Google's
+      // supported subset, so retain their inclusive bounds without shifting.
+      expect(parameters.properties.number).toStrictEqual({
+        type: 'number',
+        minimum: 0,
+        maximum: 10,
+      });
+    }
+  });
+
+  it('generates finite schemas for the scientific review tool roster', () => {
+    const reviewTools = resolveToolDefinitions([
+      'wolfram',
+      'todo_write',
+      'bash',
+      'read_file',
+      'write_file',
+      'edit_file',
+      'glob',
+      'grep',
+      'extract_figures',
+      'extract_bib_entries',
+      'extract_tikz_figures',
+      'texcount',
+      'arxiv_search',
+      'arxiv_metadata',
+      'crossref_search',
+      'diagnostics',
+      'delegate_workflow_script',
+    ]);
+
+    expect(reviewTools).toHaveLength(17);
+    for (const definition of reviewTools) {
+      const interactionSchema = convertGoogleToolSchema(definition);
+      const generateContentSchema = (
+        toGoogleTools([definition])[0] as GeminiTool
+      ).functionDeclarations?.[0].parameters;
+      for (const schema of [interactionSchema, generateContentSchema]) {
+        const serialized = JSON.stringify(schema);
+        expect(serialized, definition.name).not.toContain('"type":"null"');
+        expect(serialized, definition.name).not.toContain('$ref');
+        expect(serialized, definition.name).not.toContain('$defs');
+        if (definition.name === 'arxiv_search') {
+          const parameters = schema as {
+            properties: Record<string, Record<string, unknown>>;
+          };
+          expect(parameters.properties.maxResults.minimum).toBe(1);
+        }
+      }
+    }
+  });
+
+  it('converts the registered workflow script JSON args for both Google APIs', () => {
+    const [definition] = resolveToolDefinitions(['delegate_workflow_script']);
+    const interactionSchema = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const schema of [interactionSchema, generateContentSchema]) {
+      expect(schema.properties.args.description).toEqual(expect.any(String));
+      expect(schema.properties.args.type).toBeUndefined();
+      expect(JSON.stringify(schema)).not.toContain('$ref');
+    }
+  });
+
+  it('preserves opaque Google schema annotations', () => {
+    const schema = convertGoogleToolSchema({
+      name: 'annotated_input',
+      parameters: {
+        type: 'object',
+        properties: {
+          options: {
+            type: 'object',
+            default: {
+              $ref: 'literal default data',
+              oneOf: ['fast'],
+              allOf: [{ mode: 'fast' }],
+            },
+            example: {
+              $ref: 'literal example data',
+              oneOf: ['careful'],
+              allOf: [{ mode: 'careful' }],
+            },
+          },
+        },
+      },
+    }) as { properties: Record<string, Record<string, unknown>> };
+
+    expect(schema.properties.options.default).toStrictEqual({
+      $ref: 'literal default data',
+      oneOf: ['fast'],
+      allOf: [{ mode: 'fast' }],
+    });
+    expect(schema.properties.options.example).toStrictEqual({
+      $ref: 'literal example data',
+      oneOf: ['careful'],
+      allOf: [{ mode: 'careful' }],
+    });
+  });
+
+  it.each(['oneOf', 'allOf', 'not'] as const)(
+    'rejects unsupported nested Google %s constraints',
+    (constraint) => {
+      expect(() =>
+        convertGoogleToolSchema({
+          name: 'combined_input',
+          parameters: {
+            type: 'object',
+            properties: {
+              value: {
+                [constraint]:
+                  constraint === 'not'
+                    ? { const: 'reserved' }
+                    : [{ type: 'string' }, { type: 'number' }],
+              },
+            },
+          },
+        }),
+      ).toThrow(
+        `Google tool schemas do not support the "${constraint}" keyword.`,
+      );
+    },
+  );
+
+  it.each([
+    'contains',
+    'if',
+    'then',
+    'else',
+    'dependentSchemas',
+    'prefixItems',
+  ])('rejects the unsupported Google %s keyword', (keyword) => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'unsupported_input',
+        parameters: {
+          type: 'object',
+          properties: {
+            value: { type: 'array', [keyword]: { type: 'string' } },
+          },
+        },
+      }),
+    ).toThrow(`Google tool schemas do not support the "${keyword}" keyword.`);
+  });
+
+  it('rejects array-valued Google schema types', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'union_type',
+        parameters: {
+          type: 'object',
+          properties: { value: { type: ['string', 'null'] } },
+        },
+      }),
+    ).toThrow('Google tool schemas require a single scalar type.');
+  });
+
+  it('preserves raw numeric exclusive integer bounds exactly', () => {
+    const definition = {
+      name: 'bounded_integer',
+      parameters: {
+        type: 'object',
+        properties: {
+          lowerInclusiveStricter: {
+            type: 'integer',
+            minimum: 7,
+            exclusiveMinimum: 3,
+          },
+          lowerExclusiveStricter: {
+            type: 'integer',
+            minimum: 3,
+            exclusiveMinimum: 7,
+          },
+          upperInclusiveStricter: {
+            type: 'integer',
+            maximum: 4,
+            exclusiveMaximum: 10,
+          },
+          upperExclusiveStricter: {
+            type: 'integer',
+            maximum: 10,
+            exclusiveMaximum: 4,
+          },
+        },
+      },
+    };
+    const interactionSchema = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const schema of [interactionSchema, generateContentSchema]) {
+      expect(schema.properties.lowerInclusiveStricter.minimum).toBe(7);
+      expect(schema.properties.lowerExclusiveStricter.minimum).toBe(8);
+      expect(schema.properties.upperInclusiveStricter.maximum).toBe(4);
+      expect(schema.properties.upperExclusiveStricter.maximum).toBe(3);
+    }
+  });
+
+  it('rejects Google literal constraints that cannot be represented', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'numeric_literal',
+        parameters: {
+          type: 'object',
+          properties: { value: { type: 'integer', const: 1 } },
+        },
+      }),
+    ).toThrow('Google tool schemas support only string literal constraints.');
+  });
+
+  it('intersects compatible Google string const and enum constraints', () => {
+    const definition = {
+      name: 'literal_intersection',
+      parameters: {
+        type: 'object',
+        properties: {
+          value: {
+            type: 'string',
+            const: 'review',
+            enum: ['draft', 'review'],
+          },
+        },
+      },
+    };
+    const interactionSchema = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const schema of [interactionSchema, generateContentSchema]) {
+      expect(schema.properties.value.enum).toStrictEqual(['review']);
+    }
+  });
+
+  it('rejects contradictory Google string const and enum constraints', () => {
+    const definition = {
+      name: 'literal_contradiction',
+      parameters: {
+        type: 'object',
+        properties: {
+          value: {
+            type: 'string',
+            const: 'review',
+            enum: ['draft', 'final'],
+          },
+        },
+      },
+    };
+    const message =
+      'Google tool schemas cannot represent contradictory const and enum constraints.';
+
+    expect(() => convertGoogleToolSchema(definition)).toThrow(message);
+    expect(() => toGoogleTools([definition])).toThrow(message);
+  });
+
+  it('preserves constraints attached to nested Google parameters', () => {
+    const tools = toGoogleTools([
+      {
+        name: 'referenced_input',
+        parameters: {
+          type: 'object',
+          properties: {
+            mode: {
+              type: 'string',
+              enum: ['brief', 'full'],
+              description: 'Mode selected for this call',
+            },
+            action: { type: 'string', const: 'review' },
+          },
+          required: ['mode', 'action'],
+        },
+      },
+    ]);
+    const params = (tools[0] as GeminiTool).functionDeclarations?.[0]
+      .parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    expect(params.properties.mode).toStrictEqual({
+      type: 'string',
+      enum: ['brief', 'full'],
+      description: 'Mode selected for this call',
+    });
+    expect(params.properties.action).toStrictEqual({
+      type: 'string',
+      enum: ['review'],
+    });
+  });
+
+  it('rejects recursive structural Google schemas instead of weakening them', () => {
+    const recursiveNode: z.ZodType = z.lazy(() =>
+      z.strictObject({ children: z.array(recursiveNode) }),
+    );
+
+    expect(() =>
+      toGoogleTools([
+        {
+          name: 'recursive_input',
+          zodSchema: z.strictObject({ value: recursiveNode }),
+        },
+      ]),
+    ).toThrow(
+      'Google tool "recursive_input" must use a finite parameter schema without recursive references.',
+    );
+  });
+
+  it.each(['default', 'example'] as const)(
+    'rejects refs in Google properties named %s',
+    (propertyName) => {
+      expect(() =>
+        convertGoogleToolSchema({
+          name: 'named_property_reference',
+          parameters: {
+            type: 'object',
+            properties: {
+              [propertyName]: { $ref: '#/$defs/value' },
+            },
+            $defs: { value: { type: 'string' } },
+          },
+        }),
+      ).toThrow(
+        'Google tool "named_property_reference" must use a finite parameter schema without references.',
+      );
+    },
+  );
+
+  it('rejects referenced external Google schemas instead of flattening them', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'referenced_input',
+        parameters: {
+          type: 'object',
+          properties: { mode: { $ref: '#/$defs/mode' } },
+          $defs: { mode: { type: 'string' } },
+        },
+      }),
+    ).toThrow(
+      'Google tool "referenced_input" must use a finite parameter schema without references.',
+    );
+  });
+
+  it('rejects dangling caller-supplied Google references', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'dangling_reference',
+        parameters: {
+          type: 'object',
+          properties: { mode: { $ref: '#/$defs/missing' } },
+        },
+      }),
+    ).toThrow(
+      'Google tool "dangling_reference" must use a finite parameter schema without references.',
+    );
   });
 });
