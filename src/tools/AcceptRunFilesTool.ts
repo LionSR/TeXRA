@@ -222,7 +222,7 @@ Parameters map directly to subagent-result delivery attributes:
         continue;
       }
 
-      const finalContent = getApprovedContent(approval, entry.proposedContent);
+      const finalContent = getApprovedContent(approval);
       await writeApprovedContent(
         entry.original,
         entry.originalContent,
