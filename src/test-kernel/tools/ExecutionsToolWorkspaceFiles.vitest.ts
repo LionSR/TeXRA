@@ -250,56 +250,57 @@ describe('ExecutionsTool', () => {
     }
   });
 
-  it('reads running task lists from session snapshot state', async () => {
-    const session = createTestSession();
-    const executionId = 'abc124';
-    const parentStreamId = 'stream:parent-live-todos' as StreamTabId;
-    const childStreamId = 'stream:child-live-todos' as StreamTabId;
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId,
-      childStreamId,
-      agent: 'review',
-    });
-
-    try {
-      session.executions.track(handle);
-      seedStreamStatusForTest(session.status, childStreamId, {
-        phase: STREAM_PHASE.RUNNING,
-      });
-      session.snapshots.setTodos(childStreamId, [
-        {
-          content: 'Read live snapshot state',
-          status: 'in_progress',
-          activeForm: 'Reading live snapshot state',
-        },
-      ]);
-      await session.snapshots.flush();
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
+  it('reads running task lists from session snapshot state', () =>
+    withTempStorage(async () => {
+      const session = createTestSession();
+      const executionId = 'abc124';
+      const parentStreamId = 'stream:parent-live-todos' as StreamTabId;
+      const childStreamId = 'stream:child-live-todos' as StreamTabId;
+      const handle = testExecutionHandle({
+        executionId,
+        parentStreamId,
+        childStreamId,
+        agent: 'review',
       });
 
-      const [summary, todos] = await withRunContext(
-        createRunContext({ streamId: parentStreamId, session }),
-        () =>
-          Promise.all([
-            new ExecutionsTool().call({
-              path: `/executions/${executionId}`,
-            }),
-            new ExecutionsTool().call({
-              path: `/executions/${executionId}/todos`,
-            }),
-          ]),
-      );
+      try {
+        session.executions.track(handle);
+        seedStreamStatusForTest(session.status, childStreamId, {
+          phase: STREAM_PHASE.RUNNING,
+        });
+        session.snapshots.setTodos(childStreamId, [
+          {
+            content: 'Read live snapshot state',
+            status: 'in_progress',
+            activeForm: 'Reading live snapshot state',
+          },
+        ]);
+        await session.snapshots.flush();
+        mocks.readMeta.mockResolvedValue({
+          timestamp: '2026-06-15T09:36:02.345Z',
+          category: 'toolUse',
+        });
 
-      expect(summary.output).toContain('Read live snapshot state');
-      expect(todos.output).toContain('Read live snapshot state');
-      expect(mocks.readTodos).not.toHaveBeenCalled();
-    } finally {
-      session.dispose();
-    }
-  });
+        const [summary, todos] = await withRunContext(
+          createRunContext({ streamId: parentStreamId, session }),
+          () =>
+            Promise.all([
+              new ExecutionsTool().call({
+                path: `/executions/${executionId}`,
+              }),
+              new ExecutionsTool().call({
+                path: `/executions/${executionId}/todos`,
+              }),
+            ]),
+        );
+
+        expect(summary.output).toContain('Read live snapshot state');
+        expect(todos.output).toContain('Read live snapshot state');
+        expect(mocks.readTodos).not.toHaveBeenCalled();
+      } finally {
+        session.dispose();
+      }
+    }));
 
   it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', async () => {
     mocks.readMeta.mockResolvedValue({
