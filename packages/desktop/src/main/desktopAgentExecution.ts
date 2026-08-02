@@ -56,13 +56,7 @@ import {
   type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import {
-  runCleanMultiple,
-  runCleanRunDir,
-  runCleanSingle,
-  runPack,
-  runPackRunDir,
-} from '@housekeeping';
+import { runCleanRunDir, runPackRunDir } from '@housekeeping';
 import {
   API_PROVIDERS,
   hasUsableApiKey,
@@ -100,10 +94,7 @@ import {
 } from '@shared/copy/executionHistory';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import {
-  mergeRunDirAndWorkspaceResult,
-  type FileOpResult,
-} from '@shared/schemas/opResults';
+import type { FileOpResult } from '@shared/schemas/opResults';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
@@ -659,17 +650,13 @@ export class DesktopProgressBridge {
   }
 
   /**
-   * Stream-toolbar pack/clean. Toolbar invocations always carry an
-   * `executionId`, so — exactly as the extension's handlers document — both the
-   * run directory and the workspace are swept: the workspace pass is a no-op for
-   * new runs whose outputs live only inside the run directory, but it catches
-   * legacy runs whose outputs still sit beside the source.
+   * Stream-toolbar pack/clean for artifacts in the current execution directory.
    */
   private async runWorkflowFileOperation(
     operation: WorkflowFileOperation,
     request: WorkflowFileOperationRequest,
   ): Promise<void> {
-    const { agent, model, inputFile, outputFiles, executionId } = request;
+    const { agent, model, inputFile, executionId } = request;
     if (!agent || !model || !inputFile) {
       await this.options.host.showErrorMessage(
         `Missing required parameters for ${operation}.`,
@@ -677,32 +664,24 @@ export class DesktopProgressBridge {
       return;
     }
 
-    const runWorkspaceOperation = (): Promise<FileOpResult> => {
-      if (operation === 'pack') {
-        return runPack(model, inputFile, agent, outputFiles);
-      }
-      return outputFiles.length > 0
-        ? runCleanMultiple(model, inputFile, agent, outputFiles)
-        : runCleanSingle(model, inputFile, agent);
-    };
+    if (!executionId) {
+      await this.options.host.showErrorMessage(
+        `Missing execution identity for ${operation}.`,
+      );
+      return;
+    }
 
     let result: FileOpResult;
     try {
-      if (executionId) {
-        const runDirResult =
-          operation === 'pack'
-            ? await runPackRunDir(
-                executionId as ExecutionId,
-                agent,
-                model,
-                inputFile,
-              )
-            : await runCleanRunDir(executionId as ExecutionId);
-        const workspaceResult = await runWorkspaceOperation();
-        result = mergeRunDirAndWorkspaceResult(runDirResult, workspaceResult);
-      } else {
-        result = await runWorkspaceOperation();
-      }
+      result =
+        operation === 'pack'
+          ? await runPackRunDir(
+              executionId as ExecutionId,
+              agent,
+              model,
+              inputFile,
+            )
+          : await runCleanRunDir(executionId as ExecutionId);
     } catch (error) {
       this.logger.error(`Desktop ${operation} operation failed`, {
         data: toLogData(error),
