@@ -1,9 +1,6 @@
 // Third-party imports
 import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
-import type {
-  GenerateContentResponseUsageMetadata,
-  Interactions,
-} from '@google/genai';
+import type { Interactions } from '@google/genai';
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { ResponseUsage as OpenAIResponseUsage } from 'openai/resources/responses/responses';
 import type { ChatUsage as OpenRouterChatUsage } from '@openrouter/sdk/models';
@@ -34,13 +31,12 @@ export interface ExtendedCompletionUsage extends CompletionUsage {
  * - ExtendedCompletionUsage: OpenAI Chat Completions API (includes DeepSeek extension)
  * - OpenAIResponseUsage: OpenAI Responses API
  * - AnthropicUsage: Anthropic Messages API
- * - GenerateContentResponseUsageMetadata: Google Gemini API
+ * - Interactions.Usage: Google Gemini API
  */
 type NativeUsagePayload =
   | ExtendedCompletionUsage
   | OpenAIResponseUsage
   | AnthropicUsage
-  | GenerateContentResponseUsageMetadata
   | Interactions.Usage
   | OpenRouterChatUsage;
 
