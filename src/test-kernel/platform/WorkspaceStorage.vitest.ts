@@ -9,12 +9,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import {
-  LEGACY_RUNS_STORAGE_DIR,
   MEMORY_STORAGE_DIR,
   resolveExistingRunStoragePath,
   WorkspaceStorageProvider,
   resolveGlobalStoragePath,
-  resolveLegacyRunStoragePath,
   resolveMemoryStoragePath,
   resolveRunOriginalSnapshotPath,
   resolveRunStoragePath,
@@ -71,9 +69,9 @@ describe('workspace storage defaults', () => {
       ['run-1', 'result.json'],
       async (storagePath) => storagePath === 'executions/run-1/result.json',
     );
-    const existingLegacy = await resolveExistingRunStoragePath(
-      ['legacy-run'],
-      async (storagePath) => storagePath === 'taskRuns/legacy-run',
+    const missingRun = await resolveExistingRunStoragePath(
+      ['missing-run'],
+      async () => false,
     );
 
     expect([
@@ -84,10 +82,8 @@ describe('workspace storage defaults', () => {
       RUNS_STORAGE_DIR,
       resolveRunStoragePath('run-1', 'result.json'),
       resolveRunOriginalSnapshotPath('run-1', 'Draft/Draft.tex'),
-      LEGACY_RUNS_STORAGE_DIR,
-      resolveLegacyRunStoragePath('legacy-run'),
       existingCurrent,
-      existingLegacy,
+      missingRun,
     ]).toEqual([
       join(root, 'global-storage'),
       join(root, 'workspace-storage', workspaceStorageId(workspacePath)),
@@ -96,10 +92,8 @@ describe('workspace storage defaults', () => {
       'executions',
       'executions/run-1/result.json',
       'executions/run-1/original/Draft/Draft.tex',
-      'taskRuns',
-      'taskRuns/legacy-run',
       'executions/run-1/result.json',
-      'taskRuns/legacy-run',
+      undefined,
     ]);
     expect(() => resolveMemoryStoragePath('not-memories/project.md')).toThrow(
       'Invalid memory path',

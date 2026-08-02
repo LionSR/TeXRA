@@ -10,7 +10,6 @@ export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   runs: 'executions',
   executionLeases: 'executionLeases',
   executionLocks: 'executionLocks',
-  legacyRuns: 'taskRuns',
   streamData: 'streamData',
   streamLogs: 'streamLogs',
   original: 'original',

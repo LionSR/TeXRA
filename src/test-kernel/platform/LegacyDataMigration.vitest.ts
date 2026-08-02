@@ -143,13 +143,7 @@ describe('mergeLegacyWorkspaceStorageBucket', () => {
     const legacy = await makeTempDir('texra-workspace-legacy-', tempDirs);
     const target = await makeTempDir('texra-workspace-target-', tempDirs);
     const logger = fakeLogger();
-    const collections = [
-      'executions',
-      'taskRuns',
-      'streamData',
-      'streamLogs',
-      'memories',
-    ];
+    const collections = ['executions', 'streamData', 'streamLogs', 'memories'];
 
     for (const collection of collections) {
       await mkdir(join(legacy, collection, 'legacy-child'), {

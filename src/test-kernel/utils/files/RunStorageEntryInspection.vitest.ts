@@ -27,10 +27,6 @@ function primaryEntry(...segments: string[]): string {
   return path.join('executions', executionId, ...segments);
 }
 
-function legacyEntry(...segments: string[]): string {
-  return path.join('taskRuns', executionId, ...segments);
-}
-
 function storagePath(...segments: string[]): string {
   return path.join(storageRoot, ...segments);
 }
@@ -73,27 +69,6 @@ describe('inspectRunStorageEntry', () => {
         absolutePath: storagePath('executions', executionId, 'r1', 'draft.tex'),
         relativePath: 'r1/draft.tex',
         executionId,
-      },
-    });
-  });
-
-  it('falls back to the legacy layout only when the primary entry is absent', async () => {
-    StorageFS.stat = async (target) => {
-      if (target === legacyEntry('result.tex')) {
-        return fileStat(FileType.File);
-      }
-      if (target === legacyEntry()) {
-        return fileStat(FileType.Directory);
-      }
-      throw missing(target);
-    };
-
-    const result = await inspectRunStorageEntry(executionId, 'result.tex');
-
-    expect(result).toMatchObject({
-      kind: 'file',
-      location: {
-        absolutePath: storagePath('taskRuns', executionId, 'result.tex'),
       },
     });
   });
@@ -186,7 +161,7 @@ describe('inspectRunStorageEntry', () => {
     ).rejects.toThrow('Denied');
   });
 
-  it('recovers execution identity from current and legacy absolute paths', () => {
+  it('recovers execution identity from run-storage absolute paths', () => {
     expect(
       runStorageLocationFromAnyAbsolutePath(
         storagePath('executions', executionId, 'r2', 'result.tex'),
@@ -195,15 +170,6 @@ describe('inspectRunStorageEntry', () => {
       kind: 'runStorage',
       executionId,
       relativePath: 'r2/result.tex',
-    });
-    expect(
-      runStorageLocationFromAnyAbsolutePath(
-        storagePath('taskRuns', executionId, 'result.tex'),
-      ),
-    ).toMatchObject({
-      kind: 'runStorage',
-      executionId,
-      relativePath: 'result.tex',
     });
     expect(
       runStorageLocationFromAnyAbsolutePath(
@@ -228,15 +194,6 @@ describe('inspectRunStorageEntry', () => {
       kind: 'runStorage',
       executionId,
       relativePath: 'r1/draft.tex',
-    });
-    expect(
-      fileService.locateSource(
-        storagePath('taskRuns', executionId, 'legacy.tex'),
-      ),
-    ).toMatchObject({
-      kind: 'runStorage',
-      executionId,
-      relativePath: 'legacy.tex',
     });
   });
 });

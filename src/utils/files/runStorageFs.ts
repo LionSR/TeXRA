@@ -7,7 +7,6 @@ import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   resolveExistingRunStoragePath,
-  resolveLegacyRunStoragePath,
   resolveRunOriginalSnapshotPath,
   resolveRunStoragePath,
   resolveRunStorageRelativePath,
@@ -75,8 +74,7 @@ async function storageEntryType(target: string): Promise<number | undefined> {
 
 /**
  * Inspect one execution-relative run-storage entry without following a
- * workspace-mirror symlink. Primary storage takes precedence over the legacy
- * layout, matching {@link findExistingRunStoragePath}.
+ * workspace-mirror symlink.
  */
 export async function inspectRunStorageEntry(
   executionId: ExecutionId,
@@ -98,64 +96,47 @@ export async function inspectRunStorageEntry(
   }
   const normalizedPath = path.posix.normalize(posixPath);
 
-  const candidates = [
-    {
-      entry: resolveRunStoragePath(executionId, normalizedPath),
-      root: resolveRunStoragePath(executionId),
-    },
-    {
-      entry: resolveLegacyRunStoragePath(executionId, normalizedPath),
-      root: resolveLegacyRunStoragePath(executionId),
-    },
-  ];
-  for (const candidate of candidates) {
-    const ancestors = [candidate.root];
-    let ancestorPath = candidate.root;
-    for (const segment of pathSegments.slice(0, -1)) {
-      ancestorPath = path.join(ancestorPath, segment);
-      ancestors.push(ancestorPath);
-    }
-    let missingAncestor = false;
-    for (const ancestor of ancestors) {
-      const ancestorType = await storageEntryType(ancestor);
-      if (ancestorType === undefined) {
-        missingAncestor = true;
-        break;
-      }
-      if (isSymlink(ancestorType)) {
-        return {
-          kind: 'symlink',
-          absolutePath: StorageFS.fullPath(ancestor),
-        };
-      }
-      if (!isDirectory(ancestorType)) {
-        return {
-          kind: 'unsupported',
-          absolutePath: StorageFS.fullPath(ancestor),
-        };
-      }
-    }
-    if (missingAncestor) continue;
-
-    const type = await storageEntryType(candidate.entry);
-    if (type === undefined) continue;
-    const absolutePath = StorageFS.fullPath(candidate.entry);
-    if (isSymlink(type)) return { kind: 'symlink', absolutePath };
-    if (isFile(type)) {
+  const root = resolveRunStoragePath(executionId);
+  const ancestors = [root];
+  let ancestorPath = root;
+  for (const segment of pathSegments.slice(0, -1)) {
+    ancestorPath = path.join(ancestorPath, segment);
+    ancestors.push(ancestorPath);
+  }
+  for (const ancestor of ancestors) {
+    const ancestorType = await storageEntryType(ancestor);
+    if (ancestorType === undefined) return { kind: 'missing' };
+    if (isSymlink(ancestorType)) {
       return {
-        kind: 'file',
-        location: createRunStorageLocation(
-          absolutePath,
-          normalizedPath,
-          executionId,
-        ),
+        kind: 'symlink',
+        absolutePath: StorageFS.fullPath(ancestor),
       };
     }
-    if (isDirectory(type)) return { kind: 'directory', absolutePath };
-    return { kind: 'unsupported', absolutePath };
+    if (!isDirectory(ancestorType)) {
+      return {
+        kind: 'unsupported',
+        absolutePath: StorageFS.fullPath(ancestor),
+      };
+    }
   }
 
-  return { kind: 'missing' };
+  const entry = resolveRunStoragePath(executionId, normalizedPath);
+  const type = await storageEntryType(entry);
+  if (type === undefined) return { kind: 'missing' };
+  const absolutePath = StorageFS.fullPath(entry);
+  if (isSymlink(type)) return { kind: 'symlink', absolutePath };
+  if (isFile(type)) {
+    return {
+      kind: 'file',
+      location: createRunStorageLocation(
+        absolutePath,
+        normalizedPath,
+        executionId,
+      ),
+    };
+  }
+  if (isDirectory(type)) return { kind: 'directory', absolutePath };
+  return { kind: 'unsupported', absolutePath };
 }
 
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
@@ -183,33 +164,26 @@ export function runStorageLocationFromAbsolutePath(
   return createRunStorageLocation(absolutePath, relativePath, executionId);
 }
 
-/** Recover execution identity from an absolute path in either run layout. */
+/** Recover execution identity from an absolute path in run storage. */
 export function runStorageLocationFromAnyAbsolutePath(
   absolutePath: string,
 ): RunStorageFileLocation | undefined {
   if (!path.isAbsolute(absolutePath)) return undefined;
 
-  const roots = [
-    StorageFS.fullPath(resolveRunStoragePath()),
-    StorageFS.fullPath(resolveLegacyRunStoragePath()),
-  ];
-  for (const root of roots) {
-    const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
-    if (!runRelativePath) continue;
+  const root = StorageFS.fullPath(resolveRunStoragePath());
+  const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
+  if (!runRelativePath) return undefined;
 
-    const [rawExecutionId, ...entrySegments] = getPathSegments(runRelativePath);
-    const executionId = ExecutionIdSchema.safeParse(rawExecutionId);
-    if (!executionId.success || entrySegments.length === 0) return undefined;
+  const [rawExecutionId, ...entrySegments] = getPathSegments(runRelativePath);
+  const executionId = ExecutionIdSchema.safeParse(rawExecutionId);
+  if (!executionId.success || entrySegments.length === 0) return undefined;
 
-    const relativePath = entrySegments.join('/');
-    return createRunStorageLocation(
-      path.resolve(root, runRelativePath),
-      relativePath,
-      executionId.data,
-    );
-  }
-
-  return undefined;
+  const relativePath = entrySegments.join('/');
+  return createRunStorageLocation(
+    path.resolve(root, runRelativePath),
+    relativePath,
+    executionId.data,
+  );
 }
 
 export async function ensureParentDir(filePath: string): Promise<void> {
