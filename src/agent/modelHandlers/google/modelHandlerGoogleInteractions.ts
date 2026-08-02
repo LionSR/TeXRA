@@ -153,6 +153,14 @@ function joinTextContent(content: readonly Content[]): string {
     .join('');
 }
 
+/** Extract raw model text without user-facing LaTeX post-processing. */
+function rawModelOutputText(interaction: GoogleGenAIInteraction): string {
+  return (interaction.steps ?? [])
+    .filter((step): step is ModelOutputStep => step.type === 'model_output')
+    .map((step) => joinTextContent(step.content ?? []))
+    .join('');
+}
+
 /** Best-effort extraction of an SDK error's human-readable message. */
 function errorMessageOf(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -806,13 +814,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       };
     }
 
-    const steps = responseObject.steps ?? [];
-    const rawText = steps
-      .filter((s): s is ModelOutputStep => s.type === 'model_output')
-      .map((s) => joinTextContent(s.content ?? []))
-      .join('');
-
-    let responseText = this.postProcessResponse(rawText);
+    let responseText = this.postProcessResponse(
+      rawModelOutputText(responseObject),
+    );
     const usage = responseObject.usage;
     // Map the Interactions terminal *status* to the canonical Google chat
     // FinishReason the shared stop/continue logic understands (mirrors the
@@ -1863,7 +1867,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
           this.interactionsRequestOptions(signal),
         );
         return {
-          summaryText: this.extractResponse(summary, '').text.trim(),
+          summaryText: rawModelOutputText(summary).trim(),
           outputTokens:
             summary.usage?.total_output_tokens ??
             CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
