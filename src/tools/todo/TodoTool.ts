@@ -37,45 +37,13 @@ const TodoWriteInputSchema = z.strictObject({
 
 export type TodoWriteInput = z.infer<typeof TodoWriteInputSchema>;
 
-/**
- * Tool for managing task lists during agent sessions.
- *
- * Use this tool to:
- * - Plan complex multi-step tasks by creating a todo list
- * - Track progress by updating task statuses
- * - Show users visibility into what the agent is working on
- *
- * Best practices:
- * - Use for tasks requiring 3+ distinct steps
- * - Mark tasks as in_progress BEFORE starting work
- * - Mark tasks as completed IMMEDIATELY after finishing
- * - Keep only ONE task as in_progress at a time
- * - Remove tasks that become irrelevant
- */
+/** Tool for managing task lists during agent sessions. */
 export class TodoWriteTool extends defineTool({
   name: 'todo_write',
-  description: `Create and manage a structured task list for tracking progress on complex tasks.
-
-Use this tool to:
-- Plan multi-step tasks by breaking them into actionable items
-- Track progress by updating task statuses (pending → in_progress → completed)
-- Give users visibility into what you're working on
-
-Task states:
-- pending: Task not yet started
-- in_progress: Currently working on (limit to ONE at a time)
-- completed: Task finished successfully
-
-Each task needs two forms:
-- content: Imperative form describing what to do (e.g., "Run tests")
-- activeForm: Present continuous form for display (e.g., "Running tests")
-
-Best practices:
-- Create todos BEFORE starting complex work
-- Mark task as in_progress BEFORE beginning it
-- Mark task as completed IMMEDIATELY after finishing
-- Break large tasks into smaller, specific steps
-- Remove tasks that are no longer relevant`,
+  description: `Create and manage a structured task list for tracking progress on complex multi-step tasks.
+Task states: pending, in_progress, completed.
+Each task needs two forms: content (imperative, e.g. "Run tests") and activeForm (present continuous shown while active, e.g. "Running tests").
+Keep the list current as you work; one task in_progress at a time.`,
   schema: TodoWriteInputSchema,
 }) {
   protected async execute(input: TodoWriteInput): Promise<ToolResult> {

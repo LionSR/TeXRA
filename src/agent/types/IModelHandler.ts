@@ -99,6 +99,7 @@ export type IModelHandler<
    *   alignment is structural rather than three positionally-zipped arrays.
    * @param workspaceState - Optional workspace state for reasoning blocks
    * @param text - Optional text to include before function calls
+   * @param client - Client bound to the current run and credential route
    */
   createBatchedToolUseFollowUpMessages?(
     entries: Array<{
@@ -108,5 +109,6 @@ export type IModelHandler<
     }>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
+    client?: C,
   ): Promise<M[]>;
 };

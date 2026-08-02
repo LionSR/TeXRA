@@ -139,6 +139,26 @@ describe('local Anthropic request traits', () => {
     expect(isCompactionEligibleModel(SONNET_35)).toBe(false);
   });
 
+  it('covers future Mythos-class family members via the family prefix', () => {
+    // The traits table matches 'claude-fable-'/'claude-mythos-' as families:
+    // a new member must not fall through to DEFAULT_REQUEST_TRAITS, whose
+    // summarizedDisplay:false would suppress all visible reasoning output.
+    expect(isCompactionEligibleModel('claude-fable-6')).toBe(true);
+    expect(isCompactionEligibleModel('claude-mythos-6')).toBe(true);
+
+    const config = buildThinkingConfig({
+      fullName: 'claude-fable-6',
+      capabilities: MODEL_CONFIGS.fable5.capabilities,
+      reasoningEffort: ReasoningEffort.HIGH,
+      maxTokens: 128000,
+      useStreaming: true,
+    });
+    expect(config.thinking).toEqual({
+      type: 'adaptive',
+      display: 'summarized',
+    });
+  });
+
   it('removes temperature for Claude 4/5 thinking families', () => {
     for (const model of [
       MODEL_CONFIGS.opus48T,

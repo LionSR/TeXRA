@@ -254,6 +254,53 @@ describe('ModelHandlerAnthropic auxiliary requests', () => {
     assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
     assert.equal(upload.mock.calls.length, 1);
   });
+
+  it('uses the run-bound client for batched tool-result uploads', async () => {
+    const handler = createAnthropicHandler();
+    handler.setLogger({ ...noopTrace });
+    const upload = vi.fn(async () => ({ id: 'file-batched' }));
+    const uploadClient = { beta: { files: { upload } } };
+    const withOptions = vi.fn(() => uploadClient);
+    const call: AnthropicToolCall = {
+      provider: 'anthropic',
+      callId: 'call-batched',
+      name: 'read_file',
+      input: {},
+      raw: {
+        id: 'call-batched',
+        type: 'tool_use',
+        caller: { type: 'direct' },
+        name: 'read_file',
+        input: {},
+      },
+    };
+    const getClient = vi
+      .spyOn(handler, 'getClient')
+      .mockRejectedValue(new Error('must not select another credential route'));
+
+    await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call,
+          result: { status: 'executed', output: 'done' },
+          attachments: [
+            {
+              path: 'chart.png',
+              mimeType: 'image/png',
+              bytes: new Uint8Array([1, 2, 3]),
+            },
+          ],
+        },
+      ],
+      undefined,
+      undefined,
+      { withOptions } as never,
+    );
+
+    assert.equal(getClient.mock.calls.length, 0);
+    assert.deepEqual(withOptions.mock.calls, [[{ maxRetries: 2 }]]);
+    assert.equal(upload.mock.calls.length, 1);
+  });
 });
 
 describe('ModelHandlerAnthropic forced tool choice', () => {
@@ -560,6 +607,60 @@ describe('ModelHandlerAnthropic message guards', () => {
       getCacheMarker(toolResultBlock),
       undefined,
       'tool result block should not include block-level cache markers (top-level automatic caching handles this)',
+    );
+  });
+
+  it('batches parallel tool results into one assistant and one user message', async () => {
+    const handler = createAnthropicHandler();
+    assert.equal(handler.requiresBatchedParallelToolResults, true);
+
+    const providerCall = (id: string) =>
+      ({
+        provider: 'anthropic',
+        callId: id,
+        name: 'demo',
+        input: {},
+        raw: { id, type: 'tool_use', name: 'demo', input: {} } as ToolUseBlock,
+      }) as const;
+
+    const messages = await handler.createBatchedToolUseFollowUpMessages(
+      [
+        {
+          call: providerCall('call-1'),
+          result: { status: 'executed', output: 'ok-1' },
+          attachments: [],
+        },
+        {
+          call: providerCall('call-2'),
+          result: { status: 'error', error: 'boom' },
+          attachments: [],
+        },
+      ],
+      undefined,
+      'analysis',
+    );
+
+    assert.equal(messages.length, 2);
+    const [callMsg, resultMsg] = messages;
+    assert.equal(callMsg.role, 'assistant');
+    const callContent = callMsg.content as ContentBlockParam[];
+    assert.deepEqual(
+      callContent.map((block) => block.type),
+      ['text', 'tool_use', 'tool_use'],
+    );
+
+    assert.equal(resultMsg.role, 'user');
+    const resultContent = resultMsg.content as ContentBlockParam[];
+    assert.deepEqual(
+      resultContent.map((block) =>
+        block.type === 'tool_result'
+          ? [block.tool_use_id, block.is_error]
+          : block.type,
+      ),
+      [
+        ['call-1', undefined],
+        ['call-2', true],
+      ],
     );
   });
 

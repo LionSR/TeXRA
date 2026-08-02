@@ -742,8 +742,9 @@ describe('OpenRouter-proxied provider capabilities', () => {
     });
   }
 
-  it('requires batched parallel tool results for proxied Google/DeepSeek/Kimi/MiniMax', () => {
+  it('requires batched parallel tool results for proxied Anthropic/Google/DeepSeek/Kimi/MiniMax', () => {
     for (const provider of [
+      ModelProvider.ANTHROPIC,
       ModelProvider.GOOGLE,
       ModelProvider.DEEPSEEK,
       ModelProvider.MOONSHOT,

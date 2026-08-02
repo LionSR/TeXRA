@@ -358,7 +358,8 @@ Use view_range: [start, end] to paginate file and background-command output cont
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
-Use action: "subscribe" on /executions/{id} to receive future status and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.`,
+Use action: "subscribe" on /executions/{id} to receive future status and termination events as <execution-activity> follow-ups (auto-disposes when the execution finishes or this stream is released). Use action: "unsubscribe" on /executions/{id} to stop them.
+Delegated subagent and workflow results are delivered automatically as follow-up messages — no wait or subscribe is needed for executions you launched. Use action: "wait" only when you cannot proceed without a status change; use action: "subscribe" for push updates on executions whose results are not auto-delivered.`,
   schema: ExecutionsToolInputSchema,
 }) {
   protected async execute(input: ExecutionsToolInput): Promise<ToolResult> {

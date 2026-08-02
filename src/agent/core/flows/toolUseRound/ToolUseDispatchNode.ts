@@ -619,6 +619,7 @@ export class ToolUseDispatchNode<C> extends Node<
     // provider implementations that read `this` internally (e.g. Google,
     // OpenAI) keep their receiver bound.
     if (shouldBatch && modelHandler.createBatchedToolUseFollowUpMessages) {
+      const client = await this.services.modelCell.getClient();
       const followUpMsgs =
         await modelHandler.createBatchedToolUseFollowUpMessages(
           allResults.map((execResult) => ({
@@ -628,6 +629,7 @@ export class ToolUseDispatchNode<C> extends Node<
           })),
           workspace,
           assistantText || undefined,
+          client,
         );
       shared.messages.push(...followUpMsgs);
     } else {
