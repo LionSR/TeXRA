@@ -35,6 +35,12 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **The CLI, extension, and desktop app now share TeXRA settings** — project
+  settings follow the project across all three surfaces, and user-wide desktop
+  settings are shared with the CLI and extension. New releases use the shared
+  defaults without importing older host-specific settings. Skills, telemetry,
+  tool approvals, and LaTeX replacement rules now have native controls in the
+  TeXRA settings view.
 - **Workflow scripts are available to the software-engineering and Lean team
   leads** — after enabling Workflow Script in the Tools panel, these teams can
   run predetermined parallel and sequential agent pipelines that resume safely

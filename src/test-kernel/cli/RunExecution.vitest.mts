@@ -30,8 +30,8 @@ const mocks = vi.hoisted(() => ({
   attachRunProgressRenderer: vi.fn(),
   detachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
-  detachWorkflowPlainProjection: vi.fn(),
-  attachWorkflowPlainProjection: vi.fn(),
+  detachWorkflowPlainOutput: vi.fn(),
+  attachWorkflowPlainOutput: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   disposeHostInteractions: vi.fn(),
@@ -107,8 +107,8 @@ vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
   ),
 }));
 
-vi.mock('@cli/runtime/workflowPlainProjection', () => ({
-  attachWorkflowPlainProjection: mocks.attachWorkflowPlainProjection,
+vi.mock('@cli/runtime/workflowPlainOutput', () => ({
+  attachWorkflowPlainOutput: mocks.attachWorkflowPlainOutput,
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -148,8 +148,8 @@ function stubRunExecutionDeps(): void {
   mocks.attachRunProgressRenderer.mockReturnValue(
     mocks.detachRunProgressRenderer,
   );
-  mocks.attachWorkflowPlainProjection.mockReturnValue(
-    mocks.detachWorkflowPlainProjection,
+  mocks.attachWorkflowPlainOutput.mockReturnValue(
+    mocks.detachWorkflowPlainOutput,
   );
   mocks.createHeadlessCliHostInteractions.mockReturnValue({
     emit: mocks.emit,
@@ -236,19 +236,19 @@ describe('executeCliRequest', () => {
       cliContext({ outputFormat: 'text', renderRunProgress: true }),
     );
 
-    expect(mocks.attachWorkflowPlainProjection).toHaveBeenCalledWith(
+    expect(mocks.attachWorkflowPlainOutput).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         writeLine: mocks.writeTextStderr,
       }),
     );
     expect(
-      mocks.attachWorkflowPlainProjection.mock.invocationCallOrder[0],
+      mocks.attachWorkflowPlainOutput.mock.invocationCallOrder[0],
     ).toBeLessThan(
       mocks.runAgent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
     expect(mocks.attachRunProgressRenderer).toHaveBeenCalledTimes(1);
-    expect(mocks.detachWorkflowPlainProjection).toHaveBeenCalledTimes(1);
+    expect(mocks.detachWorkflowPlainOutput).toHaveBeenCalledTimes(1);
   });
 
   it('keeps workflow-script progress quiet when run progress is disabled', async () => {
@@ -267,7 +267,7 @@ describe('executeCliRequest', () => {
       cliContext({ outputFormat: 'text', renderRunProgress: false }),
     );
 
-    expect(mocks.attachWorkflowPlainProjection).not.toHaveBeenCalled();
+    expect(mocks.attachWorkflowPlainOutput).not.toHaveBeenCalled();
   });
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {

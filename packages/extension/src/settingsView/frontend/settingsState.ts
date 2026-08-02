@@ -162,12 +162,14 @@ export const detachSubagentsOnStop = trackedSignal(() => false);
 // Approval and tool-safety settings state
 // ---------------------------------------------------------------------------
 export const bashApprovalEnabled = trackedSignal(() => true);
+export const editApprovalEnabled = trackedSignal(() => true);
 export const toolPathProtectionEnabled = trackedSignal(
   () => DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
 );
 export const agentSkillsEnabled = trackedSignal(
   () => AGENT_SKILLS_ENABLED_DEFAULT,
 );
+export const telemetryEnabled = trackedSignal(() => true);
 export const codexSandboxMode = trackedSignal<string>(
   () => CODEX_SANDBOX_MODE_DEFAULT,
 );

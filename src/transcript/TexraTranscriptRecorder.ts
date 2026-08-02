@@ -393,20 +393,20 @@ export function attachTranscriptRecorder(
           return;
         }
 
-        case 'workflow.task': {
+        case 'workflow.call': {
           const level: LogLevel =
-            event.task.status === 'failed' ? 'error' : 'info';
+            event.call.status === 'failed' ? 'error' : 'info';
           // A failed call carries a provider error body in `error`, which
           // hosts render next to the label, so it needs the same treatment as
           // an error row's `data.message`.
           const task: WorkflowCallProgress =
-            event.task.status === 'failed'
+            event.call.status === 'failed'
               ? {
-                  ...event.task,
-                  label: redactSecrets(event.task.label),
-                  error: redactSecrets(event.task.error),
+                  ...event.call,
+                  label: redactSecrets(event.call.label),
+                  error: redactSecrets(event.call.error),
                 }
-              : { ...event.task, label: redactSecrets(event.task.label) };
+              : { ...event.call, label: redactSecrets(event.call.label) };
           const entry = {
             level,
             groupId: event.stageId,

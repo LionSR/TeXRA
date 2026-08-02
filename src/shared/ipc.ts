@@ -273,7 +273,6 @@ export const MEMORY_VIEW_COMMANDS = {
 export const SETTINGS_VIEW_CMD = {
   // Navigation commands
   SET_TAB: 'setTab',
-  OPEN_VSCODE_SETTINGS: 'openVscodeSettings',
   // Memory commands
   GET_MEMORY_DATA: MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
   GET_MEMORY_PREVIEW: MEMORY_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
@@ -383,6 +382,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   // snapshot (bash approval, coding-agent controls, and tool path protection).
   UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
   UPDATE_AGENT_SKILLS_SETTINGS: 'updateAgentSkillsSettings',
+  UPDATE_TELEMETRY_SETTINGS: 'updateTelemetrySettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',

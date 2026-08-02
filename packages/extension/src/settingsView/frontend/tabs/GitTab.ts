@@ -69,6 +69,10 @@ export class GitTab extends LitElement {
         flex: 1;
       }
 
+      .identity-fields {
+        margin-top: var(--wa-space-xs);
+      }
+
       .token-row {
         display: flex;
         align-items: center;
@@ -417,38 +421,31 @@ export class GitTab extends LitElement {
               ></wa-switch>
             </div>
           </div>
+          ${
+            this.markCommits
+              ? html`
+                  <div class="identity-fields">
+                    <div class="input-row">
+                      <label>Name</label>
+                      <wa-input
+                        .value=${this.authorName}
+                        placeholder=${DEFAULT_GIT_AUTHOR_NAME}
+                        @change=${this.handleAuthorNameChange}
+                      ></wa-input>
+                    </div>
+                    <div class="input-row">
+                      <label>Email</label>
+                      <wa-input
+                        .value=${this.authorEmail}
+                        placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
+                        @change=${this.handleAuthorEmailChange}
+                      ></wa-input>
+                    </div>
+                  </div>
+                `
+              : nothing
+          }
         </div>
-
-        ${
-          this.markCommits
-            ? html`
-                <div class="settings-section">
-                  ${renderSettingsSectionHeading({
-                    title: 'Author identity',
-                    description:
-                      'Applied to the author and committer fields for agent Git commands.',
-                    icon: 'circle-user',
-                  })}
-                  <div class="input-row">
-                    <label>Name</label>
-                    <wa-input
-                      .value=${this.authorName}
-                      placeholder=${DEFAULT_GIT_AUTHOR_NAME}
-                      @change=${this.handleAuthorNameChange}
-                    ></wa-input>
-                  </div>
-                  <div class="input-row">
-                    <label>Email</label>
-                    <wa-input
-                      .value=${this.authorEmail}
-                      placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
-                      @change=${this.handleAuthorEmailChange}
-                    ></wa-input>
-                  </div>
-                </div>
-              `
-            : nothing
-        }
       </div>
     `;
   }

@@ -182,7 +182,7 @@ function withScriptReference(
 export class WorkflowScriptTool extends defineTool({
   name: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   slow: true,
-  description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out and join structure is known in advance and should resume safely after interruption.
+  description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this only when the complete fan-out, pipeline, and join structure is known before execution and should resume safely after interruption. Keep using delegate_agent one call at a time when a later decision depends on reviewing an earlier result.
 
 Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 

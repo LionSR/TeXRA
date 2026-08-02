@@ -289,12 +289,10 @@ const SetInlineCriticismEnabledMessageSchema = enabledFlag(
 const UpdateStateSettingMessageSchema = z.object({
   command: z.literal(CMD.UPDATE_STATE_SETTING),
   key: z.string().min(1),
-  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
+  value: z.unknown().optional(),
 });
 
 // Navigation inbound messages
-const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
-
 // Settings-tab IPC is read-only: state transitions are owned by the
 // agent-side plan tool, not the user. Don't add mutation commands here.
 const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
@@ -313,7 +311,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Lifecycle
     WebviewReadyMessageSchema,
     // Navigation messages
-    OpenVscodeSettingsMessageSchema,
     // Tool dashboard messages
     OpenToolInstallUrlMessageSchema,
     InstallToolExtensionMessageSchema,

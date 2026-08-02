@@ -5,10 +5,12 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import {
@@ -37,6 +39,12 @@ import {
 
 // Local imports - LaTeX config constants (shared with backend + readers)
 import {
+  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
+  DEFAULT_ENABLED_REPLACEMENTS,
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+  type NonRegexReplacementCategory,
+  type RegexReplacementCategory,
   LATEX_CONFIG_DEFAULTS,
   LATEX_FIELD_TO_KEY,
   LATEX_CONFIG_RANGES,
@@ -71,6 +79,8 @@ import { latexTabStyles } from './LaTeXTab.styles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import type WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 /**
  * Build the `<wa-select>` option list for an enum setting from the shared
@@ -109,6 +119,15 @@ const LATEX_FORMATTER_OPTIONS = catalogEnumOptions<LatexFormatterValue>(
   LATEX_CONFIG_DEFAULTS.latexFormatter,
   false,
 );
+
+const LATEX_CONFIG_FIELD_TO_KEY = {
+  ...LATEX_FIELD_TO_KEY,
+  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
+  enabledReplacements: 'texra.latex.enabledReplacements',
+  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
+  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
+  customReplacements: 'texra.latex.customReplacements',
+} as const satisfies Record<keyof LatexConfigValues, string>;
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey =
@@ -255,6 +274,11 @@ export class LaTeXTab extends LitElement {
    * exist on desktop and stay gated on `desktopHost`).
    */
   @property({ type: Boolean }) inlineCriticismSupported = false;
+
+  @state()
+  private replacementJsonErrors: Partial<
+    Record<'customReplacements' | 'customReplacementsRegex', string>
+  > = {};
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
@@ -552,7 +576,7 @@ export class LaTeXTab extends LitElement {
             ? this.renderInlineCriticismSetting()
             : nothing
         }
-        ${this.renderCompileDiffSettings()}
+        ${this.renderReplacementSettings()} ${this.renderCompileDiffSettings()}
       </div>
     `;
   }
@@ -595,12 +619,191 @@ export class LaTeXTab extends LitElement {
 
   // ── Compile & Diff settings (TeXRA storage-backed) ──
 
+  private renderReplacementSettings(): TemplateResult {
+    const cv = this.configValues;
+    return html`
+      <div class="settings-section">
+        ${renderSettingsSectionHeading({
+          title: 'Replacement engine',
+          description:
+            'Choose the cleanup rules applied to LaTeX text and define project-specific replacements.',
+          icon: 'wand-magic-sparkles',
+        })}
+        ${this.renderBooleanSetting({
+          field: 'wrapCritiqueInAlign',
+          label: 'Protect criticism inside align environments',
+          description:
+            'Wrap bare \\critique and \\comment commands with \\intertext so align environments remain valid.',
+          defaultValue: true,
+          currentValue: cv.wrapCritiqueInAlign,
+        })}
+        ${this.renderReplacementCategories({
+          field: 'enabledReplacements',
+          label: 'Direct replacement groups',
+          description:
+            'Cleanup groups that replace exact LaTeX text and characters.',
+          categories: NON_REGEX_REPLACEMENT_CATEGORIES,
+          defaultValue: DEFAULT_ENABLED_REPLACEMENTS,
+          currentValue: cv.enabledReplacements,
+        })}
+        ${this.renderReplacementCategories({
+          field: 'enabledReplacementsRegex',
+          label: 'Pattern replacement groups',
+          description:
+            'Cleanup groups that recognize LaTeX structures and surrounding context.',
+          categories: REGEX_REPLACEMENT_CATEGORIES,
+          defaultValue: DEFAULT_ENABLED_REGEX_REPLACEMENTS,
+          currentValue: cv.enabledReplacementsRegex,
+        })}
+        ${this.renderCustomReplacementSetting({
+          field: 'customReplacements',
+          label: 'Custom direct replacements',
+          description:
+            'A JSON object whose keys are exact source text and whose values are replacements.',
+          currentValue: cv.customReplacements,
+        })}
+        ${this.renderCustomReplacementSetting({
+          field: 'customReplacementsRegex',
+          label: 'Custom pattern replacements',
+          description:
+            'A JSON object whose keys are regular expressions and whose values may use $1, $2, and later capture groups.',
+          currentValue: cv.customReplacementsRegex,
+        })}
+      </div>
+    `;
+  }
+
+  private renderReplacementCategories<
+    F extends 'enabledReplacements' | 'enabledReplacementsRegex',
+    C extends NonRegexReplacementCategory | RegexReplacementCategory,
+  >(opts: {
+    field: F;
+    label: string;
+    description: string;
+    categories: readonly C[];
+    defaultValue: readonly C[];
+    currentValue: C[] | undefined;
+  }): TemplateResult {
+    const effective = opts.currentValue ?? opts.defaultValue;
+    const enabled = new Set(effective);
+    const isCustom = opts.currentValue !== undefined;
+    return html`
+      <div class="settings-row replacement-groups-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
+          <div class="replacement-category-grid">
+            ${opts.categories.map(
+              (category) => html`
+                <wa-checkbox
+                  ?checked=${enabled.has(category)}
+                  @change=${(event: Event) => {
+                    const next = new Set(effective);
+                    if ((event.target as WaCheckbox).checked) {
+                      next.add(category);
+                    } else {
+                      next.delete(category);
+                    }
+                    this.dispatchSetConfigValue(
+                      opts.field,
+                      opts.categories.filter((item) =>
+                        next.has(item),
+                      ) as LatexConfigValueFor<F>,
+                    );
+                  }}
+                  >${category.replaceAll('_', ' ')}</wa-checkbox
+                >
+              `,
+            )}
+          </div>
+        </div>
+        <div class="settings-row-control">
+          ${this.renderSettingStatusIcon(isCustom)}
+          ${
+            isCustom
+              ? this.renderResetButton(opts.field, 'release defaults')
+              : nothing
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  private renderCustomReplacementSetting(opts: {
+    field: 'customReplacements' | 'customReplacementsRegex';
+    label: string;
+    description: string;
+    currentValue: Record<string, string> | undefined;
+  }): TemplateResult {
+    const value = opts.currentValue ?? {};
+    const error = this.replacementJsonErrors[opts.field];
+    return html`
+      <div class="settings-row replacement-map-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
+          <wa-textarea
+            rows="4"
+            resize="auto"
+            spellcheck="false"
+            .value=${JSON.stringify(value, null, 2)}
+            @change=${(event: Event) =>
+              this.handleCustomReplacementChange(
+                opts.field,
+                (event.target as WaTextarea).value ?? '',
+              )}
+          ></wa-textarea>
+          ${
+            error
+              ? html`<span class="replacement-json-error">${error}</span>`
+              : nothing
+          }
+        </div>
+        <div class="settings-row-control">
+          ${this.renderSettingStatusIcon(opts.currentValue !== undefined)}
+          ${
+            opts.currentValue !== undefined
+              ? this.renderResetButton(opts.field, '{}')
+              : nothing
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  private handleCustomReplacementChange(
+    field: 'customReplacements' | 'customReplacementsRegex',
+    source: string,
+  ): void {
+    try {
+      const parsed: unknown = JSON.parse(source);
+      if (
+        !parsed ||
+        Array.isArray(parsed) ||
+        typeof parsed !== 'object' ||
+        Object.values(parsed).some((value) => typeof value !== 'string')
+      ) {
+        throw new Error('Enter a JSON object with string values.');
+      }
+      this.replacementJsonErrors = {
+        ...this.replacementJsonErrors,
+        [field]: undefined,
+      };
+      this.dispatchSetConfigValue(field, parsed as Record<string, string>);
+    } catch (error) {
+      this.replacementJsonErrors = {
+        ...this.replacementJsonErrors,
+        [field]: error instanceof Error ? error.message : 'Invalid JSON.',
+      };
+    }
+  }
+
   private dispatchSetConfigValue<F extends LatexConfigField>(
     field: F,
     value: LatexConfigValueFor<F> | undefined,
   ): void {
     postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-      key: LATEX_FIELD_TO_KEY[field],
+      key: LATEX_CONFIG_FIELD_TO_KEY[field],
       value: value ?? null,
     });
   }
@@ -720,7 +923,8 @@ export class LaTeXTab extends LitElement {
       | 'workflowAutoOpenPdf'
       | 'workflowRejectOnCompileFailure'
       | 'latexdiffBetweenRounds'
-      | 'latexdiffChangesOnly';
+      | 'latexdiffChangesOnly'
+      | 'wrapCritiqueInAlign';
     label: string;
     description: string;
     defaultValue: boolean;
