@@ -52,6 +52,11 @@ export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
 
+export type ApprovalInstructionContext = Pick<
+  CliContext,
+  'approvalPolicy' | 'mode'
+>;
+
 const deniedApprovalContexts = new WeakSet<CliContext>();
 const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 
@@ -101,6 +106,15 @@ export function appendCliApiSwitchHint(
 
 export function approvalPromptAllowed(context: CliContext): boolean {
   return context.approvalPolicy === 'ask' && context.mode === 'interactive';
+}
+
+export function approvalPromptsUnavailable(
+  context: ApprovalInstructionContext,
+): boolean {
+  return (
+    context.approvalPolicy === 'never' ||
+    (context.mode === 'headless' && context.approvalPolicy === 'ask')
+  );
 }
 
 function enqueueCliPrompt<T>(
