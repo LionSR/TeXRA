@@ -65,7 +65,6 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   model: {
     useOpenAIResponsesAPI: true,
-    useGoogleInteractionsAPI: true,
     useGoogleInteractionsServerState: true,
     useBackgroundResponses: true,
     openaiParallelToolCalls: true,
@@ -206,10 +205,6 @@ export const CoreSettingsShape = {
       useOpenAIResponsesAPI: boolField(
         DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
         "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-      ),
-      useGoogleInteractionsAPI: boolField(
-        DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsAPI,
-        "Use Google's Interactions API instead of Generate Content when available. Enabled by default. OpenRouter-proxied Google models always use Generate Content.",
       ),
       useGoogleInteractionsServerState: boolField(
         DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState,
@@ -440,7 +435,6 @@ export const CORE_SETTING_PATHS = [
   'inlineCriticism.enabled',
   'goal.enabled',
   'model.useOpenAIResponsesAPI',
-  'model.useGoogleInteractionsAPI',
   'model.useGoogleInteractionsServerState',
   'model.useBackgroundResponses',
   'model.openaiParallelToolCalls',
@@ -517,10 +511,7 @@ export const CLI_CORE_SETTING_CONSUMERS = {
     'agentOutputs.autoOpenFinal',
   ],
   'src/tools/goal/goalFeatureFlag.ts': ['goal.enabled'],
-  'src/agent/runtime/ModelFactory.ts': [
-    'model.useOpenAIResponsesAPI',
-    'model.useGoogleInteractionsAPI',
-  ],
+  'src/agent/runtime/ModelFactory.ts': ['model.useOpenAIResponsesAPI'],
   'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts': [
     'model.useGoogleInteractionsServerState',
   ],

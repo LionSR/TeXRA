@@ -29,7 +29,10 @@ import {
   getCanonicalRelayModelName,
   getRequestLimits,
 } from '../../../supabase/functions/relay/models';
-import { isModelFreeRelayPath } from '../../../supabase/functions/relay/paths';
+import {
+  isModelFreeRelayPath,
+  isRetiredGoogleGenerateContentPath,
+} from '../../../supabase/functions/relay/paths';
 
 function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -226,23 +229,6 @@ describe('relay free-tier request limits', () => {
       },
     },
     {
-      name: 'caps Google generationConfig maxOutputTokens',
-      provider: 'google',
-      path: '/v1beta/models/gemini-3.5-flash:streamGenerateContent',
-      body: {
-        contents: [],
-        generationConfig: { maxOutputTokens: 128_000, temperature: 0.2 },
-      },
-      fieldPath: 'generationConfig.maxOutputTokens',
-      expected: {
-        contents: [],
-        generationConfig: {
-          maxOutputTokens: FREE_TIER_MAX_OUTPUT_TOKENS,
-          temperature: 0.2,
-        },
-      },
-    },
-    {
       name: 'caps Google Interactions generation_config max_output_tokens',
       provider: 'google',
       path: '/v1beta/interactions',
@@ -271,25 +257,15 @@ describe('relay free-tier request limits', () => {
       },
     },
     {
-      name: 'does not add Generate Content config when only Interactions-style config exists',
-      provider: 'google',
-      path: '/v1beta/models/gemini-3.5-flash:generateContent',
-      body: { contents: [], generation_config: { max_output_tokens: 128_000 } },
-      fieldPath: 'generation_config.max_output_tokens',
-      expected: {
-        contents: [],
-        generation_config: { max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS },
-      },
-    },
-    {
-      name: 'does not add Interactions config when only Generate Content-style config exists',
+      name: 'ignores retired Generate Content configuration fields',
       provider: 'google',
       path: '/v1beta/interactions',
       body: { input: [], generationConfig: { maxOutputTokens: 128_000 } },
-      fieldPath: 'generationConfig.maxOutputTokens',
+      fieldPath: 'generation_config.max_output_tokens',
       expected: {
         input: [],
-        generationConfig: { maxOutputTokens: FREE_TIER_MAX_OUTPUT_TOKENS },
+        generationConfig: { maxOutputTokens: 128_000 },
+        generation_config: { max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS },
       },
     },
   ])('$name', ({ provider, path, body, fieldPath, expected }) => {
@@ -316,6 +292,33 @@ describe('relay free-tier request limits', () => {
     assert.equal(isModelFreeRelayPath('/v1beta/interactions'), false);
     assert.equal(
       isModelFreeRelayPath('/v1beta/interactions/interaction-123'),
+      false,
+    );
+  });
+
+  it('identifies retired Google generation paths without blocking countTokens', () => {
+    assert.equal(
+      isRetiredGoogleGenerateContentPath(
+        '/v1beta/models/gemini-3.5-flash:generateContent',
+      ),
+      true,
+    );
+    assert.equal(
+      isRetiredGoogleGenerateContentPath(
+        '/v1beta/models/gemini-3.5-flash:streamGenerateContent',
+      ),
+      true,
+    );
+    assert.equal(
+      isRetiredGoogleGenerateContentPath(
+        '/v1beta/models/gemini-3.5-flash:countTokens',
+      ),
+      false,
+    );
+    assert.equal(
+      isRetiredGoogleGenerateContentPath(
+        '/relay/v1beta/models/gemini-3.5-flash:generateContent',
+      ),
       false,
     );
   });
