@@ -40,7 +40,7 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
   ToolUseRoundServices<C>
 > {
   async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {
-    const interrupted = this.services.checkInterruption();
+    const interrupted = this.services.runScope.signal.aborted;
 
     if (!this.services.session?.hasQueuedFollowUp()) {
       return {
@@ -51,7 +51,9 @@ export class ToolUseRoundPrepNode<C> extends BaseNode<
     }
 
     // Drain without waiting (we know there's something queued)
-    const batch = await this.services.session.waitForFollowUp(() => false);
+    const batch = await this.services.session.waitForFollowUp(
+      this.services.runScope.signal,
+    );
     return {
       interrupted,
       queuedFollowUps: batch?.items ?? null,

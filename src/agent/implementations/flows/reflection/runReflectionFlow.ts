@@ -103,7 +103,6 @@ export async function runReflectionFlow<C = unknown>(
     storageKey,
     parentStage,
     userVarChannels,
-    checkInterruption,
     onRoundFinalized,
     runScope,
   } = input;
@@ -276,7 +275,7 @@ export async function runReflectionFlow<C = unknown>(
       resetForNextRound: (s) => {
         s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
       },
-      checkInterruption,
+      signal: runScope.signal,
       // Bounded compile-repair round (#7077): a compile failure on what
       // would otherwise be the final round gets exactly one extra round
       // so the model sees the failure context via PrepareContextNode

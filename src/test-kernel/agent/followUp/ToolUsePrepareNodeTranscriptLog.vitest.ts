@@ -10,12 +10,14 @@ import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolU
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { createToolUseResumeShared } from '@test/support/toolUseResumeTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
+import { testRunScope } from '../progressTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
 ): ToolUseServices<unknown> {
   return {
     config: AgentConfigSchema.parse({ agent: 'chat', model: 'deepseekT' }),
+    runScope: testRunScope('test-stream'),
     fileService: {} as never,
     isSubagent: false,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -33,8 +35,6 @@ function buildServices(
     resumeShared: null,
     toolRegistry: {} as never,
     userVarChannels: { input: {}, transient: {} },
-    checkInterruption: () => false,
-    abortSignal: new AbortController().signal,
     ...overrides,
   } as ToolUseServices<unknown>;
 }

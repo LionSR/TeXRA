@@ -63,6 +63,7 @@ export function createTestLaunchContext({
   category = AgentCategory.ToolUse,
   logger = noopTrace,
 }: TestLaunchContextInit): AgentLaunchContext {
+  const abortController = new AbortController();
   const config = AgentConfigSchema.parse({
     agent,
     model: 'test-model',
@@ -80,6 +81,7 @@ export function createTestLaunchContext({
       executionId,
       agentName: config.agent,
       session,
+      signal: abortController.signal,
     }),
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
@@ -92,6 +94,7 @@ export function createTestLaunchContext({
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelCell: testModelCell({ dispose: vi.fn() }, config.model),
+    interrupt: () => abortController.abort(),
     disposeTrace: vi.fn(),
   };
 }

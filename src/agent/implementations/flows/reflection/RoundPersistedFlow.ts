@@ -72,7 +72,7 @@ export interface RoundCallbacks<S extends RoundAwareState> {
   ) => StageHandle;
 
   /** Check if execution should be interrupted. */
-  checkInterruption?: () => boolean;
+  signal?: AbortSignal;
 
   /** Reset workspace state for a new round. */
   resetForNextRound?: (shared: S) => void;
@@ -181,7 +181,7 @@ export class RoundPersistedFlow<
     let stepResult = await this.inStage(() => this.stepWithResult());
 
     while (stepResult.hasMore) {
-      if (this.callbacks.checkInterruption?.()) {
+      if (this.callbacks.signal?.aborted) {
         stepResult.shared.continueRounds = false;
         break;
       }
@@ -199,7 +199,7 @@ export class RoundPersistedFlow<
   private shouldContinueNextRound(shared: S): boolean {
     if (
       shared.lastError ||
-      this.callbacks.checkInterruption?.() ||
+      this.callbacks.signal?.aborted ||
       !shared.continueRounds
     ) {
       return false;
@@ -214,7 +214,7 @@ export class RoundPersistedFlow<
   private resolveOutcome(shared: S): RunOutcome {
     return deriveRunOutcome({
       failed: Boolean(shared.lastError),
-      cancelled: this.callbacks.checkInterruption?.() || !shared.continueRounds,
+      cancelled: this.callbacks.signal?.aborted || !shared.continueRounds,
     });
   }
 

@@ -68,6 +68,7 @@ async function runPersistedReflectionFlow(
     executionId,
     agentName: CONFIG.agent,
     session,
+    signal: AbortSignal.abort(),
   });
   const modelCell = createModelCell();
   const context = createRunContext({ runScope, modelCell });
@@ -87,8 +88,6 @@ async function runPersistedReflectionFlow(
           transient: {},
         },
         modelCell,
-        checkInterruption: () => true,
-        abortSignal: new AbortController().signal,
         onRoundFinalized: () => {},
       }),
     );

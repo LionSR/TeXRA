@@ -139,6 +139,7 @@ function parentContext(): LaunchRunContext {
         toolUseAgentKeys: ['builtInToolUse:assistant'],
       },
       session: { id: 'session' } as never,
+      signal: new AbortController().signal,
     },
   };
 }

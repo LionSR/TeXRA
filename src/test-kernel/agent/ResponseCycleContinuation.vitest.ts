@@ -15,6 +15,7 @@ import {
 } from '@agent/types/StopReasonTypes';
 import type { AgentFileLocation } from '@shared/schemas';
 import { testModelCell } from './modelCellTestUtils';
+import { testRunScope } from './progressTestUtils';
 
 const outputLocation: AgentFileLocation = {
   kind: 'workspace',
@@ -91,7 +92,6 @@ async function processEmptyResponse(stopReason: ProviderStopReason) {
 
 function createServices(interrupted = false, supportsManualCompaction = false) {
   const round = { continuationCount: 0 };
-  const checkInterruption = vi.fn(() => interrupted);
   const checkStopConditions = vi.fn(() => ({
     endTurn: false,
     shouldStop: false,
@@ -100,7 +100,9 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
   const requestCompaction = vi.fn(() => 7);
   const addContinueMessage = vi.fn();
   const services = {
-    checkInterruption,
+    runScope: testRunScope('response-continuation', {
+      signal: interrupted ? AbortSignal.abort() : undefined,
+    }),
     round,
     run: {},
     setting: {},
@@ -119,7 +121,6 @@ function createServices(interrupted = false, supportsManualCompaction = false) {
   return {
     services,
     round,
-    checkInterruption,
     checkStopConditions,
     shouldContinue,
     requestCompaction,
@@ -145,7 +146,6 @@ describe('response cycle continuation phases', () => {
 
     expect(prepResult).toEqual({ kind: 'skipped' });
     expect(execResult).toEqual({ kind: 'skipped' });
-    expect(harness.checkInterruption).not.toHaveBeenCalled();
     expect(shared).toMatchObject({ shouldStop: true, endTurn: false });
     expect(action).toBe(FlowTransition.COMPLETE);
   });
