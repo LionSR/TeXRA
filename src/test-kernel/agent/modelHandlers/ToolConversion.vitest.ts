@@ -769,9 +769,8 @@ describe('toGoogleTools', () => {
     };
 
     for (const schema of [interactionSchema, generateContentSchema]) {
-      const { description, ...argsConstraints } = schema.properties.args;
-      expect(description).toEqual(expect.any(String));
-      expect(argsConstraints).toStrictEqual({});
+      expect(schema.properties.args.description).toEqual(expect.any(String));
+      expect(schema.properties.args.type).toBe('object');
       expect(JSON.stringify(schema)).not.toContain('$ref');
     }
   });
