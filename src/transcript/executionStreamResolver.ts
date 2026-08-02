@@ -155,8 +155,9 @@ export async function findPersistedStreamFallbacksForExecution(
  * New executions carry this mapping in their own metadata from registration.
  * The ranked sidecar scan and suffix checks are compatibility fallbacks for
  * records created before that field existed; current records never enter that
- * branch. A unique confirmed legacy match is written through once so later
- * reads use the same constant-time metadata path as current executions.
+ * branch. Confirmed legacy matches are annotated with their provenance, but
+ * remain subject to the bounded scan because a later resume can add another
+ * root sidecar. Only birth-time registrations use the constant-time path.
  *
  * `null` means no persisted stream carries this execution. Callers that have
  * a derivable stream id own that substitution.
