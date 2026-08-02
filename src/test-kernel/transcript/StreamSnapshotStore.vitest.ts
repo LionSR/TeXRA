@@ -2148,7 +2148,7 @@ describe('StreamSnapshotStore', () => {
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     const refresh = store.load([STREAM]);
     store.setTodos(STREAM, []);
-    await expect(refresh).rejects.toThrow('3 retries');
+    await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
 
     store.setTodos(STREAM, [TODO]);
     writeSpy.mockRestore();
@@ -2174,6 +2174,27 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
+  });
+
+  it('keeps a newer staged mutation when an older write is dirty', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const revisedPlan: Plan = { objective: 'Use the staged revision' };
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(new Error('snapshot disk is full'));
+
+    store.setPlan(STREAM, PLAN);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
+    writeSpy.mockRestore();
+
+    const staging = store.stageDeleteStream(STREAM);
+    store.setPlan(STREAM, revisedPlan);
+    const deletion = await staging;
+    await deletion.rollback();
+    await store.flush();
+
+    expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
   });
 
   it('serializes same-key writes so a slow first write finishes before a queued second write starts', async () => {
