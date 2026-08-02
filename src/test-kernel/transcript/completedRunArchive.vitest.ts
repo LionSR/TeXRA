@@ -864,10 +864,15 @@ describe('completedRunArchive facade', () => {
       }),
       id: 'copied-status',
     };
+    const copiedTimestamp = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Timed answer' }),
+      id: 'copied-timestamp',
+      timestamp: 1000,
+    };
     await persistRows(
       executionId,
       new Map([
-        [canonical, [copiedText, copiedRole, copiedStatus]],
+        [canonical, [copiedText, copiedRole, copiedStatus, copiedTimestamp]],
         [
           conflicting,
           [
@@ -882,6 +887,7 @@ describe('completedRunArchive facade', () => {
                 status: 'failed',
               },
             },
+            { ...copiedTimestamp, timestamp: 2000 },
           ],
         ],
       ]),
@@ -896,6 +902,7 @@ describe('completedRunArchive facade', () => {
         { rowId: 'copied-role', streamIds: [canonical, conflicting] },
         { rowId: 'copied-status', streamIds: [canonical, conflicting] },
         { rowId: 'copied-text', streamIds: [canonical, conflicting] },
+        { rowId: 'copied-timestamp', streamIds: [canonical, conflicting] },
       ],
     });
     expect(result.conversation).toContainEqual({
@@ -910,7 +917,7 @@ describe('completedRunArchive facade', () => {
       path: `/executions/${executionId}/conversation`,
     });
     expect(endpoint.output).toContain(
-      'Conflicting row IDs: copied-role, copied-status, copied-text',
+      'Conflicting row IDs: copied-role, copied-status, copied-text, copied-timestamp',
     );
   });
 

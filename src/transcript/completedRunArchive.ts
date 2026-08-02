@@ -419,22 +419,17 @@ interface MergedConversationResult {
   readonly hasOrderingAmbiguity: boolean;
 }
 
-function conversationRowIdentity(entry: StreamLogEntry): unknown {
-  const data = isObject(entry.data) ? entry.data : undefined;
-  return {
-    type: entry.type,
-    messageType: entry.messageType,
-    text: entry.text,
-    messages: conversationMessagesForEntry(entry),
-    status: data?.status,
-    isError: data?.isError,
-  };
-}
-
 function rowsAgree(left: StreamLogEntry, right: StreamLogEntry): boolean {
-  return isDeepStrictEqual(
-    conversationRowIdentity(left),
-    conversationRowIdentity(right),
+  return (
+    left.id === right.id &&
+    left.type === right.type &&
+    left.level === right.level &&
+    left.timestamp === right.timestamp &&
+    left.groupId === right.groupId &&
+    left.messageType === right.messageType &&
+    left.text === right.text &&
+    left.verbose === right.verbose &&
+    isDeepStrictEqual(left.data, right.data)
   );
 }
 
