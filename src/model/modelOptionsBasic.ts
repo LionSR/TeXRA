@@ -7,6 +7,7 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
+import { fnv1aHash } from '@utils/core';
 import { getRuntimeModelConfig } from './runtimeModelRegistry';
 import { resolveModelSource } from './openRouterRouting';
 
@@ -93,21 +94,6 @@ export const DEFAULT_MODELS: readonly string[] = resolveDefaultModels(
  * integers, so the new value must land clear of that range.
  */
 const MODEL_LIST_HASH_BASE = 1000;
-
-/**
- * Deterministic 32-bit FNV-1a hash of `input`, as a non-negative integer.
- * Operates on UTF-16 code units (`charCodeAt`), not raw bytes -- byte-
- * equivalent to canonical FNV-1a for the ASCII-only inputs this module hashes
- * (model ids), but not a general byte-level implementation.
- */
-function fnv1aHash(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
 
 /**
  * Live registry status of a model. Distinguishes "deprecated" (still

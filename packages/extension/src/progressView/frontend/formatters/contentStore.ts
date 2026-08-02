@@ -12,16 +12,7 @@
 import { LRUCache } from 'lru-cache';
 
 import { parseDelegationToolInput, type AgentProposal } from '@shared/schemas';
-
-/** Simple string hash for generating stable content-based IDs. */
-function hashString(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return (hash >>> 0).toString(36);
-}
+import { fnv1aHash } from '@utils/core';
 
 export interface ContentStore<T extends NonNullable<unknown>> {
   register(value: T, explicitId?: string): string;
@@ -41,7 +32,7 @@ export function createContentStore<T extends NonNullable<unknown>>(options: {
       let id = explicitId;
       if (id === undefined) {
         const serialized = options.serialize(value);
-        id = `${options.prefix}:${serialized.length}:${hashString(serialized)}`;
+        id = `${options.prefix}:${serialized.length}:${fnv1aHash(serialized).toString(36)}`;
       }
       // Reference equality is sufficient: for object values re-derived from a
       // hash-based id (e.g. AgentProposal), each re-parse is a new object, so

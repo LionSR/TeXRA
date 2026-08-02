@@ -925,6 +925,9 @@ importers:
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
+      p-timeout:
+        specifier: ^7.0.1
+        version: 7.0.1
       pdf2pic:
         specifier: ^3.2.0
         version: 3.2.0

@@ -1753,6 +1753,7 @@
     "openai": "^6.46.0",
     "p-map": "^7.0.6",
     "p-queue": "^9.3.3",
+    "p-timeout": "^7.0.1",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
     "postal-mime": "^2.7.5",

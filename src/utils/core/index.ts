@@ -421,6 +421,28 @@ export function tryParseUrl(input: string): URL | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// stringHash
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic 32-bit FNV-1a hash of `input`, as a non-negative integer.
+ * Non-cryptographic — for cache keys, content-addressable IDs, and change
+ * triggers, not for anything security-sensitive (use `node:crypto` via
+ * `@utils/core/idHash` for that, which is Node-only and not browser-safe).
+ * Operates on UTF-16 code units (`charCodeAt`), not raw bytes — byte-
+ * equivalent to canonical FNV-1a for ASCII-only inputs, not a general
+ * byte-level implementation.
+ */
+export function fnv1aHash(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+// ---------------------------------------------------------------------------
 // executionId
 // ---------------------------------------------------------------------------
 

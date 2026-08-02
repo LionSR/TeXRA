@@ -11,6 +11,7 @@
  */
 
 // Third-party imports
+import pTimeout from 'p-timeout';
 import * as vscode from 'vscode';
 
 // Local imports - hosts
@@ -105,12 +106,10 @@ async function captureExecution(
 
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
-  const output = await Promise.race([
-    reader,
-    new Promise<string>((resolve) =>
-      setTimeout(() => resolve(''), READER_DRAIN_MS),
-    ),
-  ]);
+  const output = await pTimeout(reader, {
+    milliseconds: READER_DRAIN_MS,
+    fallback: () => '',
+  });
 
   return {
     exitCode: result.timedOut ? undefined : result.value,

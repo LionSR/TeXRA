@@ -1,7 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import { z } from 'zod';
+
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import type { SkillSourceOptions } from '@skills/skillSources';
@@ -191,10 +194,12 @@ export function resolveCliCommandName(entrypointPath: string): string {
     : 'texra';
 }
 
-interface CliPackageManifest {
-  readonly version?: string;
-  readonly bugs?: { readonly url?: string };
-}
+const CliPackageManifestSchema = z.object({
+  version: z.string().optional(),
+  bugs: z.object({ url: z.string().optional() }).optional(),
+});
+
+type CliPackageManifest = z.infer<typeof CliPackageManifestSchema>;
 
 async function readCliPackageManifest(): Promise<
   CliPackageManifest | undefined
@@ -204,17 +209,18 @@ async function readCliPackageManifest(): Promise<
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
+    let text: string;
     try {
-      const pkg = JSON.parse(
-        await readFile(candidate, 'utf8'),
-      ) as CliPackageManifest;
-      // Source and bundled `dist/bin` layouts both reach the CLI manifest via
-      // `../../`; keep the fallback for build layouts that place runtime files
-      // one level below the package root.
-      if (pkg.version) return pkg;
+      text = await readFile(candidate, 'utf8');
     } catch {
       // Try the next source/build-layout candidate.
+      continue;
     }
+    const result = parseJsonWith(text, CliPackageManifestSchema);
+    // Source and bundled `dist/bin` layouts both reach the CLI manifest via
+    // `../../`; keep the fallback for build layouts that place runtime files
+    // one level below the package root.
+    if (result.isOk() && result.value.version) return result.value;
   }
   return undefined;
 }
