@@ -9,7 +9,7 @@ function isGoogleInteractionsCancelPath(apiPath: string): boolean {
 }
 
 export function isRetiredGoogleGenerateContentPath(apiPath: string): boolean {
-  return /\/(?:v\d+(?:[a-z]+)?\/)?models\/[^/]+:(?:generateContent|streamGenerateContent|batchGenerateContent)$/.test(
+  return /^\/(?:v\d+(?:[a-z]+)?\/)?models\/[^/]+:(?:generateContent|streamGenerateContent|batchGenerateContent)$/.test(
     apiPath,
   );
 }

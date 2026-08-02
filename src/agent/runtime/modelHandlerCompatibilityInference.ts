@@ -42,6 +42,11 @@ export function inferPersistedModelHandlerCompatibilityKey(
   if (modelConfig?.provider === ModelProvider.COPILOT) {
     return 'ModelHandlerOpenRouterNative';
   }
+  if (modelConfig?.provider === ModelProvider.GOOGLE) {
+    throw new Error(
+      'Persisted Google sessions without a model-handler identity cannot be resumed.',
+    );
+  }
   return undefined;
 }
 
