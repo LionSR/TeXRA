@@ -315,6 +315,12 @@ describe('relay free-tier request limits', () => {
       ),
       false,
     );
+    assert.equal(
+      isRetiredGoogleGenerateContentPath(
+        '/relay/v1beta/models/gemini-3.5-flash:generateContent',
+      ),
+      false,
+    );
   });
 
   it('releases request slots when the upstream stream closes', async () => {
