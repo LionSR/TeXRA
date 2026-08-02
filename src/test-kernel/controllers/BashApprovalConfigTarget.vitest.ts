@@ -2,11 +2,11 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { BASH_APPROVAL_CONFIG_TARGET } from '@controllers/settingsView/BashApprovalGlobalMigration';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { writeSetting } from '@shared/config/settingsAccess';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { settingsViewSettingByKey } from '@shared/schemas/stateSettings';
-import { BASH_APPROVAL_CONFIG_TARGET } from '@shared/settingsView/handlers/approvalHandlers';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 describe('bash-approval config target', () => {

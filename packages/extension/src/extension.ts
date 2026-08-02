@@ -33,6 +33,7 @@ import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import { migrateLegacyGlobalBashApprovalOverride } from '@controllers/settingsView/BashApprovalGlobalMigration';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -83,7 +84,6 @@ import {
 } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import { UsageLogService } from '@telemetry/UsageLogService';
