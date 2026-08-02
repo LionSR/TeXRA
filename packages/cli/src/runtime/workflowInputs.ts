@@ -26,6 +26,12 @@ const STDIN_TEMP_PREFIX = 'texra-stdin-';
 const STDIN_TEMP_DIR_PATTERN = /^texra-stdin-\d+-[A-Za-z0-9]{6}$/;
 export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 
+export function workflowInputGlobOptionsForTests(
+  platform: NodeJS.Platform,
+): Readonly<{ windowsPathsNoEscape: boolean }> {
+  return { windowsPathsNoEscape: platform === 'win32' };
+}
+
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.isAbsolute(candidate)
     ? path.resolve(candidate)
@@ -210,15 +216,17 @@ async function expandWorkflowInputSpec(
         normalizeCliInputPathForRun(match, cwd, flagLabel, options),
       );
 
-  if (hasMagic(trimmed)) {
+  const globOptions = workflowInputGlobOptionsForTests(process.platform);
+  if (hasMagic(trimmed, { magicalBraces: true, ...globOptions })) {
     const isAbsolute = path.isAbsolute(trimmed);
-    const matches = await glob(trimmed.replaceAll('\\', '/'), {
+    const matches = await glob(trimmed, {
       cwd: isAbsolute ? undefined : cwd,
       absolute: isAbsolute,
       nodir: true,
+      ...globOptions,
     });
     if (matches.length === 0) {
-      throw new CliUsageError(`No input files matched: ${trimmed}`);
+      throw new CliUsageError(`${flagLabel}: no files matched: ${trimmed}`);
     }
     return normalizeMatches(matches);
   }
