@@ -276,9 +276,9 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
     const phase = projected.definition.phase;
     trace.emit({
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: projected.logId,
-      task: { ...call, phase },
+      call: { ...call, phase },
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };

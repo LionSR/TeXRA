@@ -10,7 +10,7 @@ import {
 import type { RunOutcome } from '@shared/schemas';
 
 /** Reference to one persisted workflow diff. */
-export const ResultDiffSummarySchema = z.strictObject({
+const ResultDiffSummarySchema = z.strictObject({
   /** Absolute path of the output file the diff belongs to. */
   path: z.string(),
   /** Diff file path relative to the execution run directory. */

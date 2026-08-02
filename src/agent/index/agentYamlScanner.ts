@@ -16,7 +16,6 @@ import type { AgentSource } from '@shared/schemas/agent';
 import { AbsoluteFS } from '@utils/files';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { LEGACY_AGENT_ALIASES } from './agentRegistryConstants';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
@@ -137,10 +136,7 @@ function parentDefinition(
   parentName: string,
   definitions: Map<string, ParsedAgentYaml>,
 ): ParsedAgentYaml | undefined {
-  return (
-    definitions.get(parentName) ??
-    definitions.get(LEGACY_AGENT_ALIASES[parentName] ?? '')
-  );
+  return definitions.get(parentName);
 }
 
 function inheritedDefinitionBlock(

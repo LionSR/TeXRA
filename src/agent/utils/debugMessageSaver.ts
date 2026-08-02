@@ -28,17 +28,11 @@ type DebugObjectType = 'messages' | 'response';
 /**
  * Whether to persist what TeXRA sends to and receives from the model.
  *
- * `texra.debug.saveModelIO` replaced the `saveDebugObjects` / `saveInputPrompt`
- * pair, which always described one workflow. The two legacy keys are honored
- * for one release so an in-flight debugging session does not go quiet, then
- * both reads here go away.
+ * The one current setting covers request messages, responses, and the final
+ * input prompt.
  */
 export function shouldSaveModelIO(): boolean {
-  return (
-    getConfig<boolean>('texra.debug.saveModelIO', false) ||
-    getConfig<boolean>('texra.debug.saveDebugObjects', false) ||
-    getConfig<boolean>('texra.debug.saveInputPrompt', false)
-  );
+  return getConfig<boolean>('texra.debug.saveModelIO', false);
 }
 
 export interface SaveDebugParams {

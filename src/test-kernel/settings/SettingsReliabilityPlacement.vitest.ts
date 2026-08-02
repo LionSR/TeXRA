@@ -87,7 +87,7 @@ describe('settings reliability placement', () => {
     expect(tab.shadowRoot?.textContent).not.toContain('Retry attempts');
   });
 
-  it('posts numeric reliability changes through the existing VS Code setting command', async () => {
+  it('posts numeric reliability changes through the provider setting command', async () => {
     const tab = await mountModelsTab();
 
     const section = await getReliabilitySection(tab);
@@ -102,7 +102,7 @@ describe('settings reliability placement', () => {
 
     expect(mocks.postMessage.mock.calls).toEqual([
       [
-        SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING,
+        SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
         {
           key: 'texra.model.compactionThresholdPercent',
           value: 100,

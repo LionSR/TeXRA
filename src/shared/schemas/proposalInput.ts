@@ -8,8 +8,8 @@
  *
  * It lives in the schema layer (not the renderer) because it encodes domain
  * knowledge rather than presentation: which delegation tools map to which agent
- * category, the `extractFigures` / `extractTikz` shorthand → `toolConfig`
- * mapping, and the legacy file-field migration. The renderer-side
+ * category and the `extractFigures` / `extractTikz` shorthand → `toolConfig`
+ * mapping. The renderer-side
  * `proposalInputStore` is a thin registry over this parser.
  *
  * The schemas here are deliberately lenient: the LLM may omit fields the
@@ -29,7 +29,7 @@ import { isObject } from '@utils/core';
 import { DEFAULT_AGENT_MODEL } from '../constants/providers';
 import { DELEGATION_TOOL_CATEGORY } from '../constants/delegationTools';
 import { AgentCategory } from './agent';
-import { fileListFields, migrateLegacyContextFileFields } from './fileFields';
+import { fileListFields } from './fileFields';
 import {
   ToolUseAgentProposalSchema,
   WorkflowAgentProposalSchema,
@@ -97,16 +97,11 @@ export function parseDelegationToolInput(
       });
   }
 
-  // Workflow: migrate legacy file fields, then map extraction shorthand flags.
-  const migrated = migrateLegacyContextFileFields(spread) as Record<
-    string,
-    unknown
-  >;
   return LenientWorkflowProposalSchema.nullable()
     .catch(null)
     .parse({
       agentCategory: AgentCategory.Workflow,
-      ...migrated,
-      toolConfig: extractionShorthandToolConfig(migrated),
+      ...spread,
+      toolConfig: extractionShorthandToolConfig(spread),
     });
 }

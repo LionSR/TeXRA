@@ -35,6 +35,12 @@ All notable changes to this project will be documented in this file.
 
 #### Features
 
+- **The CLI, extension, and desktop app now share TeXRA settings** — project
+  settings follow the project across all three surfaces, and user-wide desktop
+  settings are shared with the CLI and extension. New releases use the shared
+  defaults without importing older host-specific settings. Skills, telemetry,
+  tool approvals, and LaTeX replacement rules now have native controls in the
+  TeXRA settings view.
 - **Workflow scripts are available to the software-engineering and Lean team
   leads** — after enabling Workflow Script in the Tools panel, these teams can
   run predetermined parallel and sequential agent pipelines that resume safely
@@ -42,6 +48,18 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **Agent reviews now choose their own scope and depth** — the saved controls
+  for including untracked files or submodules and choosing a quick or thorough
+  approach have been removed. Reviews inspect the relevant change set directly.
+- **File discovery now uses fixed product rules** — the removed
+  `texra.files.included.*` and `texra.files.ignored.*` settings no longer change
+  which workspace files TeXRA discovers. Remove those keys from project config
+  files and old VS Code settings.
+- **Agent definitions use only the current schema** — custom definitions must
+  use `assistant` instead of the retired `chat` name and must remove obsolete
+  settings such as `outputExt`, `documentTag`, `endTag`, `prefills`,
+  `requiredFiles`, and `filePatternsContain`. TeXRA no longer translates or
+  silently discards these historical fields when loading an agent.
 - **Google sessions now use the current conversation service exclusively** —
   the obsolete Google compatibility toggle has been removed. Some Google
   sessions saved by earlier versions remain readable but cannot be resumed;
@@ -922,9 +940,8 @@ All notable changes to this project will be documented in this file.
   consecutive maintenance follow-ups batch into a single turn.
 - **`settings.documentTag`/`endTag` are no longer configurable in custom
   agents** — every agent now emits the standard unified output container,
-  matching what every bundled agent already used. Custom agent YAMLs that
-  still set a bespoke `documentTag`/`endTag` keep loading; the fields are
-  dropped with a console warning rather than kept as a live setting.
+  matching what every bundled agent already used. These fields no longer
+  affect custom agent behavior.
 - **Subagent runs record a structured result manifest** — outputs, line-diff
   references, outcome, and cost are readable as JSON via the executions tool
   (`/executions/{id}/result`), so follow-on agents can chain on data instead

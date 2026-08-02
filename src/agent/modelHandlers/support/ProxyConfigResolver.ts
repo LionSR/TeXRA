@@ -16,9 +16,7 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
-// NOTE: getProviderEndpoint reads from globalSM (VS Code global state), which is
-// where the Settings dashboard writes custom endpoints. The legacy settings.json
-// keys (texra.model.baseUrl*) are no longer read — globalSM is the single source.
+// Custom endpoints use the provider state written by the Models view.
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 

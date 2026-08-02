@@ -322,15 +322,11 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **File list not updating**:
    - Restart VS Code if file lists remain outdated
-   - Check file extension settings to ensure your files are included:
-
-   ```json
-   "texra.files.included.inputExtensions": [".txt", ".tex", ".md"]
-   ```
+   - Confirm that the file uses one of TeXRA's built-in supported extensions
 
 4. **File selection issues**:
    - Try adding files one by one with the picker instead of dragging in bulk
-   - If a file does not appear after dropping, confirm its extension is in the category's allowed-extensions setting
+   - If a file does not appear after dropping, confirm that TeXRA supports its extension
    - Check the developer console (`Developer: Open Webview Developer Tools`) for any errors
 
 ## Output File Issues
@@ -476,8 +472,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 1. **Output directory conflicts**:
    - Configure consistent output directories:
    ```json
-   "latex-workshop.latex.outDir": "%DIR%/build",
-   "texra.files.ignored.directories": ["build"]
+   "latex-workshop.latex.outDir": "%DIR%/build"
    ```
 
 ## Debugging Tips

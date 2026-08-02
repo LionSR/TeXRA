@@ -306,6 +306,26 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(2);
   });
 
+  it('applies native provider settings and refreshes model availability', async () => {
+    const fixture = await createFixture();
+
+    await assertSupported(
+      fixture.controller.profileHandlers.setProviderSetting,
+    )({
+      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING,
+      key: GlobalStateKey.USE_OPENROUTER,
+      value: true,
+    });
+
+    expect(fixture.globalState.get(GlobalStateKey.USE_OPENROUTER)).toBe(true);
+    expect(fixture.events).toEqual([
+      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE}`,
+      `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
+      `render:${MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS}`,
+      'credential',
+    ]);
+  });
+
   it.each([
     {
       name: 'provider streaming',

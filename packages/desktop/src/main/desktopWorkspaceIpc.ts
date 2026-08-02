@@ -20,7 +20,6 @@ import { platform } from '@platform/platform';
 import { normalizeFilePath } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 import { isPathWithin } from '@utils/core/pathCore';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
@@ -173,7 +172,7 @@ export function createDesktopWorkspaceIpc(
         return;
       }
 
-      const settings = loadFileListSettings(getConfig);
+      const settings = loadFileListSettings();
       // The project tree is a code editor, not the agent input picker. Reuse
       // the shared ignore policy, but do not inherit
       // the input picker's `.ts`/`.js`/`.json` exclusions. Only known binary

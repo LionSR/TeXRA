@@ -240,7 +240,7 @@ describe('MainApp persistence and restore characterization', () => {
     expect(blob.editedFile).toBe('other_polish.tex');
   });
 
-  it('renders the Files heading and controls without a disclosure', async () => {
+  it('renders file controls without a redundant heading or disclosure', async () => {
     const element = await mountMainApp();
 
     dispatchHostMessage({
@@ -250,9 +250,7 @@ describe('MainApp persistence and restore characterization', () => {
     await element.updateComplete;
 
     const root = element.shadowRoot;
-    expect(root?.querySelector('.file-selection-heading')?.textContent).toBe(
-      'Files',
-    );
+    expect(root?.querySelector('.file-selection-heading')).toBeNull();
     expect(root?.querySelector('wa-details.file-selection-details')).toBeNull();
     expect(
       root?.querySelectorAll('.file-selection file-select-group'),

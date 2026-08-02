@@ -86,8 +86,8 @@ const SetProviderEndpointMessageSchema = z.object({
 
 const SetGlobalStreamingMessageSchema = enabledFlag(CMD.SET_GLOBAL_STREAMING);
 
-const SetProviderVscodeSettingMessageSchema = z.object({
-  command: z.literal(CMD.SET_PROVIDER_VSCODE_SETTING),
+const SetProviderSettingMessageSchema = z.object({
+  command: z.literal(CMD.SET_PROVIDER_SETTING),
   key: z.string().min(1),
   value: z.union([z.boolean(), z.number()]),
 });
@@ -280,21 +280,25 @@ const SetInlineCriticismEnabledMessageSchema = enabledFlag(
   CMD.SET_INLINE_CRITICISM_ENABLED,
 );
 
-// Generic catalog-driven scalar-setting write. One flat branch (single outer
-// discriminator on `command`) carries a canonical settings key and a loose
-// value. Per-value validation happens in the backend handler via the entry's
-// own schema (`settingsViewSettingByKey(key).schema`), so the union stays a
-// plain flat branch and never grows a nested per-key discriminator (which would
-// crash the dispatcher).
+// Generic catalog-driven setting write. This boundary accepts exactly the
+// value shapes used by catalog entries; the selected entry's schema performs
+// the narrower per-key validation in the backend handler.
+const StateSettingValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+  z.record(z.string(), z.string()),
+  z.null(),
+]);
+
 const UpdateStateSettingMessageSchema = z.object({
   command: z.literal(CMD.UPDATE_STATE_SETTING),
   key: z.string().min(1),
-  value: z.union([z.boolean(), z.number(), z.string(), z.null()]).optional(),
+  value: StateSettingValueSchema.optional(),
 });
 
 // Navigation inbound messages
-const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
-
 // Settings-tab IPC is read-only: state transitions are owned by the
 // agent-side plan tool, not the user. Don't add mutation commands here.
 const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
@@ -313,7 +317,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     // Lifecycle
     WebviewReadyMessageSchema,
     // Navigation messages
-    OpenVscodeSettingsMessageSchema,
     // Tool dashboard messages
     OpenToolInstallUrlMessageSchema,
     InstallToolExtensionMessageSchema,
@@ -353,7 +356,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderStreamingMessageSchema,
     SetProviderEndpointMessageSchema,
     SetGlobalStreamingMessageSchema,
-    SetProviderVscodeSettingMessageSchema,
+    SetProviderSettingMessageSchema,
     OpenExternalUrlMessageSchema,
     // Model selection messages
     SetModelEnabledMessageSchema,

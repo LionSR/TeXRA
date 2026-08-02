@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { attachWorkflowPlainProjection } from '@cli/runtime/workflowPlainProjection';
+import { attachWorkflowPlainOutput } from '@cli/runtime/workflowPlainOutput';
 import {
   buildRunDescriptor,
   MESSAGE_TYPES,
@@ -48,10 +48,10 @@ function readTask(
   childStreamId?: StreamTabId,
 ): AgentEvent {
   return {
-    type: 'workflow.task',
+    type: 'workflow.call',
     stageId: 'phase-map',
     logId: 'task-read',
-    task: {
+    call: {
       id: 'read',
       label: 'Read the argument',
       phase: 'Map',
@@ -86,14 +86,14 @@ function startProjection(beforeWrite?: () => void): {
 } {
   const events = new SessionEventHub();
   const lines: string[] = [];
-  const detach = attachWorkflowPlainProjection(events, {
+  const detach = attachWorkflowPlainOutput(events, {
     writeLine: (line) => lines.push(line),
     beforeWrite,
   });
   return { events, lines, detach };
 }
 
-describe('attachWorkflowPlainProjection', () => {
+describe('attachWorkflowPlainOutput', () => {
   it('writes phase, call, log, and completion lines in stable order', () => {
     const beforeWrite = vi.fn();
     const { events, lines, detach } = startProjection(beforeWrite);
@@ -178,9 +178,9 @@ describe('attachWorkflowPlainProjection', () => {
       }),
     });
     emit(events, {
-      type: 'workflow.task',
+      type: 'workflow.call',
       logId: 'ordinary-task',
-      task: { id: 'ordinary', label: 'Ordinary task', status: 'running' },
+      call: { id: 'ordinary', label: 'Ordinary task', status: 'running' },
     });
     completeWorkflow(events, STREAM_PHASE.FAILED);
 
@@ -193,10 +193,10 @@ describe('attachWorkflowPlainProjection', () => {
     startWorkflow(events);
 
     emit(events, {
-      type: 'workflow.task',
+      type: 'workflow.call',
       stageId: 'run',
       logId: 'loose',
-      task: { id: 'loose', label: 'Loose check', status: 'planned' },
+      call: { id: 'loose', label: 'Loose check', status: 'planned' },
     });
     emit(events, {
       type: 'log',
@@ -205,10 +205,10 @@ describe('attachWorkflowPlainProjection', () => {
       message: 'Preparing the phase-less check.',
     });
     emit(events, {
-      type: 'workflow.task',
+      type: 'workflow.call',
       stageId: 'phase-write',
       logId: 'draft',
-      task: {
+      call: {
         id: 'draft',
         label: 'Draft proof',
         phase: 'Write',

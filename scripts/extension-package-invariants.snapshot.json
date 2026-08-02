@@ -382,10 +382,6 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.openSettings",
-            "when": "texra.activated"
-          },
-          {
             "command": "texra.showMainView",
             "when": "texra.activated"
           },

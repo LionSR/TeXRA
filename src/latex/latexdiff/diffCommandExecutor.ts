@@ -3,13 +3,12 @@ import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { executeCommand } from '@utils/system/execUtils';
-import { getConfig } from '@utils/config/configUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 
 // Local file imports
 import type { MathMarkupOption } from './mathMarkup';
 
-const DEFAULT_PICTURE_ENVS =
+const LATEXDIFF_PICTURE_ENVIRONMENTS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
 
 const BIBLIOGRAPHY_ERROR_PATTERNS = [
@@ -276,10 +275,7 @@ export class DiffCommandExecutor {
         readPlatformSetting<MathMarkupOption>(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
         ),
-      pictureEnvs: getConfig<string>(
-        'texra.latexdiff.pictureEnvironments',
-        DEFAULT_PICTURE_ENVS,
-      ),
+      pictureEnvs: LATEXDIFF_PICTURE_ENVIRONMENTS,
       subtype: resolveLatexdiffSubtype({
         subtype: options?.subtype,
         changesOnly,

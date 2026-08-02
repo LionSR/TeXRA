@@ -29,13 +29,13 @@ import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@shared/schemas';
 import {
   PROVIDER_DISPLAY_NAMES,
+  PROVIDER_SETTINGS,
   PROVIDER_URLS,
 } from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { unsupported } from '@shared/utils/dispatcher';
 import {
   getProviderDisplayName,
   getProviderEndpoint,
@@ -90,7 +90,7 @@ type DesktopProfileHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING
   | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT
   | typeof SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING
-  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_VSCODE_SETTING
+  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_SETTING
   | typeof SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL
 >;
 
@@ -131,7 +131,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.profileController = new SettingsProfileController({
       globalState: options.globalState,
       providerIds: API_PROVIDERS,
-      providerVscodeSettings: {},
+      providerSettings: PROVIDER_SETTINGS,
       providerDisplayNames: PROVIDER_DISPLAY_NAMES,
       providerKeyUrls: PROVIDER_URLS,
       loadProviderKeyStatuses: () =>
@@ -184,9 +184,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       setProviderEndpoint: (message) =>
         this.setProviderEndpoint(message.provider, message.endpoint),
       setGlobalStreaming: (message) => this.setGlobalStreaming(message.enabled),
-      setProviderVscodeSetting: unsupported(
-        'VS Code provider settings are not applicable in the desktop app.',
-      ),
+      setProviderSetting: (message) =>
+        this.setProviderSetting(message.key, message.value),
       openExternalUrl: (message) =>
         options.externalOpener.openExternal(message.url),
     };
@@ -318,6 +317,29 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private async setGlobalStreaming(enabled: boolean): Promise<void> {
     await setGlobalStreaming(enabled);
     await this.postProfileData();
+  }
+
+  private async setProviderSetting(
+    key: string,
+    value: boolean | number,
+  ): Promise<void> {
+    const result = await this.profileController.setProviderSetting({
+      key,
+      value,
+    });
+    if (result.kind === 'rejected') {
+      await this.options.notifications.showErrorMessage(
+        `Unknown provider setting: ${result.key}`,
+      );
+      return;
+    }
+
+    await this.postProfileData();
+    if (!result.affectsModelAvailability) return;
+
+    await this.postModelSelectionData();
+    await this.postMainModelOptionsData();
+    await this.options.onCredentialChanged();
   }
 
   private async refreshAfterProviderKeyChange(): Promise<void> {

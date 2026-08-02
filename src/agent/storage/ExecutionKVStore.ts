@@ -27,7 +27,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   applyExecutionOutcome,
-  parseLegacyResultMeta,
   ResultMetaSchema,
   type ResultMeta,
 } from './resultMeta';
@@ -272,34 +271,11 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {
-    const [raw, meta] = await Promise.all([
-      this.read(KEYS.RESULT_META),
+    const [record, meta] = await Promise.all([
+      this.readValidated(KEYS.RESULT_META, ResultMetaSchema),
       this.readMeta(),
     ]);
-    if (raw == null) return null;
-
-    const canonical = ResultMetaSchema.safeParse(raw);
-    if (canonical.success) {
-      return applyExecutionOutcome(canonical.data, meta?.outcome);
-    }
-
-    const config = await this.readConfig();
-    try {
-      return applyExecutionOutcome(
-        parseLegacyResultMeta(raw, {
-          category: config?.agentCategory,
-          outcome: meta?.outcome,
-        }),
-        meta?.outcome,
-      );
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Failed to parse execution ${this.executionId} ${KEYS.RESULT_META}.json: ${toErrorMessage(error)}`,
-        { data: error },
-      );
-      return null;
-    }
+    return record ? applyExecutionOutcome(record, meta?.outcome) : null;
   }
 
   // -- Typed writers --------------------------------------------------------

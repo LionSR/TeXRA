@@ -1,5 +1,4 @@
 // Node imports
-import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -33,27 +32,8 @@ function namedImportSources(source: string, importedName: string): string[] {
     .filter((specifier): specifier is string => specifier !== undefined);
 }
 
-function isDesktopProcessStoresSource(specifier: string): boolean {
-  return /(?:^|\/)desktopProcessStores(?:\.js)?$/u.test(specifier);
-}
-
 function readDesktopPlatformIndex(): Promise<string> {
   return readFile(desktopSourcePath('main', 'platform', 'index.ts'), 'utf8');
-}
-
-function trackedTypeScriptConsumers(identifier: string): string[] {
-  const pathspecs = ['src', 'packages'].flatMap((root) =>
-    ['ts', 'tsx', 'mts', 'cts'].map(
-      (extension) => `:(glob)${root}/**/*.${extension}`,
-    ),
-  );
-  return execFileSync(
-    'git',
-    ['grep', '-l', '-e', identifier, '--', ...pathspecs],
-    { cwd: REPO_ROOT, encoding: 'utf8' },
-  )
-    .trim()
-    .split('\n');
 }
 
 describe('desktop composition root and launch environment', () => {
@@ -162,85 +142,14 @@ describe('desktop composition root and launch environment', () => {
     expect(awaitSessionRepair).toBeGreaterThan(registerStoreDisposer);
   });
 
-  it('classifies supported process-store bindings and rejects the legacy module', () => {
-    const importedName = 'initializeDesktopProcessStores';
-    const sources = namedImportSources(
-      `
-        import { ${importedName} } from './desktopProcessStores.js';
-        export { ${importedName} } from '@desktop/main/desktopProcessStores';
-        const { ${importedName} } = await import('./desktopProcessStores.js');
-        const { ${importedName} } = (await import(
-          '@desktop/main/desktopProcessStores'
-        )) as DesktopProcessStoresModule;
-      `,
-      importedName,
+  it('imports process-store initialization directly from its owner', async () => {
+    const source = await readFile(
+      desktopSourcePath('main', 'index.ts'),
+      'utf8',
     );
-
-    expect(sources).toEqual([
-      './desktopProcessStores.js',
-      '@desktop/main/desktopProcessStores',
-      './desktopProcessStores.js',
-      '@desktop/main/desktopProcessStores',
-    ]);
-    expect(sources.every(isDesktopProcessStoresSource)).toBe(true);
     expect(
-      isDesktopProcessStoresSource('./desktopLegacyStreamImporter.js'),
-    ).toBe(false);
-  });
-
-  it('keeps process-store composition out of the legacy importer', async () => {
-    const [rootSource, processStoresSource, legacyImporterSource] =
-      await Promise.all(
-        [
-          'index.ts',
-          'desktopProcessStores.ts',
-          'desktopLegacyStreamImporter.ts',
-        ].map((file) => readFile(desktopSourcePath('main', file), 'utf8')),
-      );
-    expect(
-      namedImportSources(rootSource, 'initializeDesktopProcessStores'),
+      namedImportSources(source, 'initializeDesktopProcessStores'),
     ).toContain('./desktopProcessStores.js');
-    expect(
-      namedImportSources(
-        processStoresSource,
-        'prepareDesktopLegacyStreamImport',
-      ),
-    ).toContain('./desktopLegacyStreamImporter.js');
-    expect(processStoresSource).toMatch(
-      /\bprepareDesktopLegacyStreamImport\s*\(/u,
-    );
-    expect(legacyImporterSource).not.toMatch(
-      /\b(?:from|import)\s*\(?\s*['"](?:[^'"]*\/)?desktopProcessStores(?:\.js)?['"]/u,
-    );
-    expect(legacyImporterSource).not.toMatch(
-      /\b(?:initializeDesktopProcessStores|SessionStores)\b/u,
-    );
-
-    const exemptConsumers = new Set([
-      'packages/desktop/src/main/desktopProcessStores.ts',
-      'src/test-kernel/desktop/ElectronCompositionRoot.vitest.mts',
-    ]);
-    const consumersWithoutBindings: string[] = [];
-    const indirectConsumers: string[] = [];
-    for (const file of trackedTypeScriptConsumers(
-      'initializeDesktopProcessStores',
-    )) {
-      if (exemptConsumers.has(file)) continue;
-
-      const source = await readFile(repoPath(file), 'utf8');
-      const specifiers = namedImportSources(
-        source,
-        'initializeDesktopProcessStores',
-      );
-      if (specifiers.length === 0) consumersWithoutBindings.push(file);
-      for (const specifier of specifiers) {
-        if (!isDesktopProcessStoresSource(specifier)) {
-          indirectConsumers.push(`${file}: ${specifier}`);
-        }
-      }
-    }
-    expect(consumersWithoutBindings).toEqual([]);
-    expect(indirectConsumers).toEqual([]);
   });
 
   it('keeps platform initialization in the Electron composition root', async () => {
