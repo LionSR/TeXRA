@@ -2,12 +2,12 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import {
   BASH_APPROVAL_CONFIG_TARGET,
   migrateLegacyGlobalBashApprovalOverride,
-} from '@shared/settingsView/handlers/approvalHandlers';
+} from '@controllers/settingsView/BashApprovalGlobalMigration';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 
