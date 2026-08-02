@@ -355,7 +355,12 @@ export class AgentRosterController<
       const alreadyEnabled = index >= 0;
       if (input.enabled === alreadyEnabled) return;
       if (input.enabled && index < 0) target.push(key);
-      if (!input.enabled && index >= 0) target.splice(index, 1);
+      if (!input.enabled && index >= 0) {
+        const remaining = target.filter(
+          (candidate) => !agentMatchesIdentifier(input, candidate),
+        );
+        target.splice(0, target.length, ...remaining);
+      }
       await this.writeSelection({
         kind: 'custom',
         workflowAgentKeys:

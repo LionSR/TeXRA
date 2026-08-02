@@ -107,6 +107,30 @@ describe('AgentRosterController', () => {
     });
   });
 
+  it('removes every matching alias when disabling an agent', async () => {
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        kind: 'custom',
+        workflowAgentKeys: [],
+        toolUseAgentKeys: ['lead', 'builtInToolUse:lead', 'custom:search'],
+      },
+    });
+    const roster = controller(workspaceState);
+
+    await roster.setAgentEnabled({
+      category: 'toolUse',
+      source: 'builtInToolUse',
+      name: 'lead',
+      enabled: false,
+    });
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['custom:search'],
+    });
+  });
+
   it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
     const inheritedState = new FakeStateStore();
     const inherited = controller(inheritedState, {

@@ -32,6 +32,61 @@ const agents: AgentEntry[] = [
   },
 ];
 
+const agentsWithDuplicateName: AgentEntry[] = [
+  ...agents,
+  {
+    category: 'toolUse',
+    source: 'remote',
+    name: 'review',
+    description: 'Remote review agent',
+    path: '',
+  },
+];
+
+const selectedAgentKeyCases: Array<{
+  name: string;
+  selection: 'all' | string[];
+  catalog: AgentEntry[];
+  expected: string[];
+}> = [
+  {
+    name: 'expands all to the catalog keys',
+    selection: 'all',
+    catalog: agents,
+    expected: ['builtInToolUse:assistant', 'custom:review'],
+  },
+  {
+    name: 'deduplicates bare and source-qualified aliases',
+    selection: ['assistant', 'builtInToolUse:assistant'],
+    catalog: agents,
+    expected: ['builtInToolUse:assistant'],
+  },
+  {
+    name: 'preserves unknown bare and source-qualified identifiers',
+    selection: ['future', 'remote:future'],
+    catalog: agents,
+    expected: ['future', 'remote:future'],
+  },
+  {
+    name: 'resolves an exact remote source key',
+    selection: ['remote:review'],
+    catalog: agentsWithDuplicateName,
+    expected: ['remote:review'],
+  },
+  {
+    name: 'leaves category-like qualified identifiers unresolved',
+    selection: ['toolUse:assistant'],
+    catalog: agents,
+    expected: ['toolUse:assistant'],
+  },
+  {
+    name: 'uses the first same-name agent for bare names and retains exact identities',
+    selection: ['review', 'remote:review', 'custom:review'],
+    catalog: agentsWithDuplicateName,
+    expected: ['custom:review', 'remote:review'],
+  },
+];
+
 describe('AgentRosterForm', () => {
   it('renders loading through the shared Ink indicator', async () => {
     const { ink, React } = await loadInk();
@@ -76,12 +131,12 @@ describe('AgentRosterForm', () => {
     ]);
   });
 
-  it('resolves bare custom-roster names to catalog keys', () => {
-    const selected = selectedAgentKeys(['assistant', 'custom:review'], agents);
-
-    expect(selected).toEqual(['builtInToolUse:assistant', 'custom:review']);
-    expect(buildChatDefaultAgentItems(agents, selected)).toHaveLength(3);
-  });
+  it.each(selectedAgentKeyCases)(
+    '$name',
+    ({ selection, catalog, expected }) => {
+      expect(selectedAgentKeys(selection, catalog)).toEqual(expected);
+    },
+  );
 
   it('windows long roster lists to the available terminal rows', () => {
     expect(
