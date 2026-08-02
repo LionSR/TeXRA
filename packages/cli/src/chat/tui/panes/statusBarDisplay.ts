@@ -599,12 +599,12 @@ function statusBarBindingsText(
     ]),
     setupControlsOnly &&
       statusBarBindingRow([fullOutput, agent, model, api, newline, ctrlC]),
-    setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
-    statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
-    statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
     parentNavigationAvailable &&
       transcriptAvailable &&
       statusBarBindingRow([fullOutput, ctrlC]),
+    setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
+    statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
+    statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
     (childNavigationAvailable || agentSelectionAvailable) &&
       statusBarBindingRow([childList, agent, ctrlC]),
     childNavigationAvailable &&
