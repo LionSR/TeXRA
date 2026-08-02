@@ -33,6 +33,7 @@ import {
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import { errorResult, executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -76,16 +77,16 @@ export async function executeSubagent(
   const parentContext = tryUseRunContext();
   const parentSession = getRunContextSession(parentContext);
   if (!parentContext || !parentSession) {
-    return {
-      status: 'error',
-      summary: 'Delegation session unavailable',
-      error:
-        'delegate_agent and delegate_workflow require an active agent session. Run delegation from an active agent session, or ensure the tool run context provides its owning session.',
-      diagnostics: {
-        type: 'missing_session',
-        tools: ['delegate_agent', 'delegate_workflow'],
+    return errorResult(
+      'delegate_agent and delegate_workflow require an active agent session. Run delegation from an active agent session, or ensure the tool run context provides its owning session.',
+      {
+        summary: 'Delegation session unavailable',
+        diagnostics: {
+          type: 'missing_session',
+          tools: ['delegate_agent', 'delegate_workflow'],
+        },
       },
-    };
+    );
   }
   const parentExecutionId = getRunContextExecutionId(parentContext);
   // Captured now (while the launching tool call's ALS frame is live) so the
@@ -134,20 +135,16 @@ export async function executeSubagent(
         onStreamResolved: inheritChildStreamApprovals,
         onCost: recordCost,
       });
-      return {
-        status: 'executed',
-        summary:
-          result.outcome === 'cancelled'
-            ? `Cancelled '${agentName}'`
-            : `Completed '${agentName}'`,
-        output: delivery,
-      };
+      return executed(
+        delivery,
+        result.outcome === 'cancelled'
+          ? `Cancelled '${agentName}'`
+          : `Completed '${agentName}'`,
+      );
     } catch (err) {
-      return {
-        status: 'error',
+      return errorResult(toErrorMessage(err), {
         summary: `Subagent '${agentName}' failed`,
-        error: toErrorMessage(err),
-      };
+      });
     }
   }
 
