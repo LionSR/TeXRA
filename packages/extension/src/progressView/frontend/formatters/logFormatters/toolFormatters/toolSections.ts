@@ -382,11 +382,8 @@ function toStringArray(value: unknown): string[] | undefined {
 /**
  * `DelegateAgentInput`/`WorkflowAgentInput` derive from host-only schemas
  * (`@tools/DelegationTools`, `@tools/delegation/inputFields`), unavailable as
- * runtime imports here (see the import-block comment above) — and even a
- * type-shape union of the two wouldn't cover every legacy alias in
- * `DELEGATION_TOOLS` (`resume_agent`, `propose_agent`, `propose_workflow`
- * predate these schemas). Each displayed field is read with its own guard
- * instead, tolerating both current and legacy delegation payloads alike.
+ * runtime imports here (see the import-block comment above). Each displayed
+ * field is read with its own guard.
  */
 function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;

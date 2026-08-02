@@ -178,12 +178,10 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   lean_inspect: 'magnifying-glass-chart',
   lean_loogle: 'magnifying-glass',
 
-  // Workflow/delegation (includes legacy names for historical log entries)
+  // Workflow/delegation
   delegate_workflow: 'list-ul',
   delegate_workflow_script: 'list-ul',
   delegate_agent: 'circle-user',
-  propose_workflow: 'list-ul',
-  propose_agent: 'circle-user',
 
   // Execution history
   executions: 'clock-rotate-left',

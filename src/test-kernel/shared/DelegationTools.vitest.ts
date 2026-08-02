@@ -12,13 +12,10 @@ it('keeps canonical delegation tool names registered', () => {
   expectTypeOf<CanonicalDelegationToolName>().toExtend<RegisteredToolName>();
 });
 
-it('preserves canonical and historical delegation tool names', () => {
+it('contains the canonical delegation tool names', () => {
   expect([...DELEGATION_TOOLS]).toEqual([
     'delegate_workflow',
     'delegate_workflow_script',
     'delegate_agent',
-    'resume_agent',
-    'propose_workflow',
-    'propose_agent',
   ]);
 });

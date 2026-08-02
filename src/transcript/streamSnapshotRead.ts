@@ -4,9 +4,7 @@
  * Split out of `StreamSnapshotStore` so the (stateless) read/assembly is
  * separate from the (stateful) accumulate/write side. Reads every sidecar file
  * ONCE into canonical round-indexed records; `StreamSnapshotStore.load()`
- * seeds its in-memory accumulators from this directly, and persists any
- * legacy-flattened files once (see `legacyKeys`) so the conversion never
- * re-runs.
+ * seeds its in-memory accumulators from this directly.
  */
 
 import { z } from 'zod';
@@ -16,7 +14,6 @@ import * as logger from '@logger/logUtils';
 import {
   CompileFailureSchema,
   ExecutionIdSchema,
-  LegacyInstructionsDataSchema,
   OutputFileInfoSchema,
   parsePersistedRoundIndexed,
   parseUsageData,
@@ -24,9 +21,7 @@ import {
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
   StreamTabMetaSchema,
-  selectPreferredLegacyInstruction,
   type CompileFailure,
-  type LegacyInstructionEntry,
   type OutputFileInfo,
   type RoundIndexed,
   type StreamSnapshot,
@@ -66,8 +61,6 @@ export interface StreamData {
    */
   usageUnparsed: Map<string, unknown>;
   workPlan: WorkPlanSnapshot;
-  /** Category keys whose on-disk file was legacy-nested (need a one-time flat rewrite). */
-  legacyKeys: string[];
 }
 
 /**
@@ -115,37 +108,6 @@ export async function readMeta(
 }
 
 /**
- * Read the archived legacy per-run instruction, if any, and pick the run
- * users most likely expect to see. Read-only fallback for workflow tabs
- * created before the one-run-per-tab refactor (#3061, 2026-04-19): prefers
- * the canonical `legacyInstructions.json`, falling back to the older
- * `runInstructions.json` key from before that refactor renamed the archival
- * file (same record shape, so no on-disk migration is needed to read it).
- * `meta.activeRunId` (also legacy, tolerated on read) picks the run that was
- * active when the tab was last viewed; otherwise the newest entry wins.
- */
-export async function readLegacyInstruction(
-  kv: KVStore,
-  meta: StreamTabMeta | undefined,
-): Promise<LegacyInstructionEntry | null> {
-  const raw =
-    (await tryRead(kv, STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS)) ??
-    (await tryRead(kv, STREAM_DATA_KEYS.LEGACY_RUN_INSTRUCTIONS));
-  if (raw === undefined) return null;
-
-  const result = LegacyInstructionsDataSchema.safeParse(raw);
-  if (!result.success) {
-    logger.warn(CHANNEL, 'Discarding unreadable legacy instructions.', {
-      data: result.error,
-    });
-    return null;
-  }
-  if (Object.keys(result.data).length === 0) return null;
-
-  return selectPreferredLegacyInstruction(result.data, meta?.activeRunId);
-}
-
-/**
  * Read `workPlan.json`. A file written by a NEWER `schemaVersion` is IGNORED
  * (returns empty) rather than coerced, so we never consume a future shape's
  * fields as v1 — this is the single forward-compat gate. Within a known
@@ -175,27 +137,15 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   return result.data;
 }
 
-/** Read every per-stream sidecar file ONCE, flattening any legacy nested data. */
+/** Read every per-stream sidecar file once. */
 export async function readStreamData(kv: KVStore): Promise<StreamData> {
   const meta = await readMeta(kv);
-  const activeRunId = meta?.activeRunId ?? undefined;
-  const legacyKeys: string[] = [];
 
-  // Legacy nested `{ runId: { round } }` files are absorbed inside the single
-  // canonical parse entry; only the "rewrite it flat once" signal surfaces.
   const readRoundIndexed = async <T>(
     key: string,
     itemSchema: z.ZodType<T>,
-  ): Promise<RoundIndexed<T>> => {
-    const { rounds, wasLegacy } = parsePersistedRoundIndexed(
-      key,
-      await tryRead(kv, key),
-      itemSchema,
-      activeRunId,
-    );
-    if (wasLegacy) legacyKeys.push(key);
-    return rounds;
-  };
+  ): Promise<RoundIndexed<T>> =>
+    parsePersistedRoundIndexed(key, await tryRead(kv, key), itemSchema);
 
   const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
     readRoundIndexed(STREAM_DATA_KEYS.OUTPUT_FILES, OutputFileInfoSchema),
@@ -218,7 +168,6 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     usage,
     usageUnparsed,
     workPlan,
-    legacyKeys,
   };
 }
 

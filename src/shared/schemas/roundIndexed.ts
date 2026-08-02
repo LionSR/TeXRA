@@ -5,9 +5,7 @@
  * paths, compile failures) across the live stream state, progress events,
  * webview messages, snapshots, and the persisted `streamData/{id}/*.json`
  * sidecars — the record is the JSON wire/disk format itself, so no encode
- * step exists anywhere. Legacy persisted shapes are absorbed ONCE, here, at
- * {@link parsePersistedRoundIndexed}; downstream code only ever sees the
- * canonical record.
+ * step exists anywhere.
  *
  * Deliberately NOT unified into this shape (different requirements, not
  * history): `RoundOutput[]` (a per-round aggregate carrying `rawOutput` and
@@ -33,10 +31,9 @@ export type RoundIndexed<T> = { [round: number]: T[] };
  * roundIndexedEntries}) relies on the ES2015+ spec guarantee that
  * non-negative-integer-string keys enumerate in ascending numeric order —
  * that guarantee does NOT hold for negative or non-integer keys, so this is
- * a structural invariant, not just a naming convention. Enforced once, here,
- * at parse time (see {@link RoundKeyStringSchema}, used by both
- * {@link roundIndexedRecord} and {@link parsePersistedRoundIndexed}'s flat
- * arm), so downstream code never re-checks it.
+ * a structural invariant, not just a naming convention. Canonical record
+ * schemas enforce it through {@link RoundKeyStringSchema}; the persisted-file
+ * parser applies this schema directly while salvaging individual keys.
  */
 export const RoundKeySchema = z.coerce.number().int().nonnegative();
 
@@ -56,13 +53,12 @@ export const RoundNumberSchema = z.int().nonnegative();
 
 /**
  * A JSON object key that {@link RoundKeySchema} can coerce to a valid round
- * number. The SAME predicate — not a parallel regex — backs both
- * {@link roundIndexedRecord}'s key schema and {@link
- * parsePersistedRoundIndexed}'s flat-arm key schema, so a key like `"1e5"`
- * (scientific notation, which `RoundKeySchema` coerces to round `100000`) is
- * accepted or rejected identically by every round-indexed record schema in
- * the codebase instead of drifting between a strict `/^\d+$/`-style regex in
- * one place and the looser numeric coercion in another.
+ * number. It is derived from the same schema that
+ * {@link parsePersistedRoundIndexed} applies directly to each salvaged key,
+ * so a key like `"1e5"` (scientific notation, which `RoundKeySchema` coerces
+ * to round `100000`) is accepted or rejected identically by canonical record
+ * schemas and persisted-file parsing instead of drifting between a strict
+ * `/^\d+$/`-style regex in one place and looser numeric coercion in another.
  */
 export const RoundKeyStringSchema = z
   .string()
@@ -118,7 +114,7 @@ export function cloneRoundIndexed<T>(
 }
 
 // ============================================================================
-// Persisted-file parse entry (single legacy-absorbing entry point)
+// Persisted-file parse entry
 // ============================================================================
 
 function warnDroppedItem(
@@ -133,44 +129,8 @@ function warnDroppedItem(
 }
 
 /**
- * Pick one run's round-keyed record out of the legacy nested shape. Prefers
- * `preferredRunId` when that entry exists (legacy tabs persisted `activeRunId`
- * in meta.json to mark the selected run); otherwise falls back to JS insertion
- * order and picks the last-written run.
- */
-function pickLegacyRun(
-  raw: Record<string, unknown>,
-  preferredRunId?: string | null,
-): Record<string, unknown> {
-  if (preferredRunId) {
-    const picked = raw[preferredRunId];
-    if (picked && typeof picked === 'object' && !Array.isArray(picked)) {
-      return picked as Record<string, unknown>;
-    }
-  }
-  const latest = Object.values(raw).findLast(
-    (value) =>
-      value != null && typeof value === 'object' && !Array.isArray(value),
-  );
-  return (latest as Record<string, unknown> | undefined) ?? {};
-}
-
-export interface PersistedRoundIndexed<T> {
-  rounds: RoundIndexed<T>;
-  /** True when the on-disk file held the legacy nested shape (the caller
-   *  rewrites it flat once so the conversion never re-runs). */
-  wasLegacy: boolean;
-}
-
-/**
  * Parse a persisted round-indexed sidecar file (`outputFiles.json`,
  * `missingOutputs.json`, `compileFailures.json`) into the canonical record.
- *
- * Canonical flat shape first; the legacy nested `{ runId: { round: items[] } }`
- * shape (from before the one-run-per-tab refactor, #3061) transforms into it
- * via the union's legacy arm — handled here ONCE, never at call sites.
- * Ledger: the legacy arm retires with the other #3061-era read shims after
- * 2026-08-04 (D3), tracked in #6981.
  *
  * Salvage semantics: round keys are coerced integers (anything else is
  * skipped), malformed items are dropped LOUDLY (warned, never silently
@@ -184,9 +144,8 @@ export function parsePersistedRoundIndexed<T>(
   kind: string,
   raw: unknown,
   itemSchema: z.ZodType<T>,
-  preferredRunId?: string | null,
-): PersistedRoundIndexed<T> {
-  if (raw === undefined) return { rounds: {}, wasLegacy: false };
+): RoundIndexed<T> {
+  if (raw === undefined) return {};
 
   const toRounds = (record: Record<string, unknown>): RoundIndexed<T> => {
     const rounds: RoundIndexed<T> = {};
@@ -210,33 +169,12 @@ export function parsePersistedRoundIndexed<T>(
     return rounds;
   };
 
-  // Canonical flat shape: every key a valid round (per RoundKeyStringSchema —
-  // the SAME predicate RoundKeySchema itself uses, so e.g. "1e5" is accepted
-  // or rejected identically here and in `toRounds` below), every value an
-  // array. The key/value constraints make this arm REJECT legacy input (a
-  // runId key, or a numeric-only runId whose value is a nested object),
-  // routing it to the legacy arm — mirroring the old `isLegacyNested`
-  // predicate.
-  const FlatArmSchema = z
-    .record(RoundKeyStringSchema, z.array(z.unknown()))
-    .transform((record): PersistedRoundIndexed<T> => ({
-      rounds: toRounds(record),
-      wasLegacy: false,
-    }));
-
-  const LegacyNestedArmSchema = z
-    .record(z.string(), z.unknown())
-    .transform((record): PersistedRoundIndexed<T> => ({
-      rounds: toRounds(pickLegacyRun(record, preferredRunId)),
-      wasLegacy: true,
-    }));
-
-  const result = z.union([FlatArmSchema, LegacyNestedArmSchema]).safeParse(raw);
+  const result = z.record(z.string(), z.unknown()).safeParse(raw);
   if (!result.success) {
     console.warn(
       `[roundIndexed] Ignoring malformed ${kind} (not a round-keyed record); treating as empty.`,
     );
-    return { rounds: {}, wasLegacy: false };
+    return {};
   }
-  return result.data;
+  return toRounds(result.data);
 }
