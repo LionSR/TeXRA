@@ -329,6 +329,11 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     const handler = createHandler();
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.setLogger({ ...noopTrace });
+    (
+      handler as unknown as {
+        postProcessResponse: (text: string) => string;
+      }
+    ).postProcessResponse = () => 'REWRITTEN';
     const calls: RecordedCall[] = [];
     const client: any = capturingClient(calls, (i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2'),
@@ -365,6 +370,8 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
 
     expect(result.updatedMessages).toBeDefined();
     expect(result.updatedMessages!.length).toBeLessThan(messages.length);
+    expect(JSON.stringify(result.updatedMessages)).toContain('SUMMARY');
+    expect(JSON.stringify(result.updatedMessages)).not.toContain('REWRITTEN');
     // The compacted round full-resent (no chain) the compacted transcript.
     expect(calls[1].previousId).toBeUndefined();
     expect(calls[1].input).toEqual(result.updatedMessages);
