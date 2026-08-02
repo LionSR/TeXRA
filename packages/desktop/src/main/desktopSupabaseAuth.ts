@@ -430,14 +430,11 @@ async function processProtocolCallback(
   const result = await coordinator.createSessionFromCallback({
     path: callback.path,
     query: callback.query,
-    fragment: callback.fragment,
   });
 
   if (!result.success) {
     if (result.isAuthError) {
-      const callbackError =
-        new URLSearchParams(callback.query).get('error') ??
-        new URLSearchParams(callback.fragment).get('error');
+      const callbackError = new URLSearchParams(callback.query).get('error');
       if (callbackError === 'access_denied') {
         log.info('Desktop sign-in was cancelled in the system browser');
         return false;
