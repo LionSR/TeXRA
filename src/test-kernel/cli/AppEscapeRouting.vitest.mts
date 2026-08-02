@@ -201,6 +201,29 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('does not resolve Esc-digit focus after a foreground pane opens', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      openInfoPane('Late chord reference', 'Foreground content');
+      await waitFor(() => infoPane.get()?.title === 'Late chord reference');
+      stdin.write('1');
+      await sleep(600);
+
+      expect(activeStreamId.get()).toBe(CHILD);
+      expect(infoPane.get()?.title).toBe('Late chord reference');
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('preserves two quick bare-Escape actions through the chord window', async () => {
     seedChildHierarchy();
     focusStream(GRANDCHILD);
