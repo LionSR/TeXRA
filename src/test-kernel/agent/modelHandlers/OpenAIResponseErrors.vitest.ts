@@ -13,6 +13,7 @@ import {
 import {
   attachContextWindowError,
   formatProviderHttpError,
+  isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
 
@@ -86,7 +87,7 @@ describe('OpenAI Responses error normalization', () => {
     expect(normalized.userRetryable).toBe(true);
   });
 
-  it('classifies an exhausted polling lifetime as non-retryable', () => {
+  it('requires an explicit retry after the polling lifetime expires', () => {
     const error = createOpenAIBackgroundPollingTimeoutError(
       'resp_expired',
       10_800_000,
@@ -95,10 +96,11 @@ describe('OpenAI Responses error normalization', () => {
 
     const providerError = normalizeProviderError(error);
 
-    expect(providerError.userRetryable).toBe(false);
+    expect(providerError.userRetryable).toBe(true);
+    expect(isProviderErrorAutoRetryable(error)).toBe(false);
     expect(providerError.provider).toBe('openai');
     expect(providerError.message).toContain('resp_expired');
-    expect(providerError.message).not.toContain('Retry later');
+    expect(providerError.message).toContain('Retry explicitly');
   });
 
   it('classifies internally tagged context-window overflows as non-retryable', () => {

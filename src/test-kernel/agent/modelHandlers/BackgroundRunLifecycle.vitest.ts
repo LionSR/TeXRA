@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import { BackgroundRunLifecycle } from '@agent/modelHandlers/openai/BackgroundRunLifecycle';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
-import { normalizeProviderError } from '@common/errors/sdkErrorUtils';
+import {
+  isProviderErrorAutoRetryable,
+  normalizeProviderError,
+} from '@common/errors/sdkErrorUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 
 import type OpenAI from 'openai';
@@ -26,6 +29,8 @@ function completedResponse(id: string): Response {
     output_text: 'ok',
   } as unknown as Response;
 }
+
+const MAX_BACKGROUND_DURATION_MS = 3 * 60 * 60 * 1000;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -141,16 +146,17 @@ describe('BackgroundRunLifecycle.tryResume', () => {
       undefined,
     );
     retrieve.mockClear();
-    vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+    vi.advanceTimersByTime(MAX_BACKGROUND_DURATION_MS);
 
     const timeout = await lifecycle.tryResume(client).catch((error) => error);
     expect(timeout).toBeInstanceOf(Error);
     expect((timeout as Error).message).toContain(
       'exceeded maximum polling duration',
     );
-    expect(normalizeProviderError(timeout).userRetryable).toBe(false);
+    expect(normalizeProviderError(timeout).userRetryable).toBe(true);
+    expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
     expect(retrieve).not.toHaveBeenCalled();
-    expect(lifecycle.getPendingId()).toBe('resp-pending');
+    expect(lifecycle.getPendingId()).toBeNull();
   });
 });
 
@@ -194,6 +200,34 @@ describe('BackgroundRunLifecycle.retrieveAndRemember', () => {
     ).rejects.toThrow('not found');
     expect(lifecycle.hasPendingResume()).toBe(false);
   });
+
+  it('replaces a transient failure with the timeout when retrieval settles late', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    const lifecycle = createLifecycle();
+    const retrieve = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockImplementationOnce(async () => {
+        vi.setSystemTime(Date.now() + 2);
+        throw new Error('socket hang up');
+      });
+    const client = { responses: { retrieve } } as unknown as OpenAI;
+
+    await expect(
+      lifecycle.retrieveAndRemember(client, 'resp-late', undefined, undefined),
+    ).rejects.toThrow('socket hang up');
+    vi.advanceTimersByTime(MAX_BACKGROUND_DURATION_MS - 1);
+
+    const timeout = await lifecycle.tryResume(client).catch((error) => error);
+    expect(timeout).toBeInstanceOf(Error);
+    expect((timeout as Error).message).toContain(
+      'exceeded maximum polling duration',
+    );
+    expect(normalizeProviderError(timeout).userRetryable).toBe(true);
+    expect(isProviderErrorAutoRetryable(timeout)).toBe(false);
+    expect(retrieve).toHaveBeenCalledTimes(2);
+    expect(lifecycle.hasPendingResume()).toBe(false);
+  });
 });
 
 describe('BackgroundRunLifecycle.waitForCompletion', () => {
@@ -235,5 +269,6 @@ describe('BackgroundRunLifecycle.waitForCompletion', () => {
         status: 'in_progress',
       } as Response),
     ).rejects.toThrow();
+    expect(lifecycle.hasPendingResume()).toBe(false);
   });
 });

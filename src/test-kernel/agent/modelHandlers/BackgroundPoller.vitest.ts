@@ -117,6 +117,132 @@ describe('BackgroundPoller', () => {
     expect(retrieve).not.toHaveBeenCalled();
   });
 
+  it('returns the timeout error when retrieval rejects at the deadline', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    const deadlineAtMs = Date.now() + 1;
+    const retrieve = vi.fn(async () => {
+      vi.setSystemTime(deadlineAtMs);
+      throw new Error('socket hang up');
+    });
+    const poller = new BackgroundPoller<TestResponse>({
+      pollIntervalMs: 0,
+      maxDurationMs: 1000,
+      isPending: (response) => response.status === 'in_progress',
+      logger: trace(),
+    });
+    const timeout = new Error('canonical polling timeout');
+
+    const polling = poller.poll({
+      initialResponse: { id: 'resp-late', status: 'in_progress' },
+      retrieve,
+      extractId,
+      extractStatus,
+      deadlineAtMs,
+      formatTimeoutError: () => timeout,
+    });
+    const rejection = expect(polling).rejects.toBe(timeout);
+    await vi.advanceTimersByTimeAsync(0);
+
+    await rejection;
+    expect(retrieve).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a retrieval result that arrives at the deadline', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    const deadlineAtMs = Date.now() + 1;
+    const retrieve = vi.fn(async () => {
+      vi.setSystemTime(deadlineAtMs);
+      return { id: 'resp-late-result', status: 'completed' };
+    });
+    const poller = new BackgroundPoller<TestResponse>({
+      pollIntervalMs: 0,
+      maxDurationMs: 1000,
+      isPending: (response) => response.status === 'in_progress',
+      logger: trace(),
+    });
+
+    const polling = poller.poll({
+      initialResponse: { id: 'resp-late-result', status: 'in_progress' },
+      retrieve,
+      extractId,
+      extractStatus,
+      deadlineAtMs,
+    });
+    const rejection = expect(polling).rejects.toThrow(
+      'exceeded maximum polling duration',
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    await rejection;
+    expect(retrieve).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['fulfills', false],
+    ['rejects', true],
+  ])(
+    'preserves cancellation when a deadline-bound retrieval %s late',
+    async (_label, rejects) => {
+      vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+      const controller = new AbortController();
+      const deadlineAtMs = Date.now() + 1;
+      const poller = new BackgroundPoller<TestResponse>({
+        pollIntervalMs: 0,
+        maxDurationMs: 1000,
+        isPending: (response) => response.status === 'in_progress',
+        logger: trace(),
+      });
+
+      const polling = poller.poll({
+        initialResponse: { id: 'resp-aborted-late', status: 'in_progress' },
+        retrieve: vi.fn(async () => {
+          controller.abort();
+          vi.setSystemTime(deadlineAtMs);
+          if (rejects) throw new Error('socket hang up');
+          return { id: 'resp-aborted-late', status: 'completed' };
+        }),
+        extractId,
+        extractStatus,
+        signal: controller.signal,
+        deadlineAtMs,
+      });
+      const rejection = expect(polling).rejects.toMatchObject({
+        name: 'AbortError',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await rejection;
+    },
+  );
+
+  it('times out the default poller exactly at its duration boundary', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    const retrieve = vi.fn(async () => ({
+      id: 'resp-boundary',
+      status: 'completed',
+    }));
+    const poller = new BackgroundPoller<TestResponse>({
+      pollIntervalMs: 0,
+      maxDurationMs: 0,
+      isPending: (response) => response.status === 'in_progress',
+      logger: trace(),
+    });
+
+    const polling = poller.poll({
+      initialResponse: { id: 'resp-boundary', status: 'in_progress' },
+      retrieve,
+      extractId,
+      extractStatus,
+    });
+    const rejection = expect(polling).rejects.toThrow(
+      'exceeded maximum polling duration',
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    await rejection;
+    expect(retrieve).not.toHaveBeenCalled();
+  });
+
   it('logs aborts that happen while waiting for the next poll', async () => {
     const logger = trace();
     const controller = new AbortController();
