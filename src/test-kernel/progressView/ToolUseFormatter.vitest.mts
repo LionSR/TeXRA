@@ -419,7 +419,7 @@ const SUMMARY_CONTROL_CASES = [
         timestamp: 1,
         messageType: 'toolUse',
         data: {
-          toolName: 'propose_agent',
+          toolName: 'delegate_agent',
           input: { agent: 'assistant', instruction: 'do the thing' },
           output: 'proposed',
         },
@@ -458,7 +458,7 @@ const SUMMARY_CONTROL_CASES = [
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
     const message = toolUseMessage('proposal-1', {
-      toolName: 'propose_agent',
+      toolName: 'delegate_agent',
       input: { agent: 'assistant', instruction: 'do the thing' },
       output: 'proposed',
     });
