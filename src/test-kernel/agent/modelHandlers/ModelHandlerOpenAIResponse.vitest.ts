@@ -33,7 +33,9 @@ import {
   attachContextWindowError,
   hasContextWindowErrorMarker,
   isContextWindowError,
+  isProviderErrorAutoRetryable,
   isUserAbort,
+  normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -268,12 +270,13 @@ type BackgroundLifecycleInternals = {
     status?: string | null;
   }>;
   pendingResponseId: string | null;
-  tryResume(client: OpenAI, signal?: AbortSignal): Promise<unknown>;
-  waitForCompletion(
+  retrieveAndRemember(
     client: OpenAI,
-    initialResponse: { id?: string; status?: string | null },
-    signal?: AbortSignal,
+    responseId: string,
+    retrieveParams: undefined,
+    signal: undefined,
   ): Promise<unknown>;
+  tryResume(client: OpenAI, signal?: AbortSignal): Promise<unknown>;
 };
 
 function backgroundLifecycleInternals(
@@ -1611,23 +1614,56 @@ describe('ModelHandlerOpenAIResponse background abort handling', () => {
     assert.equal(target.pendingResponseId, 'resp_pending_transient');
   });
 
-  it('surfaces background polling timeouts', async () => {
-    const handler = createBackgroundAbortHandler();
-    const target = backgroundLifecycleInternals(handler);
-    target.backgroundPoller = new BackgroundPoller({
-      pollIntervalMs: 1,
-      maxDurationMs: 0,
-      isPending: (response) => response.status === 'in_progress',
-      logger: spiedTrace(),
-    });
+  it('starts a replacement only after an explicit retry of an expired response', async () => {
+    vi.useFakeTimers({ now: new Date('2026-08-01T00:00:00.000Z') });
+    try {
+      const handler = createHandler();
+      const lifecycle = backgroundLifecycleInternals(handler);
+      const retrieve = vi.fn(async () => {
+        throw new Error('socket hang up');
+      });
+      const create = vi.fn(async () =>
+        createResponse('resp-replacement', { input_tokens: 12 }),
+      );
+      const client = { responses: { retrieve, create } } as unknown as OpenAI;
 
-    const thrown = await target
-      .waitForCompletion(
-        { responses: { retrieve: vi.fn() } } as unknown as OpenAI,
-        { id: 'resp_timeout', status: 'in_progress' },
-      )
-      .catch((err: unknown) => err);
+      await assert.rejects(
+        lifecycle.retrieveAndRemember(
+          client,
+          'resp-expired',
+          undefined,
+          undefined,
+        ),
+        /socket hang up/,
+      );
+      vi.advanceTimersByTime(3 * 60 * 60 * 1000);
 
-    assert.ok(thrown instanceof Error);
+      const timeout = await handler
+        .createResponse({
+          client,
+          messages: createMessages(1),
+          temperature: 0,
+        })
+        .catch((error: unknown) => error);
+
+      assert.ok(timeout instanceof Error);
+      assert.equal(normalizeProviderError(timeout).userRetryable, true);
+      assert.equal(isProviderErrorAutoRetryable(timeout), false);
+      assert.equal(create.mock.calls.length, 0);
+      assert.equal(retrieve.mock.calls.length, 1);
+      assert.equal(lifecycle.pendingResponseId, null);
+
+      const result = await handler.createResponse({
+        client,
+        messages: createMessages(1),
+        temperature: 0,
+      });
+
+      assert.equal(result.response.id, 'resp-replacement');
+      assert.equal(create.mock.calls.length, 1);
+      assert.equal(retrieve.mock.calls.length, 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
