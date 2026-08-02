@@ -522,7 +522,7 @@ export async function runToolUseFlow<C = unknown>(
       }
       if (shouldWriteShared) {
         if (migrationResult.migrated) {
-          logger.debug('Migrated legacy shared state to flat format');
+          logger.debug('Normalized persisted tool-use shared state');
         }
         flowRecord.shared = migratedData;
         await kv.write(
