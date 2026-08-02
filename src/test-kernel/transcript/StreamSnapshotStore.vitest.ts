@@ -2146,7 +2146,9 @@ describe('StreamSnapshotStore', () => {
 
     store.setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
-    await expect(store.load([STREAM])).rejects.toThrow('3 retries');
+    const refresh = store.load([STREAM]);
+    store.setTodos(STREAM, []);
+    await expect(refresh).rejects.toThrow('3 retries');
 
     store.setTodos(STREAM, [TODO]);
     writeSpy.mockRestore();

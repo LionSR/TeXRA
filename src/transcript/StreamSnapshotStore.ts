@@ -317,6 +317,8 @@ interface StreamRecord {
   // refresh/seed/mutate for it.
   seeded: boolean;
   seedChain: Promise<void> | undefined;
+  /** Distinguishes a refresh from later refreshes without changing on follow-ups. */
+  seedRefreshGeneration: number;
 
   // -- Overlays: patches applied eagerly to memory while a seed is in flight,
   // so `applyStreamData`'s post-seed reconciliation can replay them on top of
@@ -380,6 +382,7 @@ export class StreamSnapshotStore {
     runConfig: undefined,
     seeded: false,
     seedChain: undefined,
+    seedRefreshGeneration: 0,
     metaOverlay: false,
     overlays: {},
     kv: undefined,
@@ -1864,7 +1867,7 @@ export class StreamSnapshotStore {
     const remaining = this.dirtyWriteEntries(stream).length;
     if (remaining > 0) {
       throw new Error(
-        `Snapshot flush failed after ${MAX_FLUSH_WRITE_RETRIES} retries; ` +
+        `Sidecar writes remain dirty after ${MAX_FLUSH_WRITE_RETRIES} retries; ` +
           `${remaining} sidecar write(s) remain dirty.`,
       );
     }
@@ -2052,11 +2055,11 @@ export class StreamSnapshotStore {
 
   private refreshSeed(stream: StreamTabId): Promise<void> {
     const version = this.streamVersion(stream);
-    const existing = this.records.get(stream);
-    const wasSeeded = existing?.seeded ?? false;
-    if (existing) existing.seeded = false;
-    const prev =
-      existing?.seedChain?.catch(() => undefined) ?? Promise.resolve();
+    const record = this.getOrCreateRecord(stream);
+    const wasSeeded = record.seeded;
+    const refreshGeneration = ++record.seedRefreshGeneration;
+    record.seeded = false;
+    const prev = record.seedChain?.catch(() => undefined) ?? Promise.resolve();
     const work = prev.then(async () => {
       if (this.streamVersion(stream) !== version) return;
       await this.retryDirtyWrites(stream);
@@ -2067,14 +2070,17 @@ export class StreamSnapshotStore {
       await this.applyStreamData(stream, data);
     });
     const next = work.catch((error: unknown) => {
-      const record = this.records.get(stream);
-      if (record?.seedChain === next) {
-        record.seedChain = undefined;
-        record.seeded = wasSeeded;
+      const current = this.records.get(stream);
+      if (
+        current?.seedRefreshGeneration === refreshGeneration &&
+        this.streamVersion(stream) === version
+      ) {
+        current.seeded = wasSeeded;
+        if (current.seedChain === next) current.seedChain = undefined;
       }
       throw error;
     });
-    this.getOrCreateRecord(stream).seedChain = next;
+    record.seedChain = next;
     return next;
   }
 
