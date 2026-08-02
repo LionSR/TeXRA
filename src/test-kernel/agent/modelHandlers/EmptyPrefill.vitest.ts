@@ -5,7 +5,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { createPartFromText, type Content } from '@google/genai';
 import { describe, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
@@ -17,13 +16,14 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
+import type { Interactions } from '@google/genai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ChatMessages } from '@openrouter/sdk/models';
 
@@ -83,19 +83,19 @@ describe('model handler output initialization with no output file', () => {
     });
   });
 
-  it('Google GenAI preserves user parts when no output file exists', async () => {
+  it('Google Interactions preserves user content when no output file exists', async () => {
     await withMissingOutput(async (outputLocation) => {
-      const handler = new ModelHandlerGoogleGenAI(
+      const handler = new ModelHandlerGoogleInteractions(
         buildTestModelConfig({
           provider: ModelProvider.GOOGLE,
           capabilities: { supportsReasoning: false, supportsVision: false },
         }),
       );
       handler.setLogger({ ...noopTrace });
-      const messages: Content[] = [
+      const messages: Interactions.Step[] = [
         {
-          role: 'user',
-          parts: [createPartFromText('revise the document')],
+          type: 'user_input',
+          content: [{ type: 'text', text: 'revise the document' }],
         },
       ];
       const workspaceState = AgentWorkspaceState.create();
@@ -112,8 +112,8 @@ describe('model handler output initialization with no output file', () => {
       assert.equal(isComplete, false);
       assert.deepEqual(updatedMessages, [
         {
-          role: 'user',
-          parts: [createPartFromText('revise the document')],
+          type: 'user_input',
+          content: [{ type: 'text', text: 'revise the document' }],
         },
       ]);
       assert.equal(workspaceState.assembly.accumulatedOutput, '');
