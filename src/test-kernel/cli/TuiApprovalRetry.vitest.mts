@@ -112,7 +112,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
+import { hasCliApprovalDenied } from '@cli/runtime/approval/approvalPolicy';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   AgentCategory,
@@ -1210,53 +1210,41 @@ describe('TUI retry approvals', () => {
     expect(ordinaryPrepare.mock.calls[0]?.[1]?.aborted).toBe(true);
   });
 
-  it('invalidates pre-queue retry lookups when approvals are cleared', async () => {
-    let resolveLookup: ((value: boolean) => void) | undefined;
-    mocks.hasUsableApiKey.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveLookup = resolve;
-        }),
-    );
+  // Both invalidation triggers must reject a retry whose API-key lookup is
+  // still in flight, and must stay rejected once that lookup finally resolves.
+  it.each([
+    ['cleared', 'interrupted', () => clearApprovals()],
+    [
+      'unbound',
+      'unbound',
+      (handle: ReturnType<typeof tui>) => handle.dispose(),
+    ],
+  ] as const)(
+    'invalidates pre-queue retry lookups when approvals are %s',
+    async (_trigger, streamId, invalidate) => {
+      let resolveLookup: ((value: boolean) => void) | undefined;
+      mocks.hasUsableApiKey.mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveLookup = resolve;
+          }),
+      );
 
-    const { interactions } = tui();
-    const result = interactions.requestRetry?.(
-      relayRetry({ streamId: 'interrupted', provider: 'openai' }),
-    );
-    clearApprovals();
-    await expect(result).resolves.toEqual({ action: 'cancel' });
+      const handle = tui();
+      const result = handle.interactions.requestRetry?.(
+        relayRetry({ streamId, provider: 'openai' }),
+      );
+      invalidate(handle);
+      await expect(result).resolves.toEqual({ action: 'cancel' });
 
-    resolveLookup?.(true);
-    await Promise.resolve();
-    await Promise.resolve();
+      resolveLookup?.(true);
+      await Promise.resolve();
+      await Promise.resolve();
 
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(currentApproval.get()).toBeUndefined();
-  });
-
-  it('invalidates pre-queue retry lookups when approvals are unbound', async () => {
-    let resolveLookup: ((value: boolean) => void) | undefined;
-    mocks.hasUsableApiKey.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveLookup = resolve;
-        }),
-    );
-
-    const { interactions, dispose } = tui();
-    const result = interactions.requestRetry?.(
-      relayRetry({ streamId: 'unbound', provider: 'openai' }),
-    );
-    dispose();
-    await expect(result).resolves.toEqual({ action: 'cancel' });
-
-    resolveLookup?.(true);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(mocks.setCliApiMode).not.toHaveBeenCalled();
-    expect(currentApproval.get()).toBeUndefined();
-  });
+      expect(mocks.setCliApiMode).not.toHaveBeenCalled();
+      expect(currentApproval.get()).toBeUndefined();
+    },
+  );
 
   it('cancels an active retry modal when approvals are cleared', async () => {
     mocks.hasUsableApiKey.mockResolvedValue(false);

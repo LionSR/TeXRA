@@ -15,7 +15,6 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -128,10 +127,8 @@ function execPrepped(
   node: ToolUseDispatchNode<unknown>,
   prepped: SdkToolCall[],
 ): Promise<unknown[]> {
-  return withTestRunContext(
-    new SessionHostInteractions(),
-    'dispatch-test',
-    () => internals(node)._exec(prepped),
+  return withTestRunContext(node.services.runScope, () =>
+    internals(node)._exec(prepped),
   );
 }
 

@@ -258,7 +258,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET]: forwardToActiveView,
       [COMMON_COMMANDS.SWITCH_VIEW]: (data) => this.switchView(data),
       [PROGRESS_VIEW_COMMANDS.POP_OUT]: () => this.provider.popOutToEditor(),
-      [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.popBackToSidebar(),
+      [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.showInSidebar(),
 
       // First-tier shared progress command groups
       ...this.progressHost.commandHandlers,

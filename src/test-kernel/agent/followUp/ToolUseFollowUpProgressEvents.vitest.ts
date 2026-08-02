@@ -13,7 +13,11 @@ import {
   onFollowUpSent,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   clearAllStreamStatusesForTest,
   seedStreamStatusForTest,
@@ -255,11 +259,9 @@ describe('tool-use follow-up progress events', () => {
   it('does not append through stale active contexts after final status', async () => {
     const appendFollowUp = vi.fn();
 
-    seedStreamStatusForTest(
-      defaultSession().status,
-      streamId,
-      STREAM_PHASE.COMPLETED,
-    );
+    seedStreamStatusForTest(defaultSession().status, streamId, {
+      phase: STREAM_PHASE.COMPLETED,
+    });
     trackToolUseFlow({ appendFollowUp });
 
     const result = await submitFollowUp(streamId, 'late follow-up');
@@ -296,11 +298,10 @@ describe('tool-use follow-up progress events', () => {
   it('queues follow-ups for resuming streams through registry admission', async () => {
     const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
 
-    seedStreamStatusForTest(
-      defaultSession().status,
-      resumingStreamId,
-      STREAM_STATUS.RESUMING,
-    );
+    seedStreamStatusForTest(defaultSession().status, resumingStreamId, {
+      phase: STREAM_PHASE.RUNNING,
+      substate: STREAM_SUBSTATE.RESUMING,
+    });
 
     try {
       const result = await submitFollowUp(
@@ -332,11 +333,9 @@ describe('tool-use follow-up progress events', () => {
       agent: 'critic',
     });
 
-    seedStreamStatusForTest(
-      defaultSession().status,
-      parentStreamId,
-      STREAM_STATUS.STOPPED,
-    );
+    seedStreamStatusForTest(defaultSession().status, parentStreamId, {
+      phase: STREAM_PHASE.COMPLETED,
+    });
     defaultSession().executions.track(handle);
 
     try {

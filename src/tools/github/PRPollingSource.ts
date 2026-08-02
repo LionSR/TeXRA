@@ -78,7 +78,7 @@ import {
 } from './prTypes';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 
-function createInitialState(pr: PRKey): SubscriptionState {
+function createInitialState(pr: PRKey): PRSubscriptionState {
   return {
     pr,
     slug: `${pr.owner}/${pr.repo}`,
@@ -140,7 +140,7 @@ export function prKeyToString(k: PRKey): string {
   return prRef(`${k.owner}/${k.repo}`, k.pullNumber);
 }
 
-interface SubscriptionState extends BasePollSubscriptionState {
+export interface PRSubscriptionState extends BasePollSubscriptionState {
   pr: PRKey;
   slug: string;
   /** Initialized on first tick so we don't replay historical events. */
@@ -167,7 +167,7 @@ interface SubscriptionState extends BasePollSubscriptionState {
    * `pollOne`), so a future per-SHA field added here can't leak stale state
    * across a push — there's no separate list of fields to remember to clear.
    */
-  currentShaState: CurrentShaState | undefined;
+  currentShaState: PRCurrentShaState | undefined;
   state: 'open' | 'closed' | undefined;
   merged: boolean;
   /** Last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
@@ -181,7 +181,7 @@ interface SubscriptionState extends BasePollSubscriptionState {
 }
 
 /** Per-head-SHA state; reset wholesale whenever the head SHA changes. */
-interface CurrentShaState {
+export interface PRCurrentShaState {
   sha: string;
   /** Whether the one-shot "CI triggered" event has been emitted for `sha`. */
   ciStarted: boolean;
@@ -210,7 +210,7 @@ interface CurrentShaState {
 
 export class PRPollingSource extends PollingSourceBase<
   string,
-  SubscriptionState
+  PRSubscriptionState
 > {
   private nextAnnotationDrainKey: string | undefined;
 
@@ -280,14 +280,14 @@ export class PRPollingSource extends PollingSourceBase<
 
   protected formatErrorEvent(
     _key: string,
-    state: SubscriptionState,
+    state: PRSubscriptionState,
     detail: string,
   ): string {
     return formatSubscriptionError(state.slug, state.pr.pullNumber, detail);
   }
 
   protected override async afterTick(
-    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now: number,
   ): Promise<void> {
     await this.drainAnnotationQueues(entries, now);
@@ -295,7 +295,7 @@ export class PRPollingSource extends PollingSourceBase<
 
   protected async pollOne(
     key: string,
-    state: SubscriptionState,
+    state: PRSubscriptionState,
   ): Promise<void> {
     const { pr } = state;
     const prPath = `/repos/${pr.owner}/${pr.repo}/pulls/${pr.pullNumber}`;
@@ -636,7 +636,7 @@ export class PRPollingSource extends PollingSourceBase<
    * re-emitting duplicates against an unchanged check-runs response.
    */
   private enqueueAnnotationCandidates(
-    state: SubscriptionState,
+    state: PRSubscriptionState,
     runs: ReadonlyArray<GhCheckRun>,
   ): void {
     const currentShaState = state.currentShaState;
@@ -655,7 +655,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   private async drainAnnotationQueues(
-    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now = Date.now(),
   ): Promise<void> {
     const pendingEntries = this.orderAnnotationDrainEntries(entries, now);
@@ -693,9 +693,9 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   private orderAnnotationDrainEntries(
-    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now: number,
-  ): Array<readonly [string, SubscriptionState]> {
+  ): Array<readonly [string, PRSubscriptionState]> {
     const pendingEntries = entries.filter(
       ([key, state]) =>
         this.has(key) &&
@@ -714,7 +714,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   private advanceAnnotationDrainStart(
-    entries: ReadonlyArray<readonly [string, SubscriptionState]>,
+    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
   ): void {
     if (entries.length === 0) {
       this.nextAnnotationDrainKey = undefined;
@@ -737,7 +737,7 @@ export class PRPollingSource extends PollingSourceBase<
    * - Anything else (network, timeout): rotate to the back of the queue.
    */
   private async drainNextAnnotationRun(
-    state: SubscriptionState,
+    state: PRSubscriptionState,
     now: number,
   ): Promise<boolean> {
     const run = state.currentShaState?.pendingAnnotationRuns[0];
@@ -782,7 +782,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   private removePendingAnnotationRun(
-    state: SubscriptionState,
+    state: PRSubscriptionState,
     runId: number,
   ): void {
     if (!state.currentShaState) return;
@@ -791,7 +791,7 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   private emitCheckAnnotations(
-    state: SubscriptionState,
+    state: PRSubscriptionState,
     run: GhCheckRun,
     annotations: readonly GhCheckAnnotation[],
   ): void {

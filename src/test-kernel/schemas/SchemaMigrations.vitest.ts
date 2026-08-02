@@ -124,6 +124,35 @@ describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => 
   });
 });
 
+describe('OutputXmlSummarySchema — legacy documents field', () => {
+  it('drops the documents copy a pre-removal record still carries', () => {
+    const result = OutputXmlSummarySchema.parse({
+      tagContents: { documents: ['Body A'] },
+      documents: ['Body A'],
+      singleOutputFile: '/tmp/run/main.tex',
+      sourceLocation: null,
+    });
+
+    expect(result).toStrictEqual({
+      tagContents: { documents: ['Body A'] },
+      singleOutputFile: '/tmp/run/main.tex',
+      sourceLocation: null,
+    });
+  });
+
+  it('still rejects an unrecognized key on a record without documents', () => {
+    expect(() =>
+      OutputXmlSummarySchema.parse({ tagContents: {}, unexpected: 1 }),
+    ).toThrow();
+  });
+
+  it('rejects an unrecognized key alongside legacy documents', () => {
+    expect(() =>
+      OutputXmlSummarySchema.parse({ documents: [], unexpected: 1 }),
+    ).toThrow();
+  });
+});
+
 describe('ContextManagementDataSchema — legacy missing tokensAfter/utilizationAfter', () => {
   const legacyBase = {
     tokensBefore: 1000,

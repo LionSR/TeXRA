@@ -78,7 +78,7 @@ export class WebviewUpdater {
    * Update stream tabs in the webview.
    * Optionally includes lightweight stream metadata (backend-owned fields only).
    */
-  updateStreams(
+  private updateStreams(
     streams: StreamTabInfo[],
     activeStream: ActiveStreamId,
     streamStates?: Record<StreamTabId, StreamMetadata>,

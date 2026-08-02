@@ -3,8 +3,13 @@
 
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { GhCheckAnnotation, GhCheckRun } from '@tools/github/prTypes';
+import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
 import { mockGitHubClient } from '../support/githubClientMock';
+import {
+  createPRCurrentShaState,
+  createPRSubscriptionState,
+} from '../support/prPollingSourceState';
 
 // ---------------------------------------------------------------------------
 // PRPollingSourceAnnotationPages
@@ -19,24 +24,9 @@ interface AnnotationFetchSource {
   ): Promise<GhCheckAnnotation[]>;
 }
 
-interface CurrentShaState {
-  pendingAnnotationRuns: GhCheckRun[];
-}
-
-interface AnnotationDrainState {
-  pr: { owner: string; repo: string; pullNumber: number };
-  slug: string;
-  listeners: Set<(text: string) => void>;
-  annotationLevelByListener: Map<(text: string) => void, 'failure'>;
-  currentShaState: CurrentShaState | undefined;
-  lastSuccessAt: number;
-  consecutiveFailures: number;
-  skipPollUntilMs: number;
-}
-
 interface AnnotationDrainSource extends AnnotationFetchSource {
   drainAnnotationQueues(
-    entries: ReadonlyArray<readonly [string, AnnotationDrainState]>,
+    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now?: number,
   ): Promise<void>;
   has(key: string): boolean;
@@ -91,17 +81,12 @@ function checkRun(id: number): GhCheckRun {
   };
 }
 
-function drainState(runs: GhCheckRun[]): AnnotationDrainState {
-  return {
-    pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
-    slug: 'owner/repo',
-    listeners: new Set(),
-    annotationLevelByListener: new Map(),
-    currentShaState: { pendingAnnotationRuns: runs },
-    lastSuccessAt: Date.now(),
-    consecutiveFailures: 0,
-    skipPollUntilMs: 0,
-  };
+function drainState(runs: GhCheckRun[]): PRSubscriptionState {
+  return createPRSubscriptionState({
+    currentShaState: createPRCurrentShaState('abcdef1234567890', {
+      pendingAnnotationRuns: runs,
+    }),
+  });
 }
 
 describe('PRPollingSource annotation pagination', () => {

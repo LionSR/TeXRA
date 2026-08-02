@@ -23,15 +23,30 @@ import { RunUsageMapSchema } from './usage';
 // appear on either kind — e.g. a subagent launched via a specific CLI tool
 // (`options.toolName` in `createChildStream`), or a background process running
 // a named tool (`bash`, `codex`) — so it stays a shared, optional field.
+//
+// Where a roster comes from, since the legacy arms below are only meaningful
+// against it. The roster is liveness state, and every artifact we have written
+// carries an empty one: `assembleSnapshot` does not set `subagents` (it takes
+// the `[]` prefault) and every hydrate clamps it, `replayTrace()` included.
+// It still crosses two parse boundaries, because `StreamSnapshotSchema` picks
+// `subagents` from `BackendOwnedFieldsSchema`: the progress-view wire
+// (`UPDATE_STREAMS`/`STREAM_STATE`), and an exported `trace.json`, which the
+// standalone viewer re-parses — the same permanent second boundary documented
+// on `GroupLogPayloadSchema` in `./taskGroup`. So the legacy arms guard
+// cross-version input on those two boundaries, not our own on-disk state.
+//
+// Retire the roster's legacy arms — `fillLegacyActiveChildKind` and the "still
+// parse" halves of the optional fields below — on 2026-11-01, with the other
+// roster/task-group compat reads. They were added defensively against
+// persisted rosters that, per the note above, no release ever wrote.
 
 const ActiveChildInfoBaseSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
   /**
-   * Current execution phase. The roster is liveness state: it is rebuilt from
-   * live handles on every load and never persisted (`StreamSnapshot` clamps
-   * `subagents` to `[]` on hydrate, and `assembleSnapshot` never writes it),
-   * so there is no legacy on-disk vocabulary to normalize here.
+   * Current execution phase. Takes `StreamPhase` only: no artifact carries a
+   * roster (see the note above), so no input can hold the retired 7-value
+   * `StreamStatus` vocabulary and there is nothing to normalize here.
    */
   status: StreamPhaseSchema.optional(),
   /** Epoch milliseconds when the child execution began. */
@@ -55,18 +70,19 @@ const ActiveChildInfoBaseSchema = z.object({
    * know `phase`) — `WorkflowCallIdentity` carries no execution or stream id.
    * Immutable per attempt: it is stamped on the handle before the first
    * `child.activity` emission, so retained (finished) rows keep it. Optional
-   * so persisted rosters written before this field still parse.
+   * because only a workflow-script run's children have an owning phase, and
+   * so replayed rows written before this field still parse.
    */
   workflowPhase: z.string().optional(),
 });
 
 /**
- * Persisted/replayed ActiveChildInfo entries predate the `kind` discriminant,
- * when subagent vs. process was inferred from array membership
- * (`subagents` vs. `processes`) or from whether `childStreamId`
- * happened to be set. `childStreamId` was — and still is — exclusive to
- * subagents, so backfill `kind` from that same signal on read, matching the
- * legacy inference, instead of failing to parse.
+ * Replayed ActiveChildInfo entries written before the `kind` discriminant
+ * landed (2026-07-06) inferred subagent vs. process from array membership
+ * (`subagents` vs. `processes`) or from whether `childStreamId` happened to be
+ * set. `childStreamId` was — and still is — exclusive to subagents, so
+ * backfill `kind` from that same signal on read, matching the legacy
+ * inference, instead of failing to parse.
  */
 function fillLegacyActiveChildKind(raw: unknown): unknown {
   if (

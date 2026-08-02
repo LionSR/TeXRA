@@ -88,7 +88,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
 
     expect(resolved).toEqual({
       streamId,
-      source: 'streamDataMeta',
       exactExecutionCandidateStreamIds: [streamId],
     });
   });
@@ -147,10 +146,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
 
-    expect(resolved).toEqual({
-      streamId,
-      source: 'executionMeta',
-    });
+    expect(resolved).toEqual({ streamId });
     await expect(
       getExecutionStore(executionId).readMeta(),
     ).resolves.toMatchObject({
@@ -176,7 +172,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
     expect(resolved).toEqual({
       streamId,
-      source: 'streamDataMeta',
       exactExecutionCandidateStreamIds: [streamId],
     });
     await expect(
@@ -199,7 +194,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
       }),
     ).resolves.toEqual({
-      source: 'streamDataMeta',
       exactExecutionCandidateStreamIds: [streamId, resumedStream],
     });
   });
@@ -222,7 +216,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
     expect(resolved).toEqual({
-      source: 'streamDataMeta',
       exactExecutionCandidateStreamIds: [firstStream, secondStream],
     });
   });
@@ -249,7 +242,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamLogStore: logStore,
     });
     expect(resolved).toEqual({
-      source: 'streamDataMeta',
       exactExecutionCandidateStreamIds: [workPlanStream, logStream],
     });
     expect(
@@ -274,7 +266,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
       }),
     ).resolves.toEqual({
-      source: 'streamDataMeta',
       associatedStreamIds: [firstChild, secondChild],
     });
   });
@@ -294,7 +285,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       resolvePersistedStreamIdForExecution(executionId, {
         snapshotStore: new StreamSnapshotStore(),
       }),
-    ).resolves.toEqual({ streamId, source: 'streamDataMeta' });
+    ).resolves.toEqual({ streamId });
   });
 
   it('preserves the legacy streamData suffix fallback', async () => {
@@ -312,7 +303,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
       }),
     ).resolves.toEqual({
       streamId: first,
-      source: 'streamDataSuffix',
       fallbackStreamIds: [second],
     });
   });
@@ -328,9 +318,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
         streamLogStore: logs,
       }),
-    ).resolves.toEqual({
-      streamId,
-      source: 'streamLogsSuffix',
-    });
+    ).resolves.toEqual({ streamId });
   });
 });

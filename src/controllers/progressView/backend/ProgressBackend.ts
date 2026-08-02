@@ -15,6 +15,7 @@ import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater
 import {
   ProgressFactApplier,
   type GetProgressStreamControls,
+  type ProgressRunFactEvent,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 import {
@@ -422,7 +423,9 @@ export class ProgressBackend {
           if (sessionEvent.scope !== 'run') return;
           this.factApplier.handleRunFact(
             sessionEvent.streamId,
-            sessionEvent.event,
+            // Narrowed by the subscription filter below, which admits only
+            // `RUN_FACT_EVENT_TYPES`.
+            sessionEvent.event as ProgressRunFactEvent,
           );
         },
         { scope: 'run', types: RUN_FACT_EVENT_TYPES },

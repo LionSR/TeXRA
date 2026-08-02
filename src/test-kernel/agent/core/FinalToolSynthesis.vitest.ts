@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { createToolUseRoundFlow } from '@agent/core/flows/ToolUseRoundFlow';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { CreateResponseOptions } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { withTestRunContext } from '../progressTestUtils';
@@ -62,10 +61,8 @@ describe('final-tool synthesis turn', () => {
   it('keeps exploration unforced, then forces exactly one final turn', async () => {
     const { requests, services, shared } = buildRound(true);
 
-    await withTestRunContext(
-      new SessionHostInteractions(),
-      'final-tool-synthesis',
-      () => createToolUseRoundFlow().setServices(services).run(shared),
+    await withTestRunContext(services.runScope, () =>
+      createToolUseRoundFlow().setServices(services).run(shared),
     );
 
     expect(requests.map((request) => request.finalTool)).toEqual([
@@ -84,10 +81,8 @@ describe('final-tool synthesis turn', () => {
   it('asks once without forcing when the provider cannot force tools', async () => {
     const { requests, services, shared } = buildRound(false);
 
-    await withTestRunContext(
-      new SessionHostInteractions(),
-      'final-tool-floor',
-      () => createToolUseRoundFlow().setServices(services).run(shared),
+    await withTestRunContext(services.runScope, () =>
+      createToolUseRoundFlow().setServices(services).run(shared),
     );
 
     expect(requests.map((request) => request.finalTool)).toEqual([

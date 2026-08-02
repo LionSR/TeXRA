@@ -1,5 +1,3 @@
-import { strict as assert } from 'node:assert';
-
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -448,10 +446,10 @@ describe('toOpenAITools additional coverage', () => {
     ];
 
     const tools = toOpenAITools(defs);
-    assert.equal(tools.length, 1);
-    assert.equal(tools[0].type, 'function');
-    assert.equal(tools[0].function.name, 'delegate_workflow');
-    assert.equal(tools[0].function.strict, undefined);
+    expect(tools.length).toBe(1);
+    expect(tools[0].type).toBe('function');
+    expect(tools[0].function.name).toBe('delegate_workflow');
+    expect(tools[0].function.strict).toBe(undefined);
   });
 });
 
@@ -471,11 +469,11 @@ describe('toOpenAIResponseTools', () => {
     ];
 
     const tools = toOpenAIResponseTools(defs);
-    assert.equal(tools.length, 1);
+    expect(tools.length).toBe(1);
     const tool = tools[0] as FunctionTool;
-    assert.equal(tool.type, 'function');
-    assert.equal(tool.name, 'echo');
-    assert.deepEqual(tool.parameters, defs[0].parameters);
+    expect(tool.type).toBe('function');
+    expect(tool.name).toBe('echo');
+    expect(tool.parameters).toStrictEqual(defs[0].parameters);
   });
 
   // web_search collapses to the native WebSearchTool when (and only when) the
@@ -501,8 +499,8 @@ describe('toOpenAIResponseTools', () => {
     },
   ])('$label', ({ defs, options }) => {
     const tools = toOpenAIResponseTools(defs as ToolDefinition[], options);
-    assert.equal(tools.length, 1);
-    assert.equal(tools[0].type, 'web_search');
+    expect(tools.length).toBe(1);
+    expect(tools[0].type).toBe('web_search');
   });
 
   // Any tool stays a plain function tool when native web search is off, which is
@@ -530,10 +528,10 @@ describe('toOpenAIResponseTools', () => {
     const tools = options
       ? toOpenAIResponseTools(defs, options)
       : toOpenAIResponseTools(defs);
-    assert.equal(tools.length, 1);
+    expect(tools.length).toBe(1);
     const tool = tools[0] as FunctionTool;
-    assert.equal(tool.type, 'function');
-    assert.equal(tool.name, def.name);
+    expect(tool.type).toBe('function');
+    expect(tool.name).toBe(def.name);
   });
 
   it('keeps a shadowing web_search definition as a function tool', () => {
@@ -548,9 +546,9 @@ describe('toOpenAIResponseTools', () => {
       { supportsNativeWebSearch: true },
     );
 
-    assert.equal(tools.length, 1);
-    assert.equal(tools[0].type, 'function');
-    assert.equal((tools[0] as FunctionTool).name, 'web_search');
+    expect(tools.length).toBe(1);
+    expect(tools[0].type).toBe('function');
+    expect((tools[0] as FunctionTool).name).toBe('web_search');
   });
 
   it('filters out function tools when supportsFunctionCalling is false', () => {
@@ -566,7 +564,7 @@ describe('toOpenAIResponseTools', () => {
     const tools = toOpenAIResponseTools(defs, {
       supportsFunctionCalling: false,
     });
-    assert.equal(tools.length, 0);
+    expect(tools.length).toBe(0);
   });
 });
 
@@ -577,7 +575,7 @@ describe('toGoogleTools', () => {
 
   it('returns empty array for empty input', () => {
     const tools = toGoogleTools([]);
-    assert.deepEqual(tools, []);
+    expect(tools).toStrictEqual([]);
   });
 
   // Every tool (including web_search) becomes a function declaration wrapped in a
@@ -616,12 +614,11 @@ describe('toGoogleTools', () => {
     },
   ])('$label', ({ defs, names }) => {
     const tools = toGoogleTools(defs as ToolDefinition[]);
-    assert.equal(tools.length, 1);
+    expect(tools.length).toBe(1);
     const tool = tools[0] as GeminiTool;
-    assert.equal(tool.googleSearch, undefined);
-    assert.ok(tool.functionDeclarations);
-    assert.deepEqual(
-      tool.functionDeclarations?.map((fd) => fd.name),
+    expect(tool.googleSearch).toBe(undefined);
+    expect(tool.functionDeclarations).toBeTruthy();
+    expect(tool.functionDeclarations?.map((fd) => fd.name)).toStrictEqual(
       names,
     );
   });
@@ -657,23 +654,23 @@ describe('toGoogleTools', () => {
     const params = tool.functionDeclarations?.[0]
       .parametersJsonSchema as Record<string, unknown>;
 
-    assert.equal(params.type, 'object');
-    assert.equal(params.oneOf, undefined);
-    assert.equal(params.anyOf, undefined);
-    assert.equal(params.allOf, undefined);
+    expect(params.type).toBe('object');
+    expect(params.oneOf).toBe(undefined);
+    expect(params.anyOf).toBe(undefined);
+    expect(params.allOf).toBe(undefined);
 
     const properties = params.properties as Record<
       string,
       Record<string, unknown>
     >;
     // Discriminator collapses literal branches into an enum.
-    assert.deepEqual(properties.command.enum, ['ask', 'read', 'list']);
-    assert.equal(properties.command.type, 'string');
+    expect(properties.command.enum).toStrictEqual(['ask', 'read', 'list']);
+    expect(properties.command.type).toBe('string');
     // Branch-specific props are merged in.
-    assert.ok(properties.question);
-    assert.ok(properties.thread_id);
-    assert.ok(properties.status);
+    expect(properties.question).toBeTruthy();
+    expect(properties.thread_id).toBeTruthy();
+    expect(properties.status).toBeTruthy();
     // Only command is required by every branch.
-    assert.deepEqual(params.required, ['command']);
+    expect(params.required).toStrictEqual(['command']);
   });
 });

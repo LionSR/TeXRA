@@ -12,7 +12,7 @@ import * as logger from '@logger/logUtils';
 import { pathToLocation } from '@utils/files';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
-const CHANNEL = 'TestCommands';
+const CHANNEL = 'FigCommands';
 
 export async function handleExtractTikzFigures(): Promise<void> {
   await runGuardedLatexCommand(

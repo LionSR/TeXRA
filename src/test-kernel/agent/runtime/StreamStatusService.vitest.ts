@@ -7,7 +7,6 @@ import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_PHASE,
-  STREAM_STATUS,
   STREAM_SUBSTATE,
   type StreamPhase,
   type StreamTabId,
@@ -48,11 +47,11 @@ describe('StreamStatusMachine', () => {
   ) as StreamTransitionCause[];
 
   it('keeps stream status state per instance', () => {
-    const first = new StreamStatusMachine();
-    const second = new StreamStatusMachine();
+    const first = new StreamStatusMachine(new SessionEventHub());
+    const second = new StreamStatusMachine(new SessionEventHub());
     const streamId = 'stream-status-instance-test' as StreamTabId;
 
-    seedStreamStatusForTest(first, streamId, STREAM_PHASE.WAITING);
+    seedStreamStatusForTest(first, streamId, { phase: STREAM_PHASE.WAITING });
 
     expect(first.get(streamId)).toBe(STREAM_PHASE.WAITING);
     expect(second.get(streamId)).toBeUndefined();
@@ -83,10 +82,10 @@ describe('StreamStatusMachine', () => {
     for (const from of [undefined, ...phases]) {
       for (const to of phases) {
         for (const cause of causes) {
-          const machine = new StreamStatusMachine();
+          const machine = new StreamStatusMachine(new SessionEventHub());
           const streamId =
             `stream-status-table:${from ?? 'none'}:${to}:${cause}` as StreamTabId;
-          if (from) seedStreamStatusForTest(machine, streamId, from);
+          if (from) seedStreamStatusForTest(machine, streamId, { phase: from });
 
           const accepted = machine.transition(streamId, to, cause);
 
@@ -100,7 +99,7 @@ describe('StreamStatusMachine', () => {
   });
 
   it('keeps reservations outside the transition table', () => {
-    const machine = new StreamStatusMachine();
+    const machine = new StreamStatusMachine(new SessionEventHub());
     const streamId = 'stream-status-reservation-test' as StreamTabId;
 
     expect(machine.tryAcquire(streamId)).toBe(true);
@@ -128,7 +127,9 @@ describe('StreamStatusMachine', () => {
       'stream-status-terminal-waiting-repair',
     );
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.CANCELLED);
+    seedStreamStatusForTest(machine, streamId, {
+      phase: STREAM_PHASE.CANCELLED,
+    });
 
     expect(machine.transitionToWaiting(streamId, 'restart-repair')).toBe(true);
 
@@ -159,7 +160,7 @@ describe('StreamStatusMachine', () => {
       `stream-status-waiting-terminal-${cause}`,
     );
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
+    seedStreamStatusForTest(machine, streamId, { phase: STREAM_PHASE.WAITING });
 
     expect(
       machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED, cause),
@@ -220,7 +221,9 @@ describe('StreamStatusMachine', () => {
       'stream-status-matching-terminal',
     );
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.CANCELLED);
+    seedStreamStatusForTest(machine, streamId, {
+      phase: STREAM_PHASE.CANCELLED,
+    });
 
     expect(
       machine.transitionToTerminal(
@@ -239,7 +242,10 @@ describe('StreamStatusMachine', () => {
       'stream-status-clear-running-substate',
     );
 
-    seedStreamStatusForTest(machine, streamId, STREAM_STATUS.RESUMING);
+    seedStreamStatusForTest(machine, streamId, {
+      phase: STREAM_PHASE.RUNNING,
+      substate: STREAM_SUBSTATE.RESUMING,
+    });
 
     expect(machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume')).toBe(
       true,
@@ -263,7 +269,7 @@ describe('StreamStatusMachine', () => {
       'stream-status-noop-running-resume',
     );
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.RUNNING);
+    seedStreamStatusForTest(machine, streamId, { phase: STREAM_PHASE.RUNNING });
 
     expect(machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume')).toBe(
       true,
@@ -274,8 +280,8 @@ describe('StreamStatusMachine', () => {
     expect(statusEvents()).toEqual([]);
   });
 
-  it('rolls back reservation state identically with and without a hub', () => {
-    const hidden = new StreamStatusMachine();
+  it('rolls back reservation state identically with and without a subscriber', () => {
+    const hidden = new StreamStatusMachine(new SessionEventHub());
     const events = new SessionEventHub();
     const observed = new StreamStatusMachine(events);
     const published = recordSessionEvents(events, { scope: 'session' });
@@ -329,7 +335,9 @@ describe('StreamStatusMachine', () => {
       'stream-status-reservation-overlay',
     );
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.COMPLETED);
+    seedStreamStatusForTest(machine, streamId, {
+      phase: STREAM_PHASE.COMPLETED,
+    });
 
     expect(machine.tryAcquire(streamId)).toBe(true);
     expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
@@ -337,7 +345,9 @@ describe('StreamStatusMachine', () => {
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle'),
     ).toBe(true);
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.COMPLETED);
+    seedStreamStatusForTest(machine, streamId, {
+      phase: STREAM_PHASE.COMPLETED,
+    });
     expect(machine.tryAcquire(streamId)).toBe(true);
     machine.releaseIfReserved(streamId);
 
@@ -414,7 +424,7 @@ describe('StreamStatusMachine', () => {
     );
     const trace = new TraceEmitter();
 
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
+    seedStreamStatusForTest(machine, streamId, { phase: STREAM_PHASE.WAITING });
 
     expect(
       machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {

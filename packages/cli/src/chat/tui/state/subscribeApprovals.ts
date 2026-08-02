@@ -31,15 +31,17 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
+  toApprovalSettlement,
+  toToolEditResult,
+} from '@cli/runtime/approvalAdapter';
+import {
   askUserQuestionDenial,
   immediateDecision,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
-  toApprovalSettlement,
-  toToolEditResult,
-} from '@cli/runtime/approvalAdapter';
+} from '@cli/runtime/approval/approvalPolicy';
 import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';

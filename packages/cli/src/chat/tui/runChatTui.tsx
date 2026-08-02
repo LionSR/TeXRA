@@ -418,10 +418,13 @@ export async function runChat(
     stdout: process.stdout,
   });
 
-  // Per-stream sidecar data (todos, plan, usage, output files) is persisted by
-  // the session's own snapshot store, so a `texra resume` restores the full
-  // display — the same streamData/{id}/* files the extension/desktop read.
-  const artifactSession = defaultSession();
+  // The TUI owns exactly one runtime session for its whole lifetime; resolve it
+  // once here so every path below propagates that owner instead of re-resolving
+  // the process default. Per-stream sidecar data (todos, plan, usage, output
+  // files) is persisted by the session's own snapshot store, so a `texra resume`
+  // restores the full display — the same streamData/{id}/* files the
+  // extension/desktop read.
+  const runtimeSession = defaultSession();
 
   const disposers: Array<() => void> = [];
   // Crash safety: if the process dies outside the orderly teardown below
@@ -434,7 +437,7 @@ export async function runChat(
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposers.push(terminalTitleUpdates.dispose);
   disposers.push(subscribeStreamLog());
-  disposers.push(subscribeStreamArtifacts(artifactSession.snapshots));
+  disposers.push(subscribeStreamArtifacts(runtimeSession.snapshots));
   disposers.push(subscribeStreamStatus());
 
   const session = new TuiSession();
@@ -449,7 +452,7 @@ export async function runChat(
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
-      defaultSession().executions.getToolUseFlowContext(session.streamId),
+      runtimeSession.executions.getToolUseFlowContext(session.streamId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -465,7 +468,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? defaultSession().executions.getToolUseFlowContext(session.streamId)
+      ? runtimeSession.executions.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -502,7 +505,7 @@ export async function runChat(
     getSessionContext: currentSessionContext,
     disposers,
     followUpQueue,
-    snapshotStore: artifactSession.snapshots,
+    snapshotStore: runtimeSession.snapshots,
   });
   disposers.push(
     setCliAgentResumeHandler({
@@ -542,7 +545,7 @@ export async function runChat(
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so transcript projection can't replay
     // the cleared conversation into the fresh `<Static>` scrollback.
-    const store = defaultSession().transcripts;
+    const store = runtimeSession.transcripts;
     for (const streamId of streamsSignal.get().keys()) {
       store.delete(streamId).catch(() => {
         // Best-effort: a KV failure leaves the log on disk, but the run
@@ -719,7 +722,7 @@ export async function runChat(
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
       const emitQueuedFollowUpsChanged = (streamId: StreamTabId): void => {
-        defaultSession().events.emit({
+        runtimeSession.events.emit({
           scope: 'session',
           event: {
             type: 'updateQueuedFollowUps',
@@ -789,7 +792,7 @@ export async function runChat(
       canInterruptActiveRun={canInterruptActiveRun}
       canInterruptStream={(streamId) =>
         (streamId === session.streamId && canInterruptActiveRun()) ||
-        defaultSession().status.isInFlight(streamId)
+        runtimeSession.status.isInFlight(streamId)
       }
       canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
@@ -801,15 +804,15 @@ export async function runChat(
       onSuspend={() => exitController.handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        defaultSession().executions.kill(executionId, {
+        runtimeSession.executions.kill(executionId, {
           detachActiveChildren: detachSubagentsOnStop(),
         });
       }}
       onSkipExecution={(executionId) => {
-        defaultSession().workflowControls.skip(executionId as ExecutionId);
+        runtimeSession.workflowControls.skip(executionId as ExecutionId);
       }}
       onRetryExecution={(executionId) => {
-        defaultSession().workflowControls.retry(executionId as ExecutionId);
+        runtimeSession.workflowControls.retry(executionId as ExecutionId);
       }}
       history={inputHistory}
     />,
@@ -851,7 +854,7 @@ export async function runChat(
     disposers,
     followUpQueue,
     getApprovalPolicy,
-    flushArtifacts: () => artifactSession.flushArtifacts(),
+    flushArtifacts: () => runtimeSession.flushArtifacts(),
     repaintAfterTerminalResume: () =>
       viewportController.repaintAfterTerminalResume(),
     suspendTerminalTitle: terminalTitleUpdates.suspend,
@@ -878,7 +881,7 @@ export async function runChat(
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn," alongside the StatusBar pill.
   disposers.push(
-    defaultSession().events.subscribeStatus((change) => {
+    runtimeSession.events.subscribeStatus((change) => {
       if (
         change.streamId === session.streamId &&
         change.phase === STREAM_PHASE.WAITING &&

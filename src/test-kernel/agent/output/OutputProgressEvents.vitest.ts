@@ -47,7 +47,6 @@ function createAgentLocation(path: string): AgentFileLocation {
 
 const emptyXmlSummary: OutputXmlSummary = {
   tagContents: {},
-  documents: [],
   singleOutputFile: null,
   sourceLocation: null,
 };
@@ -192,8 +191,7 @@ describe('output progress events', () => {
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
     try {
       const transition = await withTestRunContext(
-        host,
-        'stream:output-node',
+        outputNode.services.runScope,
         () =>
           outputNode.post(
             shared,
@@ -247,7 +245,7 @@ describe('output progress events', () => {
       createCompileFailureFixture();
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
-    await withTestRunContext(host, 'stream:compile-context', () =>
+    await withTestRunContext(outputNode.services.runScope, () =>
       outputNode.post(
         shared,
         {
@@ -286,7 +284,7 @@ describe('output progress events', () => {
       createCompileFailureFixture();
     const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
 
-    await withTestRunContext(host, 'stream:compile-context-disabled', () =>
+    await withTestRunContext(outputNode.services.runScope, () =>
       outputNode.post(
         shared,
         {
@@ -324,7 +322,7 @@ describe('output progress events', () => {
       },
     } as unknown as ReflectionFlowShared;
 
-    await withTestRunContext(host, 'stream:compile-context-ok', () =>
+    await withTestRunContext(outputNode.services.runScope, () =>
       outputNode.post(
         shared,
         {

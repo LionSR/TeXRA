@@ -709,19 +709,12 @@ export abstract class ModelHandler<
     return this.getBaseUrl() ?? `${this.config.provider}:default`;
   }
 
-  // Provider-identity getters (isAnthropic/isOpenai/isGoogle/isDeepSeek/
-  // isKimi/isMiniMax) were removed (#7101): each had exactly one or two call
-  // sites, all of which already had `this.config` (or, for the
-  // `ModelHandlerOpenRouterNative` combinators below, `this.config.provider`)
-  // in scope. `config.provider` — already part of the `IModelHandler` port —
-  // *is* the canonical profile read; a same-shaped getter wrapping it added
-  // no capability-profile value, just base-class surface. Callers now compare
-  // `config.provider` against `ModelProvider` directly. The remaining base
-  // predicates below fall into the other two buckets from the #7101 triage:
-  // runtime combinators over profile data (`shouldUseServerSideKeys`,
-  // `getEffectiveReasoningEffort`) and genuinely per-provider behavior that
-  // stays an overridable method/getter (`supportsManualCompaction`,
-  // `isBackgroundModeActive`, etc.).
+  // Provider-identity getters (isAnthropic/isOpenai/isGoogle/…) were removed
+  // (#7101): `config.provider` is already part of the `IModelHandler` port, so
+  // callers compare it against `ModelProvider` directly. The #7101 triage of
+  // every remaining predicate is complete: each carries its own note on why it
+  // stays (runtime combinator, or genuinely per-provider behavior), so there is
+  // nothing left to fold here.
 
   /**
    * Whether parallel tool calls in a single turn must be batched into one

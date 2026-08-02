@@ -499,7 +499,6 @@ export class LatexMediaManager {
     files: FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-    supportsVision: boolean,
     {
       figureMode,
       extraMediaFiles = [],
@@ -516,7 +515,7 @@ export class LatexMediaManager {
       logTikzSummary?: boolean;
     },
   ): Promise<void> {
-    if (files.length === 0 || !supportsVision) {
+    if (files.length === 0) {
       return;
     }
 
@@ -574,10 +573,9 @@ export class LatexMediaManager {
     inputFiles: FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-    supportsVision: boolean,
     extraMediaFiles: readonly FileLocation[] = [],
   ): Promise<void> {
-    await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
+    await this.processFiles(inputFiles, workspaceState, cfg, {
       figureMode: 'extract',
       extraMediaFiles,
       logTikzSummary: true,
@@ -595,9 +593,8 @@ export class LatexMediaManager {
     outputFiles: FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-    supportsVision: boolean,
   ): Promise<void> {
-    await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
+    await this.processFiles(outputFiles, workspaceState, cfg, {
       figureMode: 'mirror',
     });
   }

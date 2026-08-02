@@ -1,11 +1,6 @@
-// Node imports
 import { readFile, unlink } from 'node:fs/promises';
-
-// Third-party imports
 import writeFileAtomic from 'write-file-atomic';
 import { z } from 'zod';
-
-// Common imports
 import { isFileNotFoundError } from '@common/errors';
 
 const LEGACY_STREAMS_KEY = 'restoredStreams';

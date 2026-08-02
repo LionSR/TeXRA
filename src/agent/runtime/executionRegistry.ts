@@ -101,6 +101,21 @@ export type ManualCompactionRequestResult =
     };
 
 /**
+ * A caller bringing its own status machine must bring the hub that machine
+ * publishes on: the registry subscribes to status facts there, and a second hub
+ * would leave that subscription listening where nothing is ever published.
+ */
+type ExecutionRegistryInit =
+  | {
+      readonly streamStatus: StreamStatusMachine;
+      readonly events: SessionEventHub;
+    }
+  | {
+      readonly streamStatus?: undefined;
+      readonly events?: SessionEventHub;
+    };
+
+/**
  * Session-owned registry of active executions and their change listeners.
  *
  * One instance belongs to each {@link SessionHandle}, which binds it to that
@@ -148,24 +163,10 @@ export class ExecutionRegistry {
     (activation: ChildExecutionActivation, active: boolean) => void
   >();
 
-  constructor(
-    options: {
-      readonly streamStatus?: StreamStatusMachine;
-      readonly events?: SessionEventHub;
-      readonly publishResult?: (
-        event: ResultEvent,
-        streamId: StreamTabId,
-      ) => void;
-    } = {},
-  ) {
-    const events =
-      options.events ??
-      options.streamStatus?.sessionEvents ??
-      new SessionEventHub();
-    const streamStatus =
-      options.streamStatus ?? new StreamStatusMachine(events);
-    this.streamStatus = streamStatus;
-    this.attachSessionEvents(events, options.publishResult);
+  constructor(options: ExecutionRegistryInit = {}) {
+    const events = options.events ?? new SessionEventHub();
+    this.streamStatus = options.streamStatus ?? new StreamStatusMachine(events);
+    this.attachSessionEvents(events);
   }
 
   attachSessionEvents(
@@ -174,7 +175,6 @@ export class ExecutionRegistry {
   ): void {
     this.disposeStatusSubscription();
     this.events = events;
-    this.streamStatus.attachSessionEvents(events);
     if (publishResult) this.publishResult = publishResult;
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). SessionEventHub dispatch is synchronous, so
@@ -575,14 +575,12 @@ export class ExecutionRegistry {
   detachActiveChildren(parentStreamId: StreamTabId): void {
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
-      if (handle instanceof AgentExecutionHandle) {
-        this.approvals?.detachStreamFromParent(handle.childStreamId);
-        handle.detach();
-        this.emitParentStreamUpdate({
-          childStreamId: handle.childStreamId,
-          parentStreamId: null,
-        });
-      }
+      this.approvals?.detachStreamFromParent(handle.childStreamId);
+      handle.detach();
+      this.emitParentStreamUpdate({
+        childStreamId: handle.childStreamId,
+        parentStreamId: null,
+      });
     }
     this.emitChildActivity(parentStreamId);
   }
@@ -728,12 +726,7 @@ export class ExecutionRegistry {
   getActiveChildren(parentStreamId: StreamTabId): ActiveChildInfo[] {
     const result: ActiveChildInfo[] = [];
     for (const handle of this.handles.values()) {
-      if (
-        !(handle instanceof AgentExecutionHandle) ||
-        !isChildExecution(handle, parentStreamId)
-      ) {
-        continue;
-      }
+      if (!isChildExecution(handle, parentStreamId)) continue;
       const { status, elapsed } = this.getStatus(handle);
       result.push({
         kind: 'subagent',

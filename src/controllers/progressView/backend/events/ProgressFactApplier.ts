@@ -82,6 +82,9 @@ export type GetProgressStreamControls = (
 
 type RunFactType = (typeof RUN_FACT_EVENT_TYPES)[number];
 
+/** The run-fact vocabulary `RUN_FACT_EVENT_TYPES` subscriptions deliver. */
+export type ProgressRunFactEvent = Extract<AgentEvent, { type: RunFactType }>;
+
 type RunFactHandlers = {
   [K in RunFactType]: (
     streamId: StreamTabId,
@@ -246,20 +249,15 @@ export class ProgressFactApplier {
     });
   }
 
-  handleRunFact(streamId: StreamTabId, event: AgentEvent): void {
-    // Widen the exhaustive table to the full event union so an unlisted type
-    // (not in the subscription filter, but defensively tolerated) is a no-op
-    // rather than a lookup on a missing key.
-    const handlers = this.runFactHandlers as Partial<
-      Record<
-        AgentEvent['type'],
-        (streamId: StreamTabId, event: AgentEvent) => void | Promise<void>
-      >
-    >;
-    const handler = handlers[event.type];
-    if (!handler) return;
+  handleRunFact(streamId: StreamTabId, event: ProgressRunFactEvent): void {
+    // The table is exhaustive over `RunFactType`, so a slot always exists;
+    // TypeScript just cannot correlate a union event with its own slot.
+    const handle = this.runFactHandlers[event.type] as (
+      streamId: StreamTabId,
+      event: ProgressRunFactEvent,
+    ) => void | Promise<void>;
     this.applyFact(`failed to handle ${event.type} fact`, () =>
-      handler(streamId, event),
+      handle(streamId, event),
     );
   }
 
