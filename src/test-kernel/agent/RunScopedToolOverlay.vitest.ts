@@ -58,6 +58,7 @@ describe('run-scoped tool overlay', () => {
       streamId,
       agentName: 'chat',
       session,
+      signal: new AbortController().signal,
     });
     const warn = vi.fn<typeof noopTrace.warn>();
     const logger = { ...noopTrace, warn };
@@ -109,8 +110,7 @@ describe('run-scoped tool overlay', () => {
             },
             modelCell,
             onModelChanged: () => {},
-            checkInterruption: () => false,
-            abortSignal: new AbortController().signal,
+            interrupt: () => {},
             onRoundFinalized: () => {},
             isSubagent: true,
             tools: [tool('first'), tool('second')],

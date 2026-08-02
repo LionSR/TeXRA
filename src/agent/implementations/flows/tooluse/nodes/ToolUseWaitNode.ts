@@ -48,12 +48,13 @@ export class ToolUseWaitNode<C> extends Node<
   }
 
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
-    const { checkInterruption, session, isSubagent } = this.services;
+    const { session, isSubagent } = this.services;
     const { runScope, stopAfterCycle } = useLaunchRunContext();
     const { streamId, session: ownerSession } = runScope;
+    const { signal } = this.services.runScope;
     const hasDrainedFollowUps = Boolean(this.drainedFollowUps?.length);
 
-    if (checkInterruption()) {
+    if (signal.aborted) {
       return { kind: 'stop' };
     }
 
@@ -140,8 +141,8 @@ export class ToolUseWaitNode<C> extends Node<
       });
     }
 
-    const batch = await session.waitForFollowUp(checkInterruption);
-    if (!batch || checkInterruption()) {
+    const batch = await session.waitForFollowUp(signal);
+    if (!batch || signal.aborted) {
       return { kind: 'stop' };
     }
 

@@ -71,8 +71,6 @@ interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
   logger: AgentTrace;
   readonly runScope: RunScope;
-  /** The run's cancellation signal; see `BaseFlowContextInit.abortSignal`. */
-  readonly abortSignal: AbortSignal;
   /**
    * The run's live client seam. The cell owns the provider client, so a rebind
    * here is the same rebind every other reader of the run observes.
@@ -181,7 +179,7 @@ export abstract class RetryableInvocationNode<
     }
 
     const services = this.services;
-    const signal = services.abortSignal;
+    const signal = services.runScope.signal;
 
     // Build (or reuse) the client this attempt will run on before reading the
     // credential route it captured: a run that has just switched models holds
@@ -267,7 +265,7 @@ export abstract class RetryableInvocationNode<
     // The run's one interrupt controller drives the retry loop's abort
     // handling; an interrupt is read back off the same signal in
     // `getFallbackResult`, so there is nothing to register or clear here.
-    this.signal = this.services.abortSignal;
+    this.signal = this.services.runScope.signal;
     return await super._exec(prepRes);
   }
 
@@ -387,7 +385,7 @@ export abstract class RetryableInvocationNode<
   ): { kind: 'cancelled' } | ({ kind: 'failed' } & RetryErrorInfo) {
     if (
       this._userCancelled ||
-      this.services.abortSignal.aborted ||
+      this.services.runScope.signal.aborted ||
       isUserAbort(error)
     ) {
       return { kind: 'cancelled' };

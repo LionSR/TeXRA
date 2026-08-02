@@ -125,7 +125,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       // real output, or any provider whose terminal reason isn't yet mapped to
       // the canonical end-turn vocabulary). The `!endTurn` guard preserves a
       // cleanly-finished round even if an interrupt races in at completion.
-      if (this.services.checkInterruption() && !cycleShared.endTurn) {
+      if (this.services.runScope.signal.aborted && !cycleShared.endTurn) {
         return { outcome: 'cancelled' };
       }
       return { outcome: 'completed', endTurn: cycleShared.endTurn };

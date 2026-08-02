@@ -32,18 +32,5 @@ export interface AgentCore<C = unknown> {
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {
-  /**
-   * Derived view of {@link abortSignal} for call sites that only ask "was this
-   * run interrupted?". Both come from the run's single interrupt controller
-   * (`createInterruptCallbacks`), so they can never disagree.
-   */
-  checkInterruption: () => boolean;
-  /**
-   * The run's cancellation signal, owned by the one interrupt controller for
-   * the whole execution. Nodes pass it into provider calls and tool calls
-   * instead of registering controllers of their own.
-   */
-  readonly abortSignal: AbortSignal;
-  onInterrupt?: () => void;
   onRoundFinalized: RoundFinalizedCallback;
 }

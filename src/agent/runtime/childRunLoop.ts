@@ -239,7 +239,7 @@ export interface ChildRunLoopHandle {
  * one place a currently-running turn's real interrupt reaches.
  */
 class ChildRunInterruptible implements ExecutionInterruptHandler {
-  private interrupted = false;
+  private readonly controller = new AbortController();
   private queue: FollowUpQueue | null = null;
   private turnAbortController: AbortController | null = null;
 
@@ -249,7 +249,7 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   ) {}
 
   interrupt(): void {
-    this.interrupted = true;
+    this.controller.abort();
     this.queue?.cancelWait();
     this.turnAbortController?.abort();
     const handle = this.session.executions.getAgentHandleByStream(
@@ -263,7 +263,11 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   }
 
   isInterrupted(): boolean {
-    return this.interrupted;
+    return this.controller.signal.aborted;
+  }
+
+  get signal(): AbortSignal {
+    return this.controller.signal;
   }
 
   startTurn(): AbortController {
@@ -715,7 +719,7 @@ export function startChildRunLoop<TTurn>(
         childStream?.waitForInput();
         if (loop.isInterrupted()) break;
 
-        const batch = await queue.waitAndDrainAll(() => loop.isInterrupted());
+        const batch = await queue.waitAndDrainAll(loop.signal);
         if (!batch || loop.isInterrupted()) break;
 
         const nextRunTurn = strategy.runTurn;

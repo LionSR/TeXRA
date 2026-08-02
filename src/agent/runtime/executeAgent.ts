@@ -56,7 +56,6 @@ import {
   type WaitingToolUseFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
-import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import { ResumeAdmissionCancelledError } from './resumeAdmission';
@@ -167,7 +166,6 @@ async function launchToolUseRun(
   const result = await runToolUseFlow(
     {
       ...ctx,
-      ...createInterruptCallbacks(),
       onRoundFinalized: createUsageRecordingCallback(ctx),
       setting: shared.setting,
       isSubagent: shared.isSubagent,
@@ -208,7 +206,7 @@ async function launchToolUseRun(
     undefined,
     {
       attach: (flowContext) => {
-        handle.attachToolUseFlow(flowContext);
+        handle.attachToolUseFlow(flowContext, ctx.runScope.signal);
         if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
           variant.onCancellationAtFlowAttachment?.();
           flowContext.interrupt();
@@ -251,36 +249,15 @@ function buildLifecycleOptions(
  */
 async function runReflectionAgent(
   ctx: AgentLaunchContext,
-  handle: AgentExecutionHandle,
   setting: AgentWorkflowSetting,
 ): Promise<AgentFlowResult> {
-  const {
-    streamId: runStreamId,
-    executionId: runExecutionId,
-    session: runSession,
-  } = ctx.runScope;
+  const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
   const onRoundFinalized = createUsageRecordingCallback(ctx);
-  const interruptCallbacks = createInterruptCallbacks();
-  const detachInterruptHandler = handle.attachInterruptHandler({
-    interrupt(): void {
-      interruptCallbacks.onInterrupt?.();
-      runSession.interactions.cancel({
-        streamId: runStreamId,
-        cause: 'Run interrupted.',
-      });
-    },
+  const result = await runReflectionFlow({
+    ...ctx,
+    onRoundFinalized,
+    setting,
   });
-  let result: Awaited<ReturnType<typeof runReflectionFlow>>;
-  try {
-    result = await runReflectionFlow({
-      ...ctx,
-      ...interruptCallbacks,
-      onRoundFinalized,
-      setting,
-    });
-  } finally {
-    detachInterruptHandler();
-  }
   return {
     category: 'workflow',
     outcome: result.outcome,
@@ -494,7 +471,7 @@ export async function executeAgent(
                 { kind: 'fresh', onIdle: options.onIdle },
               );
             }
-            return runReflectionAgent(ctx, handle, setting);
+            return runReflectionAgent(ctx, setting);
           },
           buildLifecycleOptions(options, isSubagent),
         );

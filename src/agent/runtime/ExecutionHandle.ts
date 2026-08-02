@@ -69,15 +69,6 @@ type RunSuspension =
  */
 type TerminalState = 'open' | 'claimed' | 'settled';
 
-/**
- * Whether a stop arriving before an interrupt context is attached can be held.
- *
- * `closed` drops it (no runner to deliver to), `armed` accepts one, `latched`
- * is holding one for the next `attach*` call to deliver. A latched stop
- * without an open window is unrepresentable.
- */
-type PreAttachStop = 'closed' | 'armed' | 'latched';
-
 export interface LiveToolUseFlowContext {
   readonly ownerSession?: SessionHandle;
   readonly session: {
@@ -110,7 +101,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private _parentStreamId: StreamTabId;
   private interruptHandler?: ExecutionInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
-  private preAttachStop: PreAttachStop = 'closed';
+  private detachToolUseAbortListener?: () => void;
   private suspension?: RunSuspension;
   private _executionLeaseLost = false;
   private executionLeaseScope?: OwnedExecutionLeaseScope;
@@ -206,37 +197,33 @@ export class AgentExecutionHandle implements ExecutionHandle {
     return this.isChildExecution ? this._parentStreamId : undefined;
   }
 
-  /** Whether lifecycle startup must preserve an already-cancelled status. */
-  get hasPendingInterrupt(): boolean {
-    return this.preAttachStop === 'latched';
-  }
-
   /** Promote this subagent to a top-level execution (detach from parent). */
   detach(): void {
     this._parentStreamId = this.childStreamId;
   }
 
-  /** Allow a stop request to arrive between lifecycle tracking and setup. */
-  enablePendingInterrupt(): void {
-    this.preAttachStop = 'armed';
-  }
-
-  /** Discard an undeliverable pre-attach stop when the runner exits. */
-  closePendingInterruptWindow(): void {
-    this.preAttachStop = 'closed';
-  }
-
-  attachToolUseFlow(context: LiveToolUseFlowContext): void {
+  attachToolUseFlow(
+    context: LiveToolUseFlowContext,
+    signal?: AbortSignal,
+  ): void {
     if (this.category !== 'toolUse') {
       throw new Error('Only tool-use execution handles can attach tool flows.');
     }
-    const latched = this.takeLatchedStop();
+    this.detachToolUseAbortListener?.();
     this.toolUseFlowContext = context;
-    if (latched) context.interrupt();
+    if (!signal) return;
+
+    const interrupt = (): void => context.interrupt();
+    signal.addEventListener('abort', interrupt, { once: true });
+    this.detachToolUseAbortListener = () =>
+      signal.removeEventListener('abort', interrupt);
+    if (signal.aborted) interrupt();
   }
 
   detachToolUseFlow(context?: LiveToolUseFlowContext): void {
     if (context !== undefined && this.toolUseFlowContext !== context) return;
+    this.detachToolUseAbortListener?.();
+    this.detachToolUseAbortListener = undefined;
     this.toolUseFlowContext = undefined;
   }
 
@@ -245,22 +232,13 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   attachInterruptHandler(handler: ExecutionInterruptHandler): () => void {
-    const latched = this.takeLatchedStop();
     this.interruptHandler = handler;
-    if (latched) handler.interrupt();
     return () => this.detachInterruptHandler(handler);
   }
 
   detachInterruptHandler(handler?: ExecutionInterruptHandler): void {
     if (handler !== undefined && this.interruptHandler !== handler) return;
     this.interruptHandler = undefined;
-  }
-
-  /** Close the pre-attach window, reporting whether it was holding a stop. */
-  private takeLatchedStop(): boolean {
-    const latched = this.preAttachStop === 'latched';
-    this.preAttachStop = 'closed';
-    return latched;
   }
 
   interrupt(): boolean {
@@ -274,9 +252,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
       context.interrupt();
       return true;
     }
-    if (this.preAttachStop === 'closed') return false;
-    this.preAttachStop = 'latched';
-    return true;
+    return false;
   }
 
   markExecutionLeaseLost(): void {
