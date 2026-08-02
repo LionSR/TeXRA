@@ -209,14 +209,27 @@ function simplifyGoogleSchemaNode(
 
   const ref = typeof value.$ref === 'string' ? value.$ref : undefined;
   if (ref) {
-    if (resolvingRefs.has(ref)) return {};
+    const { $ref: _ref, ...siblings } = value;
+    const simplifiedSiblings = simplifyGoogleSchemaNode(
+      siblings,
+      root,
+      resolvingRefs,
+    );
+    if (resolvingRefs.has(ref)) return simplifiedSiblings;
     const target = resolveLocalSchemaRef(root, ref);
     if (target !== undefined) {
-      return simplifyGoogleSchemaNode(
+      const simplifiedTarget = simplifyGoogleSchemaNode(
         target,
         root,
         new Set([...resolvingRefs, ref]),
       );
+      if (
+        isSchemaObject(simplifiedTarget) &&
+        isSchemaObject(simplifiedSiblings)
+      ) {
+        return { ...simplifiedTarget, ...simplifiedSiblings };
+      }
+      return simplifiedTarget;
     }
   }
 
@@ -298,6 +311,9 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
   if (!isSchemaObject(value)) return value;
 
   const converted: JSONSchemaObject = {};
+  if (typeof value.const === 'string' && !Array.isArray(value.enum)) {
+    converted.enum = [value.const];
+  }
   for (const [key, child] of Object.entries(value)) {
     if (!GOOGLE_OPENAPI_SCHEMA_KEYS.has(key)) continue;
     if (key === 'properties' && isSchemaObject(child)) {
