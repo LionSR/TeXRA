@@ -68,7 +68,6 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   gears: 'settings-2',
   screwdriver: 'wrench',
   'screwdriver-wrench': 'wrench',
-  tools: 'wrench',
   'wand-magic-sparkles': 'wand-sparkles',
   flask: 'flask-conical',
   microphone: 'mic',
