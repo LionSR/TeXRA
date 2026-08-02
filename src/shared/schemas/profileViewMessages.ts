@@ -7,7 +7,7 @@
 import { z } from 'zod';
 
 import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
-import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
+import { ProviderSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
 import {
@@ -65,16 +65,16 @@ const TierConstantsSchema = z.object({
 });
 
 /**
- * A VS Code configuration toggle surfaced in a provider's expanded settings.
- * Extends ProviderVscodeSettingDefSchema (single source of truth) with runtime `value`.
+ * A native configuration toggle surfaced in a provider's expanded settings.
+ * Extends ProviderSettingDefSchema (single source of truth) with runtime `value`.
  */
-const ProviderVscodeSettingSchema = ProviderVscodeSettingDefSchema.extend({
+const ProviderSettingSchema = ProviderSettingDefSchema.extend({
   value: z.boolean(),
 });
-export type ProviderVscodeSetting = z.infer<typeof ProviderVscodeSettingSchema>;
+export type ProviderSetting = z.infer<typeof ProviderSettingSchema>;
 
-/** A VS Code numeric configuration surfaced in a settings section. */
-export const NumberVscodeSettingSchema = z.object({
+/** A numeric configuration surfaced in a settings section. */
+export const NumberSettingSchema = z.object({
   key: z.string(),
   label: z.string(),
   description: z.string(),
@@ -84,7 +84,7 @@ export const NumberVscodeSettingSchema = z.object({
   step: z.number().positive().optional(),
   unit: z.string().optional(),
 });
-export type NumberVscodeSetting = z.infer<typeof NumberVscodeSettingSchema>;
+export type NumberSetting = z.infer<typeof NumberSettingSchema>;
 
 const ProviderKeyStatusSchema = z.object({
   provider: z.string(),
@@ -94,7 +94,7 @@ const ProviderKeyStatusSchema = z.object({
   streaming: z.boolean().prefault(true),
   customEndpoint: z.string().prefault(''),
   supportsCustomEndpoint: z.boolean().prefault(false),
-  vscodeSettings: z.array(ProviderVscodeSettingSchema).prefault([]),
+  providerSettings: z.array(ProviderSettingSchema).prefault([]),
 });
 export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 

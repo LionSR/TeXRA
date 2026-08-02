@@ -1,4 +1,4 @@
-/** Approval-and-safety settings handler for the stable legacy command name. */
+/** Approval-and-safety settings handler. */
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';

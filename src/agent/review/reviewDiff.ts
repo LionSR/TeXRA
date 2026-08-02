@@ -56,7 +56,7 @@ interface ReviewDiff {
   baseDescription: string;
   /** Unified diff text; empty string when there is nothing to review. */
   diff: string;
-  /** Repository-relative paths of changed (and included untracked) files. */
+  /** Repository-relative paths present in the collected Git diff. */
   changedFiles: string[];
   /** True when the diff was cut to fit the size cap. */
   truncated: boolean;

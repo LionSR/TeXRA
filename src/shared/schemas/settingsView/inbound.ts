@@ -86,8 +86,8 @@ const SetProviderEndpointMessageSchema = z.object({
 
 const SetGlobalStreamingMessageSchema = enabledFlag(CMD.SET_GLOBAL_STREAMING);
 
-const SetProviderVscodeSettingMessageSchema = z.object({
-  command: z.literal(CMD.SET_PROVIDER_VSCODE_SETTING),
+const SetProviderSettingMessageSchema = z.object({
+  command: z.literal(CMD.SET_PROVIDER_SETTING),
   key: z.string().min(1),
   value: z.union([z.boolean(), z.number()]),
 });
@@ -356,7 +356,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetProviderStreamingMessageSchema,
     SetProviderEndpointMessageSchema,
     SetGlobalStreamingMessageSchema,
-    SetProviderVscodeSettingMessageSchema,
+    SetProviderSettingMessageSchema,
     OpenExternalUrlMessageSchema,
     // Model selection messages
     SetModelEnabledMessageSchema,
