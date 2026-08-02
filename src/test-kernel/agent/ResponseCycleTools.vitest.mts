@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { noopTrace } from '@agent/trace';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
 import { getDefaultToolRegistry } from '@tools/registry';
@@ -98,7 +99,7 @@ describe('response cycle tool visibility', () => {
     });
     node.setServices({
       config: {},
-      logger: { debug: vi.fn(), warn: vi.fn() },
+      logger: noopTrace,
       modelCell: testModelCell({
         config: { provider: 'openai', fullName: 'test-model' },
         createResponse,

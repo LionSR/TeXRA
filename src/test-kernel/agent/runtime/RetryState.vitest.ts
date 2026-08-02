@@ -14,7 +14,7 @@ import {
 } from 'vitest';
 
 // Local imports
-import { noopTrace, type AgentTrace } from '@agent/trace';
+import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import {
@@ -52,6 +52,7 @@ import {
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { setIncludedModelAccess } from '@model/includedModelAccess';
 import {
+  MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
@@ -67,6 +68,9 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { StreamLogStore } from '@transcript/StreamLogStore';
+import { isObject } from '@utils/core';
 
 // Local file imports
 import {
@@ -419,6 +423,270 @@ describe('RetryState', () => {
     );
   });
 
+  it('records cumulative attempt and manual-decision diagnostics', async () => {
+    await installPlatform({
+      config: { 'texra.model.retry.maxAttempts': 0 },
+    });
+    const streamId = 'retry-diagnostics' as StreamTabId;
+    const logger = new TraceEmitter();
+    const transcript = StreamLogStore.ephemeral('retry diagnostics test');
+    transcript.ensureStream(streamId);
+    const recorder = attachTranscriptRecorder(
+      logger,
+      transcript.acquireWriter(streamId, streamId),
+    );
+    const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
+    const session = sessionWithInteractions(
+      { requestRetry, cancel: () => {} },
+      new StreamStatusMachine(),
+    );
+
+    class DiagnosticRetryNode extends ExposedRetryNode {
+      attempts = 0;
+
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(async () => {
+          this.attempts += 1;
+          if (this.attempts === 1) {
+            throw new Error('temporary provider failure');
+          }
+          return 'recovered';
+        });
+      }
+    }
+
+    const node = new DiagnosticRetryNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: testRetryModelCell(undefined, 'api-key'),
+    });
+
+    try {
+      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
+
+      await expect(node._exec(undefined)).resolves.toBe('recovered');
+
+      const rows = transcript.get(streamId)?.getRange(0) ?? [];
+      const diagnostics = rows
+        .map((row) => row.data)
+        .filter(
+          (data): data is Record<string, unknown> =>
+            isObject(data) && data.kind === 'model_retry_lifecycle',
+        );
+      expect(
+        diagnostics.map((data) => ({
+          event: data.event,
+          attemptOrdinal: data.attemptOrdinal,
+          decisionSource: data.decisionSource,
+        })),
+      ).toEqual([
+        {
+          event: 'attempt_started',
+          attemptOrdinal: 1,
+          decisionSource: 'automatic',
+        },
+        {
+          event: 'attempt_failed',
+          attemptOrdinal: 1,
+          decisionSource: 'automatic',
+        },
+        {
+          event: 'retry_decision_requested',
+          attemptOrdinal: 1,
+          decisionSource: undefined,
+        },
+        {
+          event: 'retry_decided',
+          attemptOrdinal: 1,
+          decisionSource: 'human',
+        },
+        {
+          event: 'attempt_started',
+          attemptOrdinal: 2,
+          decisionSource: 'human',
+        },
+        {
+          event: 'attempt_succeeded',
+          attemptOrdinal: 2,
+          decisionSource: 'human',
+        },
+      ]);
+      expect(diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            executionId: 'deadbeef',
+            streamId,
+            automaticAttemptLimit: 1,
+            credentialRoute: 'api-key',
+          }),
+          expect.objectContaining({
+            event: 'retry_decision_requested',
+            afterAttemptSource: 'automatic',
+          }),
+        ]),
+      );
+      expect(
+        rows
+          .filter(
+            (row) =>
+              isObject(row.data) && row.data.kind === 'model_retry_lifecycle',
+          )
+          .every(
+            (row) =>
+              row.verbose === false &&
+              row.messageType === MESSAGE_TYPES.INTERNAL,
+          ),
+      ).toBe(true);
+      expect(new Set(diagnostics.map((data) => data.operationId)).size).toBe(1);
+      expect(
+        diagnostics
+          .map((data) => data.elapsedMs as number)
+          .every((elapsed, index, values) =>
+            index === 0
+              ? elapsed >= 0
+              : elapsed >= (values.at(index - 1) ?? elapsed),
+          ),
+      ).toBe(true);
+    } finally {
+      recorder.unsubscribe();
+      clearStreamStatusForTest(session.status, streamId);
+    }
+  });
+
+  it('counts client preparation failures and preserves automatic retry provenance', async () => {
+    await installPlatform({
+      config: { 'texra.model.retry.maxAttempts': 0 },
+    });
+    const streamId = 'retry-client-preparation' as StreamTabId;
+    const logger = new TraceEmitter();
+    const events: Record<string, unknown>[] = [];
+    logger.subscribe((event) => {
+      if (
+        event.type === 'domain' &&
+        event.key === 'modelRetryLifecycle' &&
+        isObject(event.data)
+      ) {
+        events.push(event.data);
+      }
+    });
+    const getClient = vi
+      .fn<() => Promise<unknown>>()
+      .mockRejectedValueOnce(new Error('client preparation failed'))
+      .mockResolvedValue({});
+    const session = sessionWithInteractions(
+      {
+        requestRetry: async () => ({
+          action: 'retry' as const,
+          decisionSource: 'automatic' as const,
+        }),
+        cancel: () => {},
+      },
+      new StreamStatusMachine(),
+    );
+
+    class ClientPreparationRetryNode extends ExposedRetryNode {
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(async () => 'recovered');
+      }
+    }
+
+    const node = new ClientPreparationRetryNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: {
+        getClient,
+        rebind: async () => undefined,
+        route: 'api-key',
+      },
+    });
+
+    try {
+      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
+
+      await expect(node._exec(undefined)).resolves.toBe('recovered');
+
+      expect(
+        events.map((event) => [event.event, event.attemptOrdinal]),
+      ).toEqual([
+        ['attempt_started', 1],
+        ['attempt_failed', 1],
+        ['retry_decision_requested', 1],
+        ['retry_decided', 1],
+        ['attempt_started', 2],
+        ['attempt_succeeded', 2],
+      ]);
+      expect(
+        events.find((event) => event.event === 'retry_decided'),
+      ).toMatchObject({ decisionSource: 'automatic' });
+      expect(
+        events.find(
+          (event) =>
+            event.event === 'attempt_started' && event.attemptOrdinal === 2,
+        ),
+      ).toMatchObject({ decisionSource: 'automatic' });
+      expect(getClient).toHaveBeenCalledTimes(2);
+    } finally {
+      clearStreamStatusForTest(session.status, streamId);
+    }
+  });
+
+  it('records a resolved result rejected by the concrete boundary as failed', async () => {
+    const streamId = 'retry-invalid-result' as StreamTabId;
+    const logger = new TraceEmitter();
+    const events: Record<string, unknown>[] = [];
+    logger.subscribe((event) => {
+      if (
+        event.type === 'domain' &&
+        event.key === 'modelRetryLifecycle' &&
+        isObject(event.data)
+      ) {
+        events.push(event.data);
+      }
+    });
+    const session = createTestSession();
+
+    class InvalidResultNode extends ExposedRetryNode {
+      protected override isSuccessfulInvocationResult(
+        result: unknown,
+      ): boolean {
+        return Boolean(result);
+      }
+
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(async () => '');
+      }
+    }
+
+    const node = new InvalidResultNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: testRetryModelCell(undefined, 'api-key'),
+    });
+
+    try {
+      await expect(node._exec(undefined)).resolves.toBe('');
+      expect(events.map((event) => event.event)).toEqual([
+        'attempt_started',
+        'attempt_failed',
+      ]);
+      expect(events.at(-1)).toMatchObject({
+        attemptOrdinal: 1,
+        failureKind: 'invalid_result',
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('treats user aborts as cancellations instead of failed invocations', () => {
     const { node } = createRetryNode('retry-user-abort' as StreamTabId);
     const abort = new DOMException('Request aborted', 'AbortError');
@@ -608,6 +876,84 @@ describe('RetryState', () => {
     const refreshSignal = rebind.mock.calls[0]?.[1];
     expect(refreshSignal).toBeInstanceOf(AbortSignal);
     expect(refreshSignal?.aborted).toBe(false);
+  });
+
+  it('records the relay 401 before a successful reactive recovery', async () => {
+    const streamId = 'retry-relay-refresh-diagnostics' as StreamTabId;
+    const logger = new TraceEmitter();
+    const events: Record<string, unknown>[] = [];
+    logger.subscribe((event) => {
+      if (
+        event.type === 'domain' &&
+        event.key === 'modelRetryLifecycle' &&
+        isObject(event.data)
+      ) {
+        events.push(event.data);
+      }
+    });
+    const session = createTestSession();
+    const rebind = vi.fn(async () => undefined);
+    SupabaseClient.setAuthProvider(createAuthTokenProvider());
+    const unauthorized = Object.assign(new Error('relay token expired'), {
+      status: 401,
+    });
+    const operation = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(unauthorized)
+      .mockResolvedValueOnce('recovered');
+
+    class ReactiveRecoveryNode extends ExposedRetryNode {
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(operation);
+      }
+    }
+
+    const node = new ReactiveRecoveryNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: testRetryModelCell(rebind, 'relay'),
+    });
+
+    try {
+      await expect(node._exec(undefined)).resolves.toBe('recovered');
+      expect(
+        events.map((event) => ({
+          event: event.event,
+          attemptOrdinal: event.attemptOrdinal,
+          statusCode: event.statusCode,
+          recoveryPending: event.recoveryPending,
+          credentialRefresh: event.credentialRefresh,
+        })),
+      ).toEqual([
+        {
+          event: 'attempt_started',
+          attemptOrdinal: 1,
+          statusCode: undefined,
+          recoveryPending: undefined,
+          credentialRefresh: undefined,
+        },
+        {
+          event: 'attempt_failed',
+          attemptOrdinal: 1,
+          statusCode: 401,
+          recoveryPending: true,
+          credentialRefresh: true,
+        },
+        {
+          event: 'attempt_succeeded',
+          attemptOrdinal: 1,
+          statusCode: undefined,
+          recoveryPending: undefined,
+          credentialRefresh: true,
+        },
+      ]);
+      expect(operation).toHaveBeenCalledTimes(2);
+    } finally {
+      session.dispose();
+    }
   });
 
   it('keeps node-level auto-retry for transient stream failures', () => {

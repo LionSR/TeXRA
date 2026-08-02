@@ -122,7 +122,13 @@ export type ProposalResult =
     };
 
 export type RetrySettlement =
-  | { action: 'retry'; feedback?: string; reason?: never }
+  | {
+      action: 'retry';
+      feedback?: string;
+      reason?: never;
+      /** Omitted by interactive hosts, which default to a human decision. */
+      decisionSource?: 'human' | 'automatic';
+    }
   | { action: 'cancel'; feedback?: never; reason?: never };
 
 export type RetryResult =

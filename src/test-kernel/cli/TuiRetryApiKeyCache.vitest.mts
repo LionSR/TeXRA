@@ -106,6 +106,7 @@ describe('TUI retry API-key cache boundary', () => {
 
     await expect(result).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(preparedKeys).toEqual(['sk-rotated-current-key']);
