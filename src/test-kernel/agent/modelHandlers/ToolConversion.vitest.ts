@@ -878,10 +878,43 @@ describe('toGoogleTools', () => {
           },
         }),
       ).toThrow(
-        'Google tool schemas do not support nested oneOf, allOf, or not constraints.',
+        `Google tool schemas do not support the "${constraint}" keyword.`,
       );
     },
   );
+
+  it.each([
+    'contains',
+    'if',
+    'then',
+    'else',
+    'dependentSchemas',
+    'prefixItems',
+  ])('rejects the unsupported Google %s keyword', (keyword) => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'unsupported_input',
+        parameters: {
+          type: 'object',
+          properties: {
+            value: { type: 'array', [keyword]: { type: 'string' } },
+          },
+        },
+      }),
+    ).toThrow(`Google tool schemas do not support the "${keyword}" keyword.`);
+  });
+
+  it('rejects array-valued Google schema types', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'union_type',
+        parameters: {
+          type: 'object',
+          properties: { value: { type: ['string', 'null'] } },
+        },
+      }),
+    ).toThrow('Google tool schemas require a single scalar type.');
+  });
 
   it('preserves raw numeric exclusive integer bounds exactly', () => {
     const definition = {
