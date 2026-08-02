@@ -23,20 +23,18 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
  * away and carries no other affordance, so the CLI spends color on "this one
  * finished" (green) and "this one wants you" (yellow), where the webview keeps
  * both quiet and lets its own chrome carry that. A user stop is neither success
- * nor error, so it stays neutral in both. `stopped` and `idle` remain accepted
- * for historical snapshots of the retired live-status vocabulary. */
+ * nor error, so it stays neutral in both. */
 export function childStatusColor(status: string | undefined): string {
-  if (status === STREAM_PHASE.WAITING || status === 'idle') {
+  if (status === STREAM_PHASE.WAITING) {
     return COLOR_WARNING;
   }
   if (isChildExecutionErrorStatus(status)) return COLOR_ERROR;
   if (status === STREAM_PHASE.RUNNING || status === STREAM_PHASE.COMPLETED) {
     return COLOR_SUCCESS;
   }
-  // Everything else is neutral: a user stop (`cancelled`, or `stopped` in a
-  // historical snapshot), a stream that has not reported a phase yet, and any
-  // phase a future build adds. Green would report success for a state nobody
-  // established.
+  // Everything else is neutral: a user stop, a stream that has not reported a
+  // phase yet, and any phase a future build adds. Green would report success
+  // for a state nobody established.
   return COLOR_BORDER;
 }
 
