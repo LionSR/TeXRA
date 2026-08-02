@@ -106,13 +106,12 @@ interface StreamWriterOwnership {
 
 /**
  * Every per-stream field that shares the resident stream lifecycle, keyed by
- * stream id in ONE map (`streams`) instead of parallel hand-synced maps/sets.
- * Because every field for a stream lives on the same object, dropping a
- * stream's resident state is one `streams.delete(id)` — every field disappears
- * with it BY CONSTRUCTION, which is what lets `forgetStreamState` /
- * `forgetAllStreamState` collapse to a single delete/clear. When an individual
- * field is cleared, `pruneStreamState` removes the record once no field
- * remains, preserving the old "absent from every collection" memory footprint.
+ * stream id in ONE map (`streams`). Because every field for a stream lives on
+ * the same object, dropping a stream's resident state is one
+ * `streams.delete(id)` — every field disappears with it BY CONSTRUCTION, which
+ * is what lets `forgetStreamState` / `forgetAllStreamState` be a single
+ * delete/clear. When an individual field is cleared, `pruneStreamState`
+ * removes the record once no field remains, so an idle stream holds no memory.
  *
  * `summaries` (deliberately OUTLIVES per-stream eviction so sidebar metadata
  * survives when heavy `log` entries are dropped) and `writeTombstones` (a
@@ -156,7 +155,7 @@ interface StreamState {
 
 /**
  * Shared projection into {@link StreamLogSummary}, fed either by a resident
- * `StreamLog`'s getters (`summaryOf`) or by a raw entries scan
+ * `StreamLog` (whose getters satisfy this shape) or by a raw entries scan
  * (`summarizeEntries`). Keeping the field list here means a new derived flag
  * is added once instead of in two hand-synced call sites.
  */
@@ -178,10 +177,6 @@ function toSummary(source: SummarySource): StreamLogSummary {
       ? { hasNonterminalWorkflowTask: true }
       : {}),
   };
-}
-
-function summaryOf(logInstance: StreamLog): StreamLogSummary {
-  return toSummary(logInstance);
 }
 
 /**
@@ -316,11 +311,11 @@ export class StreamLogStore {
   }
 
   /**
-   * Drop a record once none of its fields hold state, matching the old
-   * "absent from every per-stream collection" footprint. Dirtiness lives in
-   * the separate `dirtyIds` set and is intentionally NOT consulted here: a
-   * dirty stream always retains a `log` (or a `loadFailed`/`pendingLoad`
-   * deferral record), so the field checks below already keep its record alive.
+   * Drop a record once none of its fields hold state, so an idle stream costs
+   * no memory. Dirtiness lives in the separate `dirtyIds` set and is
+   * intentionally NOT consulted here: a dirty stream always retains a `log`
+   * (or a `loadFailed`/`pendingLoad` deferral record), so the field checks
+   * below already keep its record alive.
    */
   private pruneStreamState(streamId: StreamTabId): void {
     const s = this.streams.get(streamId);
@@ -1147,7 +1142,7 @@ export class StreamLogStore {
         delete existing.hasNonterminalWorkflowTask;
       }
     } else {
-      this.summaries.set(streamId, summaryOf(logInstance));
+      this.summaries.set(streamId, toSummary(logInstance));
     }
   }
 
@@ -1321,7 +1316,7 @@ export class StreamLogStore {
       return;
     }
 
-    await this.maintainSummaryCache(streamId, summaryOf(logInstance));
+    await this.maintainSummaryCache(streamId, toSummary(logInstance));
     if (this.shouldSkipWrite(streamId, expectedGeneration)) {
       await this.kv.delete(streamId);
       await this.deleteSummaryCache(streamId);

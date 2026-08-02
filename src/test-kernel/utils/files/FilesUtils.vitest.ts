@@ -1,5 +1,5 @@
-// Suites for src/utils/files (workspaceFS, mime, paths, absoluteFS,
-// relativeFS JSON, pasted images).
+// Suites for src/utils/files (baseFS predicates, workspaceFS, mime,
+// absoluteFS, relativeFS JSON, pasted images).
 
 import * as assert from 'node:assert';
 import * as path from 'node:path';
@@ -83,14 +83,11 @@ describe('BaseFS stat predicates', () => {
 // WorkspaceFS
 // ---------------------------------------------------------------------------
 
-describe('WorkspaceFS Test Suite', () => {
-  it('delete should be idempotent - not throw when file does not exist', async () => {
-    // Test that deleting a non-existent file doesn't throw
-    const nonExistentPath = 'this-file-definitely-does-not-exist-12345.txt';
-
-    // This should not throw an error
+describe('WorkspaceFS.delete', () => {
+  it('is idempotent when the file does not exist', async () => {
     await assert.doesNotReject(
-      async () => await WorkspaceFS.delete(nonExistentPath),
+      async () =>
+        await WorkspaceFS.delete('this-file-does-not-exist-12345.txt'),
       'delete() should not throw when file does not exist',
     );
   });
@@ -100,7 +97,7 @@ describe('WorkspaceFS Test Suite', () => {
 // mimeUtils
 // ---------------------------------------------------------------------------
 
-describe('mimeUtils Test Suite', () => {
+describe('getMimeType', () => {
   it('applies audio override for known extensions from file paths', () => {
     assert.strictEqual(getMimeType('/tmp/clip.opus'), 'audio/opus');
     assert.strictEqual(getMimeType('C:\\tmp\\clip.l16'), 'audio/l16');
@@ -118,51 +115,48 @@ describe('mimeUtils Test Suite', () => {
 });
 
 // ---------------------------------------------------------------------------
-// pathUtils
+// fileTypeUtils and workspace path resolution
 // ---------------------------------------------------------------------------
 
-describe('pathUtils Test Suite', () => {
-  describe('isTexFile', () => {
-    it('should identify TeX files correctly', () => {
-      assert.strictEqual(isTexFile('document.tex'), true);
-      assert.strictEqual(isTexFile('DOCUMENT.TEX'), true);
-      assert.strictEqual(isTexFile('path/to/file.tex'), true);
-      assert.strictEqual(isTexFile('file.TeX'), true);
-    });
-
-    it('should reject non-TeX files', () => {
-      assert.strictEqual(isTexFile('document.txt'), false);
-      assert.strictEqual(isTexFile('file.pdf'), false);
-      assert.strictEqual(isTexFile('image.png'), false);
-      assert.strictEqual(isTexFile('script.js'), false);
-      assert.strictEqual(isTexFile('noextension'), false);
-    });
-
-    it('should handle edge cases', () => {
-      assert.strictEqual(isTexFile(''), false);
-      // '.tex' alone is a dotfile: path.extname('.tex') === '', so it has no
-      // .tex extension under the current hasExtension-based implementation.
-      assert.strictEqual(isTexFile('.tex'), false);
-      assert.strictEqual(isTexFile('tex'), false);
-      assert.strictEqual(isTexFile('file.texture'), false);
-    });
+describe('isTexFile', () => {
+  it('identifies TeX files regardless of extension case', () => {
+    assert.strictEqual(isTexFile('document.tex'), true);
+    assert.strictEqual(isTexFile('DOCUMENT.TEX'), true);
+    assert.strictEqual(isTexFile('path/to/file.tex'), true);
+    assert.strictEqual(isTexFile('file.TeX'), true);
   });
 
-  describe('WorkspaceFS.toAbsolute', () => {
-    it('should return absolute paths unchanged', () => {
-      const absolutePath = path.resolve('/absolute/path/file.txt');
-      assert.strictEqual(WorkspaceFS.toAbsolute(absolutePath), absolutePath);
-    });
+  it('rejects non-TeX files', () => {
+    assert.strictEqual(isTexFile('document.txt'), false);
+    assert.strictEqual(isTexFile('file.pdf'), false);
+    assert.strictEqual(isTexFile('image.png'), false);
+    assert.strictEqual(isTexFile('script.js'), false);
+    assert.strictEqual(isTexFile('noextension'), false);
+  });
 
-    it('should resolve relative paths to workspace', () => {
-      const relativePath = 'relative/path/file.txt';
-      const resolved = WorkspaceFS.toAbsolute(relativePath);
-      assert.strictEqual(path.isAbsolute(resolved), true);
-      assert.strictEqual(
-        resolved.endsWith(path.join('relative', 'path', 'file.txt')),
-        true,
-      );
-    });
+  it('rejects names without a .tex extension of their own', () => {
+    assert.strictEqual(isTexFile(''), false);
+    // '.tex' alone is a dotfile: path.extname('.tex') === '', so it has no
+    // .tex extension under the hasExtension-based implementation.
+    assert.strictEqual(isTexFile('.tex'), false);
+    assert.strictEqual(isTexFile('tex'), false);
+    assert.strictEqual(isTexFile('file.texture'), false);
+  });
+});
+
+describe('WorkspaceFS.toAbsolute', () => {
+  it('returns absolute paths unchanged', () => {
+    const absolutePath = path.resolve('/absolute/path/file.txt');
+    assert.strictEqual(WorkspaceFS.toAbsolute(absolutePath), absolutePath);
+  });
+
+  it('resolves relative paths against the workspace', () => {
+    const resolved = WorkspaceFS.toAbsolute('relative/path/file.txt');
+    assert.strictEqual(path.isAbsolute(resolved), true);
+    assert.strictEqual(
+      resolved.endsWith(path.join('relative', 'path', 'file.txt')),
+      true,
+    );
   });
 });
 
@@ -229,7 +223,6 @@ describe('RelativeFS JSON helpers', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
   beforeEach(async () => {
-    // Ensure each test starts with a clean directory
     await fs
       .rm(BASE_DIR, { recursive: true, force: true })
       .catch(() => undefined);

@@ -18,7 +18,7 @@ import '@progressView/frontend/components/ContextManagement';
 import '@progressView/frontend/components/LatexdiffResults';
 
 // Third-party imports - Lit template utilities
-import { html } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
@@ -44,6 +44,27 @@ import {
 } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
+/**
+ * The collapsible file-list banner shared by the file-list and missing-outputs
+ * entries: an icon/label summary over a `<ul>` of file rows, with optional
+ * trailing content inside the same details element.
+ */
+function buildFileListDetails(options: {
+  logId: string | undefined;
+  open: boolean;
+  iconName: TeXRAIconName;
+  label: string;
+  items: unknown;
+  trailing?: unknown;
+}): TemplateResult {
+  // prettier-ignore
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${options.open}>${buildDetailsSummary({
+    iconName: options.iconName,
+    label: options.label,
+    labelClass: 'summary-text',
+  })}<ul class="file-list-content" data-log-id=${ifDefined(options.logId)}>${options.items}</ul>${options.trailing ?? ''}</wa-details>`;
+}
+
 /** Format file list entry as TemplateResult. */
 export function formatFileListTemplate(
   message: LogMessageData,
@@ -52,25 +73,22 @@ export function formatFileListTemplate(
   const { id, data, text } = message;
   // Validate with Zod schema - renderer handles display field computation
   const parseResult = z.array(FileListEntrySchema).safeParse(data);
-  const shouldOpen = options?.defaultOpen ?? false;
 
   // Raw fallback when parsing fails
   const renderData = parseResult.success
     ? buildFileListRender(parseResult.data)
     : undefined;
-  const label = parseResult.success
-    ? (renderData?.summary ?? 'Files')
-    : 'Files (raw)';
-  const listContent = parseResult.success
-    ? (renderData?.items ?? '')
-    : html`<pre>${text ?? ''}</pre>`;
-
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+  return buildFileListDetails({
+    logId: id,
+    open: options?.defaultOpen ?? false,
     iconName: 'file',
-    label,
-    labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listContent}</ul></wa-details>`;
+    label: parseResult.success
+      ? (renderData?.summary ?? 'Files')
+      : 'Files (raw)',
+    items: parseResult.success
+      ? (renderData?.items ?? '')
+      : html`<pre>${text ?? ''}</pre>`,
+  });
 }
 
 /** Render XML link template. */
@@ -93,7 +111,6 @@ export function formatMissingOutputsTemplate(
   }
 
   const { missing, xmlFile } = parseResult.data;
-  const shouldOpen = options?.defaultOpen ?? false;
 
   // Special case: only XML link, no missing files
   if (missing.length === 0 && xmlFile) {
@@ -106,12 +123,14 @@ export function formatMissingOutputsTemplate(
     const basename = getBasename(filePath);
     return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} ${buildFileLinkSpan(filePath, basename)}</li>`;
   });
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
+  return buildFileListDetails({
+    logId: id,
+    open: options?.defaultOpen ?? false,
     iconName: 'triangle-exclamation',
     label: `Missing outputs (${missing.length})`,
-    labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile) : ''}</wa-details>`;
+    items: listItems,
+    trailing: xmlFile ? renderXmlLink(xmlFile) : '',
+  });
 }
 
 // =============================================================================

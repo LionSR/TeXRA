@@ -133,11 +133,9 @@ export class SettingsApp extends SettingsAppBase {
 
   constructor() {
     super();
-    // State lives at module scope in `settingsState.ts` (mirrors
-    // progressView/frontend/progressState.ts). That state is shared across
-    // remounts in the same JS context (tests, hot reload), so reset it here
-    // to match the pre-migration per-instance-field behavior, where every
-    // signal started fresh on construction.
+    // State lives at module scope in `settingsState.ts` and is shared across
+    // remounts in the same JS context (tests, hot reload), so every signal
+    // starts fresh on construction.
     resetSettingsState();
   }
 
@@ -146,11 +144,9 @@ export class SettingsApp extends SettingsAppBase {
   // HISTORY_CLEARED is overridden here to additionally clear the
   // `<history-tab>` search box — a DOM ref this component owns via `@query`,
   // not signal state, so it can't live in the slice itself. `assertSupported`
-  // narrows the known-real `historySlice` handler out of the `Handler |
-  // Unsupported` union `SettingsViewOutboundHandlerRegistry` now requires
-  // (see `@shared/utils/dispatcher`) — this call site invokes a specific
-  // entry directly rather than going through the dispatcher, so it needs the
-  // narrowing dispatch itself would otherwise provide.
+  // narrows the `historySlice` entry out of the registry's
+  // `Handler | Unsupported` union (see `@shared/utils/dispatcher`), which is
+  // the narrowing the dispatcher would do were this not a direct call.
   private readonly messageHandlers: SettingsViewOutboundHandlerRegistry = {
     ...settingsViewHandlers,
     [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: (data) => {

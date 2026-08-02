@@ -127,6 +127,17 @@ async function writeStreamFile(
   await StorageFS.write(path.join(dir, name), JSON.stringify(contents));
 }
 
+/** Persist a stream's meta sidecar stamped with the current schema version. */
+function writeMetaFile(
+  stream: StreamTabId,
+  meta: Record<string, unknown>,
+): Promise<void> {
+  return writeStreamFile(stream, 'meta.json', {
+    schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    ...meta,
+  });
+}
+
 function readStreamFile(stream: StreamTabId, name: string): Promise<unknown> {
   return StorageFS.readJson(path.join(streamDataDir(stream), name));
 }
@@ -475,8 +486,7 @@ describe('StreamSnapshotStore', () => {
   it('degrades a structurally unreadable work plan to empty LOUDLY (not via a silent .catch)', async () => {
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     // A non-object top-level shape survives the `!raw` guard but fails the
-    // object parse — the exact corruption the old whole-object `.catch`
-    // swallowed without a trace.
+    // object parse, so the read must warn rather than swallow it.
     await writeStreamFile(STREAM, 'workPlan.json', ['not', 'a', 'work plan']);
 
     const snap = await new StreamSnapshotStore().read(STREAM);
@@ -691,9 +701,7 @@ describe('StreamSnapshotStore', () => {
     // Same race as the output-files case above, replayed for
     // updateMissingOutputs: a stream outside the preloaded set is still
     // unseeded when the mutation lands, so the seed's disk read is racing
-    // the caller's read of its own write. Regression for the "half-fixed"
-    // eager-apply overlay gap (missingOutputs/compileFailures lacked the
-    // guarantee addOutputFiles/addUsage already had).
+    // the caller's read of its own write.
     await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
       '0': ['prior.tex'],
     });
@@ -702,8 +710,8 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
-    // Fails pre-fix: the plain mutate() path defers the whole apply behind
-    // the in-flight seed, so this synchronous read-back still sees nothing.
+    // The overlay applies eagerly, so this synchronous read-back sees the
+    // mutation while the seed is still in flight.
     expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
     await store.flush();
 
@@ -796,7 +804,7 @@ describe('StreamSnapshotStore', () => {
     await store.preload([STREAM]);
 
     store.updateCompileFailures(OTHER_STREAM, { 1: [next] });
-    // Fails pre-fix for the same reason as the missing-outputs case above.
+    // Eagerly applied for the same reason as the missing-outputs case above.
     expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
@@ -842,9 +850,8 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
 
-    // Consolidated per-stream state (#8124): every field lives on one record
-    // keyed by stream id, so priming a stale in-memory meta means seeding
-    // just the `meta` field of that record rather than a standalone map.
+    // Every field lives on one record keyed by stream id, so priming a stale
+    // in-memory meta means seeding just the `meta` field of that record.
     const internals = store as unknown as {
       records: Map<
         StreamTabId,
@@ -865,8 +872,7 @@ describe('StreamSnapshotStore', () => {
   it('preserves legacy meta taskState when unrelated meta patches are written', async () => {
     await installPlatform();
     const taskState = toolUseTaskState('legacy-search');
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       taskState,
     });
 
@@ -889,8 +895,7 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
     const taskState = toolUseTaskState('legacy-search');
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId,
       taskState,
     });
@@ -916,8 +921,7 @@ describe('StreamSnapshotStore', () => {
     const runConfig = toolUseConfig('legacy-search');
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(runConfig);
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       // A legacy sidecar whose top-level mirror never held a real execution id.
       executionId: 'not-an-execution-id!',
       runDescriptor: buildRunDescriptor({
@@ -950,8 +954,7 @@ describe('StreamSnapshotStore', () => {
     ): Promise<void> => {
       await StorageFS.ensureDir(resolveRunStoragePath(executionId));
       await getExecutionStore(executionId).writeConfig(toolUseConfig(agent));
-      await writeStreamFile(stream, 'meta.json', {
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      await writeMetaFile(stream, {
         executionId,
         // A descriptor persisted before #9119 added `kind`.
         runDescriptor: {
@@ -985,8 +988,7 @@ describe('StreamSnapshotStore', () => {
     const newExecutionId = 'def456' as ExecutionId;
     const oldConfig = toolUseConfig('old-search');
     const newConfig = toolUseConfig('new-search');
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
     await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
@@ -1019,8 +1021,7 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'abc123' as ExecutionId;
     const persisted = toolUseConfig('search', 'deepseekproT');
     const switched = toolUseConfig('search', 'kimi26T');
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
@@ -1064,8 +1065,7 @@ describe('StreamSnapshotStore', () => {
     // Disk meta drops back to the pre-descriptor shape for the same execution.
     // Re-seeding may read it, but may not synthesize a competing identity from
     // the execution config over the one run.start emitted.
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId,
     });
     await store.load([STREAM]);
@@ -1086,8 +1086,7 @@ describe('StreamSnapshotStore', () => {
 
     await StorageFS.ensureDir(resolveRunStoragePath(foreignExecutionId));
     await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId: foreignExecutionId,
     });
     await store.load([STREAM]);
@@ -1103,8 +1102,7 @@ describe('StreamSnapshotStore', () => {
   it('refreshes the run config from disk when another host switched the model', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
@@ -1130,8 +1128,7 @@ describe('StreamSnapshotStore', () => {
   it('replaces a legacy run config once meta names a real execution', async () => {
     await installPlatform();
     const legacyTaskState = toolUseTaskState('legacy-search');
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       taskState: legacyTaskState,
     });
 
@@ -1146,8 +1143,7 @@ describe('StreamSnapshotStore', () => {
     const handoffConfig = toolUseConfig('handoff-search');
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await getExecutionStore(executionId).writeConfig(handoffConfig);
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId,
     });
     await store.load([STREAM]);
@@ -1162,8 +1158,7 @@ describe('StreamSnapshotStore', () => {
   it('drops run identity when disk meta no longer names an execution', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
@@ -1173,8 +1168,7 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
     expect(store.getRunDescriptor(STREAM)).toMatchObject({ executionId });
 
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       description: 'Detached tab',
     });
     await store.load([STREAM]);
@@ -1190,8 +1184,7 @@ describe('StreamSnapshotStore', () => {
     const oldExecutionId = 'abc123' as ExecutionId;
     const newExecutionId = 'def456' as ExecutionId;
     const oldConfig = toolUseConfig('old-search');
-    await writeStreamFile(STREAM, 'meta.json', {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+    await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
     await StorageFS.ensureDir(resolveRunStoragePath(oldExecutionId));
@@ -1220,17 +1213,13 @@ describe('StreamSnapshotStore', () => {
     expect(wasRunStartInjected).toHaveBeenCalledOnce();
     expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
     expect(store.getRunConfig(STREAM)).toBeUndefined();
-    expect(store.getRunConfig(STREAM)).toBeUndefined();
   });
 
   it('persists a late reset and round patch that arrive during async hydration', async () => {
     await installPlatform();
-    const dir = streamDataDir(STREAM);
     const executionId = 'c0ffee' as ExecutionId;
-    await StorageFS.ensureDir(dir);
     await Promise.all([
-      writeStreamFile(STREAM, 'meta.json', {
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      writeMetaFile(STREAM, {
         executionId,
       }),
       writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
@@ -1265,10 +1254,8 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const dir = streamDataDir(STREAM);
     const executionId = 'deadbeef' as ExecutionId;
-    await StorageFS.ensureDir(dir);
     await Promise.all([
-      writeStreamFile(STREAM, 'meta.json', {
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      writeMetaFile(STREAM, {
         executionId,
         activeRunId: RUN,
       }),
@@ -2091,18 +2078,15 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('does not resurrect a deleted sidecar dir when deleteStream lands during hydration', async () => {
-    // Regression for #8226: applyStreamData awaits execution-config hydration
-    // mid-seed. If the stream is deleted during that await, the continuation
-    // must not re-resolve a record for the evicted stream and flush merged
-    // sidecars — pre-fix, the legacy-shaped file below queued an unconditional
-    // rewrite that recreated `streamData/{id}/` after deleteDir() removed it.
+    // applyStreamData awaits execution-config hydration mid-seed. If the
+    // stream is deleted during that await, the continuation must not
+    // re-resolve a record for the evicted stream and flush merged sidecars,
+    // which would recreate `streamData/{id}/` after deleteDir() removed it.
     await installPlatform();
     const dir = streamDataDir(STREAM);
     const executionId = 'dead01' as ExecutionId;
-    await StorageFS.ensureDir(dir);
     await Promise.all([
-      writeStreamFile(STREAM, 'meta.json', {
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      writeMetaFile(STREAM, {
         executionId,
       }),
       // Legacy nested shape → `missingOutputs` lands in `data.legacyKeys`,

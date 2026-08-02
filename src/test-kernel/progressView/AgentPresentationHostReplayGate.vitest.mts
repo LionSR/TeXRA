@@ -15,21 +15,17 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 
 /**
- * #9251 behavioral gate: the extension's `HostInteractions.emit` now routes
- * presentation and progress-view interaction events the way desktop's does
- * (a thin pass-through to a caller-supplied presentation host), replacing a
- * deleted per-host presentation-event bus and its 1000-event replay buffer.
- * These tests pin the two things that buffer used to guarantee and that must
- * still hold true with it gone:
+ * The extension's `HostInteractions.emit` is a thin pass-through to a
+ * caller-supplied presentation host, so redelivery is owned elsewhere. These
+ * tests pin the two guarantees that ownership has to keep:
  *
  *  1. A pending tool-edit approval redisplays exactly once per webview
- *     reload, and never redisplays once resolved — owned entirely by
- *     `ApprovalRequestHandler`'s pending/delivered bookkeeping, untouched by
- *     this refactor.
+ *     reload, and never redisplays once resolved, from
+ *     `ApprovalRequestHandler`'s pending/delivered bookkeeping.
  *  2. A presentation event emitted before any host attaches (the launch
  *     path, before `ProgressViewProvider` is constructed) is not lost: the
- *     runtime's `replayWhenAttached` queue — not the deleted buffer —
- *     replays it exactly once when the presentation host attaches.
+ *     runtime's `replayWhenAttached` queue replays it exactly once when the
+ *     presentation host attaches.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -65,12 +61,6 @@ afterEach(() => {
   for (const session of testSessions.splice(0)) session.dispose();
 });
 
-function attachedSession(): SessionHandle {
-  const session = createTestSession();
-  testSessions.push(session);
-  return session;
-}
-
 describe('extension presentation-event emit port (#9251 replay gate)', () => {
   it('redisplays a pending tool-edit approval exactly once per webview reload', () => {
     let canSend = false;
@@ -102,16 +92,17 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
   });
 
   it('replays a launch-path presentation event exactly once once the presentation host attaches', async () => {
-    const session = attachedSession();
+    const session = createTestSession();
+    testSessions.push(session);
     const showErrorMessage = vi
       .spyOn(vscode.window, 'showErrorMessage')
       .mockResolvedValue(undefined);
 
     try {
-      // Emitted before any host has attached — mirrors a launch failure
+      // Emitted before any host has attached, mirroring a launch failure
       // (`AgentLaunchContext.ts`) firing before `ProgressViewProvider` is
-      // constructed. Only the runtime's `replayWhenAttached` queue — not the
-      // deleted buffer — can save this event.
+      // constructed. Only the runtime's `replayWhenAttached` queue can save
+      // this event.
       session.interactions.emit(
         'requestShowError',
         { message: 'Launch failed before the view attached.' },

@@ -1,9 +1,9 @@
-// Regression coverage for the claude_agent tool's resume fallback: when a
-// caller passes a session_id whose in-memory ClaudeAgentSessions registry
-// entry is gone (extension reload, host crash, or a stale id from an older
-// run). The first fallback must claim the id before asynchronous setup, while
-// concurrent calls wait for that loop and then enqueue through the ordinary
-// follow-up path.
+// Launch and resume coverage for the claude_agent tool. The resume fallback
+// applies when a caller passes a session_id whose in-memory
+// ClaudeAgentSessions registry entry is gone (extension reload, host crash, or
+// a stale id from an older run): the first fallback claims the id before
+// asynchronous setup, while concurrent calls wait for that loop and then
+// enqueue through the ordinary follow-up path.
 
 import pDefer from 'p-defer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,7 +114,7 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
   }
 }
 
-describe('claude_agent tool — resume fallback for a torn-down registry', () => {
+describe('claude_agent tool launch and resume fallback', () => {
   beforeEach(() => {
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());

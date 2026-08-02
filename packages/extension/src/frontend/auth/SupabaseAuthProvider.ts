@@ -55,7 +55,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private readonly notifier: AuthNotifier;
 
-  constructor(_context: vscode.ExtensionContext, notifier: AuthNotifier) {
+  constructor(notifier: AuthNotifier) {
     this.notifier = notifier;
     this.sessionCoordinator = createHostAuthCoordinator({
       secrets: platform().secrets,
@@ -266,21 +266,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const requestedProvider = scopes
       .find((s) => s.startsWith('provider:'))
       ?.split(':')[1];
-
-    if (requestedProvider === 'github-browser') {
-      return this.createSessionViaSupabaseOAuth('github');
-    }
+    // 'github-browser' is the sign-in menu's name for GitHub OAuth handed off
+    // to the system browser; it resolves to the same Supabase provider.
+    const provider =
+      requestedProvider === 'github-browser' ? 'github' : requestedProvider;
 
     return this.createSessionViaSupabaseOAuth(
-      isOAuthProvider(requestedProvider)
-        ? requestedProvider
-        : DEFAULT_OAUTH_PROVIDER,
+      isOAuthProvider(provider) ? provider : DEFAULT_OAUTH_PROVIDER,
     );
   }
 
   /**
-   * Create session using traditional Supabase OAuth flow.
-   * Used in desktop VS Code where OAuth callbacks work reliably.
+   * Open the provider's Supabase OAuth page in the browser and wait for the
+   * callback. `buildOAuthOptions` picks the callback URI that works for the
+   * current UI kind (desktop bridge page vs. web tunnel).
    */
   private async createSessionViaSupabaseOAuth(
     provider: OAuthProvider,
@@ -319,7 +318,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             );
           }
           await this.storeSession(session);
-          return this.toVSCodeSession(session);
         },
       );
 

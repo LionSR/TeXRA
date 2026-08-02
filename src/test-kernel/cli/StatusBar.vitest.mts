@@ -165,8 +165,8 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('/api api');
     expect(display.bindings).toContain('/model models');
     expect(display.bindings).not.toContain('/agent agents');
-    // Ctrl-J newline must be visible — the binding exists in BaseTextInput
-    // (see #4399) but used to be discoverable only via source diving.
+    // Ctrl-J newline must stay advertised: the binding lives in BaseTextInput
+    // and the status row is its only discoverable surface.
     expect(display.bindings).toContain('Ctrl-J newline');
     expect(display.bindings).not.toContain('Shift-Enter newline');
     expect(display.bindings).toContain('Ctrl-C exit');

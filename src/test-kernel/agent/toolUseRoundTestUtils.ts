@@ -10,9 +10,9 @@ import { createRunTrace, StreamLogStore } from '@transcript';
 import { testRunScope } from './progressTestUtils';
 
 /**
- * Fields identical across every `ToolUseRoundServices` fixture -- only
- * `modelHandler`, `session`, `setting`, and `toolRegistry` vary per scenario,
- * so those stay inline at each call site.
+ * Fields identical across every `ToolUseRoundServices` fixture. `modelCell`,
+ * `session`, `setting`, and `toolRegistry` vary per scenario, so those stay
+ * inline at each call site.
  */
 export function baseRoundServices(
   traceLabel: string,
@@ -35,7 +35,7 @@ export function baseRoundServices(
 }
 
 /**
- * The model-handler surface a full round drives -- response extraction,
+ * The model-handler surface a full round drives: response extraction,
  * server-tool data, routing, streaming. Scenarios override only the members
  * whose behavior they exercise.
  */

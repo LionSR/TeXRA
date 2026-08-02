@@ -65,7 +65,7 @@ describe('AgentLaunchContext', () => {
     }
   });
 
-  it('publishes missing-agent banners through the explicit runtime host', async () => {
+  it('publishes missing-agent banners through the supplied host interactions', async () => {
     const explicit = createRecordingHost();
 
     await expect(

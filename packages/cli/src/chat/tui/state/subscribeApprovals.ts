@@ -1,8 +1,8 @@
 // TUI implementation of the session-owned HostInteractions approval port.
 //
 // Approval requests are routed through the typed queue (-> ApprovalModal ->
-// user) instead of the legacy stderr prompt. When the modal resolves, the
-// interaction promise resolves with the same host-facing result shape.
+// user). When the modal resolves, the interaction promise resolves with the
+// same host-facing result shape.
 //
 // Policy is honored *before* the modal is shown — `immediateDecision` runs
 // first so `--approval-policy yolo` auto-approves without a modal, and
@@ -102,9 +102,9 @@ import {
  * Returns the auto-switch decision, or `undefined` when the modal is needed
  * (no usable key stored, direct-key failure, or unknown provider).
  */
-async function maybeAutoSwitchRetry(
+function maybeAutoSwitchRetry(
   payload: TuiRetryRequest,
-): Promise<ApprovalDecision | undefined> {
+): ApprovalDecision | undefined {
   if (!isCliApiSwitchableRetry(payload)) return undefined;
   if (isCliChatGptSubscriptionRetry(payload)) return undefined;
 
@@ -379,7 +379,7 @@ async function requestRetryInteraction(
             missingPersonalApiKeyMessage,
           };
         }
-        autoSwitch = await maybeAutoSwitchRetry(promptRequest);
+        autoSwitch = maybeAutoSwitchRetry(promptRequest);
       } catch (error) {
         // Preparation only decides whether the modal can be skipped, so a
         // failed lookup falls through to the modal instead of denying a retry

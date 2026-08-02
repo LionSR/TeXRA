@@ -1,12 +1,10 @@
 // First-run authentication onboarding for the interactive `texra` CLI.
 //
-// Replaces today's dead-end (a launcher full of "login required" models that
-// errors out when the user picks chat) with a credential picker, modeled on
-// Claude Code / Gemini CLI / aider: ChatGPT subscription, Researcher Access,
-// and bring-your-own provider key are first-class credential paths, and skip is
-// explicit. After credentials are set the caller re-reads availability in the
-// SAME process (the included/ChatGPT/personal paths invalidate the relevant
-// caches), so the launcher/chat continues with real models — no restart.
+// A credential picker with three first-class paths (ChatGPT subscription,
+// Researcher Access, bring-your-own provider key) plus an explicit skip. After
+// credentials are set the caller re-reads availability in the SAME process
+// (the included/ChatGPT/personal paths invalidate the relevant caches), so the
+// launcher/chat continues with real models, with no restart.
 //
 // TTY-only: the gate returns immediately in headless / non-TTY / dumb-terminal
 // runs, and both entry points already reject those before calling it, so
@@ -16,9 +14,9 @@ import { Box, Text, useApp, useInput } from 'ink';
 import { useState } from 'react';
 
 import { listExecutions } from '@agent/storage';
-import { type SupabaseSession } from '@auth/SupabaseSession';
+import type { SupabaseSession } from '@auth/SupabaseSession';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
-import { type CodexSession } from '@auth/codex';
+import type { CodexSession } from '@auth/codex';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
@@ -121,9 +119,8 @@ const NO_ONBOARDING_RESULT: CliOnboardingResult = {
   declined: false,
 };
 
-interface OnboardingResolution {
-  readonly configured: boolean;
-  readonly declined: boolean;
+interface OnboardingResolution extends CliOnboardingResult {
+  /** Line printed to stdout once the picker settles, when there is one. */
   readonly summary?: string;
 }
 

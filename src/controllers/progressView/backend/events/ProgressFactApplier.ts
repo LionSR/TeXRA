@@ -213,11 +213,7 @@ export class ProgressFactApplier {
   handleSessionFact(fact: SessionFact): void {
     // Wrap once, and RETURN each case so async handlers' promises reach
     // `applyFact` (a discarded promise would let a post-await rejection escape
-    // `withEventErrorHandling`'s thenable check as an unhandled rejection). The
-    // switch is inlined here rather than in a single-caller helper, mirroring
-    // `handleRunFact`'s inline table lookup. `assertNever` stays inside the
-    // wrapper — an unreachable exhaustiveness guard that would only ever be
-    // logged, never thrown, and the union is closed so it never fires.
+    // `withEventErrorHandling`'s thenable check as an unhandled rejection).
     this.applyFact(`failed to handle ${fact.type} fact`, () => {
       switch (fact.type) {
         case 'goalStateChanged':
@@ -271,11 +267,11 @@ export class ProgressFactApplier {
     withEventErrorHandling('ProgressFacts', context, handle);
   }
 
-  public handleInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
+  handleInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
     this.webviewUpdater.updateInquiryThread(thread);
   }
 
-  public handleUpdateStreamDescription({
+  handleUpdateStreamDescription({
     streamId,
     description,
   }: UpdateStreamDescriptionPayload): void {
@@ -283,7 +279,7 @@ export class ProgressFactApplier {
     this.webviewUpdater.updateStreamDescription(streamId, description);
   }
 
-  public handleSetParentStream({
+  handleSetParentStream({
     childStreamId,
     parentStreamId,
   }: SetParentStreamPayload): void {
@@ -294,7 +290,7 @@ export class ProgressFactApplier {
     );
   }
 
-  public handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
+  handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getOutputFiles(streamId);
       this.webviewUpdater.updateFiles(streamId, {
@@ -303,9 +299,7 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleUpdateMissingOutputs({
-    streamId,
-  }: UpdateMissingOutputsPayload): void {
+  handleUpdateMissingOutputs({ streamId }: UpdateMissingOutputsPayload): void {
     this.sendIfActive(streamId, () => {
       const rounds = this.state.snapshots.getMissingOutputs(streamId);
       this.webviewUpdater.updateMissingOutputs(streamId, {
@@ -314,7 +308,7 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleUpdateCompileFailures({
+  handleUpdateCompileFailures({
     streamId,
   }: UpdateCompileFailuresPayload): void {
     this.sendIfActive(streamId, () => {
@@ -326,7 +320,7 @@ export class ProgressFactApplier {
     });
   }
 
-  public handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
+  handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
     const targets = this.state.snapshots.resolveMissingOutputTargets(payload);
     for (const streamId of targets) {
       this.sendIfActive(streamId, () =>
@@ -337,7 +331,7 @@ export class ProgressFactApplier {
     }
   }
 
-  public handleUpdateStreamUsage({
+  handleUpdateStreamUsage({
     streamId,
     storageKey,
   }: UpdateStreamUsagePayload): void {
@@ -350,17 +344,17 @@ export class ProgressFactApplier {
     );
   }
 
-  public handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
+  handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
     this.sendIfActive(streamId, () =>
       this.webviewUpdater.updateTodos(streamId, todos),
     );
   }
 
-  public handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
+  handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
     this.webviewUpdater.updatePlan(streamId, plan);
   }
 
-  public handleUpdateQueuedFollowUps({
+  handleUpdateQueuedFollowUps({
     streamId,
   }: UpdateQueuedFollowUpsPayload): void {
     this.sendIfActive(streamId, () => {
@@ -379,9 +373,7 @@ export class ProgressFactApplier {
     }
   }
 
-  public async handleSetActiveStream(
-    payload: SetActiveStreamPayload,
-  ): Promise<void> {
+  async handleSetActiveStream(payload: SetActiveStreamPayload): Promise<void> {
     const { streamId, isRemote } = payload;
     if (!streamId) {
       this.state.switchActiveStream('');
@@ -480,7 +472,7 @@ export class ProgressFactApplier {
     }
   }
 
-  public handleUpdateConversationProgress(
+  handleUpdateConversationProgress(
     data: UpdateConversationProgressPayload,
   ): void {
     const { streamId, progress } = data;
@@ -497,7 +489,7 @@ export class ProgressFactApplier {
     if (!this.progressDebounce.pending) this.progressDebounce.schedule();
   }
 
-  public handleUpdateRoundStage(data: UpdateRoundStagePayload): void {
+  handleUpdateRoundStage(data: UpdateRoundStagePayload): void {
     const { streamId, roundStage } = data;
     this.state.updateStreamState(streamId, (prev) => ({
       ...prev,
@@ -558,7 +550,7 @@ export class ProgressFactApplier {
    * or a retained child going live again) has no recorded phase to keep, so it
    * takes the one stamped at emission.
    */
-  public updateChildRoster(
+  updateChildRoster(
     parentStreamId: StreamTabId,
     next: StreamExecutionState['subagents'],
   ): void {
@@ -596,31 +588,27 @@ export class ProgressFactApplier {
     });
 
     const updated = this.state.getStreamState(parentStreamId);
-    if (
-      this.webviewUpdater.isAvailable() &&
-      parentStreamId === this.state.activeStream &&
-      updated
-    ) {
+    if (!updated) return;
+    this.sendIfActive(parentStreamId, () =>
       this.webviewUpdater.updateStreamBadges(parentStreamId, {
         subagents: updated.subagents,
-      });
-    }
+      }),
+    );
   }
 
   /**
    * Cancel every still-running stream because the app itself is going away.
    *
-   * Ruled a KEPT app-lifecycle fact, not a run-lifecycle write: the only
-   * caller is the extension's `extensionDeactivating` signal
+   * An app-lifecycle fact, not a run-lifecycle write: the only caller is the
+   * extension's `extensionDeactivating` signal
    * (`attachProgressBackendAppSignals`), which fires when no run can report its
-   * own outcome any more. It is not an owner of any run's terminal fact —
-   * `runFlowWithLifecycle` and `repairRestartedStreams` remain the only writers
-   * for runs that end on their own or are found stale after a restart. Because
-   * it goes through the same `StreamStatusMachine`, the transition table
-   * refuses anything a run already terminalized, so relocating it into the
-   * runtime buys nothing.
+   * own outcome any more. Runs that end on their own or are found stale after a
+   * restart are still terminalized by `runFlowWithLifecycle` and
+   * `repairRestartedStreams`, and this goes through the same
+   * `StreamStatusMachine`, whose transition table refuses anything a run
+   * already terminalized.
    */
-  public markAllRunningTasksAsCancelled(): void {
+  markAllRunningTasksAsCancelled(): void {
     for (const [stream, status] of this.state.streamStatus.entries()) {
       if (status === STREAM_PHASE.RUNNING) {
         this.state.streamStatus.transition(
@@ -633,7 +621,7 @@ export class ProgressFactApplier {
     }
   }
 
-  public syncStreamContent(
+  syncStreamContent(
     stream: ActiveStreamId,
     options: {
       /** Include conversation progress, badges, and parent stream in the batch. */
@@ -736,11 +724,11 @@ export class ProgressFactApplier {
 
     // Active phases keep the full log resident for runtime writes. Inactive,
     // unfocused streams release heavy entries and rehydrate on demand.
-    const requiresPersistentRehydrate =
-      this.state.streamLogs.mode.kind === 'persistent' &&
-      this.state.streamLogs.has(streamId) &&
-      !this.state.streamLogs.get(streamId);
     if (isActivePhase(status)) {
+      const requiresPersistentRehydrate =
+        this.state.streamLogs.mode.kind === 'persistent' &&
+        this.state.streamLogs.has(streamId) &&
+        !this.state.streamLogs.get(streamId);
       if (requiresPersistentRehydrate) {
         await this.state.streamLogs.ensureLoaded(streamId);
       }

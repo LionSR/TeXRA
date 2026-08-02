@@ -1,9 +1,6 @@
 // Chat-session controller: owns run start/resume/stop state-transition
 // orchestration for the CLI chat session. Host-neutral (no Ink/TUI rendering
 // dependencies) — the Ink component consumes narrow commands exposed here.
-//
-// Extracted from runChatTui.tsx per #6328 so that UI rendering, command
-// parsing, runtime orchestration, and persistence rules evolve independently.
 
 import PQueue from 'p-queue';
 
@@ -203,26 +200,6 @@ export function createChatSessionController(
     attachTuiRunFactSubscription(runtimeSession.events, snapshotStore),
   );
 
-  const activateAgentConfig = (
-    config: Pick<
-      AgentConfig,
-      'agent' | 'model' | 'cliMultiAgentPresetId' | 'delegationAgentScope'
-    >,
-    modelSource?: 'history',
-  ): void => {
-    patchSessionMeta({
-      agent: config.agent,
-      model: config.model,
-      ...(modelSource ? { modelSource } : {}),
-      canDelegate: chatAgentSupportsDelegation(config.agent),
-      teamName: readCliMultiAgentPresetName(
-        config.cliMultiAgentPresetId ?? undefined,
-      ),
-      cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
-      delegationAgentScope: config.delegationAgentScope ?? undefined,
-    });
-  };
-
   // Shared prelude of the three run-starting paths (start, resume,
   // follow-up-wake resume): resolve the model-keyed session context and
   // activate the config into the session meta signals in one step.
@@ -235,7 +212,17 @@ export function createChatSessionController(
   ): { readonly currentModel: string; readonly sessionContext: CliContext } => {
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
-    activateAgentConfig(config, modelSource);
+    patchSessionMeta({
+      agent: config.agent,
+      model: config.model,
+      ...(modelSource ? { modelSource } : {}),
+      canDelegate: chatAgentSupportsDelegation(config.agent),
+      teamName: readCliMultiAgentPresetName(
+        config.cliMultiAgentPresetId ?? undefined,
+      ),
+      cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
+      delegationAgentScope: config.delegationAgentScope ?? undefined,
+    });
     return { currentModel, sessionContext };
   };
 
@@ -570,12 +557,8 @@ export function createChatSessionController(
 
   const tryResumeStream = (
     streamId: StreamTabId,
-    recoveryOrOptions: RecoveryContinuation | AutoResumeOptions = {},
+    options: AutoResumeOptions = {},
   ): Promise<boolean> => {
-    const options: AutoResumeOptions =
-      'kind' in recoveryOrOptions
-        ? { recovery: recoveryOrOptions }
-        : recoveryOrOptions;
     let resolveRun: (resumed: boolean) => void = () => {};
     let rejectRun: (error: unknown) => void = () => {};
     const runPromise = new Promise<boolean>((resolve, reject) => {
@@ -789,7 +772,8 @@ export function createChatSessionController(
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();
     },
-    tryResumeStream,
+    tryResumeStream: (streamId, recovery) =>
+      tryResumeStream(streamId, recovery ? { recovery } : {}),
     canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
 }

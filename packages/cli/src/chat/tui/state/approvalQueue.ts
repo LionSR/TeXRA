@@ -108,11 +108,11 @@ export interface PendingApprovalSummary {
   readonly kind: PendingApprovalKind;
 }
 
-const CURRENT = signal<PendingApproval | undefined>(undefined);
-
-export const currentApproval = CURRENT as Signal.State<
+const CURRENT: Signal.State<PendingApproval | undefined> = signal<
   PendingApproval | undefined
->;
+>(undefined);
+
+export const currentApproval = CURRENT;
 
 /**
  * `preparing` holds a slot for a request that cannot be shown yet: invisible

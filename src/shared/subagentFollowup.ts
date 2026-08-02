@@ -1,12 +1,7 @@
 // Host-neutral parsing/formatting for the child-run delivery-envelope XML
-// blocks produced by src/tools/subagentResults.ts, codex.ts, claudeAgent.ts,
-// github/formatUtils.ts, and ExecutionSubscriptionBinder.ts (the tags owned
-// by @shared/deliveryTags: `<subagent-progress>`, `<subagent-result>`,
-// `<subagent-error>`, `<background-result>`, `<background-error>`,
-// `<codex-result>`, `<codex-error>`, `<claude-agent-result>`,
-// `<claude-agent-error>`, `<github-webhook-activity>`,
-// `<execution-activity>`). These blocks are FollowUpQueue messages addressed
-// to the orchestrator *model*, injected into the conversation as user turns.
+// blocks whose tag vocabulary @shared/deliveryTags owns (`DELIVERY_TAGS`).
+// These blocks are FollowUpQueue messages addressed to the orchestrator
+// *model*, injected into the conversation as user turns.
 //
 // Both hosts render them: the CLI transcript collapses each block to a terse
 // status line (summarizeSubagentFollowup), and the extension ProgressView
@@ -32,10 +27,8 @@ import {
 } from '@utils/text/stringUtils';
 
 // Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags), so
-// a future child-run kind only needs one entry there. Before this, a bare
-// `subagent-(?:progress|result|error)` recognizer let
-// `claude-agent-result`/`claude-agent-error`/`codex-result`/`codex-error`
-// leak as raw XML into the CLI transcript and queued follow-ups panel.
+// a future child-run kind only needs one entry there and can never leak as raw
+// XML into the CLI transcript or the queued follow-ups panel.
 const DELIVERY_TAG_NAMES = DELIVERY_TAGS.map((entry) => entry.tag);
 const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // `\b` after the alternation is NOT a safe tag-name terminator here: `-` is a
@@ -48,16 +41,13 @@ const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // `<execution-activity>`), or the exact `/>` self-closing delimiter, so anchor
 // on those delimiters instead of accepting any slash continuation.
 const TAG_NAME_END = '(?=[\\s>]|/>)';
-const SUBAGENT_TAG_RE = new RegExp(
+const DELIVERY_TAG_RE = new RegExp(
   `^<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}`,
 );
 // Embedded-block variants of the same recognizer, for delivery-envelope
 // blocks that appear mid-stream inside assistant-role text rather than as a
 // standalone follow-up message (see findIncompleteEmbeddedSubagentFollowup /
-// summarizeEmbeddedSubagentFollowups below). Previously hard-coded to
-// `subagent-(?:progress|result|error)`, which let `codex-result`,
-// `claude-agent-error`, and the rest of the non-`subagent-*` families leak as
-// raw XML when embedded (issue #7846, follow-up to #7679/#7788).
+// summarizeEmbeddedSubagentFollowups below).
 const EMBEDDED_DELIVERY_BLOCK_RE = new RegExp(
   `<(?:${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*/>|<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*>[\\s\\S]*?</\\1>`,
   'g',
@@ -80,7 +70,7 @@ const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
 export function deliveryTagOf(text: string): DeliveryTagName | undefined {
   // Safe cast: the pattern's only alternation group is the DELIVERY_TAGS tag
   // names, so a match can only capture one of those values.
-  return SUBAGENT_TAG_RE.exec(text.trim())?.[1] as DeliveryTagName | undefined;
+  return DELIVERY_TAG_RE.exec(text.trim())?.[1] as DeliveryTagName | undefined;
 }
 
 function followupText(text: unknown): string | undefined {

@@ -117,7 +117,7 @@ export function formatStreamStatusLabel(
   ) {
     return CLI_CHILD_WAITING_LABEL;
   }
-  return STREAM_STATUS_LABELS[style][key] ?? status;
+  return STREAM_STATUS_LABELS[style][key];
 }
 
 /** Compact round/turn progress label: `r2/3` when the planned total is known

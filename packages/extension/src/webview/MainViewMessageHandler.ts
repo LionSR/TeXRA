@@ -148,9 +148,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       // The webview applies the model selection itself and the host keeps no
       // model state; MODEL_SELECTED has no outbound counterpart to echo to.
-      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: () => {
-        /* State saved client-side */
-      },
+      [MAIN_VIEW_COMMANDS.MODEL_SELECTED]: () => {},
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: () =>
         safeExecuteCommand(
           'workbench.action.openSettings',
@@ -199,7 +197,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleSelectMultipleFiles(m),
 
       [MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED]: (m) =>
-        this.fileManager.handleGenericFileSelected({
+        this.fileManager.handleEditedFileSelected({
           command: m.command,
           filePath: m.filePath ?? '',
         }),

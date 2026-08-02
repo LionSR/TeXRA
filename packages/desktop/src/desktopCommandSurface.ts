@@ -1,4 +1,4 @@
-import type { StreamTabId } from '@shared/schemas';
+import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { type AgentCategory } from '@shared/schemas/agent';
 import {
@@ -35,6 +35,29 @@ export const DESKTOP_LOCAL_COMMANDS = {
 } as const;
 
 export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
+
+type VsCodeOnlyGettingStartedAction = Exclude<
+  GettingStartedAction,
+  'openWalkthrough'
+>;
+
+const VS_CODE_ONLY_GETTING_STARTED_LABELS = {
+  runSetup: 'Run setup assistant',
+  createSampleProject: 'Create sample project',
+  cloneOverleaf: 'Import from Overleaf',
+  downloadArxiv: 'Import from arXiv',
+} as const satisfies Record<VsCodeOnlyGettingStartedAction, string>;
+
+/**
+ * Sole owner of the desktop reply for a getting-started action only the VS Code
+ * extension can carry out. Both entry points (the main-view banner and the
+ * progress empty state) route here so the two cannot drift in wording.
+ */
+export function vsCodeOnlyGettingStartedMessage(
+  action: VsCodeOnlyGettingStartedAction,
+): string {
+  return `"${VS_CODE_ONLY_GETTING_STARTED_LABELS[action]}" requires the VS Code extension.`;
+}
 
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];

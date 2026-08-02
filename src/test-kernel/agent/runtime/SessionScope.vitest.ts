@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
@@ -18,7 +18,7 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Scope session-owned state.' };
 
-describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
+describe('session-scoped trace flushers', () => {
   it('registers the flush in the run session set, not the default set', () => {
     const store = StreamLogStore.ephemeral('test');
     const sessionB = createTestSession();
@@ -69,7 +69,7 @@ describe('session-scoped trace flushers (SDK Step 7d PR 3)', () => {
   });
 });
 
-describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
+describe('session-owned transcripts and follow-up queues', () => {
   it("writes run trace entries to the launching session's transcript store only", () => {
     const launching = createTestSession();
     const sibling = createTestSession();
@@ -122,7 +122,7 @@ describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
   });
 });
 
-describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
+describe('cleanupAllApprovals scope', () => {
   it("clears only the given session's pending interactions", async () => {
     const a = createTestSession();
     const b = createTestSession();
@@ -161,7 +161,7 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
   });
 });
 
-describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
+describe('sendFollowUp host-path session routing', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
     const parentStream = 'stream:fu-parent' as StreamTabId;

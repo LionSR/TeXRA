@@ -25,6 +25,7 @@ import {
   type FileLocation,
   type OutputFileInfo,
   type Plan,
+  type ProgressViewOutboundMessage,
   type StorageKey,
   type StreamTabId,
   type TodoItem,
@@ -40,8 +41,42 @@ import {
   emitRunEvent,
   emitStreamDescription,
   toolUseConfig,
-  track,
 } from './progressBackendHarness';
+
+/** The metadata patch a stream received, narrowed to its message arm. */
+function metadataPatchFor(
+  messages: ProgressViewOutboundMessage[],
+  streamName: string,
+): Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA }
+> {
+  const patch = messages.find(
+    (message) =>
+      message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+      message.streamInfo.name === streamName,
+  );
+  if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+    throw new Error(`Expected a metadata patch for ${streamName}`);
+  }
+  return patch;
+}
+
+/** The full-view sync message, narrowed to its message arm. */
+function fullSyncFrom(
+  messages: ProgressViewOutboundMessage[],
+): Extract<
+  ProgressViewOutboundMessage,
+  { command: typeof PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS }
+> {
+  const fullSync = messages.find(
+    (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+  );
+  if (fullSync?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {
+    throw new Error('Expected a full stream metadata sync');
+  }
+  return fullSync;
+}
 
 describe('ProgressBackend', () => {
   it('sends the full metadata set once for full-view sync', () => {
@@ -68,14 +103,7 @@ describe('ProgressBackend', () => {
       ),
     ).toHaveLength(0);
 
-    const fullSync = messages.find(
-      (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-    );
-    if (fullSync?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {
-      expect(fullSync.streams).toHaveLength(20);
-    } else {
-      throw new Error('Expected full stream metadata sync');
-    }
+    expect(fullSyncFrom(messages).streams).toHaveLength(20);
   });
 
   it('registers a suppressed interaction stream without switching to it', async () => {
@@ -149,15 +177,7 @@ describe('ProgressBackend', () => {
         phaseStage: { label: 'Reduce', index: 1, total: 3 },
       }),
     );
-    const patch = messages.find(
-      (message) =>
-        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-        message.streamInfo.name === run,
-    );
-    if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
-      throw new Error('Expected a metadata patch for the run stream');
-    }
-    expect(patch.streamState).toMatchObject({
+    expect(metadataPatchFor(messages, run).streamState).toMatchObject({
       phaseStage: { label: 'Reduce', index: 1, total: 3 },
       roundStage: null,
     });
@@ -236,31 +256,19 @@ describe('ProgressBackend', () => {
       ),
     ).toBe(false);
 
-    const patch = messages.find(
-      (message) =>
-        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-    );
+    const patch = metadataPatchFor(messages, 'child');
     messages.length = 0;
 
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
       backend.factApplier.getAllStreamStates(),
     );
-    const fullSync = messages.find(
-      (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-    );
+    const fullSync = fullSyncFrom(messages);
 
-    if (
-      patch?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-      fullSync?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS
-    ) {
-      expect(
-        fullSync.streams.find((stream) => stream.name === 'child'),
-      ).toEqual(patch.streamInfo);
-      expect(fullSync.streamStates?.child).toEqual(patch.streamState);
-    } else {
-      throw new Error('Expected patch and full sync messages');
-    }
+    expect(fullSync.streams.find((stream) => stream.name === 'child')).toEqual(
+      patch.streamInfo,
+    );
+    expect(fullSync.streamStates?.child).toEqual(patch.streamState);
   });
 
   it('scopes direct session events to each backend session', async () => {
@@ -484,7 +492,8 @@ describe('ProgressBackend', () => {
   });
 
   it('applies session run facts through the fact-native handler', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const target = createIsolatedRecordingBackend();
+    const { backend } = target;
     backend.setupEventListeners();
     const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
@@ -541,13 +550,10 @@ describe('ProgressBackend', () => {
 
     try {
       await backend.state.snapshots.load([]);
-      emitActiveStream(
-        { session },
-        {
-          streamId,
-          agentCategory: AgentCategory.Workflow,
-        },
-      );
+      emitActiveStream(target, {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
       handleRunFact.mockClear();
       updateFiles.mockClear();
       updateMissingOutputs.mockClear();
@@ -556,32 +562,32 @@ describe('ProgressBackend', () => {
       updateTodos.mockClear();
       updatePlan.mockClear();
 
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'addOutputFiles',
         streamId,
         filesByRound: { 1: [outputFile] },
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'updateMissingOutputs',
         streamId,
         filesByRound: { 1: ['paper.pdf'] },
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'updateCompileFailures',
         streamId,
         filesByRound: { 1: [compileFailure] },
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'updateTodos',
         streamId,
         todos,
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'updatePlan',
         streamId,
         plan,
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'usage',
         payload: {
           streamId,
@@ -590,7 +596,7 @@ describe('ProgressBackend', () => {
         },
         recordTranscript: false,
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'goalPaused',
         streamId,
       });
@@ -653,7 +659,8 @@ describe('ProgressBackend', () => {
   });
 
   it('drops malformed updateTodos/updatePlan run facts instead of forwarding them unchecked (#7562)', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const target = createIsolatedRecordingBackend();
+    const { backend } = target;
     backend.setupEventListeners();
     const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
     const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
@@ -661,22 +668,19 @@ describe('ProgressBackend', () => {
 
     try {
       await backend.state.snapshots.load([]);
-      emitActiveStream(
-        { session },
-        {
-          streamId,
-          agentCategory: AgentCategory.Workflow,
-        },
-      );
+      emitActiveStream(target, {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
       updateTodos.mockClear();
       updatePlan.mockClear();
 
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'domain',
         key: 'runFact.updateTodos',
         data: { streamId, todos: 'not-an-array' },
       });
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'domain',
         key: 'runFact.updatePlan',
         data: { streamId, plan: { steps: ['legacy shape'] } },
@@ -690,7 +694,8 @@ describe('ProgressBackend', () => {
   });
 
   it('no-ops session output-file run facts after dispose', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const target = createIsolatedRecordingBackend();
+    const { backend } = target;
     backend.setupEventListeners();
     const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
@@ -710,18 +715,15 @@ describe('ProgressBackend', () => {
 
     try {
       await backend.state.snapshots.load([]);
-      emitActiveStream(
-        { session },
-        {
-          streamId,
-          agentCategory: AgentCategory.Workflow,
-        },
-      );
+      emitActiveStream(target, {
+        streamId,
+        agentCategory: AgentCategory.Workflow,
+      });
       handleRunFact.mockClear();
       updateFiles.mockClear();
       backend.dispose();
 
-      emitRunEvent({ session }, streamId, {
+      emitRunEvent(target, streamId, {
         type: 'addOutputFiles',
         streamId,
         filesByRound: { 1: [outputFile] },
@@ -940,14 +942,7 @@ describe('ProgressBackend', () => {
       ),
     ).toBe(false);
 
-    const patch = messages.find(
-      (message) =>
-        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-        message.streamInfo.name === stream,
-    );
-    if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
-      throw new Error('Expected existing stream metadata patch');
-    }
+    const patch = metadataPatchFor(messages, stream);
 
     expect(patch.streamState).toMatchObject({
       kind: AgentCategory.ToolUse,
@@ -1048,9 +1043,6 @@ describe('ProgressBackend', () => {
     // block-bodied handler that discarded the promise would hand
     // `withEventErrorHandling` `undefined`, leaving this untouched — and a
     // post-await rejection would then escape logging as an unhandled rejection.
-    // `setStreamStatus` now has exactly one caller — the session-fact
-    // canonical `status` path — since `StreamStatusMachine` publishes every
-    // transition on that rail and the run-fact arm is gone.
     let adopted = 0;
     const tracking: PromiseLike<void> = {
       then(onFulfilled, onRejected) {
@@ -1075,7 +1067,7 @@ describe('ProgressBackend', () => {
     expect(adopted).toBe(1);
   });
 
-  it('keeps task-state metadata canonical across rendering and sync content', () => {
+  it('keeps snapshot metadata canonical across rendering and sync content', () => {
     const { backend, messages } = createRecordingBackend();
     const stream = 'search@deepseek#de5711c' as StreamTabId;
     const executionId = 'de5711c' as ExecutionId;
@@ -1095,7 +1087,7 @@ describe('ProgressBackend', () => {
       executionId,
     );
     backend.state.refreshStreamMetadataFromSnapshot(stream);
-    // A late provisional event cannot replace task-state authority.
+    // A late provisional event cannot replace snapshot authority.
     backend.state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
     });

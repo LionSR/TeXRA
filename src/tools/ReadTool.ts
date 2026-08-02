@@ -67,6 +67,54 @@ export type ReadInput = z.infer<typeof ReadInputSchema>;
 
 type AttachmentKind = 'pdf' | 'image' | 'document';
 
+/** Guard against very large EML files exhausting memory during parsing. */
+const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches ATTACHMENT_MAX_BYTES
+
+const IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.svg',
+]);
+
+const ATTACHMENT_COPY: Record<
+  AttachmentKind,
+  {
+    label: string;
+    rangeSummary: string;
+    rangeOutput: string;
+    coreOutput: string;
+  }
+> = {
+  pdf: {
+    label: 'PDF',
+    rangeSummary: 'Ignored requested line range because PDFs are binary.',
+    rangeOutput: 'Line ranges are not supported when reading PDFs.',
+    coreOutput:
+      'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context.',
+  },
+  image: {
+    label: 'Image',
+    rangeSummary: 'Ignored requested line range because images are binary.',
+    rangeOutput: 'Line ranges are not supported when reading images.',
+    coreOutput:
+      'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
+  },
+  document: {
+    label: 'Document',
+    rangeSummary:
+      'Ignored requested line range because office documents are binary.',
+    rangeOutput: 'Line ranges are not supported when reading office documents.',
+    coreOutput:
+      'Returned the document as a file attachment. Models with file input support can extract and analyze the document content.',
+  },
+};
+
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   parallelSafe: true,
@@ -206,51 +254,3 @@ export class ReadFileTool extends defineTool({
     return { status: 'executed', summary, output, files: [attachment] };
   }
 }
-
-/** Guard against very large EML files exhausting memory during parsing. */
-const MAX_EML_BYTES = 15 * 1024 * 1024; // 15 MiB — matches ATTACHMENT_MAX_BYTES
-
-const IMAGE_EXTENSIONS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.bmp',
-  '.webp',
-  '.tif',
-  '.tiff',
-  '.svg',
-]);
-
-const ATTACHMENT_COPY: Record<
-  AttachmentKind,
-  {
-    label: string;
-    rangeSummary: string;
-    rangeOutput: string;
-    coreOutput: string;
-  }
-> = {
-  pdf: {
-    label: 'PDF',
-    rangeSummary: 'Ignored requested line range because PDFs are binary.',
-    rangeOutput: 'Line ranges are not supported when reading PDFs.',
-    coreOutput:
-      'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context.',
-  },
-  image: {
-    label: 'Image',
-    rangeSummary: 'Ignored requested line range because images are binary.',
-    rangeOutput: 'Line ranges are not supported when reading images.',
-    coreOutput:
-      'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
-  },
-  document: {
-    label: 'Document',
-    rangeSummary:
-      'Ignored requested line range because office documents are binary.',
-    rangeOutput: 'Line ranges are not supported when reading office documents.',
-    coreOutput:
-      'Returned the document as a file attachment. Models with file input support can extract and analyze the document content.',
-  },
-};

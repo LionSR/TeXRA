@@ -102,8 +102,8 @@ async function runHistoryShow(
  * extension's "Export as HTML" button) and embeds it into the trace-viewer —
  * the same faithful Progress View replay, not a separate hand-written
  * exporter. Default mode writes one self-contained page to stdout (JS/CSS/
- * fonts all inlined, so it opens correctly via `file://` with no server —
- * `> out.html` works exactly like before). `--assets-dir <dir>` switches to
+ * fonts all inlined, so `> out.html` opens correctly via `file://` with no
+ * server). `--assets-dir <dir>` switches to
  * the shared-assets mode for a site publishing many traces: stages the
  * trace-viewer's multi-file bundle into `<dir>` (safe to repeat across many
  * exports pointed at the same directory) and writes just the trace data to

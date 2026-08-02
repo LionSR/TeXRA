@@ -202,56 +202,43 @@ function repairToWaiting(
   return false;
 }
 
-async function writeFailedTerminalStatuses(
-  streamIds: readonly StreamTabId[],
-  executionIds: ReadonlyMap<StreamTabId, ExecutionId>,
+/**
+ * Persist the FAILED terminal status for a repaired stream's execution,
+ * reporting whether that status reached disk. Finalization problems are logged
+ * rather than thrown: the in-memory repair has already committed.
+ */
+async function writeFailedTerminalStatus(
+  streamId: StreamTabId,
+  executionId: ExecutionId,
   finalizeExecution: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>,
   logger: RestartRepairLogger | undefined,
-): Promise<ExecutionId[]> {
-  const status = projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus;
-  const writes = streamIds.flatMap((streamId) => {
-    const executionId = executionIds.get(streamId);
-    return executionId ? [{ streamId, executionId }] : [];
-  });
-  const results = await Promise.allSettled(
-    writes.map(({ executionId }) =>
-      finalizeExecution({
-        executionId,
-        terminalStatus: status,
-        flowRecord: 'delete',
-      }),
-    ),
-  );
-
-  const updated: ExecutionId[] = [];
-  for (const [index, result] of results.entries()) {
-    const { streamId, executionId } = writes[index];
-    if (result.status === 'fulfilled') {
-      const finalization = result.value;
-      if (finalization.status === 'failed') {
-        logger?.warn('Failed to finalize restart-repair execution', {
-          data: {
-            streamId,
-            executionId,
-            stage: finalization.stage,
-            terminalStatusPersisted: finalization.terminalStatusPersisted,
-            error: finalization.error,
-          },
-        });
-      }
-      if (finalization.terminalStatusPersisted) {
-        updated.push(executionId);
-      }
-      continue;
-    }
-    logger?.warn('Restart-repair finalization rejected unexpectedly', {
-      data: { streamId, executionId, error: result.reason },
+): Promise<boolean> {
+  try {
+    const finalization = await finalizeExecution({
+      executionId,
+      terminalStatus: projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus,
+      flowRecord: 'delete',
     });
+    if (finalization.status === 'failed') {
+      logger?.warn('Failed to finalize restart-repair execution', {
+        data: {
+          streamId,
+          executionId,
+          stage: finalization.stage,
+          terminalStatusPersisted: finalization.terminalStatusPersisted,
+          error: finalization.error,
+        },
+      });
+    }
+    return finalization.terminalStatusPersisted;
+  } catch (error) {
+    logger?.warn('Restart-repair finalization rejected unexpectedly', {
+      data: { streamId, executionId, error },
+    });
+    return false;
   }
-
-  return updated;
 }
 
 /**
@@ -444,14 +431,16 @@ async function repairRestartedStream(
         now,
       )
     : [];
-  const terminalStatusUpdated = await writeFailedTerminalStatuses(
-    failedStreams,
-    executionId
-      ? new Map<StreamTabId, ExecutionId>([[streamId, executionId]])
-      : options.executionIds,
-    options.finalizeExecution ?? defaultFinalizeExecution,
-    options.logger,
-  );
+  const terminalStatusUpdated: ExecutionId[] = [];
+  if (failedStreams.length > 0 && executionId) {
+    const persisted = await writeFailedTerminalStatus(
+      streamId,
+      executionId,
+      options.finalizeExecution ?? defaultFinalizeExecution,
+      options.logger,
+    );
+    if (persisted) terminalStatusUpdated.push(executionId);
+  }
   return {
     waitingStreams,
     failedStreams,

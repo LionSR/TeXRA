@@ -279,8 +279,7 @@ describe('CLI multi-agent run command', () => {
       response: 'The proof is correct.',
       workingDirectory: '/tmp/project',
     });
-    // The v0.41 cut removed the three deprecated status projections; `outcome`
-    // is the only terminal fact the headless JSON publishes.
+    // `outcome` is the only terminal fact the headless JSON publishes.
     expect(Object.keys(emission?.json.result ?? {})).toEqual([
       'category',
       'executionId',
@@ -309,7 +308,8 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
       includeRemote: false,
     });
-    // The second call is the remote-inclusive reload: `loadAgents()`.
+    // The remote-inclusive reload goes through `refresh()`, not a second
+    // `loadAgents()`.
     expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
   });

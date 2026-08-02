@@ -713,8 +713,8 @@ describe('CLI child list display model', () => {
 
   // A `◆ {phase}` header opens a group and nothing closes one, so a row that
   // carries no phase must never be painted after one — an `agent()` call issued
-  // outside any `phase()`, or a roster row from before the field existed, would
-  // otherwise read as belonging to the phase above it. Driven through
+  // outside any `phase()` would otherwise read as belonging to the phase above
+  // it. Driven through
   // `streamTreeViews`, the one owner of row order, rather than a hand-ordered
   // `sessions` array, so it guards the production path.
   it('never renders a phase-less row beneath a phase header', async () => {

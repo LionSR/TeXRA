@@ -502,8 +502,7 @@ function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
   };
   // Carry the inline definition in the resolution so the load path doesn't
   // re-lookup mutable global state — a re-registration between resolution
-  // and load could otherwise pair a stale entry with a replaced definition
-  // (Fix #9).
+  // and load could otherwise pair a stale entry with a replaced definition.
   if (entry.source === 'inline') {
     resolved.inlineDefinition = inlineAgentDefinition(entry.name);
   }

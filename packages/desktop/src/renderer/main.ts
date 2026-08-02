@@ -191,10 +191,6 @@ const startupTeamPanel = createStartupTeamPanel({
 //
 // The conversation is the permanent task canvas. Project navigation stays in
 // the left sidebar, while files and tools share one optional right workbench.
-//
-// `setRouteState` survives only as a backwards-compat hook so existing IPC
-// (`desktop:setRoute` from menu/command-palette) still reaches the right
-// surface; sectionForRoute maps each legacy route onto its owning section.
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
@@ -222,6 +218,7 @@ function commandTitle(
   return shortcut ? `${label} - ${shortcut}` : label;
 }
 
+/** Publishes the current route on `<body>` for styling and end-to-end checks. */
 function setRouteState(route: DesktopRoute): void {
   document.body.dataset.desktopRoute = route;
 }
@@ -334,15 +331,14 @@ const conversationView: HTMLElement = document.createElement(
 );
 conversationView.setAttribute('data-desktop-view', 'progress');
 
-// Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
-// PRD § 7.D requires mounting <stream-tabs> directly (not inside <progress-app>).
+// Left rail: a <stream-tabs> mount wired directly to module-level
+// progressState rather than nested inside <progress-app>.
 const railTabs = document.createElement('stream-tabs') as StreamTabs;
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
 
-// The logs viewer now lives in a tab instead of a drawer, so its element is
-// hosted directly in the tab body rather than inside a wa-drawer.
+// The logs viewer is hosted directly in its workbench tab body.
 const logsController = createLogsPane();
 const logsPane = logsController.element;
 
@@ -467,8 +463,8 @@ function requestFileWrite(path: string, contents: string): Promise<void> {
 
 /**
  * Progress-view messages are dispatched straight into the shared
- * messageDispatcher; `<progress-app>` is never mounted on desktop, its children
- * mount directly (PRD § 7.C).
+ * messageDispatcher: `<progress-app>` is never mounted on desktop, its children
+ * mount directly.
  */
 function isProgressOutboundMessage(
   raw: unknown,
@@ -545,8 +541,7 @@ function layoutVisibleSurfaces(): void {
 
 /**
  * Browser tabs whose URL has already been handed to the main process. Without
- * this the page would reload on every re-render; without posting at all (the
- * original bug) the view stayed blank because nothing ever called loadURL.
+ * this the page would reload on every re-render.
  */
 const loadedBrowserTabs = new Set<string>();
 
@@ -1322,7 +1317,7 @@ if (bootstrapFailed) {
 // =============================================================================
 //
 // Settings is a tab, not a modal dialog: configuring a run while watching it is
-// the common case, and an overlay made those mutually exclusive.
+// the common case, which an overlay would make mutually exclusive.
 
 type ShowSettingsArgs = Parameters<DesktopCommandActions['showSettings']>;
 
@@ -1412,9 +1407,7 @@ function switchToStream(streamId: StreamTabId): void {
   postMessage(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, { stream: streamId });
 }
 
-// Clear the active stream so the center swaps back to <main-app>. PRD § 6:
-// "Composer pinned at the bottom of <main-app>; follow-up at the bottom of
-// <stream-conversation>" — returning to launcher is just nulling the active id.
+// Clear the active stream so the center pane swaps back to <main-app>.
 function returnToLauncher(): void {
   appState.set(
     mutate(appState.get(), (draft) => {
@@ -1424,9 +1417,9 @@ function returnToLauncher(): void {
   setRouteState('main');
 }
 
-// Bridge for legacy `desktop:setRoute` IPC (menu items, command palette).
-// Each route resolves to the tab that now owns its surface; 'main' additionally
-// clears the active stream so the workspace tab shows the launcher.
+// Entry point for `desktop:setRoute` IPC (menu items, command palette). Each
+// route resolves to the workbench tab that owns its surface; 'main'
+// additionally clears the active stream so the center pane shows the launcher.
 function setRoute(route: DesktopRoute): void {
   setRouteState(route);
   if (bootstrapFailed) return;
@@ -1558,8 +1551,8 @@ window.addEventListener('message', (event) => {
   for (const route of MESSAGE_ROUTES) {
     if (route(event.data)) return;
   }
-  // Progress view messages: dispatch directly into the shared messageDispatcher
-  // — no need to mount <progress-app> for plumbing. PRD § 7.C.
+  // Progress view messages dispatch directly into the shared
+  // messageDispatcher, with no <progress-app> mounted for plumbing.
   if (isProgressOutboundMessage(event.data)) {
     dispatchMessage(event.data);
   }
@@ -1683,9 +1676,9 @@ window.addEventListener(
 );
 
 function postWebviewReady(): void {
-  // The desktop main process expects `WEBVIEW_READY` from both 'main' and
-  // 'progress' views to drive startup messages + a full progress sync. The
-  // single renderer now plays both roles.
+  // The desktop main process expects `WEBVIEW_READY` from both the 'main' and
+  // 'progress' views to drive startup messages and a full progress sync; this
+  // single renderer plays both roles.
   postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'main' });
   postMessage(COMMON_COMMANDS.WEBVIEW_READY, { view: 'progress' });
 }

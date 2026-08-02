@@ -29,7 +29,7 @@ function attachRecorder(streamId: StreamTabId): {
   return { trace, rows, row: (id) => rows().find((entry) => entry.id === id) };
 }
 
-describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)', () => {
+describe('attachTranscriptRecorder StreamPhase-native group rows (issue #7993)', () => {
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
     const { trace, row } = attachRecorder(
       'stream:group-start-native' as StreamTabId,

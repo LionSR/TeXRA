@@ -1,9 +1,6 @@
-// `texra chat` entry point — single Ink-based session.
-//
-// The legacy line-based renderer was retired in favour of one canonical
-// path: the Ink TUI runs for every interactive `texra chat` invocation, and
-// non-TTY callers are pointed at `texra run` (which is what they actually
-// want for piping/scripting).
+// `texra chat` entry point — single Ink-based session. The Ink TUI runs for
+// every interactive `texra chat` invocation, and non-TTY callers are pointed
+// at `texra run` (which is what they actually want for piping/scripting).
 //
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
@@ -208,9 +205,7 @@ export function restorePendingSkillActivations(
   }
 }
 
-export type ChatTuiFocusedChildFollowUpRoute = FocusedChildFollowUpRoute;
-
-export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
+export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
   return focusedChildFollowUpRoute({
     activeStreamId: activeStreamIdSignal.get(),
     parentStream: parentStreamSignal.get(),
@@ -881,8 +876,7 @@ export async function runChat(
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
-  // signals "your turn." Combined with the StatusBar pill, this replaces
-  // the legacy reader.prompt() ergonomics.
+  // signals "your turn," alongside the StatusBar pill.
   disposers.push(
     defaultSession().events.subscribeStatus((change) => {
       if (

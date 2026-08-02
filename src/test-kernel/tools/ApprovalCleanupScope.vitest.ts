@@ -18,7 +18,7 @@ import {
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
 
-describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
+describe('approval cleanup scope', () => {
   it("per-stream cleanup leaves another stream's approval state intact", () => {
     const a = sid('s:appr-scope-a');
     const b = sid('s:appr-scope-b');

@@ -116,6 +116,10 @@ function createExpiredProvider(
   });
 }
 
+function createUnexpiredProvider(): ReturnType<typeof createProvider> {
+  return createProvider({ expiresAt: Date.now() + 60_000 });
+}
+
 describe('SupabaseAuthProvider expired-session refresh', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -148,9 +152,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       error: { status: 503 },
     });
     const { provider, clearSessionIfCurrent, showSignInPrompt } =
-      createProvider({
-        expiresAt: Date.now() + 60_000,
-      });
+      createUnexpiredProvider();
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
@@ -164,9 +166,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       error: null,
     });
     const { provider, clearSessionIfCurrent, showSignInPrompt } =
-      createProvider({
-        expiresAt: Date.now() + 60_000,
-      });
+      createUnexpiredProvider();
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
@@ -180,9 +180,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       error: { status: 401 },
     });
     const { provider, clearSessionIfCurrent, showSignInPrompt } =
-      createProvider({
-        expiresAt: Date.now() + 60_000,
-      });
+      createUnexpiredProvider();
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
@@ -196,9 +194,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       error: { status: 401 },
     });
     const { provider, clearSessionIfCurrent, showSignInPrompt } =
-      createProvider({
-        expiresAt: Date.now() + 60_000,
-      });
+      createUnexpiredProvider();
     clearSessionIfCurrent.mockResolvedValueOnce(false);
 
     await expect(provider.getSessions()).resolves.toEqual([]);
@@ -211,9 +207,7 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
 
   it('does not clear a session that revalidates as authenticated', async () => {
     const { provider, clearSessionIfCurrent, getStoredSessionState } =
-      createProvider({
-        expiresAt: Date.now() + 60_000,
-      });
+      createUnexpiredProvider();
     getStoredSessionState.mockResolvedValueOnce('authenticated');
 
     await expect(provider.clearStoredSession()).resolves.toBe(false);
@@ -230,9 +224,7 @@ describe('SupabaseAuthProvider model availability', () => {
   // Listeners recompute model options from the session-change event, so an
   // event published ahead of the invalidation serves the stale option list.
   it('invalidates model availability before publishing a new session', async () => {
-    const { provider, session, fire } = createProvider({
-      expiresAt: Date.now() + 60_000,
-    });
+    const { provider, session, fire } = createUnexpiredProvider();
 
     // The login path stores through a private method; no public entry point
     // reaches it without a live OAuth round trip.
@@ -249,9 +241,7 @@ describe('SupabaseAuthProvider model availability', () => {
   });
 
   it('invalidates model availability before publishing a sign-out', async () => {
-    const { provider, session, fire } = createProvider({
-      expiresAt: Date.now() + 60_000,
-    });
+    const { provider, session, fire } = createUnexpiredProvider();
 
     await provider.removeSession(session.id);
 
@@ -266,9 +256,7 @@ describe('SupabaseAuthProvider model availability', () => {
   // scope, on every device. Sign-out clears local storage only, as on desktop
   // and the CLI.
   it('clears the stored session without a remote revocation', async () => {
-    const { provider, session } = createProvider({
-      expiresAt: Date.now() + 60_000,
-    });
+    const { provider, session } = createUnexpiredProvider();
     const coordinator = (
       provider as unknown as {
         sessionCoordinator: { clearSession: ReturnType<typeof vi.fn> };

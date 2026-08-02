@@ -431,7 +431,7 @@ export async function activate(context: vscode.ExtensionContext) {
         'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
       );
     } else {
-      const authProvider = new SupabaseAuthProvider(context, {
+      const authProvider = new SupabaseAuthProvider({
         showError: (msg) => void vscode.window.showErrorMessage(msg),
         showInfo: (msg) => void vscode.window.showInformationMessage(msg),
         showSignInPrompt: async (reason) => {

@@ -26,7 +26,7 @@ import {
 } from './cliContext';
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
-import { createCliStyle, type CliStyle } from './style';
+import { createCliStyle } from './style';
 
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';
@@ -173,7 +173,7 @@ async function readCommandStdout(
 /**
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
  * malformed formula entry degrades to `null` (skipped) rather than failing the
- * whole parse, matching the previous per-entry type guards.
+ * whole parse, so one odd entry cannot hide an available upgrade.
  */
 const HomebrewInfoSchema = z.object({
   formulae: z
@@ -200,14 +200,6 @@ function parseHomebrewFormulaVersion(
 }
 
 /**
- * Result of one fetch attempt against the package source. For Homebrew,
- * `refreshed: false` means a failed tap refresh yielded only stale local
- * metadata: the version may still be offered, but the daily check is not
- * stamped as complete.
- */
-export type CliUpdateFetchResult = UpdateCheckFetchResult;
-
-/**
  * Attempt to refresh Homebrew tap metadata and fetch the latest formula
  * version. Without the explicit update, `brew info` can report stale local
  * metadata and hide an available upgrade until the user runs `brew update`
@@ -220,7 +212,7 @@ export async function fetchLatestHomebrewFormulaVersion(options?: {
   timeoutMs?: number;
   cwd?: string;
   runCommand?: CommandRunner;
-}): Promise<CliUpdateFetchResult> {
+}): Promise<UpdateCheckFetchResult> {
   const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
   const runCommand = options?.runCommand ?? readCommandStdout;
   const timeoutMs = options?.timeoutMs ?? HOMEBREW_COMMAND_TIMEOUT_MS;
@@ -260,30 +252,11 @@ function affirmative(answer: string): boolean {
   return normalized === '' || normalized === 'y' || normalized === 'yes';
 }
 
-/**
- * Announce that the new version installed, then exit. We intentionally do NOT
- * re-exec the freshly installed binary under the user: this process is still
- * the old code, and silently swapping the running program mid-session is more
- * surprising than a one-line hand-off. Asking the user to run `texra` again is
- * the clean boundary — the next invocation runs `latest` from a fresh process.
- *
- * Never returns — it calls `process.exit`.
- */
-function announceUpdateInstalled(latest: string, style: CliStyle): never {
-  writeTextStderr(
-    style.success(`Updated to ${latest}.`) +
-      style.muted(' Run ') +
-      style.command('texra') +
-      style.muted(' again to use it.'),
-  );
-  process.exit(CliExitCode.Success);
-}
-
 export interface CheckCliUpdateAvailableOptions {
   currentVersion: string;
   globalState: StateStore;
   /** Fetch the latest published version plus whether the source was live. */
-  fetchLatest: () => Promise<CliUpdateFetchResult>;
+  fetchLatest: () => Promise<UpdateCheckFetchResult>;
   /**
    * Present a newer version to the user (notice + prompt). Called only when a
    * strictly newer version was fetched, and always before the daily stamp is
@@ -413,8 +386,16 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     return;
   }
 
-  // The new version is on disk, but THIS process is still the old code. Don't
-  // re-exec it under the user — announce success and let them run `texra` again
-  // so the next session starts clean on the new version.
-  announceUpdateInstalled(latest, style);
+  // The new version is on disk, but THIS process is still the old code. We
+  // intentionally do NOT re-exec the freshly installed binary: silently
+  // swapping the running program mid-session is more surprising than a
+  // one-line hand-off, and the next `texra` invocation runs `latest` from a
+  // fresh process.
+  writeTextStderr(
+    style.success(`Updated to ${latest}.`) +
+      style.muted(' Run ') +
+      style.command('texra') +
+      style.muted(' again to use it.'),
+  );
+  process.exit(CliExitCode.Success);
 }

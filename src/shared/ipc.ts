@@ -1,7 +1,4 @@
-/**
- * Webview IPC command-name constants, grouped per view.
- * Formerly one file per view under `ipc/`.
- */
+/** Webview IPC command-name constants, grouped per view. */
 
 export const COMMON_COMMANDS = {
   THEME_SET: 'setTheme',
@@ -135,7 +132,6 @@ export const MAIN_VIEW_COMMANDS = {
   PACK_MULTIPLE: 'packMultiple',
   CLEAN_MULTIPLE: 'cleanMultiple',
 
-  // Other operations
   ACCEPT_EDITED: 'acceptEdited',
 } as const;
 
@@ -268,8 +264,8 @@ export const MEMORY_VIEW_COMMANDS = {
 
 /**
  * Command string literals for settings view schema definitions.
- * Defined here (not in settingsViewMessages.ts) to avoid circular dependency:
- * commands.ts → settingsViewMessages.ts → memoryViewMessages.ts → commands.ts
+ * Defined here (not in settingsViewMessages.ts) to avoid the cycle
+ * `ipc.ts → settingsViewMessages.ts → memoryViewMessages.ts → ipc.ts`.
  *
  * Memory/History/Profile inbound commands reference their own view's
  * command map (the single source of truth for those literals) instead of

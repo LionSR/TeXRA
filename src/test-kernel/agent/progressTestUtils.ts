@@ -35,9 +35,10 @@ import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**
- * Loosely-typed recording of host emissions. The recording host also encodes
- * typed `HostInteractions` requests and test-owned decisions as legacy-style
- * show/resolve entries, so the vocabulary is a plain string.
+ * Loosely-typed recording of host emissions. The recording host flattens typed
+ * `HostInteractions` requests and test-owned decisions into the same stream as
+ * plain `emit` calls, using its own `show*`/`resolve*` names, so the event
+ * vocabulary is a plain string.
  */
 export type RecordedProgressEvent = {
   event: string;

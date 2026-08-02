@@ -1,6 +1,6 @@
-// Public entry point for the CLI approval adapter. Internal CLI callers may
-// import the focused modules under ./approval/ directly; this barrel keeps the
-// stable surface for command modules, the TUI, and tests.
+// The headless CLI's `HostInteractions` implementation, plus the approval
+// surface the chat TUI and the tests import. Internal CLI callers may import
+// the focused modules under ./approval/ directly.
 
 import type {
   HostAgentProposalRequest,

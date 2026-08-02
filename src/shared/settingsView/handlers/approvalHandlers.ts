@@ -1,10 +1,8 @@
 /**
- * Approval settings handlers shared between desktop and extension hosts.
- *
- * Builds the approval-and-safety outbound message from workspace state and
- * applies updates from inbound messages. Both hosts hold the same workspace
- * state shape — the only host-specific dependency is the bash-approval flag,
- * which lives in `ConfigProvider` rather than workspace state.
+ * Builds the approval-and-safety outbound message shared by the desktop and
+ * extension hosts. Both hold the same workspace state shape — the only
+ * host-specific dependency is the bash-approval flag, which lives in
+ * `ConfigProvider` rather than workspace state.
  */
 import type { ConfigProvider } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';

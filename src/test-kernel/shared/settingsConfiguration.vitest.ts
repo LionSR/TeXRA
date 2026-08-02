@@ -74,7 +74,6 @@ describe('TexraSettingsSchema', () => {
     assert.equal(parsed.apiKeys.set, null);
     assert.equal(parsed.apiKeys.remove, null);
     assert.deepEqual(parsed.files.included.editedExtensions, ['.txt', '.tex']);
-    // T10: Google Interactions server-side state defaults ON.
     assert.equal(parsed.model.useGoogleInteractionsServerState, true);
     assert.deepEqual(parsed, DEFAULT_TEXRA_SETTINGS);
   });

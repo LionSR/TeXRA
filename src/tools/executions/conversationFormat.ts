@@ -3,8 +3,7 @@
  * text, built on the shared per-content-block formatter in
  * `@agent/storage/conversationFormat` (the same block recognition and
  * truncation the CLI's `texra history` conversation previews use).
- * Used by ExecutionsTool's /conversation endpoint; kept free of I/O so the
- * tool class stays focused on path routing and storage access.
+ * Pure: the caller owns storage access and paging.
  */
 import {
   formatConversationMessage,

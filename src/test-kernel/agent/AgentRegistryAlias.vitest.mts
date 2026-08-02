@@ -28,6 +28,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
+import { delay } from '@utils/core';
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
@@ -172,7 +173,7 @@ describe('agent registry legacy aliases', () => {
     });
 
     const pendingRefresh = refresh({ includeRemote: false });
-    await new Promise((resolveNextTick) => setTimeout(resolveNextTick, 0));
+    await delay(0);
 
     expect(getAgent('assistant')?.name).toBe('assistant');
 
@@ -373,7 +374,7 @@ describe('agent registry legacy aliases', () => {
       });
 
       const pendingRefresh = refresh({ includeRemote: false });
-      await new Promise((resolveNextTick) => setTimeout(resolveNextTick, 0));
+      await delay(0);
       const optionsPromise = computeAgentOptionsData();
 
       builtInToolUseDir.resolve();

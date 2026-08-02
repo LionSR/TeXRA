@@ -369,13 +369,6 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
   substate: STREAM_SUBSTATE.RESUMING,
 };
 
-function emitSessionStatus(
-  events: SessionEventHub,
-  payload: RunStatusProjectionPayload,
-): void {
-  events.emit(statusFact(payload));
-}
-
 describe('attachCliSessionProgressProjection', () => {
   it('projects every public NDJSON progress event with its typed payload', () => {
     const cases = Object.entries(PROGRESS_PROJECTION_CASES);
@@ -397,26 +390,18 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('writes retained session facts as public NDJSON progress records', () => {
     withProjection(({ events, writeRecord, detach }) => {
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: { streamId },
-        },
-      });
+      events.emit(sessionFact('setActiveStream', { streamId }));
 
       expect(writeRecord).toHaveBeenCalledWith(
         progressRecord('setActiveStream', { streamId }),
       );
 
       detach();
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: { streamId: 'stream:after-detach' as StreamTabId },
-        },
-      });
+      events.emit(
+        sessionFact('setActiveStream', {
+          streamId: 'stream:after-detach' as StreamTabId,
+        }),
+      );
 
       expect(writeRecord).toHaveBeenCalledTimes(1);
     });
@@ -424,13 +409,7 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('keeps followUpSent session-local', () => {
     withProjection(({ events, writeRecord }) => {
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'followUpSent',
-          payload: { streamId },
-        },
-      });
+      events.emit(sessionFact('followUpSent', { streamId }));
 
       expect(writeRecord).not.toHaveBeenCalled();
     });
@@ -438,7 +417,7 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('projects status facts to the public stream-status event', () => {
     withProjection(({ events, writeRecord }) => {
-      emitSessionStatus(events, resumingStatusPayload);
+      events.emit(statusFact(resumingStatusPayload));
 
       expect(writeRecord).toHaveBeenCalledTimes(1);
       expect(writeRecord).toHaveBeenCalledWith(
@@ -449,9 +428,9 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('ignores run-scope status trace events', () => {
     withProjection(({ events, writeRecord }) => {
-      // `status` is no longer a projected run fact: `StreamStatusMachine` owns
-      // the canonical session-fact rail, so a stray run-scope status event
-      // must never reach the public NDJSON stream.
+      // `StreamStatusMachine` owns the canonical session-fact rail, so a
+      // stray run-scope status event must never reach the public NDJSON
+      // stream.
       events.emit({
         scope: 'run',
         streamId,
@@ -476,8 +455,8 @@ describe('attachCliSessionProgressProjection', () => {
     };
 
     withProjection(({ events, writeRecord }) => {
-      emitSessionStatus(events, resumingStatusPayload);
-      emitSessionStatus(events, startingPayload);
+      events.emit(statusFact(resumingStatusPayload));
+      events.emit(statusFact(startingPayload));
 
       expect(writeRecord).toHaveBeenCalledTimes(2);
       expect(writeRecord).toHaveBeenNthCalledWith(

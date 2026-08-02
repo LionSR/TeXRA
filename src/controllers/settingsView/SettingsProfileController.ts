@@ -105,7 +105,7 @@ export class SettingsProfileController {
 
   getReliabilitySettings(): NumberVscodeSetting[] {
     return SETTINGS_RELIABILITY_SETTINGS.map((definition) => {
-      const { defaultValue, schema: _schema, ...setting } = definition;
+      const { defaultValue, schema, ...setting } = definition;
       const configuredValue = this.deps.getConfig<number>(
         setting.key,
         defaultValue,
@@ -113,8 +113,7 @@ export class SettingsProfileController {
       return {
         ...setting,
         value:
-          definition.schema &&
-          !definition.schema.safeParse(configuredValue).success
+          schema && !schema.safeParse(configuredValue).success
             ? defaultValue
             : configuredValue,
       };

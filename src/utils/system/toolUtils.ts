@@ -33,7 +33,6 @@ import { executeCommand, executeCommandSync } from './execUtils';
 
 const CHANNEL = 'toolUtils';
 
-// Interface for tool configuration (internal to this module)
 interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
   errorMessage: string;
@@ -56,42 +55,48 @@ async function reportMissingTool(
 
 // Platform-specific install instructions resolved at module load.
 // All guides are defined in @shared/constants/latex (single source of truth).
-const p = process.platform;
+function installGuide(guide: Parameters<typeof getInstallGuide>[0]): string {
+  return getInstallGuide(guide, process.platform);
+}
 
-const LATEXDIFF_INSTRUCTIONS = getInstallGuide(LATEXDIFF_INSTALL_GUIDE, p);
-const LATEXINDENT_INSTRUCTIONS = getInstallGuide(LATEXINDENT_INSTALL_GUIDE, p);
-const TEXFMT_INSTRUCTIONS = getInstallGuide(TEXFMT_INSTALL_GUIDE, p);
-const TEXCOUNT_INSTRUCTIONS = getInstallGuide(TEXCOUNT_INSTALL_GUIDE, p);
-const PERL_INSTRUCTIONS = getInstallGuide(PERL_INSTALL_GUIDE, p);
-const GHOSTSCRIPT_INSTRUCTIONS = getInstallGuide(GHOSTSCRIPT_INSTALL_GUIDE, p);
-const GM_INSTRUCTIONS = getInstallGuide(GRAPHICSMAGICK_INSTALL_GUIDE, p);
-const MAGICK_INSTRUCTIONS = getInstallGuide(IMAGEMAGICK_INSTALL_GUIDE, p);
-const WOLFRAM_INSTRUCTIONS = getInstallGuide(WOLFRAM_INSTALL_GUIDE, p);
-const PANDOC_INSTRUCTIONS = getInstallGuide(PANDOC_INSTALL_GUIDE, p);
-const PDFLATEX_INSTRUCTIONS = getInstallGuide(PDFLATEX_INSTALL_GUIDE, p);
-const LATEXMK_INSTRUCTIONS = getInstallGuide(LATEXMK_INSTALL_GUIDE, p);
+const LATEXDIFF_INSTRUCTIONS = installGuide(LATEXDIFF_INSTALL_GUIDE);
+const LATEXINDENT_INSTRUCTIONS = installGuide(LATEXINDENT_INSTALL_GUIDE);
+const TEXFMT_INSTRUCTIONS = installGuide(TEXFMT_INSTALL_GUIDE);
+const TEXCOUNT_INSTRUCTIONS = installGuide(TEXCOUNT_INSTALL_GUIDE);
+const PERL_INSTRUCTIONS = installGuide(PERL_INSTALL_GUIDE);
+const GHOSTSCRIPT_INSTRUCTIONS = installGuide(GHOSTSCRIPT_INSTALL_GUIDE);
+const GM_INSTRUCTIONS = installGuide(GRAPHICSMAGICK_INSTALL_GUIDE);
+const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
+const WOLFRAM_INSTRUCTIONS = installGuide(WOLFRAM_INSTALL_GUIDE);
+const PANDOC_INSTRUCTIONS = installGuide(PANDOC_INSTALL_GUIDE);
+const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
+const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
 
 // Most tool entries share the same "open installation docs" link and the same
 // "<tool> is not installed…" phrasing; only the label, install guide, and the
 // occasional reason/command differ. These builders capture just that variance.
 const INSTALL_DOCS = 'texra.openDoc,installation';
 
-const featureTool = (name: string, guide: string): string =>
-  `${name} is not installed. Please install it to use this feature.\n${guide}`;
-const texTool = (name: string, guide: string): string =>
-  `${name} is not installed. Please install a TeX distribution to use this feature.\n${guide}`;
+function featureTool(name: string, guide: string): string {
+  return `${name} is not installed. Please install it to use this feature.\n${guide}`;
+}
+
+function texTool(name: string, guide: string): string {
+  return `${name} is not installed. Please install a TeX distribution to use this feature.\n${guide}`;
+}
 
 /** Build a ToolConfig with the default install-docs link unless `docs: false`. */
-const withDocs = (
+function withDocs(
   errorMessage: string,
   extra: { command?: string | string[]; docs?: false } = {},
-): ToolConfig => ({
-  errorMessage,
-  ...(extra.command ? { command: extra.command } : {}),
-  ...(extra.docs === false ? {} : { openDocsCommand: INSTALL_DOCS }),
-});
+): ToolConfig {
+  return {
+    errorMessage,
+    ...(extra.command ? { command: extra.command } : {}),
+    ...(extra.docs === false ? {} : { openDocsCommand: INSTALL_DOCS }),
+  };
+}
 
-// All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   // ImageMagick / GraphicsMagick / system dependencies
   magick: withDocs(
@@ -264,7 +269,6 @@ export async function checkToolInstalled(
   toolOrConfig: string | ToolConfig,
   showError: boolean = true,
 ): Promise<boolean> {
-  // Get the config object - either passed directly or looked up by string key
   const toolName = typeof toolOrConfig === 'string' ? toolOrConfig : null;
   const config: ToolConfig | undefined =
     typeof toolOrConfig === 'string'

@@ -9,7 +9,7 @@ import * as yaml from 'yaml';
 // Local imports
 import { REPO_ROOT } from '@test/support/repoScan';
 
-/** A bundled tool-use agent: declares the tool roster its prompt refers to. */
+/** A tool-use agent: declares the tool roster its prompt refers to. */
 interface ToolUseAgentYaml {
   readonly name: string;
   readonly description: string;
@@ -80,6 +80,11 @@ describe('engineer agent prompt', () => {
     expect(agent.settings.tools).toContain('delegate_agent');
   });
 
+  it('can run deterministic workflow scripts when globally enabled', () => {
+    expect(agent.settings.tools).toContain('delegate_workflow_script');
+    expect(systemPrompt).not.toContain('delegate_workflow_script');
+  });
+
   it('grounds its delegation targets in the live Available agents roster', () => {
     // The fix for #6655: the engineer must defer to the agents the delegate_agent
     // tool currently lists, not assume its hardcoded specialists are reachable.
@@ -109,6 +114,19 @@ describe('engineer agent prompt', () => {
     ]) {
       expect(systemPrompt).toContain(role);
     }
+  });
+});
+
+describe('Lean orchestrator agent prompt', () => {
+  const agent = loadAgentYaml<ToolUseAgentYaml>(
+    'prompts/agents/remote/Lean4/leanOrchestrator.yaml',
+  );
+
+  it('can run deterministic workflow scripts when globally enabled', () => {
+    expect(agent.settings.tools).toContain('delegate_workflow_script');
+    expect(agent.prompts.systemPrompt).not.toContain(
+      'delegate_workflow_script',
+    );
   });
 });
 

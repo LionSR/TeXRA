@@ -24,12 +24,11 @@ import {
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
 
-// Test stream ID for per-stream YOLO mode tests
+// Test stream ID for the per-stream approval-bypass cases
 const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;
 
-// Mutable test handler reference — the Platform is frozen at init time, so
-// tests inject a delegating handler that reads this reference, mirroring the
-// pattern used by the CLI and desktop hosts.
+// Host interactions are attached once per platform install, so each case swaps
+// this reference and the attached port delegates to whatever it holds.
 let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;

@@ -1,5 +1,17 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+
+export interface ProgressToolbarButton {
+  id: string;
+  icon: TeXRAIconName;
+  command: string;
+  title: string;
+  titleActive?: string;
+  className?: string;
+  disabled?: boolean;
+  isToggle?: boolean;
+}
 
 /**
  * DOM element IDs used across the progress view.
@@ -49,7 +61,7 @@ export const GROUP_DOM_IDS = Object.freeze({
 
 const STOP_STREAM_BUTTON = Object.freeze({
   id: ELEMENT_IDS.STOP_STREAM_BTN,
-  icon: 'debug-stop',
+  icon: 'circle-stop',
   command: PROGRESS_VIEW_COMMANDS.STOP_STREAM,
   title:
     'Request task interruption (current API call will be aborted if supported)',
@@ -68,18 +80,18 @@ const RESTORE_STATE_BUTTON = Object.freeze({
 
 const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
-  icon: 'folder-opened',
+  icon: 'folder-open',
   command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
   title: 'Open in task storage: reveal this run folder and generated files',
   className: 'storage-button',
   disabled: true,
 });
 
-const WORKFLOW_TOOLBAR = [
+const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
   STOP_STREAM_BUTTON,
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
-    icon: 'debug-start',
+    icon: 'play',
     command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
     title: 'Start a fresh run (discards previous outputs)',
     className: 'run-button run-new-button',
@@ -87,7 +99,7 @@ const WORKFLOW_TOOLBAR = [
   },
   {
     id: ELEMENT_IDS.RESUME_BTN,
-    icon: 'debug-continue',
+    icon: 'forward-step',
     command: PROGRESS_VIEW_COMMANDS.RESUME,
     title: 'Resume from saved outputs (continues where it left off)',
     className: 'run-button resume-button',
@@ -97,7 +109,7 @@ const WORKFLOW_TOOLBAR = [
   OPEN_TASK_STORAGE_BUTTON,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
-    icon: 'diff-multiple',
+    icon: 'code-compare',
     command: PROGRESS_VIEW_COMMANDS.DIFF_STREAM,
     title: 'Run latexdiff on existing tex files',
     className: 'diff-button',
@@ -113,7 +125,7 @@ const WORKFLOW_TOOLBAR = [
   },
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
-    icon: 'archive',
+    icon: 'box-archive',
     command: PROGRESS_VIEW_COMMANDS.PACK_STREAM,
     title: 'Pack: Archive output files into a timestamped History folder',
     className: 'pack-button',
@@ -153,7 +165,7 @@ const COMPACT_RESPONSE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-const TOOL_USE_TOOLBAR = [
+const TOOL_USE_TOOLBAR: readonly ProgressToolbarButton[] = [
   STOP_STREAM_BUTTON,
   YOLO_TOGGLE_BUTTON,
   DELEGATED_WORK_APPROVAL_TOGGLE_BUTTON,

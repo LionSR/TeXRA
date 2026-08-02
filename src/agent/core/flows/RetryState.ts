@@ -34,20 +34,18 @@ const BACKGROUND_MODE_MIN_RETRIES = 3;
  * own failure-scaled backoff on top, so this is an implementation constant
  * rather than something a user tunes separately from the attempt count.
  */
-const RETRY_BACKOFF_MS = 1000;
+export const RETRY_BACKOFF_MS = 1000;
 
-/** Returns one initial attempt plus configured retries and their base backoff. */
-function getNodeRetryConfig(): { maxRetries: number; backoffMs: number } {
-  const maxAutoAttempts = getValidatedConfig(
-    'texra.model.retry.maxAttempts',
-    ModelRetryMaxAttemptsSchema,
-    DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+/** One initial attempt plus the configured number of automatic retries. */
+function getNodeMaxRetries(): number {
+  return (
+    1 +
+    getValidatedConfig(
+      'texra.model.retry.maxAttempts',
+      ModelRetryMaxAttemptsSchema,
+      DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+    )
   );
-
-  return {
-    maxRetries: 1 + maxAutoAttempts,
-    backoffMs: RETRY_BACKOFF_MS,
-  };
 }
 
 interface ManualRetryPromptResult {
@@ -122,13 +120,10 @@ export abstract class RetryableInvocationNode<
   protected _userCancelled = false;
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;
-  protected _retryBackoffMs: number;
   private _retryLifecycle: RetryLifecycleState | undefined;
 
   constructor() {
-    const config = getNodeRetryConfig();
-    super(config.maxRetries, config.backoffMs / 1000);
-    this._retryBackoffMs = config.backoffMs;
+    super(getNodeMaxRetries(), RETRY_BACKOFF_MS / 1000);
   }
 
   protected abstract getOperationName(): string;
@@ -371,15 +366,13 @@ export abstract class RetryableInvocationNode<
 
   async _exec(prepRes: unknown): Promise<unknown> {
     this._userCancelled = false;
-    const config = getNodeRetryConfig();
-    let maxRetries = config.maxRetries;
+    let maxRetries = getNodeMaxRetries();
 
     if (this.isBackgroundModeActive()) {
       maxRetries = Math.max(maxRetries, BACKGROUND_MODE_MIN_RETRIES);
     }
 
     this.maxRetries = maxRetries;
-    this._retryBackoffMs = config.backoffMs;
     this._retryLifecycle = {
       operationId: `model-operation-${generateShortId()}`,
       startedAt: Date.now(),
@@ -390,7 +383,7 @@ export abstract class RetryableInvocationNode<
     // This local delay is the fallback for retryable failures that do not
     // implicate a shared route. For classified route failures it overlaps the
     // gate's cooling interval, so the gate waits only for any remaining time.
-    this.wait = config.backoffMs / 1000;
+    this.wait = RETRY_BACKOFF_MS / 1000;
     // The run's one interrupt controller drives the retry loop's abort
     // handling; an interrupt is read back off the same signal in
     // `getFallbackResult`, so there is nothing to register or clear here.
@@ -400,8 +393,7 @@ export abstract class RetryableInvocationNode<
 
   async retryPrompt(_prepRes: unknown, error: Error): Promise<boolean> {
     if (isUserAbort(error)) return false;
-    // A missing credential cannot be fixed by retrying; fail immediately as
-    // the pre-cell eager client build did.
+    // A missing credential cannot be fixed by retrying; fail immediately.
     if (hasMissingApiKeyErrorMarker(error)) return false;
 
     const result = await this.handleManualRetryPrompt(error);

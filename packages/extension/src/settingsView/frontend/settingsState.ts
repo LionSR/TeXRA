@@ -1,12 +1,8 @@
 /**
  * Module-level reactive state for the Settings view.
  *
- * Hoisted from `SettingsApp` private instance fields onto module scope,
- * mirroring the Progress view's `progressState.ts` (audit item A3). Unlike
- * `progressState.ts`, there is no monolithic nested state object here — each
- * signal below was already an independent, flat piece of state (no shared
- * per-stream Map indirection), so slices import and set the specific signals
- * they need directly instead of going through a generic get/set context.
+ * Each signal is an independent, flat piece of state, so slices import and set
+ * the ones they need directly rather than going through a get/set context.
  *
  * SettingsApp has no persistence/restore path: every signal here is written
  * only by the composed `messageHandlers` registry (see `messageDispatcher.ts`
@@ -18,15 +14,10 @@
  * multiple independent settings instances on the same page, this file must be
  * promoted to a per-instance store.
  *
- * Reset mechanism: every writable signal below is declared through
- * `trackedSignal()` instead of the bare `signal()` import. `trackedSignal`
- * records the signal's own default-value factory in `resetCallbacks` at the
- * point of declaration, so `resetSettingsState()` can replay that single list
- * instead of a hand-written, independently-ordered sequence of `.set()`
- * calls. There is only one place that knows each signal's default — the
- * `trackedSignal(() => ...)` call site — so a new signal can't be added
- * without also being wired into the reset; forgetting the wrapper here would
- * mean the signal isn't exported as reactive state at all.
+ * Declare writable signals with `trackedSignal()` rather than the bare
+ * `signal()`: the registry records each default-value factory at its
+ * declaration site, and that single list is what `resetSettingsState()`
+ * replays. A signal declared any other way is silently left out of the reset.
  */
 
 import { createTrackedSignalRegistry } from '@shared/signals';
@@ -86,7 +77,7 @@ const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
-// declared. See the file-header note on the reset mechanism.
+// declared.
 // ---------------------------------------------------------------------------
 
 const { trackedSignal, resetAll: resetTrackedSignals } =
@@ -254,10 +245,7 @@ export const unsupportedCommands = trackedSignal<ReadonlySet<string> | null>(
 
 // ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context
-// (tests, hot reload). Mirrors `resetProgressState()` in progressState.ts in
-// intent (replay the one source of truth on remount); the mechanism differs
-// because these signals stay individually exported rather than living behind
-// one monolithic object signal — see the file-header note.
+// (tests, hot reload), so a fresh mount replays every registered default.
 // ---------------------------------------------------------------------------
 export function resetSettingsState(): void {
   resetTrackedSignals();
