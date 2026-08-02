@@ -493,7 +493,11 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   }
 
-  const progressViewProvider = new ProgressViewProvider(context);
+  const progressViewProvider = new ProgressViewProvider(
+    context,
+    config,
+    workspace,
+  );
   await progressViewProvider.initialize();
 
   logger.info('extension', 'TeXRA extension activated');
@@ -560,20 +564,9 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
-    // gates the GitHub PR subscription tool group. Native workspace settings
-    // must follow the same first-folder replacement as workspace and storage.
+    // gates the GitHub PR subscription tool group. ProgressViewProvider owns
+    // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void config
-        .rebindWorkspace(workspace.getWorkspacePath())
-        .catch((error) => {
-          logger.error(
-            'extension',
-            `Failed to load TeXRA settings after workspace change: ${toErrorMessage(error)}`,
-          );
-          void vscode.window.showErrorMessage(
-            'TeXRA could not load settings for the new workspace. Restart TeXRA before changing settings.',
-          );
-        });
       void refreshToolAvailability().catch(
         logRefreshFailure('workspace folder change'),
       );
