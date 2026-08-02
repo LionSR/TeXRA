@@ -2,20 +2,21 @@ import '@test/support/defaultSessionTestSetup';
 
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App, type AppProps } from '@cli/chat/tui/App';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   activeStreamId,
+  focusStream,
   infoPane,
   openInfoPane,
-  patchStream,
   resetCliState,
   rootRunStartAvailable,
   rootStreamId,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import { setParentStream } from '@cli/chat/tui/state/childExecutions';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import {
   loadInk,
@@ -25,6 +26,8 @@ import {
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
 const ROOT = 'escape-root' as StreamTabId;
+const CHILD = 'escape-child' as StreamTabId;
+const GRANDCHILD = 'escape-grandchild' as StreamTabId;
 const ESC = String.fromCharCode(27);
 
 function seedRootStream(): void {
@@ -34,7 +37,19 @@ function seedRootStream(): void {
     streamId: ROOT,
     status: STREAM_PHASE.RUNNING,
   });
-  activeStreamId.set(ROOT);
+  focusStream(ROOT);
+}
+
+function seedChildHierarchy(): void {
+  seedRootStream();
+  for (const streamId of [CHILD, GRANDCHILD]) {
+    setStreamStatusInCliState({
+      streamId,
+      status: STREAM_PHASE.RUNNING,
+    });
+  }
+  setParentStream(CHILD, ROOT);
+  setParentStream(GRANDCHILD, CHILD);
 }
 
 function appProps(
@@ -69,13 +84,13 @@ function fakeHistory(entries: readonly string[]): InputHistory {
   };
 }
 
-afterEach(() => {
-  resetCliState();
-});
+beforeEach(() => resetCliState());
+afterEach(() => resetCliState());
 
 describe('App foreground Escape ownership', () => {
-  it('lets a foreground information pane own Escape', async () => {
-    seedRootStream();
+  it('lets a foreground information pane own Escape before child back', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
     openInfoPane('Reference', 'Foreground content');
     const onInterruptStream = vi.fn();
     const { instance, stdin } = await renderApp(appProps(onInterruptStream));
@@ -86,7 +101,102 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => infoPane.get() === undefined);
       await sleep(600);
 
+      expect(activeStreamId.get()).toBe(CHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('walks nested children back one immediate parent per bare Escape', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === CHILD);
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT);
+
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('treats list Escape as cancel and Tab as the explicit ownership transfer', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin, stdout } = await renderApp(
+      appProps(onInterruptStream),
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('Session selection active.'));
+      const beforeListCancel = stdout.output.length;
+      stdin.write(ESC);
+      await waitFor(() =>
+        stdout.output.slice(beforeListCancel).includes('Esc back'),
+      );
+
+      expect(activeStreamId.get()).toBe(CHILD);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+
+      const beforeListFocus = stdout.output.length;
+      stdin.write('\t');
+      await waitFor(() =>
+        stdout.output
+          .slice(beforeListFocus)
+          .includes('Session selection active.'),
+      );
+      const beforeTabReturn = stdout.output.length;
+      stdin.write('\t');
+      await waitFor(() =>
+        stdout.output.slice(beforeTabReturn).includes('Esc back'),
+      );
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('does not transfer idle input arrows to an available child list', async () => {
+    seedChildHierarchy();
+    focusStream(ROOT);
+    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\u001b[B');
+      stdin.write('\u001b[A');
+      await sleep(30);
+
+      expect(stdout.output).not.toContain('Session selection active.');
+      expect(activeStreamId.get()).toBe(ROOT);
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('interrupts a promoted top-level stream because it has no back relation', async () => {
+    seedChildHierarchy();
+    setParentStream(CHILD, null);
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await waitFor(() => onInterruptStream.mock.calls.length === 1);
+
+      expect(onInterruptStream).toHaveBeenCalledWith(CHILD);
+      expect(activeStreamId.get()).toBe(CHILD);
     } finally {
       instance.unmount();
     }
