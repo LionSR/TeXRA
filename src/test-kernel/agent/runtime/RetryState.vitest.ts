@@ -556,7 +556,7 @@ describe('RetryState', () => {
     }
   });
 
-  it('counts client preparation failures as retry attempts', async () => {
+  it('counts client preparation failures and preserves automatic retry provenance', async () => {
     await installPlatform({
       config: { 'texra.model.retry.maxAttempts': 0 },
     });
@@ -578,7 +578,10 @@ describe('RetryState', () => {
       .mockResolvedValue({});
     const session = sessionWithInteractions(
       {
-        requestRetry: async () => ({ action: 'retry' as const }),
+        requestRetry: async () => ({
+          action: 'retry' as const,
+          decisionSource: 'automatic' as const,
+        }),
         cancel: () => {},
       },
       new StreamStatusMachine(),
@@ -618,6 +621,15 @@ describe('RetryState', () => {
         ['attempt_started', 2],
         ['attempt_succeeded', 2],
       ]);
+      expect(
+        events.find((event) => event.event === 'retry_decided'),
+      ).toMatchObject({ decisionSource: 'automatic' });
+      expect(
+        events.find(
+          (event) =>
+            event.event === 'attempt_started' && event.attemptOrdinal === 2,
+        ),
+      ).toMatchObject({ decisionSource: 'automatic' });
       expect(getClient).toHaveBeenCalledTimes(2);
     } finally {
       clearStreamStatusForTest(session.status, streamId);

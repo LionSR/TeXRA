@@ -54,6 +54,7 @@ interface ManualRetryPromptResult {
   shouldRetry: boolean;
   userCancelled: boolean;
   clientPrepared?: boolean;
+  retrySource?: RetryAttemptSource;
 }
 
 type RetryAttemptSource = 'automatic' | 'human';
@@ -411,7 +412,7 @@ export abstract class RetryableInvocationNode<
 
     if (result.shouldRetry) {
       if (this._retryLifecycle) {
-        this._retryLifecycle.nextAttemptSource = 'human';
+        this._retryLifecycle.nextAttemptSource = result.retrySource ?? 'human';
       }
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
@@ -484,10 +485,12 @@ export abstract class RetryableInvocationNode<
       throw new Error('HostInteractions.requestRetry is required');
     }
     const result = await interaction;
-    let decisionSource: 'human' | 'denied' | 'cancelled';
-    if (result.action === 'retry') decisionSource = 'human';
-    else if (result.action === 'deny') decisionSource = 'denied';
-    else decisionSource = 'cancelled';
+    const retrySource =
+      result.action === 'retry'
+        ? (result.decisionSource ?? 'human')
+        : undefined;
+    const decisionSource =
+      retrySource ?? (result.action === 'deny' ? 'denied' : 'cancelled');
     this.logRetryLifecycle('retry_decided', {
       action: result.action,
       decisionSource,
@@ -498,7 +501,12 @@ export abstract class RetryableInvocationNode<
       streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
         trace: logger,
       });
-      return { shouldRetry: true, userCancelled: false, clientPrepared };
+      return {
+        shouldRetry: true,
+        userCancelled: false,
+        clientPrepared,
+        retrySource,
+      };
     }
 
     if (result.action === 'deny') {
