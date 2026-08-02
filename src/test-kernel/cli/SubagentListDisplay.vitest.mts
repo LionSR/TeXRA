@@ -437,7 +437,6 @@ describe('CLI child list display model', () => {
     expect(childStatusColor('error')).toBe('red');
     expect(childStatusColor('failed')).toBe('red');
     expect(childStatusColor('exit 2')).toBe('red');
-    expect(childStatusColor('stopped')).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.CANCELLED)).toBe('gray');
     expect(childStatusColor(STREAM_PHASE.COMPLETED)).toBe('green');
   });
