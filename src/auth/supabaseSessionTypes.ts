@@ -79,7 +79,7 @@ interface SupabaseCallbackParseError {
 export type SupabaseCallbackResult =
   SupabaseCallbackParseResult | SupabaseCallbackParseError;
 
-export function firstAccountLabel(
+function firstAccountLabel(
   ...candidates: readonly (string | null | undefined)[]
 ): string {
   for (const candidate of candidates) {

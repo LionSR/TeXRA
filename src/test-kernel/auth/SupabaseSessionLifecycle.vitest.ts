@@ -365,30 +365,6 @@ describe('SupabaseSession', () => {
       assert.equal(getReadCount(), 1);
     });
 
-    it('creates a session from host-neutral callback URI parts', async () => {
-      const { coordinator } = createCoordinator();
-
-      const result = await coordinator.createSessionFromCallback({
-        path: '/auth-callback',
-        fragment: new URLSearchParams({
-          access_token: 'access-token',
-          refresh_token: 'refresh-token',
-          expires_in: '3600',
-        }).toString(),
-      });
-
-      assert.equal(result.success, true);
-      if (!result.success) return;
-      assert.equal(result.session.id, 'user-id');
-      assert.equal(result.session.accessToken, 'access-token');
-      assert.equal(result.session.refreshToken, 'refresh-token');
-      assert.deepEqual(result.session.account, {
-        id: 'user-id',
-        label: 'user@example.com',
-      });
-      assert.ok(result.session.expiresAt > Date.now());
-    });
-
     it('exchanges a PKCE code from the query for a session', async () => {
       const client = {
         auth: {
@@ -445,26 +421,21 @@ describe('SupabaseSession', () => {
       assert.equal(result.isAuthError, true);
     });
 
-    it('falls back to default callback expiry when expires_in is invalid', async () => {
+    it('rejects retired implicit-token callbacks', async () => {
       const { coordinator } = createCoordinator();
-      const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
 
       const result = await coordinator.createSessionFromCallback({
         path: '/auth-callback',
-        fragment: new URLSearchParams({
+        query: new URLSearchParams({
           access_token: 'access-token',
           refresh_token: 'refresh-token',
-          expires_in: 'not-a-number',
         }).toString(),
       });
 
-      assert.equal(result.success, true);
-      if (!result.success) return;
-      assert.ok(result.session.expiresAt >= earliestExpiry);
-      assert.ok(
-        result.session.expiresAt <=
-          Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      );
+      assert.deepEqual(result, {
+        success: false,
+        error: 'Missing authorization code in callback',
+      });
     });
 
     it('refreshes custom sessions through the injected fetch boundary', async () => {
