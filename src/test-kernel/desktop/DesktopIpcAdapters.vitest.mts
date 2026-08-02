@@ -199,20 +199,19 @@ describe('desktop IPC adapters', () => {
     await Promise.resolve();
 
     expect(postToRenderer).toHaveBeenNthCalledWith(1, {
-      command: 'desktop:setRoute',
-      route: 'main',
+      command: 'desktop:showLauncher',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(2, {
-      command: 'desktop:setRoute',
-      route: 'settings',
+      command: 'desktop:openWorkbench',
+      kind: 'settings',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(3, {
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.MODELS,
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(4, {
-      command: 'desktop:setRoute',
-      route: 'settings',
+      command: 'desktop:openWorkbench',
+      kind: 'settings',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(5, {
       agentSubTab: AgentCategory.ToolUse,
@@ -239,8 +238,8 @@ describe('desktop IPC adapters', () => {
       customDirSet: false,
     });
     expect(postToRenderer).toHaveBeenCalledWith({
-      command: 'desktop:setRoute',
-      route: 'settings',
+      command: 'desktop:openWorkbench',
+      kind: 'settings',
     });
     expect(postToRenderer).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
