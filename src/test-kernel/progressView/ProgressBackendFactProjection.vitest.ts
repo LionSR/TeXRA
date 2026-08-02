@@ -79,46 +79,6 @@ function fullSyncFrom(
 }
 
 describe('ProgressBackend', () => {
-  it('shows process streams only while they are in flight', () => {
-    const { backend } = createIsolatedRecordingBackend();
-    const root = 'root-session' as StreamTabId;
-    const processStream = 'bash#background-process' as StreamTabId;
-
-    backend.state.streamLogs.ensureStream(root);
-    backend.state.streamLogs.ensureStream(processStream);
-    backend.state.updateStreamMetadata(processStream, {
-      agentCategory: AgentCategory.ToolUse,
-      run: {
-        kind: 'process',
-        agent: 'bash',
-        instruction: 'corepack pnpm run desktop:package:dist',
-      },
-    });
-
-    // Restored process transcripts have no live phase and must not reappear.
-    expect(buildStreamInfos(backend.state).map((info) => info.name)).toEqual([
-      root,
-    ]);
-
-    backend.state.streamStatus.transition(
-      processStream,
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
-    expect(buildStreamInfos(backend.state).map((info) => info.name)).toContain(
-      processStream,
-    );
-
-    backend.state.streamStatus.transitionToTerminal(
-      processStream,
-      STREAM_PHASE.COMPLETED,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
-    expect(buildStreamInfos(backend.state).map((info) => info.name)).toEqual([
-      root,
-    ]);
-  });
-
   it('sends the full metadata set once for full-view sync', () => {
     const { backend, messages } = createRecordingBackend();
 

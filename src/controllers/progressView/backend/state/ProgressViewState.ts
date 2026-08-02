@@ -35,7 +35,7 @@ import {
 } from '@shared/state/PersistedState';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
-import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -244,21 +244,13 @@ export class ProgressViewState {
 
   /**
    * Stream tabs offered for selection, newest first — the order
-   * `buildStreamInfos` renders. Process streams are transient views of live
-   * commands, so terminal and restored process transcripts are not sessions
-   * in the navigation list. Their execution artifacts remain available
-   * through the parent run.
+   * `buildStreamInfos` renders. Membership and rotation only depend on
+   * creation time, so this answers them without building tab infos or
+   * touching the worktree resolver.
    */
   selectableStreamNames(): StreamTabId[] {
     return this.streamLogs
       .keys()
-      .filter((name) => {
-        const metadata = this.getStreamMetadata(name);
-        return (
-          metadata.run?.kind !== 'process' ||
-          isInFlightPhase(this.streamStatus.get(name))
-        );
-      })
       .map((name) => ({
         name,
         creationTimestamp: this.getStreamMetadata(name).creationTimestamp,
@@ -728,16 +720,22 @@ export class ProgressViewState {
     return restoredCount;
   }
 
-  /** The topmost (newest) selectable stream tab, or '' when none exist. */
+  /**
+   * The topmost (newest) visible stream tab, or '' when none exist.
+   *
+   * `streamLogs.keys()` is ascending by creation time (load() sorts by
+   * `firstTimestamp` ASC, session additions are appended), but the sidebar
+   * renders newest-first, so `.at(-1)` matches the topmost visible tab rather
+   * than the oldest one at the bottom.
+   */
   private topmostStreamTab(): ActiveStreamId {
-    return this.selectableStreamNames().at(0) ?? '';
+    return this.streamLogs.keys().at(-1) ?? '';
   }
 
   /** Validate activeStream against available streams after load */
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
-    const selectableStreams = this.selectableStreamNames();
-    if (!savedActiveStream || !selectableStreams.includes(savedActiveStream)) {
+    if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
       const fallback = this.topmostStreamTab();
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });
