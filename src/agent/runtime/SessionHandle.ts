@@ -137,6 +137,13 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
     >
   >;
 
+export interface WorkspaceStorageTransitionHooks {
+  readonly workspacePath: string | undefined;
+  afterStorageCommit(): Promise<void>;
+  afterStorageRollback(): void;
+  afterStorageFinalize(): void;
+}
+
 export class SessionHandle {
   /** Per-run execution handles; owns the process-output poller + status sub. */
   readonly executions: ExecutionRegistry;
@@ -278,21 +285,27 @@ export class SessionHandle {
    * Ordinary view loads must not reopen these live stores. The host calls this
    * explicit lifecycle boundary only after a workspace-root change.
    */
-  reloadAfterStorageRootChange(): Promise<boolean> {
+  reloadAfterStorageRootChange(
+    hooks?: WorkspaceStorageTransitionHooks,
+  ): Promise<boolean> {
     if (
       this.transcripts.mode.kind !== 'persistent' ||
       this.restartRepairAbort.signal.aborted
     ) {
       return Promise.resolve(false);
     }
-    if (platform().storage.hasPendingWorkspaceStorageChange?.() === false) {
-      return Promise.resolve(false);
-    }
+    const hasPendingStorageChange =
+      hooks === undefined
+        ? platform().storage.hasPendingWorkspaceStorageChange?.()
+        : platform().storage.hasPendingWorkspaceStorageChange?.({
+            workspacePath: hooks.workspacePath,
+          });
+    if (hasPendingStorageChange === false) return Promise.resolve(false);
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
     this.restartRepairRetry.cancel();
     const repair = this.enqueueRestartRepair(() =>
-      this.repairStoresAfterRestart(generation, true),
+      this.repairStoresAfterRestart(generation, true, hooks),
     );
     this.restartRepairPromise = repair;
     return repair;
@@ -382,13 +395,17 @@ export class SessionHandle {
   private async repairStoresAfterRestart(
     generation: number,
     reloadTranscripts = false,
+    transitionHooks?: WorkspaceStorageTransitionHooks,
   ): Promise<boolean> {
     try {
       if (this.restartRepairAbort.signal.aborted) return false;
       if (reloadTranscripts) {
         return await runWithOwnedExecutionLeaseQuiescence(async () => {
           if (this.restartRepairAbort.signal.aborted) return false;
-          return this.replaceStoresAfterStorageRootChange(generation);
+          return this.replaceStoresAfterStorageRootChange(
+            generation,
+            transitionHooks,
+          );
         });
       }
       if (generation !== this.storageGeneration) return false;
@@ -412,6 +429,7 @@ export class SessionHandle {
 
   private async replaceStoresAfterStorageRootChange(
     generation: number,
+    transitionHooks?: WorkspaceStorageTransitionHooks,
   ): Promise<boolean> {
     if (generation !== this.storageGeneration) return false;
     try {
@@ -429,12 +447,26 @@ export class SessionHandle {
       return false;
     }
     const storage = platform().storage;
-    if (storage.commitWorkspaceStorageChange?.() === false) {
-      await this.runRestartRepair(generation);
-      return false;
+    const storageRootChanged =
+      transitionHooks === undefined
+        ? storage.commitWorkspaceStorageChange?.()
+        : storage.commitWorkspaceStorageChange?.({
+            workspacePath: transitionHooks.workspacePath,
+          });
+    if (storageRootChanged === false) {
+      try {
+        await transitionHooks?.afterStorageCommit();
+        await this.runRestartRepair(generation);
+        transitionHooks?.afterStorageFinalize();
+        return false;
+      } catch (replacementError) {
+        transitionHooks?.afterStorageRollback();
+        throw replacementError;
+      }
     }
     const previousStatus = this.status.getAllStreamStates();
     try {
+      await transitionHooks?.afterStorageCommit();
       await this.transcripts.reload();
       this.status.clearAll();
       const streamIds = this.transcripts.keys();
@@ -442,11 +474,14 @@ export class SessionHandle {
       this.markUnfinishedStreamsRunning();
       await this.runRestartRepair(generation);
       storage.finalizeWorkspaceStorageChange?.();
+      transitionHooks?.afterStorageFinalize();
       return true;
     } catch (replacementError) {
       if (storage.rollbackWorkspaceStorageChange?.() !== true) {
+        transitionHooks?.afterStorageRollback();
         throw replacementError;
       }
+      transitionHooks?.afterStorageRollback();
       try {
         await this.transcripts.reload({ discardPendingWrites: true });
         this.snapshots.evictAll();
