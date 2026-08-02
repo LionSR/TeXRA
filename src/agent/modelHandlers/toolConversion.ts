@@ -36,6 +36,14 @@ const CHANNEL = 'toolConversion';
 
 type JSONSchemaObject = Record<string, unknown>;
 
+function schemaLiteralValue(schema: JSONSchemaObject): unknown {
+  if (schema.const !== undefined) return schema.const;
+  if (Array.isArray(schema.enum) && schema.enum.length === 1) {
+    return schema.enum[0];
+  }
+  return undefined;
+}
+
 /**
  * OpenAI, Gemini, and Anthropic all require function parameter schemas whose
  * top-level node is an object. OpenAI and Gemini also reject schemas whose
@@ -91,8 +99,8 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     }
     // Discriminator: every branch pins this prop to a literal value.
     const constValues = branchSchemas
-      .map((s) => s.const)
-      .filter((c) => c !== undefined);
+      .map(schemaLiteralValue)
+      .filter((value) => value !== undefined);
     if (constValues.length === branchSchemas.length) {
       const descriptions = branchSchemas
         .map((s) => s.description)
@@ -172,107 +180,54 @@ function isSchemaObject(value: unknown): value is JSONSchemaObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Resolve a local JSON Pointer against a schema root. */
-function resolveLocalSchemaRef(root: JSONSchemaObject, ref: string): unknown {
-  if (!ref.startsWith('#/')) return undefined;
-  return ref
-    .slice(2)
-    .split('/')
-    .map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))
-    .reduce<unknown>((value, part) => {
-      if (!isSchemaObject(value) && !Array.isArray(value)) return undefined;
-      return value[part as keyof typeof value];
-    }, root);
-}
+const GOOGLE_TOOL_JSON_SCHEMA_OPTIONS = Object.freeze({
+  ...TOOL_JSON_SCHEMA_OPTIONS,
+  target: 'openapi-3.0',
+  cycles: 'throw',
+} as const);
 
-/**
- * Reduce a general JSON Schema to the simpler form accepted reliably by
- * Google's function-calling endpoints.
- *
- * Optional properties do not need a separate null branch in the model-facing
- * schema: omission expresses absence, while runtime Zod validation continues
- * to accept explicit null. Local references are expanded once; a recursive
- * edge becomes an unconstrained value so Google's server does not attempt to
- * flatten an unbounded schema such as `z.json()`.
- */
-function simplifyGoogleSchemaNode(
-  value: unknown,
-  root: JSONSchemaObject,
-  resolvingRefs: ReadonlySet<string>,
-): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) =>
-      simplifyGoogleSchemaNode(item, root, resolvingRefs),
-    );
-  }
-  if (!isSchemaObject(value)) return value;
-
-  const ref = typeof value.$ref === 'string' ? value.$ref : undefined;
-  if (ref) {
-    const { $ref: _ref, ...siblings } = value;
-    const simplifiedSiblings = simplifyGoogleSchemaNode(
-      siblings,
-      root,
-      resolvingRefs,
-    );
-    if (resolvingRefs.has(ref)) return simplifiedSiblings;
-    const target = resolveLocalSchemaRef(root, ref);
-    if (target !== undefined) {
-      const simplifiedTarget = simplifyGoogleSchemaNode(
-        target,
-        root,
-        new Set([...resolvingRefs, ref]),
-      );
-      if (
-        isSchemaObject(simplifiedTarget) &&
-        isSchemaObject(simplifiedSiblings)
-      ) {
-        return { ...simplifiedTarget, ...simplifiedSiblings };
-      }
-      return simplifiedTarget;
-    }
-  }
-
-  const anyOf = Array.isArray(value.anyOf) ? value.anyOf : undefined;
-  if (anyOf) {
-    const nonNull = anyOf.filter(
-      (branch) => !isSchemaObject(branch) || branch.type !== 'null',
-    );
-    if (nonNull.length === 1 && nonNull.length !== anyOf.length) {
-      const simplified = simplifyGoogleSchemaNode(
-        nonNull[0],
-        root,
-        resolvingRefs,
-      );
-      if (isSchemaObject(simplified)) {
-        const { anyOf: _anyOf, ...siblings } = value;
-        return { ...simplified, ...siblings };
-      }
-      return simplified;
-    }
-  }
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => key !== '$defs' && key !== '$schema')
-      .map(([key, child]) => [
-        key,
-        simplifyGoogleSchemaNode(child, root, resolvingRefs),
-      ]),
+function containsSchemaReference(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsSchemaReference);
+  if (!isSchemaObject(value)) return false;
+  return (
+    typeof value.$ref === 'string' ||
+    Object.values(value).some(containsSchemaReference)
   );
 }
 
-/** Convert a tool schema to Google's bounded function-declaration subset. */
+/**
+ * Convert a tool directly from its canonical Zod schema to Google's finite
+ * OpenAPI representation. Recursive references are rejected locally rather
+ * than weakened on the wire.
+ */
 export function convertGoogleToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
-  const schema = convertToolSchema(def);
+  let schema: JSONSchemaObject | null;
+  if (def.zodSchema) {
+    try {
+      schema = toJSONSchema(
+        def.zodSchema,
+        GOOGLE_TOOL_JSON_SCHEMA_OPTIONS,
+      ) as JSONSchemaObject;
+    } catch (error) {
+      throw new Error(
+        `Google tool "${def.name}" must use a finite parameter schema without recursive references.`,
+        { cause: error },
+      );
+    }
+  } else {
+    schema = (def.parameters ?? null) as JSONSchemaObject | null;
+  }
   if (!schema) return null;
-  return simplifyGoogleSchemaNode(
-    schema,
-    schema,
-    new Set(),
-  ) as JSONSchemaObject;
+  const normalized = stripDollarSchema(flattenTopLevelUnion(schema));
+  if (containsSchemaReference(normalized)) {
+    throw new Error(
+      `Google tool "${def.name}" must use a finite parameter schema without references.`,
+    );
+  }
+  const { $defs: _defs, definitions: _definitions, ...finite } = normalized;
+  return finite;
 }
 
 // This mirrors @google/genai's Schema interface. Validation-only JSON Schema
