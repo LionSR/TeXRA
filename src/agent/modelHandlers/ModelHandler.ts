@@ -85,6 +85,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
+import { DEFAULT_COMPACTION_THRESHOLD_PERCENT } from '@shared/constants/contextManagement';
 import { AbsoluteFS } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import {
@@ -99,7 +100,6 @@ import {
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
   TOOL_USE_MAX_OUTPUT_FACTOR,
-  DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   COMPACTION_SUMMARY_PREFIX,
   COMPACTION_SYSTEM_PROMPT,
 } from './contextManagementConstants';
