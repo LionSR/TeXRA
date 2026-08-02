@@ -197,7 +197,6 @@ export class AgentRosterController<
 
     return unique(
       identifiers.map((identifier) => {
-        if (selection.kind === 'custom') return identifier;
         const entry = this.resolveEntry(category, identifier);
         return entry ? agentKeyOf(entry) : identifier;
       }),

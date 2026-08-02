@@ -107,6 +107,20 @@ describe('AgentRosterController', () => {
     });
   });
 
+  it('canonicalizes known custom identifiers and preserves unknown ones', async () => {
+    const roster = controller(new FakeStateStore());
+    await roster.setCustom({
+      workflowAgentKeys: ['write', 'future-writer'],
+      toolUseAgentKeys: ['search'],
+    });
+
+    expect(roster.getEnabledAgentKeys('workflow')).toEqual([
+      'builtInWorkflow:write',
+      'future-writer',
+    ]);
+    expect(roster.getEnabledAgentKeys('toolUse')).toEqual(['custom:search']);
+  });
+
   it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
     const inheritedState = new FakeStateStore();
     const inherited = controller(inheritedState, {
