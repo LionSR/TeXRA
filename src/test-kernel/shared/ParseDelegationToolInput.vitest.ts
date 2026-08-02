@@ -5,32 +5,27 @@ import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { parseDelegationToolInput } from '@shared/schemas/proposalInput';
 
 describe('parseDelegationToolInput', () => {
-  it('returns null for non proposal-bearing tools (incl. resume_agent)', () => {
+  it('returns null for non-delegation tools', () => {
     expect(parseDelegationToolInput({ agent: 'a' }, 'bash')).toBeNull();
-    expect(parseDelegationToolInput({ agent: 'a' }, 'resume_agent')).toBeNull();
   });
 
-  it('routes delegate_agent / propose_agent to a tool-use proposal', () => {
-    for (const tool of ['delegate_agent', 'propose_agent']) {
-      const proposal = parseDelegationToolInput(
-        { agent: 'orchestrator', instruction: 'do it' },
-        tool,
-      );
-      expect(proposal?.agentCategory).toBe(AgentCategory.ToolUse);
-      expect(proposal?.agent).toBe('orchestrator');
-    }
+  it('routes delegate_agent to a tool-use proposal', () => {
+    const proposal = parseDelegationToolInput(
+      { agent: 'orchestrator', instruction: 'do it' },
+      'delegate_agent',
+    );
+    expect(proposal?.agentCategory).toBe(AgentCategory.ToolUse);
+    expect(proposal?.agent).toBe('orchestrator');
   });
 
-  it('routes delegate_workflow / propose_workflow to a workflow proposal', () => {
-    for (const tool of ['delegate_workflow', 'propose_workflow']) {
-      const proposal = parseDelegationToolInput(
-        { agent: 'correct', instruction: 'fix', inputFiles: ['paper.tex'] },
-        tool,
-      );
-      expect(proposal?.agentCategory).toBe(AgentCategory.Workflow);
-      if (proposal?.agentCategory === AgentCategory.Workflow) {
-        expect(proposal.inputFiles).toEqual(['paper.tex']);
-      }
+  it('routes delegate_workflow to a workflow proposal', () => {
+    const proposal = parseDelegationToolInput(
+      { agent: 'correct', instruction: 'fix', inputFiles: ['paper.tex'] },
+      'delegate_workflow',
+    );
+    expect(proposal?.agentCategory).toBe(AgentCategory.Workflow);
+    if (proposal?.agentCategory === AgentCategory.Workflow) {
+      expect(proposal.inputFiles).toEqual(['paper.tex']);
     }
   });
 
