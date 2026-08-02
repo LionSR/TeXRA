@@ -1,6 +1,6 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +8,7 @@ import { CliUsageError } from '@cli/runtime/cliContext';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  probeOutputPathForTests,
 } from '@cli/runtime/workflowOutput';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
@@ -15,6 +16,278 @@ const tempDirs: string[] = [];
 
 afterEach(async () => {
   await cleanupTempDirs(tempDirs);
+});
+
+function missingError(message = 'missing'): NodeJS.ErrnoException {
+  return Object.assign(new Error(message), { code: 'ENOENT' });
+}
+
+const outputFlagCases = [
+  {
+    flagLabel: '--output-dir' as const,
+    fileMessage:
+      '--output-dir is not a directory (a parent path component is a file)',
+    danglingMessage: '--output-dir is a dangling symbolic link',
+  },
+  {
+    flagLabel: '--output' as const,
+    fileMessage: '--output: a parent path component is a file',
+    danglingMessage: '--output is a dangling symbolic link',
+  },
+];
+
+const windowsAncestorCases = [
+  {
+    label: 'drive',
+    fileAncestor: String.raw`C:\workspace\blocked`,
+    target: String.raw`C:\workspace\blocked\missing-one\missing-two\output.tex`,
+  },
+  {
+    label: 'UNC',
+    fileAncestor: String.raw`\\server\share\workspace\blocked`,
+    target: String.raw`\\server\share\workspace\blocked\missing-one\missing-two\output.tex`,
+  },
+];
+
+const rootCases = [
+  {
+    label: 'POSIX',
+    dirname: posix.dirname,
+    target: '/missing/output.tex',
+    candidates: ['/missing/output.tex', '/missing', '/'],
+  },
+  {
+    label: 'Windows drive',
+    dirname: win32.dirname,
+    target: String.raw`C:\missing\output.tex`,
+    candidates: [
+      String.raw`C:\missing\output.tex`,
+      String.raw`C:\missing`,
+      'C:\\',
+    ],
+  },
+  {
+    label: 'Windows UNC',
+    dirname: win32.dirname,
+    target: String.raw`\\server\share\missing\output.tex`,
+    candidates: [
+      String.raw`\\server\share\missing\output.tex`,
+      String.raw`\\server\share\missing`,
+      '\\\\server\\share\\',
+    ],
+  },
+];
+
+describe('probeOutputPath', () => {
+  describe.each(windowsAncestorCases)(
+    '$label paths',
+    ({ fileAncestor, target }) => {
+      it.each(outputFlagCases)(
+        'walks past Windows-shaped ENOENT and reports a file ancestor for $flagLabel',
+        async ({ flagLabel, fileMessage }) => {
+          const missingCandidates = [
+            target,
+            win32.dirname(target),
+            win32.dirname(win32.dirname(target)),
+          ];
+          const statVisited: string[] = [];
+          const lstatVisited: string[] = [];
+
+          await expect(
+            probeOutputPathForTests(target, flagLabel, {
+              dirname: win32.dirname,
+              stat: async (candidate) => {
+                statVisited.push(candidate);
+                if (candidate === fileAncestor) {
+                  return { isDirectory: () => false };
+                }
+                throw missingError();
+              },
+              lstat: async (candidate) => {
+                lstatVisited.push(candidate);
+                throw missingError();
+              },
+            }),
+          ).rejects.toThrow(`${fileMessage}: ${target}`);
+          expect(statVisited).toEqual([...missingCandidates, fileAncestor]);
+          expect(lstatVisited).toEqual(missingCandidates);
+        },
+      );
+    },
+  );
+
+  it('stops at the nearest existing directory for a creatable target', async () => {
+    const ancestor = String.raw`C:\workspace`;
+    const target = String.raw`C:\workspace\missing\output.tex`;
+    const statVisited: string[] = [];
+    const lstatVisited: string[] = [];
+
+    await expect(
+      probeOutputPathForTests(target, '--output', {
+        dirname: win32.dirname,
+        stat: async (candidate) => {
+          statVisited.push(candidate);
+          if (candidate === ancestor) return { isDirectory: () => true };
+          throw missingError();
+        },
+        lstat: async (candidate) => {
+          lstatVisited.push(candidate);
+          throw missingError();
+        },
+      }),
+    ).resolves.toBeUndefined();
+    expect(statVisited).toEqual([
+      target,
+      String.raw`C:\workspace\missing`,
+      ancestor,
+    ]);
+    expect(lstatVisited).toEqual([target, String.raw`C:\workspace\missing`]);
+  });
+
+  it.each(rootCases)(
+    'propagates ENOENT after exhausting a $label root',
+    async ({ dirname, target, candidates }) => {
+      const rootError = missingError('missing root');
+      const statVisited: string[] = [];
+      const lstatVisited: string[] = [];
+
+      await expect(
+        probeOutputPathForTests(target, '--output', {
+          dirname,
+          stat: async (candidate) => {
+            statVisited.push(candidate);
+            throw missingError();
+          },
+          lstat: async (candidate) => {
+            lstatVisited.push(candidate);
+            if (candidate === candidates.at(-1)) throw rootError;
+            throw missingError();
+          },
+        }),
+      ).rejects.toBe(rootError);
+      expect(statVisited).toEqual(candidates);
+      expect(lstatVisited).toEqual(candidates);
+    },
+  );
+
+  it.each(outputFlagCases)(
+    'rejects a dangling target symlink for $flagLabel',
+    async ({ flagLabel, danglingMessage }) => {
+      const target = String.raw`C:\workspace\dangling`;
+      const statVisited: string[] = [];
+      const lstatVisited: string[] = [];
+
+      await expect(
+        probeOutputPathForTests(target, flagLabel, {
+          dirname: win32.dirname,
+          stat: async (candidate) => {
+            statVisited.push(candidate);
+            throw missingError();
+          },
+          lstat: async (candidate) => {
+            lstatVisited.push(candidate);
+            return {
+              isDirectory: () => false,
+              isSymbolicLink: () => true,
+            };
+          },
+        }),
+      ).rejects.toThrow(`${danglingMessage}: ${target}`);
+      expect(statVisited).toEqual([target, target]);
+      expect(lstatVisited).toEqual([target]);
+    },
+  );
+
+  it('rejects a dangling symlink ancestor without walking past it', async () => {
+    const dangling = String.raw`C:\workspace\dangling`;
+    const target = String.raw`C:\workspace\dangling\missing\output.tex`;
+    const statVisited: string[] = [];
+    const lstatVisited: string[] = [];
+
+    await expect(
+      probeOutputPathForTests(target, '--output', {
+        dirname: win32.dirname,
+        stat: async (candidate) => {
+          statVisited.push(candidate);
+          throw missingError();
+        },
+        lstat: async (candidate) => {
+          lstatVisited.push(candidate);
+          if (candidate === dangling) {
+            return {
+              isDirectory: () => false,
+              isSymbolicLink: () => true,
+            };
+          }
+          throw missingError();
+        },
+      }),
+    ).rejects.toThrow(
+      `--output: a parent path component is a dangling symbolic link: ${target}`,
+    );
+    expect(statVisited).toEqual([
+      target,
+      win32.dirname(target),
+      dangling,
+      dangling,
+    ]);
+    expect(lstatVisited).toEqual([target, win32.dirname(target), dangling]);
+  });
+
+  it('propagates unexpected lstat errors', async () => {
+    const denied = Object.assign(new Error('denied'), { code: 'EACCES' });
+    await expect(
+      probeOutputPathForTests('/missing/output.tex', '--output', {
+        dirname: win32.dirname,
+        stat: async () => {
+          throw missingError();
+        },
+        lstat: async () => {
+          throw denied;
+        },
+      }),
+    ).rejects.toBe(denied);
+  });
+});
+
+describe('dangling output symlinks', () => {
+  it('rejects a real dangling symlink for both output modes', async (context) => {
+    const root = await makeTempDir('texra-cli-dangling-output-', tempDirs);
+    const dangling = join(root, 'dangling');
+    try {
+      await symlink(
+        join(root, 'absent'),
+        dangling,
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    } catch (error: unknown) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? error.code
+          : undefined;
+      if (
+        typeof code === 'string' &&
+        ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)
+      ) {
+        context.skip();
+        return;
+      }
+      throw error;
+    }
+
+    await expect(
+      assertOutputDirAvailable(dangling, root),
+    ).rejects.toBeInstanceOf(CliUsageError);
+    await expect(assertOutputDirAvailable(dangling, root)).rejects.toThrow(
+      `--output-dir is a dangling symbolic link: ${dangling}`,
+    );
+    await expect(
+      assertOutputFileAvailable(dangling, root),
+    ).rejects.toBeInstanceOf(CliUsageError);
+    await expect(assertOutputFileAvailable(dangling, root)).rejects.toThrow(
+      `--output is a dangling symbolic link: ${dangling}`,
+    );
+  });
 });
 
 describe('assertOutputDirAvailable', () => {
