@@ -8,8 +8,6 @@ import { CliUsageError } from '@cli/runtime/cliContext';
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import { unique } from '@utils/core';
 
-import { toCamelCaseFlagName } from './flagCase';
-
 /**
  * Single source of truth for the global flags accepted by every TeXRA
  * subcommand. `as const` + spread would lose literal-type narrowing (citty's
@@ -206,6 +204,12 @@ export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function camelCaseFlagName(name: string): string {
+  return name.replaceAll(/-([a-z])/g, (_match, letter: string) =>
+    letter.toUpperCase(),
+  );
+}
+
 /**
  * Read a boolean flag from citty's parsed args under every spelling citty can
  * produce: the declared hyphenated key, the camelCase alias, and — for a
@@ -214,7 +218,7 @@ export function optString(value: unknown): string | undefined {
  */
 export function booleanArg(args: object, name: string): boolean {
   const record = args as Record<string, unknown>;
-  if (record[name] === true || record[toCamelCaseFlagName(name)] === true) {
+  if (record[name] === true || record[camelCaseFlagName(name)] === true) {
     return true;
   }
   return name.startsWith('no-') && record[name.slice(3)] === false;

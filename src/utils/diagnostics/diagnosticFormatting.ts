@@ -105,7 +105,7 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
  * **Line 10:** Unexpected token
  * **Line 20:** Missing semicolon
  */
-const SECTION_TITLE_BY_SEVERITY: Record<number, string> = {
+const SECTION_TITLE_BY_SEVERITY: Partial<Record<number, string>> = {
   [SEVERITY_ERROR]: 'Errors',
   [SEVERITY_WARNING]: 'Warnings',
   [SEVERITY_INFO]: 'Info/Hints',
@@ -117,7 +117,7 @@ export function formatGroupedSections(
 ): string {
   const bySectionTitle = groupBy(
     diagnostics,
-    (d) => SECTION_TITLE_BY_SEVERITY[d.severity] ?? 'Info/Hints',
+    (d) => SECTION_TITLE_BY_SEVERITY[d.severity],
   );
   const sections: Array<[title: string, items: GenericDiagnostic[]]> = [
     'Errors',
