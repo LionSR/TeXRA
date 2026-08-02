@@ -3,7 +3,7 @@ import pDefer from 'p-defer';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
@@ -27,7 +27,7 @@ function cellFor(
   });
 }
 
-class CredentialRouteProbe extends ModelHandlerGoogleGenAI {
+class CredentialRouteProbe extends ModelHandlerGoogleInteractions {
   // Pin the endpoint so the key assertions exercise identity semantics
   // without dragging base-URL resolution (server-side key service) into a
   // unit test.

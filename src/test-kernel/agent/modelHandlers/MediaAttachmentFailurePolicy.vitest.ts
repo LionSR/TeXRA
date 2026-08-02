@@ -8,7 +8,7 @@ import { ModelProvider } from 'llm-zoo';
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -45,7 +45,7 @@ class ThrowingMediaOpenAIResponseHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
-class ThrowingMediaGoogleGenAIHandler extends ModelHandlerGoogleGenAI {
+class ThrowingMediaGoogleInteractionsHandler extends ModelHandlerGoogleInteractions {
   protected override async createMediaMessage(): Promise<never> {
     throw MEDIA_FAILURE;
   }
@@ -118,8 +118,8 @@ describe('media attachment failure policy (#7465)', () => {
     );
   });
 
-  it('Google GenAI.createRoundMessages now warns and continues on a media error (previously threw and failed the round)', async () => {
-    const handler = new ThrowingMediaGoogleGenAIHandler(
+  it('Google Interactions createRoundMessages warns and continues on a media error', async () => {
+    const handler = new ThrowingMediaGoogleInteractionsHandler(
       buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
     );
     const { logger, errorMessages } = createFailureRecorder();
@@ -138,8 +138,8 @@ describe('media attachment failure policy (#7465)', () => {
     );
   });
 
-  it('Google GenAI.initializeMessages still fails the round on a media error', async () => {
-    const handler = new ThrowingMediaGoogleGenAIHandler(
+  it('Google Interactions initializeMessages fails the round on a media error', async () => {
+    const handler = new ThrowingMediaGoogleInteractionsHandler(
       buildTestModelConfig(GOOGLE_GENAI_TEST_CONFIG),
     );
     const { logger } = createFailureRecorder();
