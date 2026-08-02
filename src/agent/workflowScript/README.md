@@ -107,12 +107,8 @@ return await parallel(
   never repeated. The parent records the complete attempt sequence, so deleting
   an earlier child cannot hide a later completed result. A parent execution has
   one active runtime owner; the execution KV store is durable state, not a
-  cross-process lock. Version-1 journal keys are tagged when loaded and migrate
-  to dependency-aware keys after a verified replay. Legacy file-backed keys
-  conservatively miss once because they did not record file contents. Because
-  the oldest format retained only an opaque hash, changing a task label or
-  phase during the same upgrade also cannot be proven equivalent and
-  conservatively reruns that call.
+  cross-process lock. Checkpoints use the strict version-3 schema; malformed or
+  older records fail instead of being translated into the current journal.
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result
   boundary, rather than mutating parent totals during child launch; this keeps
