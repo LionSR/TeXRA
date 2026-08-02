@@ -17,21 +17,6 @@ describe('model handler compatibility inference', () => {
 
   it.each([
     {
-      name: 'infers the legacy Google GenAI handler from Content transcripts',
-      model: 'gemini35f',
-      message: { role: 'user', parts: [{ text: 'continue' }] },
-      expected: 'ModelHandlerGoogleGenAI',
-    },
-    {
-      name: 'infers OpenRouter for Google chat transcripts without a stored key',
-      model: 'gemini35f',
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: 'continue' }],
-      },
-      expected: 'ModelHandlerOpenRouterNative',
-    },
-    {
       name: 'keeps keyless legacy Copilot transcripts on OpenRouter',
       model: 'copilot4o',
       message: {
@@ -54,13 +39,13 @@ describe('model handler compatibility inference', () => {
     );
   });
 
-  it('keeps launch-time flow inference silent until persistence', () => {
-    expect(
+  it('rejects keyless Google transcripts without inspecting their format', () => {
+    expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         messages: [
           {
-            role: 'user',
-            parts: [{ text: 'continue' }],
+            type: 'user_input',
+            content: [{ type: 'text', text: 'continue' }],
           },
         ],
         stateSlices: {
@@ -70,18 +55,20 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBe('ModelHandlerGoogleGenAI');
+    ).toThrow(
+      'Persisted Google sessions without a model-handler identity cannot be resumed.',
+    );
     expect(info).not.toHaveBeenCalled();
   });
 
   it('prefers the persisted model id over the MODEL variable', () => {
-    expect(
+    expect(() =>
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         modelId: 'gemini35f',
         messages: [
           {
-            role: 'user',
-            parts: [{ text: 'continue' }],
+            type: 'user_input',
+            content: [{ type: 'text', text: 'continue' }],
           },
         ],
         stateSlices: {
@@ -91,7 +78,9 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBe('ModelHandlerGoogleGenAI');
+    ).toThrow(
+      'Persisted Google sessions without a model-handler identity cannot be resumed.',
+    );
     expect(info).not.toHaveBeenCalled();
   });
 

@@ -166,24 +166,6 @@ function clampMaxOutputFields(
   };
 }
 
-function googleMaxOutputFields(
-  body: JsonRecord,
-  apiPath: string,
-): MaxOutputTokenField[] {
-  const fields: MaxOutputTokenField[] = [];
-  if (isJsonRecord(body.generationConfig)) {
-    fields.push({ container: 'generationConfig', field: 'maxOutputTokens' });
-  }
-  if (isJsonRecord(body.generation_config)) {
-    fields.push({ container: 'generation_config', field: 'max_output_tokens' });
-  }
-  if (fields.length > 0) return fields;
-
-  return apiPath.includes('/interactions')
-    ? [{ container: 'generation_config', field: 'max_output_tokens' }]
-    : [{ container: 'generationConfig', field: 'maxOutputTokens' }];
-}
-
 function isOpenAICompletionTokenModel(model: unknown): boolean {
   if (typeof model !== 'string') return false;
   if (isGpt5Model(model)) return true;
@@ -245,7 +227,7 @@ export function clampFreeTierMaxOutputTokens(
 
   const fields =
     provider === 'google'
-      ? googleMaxOutputFields(body, apiPath)
+      ? [{ container: 'generation_config', field: 'max_output_tokens' }]
       : openAICompatibleMaxOutputFields(provider, apiPath, body);
   return clampMaxOutputFields(body, fields, limit);
 }

@@ -99,7 +99,10 @@ import {
   capOpenAIReasoningEffortForTier,
   type ReasoningEffortCap,
 } from './reasoning.ts';
-import { isModelFreeRelayPath } from './paths.ts';
+import {
+  isModelFreeRelayPath,
+  isRetiredGoogleGenerateContentPath,
+} from './paths.ts';
 import {
   clampFreeTierMaxOutputTokens,
   FREE_TIER_MAX_OUTPUT_TOKENS,
@@ -201,9 +204,8 @@ function extractJwtFromRequest(req: Request): string | null {
 }
 
 /**
- * Extract model name from URL path for providers that embed it there.
- * Google GenAI SDK uses paths like /models/gemini-2.5-flash:generateContent
- * or /v1beta/models/gemini-2.5-flash:generateContent
+ * Extract model names from provider paths that embed them, including Google's
+ * `models/{model}:countTokens` route.
  */
 function extractModelFromPath(apiPath: string): string | null {
   const match = apiPath.match(/^(?:\/v1(?:beta)?)?\/models\/([^:]+)/);
@@ -414,6 +416,12 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   const providerConfig = PROVIDER_CONFIGS[provider as ProviderKey] ?? null;
   if (!providerConfig) {
     return jsonError(`Unsupported provider: ${provider}`, 400);
+  }
+  if (provider === 'google' && isRetiredGoogleGenerateContentPath(apiPath)) {
+    return jsonError(
+      'Google Generate Content is no longer supported. Use the Interactions API.',
+      410,
+    );
   }
 
   // 2. Extract JWT token
