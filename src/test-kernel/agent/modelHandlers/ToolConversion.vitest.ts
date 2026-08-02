@@ -699,6 +699,40 @@ describe('toGoogleTools', () => {
     expect(params).not.toHaveProperty('additionalProperties');
   });
 
+  it('preserves constraints attached to nested Google parameters', () => {
+    const tools = toGoogleTools([
+      {
+        name: 'referenced_input',
+        parameters: {
+          type: 'object',
+          properties: {
+            mode: {
+              $ref: '#/$defs/mode',
+              description: 'Mode selected for this call',
+            },
+            action: { type: 'string', const: 'review' },
+          },
+          required: ['mode', 'action'],
+          $defs: { mode: { type: 'string', enum: ['brief', 'full'] } },
+        },
+      },
+    ]);
+    const params = (tools[0] as GeminiTool).functionDeclarations?.[0]
+      .parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    expect(params.properties.mode).toStrictEqual({
+      type: 'string',
+      enum: ['brief', 'full'],
+      description: 'Mode selected for this call',
+    });
+    expect(params.properties.action).toStrictEqual({
+      type: 'string',
+      enum: ['review'],
+    });
+  });
+
   it('bounds recursive JSON values before Google flattens the schema', () => {
     const tools = toGoogleTools([
       {
