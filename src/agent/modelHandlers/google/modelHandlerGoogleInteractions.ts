@@ -1276,6 +1276,66 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // super.getStreamingConfig() (not this.) — the override would recompute
     // background mode (extra config reads) when we already know useBackground.
     const useStreaming = !useBackground && super.getStreamingConfig();
+
+    return this.dispatchGoogleInteractionsExecution({
+      client,
+      inputSteps,
+      stateful,
+      previousId,
+      systemPrompt,
+      interactionsTools,
+      generationConfig,
+      signal,
+      endTag,
+      baseLength: base.length,
+      useBackground,
+      useStreaming,
+      updatedMessages,
+      options,
+    });
+  }
+
+  /**
+   * Dispatch phase: build the common request shape and route through
+   * background / streaming / non-streaming, including the shared error
+   * recovery (background-unsupported fallback and stale-chain retry, both
+   * self-recursive back into {@link createResponseImpl}). Extracted from
+   * {@link createResponseImpl} verbatim; it is the tail of that method, so it
+   * returns the final {@link CreateResponseResult} directly.
+   */
+  private async dispatchGoogleInteractionsExecution(args: {
+    client: GoogleGenAI;
+    inputSteps: Step[];
+    stateful: boolean;
+    previousId: string | undefined;
+    systemPrompt: string | undefined;
+    interactionsTools: FunctionT[] | undefined;
+    generationConfig: GenerationConfig;
+    signal: AbortSignal | undefined;
+    endTag: string | undefined;
+    baseLength: number;
+    useBackground: boolean;
+    useStreaming: boolean;
+    updatedMessages: Step[] | undefined;
+    options: CreateResponseOptions<Step, GoogleGenAI>;
+  }): Promise<CreateResponseResult<GoogleGenAIInteraction, Step>> {
+    const {
+      client,
+      inputSteps,
+      stateful,
+      previousId,
+      systemPrompt,
+      interactionsTools,
+      generationConfig,
+      signal,
+      endTag,
+      baseLength,
+      useBackground,
+      useStreaming,
+      updatedMessages,
+      options,
+    } = args;
+
     let aggregatedText = '';
 
     const withUpdated = (
@@ -1300,7 +1360,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
         const result = await this.executeBackgroundPath(
           client,
           commonParams,
-          base.length,
+          baseLength,
           stateful,
           requestOptions,
           signal,
@@ -1320,7 +1380,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
         const result = await this.consumeStream(stream, endTag, (text) => {
           aggregatedText += text;
         });
-        this.finalizeChain(result.response, base.length, stateful);
+        this.finalizeChain(result.response, baseLength, stateful);
         return withUpdated(result);
       }
 
@@ -1338,7 +1398,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
         stream: false as const,
       };
       const response = await client.interactions.create(params, requestOptions);
-      this.finalizeChain(response, base.length, stateful);
+      this.finalizeChain(response, baseLength, stateful);
       return withUpdated({ response });
     } catch (error) {
       // Model doesn't support background interactions (e.g. gemini-2.5-flash ⇒

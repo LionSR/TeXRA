@@ -128,9 +128,11 @@ import type {
   BetaUsage,
   MessageCountTokensParams,
   MessageCreateParams,
+  MessageCreateParamsNonStreaming,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   Base64ImageSource,
+  CacheControlEphemeral,
   MessageParam,
   ContentBlockParam,
   ToolUseBlock,
@@ -623,63 +625,44 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
-  /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
-  protected override async createResponseImpl(
-    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
-  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
+  /**
+   * Phase 1: BUILD - Construct provider-specific request parameters.
+   * Extracted from {@link createResponseImpl} verbatim; the only inputs it
+   * needs are the already-resolved cache decision and the raw request fields.
+   */
+  private buildAnthropicRequestParams(
+    params: Pick<
+      CreateResponseOptions<MessageParam, Anthropic>,
+      | 'messages'
+      | 'temperature'
+      | 'endTag'
+      | 'systemPrompt'
+      | 'tools'
+      | 'finalTool'
+    > & {
+      supportsCache: boolean;
+      cacheControl: CacheControlEphemeral;
+      useStreaming: boolean;
+    },
+  ): MessageCreateParamsNonStreaming {
     const {
-      client,
       messages,
       temperature,
-      systemPrompt,
       endTag,
-      signal,
+      systemPrompt,
       tools,
       finalTool,
-    } = requestOptions;
-    // Get streaming config
-    const useStreaming = this.getStreamingConfig();
-    // Track input token count for client-side context management triggering
-    let measuredInputTokens: number | undefined;
-    const effectiveContextWindow = this.getEffectiveContextWindow();
-
-    // Count cache slots reserved by top-level automatic caching and system prompt
-    // so enforceCacheControlLimit knows how many remain for message blocks.
-    const supportsCache = this.capabilities.supportsPromptCaching;
-    let reservedCacheSlots = 0;
-    if (supportsCache) {
-      reservedCacheSlots += 1; // top-level automatic caching
-      if (systemPrompt) reservedCacheSlots += 1; // system prompt breakpoint
-    }
-
-    // Use 1-hour cache TTL for tool-use requests (which involve long-running
-    // tool execution cycles where 5-minute caches would frequently expire),
-    // and 5-minute TTL for simple non-tool requests.
-    const cacheControl = tools?.length
-      ? LONG_CACHE_CONTROL
-      : SHORT_CACHE_CONTROL;
-
-    enforceCacheControlLimit(
-      messages,
-      reservedCacheSlots,
+      supportsCache,
       cacheControl,
-      this.capabilities.supportsPromptCaching,
-    );
+      useStreaming,
+    } = params;
 
-    const documentAnalysis = analyzeDocumentSources(messages);
-    let hasFileReference = documentAnalysis.hasFileSource;
-
-    // Prune tracked file metadata for file IDs no longer in messages
-    // (e.g. after server-side compaction drops old messages)
-    if (
-      this.uploadedPdfPageCounts.size > 0 ||
-      this.fileTokenEstimates.size > 0
-    ) {
-      this.pruneTrackedFileMetadata(messages);
-    }
-
-    // Phase 1: BUILD - Construct provider-specific request parameters
-    const options: MessageCreateParams = {
+    // Typed as the non-streaming member: this handler never sets `stream`, and
+    // pinning the member here (rather than the `MessageCreateParams` union)
+    // preserves the narrowed type through `dispatchAnthropicExecution`'s
+    // `client.beta.messages.create()` call — a plain union parameter type
+    // would force TS to pick the ambiguous three-way overload.
+    const options: MessageCreateParamsNonStreaming = {
       model: this.config.fullName,
       max_tokens: this.getEffectiveMaxOutputTokens(),
       messages,
@@ -783,6 +766,177 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
+    return options;
+  }
+
+  /**
+   * Phase 4: EXECUTE - Dispatch through the provider's two SDK paths
+   * (streaming vs. non-streaming), including the non-streaming compaction
+   * heuristic and post-response bookkeeping. Extracted from
+   * {@link createResponseImpl} verbatim; it is the tail of that method, so it
+   * returns the final {@link CreateResponseResult} directly.
+   */
+  private async dispatchAnthropicExecution(params: {
+    client: Anthropic;
+    options: MessageCreateParamsNonStreaming;
+    useStreaming: boolean;
+    measuredInputTokens: number | undefined;
+    hasFileReference: boolean;
+    messages: MessageParam[];
+    signal: AbortSignal | undefined;
+    effectiveContextWindow: number;
+    compactionConsumed: boolean;
+    pendingCompactionRequestId: number | undefined;
+  }): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
+    const {
+      client,
+      options,
+      useStreaming,
+      measuredInputTokens,
+      hasFileReference,
+      messages,
+      signal,
+      effectiveContextWindow,
+      compactionConsumed,
+      pendingCompactionRequestId,
+    } = params;
+
+    // Non-streaming responses have no block-start event. Use the native count
+    // when available and otherwise combine the existing text heuristic with
+    // tracked PDF pages. Treating an unavailable count as either zero or
+    // definitely over threshold would miss large requests or label every small
+    // request as compaction.
+    const compactionEdit = options.context_management?.edits?.find(
+      (edit) => edit.type === 'compact_20260112',
+    );
+    const compactionTrigger =
+      !useStreaming && compactionEdit?.trigger?.type === 'input_tokens'
+        ? compactionEdit.trigger.value
+        : undefined;
+    let inputTokensForCompaction = measuredInputTokens;
+    if (inputTokensForCompaction === undefined) {
+      const textTokens = estimateTokensFromText(
+        JSON.stringify({
+          messages: options.messages,
+          system: options.system,
+          tools: options.tools,
+          thinking: options.thinking,
+          outputConfig: options.output_config,
+        }),
+      );
+      const tokensUntilCompaction =
+        compactionTrigger === undefined ? 0 : compactionTrigger - textTokens;
+      const fileReferenceTokens =
+        hasFileReference && tokensUntilCompaction > 0
+          ? await this.estimateFileReferenceTokens(
+              client,
+              messages,
+              signal,
+              tokensUntilCompaction,
+            )
+          : 0;
+      inputTokensForCompaction = textTokens + fileReferenceTokens;
+    }
+    const nonStreamingCompactionExpected =
+      compactionTrigger !== undefined &&
+      inputTokensForCompaction >= compactionTrigger;
+
+    if (nonStreamingCompactionExpected) {
+      logCompactionActivity(this.logger, 'started');
+    }
+
+    let response: BetaMessage;
+    try {
+      response = useStreaming
+        ? await this.executeStreamingResponse(client, options, signal)
+        : await client.beta.messages.create(options, { signal });
+    } finally {
+      if (nonStreamingCompactionExpected) {
+        logCompactionActivity(this.logger, 'finished');
+      }
+    }
+
+    if (compactionConsumed && pendingCompactionRequestId !== undefined) {
+      this.clearCompactionRequest(pendingCompactionRequestId);
+    }
+
+    // Log server-side compaction events when present in response content.
+    logContextManagementFromResponse(
+      response,
+      effectiveContextWindow,
+      this.logger,
+    );
+
+    return { response };
+  }
+
+  /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
+  protected override async createResponseImpl(
+    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
+  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+      finalTool,
+    } = requestOptions;
+    // Get streaming config
+    const useStreaming = this.getStreamingConfig();
+    // Track input token count for client-side context management triggering
+    let measuredInputTokens: number | undefined;
+    const effectiveContextWindow = this.getEffectiveContextWindow();
+
+    // Count cache slots reserved by top-level automatic caching and system prompt
+    // so enforceCacheControlLimit knows how many remain for message blocks.
+    const supportsCache = this.capabilities.supportsPromptCaching;
+    let reservedCacheSlots = 0;
+    if (supportsCache) {
+      reservedCacheSlots += 1; // top-level automatic caching
+      if (systemPrompt) reservedCacheSlots += 1; // system prompt breakpoint
+    }
+
+    // Use 1-hour cache TTL for tool-use requests (which involve long-running
+    // tool execution cycles where 5-minute caches would frequently expire),
+    // and 5-minute TTL for simple non-tool requests.
+    const cacheControl = tools?.length
+      ? LONG_CACHE_CONTROL
+      : SHORT_CACHE_CONTROL;
+
+    enforceCacheControlLimit(
+      messages,
+      reservedCacheSlots,
+      cacheControl,
+      this.capabilities.supportsPromptCaching,
+    );
+
+    const documentAnalysis = analyzeDocumentSources(messages);
+    let hasFileReference = documentAnalysis.hasFileSource;
+
+    // Prune tracked file metadata for file IDs no longer in messages
+    // (e.g. after server-side compaction drops old messages)
+    if (
+      this.uploadedPdfPageCounts.size > 0 ||
+      this.fileTokenEstimates.size > 0
+    ) {
+      this.pruneTrackedFileMetadata(messages);
+    }
+
+    const options = this.buildAnthropicRequestParams({
+      messages,
+      temperature,
+      endTag,
+      systemPrompt,
+      tools,
+      finalTool,
+      supportsCache,
+      cacheControl,
+      useStreaming,
+    });
+
     // Set up context management before token counting so estimates use matching options.
     const compactionThresholdPercent = this.getCompactionThresholdPercent();
     const pendingCompactionRequestId = this.getPendingCompactionRequestId();
@@ -867,74 +1021,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ensureBeta(options, FILES_API_BETA);
     }
 
-    // Phase 4: EXECUTE - Dispatch through the provider's two SDK paths.
-    // Non-streaming responses have no block-start event. Use the native count
-    // when available and otherwise combine the existing text heuristic with
-    // tracked PDF pages. Treating an unavailable count as either zero or
-    // definitely over threshold would miss large requests or label every small
-    // request as compaction.
-    const compactionEdit = options.context_management?.edits?.find(
-      (edit) => edit.type === 'compact_20260112',
-    );
-    const compactionTrigger =
-      !useStreaming && compactionEdit?.trigger?.type === 'input_tokens'
-        ? compactionEdit.trigger.value
-        : undefined;
-    let inputTokensForCompaction = measuredInputTokens;
-    if (inputTokensForCompaction === undefined) {
-      const textTokens = estimateTokensFromText(
-        JSON.stringify({
-          messages: options.messages,
-          system: options.system,
-          tools: options.tools,
-          thinking: options.thinking,
-          outputConfig: options.output_config,
-        }),
-      );
-      const tokensUntilCompaction =
-        compactionTrigger === undefined ? 0 : compactionTrigger - textTokens;
-      const fileReferenceTokens =
-        hasFileReference && tokensUntilCompaction > 0
-          ? await this.estimateFileReferenceTokens(
-              client,
-              messages,
-              signal,
-              tokensUntilCompaction,
-            )
-          : 0;
-      inputTokensForCompaction = textTokens + fileReferenceTokens;
-    }
-    const nonStreamingCompactionExpected =
-      compactionTrigger !== undefined &&
-      inputTokensForCompaction >= compactionTrigger;
-
-    if (nonStreamingCompactionExpected) {
-      logCompactionActivity(this.logger, 'started');
-    }
-
-    let response: BetaMessage;
-    try {
-      response = useStreaming
-        ? await this.executeStreamingResponse(client, options, signal)
-        : await client.beta.messages.create(options, { signal });
-    } finally {
-      if (nonStreamingCompactionExpected) {
-        logCompactionActivity(this.logger, 'finished');
-      }
-    }
-
-    if (compactionConsumed && pendingCompactionRequestId !== undefined) {
-      this.clearCompactionRequest(pendingCompactionRequestId);
-    }
-
-    // Log server-side compaction events when present in response content.
-    logContextManagementFromResponse(
-      response,
+    return this.dispatchAnthropicExecution({
+      client,
+      options,
+      useStreaming,
+      measuredInputTokens,
+      hasFileReference,
+      messages,
+      signal,
       effectiveContextWindow,
-      this.logger,
-    );
-
-    return { response };
+      compactionConsumed,
+      pendingCompactionRequestId,
+    });
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
