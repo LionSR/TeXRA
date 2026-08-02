@@ -92,27 +92,32 @@ function writeSlot(
   value: unknown,
   stores: SettingsStores,
   host: SettingsHostKind,
-  target: ConfigTarget,
+  target: ConfigTarget | undefined,
 ): Promise<void> {
   const slot = settingSlot(entry, host);
   return Promise.resolve(
     slot === 'config'
-      ? stores.config.update(entry.key, value, target)
+      ? stores.config.update(
+          entry.key,
+          value,
+          target ?? entry.configTarget ?? 'workspace',
+        )
       : stores[slot].update(entry.key, value),
   );
 }
 
 /**
  * Validate and persist a state-backed setting. Throws if `value` fails the
- * entry's schema. For `config`-slot writes the target defaults to `'workspace'`
- * (matching today's CLI git-author behavior); state-store slots ignore target.
+ * entry's schema. Config-backed settings use the target declared by their
+ * catalog row, falling back to `'workspace'`; an explicit caller target wins.
+ * State-store slots ignore target.
  */
 export async function writeSetting(
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
   host: SettingsHostKind = 'extension',
-  target: ConfigTarget = 'workspace',
+  target?: ConfigTarget,
 ): Promise<void> {
   // `async` so a schema-rejected value surfaces as a rejected promise rather
   // than a synchronous throw — callers rely on the uniform promise contract.
@@ -128,7 +133,7 @@ export function resetSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
   host: SettingsHostKind = 'extension',
-  target: ConfigTarget = 'workspace',
+  target?: ConfigTarget,
 ): Promise<void> {
   return writeSlot(entry, undefined, stores, host, target);
 }

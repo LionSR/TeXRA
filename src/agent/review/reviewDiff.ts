@@ -87,7 +87,6 @@ async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
   }
 }
 
-/** True when the content looks binary (NUL byte in the leading bytes). */
 /**
  * True when `file` belongs to the collected change set. Prefix matches keep
  * issues inside changed submodules, whose diff entries name the submodule
