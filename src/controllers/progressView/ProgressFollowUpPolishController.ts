@@ -73,7 +73,12 @@ export class ProgressFollowUpPolishController {
       if (result.success) {
         return {
           kind: 'updated',
-          update: this.createPolishedUpdate(input.stream, result.text),
+          update: {
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+            stream: input.stream,
+            kind: 'polished',
+            text: result.text,
+          },
         };
       }
       if (!result.error) {
@@ -117,18 +122,6 @@ export class ProgressFollowUpPolishController {
     }
 
     return context;
-  }
-
-  private createPolishedUpdate(
-    stream: StreamTabId,
-    text: string,
-  ): UpdateFollowUpTextMessage {
-    return {
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-      stream,
-      kind: 'polished',
-      text,
-    };
   }
 
   private createPolishErrorUpdate(
