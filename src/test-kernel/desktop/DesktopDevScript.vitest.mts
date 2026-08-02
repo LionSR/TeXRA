@@ -138,7 +138,7 @@ describe('desktop development launcher', () => {
     process.argv = [
       process.execPath,
       'scripts/dev.mjs',
-      '--texra-workspace',
+      '--texra-workspace-path',
       '/tmp/paper',
     ];
 
@@ -168,7 +168,7 @@ describe('desktop development launcher', () => {
 
     const electronCall = calls[4];
     expect(electronCall?.args.slice(1)).toEqual([
-      '--texra-workspace',
+      '--texra-workspace-path',
       '/tmp/paper',
     ]);
     expect(electronCall?.options.env).toMatchObject({

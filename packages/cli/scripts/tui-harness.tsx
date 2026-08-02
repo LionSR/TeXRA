@@ -1400,9 +1400,9 @@ function seedRunningWorkflow(): void {
     total: 1,
   });
   runTrace.trace.emit({
-    type: 'workflow.task',
+    type: 'workflow.call',
     logId: 'harness-workflow-running-task-a',
-    task: {
+    call: {
       id: 'proofread-a',
       label: 'Proofread paper A',
       phase: 'Proofread',
@@ -1411,9 +1411,9 @@ function seedRunningWorkflow(): void {
     stageId: phaseStage.id,
   });
   runTrace.trace.emit({
-    type: 'workflow.task',
+    type: 'workflow.call',
     logId: 'harness-workflow-running-task-b',
-    task: {
+    call: {
       id: 'proofread-b',
       label: 'Proofread paper B',
       phase: 'Proofread',
