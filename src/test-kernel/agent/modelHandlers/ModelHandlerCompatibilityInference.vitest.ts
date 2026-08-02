@@ -17,24 +17,6 @@ describe('model handler compatibility inference', () => {
 
   it.each([
     {
-      name: 'infers Google Interactions from step transcripts',
-      model: 'gemini35f',
-      message: {
-        type: 'user_input',
-        content: [{ type: 'text', text: 'continue' }],
-      },
-      expected: 'ModelHandlerGoogleInteractions',
-    },
-    {
-      name: 'infers OpenRouter for Google chat transcripts without a stored key',
-      model: 'gemini35f',
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: 'continue' }],
-      },
-      expected: 'ModelHandlerOpenRouterNative',
-    },
-    {
       name: 'keeps keyless legacy Copilot transcripts on OpenRouter',
       model: 'copilot4o',
       message: {
@@ -57,7 +39,7 @@ describe('model handler compatibility inference', () => {
     );
   });
 
-  it('keeps launch-time flow inference silent until persistence', () => {
+  it('does not infer compatibility for Google transcripts', () => {
     expect(
       inferPersistedFlowModelHandlerCompatibilityKey('gpt54', {
         messages: [
@@ -73,7 +55,7 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBe('ModelHandlerGoogleInteractions');
+    ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });
 
@@ -94,7 +76,7 @@ describe('model handler compatibility inference', () => {
           },
         },
       }),
-    ).toBe('ModelHandlerGoogleInteractions');
+    ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });
 
@@ -116,22 +98,6 @@ describe('model handler compatibility inference', () => {
   it('does not log when inference is inconclusive', () => {
     expect(
       inferAndLogPersistedModelHandlerCompatibilityKey('gpt54', [], logger),
-    ).toBeUndefined();
-    expect(info).not.toHaveBeenCalled();
-  });
-
-  it('does not infer a handler for retired Google Content transcripts', () => {
-    expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        'gemini35f',
-        [
-          {
-            role: 'user',
-            parts: [{ text: 'continue' }],
-          } as ProviderMessage,
-        ],
-        logger,
-      ),
     ).toBeUndefined();
     expect(info).not.toHaveBeenCalled();
   });
