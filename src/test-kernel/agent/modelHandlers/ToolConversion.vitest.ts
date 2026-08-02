@@ -740,14 +740,39 @@ describe('toGoogleTools', () => {
       'arxiv_metadata',
       'crossref_search',
       'diagnostics',
+      'delegate_workflow_script',
     ]);
 
-    expect(reviewTools).toHaveLength(16);
+    expect(reviewTools).toHaveLength(17);
     for (const definition of reviewTools) {
-      const serialized = JSON.stringify(convertGoogleToolSchema(definition));
-      expect(serialized, definition.name).not.toContain('"type":"null"');
-      expect(serialized, definition.name).not.toContain('$ref');
-      expect(serialized, definition.name).not.toContain('$defs');
+      const interactionSchema = convertGoogleToolSchema(definition);
+      const generateContentSchema = (
+        toGoogleTools([definition])[0] as GeminiTool
+      ).functionDeclarations?.[0].parameters;
+      for (const schema of [interactionSchema, generateContentSchema]) {
+        const serialized = JSON.stringify(schema);
+        expect(serialized, definition.name).not.toContain('"type":"null"');
+        expect(serialized, definition.name).not.toContain('$ref');
+        expect(serialized, definition.name).not.toContain('$defs');
+      }
+    }
+  });
+
+  it('converts the registered workflow script JSON args for both Google APIs', () => {
+    const [definition] = resolveToolDefinitions(['delegate_workflow_script']);
+    const interactionSchema = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const generateContentSchema = (toGoogleTools([definition])[0] as GeminiTool)
+      .functionDeclarations?.[0].parameters as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+
+    for (const schema of [interactionSchema, generateContentSchema]) {
+      const { description, ...argsConstraints } = schema.properties.args;
+      expect(description).toEqual(expect.any(String));
+      expect(argsConstraints).toStrictEqual({});
+      expect(JSON.stringify(schema)).not.toContain('$ref');
     }
   });
 
@@ -785,16 +810,20 @@ describe('toGoogleTools', () => {
     });
   });
 
-  it('rejects recursive Google schemas instead of weakening them', () => {
+  it('rejects recursive structural Google schemas instead of weakening them', () => {
+    const recursiveNode: z.ZodType = z.lazy(() =>
+      z.strictObject({ children: z.array(recursiveNode) }),
+    );
+
     expect(() =>
       toGoogleTools([
         {
-          name: 'json_input',
-          zodSchema: z.strictObject({ value: z.json().nullish() }),
+          name: 'recursive_input',
+          zodSchema: z.strictObject({ value: recursiveNode }),
         },
       ]),
     ).toThrow(
-      'Google tool "json_input" must use a finite parameter schema without recursive references.',
+      'Google tool "recursive_input" must use a finite parameter schema without recursive references.',
     );
   });
 
@@ -810,6 +839,20 @@ describe('toGoogleTools', () => {
       }),
     ).toThrow(
       'Google tool "referenced_input" must use a finite parameter schema without references.',
+    );
+  });
+
+  it('rejects dangling caller-supplied Google references', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'dangling_reference',
+        parameters: {
+          type: 'object',
+          properties: { mode: { $ref: '#/$defs/missing' } },
+        },
+      }),
+    ).toThrow(
+      'Google tool "dangling_reference" must use a finite parameter schema without references.',
     );
   });
 });
