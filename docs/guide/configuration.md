@@ -94,6 +94,13 @@ content, or file names. Turning telemetry off stops reporting for runs billed
 through the user's own provider key. Included-access usage is still metered by
 the hosted service.
 
+## File discovery
+
+TeXRA uses built-in file extensions and exclusions when discovering inputs,
+context, edited files, and media. The former `texra.files.included.*` and
+`texra.files.ignored.*` settings have been removed; saved values for those keys
+no longer affect discovery.
+
 ## LaTeX configuration
 
 The **LaTeX** view contains the settings that remain useful to change:
@@ -104,10 +111,8 @@ The **LaTeX** view contains the settings that remain useful to change:
 - TikZ processing; and
 - direct, regular-expression, and custom replacement rules.
 
-File-extension lists and the latexdiff picture-environment pattern are fixed
-product rules rather than user settings. The former
-`texra.files.included.*` and `texra.files.ignored.*` discovery settings have
-been removed; saved values for those keys no longer affect file discovery.
+The latexdiff picture-environment pattern is a fixed product rule rather than a
+user setting.
 
 Some rows recommend settings owned by VS Code or another extension, such as an
 Explorer exclusion. Those rows are explicitly labeled and are separate from
