@@ -177,7 +177,7 @@ describe('workspace storage defaults', () => {
     });
   });
 
-  it('recreates a storage root deleted underneath it, marker included', async () => {
+  it('initializes each workspace storage root only once', async () => {
     const root = await makeTempDir('texra-workspace-storage-', tempDirs);
     const workspacePath = '/workspace/a';
     const provider = new WorkspaceStorageProvider(root, workspacePath);
@@ -186,9 +186,7 @@ describe('workspace storage defaults', () => {
     await rm(storagePath, { recursive: true, force: true });
 
     expect(provider.getStoragePath()).toBe(storagePath);
-    await expect(readWorkspaceMarker(storagePath)).resolves.toMatchObject({
-      path: workspacePath,
-    });
+    await expect(pathExists(storagePath)).resolves.toBe(false);
   });
 
   it('uses the same workspace storage rule for node hosts', async () => {
