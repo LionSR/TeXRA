@@ -4,29 +4,35 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { App, type AppProps } from '@cli/chat/tui/App';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   activeStreamId,
   focusStream,
   infoPane,
   openInfoPane,
+  patchStream,
   resetCliState,
   rootRunStartAvailable,
   rootStreamId,
   setStreamStatusInCliState,
+  streams,
 } from '@cli/chat/tui/state/cliState';
 import {
   applySubagentRoster,
   setParentStream,
 } from '@cli/chat/tui/state/childExecutions';
-import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import {
   loadInk,
   renderInteractive,
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.mts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import { createRunTrace } from '@transcript';
 
 vi.mock('@cli/runtime/shortcutLabels', async (importOriginal) => {
   const actual =
@@ -142,6 +148,162 @@ describe('App foreground Escape ownership', () => {
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
+    }
+  });
+
+  it('renders and operates a canonical workflow dashboard with zero descendants', async () => {
+    seedRootStream();
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'solo-workflow',
+      category: AgentCategory.Workflow,
+      entries: [
+        {
+          id: 'task-planned-only',
+          role: 'workflowTask',
+          text: 'Planned: Draft alone',
+          finalized: false,
+          task: {
+            id: 'draft-alone',
+            label: 'Draft alone',
+            status: 'planned',
+          },
+        },
+      ],
+    }));
+    const onInterruptStream = vi.fn();
+    const { instance, stdin, stdout } = await renderApp(
+      appProps(onInterruptStream),
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('solo-workflow · 0/1 done'));
+      expect(stdout.output).toContain('Draft alone · Planned');
+      stdin.write('\r');
+      await sleep(30);
+      expect(activeStreamId.get()).toBe(ROOT);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('retains projected workflow rows while child detail is focused and returns to the same task', async () => {
+    seedRootStream();
+    for (const streamId of [CHILD, GRANDCHILD]) {
+      setStreamStatusInCliState({
+        streamId,
+        status: STREAM_PHASE.RUNNING,
+      });
+    }
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'workflow',
+      category: AgentCategory.Workflow,
+    }));
+    const runTrace = createRunTrace(ROOT, defaultSession().transcripts);
+    const phase = runTrace.trace.openStage('Map', {
+      id: 'phase-map',
+      kind: 'phase',
+      index: 0,
+      total: 1,
+    });
+    for (const [logId, id, label, childStreamId] of [
+      ['task-child', 'inspect', 'Inspect', CHILD],
+      ['task-review', 'review', 'Review', GRANDCHILD],
+    ] as const) {
+      runTrace.trace.emit({
+        type: 'workflow.call',
+        logId,
+        stageId: phase.id,
+        call: {
+          id,
+          label,
+          phase: 'Map',
+          status: 'running',
+          childStreamId,
+        },
+      });
+    }
+    syncStreamLog(ROOT);
+    applySubagentRoster(ROOT, [
+      {
+        kind: 'subagent',
+        executionId: 'workflow-child-execution',
+        agentName: 'duplicate',
+        childStreamId: CHILD,
+        status: STREAM_PHASE.RUNNING,
+      },
+      {
+        kind: 'subagent',
+        executionId: 'workflow-review-execution',
+        agentName: 'duplicate',
+        childStreamId: GRANDCHILD,
+        status: STREAM_PHASE.RUNNING,
+      },
+    ]);
+    setParentStream(CHILD, ROOT);
+    setParentStream(GRANDCHILD, ROOT);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin, stdout } = await renderApp(
+      appProps(onInterruptStream),
+    );
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\t');
+      await waitFor(() => stdout.output.includes('workflow · 0/2 done'));
+      stdin.write('\r');
+      await waitFor(() => stdout.output.includes('Inspect · Running'));
+      stdin.write('\r');
+      await waitFor(() => activeStreamId.get() === CHILD);
+      syncStreamLog(ROOT);
+      expect(
+        streams
+          .get()
+          .get(ROOT)
+          ?.entries.map((entry) => [entry.id, entry.role]),
+      ).toEqual([
+        ['phase-map', 'phase'],
+        ['task-child', 'workflowTask'],
+        ['task-review', 'workflowTask'],
+      ]);
+
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT, {
+        timeoutMs: 1_000,
+      });
+      const taskLine = stdout.output
+        .split('\n')
+        .find((line) => line.includes('Inspect · Running'));
+      expect(taskLine).toContain(POINTER);
+      expect(stdout.output).toContain('Esc input');
+
+      stdin.write(ESC);
+      await waitFor(() => stdout.output.includes('Tab children'));
+      expect(activeStreamId.get()).toBe(ROOT);
+
+      focusStream(GRANDCHILD);
+      await waitFor(() => activeStreamId.get() === GRANDCHILD);
+      await sleep(30);
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT, {
+        timeoutMs: 1_000,
+      });
+      await waitFor(() =>
+        stdout.output
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('Review · Running') && line.includes(POINTER),
+          ),
+      );
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+      runTrace.dispose();
     }
   });
 

@@ -147,12 +147,14 @@ export function allocateConversationBottomPanelRows({
   maxRows,
   sessionCount,
   childListFocused,
+  minimumSessionPanelRows = 2,
   todosPlanContentRows,
   transcriptRows,
 }: {
   readonly maxRows: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
+  readonly minimumSessionPanelRows?: number;
   readonly todosPlanContentRows: number;
   readonly transcriptRows: number;
 }): {
@@ -171,7 +173,8 @@ export function allocateConversationBottomPanelRows({
   // The todos/plan panel likewise owns a separator row above its checklist.
   const todosPanelContentRows =
     todosPlanContentRows > 0 ? todosPlanContentRows + 1 : 0;
-  const minimumSessionRows = childListRowCount > 0 ? 2 : 0;
+  const minimumSessionRows =
+    childListRowCount > 0 ? minimumSessionPanelRows : 0;
   const availableTranscriptRows = Math.max(0, transcriptRows);
   let panelTranscriptLimit: number;
   if (childListFocused) {
