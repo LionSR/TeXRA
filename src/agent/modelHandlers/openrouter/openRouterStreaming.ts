@@ -1,6 +1,6 @@
 // Local file imports
+import { ChannelStreamAggregator } from '../utils/channelStreamAggregator';
 import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
-import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
 import type {
   ChatAssistantMessage,
   ChatFinishReasonEnum,
@@ -37,11 +37,8 @@ export function toOpenRouterReasoningEffort(
  * Accumulates streaming chunks into a final ChatResult since the OpenRouter SDK
  * does not provide a `finalChatCompletion()` helper.
  */
-export class OpenRouterStreamAggregator {
-  private content = '';
-  private reasoning = '';
+export class OpenRouterStreamAggregator extends ChannelStreamAggregator {
   private reasoningDetails: ReasoningDetailUnion[] = [];
-  private toolCalls = new ToolCallAccumulator();
   private finishReason: ChatFinishReasonEnum | null = null;
   private usage: ChatUsage | null = null;
   private model = '';
@@ -51,7 +48,7 @@ export class OpenRouterStreamAggregator {
   /** Text accumulated so far — read on stream failure so the retry UI can
    *  show the partial tail (parity with the other streaming providers). */
   get partialContent(): string {
-    return this.content;
+    return this.getFullContent();
   }
 
   consumeChunk(chunk: ChatStreamChunk): {
@@ -79,7 +76,7 @@ export class OpenRouterStreamAggregator {
 
     const delta = choice.delta;
     const contentDelta = delta.content ?? '';
-    if (contentDelta) this.content += contentDelta;
+    this.pushContent(contentDelta);
 
     // Reasoning - try reasoningDetails first, then reasoning string
     let reasoningDelta = '';
@@ -89,7 +86,7 @@ export class OpenRouterStreamAggregator {
     } else if (delta.reasoning) {
       reasoningDelta = delta.reasoning;
     }
-    if (reasoningDelta) this.reasoning += reasoningDelta;
+    this.pushReasoning(reasoningDelta);
 
     // Accumulate tool calls by index
     if (delta.toolCalls) {
@@ -120,13 +117,14 @@ export class OpenRouterStreamAggregator {
 
     const message: ChatAssistantMessage & { role: 'assistant' } = {
       role: 'assistant',
-      content: this.content || undefined,
+      content: this.getFullContent() || undefined,
     };
     if (toolCalls.length > 0) {
       message.toolCalls = toolCalls;
     }
-    if (this.reasoning) {
-      message.reasoning = this.reasoning;
+    const reasoning = this.getFullReasoning();
+    if (reasoning) {
+      message.reasoning = reasoning;
     }
     if (this.reasoningDetails.length > 0) {
       message.reasoningDetails = this.reasoningDetails;
