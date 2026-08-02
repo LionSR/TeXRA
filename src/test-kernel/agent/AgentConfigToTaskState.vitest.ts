@@ -66,23 +66,4 @@ describe('agentConfigToTaskState', () => {
 
     assert.deepEqual(taskState, { agentConfig: config });
   });
-
-  it('normalizes a legacy workflow config nested inside task state', () => {
-    const taskState = TaskStateSchema.parse({
-      agentConfig: {
-        inputFile: 'main.tex',
-      },
-      activeFiles: {
-        input: true,
-      },
-    });
-    assert.equal(taskState.agentConfig.agentCategory, AgentCategory.Workflow);
-    assert.deepEqual(taskState.agentConfig.inputFiles, ['main.tex']);
-    assert.deepEqual('activeFiles' in taskState && taskState.activeFiles, {
-      input: true,
-      context: false,
-      media: false,
-      output: false,
-    });
-  });
 });

@@ -27,19 +27,19 @@ export interface InitAnswers {
 
 /** Canonical config shape written by `texra init` (a subset of CliConfigValues). */
 export interface InitConfigShape {
-  readonly model: string;
-  readonly outputFormat: CliOutputFormat;
-  readonly approvalPolicy: CliApprovalPolicy;
-  readonly chat: { readonly agent: string; readonly model: string };
+  readonly 'texra.model': string;
+  readonly 'texra.outputFormat': CliOutputFormat;
+  readonly 'texra.approvalPolicy': CliApprovalPolicy;
+  readonly 'texra.chat': { readonly agent: string; readonly model: string };
 }
 
 /** Map wizard answers to the canonical config object. */
 export function buildInitConfig(answers: InitAnswers): InitConfigShape {
   return {
-    model: answers.model,
-    outputFormat: answers.outputFormat,
-    approvalPolicy: answers.approvalPolicy,
-    chat: { agent: answers.agent, model: answers.model },
+    'texra.model': answers.model,
+    'texra.outputFormat': answers.outputFormat,
+    'texra.approvalPolicy': answers.approvalPolicy,
+    'texra.chat': { agent: answers.agent, model: answers.model },
   };
 }
 

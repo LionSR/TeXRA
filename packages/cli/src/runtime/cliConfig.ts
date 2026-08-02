@@ -7,7 +7,7 @@ import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
-import { configKeyVariants } from '@shared/config/configKeys';
+import { canonicalConfigKey } from '@shared/config/configKeys';
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -96,7 +96,6 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 const ApprovalPolicySchema = z.enum(CLI_APPROVAL_POLICIES);
 
-// Top-level fields validated under both bare (legacy) and `texra.*` forms.
 const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
@@ -110,15 +109,13 @@ const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
 ];
 const COMMAND_SECTIONS = ['chat', 'run'] as const;
 
-const TOP_LEVEL_KEYS = new Set<string>(CLI_SETTING_PATHS);
+const TOP_LEVEL_KEYS = new Set<string>(
+  CLI_SETTING_PATHS.map(canonicalConfigKey),
+);
 const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
 
 function isKnownConfigKey(key: string): boolean {
-  return (
-    TOP_LEVEL_KEYS.has(key) ||
-    KNOWN_TEXRA_KEYS.has(key) ||
-    KNOWN_TEXRA_KEYS.has(`texra.${key}`)
-  );
+  return TOP_LEVEL_KEYS.has(key) || KNOWN_TEXRA_KEYS.has(key);
 }
 
 function warnUnknownKeys(
@@ -160,26 +157,23 @@ function collectValidationWarnings(
   const warnings: string[] = [];
   warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
 
-  // Validate top-level fields in both bare (legacy) and `texra.*` forms.
   for (const [key, schema] of TOP_LEVEL_FIELD_SCHEMAS) {
-    for (const variant of configKeyVariants(key)) {
-      warnInvalidField(warnings, filePath, record, variant, schema);
-    }
+    const storedKey = canonicalConfigKey(key);
+    warnInvalidField(warnings, filePath, record, storedKey, schema);
   }
 
   for (const section of COMMAND_SECTIONS) {
-    for (const sectionKey of configKeyVariants(section)) {
-      if (!Object.hasOwn(record, sectionKey)) continue;
-      const sectionValue = record[sectionKey];
-      if (!isObject(sectionValue)) {
-        warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
-        continue;
-      }
-      const prefix = `${sectionKey}.`;
-      warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
-      for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
-        warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
-      }
+    const sectionKey = canonicalConfigKey(section);
+    if (!Object.hasOwn(record, sectionKey)) continue;
+    const sectionValue = record[sectionKey];
+    if (!isObject(sectionValue)) {
+      warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
+      continue;
+    }
+    const prefix = `${sectionKey}.`;
+    warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
+    for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
+      warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
     }
   }
   return warnings;
@@ -196,27 +190,20 @@ function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
   };
 }
 
-/** Look up a value by both bare and `texra.*` prefixed key — prefixed takes precedence. */
 function pickValue<T>(
   record: Record<string, unknown>,
-  bareKey: string,
+  key: string,
   schema: z.ZodType<T>,
 ): T | undefined {
-  for (const key of configKeyVariants(bareKey)) {
-    if (Object.hasOwn(record, key)) return parseOptional(schema, record[key]);
-  }
-  return undefined;
+  return parseOptional(schema, record[canonicalConfigKey(key)]);
 }
 
 function pickRecord(
   record: Record<string, unknown>,
-  bareKey: string,
+  key: string,
 ): Record<string, unknown> | undefined {
-  for (const key of configKeyVariants(bareKey)) {
-    const value = record[key];
-    if (isObject(value)) return value;
-  }
-  return undefined;
+  const value = record[canonicalConfigKey(key)];
+  return isObject(value) ? value : undefined;
 }
 
 function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
@@ -283,8 +270,8 @@ export async function loadWorkspaceCliConfig(
 
 /**
  * Update the workspace chat-agent default without replacing unrelated config.
- * Nested command defaults remain a JSON object because the public config file
- * uses `chat.agent`, while scalar state settings use flat `texra.*` keys.
+ * Nested command defaults remain a JSON object under the canonical
+ * `texra.chat` key.
  */
 export async function setWorkspaceCliChatAgent(
   cwd: string,
@@ -296,16 +283,12 @@ export async function setWorkspaceCliChatAgent(
   }
   const store = await JsonStore.open(workspaceTexraConfigPath(cwd));
   const snapshot = store.snapshot();
-  const sectionKey = Object.hasOwn(snapshot, 'texra.chat')
-    ? 'texra.chat'
-    : 'chat';
-  for (const key of configKeyVariants('chat')) {
-    const existing = isObject(snapshot[key]) ? snapshot[key] : {};
-    const next = { ...existing };
-    if (trimmed && key === sectionKey) next.agent = trimmed;
-    else delete next.agent;
-    await store.set(key, Object.keys(next).length > 0 ? next : undefined);
-  }
+  const sectionKey = canonicalConfigKey('chat');
+  const existing = isObject(snapshot[sectionKey]) ? snapshot[sectionKey] : {};
+  const next = { ...existing };
+  if (trimmed) next.agent = trimmed;
+  else delete next.agent;
+  await store.set(sectionKey, Object.keys(next).length > 0 ? next : undefined);
 }
 
 export function resolveConfiguredAgent(

@@ -55,9 +55,9 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     };
   }
 
-  it('lets workspace values override global values across config aliases', async () => {
+  it('lets workspace values override global values', async () => {
     const { provider, globalStore, workspaceStore } = await createProvider();
-    await globalStore.set('files.exclude', ['dist']);
+    await globalStore.set('texra.files.exclude', ['dist']);
     await workspaceStore.set('texra.files.exclude', ['node_modules']);
 
     expect(provider.get('files.exclude', [])).toEqual(['node_modules']);
@@ -68,7 +68,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     });
   });
 
-  it('updates existing alias keys instead of leaving stale shadow entries', async () => {
+  it('updates existing canonical keys', async () => {
     const { provider, workspaceStore } = await createProvider();
     await workspaceStore.set('texra.files.exclude', ['dist']);
 
@@ -91,21 +91,8 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     });
   });
 
-  it('updates an existing shorthand key from a prefixed alias', async () => {
+  it('clears the stored value when a config value is unset', async () => {
     const { provider, workspaceStore } = await createProvider();
-    await workspaceStore.set('files.exclude', ['dist']);
-
-    await provider.update('texra.files.exclude', ['node_modules']);
-
-    expect(provider.get('files.exclude', [])).toEqual(['node_modules']);
-    expect(workspaceStore.snapshot()).toEqual({
-      'files.exclude': ['node_modules'],
-    });
-  });
-
-  it('clears every stored alias when a config value is unset', async () => {
-    const { provider, workspaceStore } = await createProvider();
-    await workspaceStore.set('files.exclude', ['dist']);
     await workspaceStore.set('texra.files.exclude', ['node_modules']);
 
     await provider.update('files.exclude', undefined);
@@ -114,7 +101,7 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
     expect(workspaceStore.snapshot()).toEqual({});
   });
 
-  it('notifies watchers registered under either config alias', async () => {
+  it('canonicalizes watcher keys supplied through the configuration API', async () => {
     const { provider } = await createProvider();
     let prefixedChanges = 0;
     let unprefixedChanges = 0;

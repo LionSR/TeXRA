@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  WORKFLOW_JOURNAL_KEY_FORMAT,
   WorkflowScriptPersistenceError,
   writeWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
@@ -25,37 +24,9 @@ const script = `export const meta = {
 const first = await agent('first')
 const second = await agent('second')
 return [first, second]`;
-const legacyPresentationScript = `export const meta = {
-  name: 'legacy-presentation',
-  description: 'tests migration of presentation-sensitive journal keys',
-}
-phase('Research')
-return await agent('Inspect', { label: 'Inspect source' })`;
-const LEGACY_PRESENTATION_KEY = '748e06fd1e0824b5';
-
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
 beforeEach(() => clearStoreCache());
-
-async function writeLegacyPresentationCheckpoint(
-  checkpointId: string,
-): Promise<void> {
-  await getExecutionStore(executionId).write(
-    workflowScriptCheckpointKvKey(checkpointId),
-    {
-      schemaVersion: 1,
-      script: legacyPresentationScript,
-      args: { kind: 'undefined' },
-      journal: [
-        {
-          index: 0,
-          key: LEGACY_PRESENTATION_KEY,
-          result: { kind: 'json', value: 'saved result' },
-        },
-      ],
-    },
-  );
-}
 
 // Runs `onFirstEntry` while the checkpoint holding exactly one journal entry
 // is being written; throwing from it leaves that write unperformed.
@@ -146,174 +117,11 @@ describe('workflow-script persistence', () => {
           {
             index: 0,
             key: '0000000000000000',
-            keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
             result: () => 1,
           },
         ],
       }),
     ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
-  });
-
-  it('normalizes checkpoints created before launch files were persisted', async () => {
-    const store = getExecutionStore(executionId);
-    await store.write(workflowScriptCheckpointKvKey('legacy-files'), {
-      schemaVersion: 1,
-      script,
-      args: { kind: 'undefined' },
-      journal: [],
-    });
-
-    await expect(
-      readWorkflowScriptCheckpoint(store, 'legacy-files'),
-    ).resolves.toMatchObject({
-      files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
-    });
-  });
-
-  it('normalizes and replays dependency-free v2 journal entries', async () => {
-    const store = getExecutionStore(executionId);
-    const checkpointId = 'legacy-v2-no-files';
-    const dependencyFreeScript = `export const meta = {
-  name: 'legacy-v2-no-files',
-  description: 'replays a dependency-free v2 entry',
-}
-return await agent('review')`;
-    const first = await runPersistedWorkflowScript({
-      store,
-      checkpointId,
-      script: dependencyFreeScript,
-      runAgent: async () => 'saved result',
-    });
-    const prior = first.journal[0];
-    if (!prior) throw new Error('Expected one dependency-free journal entry');
-    await store.write(workflowScriptCheckpointKvKey(checkpointId), {
-      schemaVersion: 2,
-      script: dependencyFreeScript,
-      args: { kind: 'undefined' },
-      files: {},
-      journal: [
-        {
-          index: prior.index,
-          key: prior.key,
-          keyFormat: 'presentation-independent-v2',
-          result: { kind: 'json', value: prior.result },
-        },
-      ],
-    });
-    clearStoreCache();
-    const runner = vi.fn(async () => 'must not run');
-
-    const resumed = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId,
-      runAgent: runner,
-    });
-
-    expect(resumed.result).toBe('saved result');
-    expect(runner).not.toHaveBeenCalled();
-    expect(resumed.journal[0]?.keyFormat).toBe(
-      WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-    );
-  });
-
-  it('normalizes v2 journal labels and reruns stale file-backed entries', async () => {
-    const store = getExecutionStore(executionId);
-    const checkpointId = 'legacy-v2-file';
-    const fileScript = `export const meta = {
-  name: 'legacy-v2-file',
-  description: 'reruns a pre-fingerprint file-backed entry',
-}
-return await agent('review', { inputFiles: ['proof.tex'] })`;
-    await store.write(workflowScriptCheckpointKvKey(checkpointId), {
-      schemaVersion: 2,
-      script: fileScript,
-      args: { kind: 'undefined' },
-      files: {},
-      journal: [
-        {
-          index: 0,
-          key: '0000000000000000',
-          keyFormat: 'presentation-independent-v2',
-          result: { kind: 'json', value: 'stale result' },
-        },
-      ],
-    });
-
-    await expect(
-      readWorkflowScriptCheckpoint(store, checkpointId),
-    ).resolves.toMatchObject({
-      journal: [
-        {
-          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-        },
-      ],
-    });
-
-    const runner = vi.fn(async () => 'fresh result');
-    const resumed = await runPersistedWorkflowScript({
-      store,
-      checkpointId,
-      runAgent: runner,
-      fingerprintAgentDependencies: async () => 'current-proof',
-    });
-
-    expect(resumed.result).toBe('fresh result');
-    expect(runner).toHaveBeenCalledOnce();
-  });
-
-  it('migrates a v1 presentation-sensitive key after cached replay', async () => {
-    await writeLegacyPresentationCheckpoint('legacy-key');
-    const runner = vi.fn(() => Promise.reject(new Error('must not run')));
-
-    const resumed = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: 'legacy-key',
-      runAgent: runner,
-    });
-
-    expect(resumed.result).toBe('saved result');
-    expect(runner).not.toHaveBeenCalled();
-    expect(resumed.journal).toMatchObject([
-      {
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-      },
-    ]);
-    expect(resumed.journal[0]?.key).not.toBe(LEGACY_PRESENTATION_KEY);
-    await expect(
-      getExecutionStore(executionId).read(
-        workflowScriptCheckpointKvKey('legacy-key'),
-      ),
-    ).resolves.toMatchObject({
-      schemaVersion: 2,
-      journal: [
-        {
-          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-        },
-      ],
-    });
-  });
-
-  it('reruns safely when a v1 checkpoint and presentation change together', async () => {
-    await writeLegacyPresentationCheckpoint('legacy-presentation-drift');
-    const runner = vi.fn(async () => 'fresh result');
-    const revisedScript = legacyPresentationScript
-      .replaceAll('Research', 'Review')
-      .replaceAll('Inspect source', 'Review source');
-
-    const resumed = await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: 'legacy-presentation-drift',
-      script: revisedScript,
-      runAgent: runner,
-    });
-
-    expect(resumed.result).toBe('fresh result');
-    expect(runner).toHaveBeenCalledOnce();
-    expect(resumed.journal).toMatchObject([
-      {
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
-      },
-    ]);
   });
 
   it('accepts script drift: unchanged calls replay, changed calls re-run', async () => {
