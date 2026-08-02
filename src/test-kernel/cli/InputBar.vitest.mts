@@ -1,6 +1,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
@@ -27,7 +28,11 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import { loadInk, renderInteractive } from '@test/support/inkTestHarness.mts';
+import {
+  loadInk,
+  renderInteractive,
+  type InkRenderHandles,
+} from '@test/support/inkTestHarness.mts';
 import {
   createDeferred,
   waitForCondition as waitFor,
@@ -53,54 +58,74 @@ function fakeHistory(entries: readonly string[]): InputHistory {
   };
 }
 
+function latestRenderedFrame(stdout: InkRenderHandles['stdout']): string {
+  return stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+}
+
 beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
 
-describe('InputBar arrow-key child-list focus', () => {
-  it('falls through to the child list on ↓/↑ when there is no history to walk', async () => {
+describe('InputBar history arrow boundaries', () => {
+  it('keeps idle arrows in the input when there is no history to walk', async () => {
     const { ink, React } = await loadInk();
-    const onFocusChildList = vi.fn();
-
-    const { instance, stdin } = renderInteractive(
+    const { instance, stdin, stdout } = renderInteractive(
       ink,
-      React.createElement(InputBar, { onSubmit: vi.fn(), onFocusChildList }),
+      React.createElement(InputBar, { onSubmit: vi.fn() }),
+      { debug: true },
     );
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('[B');
-      await waitFor(() => onFocusChildList.mock.calls.length === 1);
-      stdin.write('[A');
-      await waitFor(() => onFocusChildList.mock.calls.length === 2);
+      stdin.write('draft');
+      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
+      stdin.write('\u001b[B');
+      stdin.write('\u001b[A');
+      await flushPromiseQueue();
+
+      expect(latestRenderedFrame(stdout)).toContain('draft');
     } finally {
       instance.unmount();
     }
   });
 
-  it('still recalls history on ↑ but hands off on an idle ↓', async () => {
+  it('clamps at the oldest entry and restores the draft at the newest boundary', async () => {
     const { ink, React } = await loadInk();
-    const onFocusChildList = vi.fn();
     const history = fakeHistory(['first command', 'second command']);
-
     const { instance, stdin, stdout } = renderInteractive(
       ink,
-      React.createElement(InputBar, {
-        onSubmit: vi.fn(),
-        onFocusChildList,
-        history,
-      }),
+      React.createElement(InputBar, { onSubmit: vi.fn(), history }),
+      { debug: true },
     );
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
-      // Idle Down has nothing to walk forward into — hands off immediately.
-      stdin.write('[B');
-      await waitFor(() => onFocusChildList.mock.calls.length === 1);
-      // Up still recalls the most recent entry rather than escaping.
-      stdin.write('[A');
-      await waitFor(() => stdout.output.includes('second command'));
+      stdin.write('draft');
+      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
+      stdin.write('\u001b[A');
+      await waitFor(() =>
+        latestRenderedFrame(stdout).includes('second command'),
+      );
+      stdin.write('\u001b[A');
+      await waitFor(() =>
+        latestRenderedFrame(stdout).includes('first command'),
+      );
+      stdin.write('\u001b[A');
+      stdin.write('\u001b[A');
+      await flushPromiseQueue();
+      expect(latestRenderedFrame(stdout)).toContain('first command');
+      expect(latestRenderedFrame(stdout)).not.toContain('second command');
 
-      expect(onFocusChildList).toHaveBeenCalledTimes(1);
+      stdin.write('\u001b[B');
+      await waitFor(() =>
+        latestRenderedFrame(stdout).includes('second command'),
+      );
+      stdin.write('\u001b[B');
+      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
+      stdin.write('\u001b[B');
+      await flushPromiseQueue();
+
+      expect(latestRenderedFrame(stdout)).toContain('draft');
+      expect(latestRenderedFrame(stdout)).not.toContain('second command');
     } finally {
       instance.unmount();
     }
