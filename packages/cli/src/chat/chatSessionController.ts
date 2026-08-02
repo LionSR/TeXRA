@@ -19,7 +19,7 @@ import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedTo
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
+import { approvalPromptsUnavailable } from '@cli/runtime/approval/approvalPolicy';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
