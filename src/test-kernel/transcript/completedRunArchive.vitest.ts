@@ -707,7 +707,7 @@ describe('completedRunArchive facade', () => {
     expect(result.conversation!.length).toBeGreaterThan(0);
   });
 
-  it('falls through to a content-bearing historical sibling stream', async () => {
+  it('reads the historical root instead of its child sidecar', async () => {
     const executionId = '0777aa0777aa' as ExecutionId;
     const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
     const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
@@ -715,6 +715,7 @@ describe('completedRunArchive facade', () => {
     const snapshots = new StreamSnapshotStore();
     snapshots.setRunConfig(emptyStream, runConfig('bash'), executionId);
     snapshots.setRunConfig(fullStream, runConfig('orchestrator'), executionId);
+    snapshots.setParentStream(emptyStream, fullStream);
     await snapshots.flush();
 
     const logs = await StreamLogStore.open();
@@ -743,6 +744,184 @@ describe('completedRunArchive facade', () => {
         {
           role: 'assistant',
           content: [{ type: 'text', text: 'Real answer' }],
+        },
+      ],
+    });
+  });
+
+  it('merges matched roots, excluding children and only deduplicating row identity', async () => {
+    const executionId = '0888bb0888bb' as ExecutionId;
+    const firstRoot = 'aOrchestrator@old#0888bb0888bb' as StreamTabId;
+    const secondRoot = 'bOrchestrator@new#0888bb0888bb' as StreamTabId;
+    const child = 'child@tool#0888bb0888bb' as StreamTabId;
+
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstRoot, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(secondRoot, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(child, runConfig('bash'), executionId);
+    snapshots.setParentStream(child, firstRoot);
+    await snapshots.flush();
+
+    const firstQuestion = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First question' }),
+      timestamp: 2000,
+    };
+    const firstAnswer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First answer' }),
+      // A clock adjustment must not move this response before its prompt.
+      timestamp: 1000,
+    };
+    const secondQuestion = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Second question' }),
+      timestamp: 3000,
+    };
+    const secondAnswer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+        // Equal text with a distinct row identity is a real second message.
+        text: 'First answer',
+      }),
+      timestamp: 4000,
+    };
+    const childMessage = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Child implementation detail',
+    });
+
+    const logs = await StreamLogStore.open();
+    logs.append(firstRoot, firstQuestion);
+    logs.append(firstRoot, firstAnswer);
+    // The resumed sidecar copied the last settled row before appending turn 2.
+    logs.append(secondRoot, firstAnswer);
+    logs.append(secondRoot, secondQuestion);
+    logs.append(secondRoot, secondAnswer);
+    logs.append(child, childMessage);
+    await logs.flush();
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'streamLog',
+      streamId: firstRoot,
+      streamIds: [firstRoot, secondRoot],
+      conversation: [
+        { role: 'user', content: 'First question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First answer' }],
+        },
+        { role: 'user', content: 'Second question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First answer' }],
+        },
+      ],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain(
+      `Merged streams: ${firstRoot}, ${secondRoot}`,
+    );
+    expect(endpoint.output).not.toContain('Child implementation detail');
+    expect(endpoint.output?.split('First answer')).toHaveLength(3);
+  });
+
+  it('retains copied rows as ordering constraints across roots', async () => {
+    const executionId = '0888bc0888bc' as ExecutionId;
+    const firstRoot = 'orchestrator@old#0888bc0888bc' as StreamTabId;
+    const resumedRoot = 'orchestrator@new#0888bc0888bc' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstRoot, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(resumedRoot, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const copiedQuestion = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Copied question' }),
+      timestamp: 2000,
+    };
+    const answer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Later answer' }),
+      // The copied prompt still constrains this row despite the earlier clock.
+      timestamp: 1000,
+    };
+    const logs = await StreamLogStore.open();
+    logs.append(firstRoot, copiedQuestion);
+    logs.append(resumedRoot, copiedQuestion);
+    logs.append(resumedRoot, answer);
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId: resumedRoot,
+      streamIds: [resumedRoot, firstRoot],
+      conversation: [
+        { role: 'user', content: 'Copied question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Later answer' }],
+        },
+      ],
+    });
+  });
+
+  it('never substitutes child conversation rows for empty confirmed roots', async () => {
+    const executionId = '0999cc0999cc' as ExecutionId;
+    const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
+    const child = 'child@tool#0999cc0999cc' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(child, runConfig('bash'), executionId);
+    snapshots.setParentStream(child, root);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      root,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
+    );
+    logs.append(
+      child,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
+    );
+    logs.append(
+      child,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Child-only answer' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+    });
+  });
+
+  it('reads a historical execution whose canonical stream is delegated', async () => {
+    const executionId = '0999cd0999cd' as ExecutionId;
+    const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
+    const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('bash'), executionId);
+    snapshots.setParentStream(streamId, parentStreamId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Delegated question' }),
+    );
+    logs.append(
+      streamId,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Delegated answer' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamId,
+      conversation: [
+        { role: 'user', content: 'Delegated question' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Delegated answer' }],
         },
       ],
     });
