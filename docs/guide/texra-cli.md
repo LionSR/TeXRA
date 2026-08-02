@@ -345,8 +345,8 @@ section has three distinct choices:
   is set to inherit. With no default team, an inherited workspace shows all
   agents.
 - **Default chat agent** is the root agent selected for new chats in this
-  workspace. It is stored as `chat.agent` in `.texra/config.json` and does not
-  change which agents are visible.
+  workspace. It is stored under `texra.chat` in `.texra/config.json` and does
+  not change which agents are visible.
 
 The corresponding non-interactive interface is `texra config agents`:
 
@@ -378,22 +378,23 @@ defaults.
 
 ```json
 {
-  "model": "deepseekT",
-  "outputFormat": "text",
-  "approvalPolicy": "never",
-  "chat": {
+  "texra.model": "deepseekT",
+  "texra.outputFormat": "text",
+  "texra.approvalPolicy": "never",
+  "texra.chat": {
     "agent": "assistant",
     "model": "deepseekT"
   },
-  "run": {
+  "texra.run": {
     "model": "deepseekT"
   }
 }
 ```
 
-Supported top-level keys are `agent`, `model`, `outputFormat`, and
-`approvalPolicy`; `chat` and `run` may set command-specific `agent` and `model`
-defaults. The built-in CLI model default is `deepseekT`.
+Supported top-level keys are `texra.agent`, `texra.model`,
+`texra.outputFormat`, and `texra.approvalPolicy`; `texra.chat` and `texra.run`
+may set command-specific `agent` and `model` defaults. The built-in CLI model
+default is `deepseekT`.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, `TEXRA_APPROVAL_POLICY`, and `TEXRA_API_MODE`. Run
