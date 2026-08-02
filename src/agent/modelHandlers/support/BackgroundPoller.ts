@@ -176,9 +176,37 @@ export class BackgroundPoller<TResponse> {
     const logger = () => resolveLogger(this.config.logger);
     const startTime =
       deadlineAtMs === undefined ? Date.now() : deadlineAtMs - maxDurationMs;
-    const deadline = deadlineAtMs ?? startTime + maxDurationMs;
     let current = initialResponse;
     let pollCount = 0;
+
+    const throwIfTimedOut = (response: TResponse): void => {
+      const now = Date.now();
+      const elapsedMs = now - startTime;
+      const timedOut =
+        deadlineAtMs === undefined
+          ? elapsedMs >= maxDurationMs
+          : now >= deadlineAtMs;
+      if (!timedOut) return;
+
+      const stats = {
+        responseId,
+        status: extractStatus(response),
+        pollCount,
+        elapsedMs,
+      };
+      logger().error(
+        `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration while pending`,
+        { data: { ...stats, maxDurationMs } },
+      );
+      const timeout =
+        options.formatTimeoutError?.({
+          ...stats,
+          maxDurationMs,
+          response,
+        }) ??
+        `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`;
+      throw timeout instanceof Error ? timeout : new Error(timeout);
+    };
 
     const initialStatus = extractStatus(current);
     logger().debug(
@@ -227,30 +255,24 @@ export class BackgroundPoller<TResponse> {
           throw err;
         }
 
-        const elapsedMs = Date.now() - startTime;
-        const status = extractStatus(current);
-        if (Date.now() >= deadline) {
-          const stats = { responseId, status, pollCount, elapsedMs };
-          logger().error(
-            `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration while pending`,
-            {
-              data: {
-                ...stats,
-                maxDurationMs,
-              },
-            },
-          );
-          const timeout =
-            options.formatTimeoutError?.({
-              ...stats,
-              maxDurationMs,
-              response: current,
-            }) ??
-            `${providerLabel} ${resourceLabel} ${responseId} exceeded maximum polling duration of ${maxDurationMs} ms.`;
-          throw timeout instanceof Error ? timeout : new Error(timeout);
-        }
+        if (deadlineAtMs !== undefined) signal?.throwIfAborted();
+        throwIfTimedOut(current);
 
-        current = await retrieve(responseId, signal);
+        let retrieved: TResponse;
+        try {
+          retrieved = await retrieve(responseId, signal);
+        } catch (err) {
+          if (deadlineAtMs !== undefined && !isUserAbort(err)) {
+            signal?.throwIfAborted();
+            throwIfTimedOut(current);
+          }
+          throw err;
+        }
+        if (deadlineAtMs !== undefined) {
+          signal?.throwIfAborted();
+          throwIfTimedOut(retrieved);
+        }
+        current = retrieved;
 
         const polledStatus = extractStatus(current);
         logger().debug(
