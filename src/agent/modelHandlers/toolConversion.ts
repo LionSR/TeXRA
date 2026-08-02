@@ -183,91 +183,8 @@ function isSchemaObject(value: unknown): value is JSONSchemaObject {
 const GOOGLE_TOOL_JSON_SCHEMA_OPTIONS = Object.freeze({
   ...TOOL_JSON_SCHEMA_OPTIONS,
   target: 'openapi-3.0',
-  cycles: 'ref',
+  cycles: 'throw',
 } as const);
-
-function isReferenceTo(value: unknown, reference: string): boolean {
-  return isSchemaObject(value) && value.$ref === reference;
-}
-
-/** Match the finite JSON Schema expansion emitted specifically for z.json(). */
-function isArbitraryJsonDefinition(value: unknown, reference: string): boolean {
-  if (!isSchemaObject(value) || !Array.isArray(value.anyOf)) return false;
-  const [string, number, boolean, nullable, array, record] = value.anyOf;
-  return (
-    value.anyOf.length === 6 &&
-    isSchemaObject(string) &&
-    string.type === 'string' &&
-    isSchemaObject(number) &&
-    number.type === 'number' &&
-    isSchemaObject(boolean) &&
-    boolean.type === 'boolean' &&
-    isSchemaObject(nullable) &&
-    nullable.type === 'string' &&
-    nullable.nullable === true &&
-    Array.isArray(nullable.enum) &&
-    nullable.enum.length === 1 &&
-    nullable.enum[0] === null &&
-    isSchemaObject(array) &&
-    array.type === 'array' &&
-    isReferenceTo(array.items, reference) &&
-    isSchemaObject(record) &&
-    record.type === 'object' &&
-    isReferenceTo(record.additionalProperties, reference)
-  );
-}
-
-function arbitraryJsonDefinitionReferences(
-  schema: JSONSchemaObject,
-): Set<string> {
-  const references = new Set<string>();
-  for (const definitionsKey of ['$defs', 'definitions'] as const) {
-    const definitions = schema[definitionsKey];
-    if (!isSchemaObject(definitions)) continue;
-    for (const [name, definition] of Object.entries(definitions)) {
-      const reference = `#/${definitionsKey}/${name.replaceAll('~', '~0').replaceAll('/', '~1')}`;
-      if (isArbitraryJsonDefinition(definition, reference)) {
-        references.add(reference);
-      }
-    }
-  }
-  return references;
-}
-
-/** Replace only references emitted for z.json(); leave every other ref intact. */
-function rewriteArbitraryJsonNodes(
-  value: unknown,
-  references: ReadonlySet<string>,
-): unknown {
-  if (Array.isArray(value)) {
-    return value.map((child) => rewriteArbitraryJsonNodes(child, references));
-  }
-  if (!isSchemaObject(value)) return value;
-
-  const rewritten = Object.fromEntries(
-    Object.entries(value)
-      .map(([key, child]) => [
-        key,
-        key === '$ref' && typeof child === 'string' && references.has(child)
-          ? undefined
-          : rewriteArbitraryJsonNodes(child, references),
-      ])
-      .filter(([, child]) => child !== undefined),
-  );
-
-  if (
-    Array.isArray(rewritten.allOf) &&
-    rewritten.allOf.length > 0 &&
-    rewritten.allOf.every(
-      (branch: unknown) =>
-        isSchemaObject(branch) && Object.keys(branch).length === 0,
-    )
-  ) {
-    delete rewritten.allOf;
-    delete rewritten.nullable;
-  }
-  return rewritten;
-}
 
 function containsSchemaReference(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsSchemaReference);
@@ -289,13 +206,9 @@ export function convertGoogleToolSchema(
   let schema: JSONSchemaObject | null;
   if (def.zodSchema) {
     try {
-      const converted = toJSONSchema(
+      schema = toJSONSchema(
         def.zodSchema,
         GOOGLE_TOOL_JSON_SCHEMA_OPTIONS,
-      ) as JSONSchemaObject;
-      schema = rewriteArbitraryJsonNodes(
-        converted,
-        arbitraryJsonDefinitionReferences(converted),
       ) as JSONSchemaObject;
     } catch (error) {
       throw new Error(
@@ -310,9 +223,7 @@ export function convertGoogleToolSchema(
   const normalized = stripDollarSchema(flattenTopLevelUnion(schema));
   if (containsSchemaReference(normalized)) {
     throw new Error(
-      def.zodSchema
-        ? `Google tool "${def.name}" must use a finite parameter schema without recursive references.`
-        : `Google tool "${def.name}" must use a finite parameter schema without references.`,
+      `Google tool "${def.name}" must use a finite parameter schema without references.`,
     );
   }
   const { $defs: _defs, definitions: _definitions, ...finite } = normalized;
