@@ -91,7 +91,6 @@ interface TestRetryServices {
   streamId: StreamTabId;
   interactions: SessionHostInteractions;
   logger: AgentTrace;
-  abortSignal: AbortSignal;
   modelCell: Pick<ModelCell, 'getClient' | 'rebind' | 'route'>;
 }
 
@@ -173,7 +172,6 @@ function createRetryNode(
     streamId,
     interactions: new SessionHostInteractions(),
     logger: noopTrace,
-    abortSignal: new AbortController().signal,
     modelCell: testRetryModelCell(rebind, route),
   });
   return { node, session, streamStatus, requestRetry };
@@ -190,6 +188,7 @@ async function withRetryRunContext<T>(
       executionId: `${streamId}-execution` as ExecutionId,
       agentName: 'retry-test',
       session,
+      signal: new AbortController().signal,
     }),
   });
   return await withRunContext(context, fn);
@@ -271,7 +270,6 @@ async function captureModelRetry(
     setting: { temperature: 0 },
     config: { model: 'openai:test' },
     runScope: testRunScope(streamId, { session }),
-    abortSignal: new AbortController().signal,
   } as never);
 
   try {
@@ -503,7 +501,6 @@ describe('RetryState', () => {
         streamId: 'retry-delay' as StreamTabId,
         interactions: new SessionHostInteractions(),
         logger: noopTrace,
-        abortSignal: new AbortController().signal,
         modelCell: testRetryModelCell(),
       });
       const retry = node._exec(undefined);
@@ -547,11 +544,12 @@ describe('RetryState', () => {
       const runController = new AbortController();
       const node = new InterruptibleBackoffNode().setServices({
         config: { model: 'openai:test' },
-        runScope: testRunScope('retry-interrupt' as StreamTabId),
+        runScope: testRunScope('retry-interrupt' as StreamTabId, {
+          signal: runController.signal,
+        }),
         streamId: 'retry-interrupt' as StreamTabId,
         interactions: new SessionHostInteractions(),
         logger: noopTrace,
-        abortSignal: runController.signal,
         modelCell: testRetryModelCell(),
       });
       const retry = node._exec(undefined);
@@ -617,6 +615,47 @@ describe('RetryState', () => {
     const streamError = new Error('stream closed after response started');
 
     expect(node.shouldAutoRetry(streamError)).toBe(true);
+  });
+
+  it('does not issue a model request when the run is interrupted after prep', async () => {
+    const streamId = 'model-interrupt-after-prep' as StreamTabId;
+    const session = createTestSession();
+    const controller = new AbortController();
+    const createResponse = vi.fn(async () => ({ response: 'too late' }));
+    const node = new ModelInvocationNode<BaseCycleFields>({
+      operationName: 'Model call',
+      streaming: false,
+      storeResponse: vi.fn(),
+    }).setServices({
+      modelCell: testModelCell({
+        createResponse,
+        getClient: async () => ({}),
+        isBackgroundModeActive: () => false,
+        setOutputStreaming: () => {},
+      }),
+      logger: noopTrace,
+      setting: { temperature: 0 },
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, {
+        session,
+        signal: controller.signal,
+      }),
+    } as never);
+    try {
+      const prep = await node.prep({
+        shouldStop: false,
+        messages: [],
+        endTurn: false,
+      });
+
+      controller.abort();
+      const result = await node._exec(prep);
+
+      expect(result).toEqual({ kind: 'cancelled' });
+      expect(createResponse).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
   });
 
   it('keeps flow-level auto-retry for a raw undici fetch failure', () => {

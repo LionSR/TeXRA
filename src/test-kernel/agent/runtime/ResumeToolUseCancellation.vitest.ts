@@ -77,8 +77,8 @@ import {
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 interface InterruptibleFlowInput {
-  checkInterruption(): boolean;
-  onInterrupt?: () => void;
+  readonly runScope: { readonly signal: AbortSignal };
+  interrupt(): void;
   takePendingFollowUps?: () => readonly unknown[];
   tools?: readonly ITool[];
 }
@@ -104,6 +104,7 @@ function buildResumeContext(
   streamId: StreamTabId,
   usageMonitor: { setModelInfo: ReturnType<typeof vi.fn> },
 ): AgentLaunchContext {
+  const abortController = new AbortController();
   return {
     setting: { agentCategory: AgentCategory.ToolUse },
     runScope: {
@@ -114,6 +115,7 @@ function buildResumeContext(
         transcripts: { ensureLoaded: vi.fn(async () => {}) },
         flushArtifacts: vi.fn(async () => {}),
       },
+      signal: abortController.signal,
     },
     config: { agent: 'test-agent', model: 'test-model' },
     userVarChannels: {
@@ -122,6 +124,7 @@ function buildResumeContext(
     },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn(), ...usageMonitor },
+    interrupt: () => abortController.abort(),
   } as unknown as AgentLaunchContext;
 }
 
@@ -264,6 +267,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     const interactions = {
       emit: vi.fn(),
     } as unknown as SessionHostInteractions;
+    const abortController = new AbortController();
     const context = {
       setting: { agentCategory: AgentCategory.ToolUse },
       runScope: {
@@ -274,10 +278,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           transcripts: { ensureLoaded: vi.fn(async () => {}) },
           flushArtifacts: vi.fn(async () => {}),
         },
+        signal: abortController.signal,
       },
       config: { agent: 'test-agent', model: 'test-model' },
       attachedMemoryMisses: [],
       usageMonitor: { recordUsage: vi.fn() },
+      interrupt: () => abortController.abort(),
     } as unknown as AgentLaunchContext;
     const order: string[] = [];
     const tools = [
@@ -320,15 +326,15 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           session: { appendFollowUp: vi.fn() },
           interrupt: () => {
             order.push('interrupt');
-            input.onInterrupt?.();
+            input.interrupt();
           },
         };
         attachment.attach(flowContext);
         input.takePendingFollowUps?.();
-        if (!input.checkInterruption()) mocks.invokeModelOrTool();
+        if (!input.runScope.signal.aborted) mocks.invokeModelOrTool();
         attachment.detach(flowContext);
         return {
-          outcome: input.checkInterruption()
+          outcome: input.runScope.signal.aborted
             ? RUN_OUTCOME.CANCELLED
             : RUN_OUTCOME.COMPLETED,
         };

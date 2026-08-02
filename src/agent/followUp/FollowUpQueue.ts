@@ -100,14 +100,12 @@ export class FollowUpQueue {
     return this.queued.splice(0).filter(isVisibleItem);
   }
 
-  waitForNext(
-    checkInterruption: () => boolean,
-  ): Promise<FollowUpQueueItem | null> {
+  waitForNext(signal: AbortSignal): Promise<FollowUpQueueItem | null> {
     const next = this.queued.shift();
     if (next) {
       return Promise.resolve(next);
     }
-    if (checkInterruption()) {
+    if (signal.aborted) {
       return Promise.resolve(null);
     }
     if (this.deferred) {
@@ -115,7 +113,15 @@ export class FollowUpQueue {
     }
     const d = pDefer<FollowUpQueueItem | null>();
     this.deferred = d;
-    return d.promise;
+    const onAbort = (): void => {
+      if (this.deferred !== d) return;
+      this.deferred = null;
+      d.resolve(null);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    return d.promise.finally(() =>
+      signal.removeEventListener('abort', onAbort),
+    );
   }
 
   /**
@@ -128,9 +134,9 @@ export class FollowUpQueue {
    * Returns null if interrupted.
    */
   async waitAndDrainAll(
-    checkInterruption: () => boolean,
+    signal: AbortSignal,
   ): Promise<FollowUpQueueBatch | null> {
-    const first = await this.waitForNext(checkInterruption);
+    const first = await this.waitForNext(signal);
     if (first === null) return null;
     const synthetic = first.origin === 'synthetic';
 

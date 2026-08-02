@@ -7,6 +7,8 @@ import type { StreamTabId } from '@shared/schemas';
 const stream = (value: string) => value as StreamTabId;
 
 describe('FollowUpQueue', () => {
+  const activeSignal = () => new AbortController().signal;
+
   it('keeps visible and synthetic batches separate', async () => {
     const queue = new FollowUpQueue();
     queue.enqueueSynthetic('compact');
@@ -14,11 +16,11 @@ describe('FollowUpQueue', () => {
     queue.enqueue({ text: 'second', origin: 'subagent_result' });
 
     expect(queue.getAll()).toEqual(['first', 'second']);
-    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+    await expect(queue.waitAndDrainAll(activeSignal())).resolves.toEqual({
       items: [{ text: 'compact', origin: 'synthetic' }],
       synthetic: true,
     });
-    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+    await expect(queue.waitAndDrainAll(activeSignal())).resolves.toEqual({
       items: [
         { text: 'first', mediaFiles: ['/tmp/a.png'], origin: 'user' },
         { text: 'second', origin: 'subagent_result' },
@@ -29,9 +31,9 @@ describe('FollowUpQueue', () => {
 
   it('rejects a second waiter instead of replacing the first', async () => {
     const queue = new FollowUpQueue();
-    const first = queue.waitForNext(() => false);
+    const first = queue.waitForNext(activeSignal());
 
-    expect(() => queue.waitForNext(() => false)).toThrow(
+    expect(() => queue.waitForNext(activeSignal())).toThrow(
       'already has a waiting consumer',
     );
     queue.enqueue({ text: 'accepted once' });
@@ -39,6 +41,16 @@ describe('FollowUpQueue', () => {
       text: 'accepted once',
       origin: 'user',
     });
+  });
+
+  it('settles an active wait from the supplied run signal', async () => {
+    const queue = new FollowUpQueue();
+    const controller = new AbortController();
+    const waiting = queue.waitForNext(controller.signal);
+
+    controller.abort();
+
+    await expect(waiting).resolves.toBeNull();
   });
 });
 

@@ -9,7 +9,5 @@ export interface IToolUseSession {
   appendSyntheticFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
-  waitForFollowUp(
-    checkInterruption: () => boolean,
-  ): Promise<FollowUpQueueBatch | null>;
+  waitForFollowUp(signal: AbortSignal): Promise<FollowUpQueueBatch | null>;
 }

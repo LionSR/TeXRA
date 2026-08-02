@@ -18,6 +18,8 @@ export interface RunScope {
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
   readonly session: SessionHandle;
+  /** Sticky cancellation state shared by every part of this run. */
+  readonly signal: AbortSignal;
 }
 
 export function createRunScope(scope: RunScope): RunScope {

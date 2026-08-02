@@ -159,7 +159,7 @@ type OutcomeShared = RoundAwareState;
 
 interface OutcomeControl {
   readonly terminalOutcome: RunOutcome | 'throws';
-  interrupted: boolean;
+  readonly abortController: AbortController;
 }
 
 class OutcomeRoundNode extends BaseNode<OutcomeShared> {
@@ -179,7 +179,7 @@ class OutcomeRoundNode extends BaseNode<OutcomeShared> {
       };
       shared.continueRounds = false;
     } else if (this.control.terminalOutcome === RUN_OUTCOME.CANCELLED) {
-      this.control.interrupted = true;
+      this.control.abortController.abort();
     }
 
     return undefined;
@@ -217,7 +217,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
       const store = StreamLogStore.ephemeral('test');
       const control: OutcomeControl = {
         terminalOutcome,
-        interrupted: false,
+        abortController: new AbortController(),
       };
       const flow = new RoundPersistedFlow<OutcomeShared>(
         new OutcomeRoundNode(control),
@@ -231,7 +231,7 @@ describe('RoundPersistedFlow round outcome persistence (#8137)', () => {
                 index: roundIndex,
                 total: shared.totalRounds,
               }),
-            checkInterruption: () => control.interrupted,
+            signal: control.abortController.signal,
           },
         },
       );

@@ -17,11 +17,10 @@ import { testRunScope } from './progressTestUtils';
 export function baseRoundServices(
   traceLabel: string,
   streamId = 'test-stream',
+  signal = new AbortController().signal,
 ) {
   return {
-    runScope: testRunScope(streamId),
-    abortSignal: new AbortController().signal,
-    checkInterruption: () => false,
+    runScope: testRunScope(streamId, { signal }),
     config: { agent: 'test-agent', model: 'test-model' },
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),

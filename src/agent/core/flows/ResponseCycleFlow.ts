@@ -113,8 +113,8 @@ class ResponsePrepNode<C> extends BaseNode<
   ResponseCycleServices<C>
 > {
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
-    const { prompt, userVarChannels, checkInterruption } = this.services;
-    const interrupted = checkInterruption();
+    const { prompt, userVarChannels, runScope } = this.services;
+    const interrupted = runScope.signal.aborted;
     const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
@@ -497,7 +497,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     return {
       kind: 'success',
       value: {
-        interrupted: this.services.checkInterruption(),
+        interrupted: this.services.runScope.signal.aborted,
         stopReason: shared.stopReason,
         processedResponse: shared.processedResponse,
       },

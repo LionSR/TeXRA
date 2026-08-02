@@ -94,6 +94,7 @@ describe('AgentLaunchContext', () => {
       executionId,
       agentName: 'chat',
       session,
+      signal: new AbortController().signal,
     });
     const modelCell = testModelCell({ dispose: vi.fn() }, 'deepseekT');
     const ctx = {

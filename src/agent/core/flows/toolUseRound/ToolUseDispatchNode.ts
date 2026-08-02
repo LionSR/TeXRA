@@ -121,7 +121,7 @@ export class ToolUseDispatchNode<C> extends Node<
       return [];
     }
 
-    if (this.services.abortSignal.aborted) {
+    if (this.services.runScope.signal.aborted) {
       shared.shouldStop = true;
       return [];
     }
@@ -173,11 +173,11 @@ export class ToolUseDispatchNode<C> extends Node<
         ? []
         : [index],
     );
-    const { abortSignal } = this.services;
+    const { signal } = this.services.runScope;
     const queue = new PQueue({ concurrency: MAX_PARALLEL_TOOL_CALLS });
     let i = 0;
     while (i < live.length) {
-      if (abortSignal.aborted) {
+      if (signal.aborted) {
         break;
       }
       if (!this.isParallelSafe(calls[live[i]])) {
@@ -199,7 +199,7 @@ export class ToolUseDispatchNode<C> extends Node<
           queue.add(async () => {
             // Re-check after waiting for a slot: an interrupt while this
             // call was queued must not start new work.
-            if (abortSignal.aborted) return;
+            if (signal.aborted) return;
             results[index] = await this.exec(calls[index]);
           }),
         ),
@@ -266,7 +266,7 @@ export class ToolUseDispatchNode<C> extends Node<
 
   /** Execute a single tool call, returning null if interrupted. */
   async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
-    if (this.services.abortSignal.aborted) {
+    if (this.services.runScope.signal.aborted) {
       return null;
     }
 
@@ -429,10 +429,10 @@ export class ToolUseDispatchNode<C> extends Node<
       parsedInput,
       onExecutionReady,
       onToolOutput,
-      options.abortSignal,
+      options.runScope.signal,
     );
 
-    if (options.abortSignal.aborted) {
+    if (options.runScope.signal.aborted) {
       if (logRef.logId) {
         endToolUseCard(
           options.logger,

@@ -6,10 +6,7 @@ import {
   replaceMessagesInPlace,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import type {
-  AgentCore,
-  BaseFlowContextInit,
-} from '@agent/core/flows/BaseFlowServices';
+import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import {
   classifyModelRateLimitFailure,
@@ -70,8 +67,7 @@ export interface ModelInvocationConfig<TShared, TServices> {
 type InvocationServices = Pick<
   AgentCore,
   'modelCell' | 'logger' | 'setting' | 'config' | 'runScope'
-> &
-  Pick<BaseFlowContextInit, 'abortSignal'>;
+>;
 
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,

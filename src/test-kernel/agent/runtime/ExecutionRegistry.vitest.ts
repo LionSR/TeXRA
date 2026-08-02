@@ -294,52 +294,6 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('delivers a latched pre-attach stop to the handler that attaches next', () => {
-    const executionId = 'exec-pre-attach-stop-test';
-    const handle = createHandle(
-      executionId,
-      'parent-pre-attach-stop-test' as StreamTabId,
-      'child-pre-attach-stop-test' as StreamTabId,
-    );
-    const interrupt = vi.fn();
-
-    // Closed: a stop before the window opens has nowhere to go.
-    expect(handle.interrupt()).toBe(false);
-    expect(handle.hasPendingInterrupt).toBe(false);
-
-    handle.enablePendingInterrupt();
-    expect(handle.interrupt()).toBe(true);
-    expect(handle.hasPendingInterrupt).toBe(true);
-
-    handle.attachInterruptHandler({ interrupt });
-
-    expect(interrupt).toHaveBeenCalledOnce();
-    // The latch is consumed, so a second attach does not replay the stop.
-    expect(handle.hasPendingInterrupt).toBe(false);
-    handle.detachInterruptHandler();
-    handle.attachInterruptHandler({ interrupt });
-    expect(interrupt).toHaveBeenCalledOnce();
-  });
-
-  it('drops a latched pre-attach stop when the runner closes the window', () => {
-    const handle = createHandle(
-      'exec-pre-attach-stop-closed-test',
-      'parent-pre-attach-stop-closed-test' as StreamTabId,
-      'child-pre-attach-stop-closed-test' as StreamTabId,
-    );
-    const interrupt = vi.fn();
-
-    handle.enablePendingInterrupt();
-    expect(handle.interrupt()).toBe(true);
-    handle.closePendingInterruptWindow();
-
-    expect(handle.hasPendingInterrupt).toBe(false);
-    // Closed again, so a later stop is refused rather than silently latched.
-    expect(handle.interrupt()).toBe(false);
-    handle.attachInterruptHandler({ interrupt });
-    expect(interrupt).not.toHaveBeenCalled();
-  });
-
   it('uses the handle interrupt target when terminating agent handles', () => {
     const streamStatus = new StreamStatusMachine();
     const registry = new ExecutionRegistry({ streamStatus });
@@ -557,10 +511,11 @@ describe('executionRegistry', () => {
         'parent-waiting-stop-handoff' as StreamTabId,
         childStreamId,
       );
-      successor.enablePendingInterrupt();
+      const successorInterrupt = vi.fn();
+      successor.attachInterruptHandler({ interrupt: successorInterrupt });
       registry.track(successor);
 
-      expect(successor.hasPendingInterrupt).toBe(true);
+      expect(successorInterrupt).toHaveBeenCalledOnce();
       finishCleanup();
       await expect(previous.result).resolves.toMatchObject({
         type: 'result',
