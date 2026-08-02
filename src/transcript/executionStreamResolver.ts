@@ -2,7 +2,11 @@ import pMap from 'p-map';
 
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { writeLegacyExecutionStreamId } from '@agent/storage/executionLifecycle';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  EXECUTION_STREAM_ID_SOURCE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StreamLogStore } from './StreamLogStore';
@@ -161,10 +165,13 @@ export async function resolvePersistedStreamIdForExecution(
   executionId: ExecutionId,
   options: PersistedStreamIdResolverOptions = {},
 ): Promise<PersistedStreamIdResolution | null> {
-  const registeredStreamId = (await getExecutionStore(executionId).readMeta())
-    ?.streamId;
-  if (registeredStreamId) {
-    return { streamId: registeredStreamId, source: 'executionMeta' };
+  const executionMeta = await getExecutionStore(executionId).readMeta();
+  if (
+    executionMeta?.streamId &&
+    executionMeta.streamIdSource !==
+      EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION
+  ) {
+    return { streamId: executionMeta.streamId, source: 'executionMeta' };
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
@@ -172,8 +179,10 @@ export async function resolvePersistedStreamIdForExecution(
     await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
+    const primaryCandidates =
+      rootMetaMatched.length > 0 ? rootMetaMatched : metaMatched;
     const streamId = await pickBestLegacyMetaMatch(
-      metaMatched,
+      primaryCandidates,
       snapshotStore,
       options.streamLogStore,
     );
@@ -192,9 +201,7 @@ export async function resolvePersistedStreamIdForExecution(
       streamId,
       source: 'streamDataMeta',
       ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
-      ...(metaMatched.length > 1 && rootMetaMatched.length > 0
-        ? { associatedRootStreamIds: rootMetaMatched }
-        : {}),
+      associatedRootStreamIds: rootMetaMatched,
     };
   }
 

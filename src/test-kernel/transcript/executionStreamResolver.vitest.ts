@@ -8,6 +8,7 @@ import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
+  EXECUTION_STREAM_ID_SOURCE,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -85,7 +86,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
 
-    expect(resolved).toEqual({ streamId, source: 'streamDataMeta' });
+    expect(resolved).toEqual({
+      streamId,
+      source: 'streamDataMeta',
+      associatedRootStreamIds: [streamId],
+    });
   });
 
   it(
@@ -148,7 +153,10 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
     await expect(
       getExecutionStore(executionId).readMeta(),
-    ).resolves.toMatchObject({ streamId });
+    ).resolves.toMatchObject({
+      streamId,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+    });
   });
 
   it('retains a sidecar scan fallback for execution records predating streamId', async () => {
@@ -165,10 +173,36 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
     });
-    expect(resolved).toEqual({ streamId, source: 'streamDataMeta' });
+    expect(resolved).toEqual({
+      streamId,
+      source: 'streamDataMeta',
+      associatedRootStreamIds: [streamId],
+    });
     await expect(
       getExecutionStore(executionId).readMeta(),
-    ).resolves.toMatchObject({ streamId });
+    ).resolves.toMatchObject({
+      streamId,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION,
+    });
+
+    const resumedStream = 'zOrchestrator@newModel#abc666' as StreamTabId;
+    store.setRunConfig(
+      resumedStream,
+      runConfig('orchestrator', 'newModel'),
+      executionId,
+    );
+    await store.flush();
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+      }),
+    ).resolves.toEqual({
+      streamId,
+      source: 'streamDataMeta',
+      fallbackStreamIds: [resumedStream],
+      associatedRootStreamIds: [streamId, resumedStream],
+    });
   });
 
   it('prefers a work-plan-bearing historical stream over a bare match', async () => {

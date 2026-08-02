@@ -707,7 +707,7 @@ describe('completedRunArchive facade', () => {
     expect(result.conversation!.length).toBeGreaterThan(0);
   });
 
-  it('falls through to a content-bearing historical sibling stream', async () => {
+  it('reads the historical root instead of its child sidecar', async () => {
     const executionId = '0777aa0777aa' as ExecutionId;
     const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
     const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
@@ -762,19 +762,26 @@ describe('completedRunArchive facade', () => {
     snapshots.setParentStream(child, firstRoot);
     await snapshots.flush();
 
-    const firstQuestion = logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'First question',
-    });
-    const firstAnswer = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'First answer',
-    });
-    const secondQuestion = logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'Second question',
-    });
-    const secondAnswer = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      // Equal text with a distinct row identity is a real second message.
-      text: 'First answer',
-    });
+    const firstQuestion = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First question' }),
+      timestamp: 2000,
+    };
+    const firstAnswer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First answer' }),
+      // A clock adjustment must not move this response before its prompt.
+      timestamp: 1000,
+    };
+    const secondQuestion = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Second question' }),
+      timestamp: 3000,
+    };
+    const secondAnswer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+        // Equal text with a distinct row identity is a real second message.
+        text: 'First answer',
+      }),
+      timestamp: 4000,
+    };
     const childMessage = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
       text: 'Child implementation detail',
     });
@@ -816,6 +823,37 @@ describe('completedRunArchive facade', () => {
     );
     expect(endpoint.output).not.toContain('Child implementation detail');
     expect(endpoint.output?.split('First answer')).toHaveLength(3);
+  });
+
+  it('never substitutes child conversation rows for empty confirmed roots', async () => {
+    const executionId = '0999cc0999cc' as ExecutionId;
+    const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
+    const child = 'child@tool#0999cc0999cc' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(child, runConfig('bash'), executionId);
+    snapshots.setParentStream(child, root);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      root,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
+    );
+    logs.append(
+      child,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
+    );
+    logs.append(
+      child,
+      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Child-only answer' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+    });
   });
 
   it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {

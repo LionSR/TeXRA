@@ -389,46 +389,52 @@ async function conversationFromStream(
   return log ? streamLogEntriesToConversation(log.toJSON()) : [];
 }
 
-/** Load one stream's raw rows; `[]` when its persisted log is absent. */
-async function entriesFromStream(
-  streamLogStore: StreamLogStore,
-  streamId: StreamTabId,
-): Promise<StreamLogEntry[]> {
-  await streamLogStore.ensureLoaded(streamId);
-  return streamLogStore.get(streamId)?.toJSON() ?? [];
-}
-
 /**
- * Merge execution-matched root sidecars by recorded time. Stream order and
- * local sequence number break ties, and persisted row identity removes copied
- * overlap without collapsing two distinct messages that happen to have equal
- * text.
+ * Interleave execution-matched root sidecars by recorded time while preserving
+ * each stream's authoritative local sequence. Persisted row identity removes
+ * copied overlap without collapsing distinct messages with equal text.
  */
 async function mergedRootConversation(
   streamLogStore: StreamLogStore,
   streamIds: readonly StreamTabId[],
 ): Promise<unknown[]> {
   const entriesByStream = await Promise.all(
-    streamIds.map((streamId) => entriesFromStream(streamLogStore, streamId)),
-  );
-  const ordered = entriesByStream
-    .flatMap((entries, streamIndex) =>
-      entries.map((entry) => ({ entry, streamIndex })),
-    )
-    .toSorted(
-      (left, right) =>
-        left.entry.timestamp - right.entry.timestamp ||
-        left.streamIndex - right.streamIndex ||
-        left.entry.seqNo - right.entry.seqNo,
-    );
-  const seen = new Set<string>();
-  return streamLogEntriesToConversation(
-    ordered.flatMap(({ entry }) => {
-      if (seen.has(entry.id)) return [];
-      seen.add(entry.id);
-      return [entry];
+    streamIds.map(async (streamId) => {
+      await streamLogStore.ensureLoaded(streamId);
+      return streamLogStore.get(streamId)?.toJSON() ?? [];
     }),
   );
+  const seen = new Set<string>();
+  const uniqueEntriesByStream = entriesByStream.map((entries) =>
+    entries.filter((entry) => {
+      if (seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    }),
+  );
+  const nextIndexes = uniqueEntriesByStream.map(() => 0);
+  const ordered: StreamLogEntry[] = [];
+  while (true) {
+    let next:
+      | { readonly entry: StreamLogEntry; readonly streamIndex: number }
+      | undefined;
+    for (const [streamIndex, entries] of uniqueEntriesByStream.entries()) {
+      const entry = entries[nextIndexes[streamIndex] ?? 0];
+      if (
+        entry &&
+        (!next ||
+          entry.timestamp < next.entry.timestamp ||
+          (entry.timestamp === next.entry.timestamp &&
+            streamIndex < next.streamIndex))
+      ) {
+        next = { entry, streamIndex };
+      }
+    }
+    if (!next) break;
+    ordered.push(next.entry);
+    nextIndexes[next.streamIndex] = (nextIndexes[next.streamIndex] ?? 0) + 1;
+  }
+  return streamLogEntriesToConversation(ordered);
 }
 
 /**
@@ -446,8 +452,8 @@ async function readSidecarConversation(
   // release/reopen regression proves resumed turns append there. Only
   // pre-registration resolutions can represent historical split sidecars, so
   // keep the ordinary completed-read path constant-time.
-  const rootStreamIds = resolved.associatedRootStreamIds ?? [];
-  if (rootStreamIds.length > 0) {
+  const rootStreamIds = resolved.associatedRootStreamIds;
+  if (rootStreamIds !== undefined) {
     const orderedRoots = [
       ...(rootStreamIds.includes(resolved.streamId) ? [resolved.streamId] : []),
       ...rootStreamIds.filter((streamId) => streamId !== resolved.streamId),
@@ -464,6 +470,10 @@ async function readSidecarConversation(
         ...(orderedRoots.length > 1 ? { streamIds: orderedRoots } : {}),
       };
     }
+    // Exact metadata established the canonical root set. An empty root
+    // conversation must fall back to the legacy execution projection, never
+    // to a child or suffix-only sidecar.
+    return null;
   }
 
   const primaryConversation = await conversationFromStream(
