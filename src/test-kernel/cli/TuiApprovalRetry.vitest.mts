@@ -649,6 +649,7 @@ describe('TUI retry approvals', () => {
     });
     await expect(result).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(currentApproval.get()).toBeUndefined();
@@ -875,6 +876,7 @@ describe('TUI retry approvals', () => {
     );
     await expect(later).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(laterPrepare).toHaveBeenCalledOnce();
@@ -1326,6 +1328,7 @@ describe('TUI retry approvals', () => {
     });
     await expect(second).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
   });
@@ -1503,6 +1506,7 @@ describe('TUI retry approvals', () => {
     blockingWrite.resolve(undefined);
     await expect(blocking).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(mocks.setCliApiMode).toHaveBeenCalledOnce();
@@ -1536,6 +1540,7 @@ describe('TUI retry approvals', () => {
     firstModeSwitch.reject(new Error('stale mode switch failed'));
     await expect(second).resolves.toEqual({
       action: 'retry',
+      decisionSource: 'automatic',
       feedback: undefined,
     });
     expect(mocks.setCliApiMode.mock.calls.map(([mode]) => mode)).toEqual([
