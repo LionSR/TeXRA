@@ -6,8 +6,8 @@
  * rooted the same on-disk layout at VS Code's per-extension
  * `context.storageUri`. Wiring the identical `WorkspaceStorageProvider` here
  * means a workspace worked on from any host shows one history (#8622). Only
- * the storage port moves — Memento state, secrets, and `.vscode/settings.json`
- * config stay VS Code-native.
+ * the storage port moves. VS Code Memento state and SecretStorage remain
+ * host-owned; TeXRA configuration uses the shared JSON stores.
  */
 // Third-party imports
 import * as vscode from 'vscode';

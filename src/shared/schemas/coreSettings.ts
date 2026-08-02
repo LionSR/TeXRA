@@ -33,7 +33,6 @@ export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
   'workspaceTemp',
 ] as const;
 
-export const AGENT_REVIEW_APPROACHES = ['quick', 'thorough'] as const;
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
@@ -475,6 +474,23 @@ export const CORE_SETTING_PATHS = [
 ] as const satisfies readonly LeafPaths<CoreSettings>[];
 
 export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
+
+const CORE_SETTING_PATH_SET = new Set<string>(CORE_SETTING_PATHS);
+
+/** Return a fresh copy of a Core setting's schema-owned default value. */
+export function getCoreSettingDefault(key: string): unknown {
+  const settingPath = key.startsWith('texra.') ? key.slice(6) : key;
+  if (!CORE_SETTING_PATH_SET.has(settingPath)) return undefined;
+
+  let value: unknown = DEFAULT_CORE_SETTINGS;
+  for (const segment of settingPath.split('.')) {
+    if (value === null || typeof value !== 'object') return undefined;
+    value = (value as Record<string, unknown>)[segment];
+  }
+  return value !== null && typeof value === 'object'
+    ? structuredClone(value)
+    : value;
+}
 
 // Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
 type _AssertCorePathsExhaustive = AssertNever<

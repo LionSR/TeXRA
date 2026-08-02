@@ -80,16 +80,6 @@ describe('getToolFlags', () => {
     }
   });
 
-  it('still honors the pre-merge texra.debug.saveInputPrompt key', async () => {
-    try {
-      fakeConfig.set('texra.debug.saveInputPrompt', true);
-      const flags = getToolFlags(baseConfig, baseSetting, basePrompt);
-      expect(flags.PRINT_INPUT_PROMPT).toBe(true);
-    } finally {
-      await fakeConfig.update('texra.debug.saveInputPrompt', undefined);
-    }
-  });
-
   it('derives round count from additional userRequest entries', () => {
     const prompt: AgentPrompt = {
       ...basePrompt,

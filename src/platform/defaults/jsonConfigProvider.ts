@@ -2,6 +2,7 @@ import {
   canonicalConfigKey,
   createWatcherRegistry,
 } from '@shared/config/configKeys';
+import { getCoreSettingDefault } from '@shared/schemas/coreSettings';
 
 import type { JsonStore } from './jsonStore';
 import type {
@@ -23,7 +24,7 @@ export interface JsonConfigProviderOptions {
  */
 export class JsonConfigProvider implements ConfigProvider {
   private readonly watchers = createWatcherRegistry();
-  private readonly workspaceStore: JsonStore;
+  private workspaceStore: JsonStore;
   private readonly globalStore: JsonStore;
 
   constructor({ workspace, global }: JsonConfigProviderOptions) {
@@ -37,7 +38,18 @@ export class JsonConfigProvider implements ConfigProvider {
     if (workspaceValue !== undefined) return workspaceValue;
     const globalValue = this.globalStore.get<T>(storedKey);
     if (globalValue !== undefined) return globalValue;
-    return defaultValue as T;
+    const schemaDefault = getCoreSettingDefault(storedKey) as T | undefined;
+    return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
+  }
+
+  /** Switch workspace scope while retaining global values and subscriptions. */
+  replaceWorkspaceStore(workspaceStore: JsonStore): void {
+    const affectedKeys = new Set([
+      ...Object.keys(this.workspaceStore.snapshot()),
+      ...Object.keys(workspaceStore.snapshot()),
+    ]);
+    this.workspaceStore = workspaceStore;
+    for (const key of affectedKeys) this.watchers.notify(key);
   }
 
   async update<T>(
@@ -57,7 +69,9 @@ export class JsonConfigProvider implements ConfigProvider {
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
     const storedKey = canonicalConfigKey(key);
+    const defaultValue = getCoreSettingDefault(storedKey) as T | undefined;
     return {
+      ...(defaultValue !== undefined && { defaultValue }),
       globalValue: this.globalStore.get<T>(storedKey),
       workspaceValue: this.workspaceStore.get<T>(storedKey),
       effectiveValue: this.get<T>(key),

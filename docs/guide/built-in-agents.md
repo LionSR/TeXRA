@@ -78,7 +78,8 @@ For details on the underlying structure and execution flow common to all agents,
 ### `assistant`
 
 ::: tip Opt-in
-`assistant` (formerly `chat`) is not included in any of the [built-in teams](#built-in-teams). Enable it from the **Agents** tab if you want to use it. The old `chat` name still resolves to it.
+`assistant` is not included in any of the [built-in teams](#built-in-teams).
+Enable it from the **Agents** tab if you want to use it.
 :::
 
 A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, Crossref, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code)—all in a back-and-forth conversation.

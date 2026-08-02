@@ -20,7 +20,6 @@ import {
   agentName,
 } from '@shared/schemas/agent';
 import {
-  LEGACY_AGENT_ALIASES,
   LOOKUP_PRIORITY,
   TOOL_USE_LOOKUP_PRIORITY,
 } from './agentRegistryConstants';
@@ -189,15 +188,6 @@ async function doLoad(
 }
 
 /**
- * Replace the name part of a possibly source-qualified key while preserving its
- * source prefix ("src:old" → "src:new", bare "old" → "new").
- */
-function withAgentName(key: string, newName: string): string {
-  const name = agentName(key);
-  return key.slice(0, key.length - name.length) + newName;
-}
-
-/**
  * Canonical agent resolver: look up an agent by identifier.
  *
  * Supports "source:name" format or just "name". Plain names use the default
@@ -224,14 +214,6 @@ export function getAgent(
   for (const source of priority) {
     const entry = cache.get(agentKey(source, identifier));
     if (entry) return entry;
-  }
-
-  // Legacy-name fallback, for both bare names ("chat") and source-qualified
-  // keys ("builtInToolUse:chat"): map the name part through the alias table
-  // and retry once.
-  const alias = LEGACY_AGENT_ALIASES[agentName(identifier)];
-  if (alias) {
-    return getAgent(withAgentName(identifier, alias), lookupCategory);
   }
   return undefined;
 }
@@ -465,16 +447,12 @@ export function resolveDelegationScopeAgents(
 
 /**
  * Match an identifier against a candidate set. A source-qualified identifier
- * names one specific entry, so only an exact key match counts — matching its
- * bare name could hit a different entry that shares the legacy name (e.g. a
- * custom `chat` shadowing the renamed built-in). Bare identifiers may match any
- * candidate by name.
+ * names one specific entry, so only an exact key match counts. Bare identifiers
+ * may match any candidate by name.
  *
  * This is the single identity-matching rule. Every resolver that picks an entry
- * out of a list by name-or-key goes through it — including the exact-match and
- * legacy-alias halves of {@link resolveWithinCategory}, which is the seam
- * out-of-registry callers (delegation scopes, visibility checks) resolve
- * through — so the rule lives in exactly one place.
+ * out of a list by name-or-key goes through it, so the rule lives in exactly
+ * one place.
  */
 export function findAgentByIdentifier(
   entries: readonly AgentEntry[],
@@ -483,65 +461,20 @@ export function findAgentByIdentifier(
   return entries.find((entry) => agentMatchesIdentifier(entry, identifier));
 }
 
-/**
- * Resolve an identifier within a category-scoped candidate set: exact identity
- * match first, then the alias-aware canonical resolver mapped back into the
- * set. Callers supply the scope (visible-only, the full category, or a run's
- * delegation roster); the matching rule is identical regardless of scope.
- */
-export function resolveWithinCategory(
-  entries: readonly AgentEntry[],
-  category: AgentCategory,
-  identifier: string,
-): AgentEntry | undefined {
-  const exact = findAgentByIdentifier(entries, identifier);
-  if (exact) return exact;
-
-  // Legacy-alias fallback (e.g. `chat` → `assistant`). getAgent is category-
-  // blind, so map its result back into the category scope; an entry from
-  // another category is correctly rejected here. The mapping goes back through
-  // findAgentByIdentifier so a source-qualified identifier still matches only
-  // the alias target's exact key, never a different entry sharing its name.
-  const entry = getAgent(identifier, category);
-  if (!entry) return undefined;
-  return findAgentByIdentifier(
-    entries,
-    identifier === agentName(identifier) ? entry.name : agentKeyOf(entry),
-  );
-}
-
-/**
- * Resolve an identifier to a currently visible agent entry. Visibility and
- * legacy aliases are owned by the registry, so callers do not need to repeat
- * rename or enabled-agent matching rules.
- */
+/** Resolve an identifier to a currently visible agent entry. */
 export function getVisibleAgent(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  return resolveWithinCategory(
-    getVisibleAgents(category),
-    category,
-    identifier,
-  );
+  return findAgentByIdentifier(getVisibleAgents(category), identifier);
 }
 
-/**
- * Resolve an identifier to an agent in a category, ignoring visibility. Shares
- * {@link resolveWithinCategory} with {@link getVisibleAgent} so the
- * category-scoped matching rule is identical to validation's. Used by the
- * legacy-alias migration and as the category floor of
- * {@link resolveAgentForLaunch}.
- */
+/** Resolve an identifier to an agent in a category, ignoring visibility. */
 export function getCategoryAgent(
   category: AgentCategory,
   identifier: string,
 ): AgentEntry | undefined {
-  return resolveWithinCategory(
-    getAgentsByCategory(category),
-    category,
-    identifier,
-  );
+  return findAgentByIdentifier(getAgentsByCategory(category), identifier);
 }
 
 /**
@@ -556,9 +489,8 @@ export function getCategoryAgent(
  *     launch (the webview "Run", CLI, restored records) of a visible agent
  *     resolves to exactly what validation resolved, not a same-name shadow the
  *     full set would dedup to differently.
- *  3. The full category set (`getCategoryAgent`), reached only for names the
- *     visible set can't resolve — a legacy alias, or an agent the workspace
- *     roster hides but a command still names.
+ *  3. The full category set (`getCategoryAgent`), reached only for an agent the
+ *     workspace roster hides but a command still names.
  *
  * It never falls back to blind source-priority on a bare name, so launch only
  * ever extends resolution beyond the visible roster — it cannot pick a

@@ -2,6 +2,9 @@
 import { access, constants } from 'node:fs/promises';
 import * as path from 'node:path';
 
+// Third-party imports
+import PQueue from 'p-queue';
+
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
 
@@ -9,7 +12,7 @@ import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local imports - platform
-import type { ConfigProvider, StorageProvider } from '@platform/interfaces';
+import type { StorageProvider } from '@platform/interfaces';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
@@ -35,16 +38,10 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
   }
 }
 
-/** Open the TeXRA configuration shared by the CLI, extension, and desktop. */
-export async function createExtensionTexraConfig(
-  storage: StorageProvider,
+async function openWorkspaceConfigStore(
   workspaceRoot: string | undefined,
-): Promise<ConfigProvider> {
-  const internalWorkspaceConfigPath = path.join(
-    storage.getStoragePath(),
-    TEXRA_CONFIG_FILE_NAME,
-  );
-  let workspaceStore: JsonStore | undefined;
+  internalConfigPath: string,
+): Promise<JsonStore> {
   if (workspaceRoot) {
     const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
     try {
@@ -53,7 +50,7 @@ export async function createExtensionTexraConfig(
         Object.keys(projectStore.snapshot()).length > 0 ||
         (await canCreateOrWrite(projectConfigPath))
       ) {
-        workspaceStore = projectStore;
+        return projectStore;
       }
     } catch (error) {
       logger.warn(
@@ -62,13 +59,48 @@ export async function createExtensionTexraConfig(
       );
     }
   }
-  workspaceStore ??= await JsonStore.open(internalWorkspaceConfigPath);
+  return JsonStore.open(internalConfigPath);
+}
+
+export class ExtensionTexraConfig extends JsonConfigProvider {
+  private readonly rebindQueue = new PQueue({ concurrency: 1 });
+
+  constructor(
+    private readonly storage: StorageProvider,
+    workspaceStore: JsonStore,
+    globalStore: JsonStore,
+  ) {
+    super({ workspace: workspaceStore, global: globalStore });
+  }
+
+  /** Follow VS Code when its first workspace folder changes. */
+  rebindWorkspace(workspaceRoot: string | undefined): Promise<void> {
+    const internalConfigPath = path.join(
+      this.storage.getStoragePath(),
+      TEXRA_CONFIG_FILE_NAME,
+    );
+    return this.rebindQueue.add(async () => {
+      const workspaceStore = await openWorkspaceConfigStore(
+        workspaceRoot,
+        internalConfigPath,
+      );
+      this.replaceWorkspaceStore(workspaceStore);
+    }) as Promise<void>;
+  }
+}
+
+/** Open the TeXRA configuration shared by the CLI, extension, and desktop. */
+export async function createExtensionTexraConfig(
+  storage: StorageProvider,
+  workspaceRoot: string | undefined,
+): Promise<ExtensionTexraConfig> {
+  const workspaceStore = await openWorkspaceConfigStore(
+    workspaceRoot,
+    path.join(storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
+  );
   const globalStore = await JsonStore.open(
     path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
   );
 
-  return new JsonConfigProvider({
-    workspace: workspaceStore,
-    global: globalStore,
-  });
+  return new ExtensionTexraConfig(storage, workspaceStore, globalStore);
 }

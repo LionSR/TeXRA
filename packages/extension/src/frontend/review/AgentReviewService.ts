@@ -24,7 +24,6 @@ import {
   buildFixInstruction,
   buildReviewInstruction,
   createReviewIssue,
-  type ReviewApproach,
   type ReviewIssue,
   type ReviewIssueReport,
   type ReviewSeverity,
@@ -71,8 +70,6 @@ interface AgentReviewRunOptions {
   baseDescription?: string;
   /** Per-run base branch (merge-base) from the "Diff Against…" picker. */
   baseBranch?: string;
-  /** Per-run approach override; falls back to the configured default. */
-  approach?: ReviewApproach;
   /** Optional free-text focus from the "Find Issues" options. */
   userInstructions?: string;
 }
@@ -290,7 +287,6 @@ class AgentReviewServiceImpl {
         changedFiles,
         diff,
         truncated,
-        approach: options.approach ?? 'quick',
         userInstructions: options.userInstructions,
       });
       const config = AgentConfigSchema.parse({
