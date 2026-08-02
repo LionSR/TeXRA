@@ -6,6 +6,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/wa/iconNames';
 import { UIFileFieldsSchema, requiredFileListFields } from '../fileFields';
 import {
   CurrentFileTypeSchema,
@@ -206,7 +207,7 @@ export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 const FileSelectConfigSchema = z.object({
   type: DocumentFileTypeSchema,
   label: z.string(),
-  icon: z.string(),
+  icon: z.enum(TEXRA_ICON_CANONICAL_NAMES),
   addOpenedLabel: z.string(),
   emptyListLabel: z.string(),
   selectListLabel: z.string(),
