@@ -18,6 +18,27 @@ const usageFixture = {
 } as const;
 
 describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration', () => {
+  it('takes the last element when normalizedSnapshots has multiple entries', () => {
+    const older = { ...usageFixture, inputTokens: 50 };
+    const latest = { ...usageFixture, inputTokens: 200 };
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      normalizedSnapshots: [
+        { round: 0, usage: older },
+        { round: 1, usage: latest },
+      ],
+    });
+
+    expect(result.latestUsage?.inputTokens).toBe(200);
+  });
+
+  it('sets latestUsage to null for an empty normalizedSnapshots array', () => {
+    const result = RunUsageAccumulatorJSONSchema.parse({
+      normalizedSnapshots: [],
+    });
+
+    expect(result.latestUsage).toBeNull();
+  });
+
   it('keeps an explicit null latestUsage over snapshots in a hybrid payload', () => {
     const result = RunUsageAccumulatorJSONSchema.parse({
       latestUsage: null,
@@ -56,6 +77,14 @@ describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => 
     });
 
     expect(result.tagContents['title']).toEqual(['My Paper']);
+  });
+
+  it('passes an existing string[] through unchanged', () => {
+    const result = OutputXmlSummarySchema.parse({
+      tagContents: { authors: ['Alice', 'Bob'] },
+    });
+
+    expect(result.tagContents['authors']).toEqual(['Alice', 'Bob']);
   });
 
   it('degrades a malformed value to [] via .catch', () => {
@@ -108,6 +137,17 @@ describe('ContextManagementDataSchema — legacy missing tokensAfter/utilization
       tokensAfter: 1000,
       utilizationAfter: 5,
     });
+  });
+
+  it('passes an already-populated tokens-freed entry through unchanged', () => {
+    const result = ContextManagementDataSchema.parse({
+      ...legacyBase,
+      action: 'compaction',
+      tokensAfter: 400,
+      utilizationAfter: 2,
+    });
+
+    expect(result).toMatchObject({ tokensAfter: 400, utilizationAfter: 2 });
   });
 
   it('still requires originalMaxTokens/reducedMaxTokens for max_tokens_reduced', () => {
