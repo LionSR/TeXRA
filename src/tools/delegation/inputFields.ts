@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { formatBytes } from '@shared/utils/string';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
@@ -192,17 +193,15 @@ export async function rejectOversizedBibAttachments(
     if (stats.size <= LARGE_BIB_LIMIT_BYTES) continue;
 
     const message = `${bibFile} is ${stats.size} bytes (${formatBytes(stats.size)}), over the ${LARGE_BIB_LIMIT_BYTES} byte (${formatBytes(LARGE_BIB_LIMIT_BYTES)}) limit. Call extract_bib_entries first if citations are needed, then re-propose without the full .bib file.`;
-    return {
-      status: 'error',
+    return errorResult(message, {
       summary: `Rejected oversized BibTeX attachment`,
-      error: message,
       diagnostics: {
         type: 'oversized_bib_attachment',
         path: bibFile,
         sizeBytes: stats.size,
         limitBytes: LARGE_BIB_LIMIT_BYTES,
       },
-    };
+    });
   }
 
   return null;

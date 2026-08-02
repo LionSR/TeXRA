@@ -32,17 +32,10 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import {
-  startChildRunLoop,
-  type ChildRunPorts,
-  type ChildRunStrategy,
-} from '@agent/runtime/childRunLoop';
-import {
   getRunContextExecutionId,
   getRunContextStreamId,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import {
   ClaudeAgentEffortSchema,
   ClaudeAgentPermissionModeSchema,
@@ -73,9 +66,9 @@ import {
 import { type ChildStream } from './childStream';
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
-  publishAgentCliStreamUsage,
   launchAgentCliSession,
   resumeOrLaunchAgentCliSession,
+  startAgentCliLoop,
   withAgentCliApproval,
 } from './agentCliShared';
 import {
@@ -408,7 +401,7 @@ function startClaudeAgentLoop(params: {
   releaseFallbackClaim: (() => void) | undefined;
 }): void {
   const { childStream, parentStreamId, executionId, initialPrompt } = params;
-  const { childStreamId, logger } = childStream;
+  const { logger } = childStream;
 
   // The SDK needs the prior session id to resume the same conversation across
   // turns; it's threaded forward from each turn's result. Seeded from
@@ -416,10 +409,34 @@ function startClaudeAgentLoop(params: {
   let resumeSessionId: string | undefined = params.resumeSessionId;
   const fallbackSessionId = params.resumeSessionId;
 
-  const registerSession = (sessionId: string, session: SessionHandle): void => {
-    if (ClaudeAgentSessions.lookup(sessionId)) return;
-    ClaudeAgentSessions.register(sessionId, {
-      childStreamId,
+  startAgentCliLoop({
+    childStream,
+    parentStreamId,
+    executionId,
+    agentName: CLAUDE_AGENT_NAME,
+    stageLabel: 'Claude Code session',
+    initialPrompt,
+    store: ClaudeAgentSessions,
+    releaseFallbackClaim: params.releaseFallbackClaim,
+    runProviderTurn: async (prompt, _ports, abortController) => {
+      const turn = await runStreamedTurn({
+        prompt,
+        logger,
+        abortController,
+        model: params.model,
+        permissionMode: params.permissionMode,
+        effort: params.effort,
+        cwd: params.cwd,
+        additionalDirectories: params.additionalDirectories,
+        env: params.env,
+        resumeSessionId,
+        pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
+      });
+      if (turn.sessionId) resumeSessionId = turn.sessionId;
+      return turn;
+    },
+    buildEntry: (session) => ({
+      childStreamId: childStream.childStreamId,
       parentStreamId,
       executionId,
       executions: session.executions,
@@ -428,81 +445,18 @@ function startClaudeAgentLoop(params: {
       effort: params.effort,
       cwd: params.cwd,
       additionalDirectories: params.additionalDirectories,
-    });
-  };
-  // The joined prompt text for whichever turn is currently in flight —
-  // captured here (rather than threaded through the loop contract) since
-  // `formatDelivery`/`formatError` run strictly after the turn that set it.
-  let lastPrompt = initialPrompt;
-
-  const runTurn = async (
-    followUps: readonly FollowUpQueueBatchItem[],
-    _ports: ChildRunPorts,
-    abortController: AbortController,
-  ): Promise<TurnResult> => {
-    lastPrompt = followUps.map((f) => f.text).join('\n\n');
-    const turn = await runStreamedTurn({
-      prompt: lastPrompt,
-      logger,
-      abortController,
-      model: params.model,
-      permissionMode: params.permissionMode,
-      effort: params.effort,
-      cwd: params.cwd,
-      additionalDirectories: params.additionalDirectories,
-      env: params.env,
-      resumeSessionId,
-      pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
-    });
-    if (turn.sessionId) resumeSessionId = turn.sessionId;
-    return turn;
-  };
-
-  const strategy: ChildRunStrategy<TurnResult> = {
-    stageLabel: 'Claude Code session',
-    launch: (ports, abortController) =>
-      runTurn(
-        [{ text: initialPrompt, origin: 'user' }],
-        ports,
-        abortController,
-      ),
-    runTurn,
-    isTerminal: () => false,
+    }),
+    resolveSessionIds: (turn) => [fallbackSessionId, turn.sessionId],
     getUsage: (turn) => turn.usage,
+    buildUsageStats: (turn) =>
+      turn.usage ? buildClaudeUsageStats(turn.usage) : undefined,
     isTurnError: (turn) => turn.isError,
     onTurnError: (turn, log) => {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
-    onLoopStart: (session) => {
-      ClaudeAgentSessions.trackInFlight({
-        childStreamId,
-        parentStreamId,
-        executionId,
-        executions: session.executions,
-        model: params.model,
-        permissionMode: params.permissionMode,
-        effort: params.effort,
-        cwd: params.cwd,
-        additionalDirectories: params.additionalDirectories,
-      });
-    },
-    onTurnSuccess: (turn, session) => {
-      if (fallbackSessionId) registerSession(fallbackSessionId, session);
-      if (turn.sessionId) registerSession(turn.sessionId, session);
-    },
-    publishUsage: (turn) => {
-      if (turn.usage) {
-        publishAgentCliStreamUsage(
-          childStreamId,
-          executionId,
-          buildClaudeUsageStats(turn.usage),
-          logger,
-        );
-      }
-    },
-    formatDelivery: (turn, wallTimeMs) =>
+    formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatClaudeDelivery(executionId, lastPrompt, wallTimeMs, turn),
-    formatError: (turn, err) =>
+    formatError: (turn, err, lastPrompt) =>
       formatChildRunError(
         { tag: DELIVERY_TAG.claudeAgentError, executionId, prompt: lastPrompt },
         {
@@ -511,24 +465,7 @@ function startClaudeAgentLoop(params: {
           ),
         },
       ),
-    releaseSessionOwnership: () => {
-      params.releaseFallbackClaim?.();
-      ClaudeAgentSessions.releaseByExecutionId(executionId);
-    },
-  };
-
-  const { completion } = startChildRunLoop({
-    childStream,
-    childStreamId,
-    parentStreamId,
-    executionId,
-    agentName: CLAUDE_AGENT_NAME,
-    strategy,
-  });
-  void completion.catch((error: unknown) => {
-    childStream.logger.error(`Claude Agent run loop failed after launch`, {
-      data: error,
-    });
+    loopFailedMessage: 'Claude Agent run loop failed after launch',
   });
 }
 
