@@ -86,7 +86,7 @@ Examples:
 
 - `/relay/openai/v1/chat/completions`
 - `/relay/anthropic/v1/messages`
-- `/relay/google/v1beta/models/gemini-pro:generateContent`
+- `/relay/google/v1beta/interactions`
 
 ## Security
 
