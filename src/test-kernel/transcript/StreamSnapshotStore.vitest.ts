@@ -1588,6 +1588,35 @@ describe('StreamSnapshotStore', () => {
     await store.deleteStream(STREAM);
   });
 
+  it('drains dirty writes when deletion staging fails during setup', async () => {
+    const store = await storeWithPersistedPlan();
+    const writeError = new Error('snapshot disk is full');
+    const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValueOnce(writeError)
+      .mockImplementation(writeAtomic);
+
+    store.setPlan(STREAM, null);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
+
+    const setupError = new Error('cannot inspect staged snapshot');
+    const stat = StorageFS.stat.bind(StorageFS);
+    const statSpy = vi
+      .spyOn(StorageFS, 'stat')
+      .mockRejectedValueOnce(setupError)
+      .mockImplementation(stat);
+
+    await expect(store.stageDeleteStream(STREAM)).rejects.toBe(setupError);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledTimes(2));
+
+    statSpy.mockRestore();
+    writeSpy.mockRestore();
+    await store.flush();
+    expect((await reloadWorkPlan()).plan).toBeNull();
+    await store.deleteStream(STREAM);
+  });
+
   it('keeps writes buffered when a staging rename fails after moving data', async () => {
     const store = await storeWithPersistedPlan();
     const renameError = new Error('snapshot rename acknowledgement failed');
@@ -2137,7 +2166,7 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
   });
 
-  it('retains mutations made after a failed refresh', async () => {
+  it('retains a mutation queued during a failed refresh', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
     const writeSpy = vi
@@ -2147,9 +2176,57 @@ describe('StreamSnapshotStore', () => {
     store.setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     const refresh = store.load([STREAM]);
-    store.setTodos(STREAM, []);
+    store.setTodos(STREAM, [TODO]);
     await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
 
+    writeSpy.mockRestore();
+    await store.flush();
+
+    expect(await reloadWorkPlan()).toMatchObject({
+      plan: PLAN,
+      todos: [TODO],
+    });
+  });
+
+  it('persists an eager overlay queued during a failed refresh', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValue(new Error('snapshot disk is full'));
+    const output = outputFile('revised.tex', 1);
+
+    store.setPlan(STREAM, PLAN);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
+    const refresh = store.load([STREAM]);
+    store.addOutputFiles(STREAM, { 1: [output] });
+    await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
+
+    writeSpy.mockRestore();
+    await store.flush();
+
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getOutputFiles(STREAM)).toEqual({ 1: [output] });
+  });
+
+  it('restores the authoritative seed after overlapping refreshes fail', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const writeSpy = vi
+      .spyOn(StorageFS, 'writeAtomic')
+      .mockRejectedValue(new Error('snapshot disk is full'));
+
+    store.setPlan(STREAM, PLAN);
+    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
+    const firstRefresh = store.load([STREAM]);
+    const secondRefresh = store.load([STREAM]);
+    await Promise.all([
+      expect(firstRefresh).rejects.toThrow('Sidecar writes remain dirty'),
+      expect(secondRefresh).rejects.toThrow('Sidecar writes remain dirty'),
+    ]);
+
+    expect(store.getWorkPlan(STREAM).plan).toEqual(PLAN);
     store.setTodos(STREAM, [TODO]);
     writeSpy.mockRestore();
     await store.flush();
