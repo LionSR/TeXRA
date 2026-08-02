@@ -109,10 +109,13 @@ function isTelemetryEnabledBySetting(): boolean {
   // has not initialized its platform yet.
   if (isTelemetryDisabledByEnv()) return false;
 
-  const raw = platform().config.get<unknown>(
+  const configured = platform().config.inspect<unknown>(
     TELEMETRY_ENABLED_KEY,
-    DEFAULT_CORE_SETTINGS.telemetry.enabled,
-  );
+  )?.globalValue;
+  const raw =
+    configured === undefined
+      ? DEFAULT_CORE_SETTINGS.telemetry.enabled
+      : configured;
   if (typeof raw === 'boolean') return raw;
   // `.texra/config.json` is hand-edited and JsonConfigProvider hands back raw
   // JSON, so a mistyped `"false"` would arrive as a truthy string and quietly
