@@ -1367,6 +1367,71 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('keeps incompatible copied diagnostics distinct while ordering conversation rows', async () => {
+    const executionId = '0888b20888b2' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b20888b2' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b20888b2' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First turn' });
+    const shared = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared turn' }),
+      id: 'shared-conversation-row',
+    };
+    const diagnostic = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, {
+        text: 'Usage branch A',
+        data: { inputTokens: 10 },
+      }),
+      id: 'incompatible-diagnostic-row',
+    };
+    const last = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Last turn' });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [first, diagnostic, shared]],
+        [
+          continuation,
+          [
+            shared,
+            {
+              ...diagnostic,
+              text: 'Usage branch B',
+              data: { inputTokens: 20 },
+            },
+            last,
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conflicts: [
+        {
+          rowId: 'incompatible-diagnostic-row',
+          streamIds: [canonical, continuation],
+        },
+      ],
+      conversation: [
+        { role: 'user', content: 'First turn' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Shared turn' }],
+        },
+        { role: 'user', content: 'Last turn' },
+      ],
+    });
+  });
+
   it('contracts a copied diagnostic bridge while preserving conversation order', async () => {
     const executionId = '0888b10888b1' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;

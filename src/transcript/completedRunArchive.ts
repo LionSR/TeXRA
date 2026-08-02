@@ -550,16 +550,35 @@ async function mergedCandidateConversation(
   if (connectedConflict) mergeStreams = selected ? [selected] : [];
   const allNodes = new Map<string, StreamLogEntry>();
   const rowSuccessors = new Map<string, Set<string>>();
-  for (const { entries } of mergeStreams) {
-    let previousId: string | undefined;
+  // Persisted IDs identify conflict diagnostics, but only complete agreeing rows
+  // represent the same ordering node. Keep incompatible copies stream-qualified.
+  const rowVariantsById = new Map<
+    string,
+    { readonly graphId: string; readonly entry: StreamLogEntry }[]
+  >();
+  for (const { streamId, entries } of mergeStreams) {
+    let previousGraphId: string | undefined;
     for (const entry of entries) {
-      if (!allNodes.has(entry.id)) allNodes.set(entry.id, entry);
-      if (previousId && previousId !== entry.id) {
-        const nextIds = rowSuccessors.get(previousId) ?? new Set<string>();
-        nextIds.add(entry.id);
-        rowSuccessors.set(previousId, nextIds);
+      const variants = rowVariantsById.get(entry.id) ?? [];
+      const matchingVariant = variants.find((variant) =>
+        rowsAgree(variant.entry, entry),
+      );
+      const graphId =
+        matchingVariant?.graphId ??
+        (variants.length === 0
+          ? entry.id
+          : `${entry.id}\0${streamId}\0${variants.length}`);
+      if (!matchingVariant) {
+        variants.push({ graphId, entry });
+        rowVariantsById.set(entry.id, variants);
+        allNodes.set(graphId, entry);
       }
-      previousId = entry.id;
+      if (previousGraphId && previousGraphId !== graphId) {
+        const nextIds = rowSuccessors.get(previousGraphId) ?? new Set<string>();
+        nextIds.add(graphId);
+        rowSuccessors.set(previousGraphId, nextIds);
+      }
+      previousGraphId = graphId;
     }
   }
 
