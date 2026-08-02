@@ -34,7 +34,7 @@ vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
 }));
 
-describe('session isolation (SDK Step 7d PR 2)', () => {
+describe('session isolation', () => {
   it('currentSession() resolves the active run context session, default otherwise', () => {
     const sessionB = createTestSession();
     try {

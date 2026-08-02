@@ -217,7 +217,7 @@ export class WebviewUpdater {
     });
   }
 
-  updateTheme(theme: 'dark' | 'light'): void {
+  private updateTheme(theme: 'dark' | 'light'): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.THEME_SET,
       theme,

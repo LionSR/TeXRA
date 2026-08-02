@@ -62,6 +62,14 @@ const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
 describe('executeCommand', () => {
   const tempDirs: string[] = [];
 
+  // executeCommand resolves its cwd from the workspace; point the fake
+  // platform at a directory that exists on disk so spawning succeeds.
+  setupPlatform({ workspacePath: process.cwd() });
+
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
+  });
+
   it('exposes only text encodings and non-transform output modes', () => {
     expectTypeOf<ExecuteCommandOptions['encoding']>().toEqualTypeOf<
       'utf8' | 'utf-8' | 'utf16le' | undefined
@@ -75,14 +83,6 @@ describe('executeCommand', () => {
     expectTypeOf<ExecuteCommandOptions['stderr']>().toEqualTypeOf<
       'pipe' | 'ignore' | 'inherit' | 'overlapped' | undefined
     >();
-  });
-
-  // executeCommand resolves its cwd from the workspace; point the fake
-  // platform at a directory that exists on disk so spawning succeeds.
-  setupPlatform({ workspacePath: process.cwd() });
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
   });
 
   // Runs SLEEPER_SCRIPT in a scratch directory and resolves once the
@@ -115,8 +115,8 @@ describe('executeCommand', () => {
     );
 
     assert.ok(result.success);
-    assert.strictEqual(result.stdout, 'onetwo');
-    assert.strictEqual(result.stderr, null);
+    assert.equal(result.stdout, 'onetwo');
+    assert.equal(result.stderr, null);
   });
 
   it('preserves fallback execution with logical OR', async () => {
@@ -125,8 +125,8 @@ describe('executeCommand', () => {
     );
 
     assert.ok(result.success);
-    assert.strictEqual(result.stdout, 'fallback');
-    assert.strictEqual(result.stderr, null);
+    assert.equal(result.stdout, 'fallback');
+    assert.equal(result.stderr, null);
   });
 
   it('keeps stderr empty for ordinary nonzero exits with stdout only', async () => {

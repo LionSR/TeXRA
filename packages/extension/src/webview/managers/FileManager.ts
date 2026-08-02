@@ -112,7 +112,7 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  handleGenericFileSelected(message: EditedFileSelectedMessage): void {
+  handleEditedFileSelected(message: EditedFileSelectedMessage): void {
     logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
   }
 
@@ -347,7 +347,9 @@ export class FileManager extends BaseWebviewManager {
     this.postMessage({ command: setCommand, files: message.files ?? [] });
   }
 
-  async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {
+  private async selectOutputFiles(
+    currentInputFile?: string,
+  ): Promise<string[] | null> {
     try {
       const relativePaths = await selectFiles({
         allowMany: true,

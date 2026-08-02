@@ -284,7 +284,7 @@ describe('CLI multi-agent presets', () => {
     );
   });
 
-  it('formats explicit non-delegating team roots without old fallback wording', () => {
+  it('names an explicit non-delegating team root instead of saying it cannot delegate', () => {
     const preset = findPreset('mathematician');
     const plan = planRun(preset, {
       toolUseAgents: [agent('lean', AgentCategory.ToolUse)],

@@ -1,8 +1,9 @@
 /**
  * Polymorphic execution handles.
  *
- * Replaces data-oriented maps with handles that know how to report status and
- * describe themselves. Termination policy lives with the owning registry.
+ * A handle owns one run's identity, its live control surfaces (interrupt,
+ * tool-use flow, execution lease), and its exactly-once terminal settlement.
+ * Termination policy lives with the owning registry.
  */
 
 import pDefer from 'p-defer';

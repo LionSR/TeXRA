@@ -110,7 +110,10 @@ import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { postDesktopSettingsRoute } from '../desktopCommandSurface.js';
+import {
+  postDesktopSettingsRoute,
+  vsCodeOnlyGettingStartedMessage,
+} from '../desktopCommandSurface.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { buildDesktopSetRouteMessage } from '../desktopShellMessages.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
@@ -186,12 +189,7 @@ export class DesktopProgressBridge {
   private readonly followUpPolishController: ProgressFollowUpPolishController;
   /** Switches a credit/limit-exhausted run onto the user's own API key. */
   private apiKeyRetryController!: ProgressApiKeyRetryController;
-  /**
-   * Pending approval prompts, one {@link ApprovalRequestHandler}
-   * per kind. These back the shared pending-permissions guard against view
-   * switches and the pending-proposal lookup — the same host-agnostic
-   * bookkeeping the extension uses, rather than a hand-rolled registry.
-   */
+  /** Detaches the run-completion subscription that refreshes onboarding. */
   private detachCompletedResult: () => void = () => undefined;
   private toolEditApprovals: ToolEditApprovalController | undefined;
   private hostInteractions!: ProgressHostInteractions;
@@ -249,10 +247,8 @@ export class DesktopProgressBridge {
         });
       },
       requestOpenFile: (data: RequestOpenFilePayload) => {
-        // The extension previews via its LaTeX-Workshop build+view flow
-        // (openBuildDisplayIfTex); desktop has no such editor integration, so
-        // open the resolved path through the same preview-with-fallback host
-        // `openWorkflowOutput` already uses (see runExecution above).
+        // Desktop has no editor integration to preview through, so the
+        // resolved path goes to the preview-with-fallback host directly.
         this.options.host
           .openPath(data.location.absolutePath)
           .catch((error) => {
@@ -266,9 +262,6 @@ export class DesktopProgressBridge {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };
     this.session = options.session;
-    const syncRenderedStreams = (): void =>
-      this.syncStreamContent(this.updateStreamMetadata());
-
     this.backend = new ProgressBackend({
       session: this.session,
       stateOwnership: 'session',
@@ -287,11 +280,10 @@ export class DesktopProgressBridge {
         canSend: () => true,
         logger: this.logger,
         overrides: {
-          // Route retry requests to the renderer's RetryRequestPanel, as the
-          // extension does. These were no-ops while `requestRetry` auto-cancelled;
-          // now that it parks the request for the user, the card has to be shown
-          // or the run would block forever. Both are arrow functions, so
-          // `this.backend` is already assigned by the time either runs.
+          // Route retry requests to the renderer's RetryRequestPanel: a parked
+          // request blocks the run until the user answers it, so the card has
+          // to be shown. Both are arrow functions, so `this.backend` is already
+          // assigned by the time either runs.
           retry: {
             show: (permission) =>
               this.backend.webviewUpdater.showPermission({
@@ -340,7 +332,7 @@ export class DesktopProgressBridge {
           const activeStream = this.updateStreamMetadata();
           if (syncActiveStream) this.syncStreamContent(activeStream);
         },
-        activateStream: (_stream) => syncRenderedStreams(),
+        activateStream: () => this.syncFullView(),
         notifyDeletionRetained: (activeCount, failedCount) =>
           this.options.host.showInfoMessage(
             failedCount === 0
@@ -1003,14 +995,8 @@ export class DesktopProgressBridge {
           this.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
           return;
         }
-        const labels: Record<typeof data.action, string> = {
-          runSetup: 'Run setup assistant',
-          createSampleProject: 'Create sample project',
-          cloneOverleaf: 'Import from Overleaf',
-          downloadArxiv: 'Import from arXiv',
-        };
         await this.options.host.showInfoMessage(
-          `"${labels[data.action]}" requires the VS Code extension.`,
+          vsCodeOnlyGettingStartedMessage(data.action),
         );
       },
       // Recording: the desktop calls standalone functions and posts status
@@ -1151,9 +1137,8 @@ export class DesktopProgressBridge {
 
   /**
    * Select the given stream as this window's active stream.
-   * Mirrors the extension's `revealProgressStream` for the desktop Settings
-   * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
-   * run works the same way on both hosts.
+   * Mirrors the extension's `revealProgressStream`, so jumping from a settings
+   * entry to its owning run works the same way on both hosts.
    */
   async revealStream(
     streamId: StreamTabId,

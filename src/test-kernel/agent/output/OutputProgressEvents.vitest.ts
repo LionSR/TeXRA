@@ -348,7 +348,7 @@ describe('output progress events', () => {
 
   it.each([
     {
-      name: 'publishes missing-output processing events through the runtime host',
+      name: 'publishes missing-output processing events on the run trace',
       split: async () => {
         throw new Error('invalid xml');
       },
@@ -391,10 +391,10 @@ describe('output progress events', () => {
   });
 
   it('warns when a non-empty response yields zero extracted files', async () => {
-    // Regression: a run where the model returned content but nothing could be
-    // extracted (e.g. it did not wrap files in <documents>) used to "complete"
-    // silently with only the raw output. It must now surface a warning. Stub
-    // the read so the model output is treated as non-empty.
+    // A run where the model returned content but nothing could be extracted
+    // (e.g. it did not wrap files in <documents>) must surface a warning
+    // rather than completing silently with only the raw output. Stub the read
+    // so the model output is treated as non-empty.
     const readSpy = vi
       .spyOn(AbsoluteFS, 'read')
       .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');

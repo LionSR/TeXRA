@@ -413,25 +413,32 @@ function fitTransientNoticeStatusBarLeftSegments(
     }
   }
 
+  // Shrink `segment` (always the untruncated original, so repeated fits never
+  // compound) into whatever room the rest of the row leaves at `index`.
+  const truncatedIntoRemainingWidth = (
+    index: number,
+    segment: StatusBarSegment,
+  ): StatusBarSegment => {
+    const fixedWidth = fitted.reduce(
+      (total, other, otherIndex) =>
+        otherIndex === index ? total : total + statusBarSegmentWidth(other),
+      fitted.length - 1,
+    );
+    return {
+      ...segment,
+      text: truncateSummaryToWidth(
+        segment.text,
+        Math.max(0, innerWidth - fixedWidth),
+      ),
+    };
+  };
+
   const fitNotice = (): void => {
     const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
     if (fittedNoticeIndex < 0 || statusBarSegmentsWidth(fitted) <= innerWidth) {
       return;
     }
-    const fixedWidth = fitted.reduce(
-      (total, segment, index) =>
-        index === fittedNoticeIndex
-          ? total
-          : total + statusBarSegmentWidth(segment),
-      fitted.length - 1,
-    );
-    fittedNotice = {
-      ...notice,
-      text: truncateSummaryToWidth(
-        notice.text,
-        Math.max(0, innerWidth - fixedWidth),
-      ),
-    };
+    fittedNotice = truncatedIntoRemainingWidth(fittedNoticeIndex, notice);
     fitted[fittedNoticeIndex] = fittedNotice;
   };
 
@@ -456,20 +463,10 @@ function fitTransientNoticeStatusBarLeftSegments(
     const fittedNoticeIndex = fittedNotice ? fitted.indexOf(fittedNotice) : -1;
     if (fittedNoticeIndex >= 0) fitted.splice(fittedNoticeIndex, 1);
     const fittedWarningIndex = fitted.indexOf(discardWarning);
-    const fixedWidth = fitted.reduce(
-      (total, segment, index) =>
-        index === fittedWarningIndex
-          ? total
-          : total + statusBarSegmentWidth(segment),
-      fitted.length - 1,
+    fitted[fittedWarningIndex] = truncatedIntoRemainingWidth(
+      fittedWarningIndex,
+      discardWarning,
     );
-    fitted[fittedWarningIndex] = {
-      ...discardWarning,
-      text: truncateSummaryToWidth(
-        discardWarning.text,
-        Math.max(0, innerWidth - fixedWidth),
-      ),
-    };
   }
 
   return fitted;
@@ -634,7 +631,10 @@ function statusBarBindingsText(
   return text;
 }
 
-function fitsStatusBindings(text: string, maxColumns: number | undefined) {
+function fitsStatusBindings(
+  text: string,
+  maxColumns: number | undefined,
+): boolean {
   return maxColumns === undefined || textDisplayWidth(text) <= maxColumns;
 }
 

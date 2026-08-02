@@ -1,11 +1,11 @@
 // One driver for every child-run type (agent-CLI codex/claude sessions, native
 // subagents of either category, workflow-script runs). Each turn source
-// supplies an AgentCliSessionStrategy-shaped ChildRunStrategy; this loop owns
-// the parts
-// that were previously duplicated per driver: follow-up queue acquire/drain,
-// one run-handle interrupt target for the child's whole lifetime, per-turn
-// delivery choreography (format → persist report → optional manifest → deliver
-// with wake), and the terminal call into the shared finalizer.
+// supplies an AgentCliSessionStrategy-shaped ChildRunStrategy; this loop is the
+// single owner of everything a driver does NOT vary: follow-up queue
+// acquire/drain, one run-handle interrupt target for the child's whole
+// lifetime, per-turn delivery choreography (format → persist report → optional
+// manifest → deliver with wake), and the terminal call into the shared
+// finalizer.
 //
 // Host-agnostic, VS Code-free.
 

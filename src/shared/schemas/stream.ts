@@ -12,9 +12,9 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
  * 1. The standalone trace-viewer's file import (`replayTrace.ts`) parses
  *    externally-authored `trace.json` exports through
  *    `StreamLifecycleStatusSchema` and `StreamSnapshot.status` (§8.3's
- *    second permanent boundary — a static exported file stays legacy-shaped
+ *    permanent boundary — a static exported file stays legacy-shaped
  *    forever).
- * 3. Display tolerance for those two inputs
+ * 2. Display tolerance for that input
  *    (`@shared/streams/streamStatusDisplay`).
  *
  * The trait table that used to hang off this enum is gone: membership
@@ -54,7 +54,7 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
  * parse-side compatibility readers and normalized to current values.
  *
  * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
- * not an error. Matches the planned `ResultEvent.outcome` triad (SDK 7d/T3-2).
+ * not an error. This is the triad `ResultEvent.outcome` carries.
  */
 export const RUN_OUTCOME = {
   COMPLETED: 'completed',
@@ -134,11 +134,9 @@ export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
  * populated from `GROUP_START`/`GROUP_END` transcript rows — #7993 step 3).
  * No `WAITING`: task groups have no waiting concept, only running and the
  * three terminal `RunOutcome` values (§8.2's group-end mapping table,
- * docs/proposals/2026-07-03-session-scoped-runtime-architecture.md). Previously a
- * 4-value subset of the legacy `StreamStatus` (`running`/`error`/`stopped`/
- * `ready`); retyped to the native vocabulary in lockstep with its readers
- * (`logSlice.ts`, `TaskGroupList.ts`) so the completed/cancelled distinction
- * §8.2 already writes to the transcript row reaches the rendered value too.
+ * docs/proposals/2026-07-03-session-scoped-runtime-architecture.md). Using the
+ * native vocabulary keeps the completed/cancelled distinction §8.2 writes to
+ * the transcript row visible in the rendered value.
  */
 export const TaskGroupStatusSchema = z.enum([
   STREAM_PHASE.RUNNING,

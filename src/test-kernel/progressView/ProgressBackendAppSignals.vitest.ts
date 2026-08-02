@@ -1,9 +1,9 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
+import type { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import type {
   AppSignal,
   AppSignalPayloads,
@@ -16,7 +16,8 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
-import { FakeStateStore } from '@test/support/FakePlatform';
+
+import { createRecordingBackend, track } from './progressBackendHarness';
 
 class MemoryAppSignals implements AppSignalsLike {
   private readonly listeners = new Map<
@@ -52,45 +53,6 @@ class MemoryAppSignals implements AppSignalsLike {
   }
 }
 
-/** Everything a test attaches, released in reverse order by one owner. */
-const testDisposables: { dispose(): void }[] = [];
-
-afterEach(() => {
-  for (const disposable of testDisposables.splice(0).reverse()) {
-    disposable.dispose();
-  }
-});
-
-function track<T extends { dispose(): void }>(disposable: T): T {
-  testDisposables.push(disposable);
-  return disposable;
-}
-
-function createBackend(): ProgressBackend {
-  return track(
-    new ProgressBackend({
-      storage: new FakeStateStore(),
-      sendMessage: () => true,
-      hasTarget: () => true,
-      approvals: {
-        canSend: () => true,
-        overrides: {
-          retry: { show: vi.fn(), dismiss: vi.fn() },
-          proposal: { show: vi.fn(), dismiss: vi.fn() },
-        },
-      },
-      lifecycle: {
-        stopStream: vi.fn(),
-        cleanupDeletedStream: vi.fn(),
-        cleanupDeletedStreams: vi.fn(),
-        rebuildRenderedStreams: vi.fn(),
-        activateStream: vi.fn(),
-        notifyDeletionRetained: vi.fn(),
-      },
-    }),
-  );
-}
-
 function setStatus(
   backend: ProgressBackend,
   streamId: StreamTabId,
@@ -112,7 +74,7 @@ function setStatus(
 
 describe('attachProgressBackendAppSignals', () => {
   it('marks running progress tasks cancelled on extension deactivation', () => {
-    const backend = createBackend();
+    const { backend } = createRecordingBackend();
     const signals = new MemoryAppSignals();
     backend.setupEventListeners();
     track(attachProgressBackendAppSignals(backend, signals));
@@ -133,7 +95,7 @@ describe('attachProgressBackendAppSignals', () => {
   });
 
   it('detaches the app-signal listener cleanly', () => {
-    const backend = createBackend();
+    const { backend } = createRecordingBackend();
     const signals = new MemoryAppSignals();
     backend.setupEventListeners();
     const appSignalSubscription = track(

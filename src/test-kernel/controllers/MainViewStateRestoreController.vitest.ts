@@ -42,35 +42,17 @@ describe('RestoreRunConfigInputSchema', () => {
     expect(parsed.inputFiles).toEqual(['main.tex']);
   });
 
-  it('rejects a payload that is neither a run config nor the legacy wrapper', () => {
-    expect(RestoreRunConfigInputSchema.safeParse('nope').success).toBe(false);
-  });
-
-  it('reports a malformed wrapper instead of restoring a blank config', () => {
-    expect(
-      RestoreRunConfigInputSchema.safeParse({ agentConfig: 42 }).success,
-    ).toBe(false);
-    expect(
-      RestoreRunConfigInputSchema.safeParse({
-        agentConfig: { agentCategory: 'not-a-category' },
-      }).success,
-    ).toBe(false);
-  });
-
-  it('rejects blank and unrelated objects before applying config defaults', () => {
-    expect(RestoreRunConfigInputSchema.safeParse({}).success).toBe(false);
-    expect(
-      RestoreRunConfigInputSchema.safeParse({ agentConfig: {} }).success,
-    ).toBe(false);
-    expect(
-      RestoreRunConfigInputSchema.safeParse({ unrelated: true }).success,
-    ).toBe(false);
-    expect(
-      RestoreRunConfigInputSchema.safeParse({ agent: undefined }).success,
-    ).toBe(false);
-  });
-
   it.each([
+    ['a payload that is neither a run config nor the legacy wrapper', 'nope'],
+    ['a wrapper whose config is not an object', { agentConfig: 42 }],
+    [
+      'a wrapper with a malformed config',
+      { agentConfig: { agentCategory: 'not-a-category' } },
+    ],
+    ['a blank object', {}],
+    ['a wrapper around a blank config', { agentConfig: {} }],
+    ['an unrelated object', { unrelated: true }],
+    ['an object whose only identity is undefined', { agent: undefined }],
     ['direct blank identities', { agent: '', model: '' }],
     ['direct whitespace identities', { agent: '  ', model: '\t' }],
     ['direct blank identity', { agent: '', model: 'sonnet46T' }],
@@ -82,7 +64,7 @@ describe('RestoreRunConfigInputSchema', () => {
       'legacy-wrapped whitespace identities',
       { agentConfig: { agent: '  ', model: '\t' } },
     ],
-  ])('rejects %s', (_name, input) => {
+  ])('rejects %s instead of applying config defaults', (_name, input) => {
     expect(RestoreRunConfigInputSchema.safeParse(input).success).toBe(false);
   });
 

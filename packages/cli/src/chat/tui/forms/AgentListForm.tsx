@@ -103,9 +103,9 @@ export function agentSelectWindow({
     };
   }
 
-  const chromeRows = 8 + Math.max(0, extraRows);
   // Border, title, description, tool-use heading, and key hints are the fixed
   // chrome for the primary selectable list.
+  const chromeRows = 8 + Math.max(0, extraRows);
   const selectRows = Math.max(1, availableRows - chromeRows);
   if (itemCount > selectRows) {
     return {

@@ -337,12 +337,13 @@ const ToolUseStreamContentMessageSchema = z.strictObject({
   }),
 });
 
-/** Full tab snapshots, expressed as the only three valid transport states. */
+/** Full tab snapshots, one branch per stream kind. */
 const RenderStreamContentMessageSchema = z.discriminatedUnion('kind', [
   WorkflowStreamContentMessageSchema,
   ToolUseStreamContentMessageSchema,
 ]);
 
+/** The only valid tab-content transport states: clear, or a full render. */
 export const SyncStreamContentMessageSchema = z.discriminatedUnion('action', [
   ClearStreamContentMessageSchema,
   RenderStreamContentMessageSchema,
@@ -367,11 +368,10 @@ const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
 });
 
 // `theme` reuses the canonical `ThemeSchema` (`commonViewMessages.ts`) rather
-// than a locally re-declared enum — the actual desktop theme kind includes
+// than a locally re-declared enum: the desktop theme kind includes
 // `'high-contrast'` (see `DESKTOP_THEME_KIND`), which
 // `COMMON_COMMANDS.THEME_SET` messages already carry for both mainView and
-// progressView; a narrower local enum here previously just hadn't been
-// exercised against real payloads before outbound send validation (#8123).
+// progressView, and outbound sends are validated against this schema.
 const ProgressSetThemeMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
   theme: ThemeSchema,

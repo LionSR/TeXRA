@@ -32,7 +32,7 @@ setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 const mocks = vi.hoisted(() => ({
   registerExecution: vi.fn(),
   startChildRunLoop: vi.fn(),
-  createChildStream: vi.fn(),
+  createRehydratedChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   requireVisibleAgent: vi.fn(),
   selectAvailableDelegationModel: vi.fn(),
@@ -60,7 +60,7 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/childStream', () => ({
-  createRehydratedChildStream: mocks.createChildStream,
+  createRehydratedChildStream: mocks.createRehydratedChildStream,
   getChildStreamId: (executionId: string, prefix: string) =>
     `${prefix}#${executionId}`,
 }));
@@ -179,7 +179,7 @@ beforeEach(async () => {
       path: `/agents/${name}.yaml`,
     };
   });
-  mocks.createChildStream.mockImplementation(
+  mocks.createRehydratedChildStream.mockImplementation(
     async (runId: ExecutionId): Promise<unknown> => {
       const logger = new TraceEmitter();
       vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
@@ -203,17 +203,6 @@ describe('WorkflowScriptTool', () => {
       'workflow',
     );
     expect(DELEGATION_TOOL_CATEGORY.delegate_workflow_script).toBeUndefined();
-  });
-
-  it('launches its deterministic stream through transcript rehydration', async () => {
-    await callTool();
-
-    const runExecutionId = runExecutionIdFor('tool-test');
-    expect(mocks.createChildStream).toHaveBeenCalledWith(
-      runExecutionId,
-      streamId,
-      expect.objectContaining({ streamPrefix: 'workflow-script' }),
-    );
   });
 
   it('owns a detached run completion rejection without delivering a second error', async () => {
@@ -334,7 +323,7 @@ describe('WorkflowScriptTool', () => {
         parentExecutionId: executionId,
       },
     );
-    expect(mocks.createChildStream).toHaveBeenCalledWith(
+    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
       runExecutionId,
       streamId,
       expect.objectContaining({
@@ -594,7 +583,7 @@ describe('WorkflowScriptTool', () => {
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.createRehydratedChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -633,7 +622,7 @@ describe('WorkflowScriptTool', () => {
     });
     expect(result.error).toContain('Script file: .texra/workflow-scripts/');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.createRehydratedChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
@@ -749,7 +738,7 @@ describe('WorkflowScriptTool', () => {
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     // A relaunch over a live run never starts a second competing loop.
-    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.createRehydratedChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 

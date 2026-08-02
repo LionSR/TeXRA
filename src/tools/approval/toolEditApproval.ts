@@ -104,7 +104,7 @@ export function prepareToolEditApprovalPrompt(
 }
 
 // ============================================================================
-// Pure diff helpers (exported for use by native handler in @frontend/)
+// Pure diff helpers, shared with the hosts' native approval/diff surfaces
 // ============================================================================
 
 function createSemanticDiffs(original: string, proposed: string): TextDiff[] {
@@ -260,12 +260,6 @@ export type AcceptedToolEditApprovalResult = Extract<
   { accepted: true }
 >;
 
-export function getApprovedContent(
-  approval: AcceptedToolEditApprovalResult,
-): string {
-  return approval.appliedContent;
-}
-
 function formatUnifiedApprovalUserDiff(
   path: string,
   suggestedContent: string,
@@ -371,9 +365,8 @@ interface WrittenApprovedEdit extends WriteApprovedContentResult {
 /**
  * Full approve-then-write handshake for a proposed edit: request approval,
  * then write the resolved content (the user's adjustments if any, else the
- * proposal). Combines the exact pairing every straight-through edit call site
- * previously hand-rolled, so `sourceTool` is named once and the rejection
- * message stays uniform.
+ * proposal). `sourceTool` is named once and the rejection message is uniform
+ * across every straight-through edit call site.
  *
  * Returns `{ rejected }` (a {@link ToolResult} to return directly) when the
  * user declines. `beforeWrite` covers work that must happen only after
@@ -412,7 +405,7 @@ export async function requestAndWriteApprovedEdit(request: {
   const written = await writeApprovedContent(
     path,
     originalContent,
-    getApprovedContent(approval),
+    approval.appliedContent,
   );
   return { approval, ...written };
 }

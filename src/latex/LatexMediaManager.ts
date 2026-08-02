@@ -41,12 +41,6 @@ const USEPACKAGE_PATTERN =
 const LATEX_CONCURRENCY = 4;
 
 /**
- * Flexible input type that accepts either a string path or FileLocation.
- * Provides API consistency while maintaining caller convenience.
- */
-type PathInput = string | FileLocation;
-
-/**
  * The slice of agent workspace state this manager writes media results into.
  * Structurally satisfied by `AgentWorkspaceState`; declared here so LaTeX
  * processing stays independent of agent execution internals.
@@ -518,7 +512,7 @@ export class LatexMediaManager {
        * Both modes are additionally gated by `cfg.autoExtractFigure`.
        */
       figureMode: 'extract' | 'mirror';
-      extraMediaFiles?: PathInput[];
+      extraMediaFiles?: readonly FileLocation[];
       logTikzSummary?: boolean;
     },
   ): Promise<void> {
@@ -543,10 +537,7 @@ export class LatexMediaManager {
     }
 
     if (extraMediaFiles.length > 0) {
-      const fileLocations = extraMediaFiles.map((input) =>
-        typeof input === 'string' ? pathToLocation(input) : input,
-      );
-      workspaceState.media.addMediaFiles(fileLocations);
+      workspaceState.media.addMediaFiles(extraMediaFiles);
     }
 
     if (cfg.autoExtractFigure) {
@@ -576,16 +567,15 @@ export class LatexMediaManager {
    * Process input files to extract figures, compile TikZ pictures and PDFs.
    * Adds resulting media paths through the provided media workspace state.
    *
-   * @param extraMediaFiles - Additional media files to include.
-   *   Accepts both string paths and FileLocation objects for API flexibility.
-   *   Typically user-provided paths from agent config (mediaFile, mediaFiles).
+   * @param extraMediaFiles - Additional media files to include, typically the
+   *   user-provided `mediaFiles` from the agent config.
    */
   async processInputFiles(
     inputFiles: FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
-    extraMediaFiles: PathInput[] = [],
+    extraMediaFiles: readonly FileLocation[] = [],
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
       figureMode: 'extract',

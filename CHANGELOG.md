@@ -33,6 +33,13 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Features
+
+- **Workflow scripts are available to the software-engineering and Lean team
+  leads** — after enabling Workflow Script in the Tools panel, these teams can
+  run predetermined parallel and sequential agent pipelines that resume safely
+  after interruption.
+
 #### Breaking Changes
 
 - **Tool-use flow results use `response` and `files` consistently** — consumers

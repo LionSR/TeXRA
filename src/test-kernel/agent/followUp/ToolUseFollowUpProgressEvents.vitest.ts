@@ -22,14 +22,13 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
-import { createRecordingHost } from '../progressTestUtils';
+import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:follow-up' as StreamTabId;
 
 describe('tool-use follow-up progress events', () => {
   const unsubscribeFollowUpObservers: Array<() => void> = [];
-  const trackedExecutionIds = new Set<string>();
-  const sessionTrackedExecutions: Array<{
+  const trackedExecutions: Array<{
     readonly session: SessionHandle;
     readonly executionId: string;
   }> = [];
@@ -39,11 +38,7 @@ describe('tool-use follow-up progress events', () => {
     for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
       unsubscribe();
     }
-    for (const executionId of trackedExecutionIds) {
-      defaultSession().executions.untrack(executionId);
-    }
-    trackedExecutionIds.clear();
-    for (const { session, executionId } of sessionTrackedExecutions.splice(0)) {
+    for (const { session, executionId } of trackedExecutions.splice(0)) {
       session.executions.untrack(executionId);
     }
     for (const session of sessions) {
@@ -78,23 +73,16 @@ describe('tool-use follow-up progress events', () => {
       switchModel: async () => {},
       interrupt: () => {},
     });
-    if (session) {
-      session.executions.track(handle);
-      sessionTrackedExecutions.push({ session, executionId });
-    } else {
-      defaultSession().executions.track(handle);
-      trackedExecutionIds.add(executionId);
-    }
+    const owner = session ?? defaultSession();
+    owner.executions.track(handle);
+    trackedExecutions.push({ session: owner, executionId });
   }
 
   it('publishes sent follow-up events through the owning session fact hub', async () => {
     const { events } = createRecordingHost();
     const session = createTestSession();
     sessions.add(session);
-    const facts: unknown[] = [];
-    const detachFacts = session.events.subscribe((event) => {
-      facts.push(event);
-    });
+    const recorded = recordSessionEvents(session.events);
     const appendFollowUp = vi.fn();
 
     trackToolUseFlow({ appendFollowUp, session });
@@ -102,7 +90,7 @@ describe('tool-use follow-up progress events', () => {
     const result = await submitFollowUp(streamId, 'please continue', {
       session,
     });
-    detachFacts();
+    recorded.detach();
 
     expect(result).toEqual({ status: 'sent' });
     expect(appendFollowUp).toHaveBeenCalledWith({
@@ -110,7 +98,7 @@ describe('tool-use follow-up progress events', () => {
       mediaFiles: undefined,
       displayText: undefined,
     });
-    expect(facts).toEqual([
+    expect(recorded.events).toEqual([
       {
         scope: 'session',
         event: {
@@ -128,14 +116,8 @@ describe('tool-use follow-up progress events', () => {
     const activeSession = createTestSession();
     sessions.add(explicitSession);
     sessions.add(activeSession);
-    const explicitFacts: unknown[] = [];
-    const activeFacts: unknown[] = [];
-    const detachExplicitFacts = explicitSession.events.subscribe((event) => {
-      explicitFacts.push(event);
-    });
-    const detachActiveFacts = activeSession.events.subscribe((event) => {
-      activeFacts.push(event);
-    });
+    const explicit = recordSessionEvents(explicitSession.events);
+    const active = recordSessionEvents(activeSession.events);
 
     try {
       withRunContext(
@@ -145,7 +127,7 @@ describe('tool-use follow-up progress events', () => {
         () => notifyFollowUpSent(streamId, explicitSession),
       );
 
-      expect(explicitFacts).toEqual([
+      expect(explicit.events).toEqual([
         {
           scope: 'session',
           event: {
@@ -154,11 +136,11 @@ describe('tool-use follow-up progress events', () => {
           },
         },
       ]);
-      expect(activeFacts).toEqual([]);
+      expect(active.events).toEqual([]);
       expect(run.events).toEqual([]);
     } finally {
-      detachExplicitFacts();
-      detachActiveFacts();
+      explicit.detach();
+      active.detach();
     }
   });
 
@@ -166,20 +148,14 @@ describe('tool-use follow-up progress events', () => {
     const run = createRecordingHost();
     const session = createTestSession();
     sessions.add(session);
-    const facts: unknown[] = [];
-    const detachFacts = session.events.subscribe((event) => {
-      facts.push(event);
-    });
+    const recorded = recordSessionEvents(session.events);
 
     try {
-      withRunContext(
-        createRunContext({
-          session,
-        }),
-        () => notifyFollowUpSent(streamId),
+      withRunContext(createRunContext({ session }), () =>
+        notifyFollowUpSent(streamId),
       );
 
-      expect(facts).toEqual([
+      expect(recorded.events).toEqual([
         {
           scope: 'session',
           event: {
@@ -190,16 +166,13 @@ describe('tool-use follow-up progress events', () => {
       ]);
       expect(run.events).toEqual([]);
     } finally {
-      detachFacts();
+      recorded.detach();
     }
   });
 
   it('falls back to the default session when the active run has no event hub', () => {
     const run = createRecordingHost();
-    const defaultFacts: unknown[] = [];
-    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
-      defaultFacts.push(event);
-    });
+    const recorded = recordSessionEvents(defaultSession().events);
 
     try {
       withRunContext(
@@ -209,7 +182,7 @@ describe('tool-use follow-up progress events', () => {
         () => notifyFollowUpSent(streamId),
       );
 
-      expect(defaultFacts).toEqual([
+      expect(recorded.events).toEqual([
         {
           scope: 'session',
           event: {
@@ -220,7 +193,7 @@ describe('tool-use follow-up progress events', () => {
       ]);
       expect(run.events).toEqual([]);
     } finally {
-      detachDefaultFacts();
+      recorded.detach();
     }
   });
 
@@ -301,10 +274,7 @@ describe('tool-use follow-up progress events', () => {
   it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
     const session = createTestSession();
     sessions.add(session);
-    const facts: unknown[] = [];
-    const detachFacts = session.events.subscribe((event) => {
-      facts.push(event);
-    });
+    const recorded = recordSessionEvents(session.events);
 
     try {
       const result = await submitFollowUp(
@@ -317,9 +287,9 @@ describe('tool-use follow-up progress events', () => {
         status: 'no_session',
         streamStatus: undefined,
       });
-      expect(facts).toEqual([]);
+      expect(recorded.events).toEqual([]);
     } finally {
-      detachFacts();
+      recorded.detach();
     }
   });
 

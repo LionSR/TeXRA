@@ -1,7 +1,6 @@
 /**
  * CLI TUI shared signal store. All view-level state (streams, session,
- * focus, overlays, exit hints) lives here as signals; formerly one file per
- * slice under `cliState/`.
+ * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
@@ -39,8 +38,7 @@ import {
 // Data model for the CLI TUI's signal-backed state. Mirrors the webview's
 // `progressState` shape — same primitives (`@lit-labs/signals`), same shape
 // (one record per stream + an `activeStreamId`) so future feature parity is a
-// port, not a rewrite. Phase 4 extends with per-stream subagent/todos/plan
-// fields plus the per-stream bypass-state badges the StatusBar consumes.
+// port, not a rewrite.
 
 interface ConversationEntryBase {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */

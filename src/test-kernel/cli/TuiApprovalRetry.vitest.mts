@@ -213,6 +213,19 @@ function requestSameStreamRetry(
   );
 }
 
+/** Transient retry with no relay or subscription exhaustion behind it. */
+function ordinaryRetry(
+  streamId: string,
+  requestId: string = streamId,
+): RetryPermission {
+  return {
+    requestId,
+    streamId,
+    operation: 'model request',
+    errorMessage: 'Temporary connection error.',
+  };
+}
+
 function chatGptSubscriptionRetry(streamId: string): RetryPermission {
   return {
     streamId,
@@ -317,12 +330,9 @@ describe('TUI retry approvals', () => {
       approvalPolicy: 'yolo',
     });
 
-    const result = interactions.requestRetry?.({
-      requestId: 'yolo-transient-retry',
-      streamId: 'yolo-transient-stream',
-      operation: 'model request',
-      errorMessage: 'Temporary connection error.',
-    });
+    const result = interactions.requestRetry?.(
+      ordinaryRetry('yolo-transient-stream', 'yolo-transient-retry'),
+    );
 
     await expect(result).resolves.toEqual({
       action: 'deny',
@@ -824,12 +834,7 @@ describe('TUI retry approvals', () => {
       expect(selection).toBe('configured');
     });
     const later = interactions.requestRetry?.(
-      {
-        requestId: 'retry-after-stall',
-        streamId: 'retry-after-stall',
-        operation: 'model request',
-        errorMessage: 'Temporary connection error.',
-      },
+      ordinaryRetry('retry-after-stall'),
       { prepareRetry: laterPrepare },
     );
     await waitForApproval('retry', { streamId: 'retry-after-stall' });
@@ -1031,12 +1036,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.preferSubscription).toBe(true);
     });
     const ordinary = interactions.requestRetry?.(
-      {
-        requestId: 'ordinary-retry',
-        streamId: 'ordinary-stream',
-        operation: 'model request',
-        errorMessage: 'Temporary connection error.',
-      },
+      ordinaryRetry('ordinary-stream', 'ordinary-retry'),
       { prepareRetry: ordinaryPrepare },
     );
     await waitForApproval('retry', { streamId: 'ordinary-stream' });
@@ -1077,12 +1077,7 @@ describe('TUI retry approvals', () => {
       expect(mocks.preferSubscription).toBe(true);
     });
     const ordinary = interactions.requestRetry?.(
-      {
-        requestId: 'ordinary-after-rollback',
-        streamId: 'ordinary-after-rollback',
-        operation: 'model request',
-        errorMessage: 'Temporary connection error.',
-      },
+      ordinaryRetry('ordinary-after-rollback'),
       { prepareRetry: ordinaryPrepare },
     );
     await waitForApproval('retry', { streamId: 'ordinary-after-rollback' });
@@ -1106,12 +1101,7 @@ describe('TUI retry approvals', () => {
       throw new Error('ordinary client refresh failed');
     });
     const ordinary = interactions.requestRetry?.(
-      {
-        requestId: 'ordinary-refresh-failure',
-        streamId: 'ordinary-refresh-failure',
-        operation: 'model request',
-        errorMessage: 'Temporary connection error.',
-      },
+      ordinaryRetry('ordinary-refresh-failure'),
       { prepareRetry },
     );
     await waitForApproval('retry', { streamId: 'ordinary-refresh-failure' });
@@ -1201,12 +1191,7 @@ describe('TUI retry approvals', () => {
     );
     const { interactions } = tui();
     const ordinary = interactions.requestRetry?.(
-      {
-        requestId: 'cancelled-ordinary',
-        streamId: 'cancelled-ordinary',
-        operation: 'model request',
-        errorMessage: 'Temporary connection error.',
-      },
+      ordinaryRetry('cancelled-ordinary'),
       { prepareRetry: ordinaryPrepare },
     );
     await waitForApproval('retry', { streamId: 'cancelled-ordinary' });
@@ -1424,12 +1409,7 @@ describe('TUI retry approvals', () => {
 
     const { interactions } = tui();
     const result = interactions.requestRetry?.(
-      {
-        requestId: 'abort-at-resolution',
-        streamId: 'abort-at-resolution',
-        operation: 'model request',
-        errorMessage: 'Temporary connection error.',
-      },
+      ordinaryRetry('abort-at-resolution'),
       { prepareRetry },
     );
     await waitForApproval('retry', { streamId: 'abort-at-resolution' });

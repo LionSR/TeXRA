@@ -232,11 +232,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const { runContext: parent, callContext } = contexts;
     const { runScope } = parent;
 
-    // Named checkpoint, not content- or toolCallId-keyed: a retrying model
-    // rewrites its script, so any key derived from call identity or source
-    // text orphans the journal exactly when resume matters (#8666). meta.name
-    // is the durable identity; per-entry prompt/options hashes in the journal
-    // keep replays honest when the script evolves.
     let scriptPath: string;
     let script: string;
     if (input.scriptPath != null) {
@@ -289,6 +284,11 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       );
       return { meta, defaultAgent };
     });
+    // Named checkpoint, not content- or toolCallId-keyed: a retrying model
+    // rewrites its script, so any key derived from call identity or source
+    // text orphans the journal exactly when resume matters (#8666). meta.name
+    // is the durable identity; per-entry prompt/options hashes in the journal
+    // keep replays honest when the script evolves.
     const checkpointId = deriveWorkflowScriptCheckpointId({
       name: meta.name,
       defaultAgent: defaultAgent.name,

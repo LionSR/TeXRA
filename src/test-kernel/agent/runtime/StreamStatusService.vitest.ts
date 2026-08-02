@@ -151,19 +151,18 @@ describe('StreamStatusMachine', () => {
     ]);
   });
 
-  it('terminalizes waiting streams through resume then lifecycle', () => {
+  it.each([
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+  ])('terminalizes waiting streams through resume then %s', (cause) => {
     const { machine, statusEvents, streamId } = setupMachine(
-      'stream-status-waiting-terminal-repair',
+      `stream-status-waiting-terminal-${cause}`,
     );
 
     seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
 
     expect(
-      machine.transitionToTerminal(
-        streamId,
-        STREAM_PHASE.FAILED,
-        STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      ),
+      machine.transitionToTerminal(streamId, STREAM_PHASE.FAILED, cause),
     ).toBe(true);
 
     expect(machine.get(streamId)).toBe(STREAM_PHASE.FAILED);
@@ -180,41 +179,7 @@ describe('StreamStatusMachine', () => {
         type: 'status',
         phase: STREAM_PHASE.FAILED,
         previousPhase: STREAM_PHASE.RUNNING,
-        cause: 'lifecycle',
-      },
-    ]);
-  });
-
-  it('terminalizes waiting streams with the restart-repair cause', () => {
-    const { machine, statusEvents, streamId } = setupMachine(
-      'stream-status-waiting-terminal-restart-repair',
-    );
-
-    seedStreamStatusForTest(machine, streamId, STREAM_PHASE.WAITING);
-
-    expect(
-      machine.transitionToTerminal(
-        streamId,
-        STREAM_PHASE.FAILED,
-        STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-      ),
-    ).toBe(true);
-
-    expect(machine.get(streamId)).toBe(STREAM_PHASE.FAILED);
-    expect(statusEvents()).toEqual([
-      {
-        streamId,
-        type: 'status',
-        phase: STREAM_PHASE.RUNNING,
-        previousPhase: STREAM_PHASE.WAITING,
-        cause: 'resume',
-      },
-      {
-        streamId,
-        type: 'status',
-        phase: STREAM_PHASE.FAILED,
-        previousPhase: STREAM_PHASE.RUNNING,
-        cause: 'restart-repair',
+        cause,
       },
     ]);
   });
@@ -442,10 +407,7 @@ describe('StreamStatusMachine', () => {
 
   // One rail: the session fact is published by the machine itself, so a
   // trace-owned transition (run start, terminal, manual-retry wait, restart
-  // repair) reaches every projector without the caller passing a hub. Before
-  // this became unconditional, those transitions were visible only as
-  // run-scope `status` trace events, which is why each projector carried its
-  // own duplicate trace arm.
+  // repair) reaches every projector without the caller passing a hub.
   it('publishes the session fact when a trace bridge is present', () => {
     const { machine, statusEvents, streamId } = setupMachine(
       'stream-status-single-rail',

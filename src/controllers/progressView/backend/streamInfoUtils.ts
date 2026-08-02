@@ -9,7 +9,7 @@ export type StreamInfoSource = Pick<ProgressViewState, 'getStreamMetadata'>;
 
 /** The state the full tab list is built from. */
 export type StreamInfoListSource = StreamInfoSource &
-  Pick<ProgressViewState, 'streamLogs'>;
+  Pick<ProgressViewState, 'selectableStreamNames'>;
 
 /** Build a StreamTabInfo object for a single stream ID. */
 export function buildStreamInfo(
@@ -37,8 +37,8 @@ export function buildStreamInfo(
 
 /** Build metadata objects for all streams in the given state, newest first. */
 export function buildStreamInfos(state: StreamInfoListSource): StreamTabInfo[] {
-  return state.streamLogs
-    .keys()
+  return state
+    .selectableStreamNames()
     .map((id) => buildStreamInfo(state, id))
     .sort(compareByNewestCreationTime);
 }

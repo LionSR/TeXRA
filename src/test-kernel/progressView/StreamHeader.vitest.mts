@@ -250,6 +250,9 @@ describe('stream-header', () => {
       expect(stopButton).toBeTruthy();
       expect(stopButton?.tagName).toBe('WA-BUTTON');
       expect(stopButton?.hasAttribute('data-command')).toBe(false);
+      expect(stopButton?.querySelector('wa-icon')?.getAttribute('name')).toBe(
+        'circle-stop',
+      );
 
       const stopTooltip = element.shadowRoot?.querySelector(
         `wa-tooltip[for="${ELEMENT_IDS.STOP_STREAM_BTN}"]`,

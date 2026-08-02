@@ -2,7 +2,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
 import type { FinalizeExecutionResult } from '@agent/storage';
@@ -835,14 +835,12 @@ describe('runFlowWithLifecycle', () => {
       const waitingHandle = takeWaitingHandle(executionId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
-      // (post #7286) preserves the follow-up queue for WAITING — it does not
-      // dispose the session — by the time a native subagent suspends at
-      // WAITING (not reproduced by this fake runner, but true in production —
-      // see runToolUseFlow.ts). Before the fix, `executions.kill()`
-      // found no interrupt target for a suspended handle and silently
-      // no-opped, leaving the handle stuck registered forever. It must now
-      // fall back to the teardown the WAITING branch parked and actually tear
-      // the execution down.
+      // preserves the follow-up queue for WAITING — it does not dispose the
+      // session — by the time a native subagent suspends at WAITING (not
+      // reproduced by this fake runner, but true in production — see
+      // runToolUseFlow.ts). With no interrupt target left, `executions.kill()`
+      // falls back to the teardown the WAITING branch parked and tears the
+      // execution down.
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await waitingHandle.result;
 
@@ -875,11 +873,9 @@ describe('runFlowWithLifecycle', () => {
       // The kill path never resumes, so the per-suspension parent stage must
       // be closed here rather than dangling open forever. `ctx.parentStage`
       // is already desubscribed by this point (disposeTrace ran in the
-      // WAITING branch's own finally), so the fix writes the stage's
-      // GROUP_END entry directly to the transcript store instead of calling
-      // the now-inert `ctx.parentStage.end()`. The written status is the
-      // literal `RunOutcome.CANCELLED` (#7993 step 2), not a legacy
-      // 2-value fold.
+      // WAITING branch's own finally), so the stage's GROUP_END entry is
+      // written directly to the transcript store instead of through the
+      // now-inert `ctx.parentStage.end()`.
       expect(transcriptsUpdate).toHaveBeenCalledWith(
         streamId,
         expect.any(String),
@@ -951,9 +947,8 @@ describe('runFlowWithLifecycle', () => {
   // matrix pins the projections for every terminal path — in particular that
   // a user stop (the no-throw `cancelled` exit, the dominant stop path)
   // persists `interrupted` and ends the stage with the literal `cancelled`
-  // outcome, distinct from `completed` (#7993 step 2: `stage.end()` writes
-  // the native `RunOutcome`, not the folded 2-value `EndGroupStatus` string —
-  // completed/cancelled/failed all end up distinct on the transcript row).
+  // outcome. `stage.end()` writes the native `RunOutcome`, so
+  // completed/cancelled/failed stay distinct on the transcript row.
   it('projects returned outcomes to terminal status, stage end, and stream status', async () => {
     const cases = [
       {
@@ -992,8 +987,6 @@ describe('runFlowWithLifecycle', () => {
           flowRecord:
             expected.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
         });
-        // The stage closes with the literal outcome, not a legacy 2-value
-        // fold.
         expect(stageEnd).toHaveBeenCalledWith(expected.outcome);
         expect(streamStatus.get(streamId)).toBe(expected.stream);
       } finally {
@@ -1002,7 +995,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('projects a thrown abort as cancelled (distinct stage outcome, not folded to stopped)', async () => {
+  it('projects a thrown abort as cancelled on its own stage outcome', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'outcome-thrown-abort',
     );
@@ -1201,6 +1194,30 @@ describe('runFlowWithLifecycle', () => {
   });
 });
 
+/** The handle, status machine, and untrack spy every finalize test drives. */
+function finalizeFixture(slug: string): {
+  executionId: string;
+  streamId: StreamTabId;
+  streamStatus: StreamStatusMachine;
+  handle: ReturnType<typeof testExecutionHandle>;
+  untrack: Mock<(executionId: string) => void>;
+} {
+  const executionId = `exec-${slug}`;
+  const streamId = `stream-${slug}` as StreamTabId;
+  return {
+    executionId,
+    streamId,
+    streamStatus: new StreamStatusMachine(),
+    handle: testExecutionHandle({
+      executionId,
+      parentStreamId: streamId,
+      agent: 'test-agent',
+      trace: noopTrace,
+    }),
+    untrack: vi.fn<(executionId: string) => void>(),
+  };
+}
+
 describe('finalizeRunTerminal', () => {
   // The exactly-once guard must be an atomic, synchronous claim — not a
   // check-then-await on the settled flag. Two finalizers racing across the
@@ -1208,16 +1225,8 @@ describe('finalizeRunTerminal', () => {
   // handle) would otherwise both pass the check before the first settles and
   // double-publish persist/emit/settle/untrack.
   it('finalizes exactly once when two callers race across the persist await', async () => {
-    const executionId = 'exec-finalize-race';
-    const streamId = 'stream-finalize-race' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId: streamId,
-      agent: 'test-agent',
-      trace: noopTrace,
-    });
-    const untrack = vi.fn();
+    const { executionId, streamId, streamStatus, handle, untrack } =
+      finalizeFixture('finalize-race');
     const traceEmit = vi.spyOn(noopTrace, 'emit');
     storageMocks.finalizeExecution.mockClear();
     // Park the first caller at its persist await so the second caller arrives
@@ -1283,16 +1292,8 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('flushes display artifacts before publishing and untracking', async () => {
-    const executionId = 'exec-finalize-artifact-order';
-    const streamId = 'stream-finalize-artifact-order' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId: streamId,
-      agent: 'test-agent',
-      trace: noopTrace,
-    });
-    const untrack = vi.fn();
+    const { executionId, streamId, streamStatus, handle, untrack } =
+      finalizeFixture('finalize-artifact-order');
     let releaseFlush: (() => void) | undefined;
     const flushArtifacts = vi.fn(
       () =>
@@ -1334,16 +1335,8 @@ describe('finalizeRunTerminal', () => {
   });
 
   it('settles and untracks once while reporting terminal metadata failure', async () => {
-    const executionId = 'exec-finalize-metadata-failure';
-    const streamId = 'stream-finalize-metadata-failure' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId: streamId,
-      agent: 'test-agent',
-      trace: noopTrace,
-    });
-    const untrack = vi.fn();
+    const { executionId, streamId, streamStatus, handle, untrack } =
+      finalizeFixture('finalize-metadata-failure');
     const durabilityError = new Error('metadata disk write failed');
     storageMocks.finalizeExecution.mockResolvedValueOnce({
       status: 'failed',
@@ -1399,16 +1392,8 @@ describe('finalizeRunTerminal', () => {
   // killed then reports its own non-zero exit as a failure — so the phase, not
   // the report, has to decide, and no caller may cross-check it for itself.
   it('resolves the terminal outcome from an already-cancelled stream phase', async () => {
-    const executionId = 'exec-finalize-stopped';
-    const streamId = 'stream-finalize-stopped' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId: streamId,
-      agent: 'test-agent',
-      trace: noopTrace,
-    });
-    const untrack = vi.fn();
+    const { executionId, streamId, streamStatus, handle, untrack } =
+      finalizeFixture('finalize-stopped');
     const stage = { end: vi.fn() };
     storageMocks.finalizeExecution.mockClear();
     channelTraceMocks.warn.mockClear();
@@ -1457,16 +1442,8 @@ describe('finalizeRunTerminal', () => {
   // published FAILED is a terminal fact a later stop cannot rewrite, so a
   // caller reporting `cancelled` does not get to relabel it.
   it('keeps an already-failed stream phase over a later cancelled report', async () => {
-    const executionId = 'exec-finalize-failed-then-stopped';
-    const streamId = 'stream-finalize-failed-then-stopped' as StreamTabId;
-    const streamStatus = new StreamStatusMachine();
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId: streamId,
-      agent: 'test-agent',
-      trace: noopTrace,
-    });
-    const untrack = vi.fn();
+    const { executionId, streamId, streamStatus, handle, untrack } =
+      finalizeFixture('finalize-failed-then-stopped');
     channelTraceMocks.warn.mockClear();
 
     try {

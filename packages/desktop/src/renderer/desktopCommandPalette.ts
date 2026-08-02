@@ -1,7 +1,6 @@
-// Desktop command palette — owns the wa-dialog shell, filter/keyboard wiring,
-// and Lit render loop, plus the desktop command surface and accelerator
-// formatting. Repatriated from src/shared/wa/commandPalette.ts (#8825): the
-// desktop renderer is its only consumer.
+// Desktop command palette: owns the wa-dialog shell, filter/keyboard wiring,
+// and Lit render loop over the desktop command surface and its accelerator
+// formatting.
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
@@ -109,14 +108,11 @@ export function executeCommandPaletteEntry(
   onExecute: (id: string) => boolean | Promise<boolean>,
 ): boolean {
   if (!entry) return false;
-  // Sync handlers report their actual result; async handlers (typed-args
-  // registry, #3784) return a Promise — treat that as "handled" so the
-  // palette closes immediately and the work runs in the background.
-  //
-  // Bot review (#3818): an async handler that rejects would otherwise
-  // surface as an unhandled rejection at the host. Attach a catch that
-  // logs but doesn't propagate — sync handler errors still throw
-  // synchronously and bubble to the caller.
+  // Sync handlers report their actual result; an async handler returns a
+  // Promise, which counts as "handled" so the palette closes immediately and
+  // the work runs in the background. That background rejection would surface
+  // as an unhandled rejection at the host, so log it here without
+  // propagating; sync handler errors still throw and bubble to the caller.
   const result = onExecute(entry.id);
   if (isThenable(result)) {
     (result as Promise<boolean>).catch((error) => {
@@ -151,9 +147,9 @@ export function createDesktopCommandPalette({
   const onExecute = (id: string): boolean | Promise<boolean> =>
     dispatchDesktopPaletteCommand(id, actions);
 
-  // Reactive state — every mutation calls renderTemplate() to keep the DOM
-  // in sync. wa-dialog handles modal backdrop, focus trap, escape key, and
-  // focus restoration natively, so we no longer manage those by hand.
+  // Reactive state: every mutation calls renderTemplate() to keep the DOM in
+  // sync. wa-dialog handles modal backdrop, focus trap, escape key, and focus
+  // restoration natively, so none of those are managed here.
   let allEntries: CommandPaletteEntry[] = [];
   let visibleEntries: CommandPaletteEntry[] = [];
   let activeIndex = -1;

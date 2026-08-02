@@ -280,26 +280,30 @@ function buildResponseResumeData(
   };
 }
 
+interface PersistedFlowRunOptions {
+  readonly attachment?: Partial<ToolUseFlowAttachment>;
+  readonly session?: SessionHandle;
+  readonly isSubagent?: boolean;
+  readonly stopAfterCycle?: boolean;
+  readonly config?: AgentConfig;
+  readonly modelHandler?: Record<string, unknown>;
+  readonly tools?: readonly ITool[];
+  readonly drainedFollowUps?: RunToolUseFlowInput['drainedFollowUps'];
+  readonly onIdle?: () => void;
+  readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
+  readonly onFlowRecordDisposition?: (
+    disposition: 'preserve' | 'delete',
+  ) => void;
+}
+
 async function runPersistedFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
   resume: ToolUseResumeData | undefined,
-  attachment?: Partial<ToolUseFlowAttachment>,
-  session: SessionHandle = createTestSession(),
-  options: {
-    readonly isSubagent?: boolean;
-    readonly stopAfterCycle?: boolean;
-    readonly config?: AgentConfig;
-    readonly modelHandler?: Record<string, unknown>;
-    readonly tools?: readonly ITool[];
-    readonly drainedFollowUps?: RunToolUseFlowInput['drainedFollowUps'];
-    readonly onIdle?: () => void;
-    readonly takePendingFollowUps?: RunToolUseFlowInput['takePendingFollowUps'];
-    readonly onFlowRecordDisposition?: (
-      disposition: 'preserve' | 'delete',
-    ) => void;
-  } = {},
+  options: PersistedFlowRunOptions = {},
 ): Promise<RunToolUseFlowResult> {
+  const { attachment } = options;
+  const session = options.session ?? createTestSession();
   const config = options.config ?? resume?.agentConfig ?? CONFIG;
   const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
     input: Object.freeze({ MODEL: config.model }),
@@ -736,17 +740,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const resume = buildResponseResumeData(executionId, streamId, prior);
       await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
 
-      const result = await runPersistedFlow(
-        executionId,
-        streamId,
-        resume,
-        undefined,
-        undefined,
-        {
-          modelHandler: responseModelHandler([{ text: fresh }]),
-          drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-        },
-      );
+      const result = await runPersistedFlow(executionId, streamId, resume, {
+        modelHandler: responseModelHandler([{ text: fresh }]),
+        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+      });
 
       expect(result.response).toBe(fresh);
     },
@@ -759,17 +756,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const resume = buildResponseResumeData(executionId, streamId, 'A');
     await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      resume,
-      undefined,
-      undefined,
-      {
-        modelHandler: partialFailureModelHandler('A'),
-        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, resume, {
+      modelHandler: partialFailureModelHandler('A'),
+      drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+    });
 
     expect(result).toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
@@ -810,17 +800,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       },
     );
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      resume,
-      undefined,
-      undefined,
-      {
-        modelHandler: responseModelHandler([{ error: providerError }]),
-        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, resume, {
+      modelHandler: responseModelHandler([{ error: providerError }]),
+      drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+    });
 
     expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
     expect(result.response).toBeUndefined();
@@ -839,24 +822,17 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       },
     });
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      undefined,
-      undefined,
-      undefined,
-      {
-        config,
-        isSubagent: false,
-        stopAfterCycle: true,
-        modelHandler: responseModelHandler([
-          {
-            text: 'Here is the structured result.',
-            toolCalls: [testToolCall('submit_output', { answer: 'done' })],
-          },
-        ]),
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, undefined, {
+      config,
+      isSubagent: false,
+      stopAfterCycle: true,
+      modelHandler: responseModelHandler([
+        {
+          text: 'Here is the structured result.',
+          toolCalls: [testToolCall('submit_output', { answer: 'done' })],
+        },
+      ]),
+    });
 
     expect(result).toMatchObject({
       outcome: RUN_OUTCOME.COMPLETED,
@@ -881,23 +857,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       call: vi.fn(async () => ({ status: 'executed' as const, output: 'ok' })),
     };
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      undefined,
-      undefined,
-      undefined,
-      {
-        modelHandler: responseModelHandler([
-          {
-            text: 'I checked the tool.',
-            toolCalls: [testToolCall('probe', {})],
-          },
-          { error: providerError },
-        ]),
-        tools: [probeTool],
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, undefined, {
+      modelHandler: responseModelHandler([
+        {
+          text: 'I checked the tool.',
+          toolCalls: [testToolCall('probe', {})],
+        },
+        { error: providerError },
+      ]),
+      tools: [probeTool],
+    });
 
     expect(result).toMatchObject({
       outcome: RUN_OUTCOME.FAILED,
@@ -912,22 +881,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const resume = buildResponseResumeData(executionId, streamId, 'A');
     await writeFlowRecord(executionId, resume.sourceShared, WAITING_AT_START);
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      resume,
-      undefined,
-      undefined,
-      {
-        modelHandler: responseModelHandler([
-          {
-            text: 'B',
-            updatedMessages: [{ role: 'user', content: 'Compacted context.' }],
-          },
-        ]),
-        drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, resume, {
+      modelHandler: responseModelHandler([
+        {
+          text: 'B',
+          updatedMessages: [{ role: 'user', content: 'Compacted context.' }],
+        },
+      ]),
+      drainedFollowUps: [{ text: 'Continue.', origin: 'user' }],
+    });
 
     expect(result.response).toBe('B');
     expect(await readFlowRecord(executionId)).toMatchObject({
@@ -944,18 +906,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-flow-fresh-root-response' as ExecutionId;
     const streamId = 'chat@gpt54#abc-flow-fresh-root-response' as StreamTabId;
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      undefined,
-      undefined,
-      undefined,
-      {
-        isSubagent: false,
-        stopAfterCycle: true,
-        modelHandler: responseModelHandler([{ text: 'fresh answer' }]),
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, undefined, {
+      isSubagent: false,
+      stopAfterCycle: true,
+      modelHandler: responseModelHandler([{ text: 'fresh answer' }]),
+    });
 
     expect(result).toMatchObject({
       outcome: RUN_OUTCOME.COMPLETED,
@@ -973,20 +928,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       .mockReturnValueOnce([{ text: 'Continue.', origin: 'user' }])
       .mockReturnValue([]);
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      undefined,
-      undefined,
-      undefined,
-      {
-        modelHandler: responseModelHandler([
-          { text: 'first answer' },
-          { text: 'latest answer' },
-        ]),
-        takePendingFollowUps,
-      },
-    );
+    const result = await runPersistedFlow(executionId, streamId, undefined, {
+      modelHandler: responseModelHandler([
+        { text: 'first answer' },
+        { text: 'latest answer' },
+      ]),
+      takePendingFollowUps,
+    });
 
     expect(result).toMatchObject({
       outcome: STREAM_PHASE.WAITING,
@@ -1005,11 +953,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       return [];
     });
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      snapshot,
-      {
+    const result = await runPersistedFlow(executionId, streamId, snapshot, {
+      attachment: {
         attach: () => {
           boundaryEvents.push('attach');
         },
@@ -1017,9 +962,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           boundaryEvents.push('detach');
         },
       },
-      undefined,
-      { takePendingFollowUps },
-    );
+      takePendingFollowUps,
+    });
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
     expect(takePendingFollowUps).toHaveBeenCalledTimes(2);
@@ -1039,11 +983,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     await expect(
       runPersistedFlow(executionId, streamId, snapshot, {
-        attach: () => {
-          throw attachFailure;
-        },
-        detach: (context) => {
-          detached.push(context);
+        attachment: {
+          attach: () => {
+            throw attachFailure;
+          },
+          detach: (context) => {
+            detached.push(context);
+          },
         },
       }),
     ).rejects.toBe(attachFailure);
@@ -1069,11 +1015,8 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
       try {
         await expect(
-          runPersistedFlow(
-            executionId,
-            streamId,
-            snapshot,
-            {
+          runPersistedFlow(executionId, streamId, snapshot, {
+            attachment: {
               attach: (context) => {
                 context.session.appendFollowUp({
                   text: 'queued before recovery',
@@ -1081,7 +1024,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
               },
             },
             session,
-          ),
+          }),
         ).rejects.toMatchObject({
           name: PersistedFlowStateError.name,
           reason: 'read-failed',
@@ -1126,17 +1069,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     try {
       // The run's own failure outranks the teardown failure: it is carried
       // out on the result rather than replaced by the thrown teardown error.
-      const result = await runPersistedFlow(
-        executionId,
-        streamId,
-        snapshot,
-        {
+      const result = await runPersistedFlow(executionId, streamId, snapshot, {
+        attachment: {
           detach: () => {
             throw teardownFailure;
           },
         },
         session,
-      );
+      });
 
       expect(result).toMatchObject({
         outcome: RUN_OUTCOME.FAILED,
@@ -1165,18 +1105,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          {
+        runPersistedFlow(executionId, streamId, snapshot, {
+          attachment: {
             attach: (context) => context.interrupt(),
             detach: () => {
               throw teardownFailure;
             },
           },
           session,
-        ),
+        }),
       ).rejects.toBe(teardownFailure);
       expect(releaseSpy).toHaveBeenCalled();
     } finally {
@@ -1211,17 +1148,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          {
+        runPersistedFlow(executionId, streamId, snapshot, {
+          attachment: {
             detach: () => {
               throw teardownFailure;
             },
           },
           session,
-        ),
+        }),
       ).rejects.toThrow(
         'Structured-output run completed without calling submit_output.',
       );
@@ -1318,7 +1252,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       const result = await runPersistedFlow(executionId, streamId, snapshot, {
-        attach: (flowContext) => flowContext.interrupt(),
+        attachment: {
+          attach: (flowContext) => flowContext.interrupt(),
+        },
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
@@ -1343,14 +1279,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const dispositions: Array<'preserve' | 'delete'> = [];
 
     try {
-      const result = await runPersistedFlow(
-        executionId,
-        streamId,
-        undefined,
-        { attach: (flowContext) => flowContext.interrupt() },
+      const result = await runPersistedFlow(executionId, streamId, undefined, {
+        attachment: { attach: (flowContext) => flowContext.interrupt() },
         session,
-        { onFlowRecordDisposition: (value) => dispositions.push(value) },
-      );
+        onFlowRecordDisposition: (value) => dispositions.push(value),
+      });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(readSpy).not.toHaveBeenCalled();
@@ -1392,8 +1325,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       const result = await runPersistedFlow(executionId, streamId, snapshot, {
-        attach: (context) => {
-          flowContext = context;
+        attachment: {
+          attach: (context) => {
+            flowContext = context;
+          },
         },
       });
 
@@ -1415,21 +1350,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
 
-    const result = await runPersistedFlow(
-      executionId,
-      streamId,
-      snapshot,
-      {
+    const result = await runPersistedFlow(executionId, streamId, snapshot, {
+      attachment: {
         attach: (context) => {
           flowContext = context;
         },
       },
-      createTestSession(),
-      {
-        isSubagent: false,
-        onIdle: () => flowContext?.interrupt(),
-      },
-    );
+      session: createTestSession(),
+      isSubagent: false,
+      onIdle: () => flowContext?.interrupt(),
+    });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
     expect(await readFlowRecord(executionId)).toMatchObject({
@@ -1497,18 +1427,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          {
+        runPersistedFlow(executionId, streamId, snapshot, {
+          attachment: {
             attach: (context) => {
               flowContext = context;
             },
           },
-          undefined,
-          { onFlowRecordDisposition: (value) => dispositions.push(value) },
-        ),
+          onFlowRecordDisposition: (value) => dispositions.push(value),
+        }),
       ).rejects.toBe(abortError);
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
       expect(dispositions).toEqual(['preserve']);
@@ -1523,21 +1449,13 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
   });
 
   it('preserves a follow-up appended during setup when cancellation arrives during the recovery read (issue #8049 P2)', async () => {
-    // Regression: once setup attaches the live flow context, a new follow-up
-    // can enter its session queue before the flow is interruptible. If an
-    // external cancellation then lands while the recovery read is pending --
-    // this same "cancellation during read" window as the sibling test above --
-    // the early return here reports CANCELLED with the resume record preserved,
-    // but previously
-    // `ToolUseSessionLifecycle.interrupt()` unconditionally disposed the
-    // queue (dropping the just-appended follow-up) and the finally below
-    // unconditionally released it again, so neither the caller
-    // (`resumeQueuedToolUseFromResumeData`, which never restores follow-ups on
-    // this success path) nor a later resume could ever recover the user's
-    // queued input. Fixed by asking `ToolUseSessionLifecycle.interrupt()` to
-    // preserve the queue for this window (cancelling the pending wait without
-    // dropping queued items) and by skipping the queue release in
-    // `runToolUseFlow`'s finally whenever the flow record itself is preserved.
+    // Once setup attaches the live flow context, a new follow-up can enter its
+    // session queue before the flow is interruptible. When an external
+    // cancellation then lands while the recovery read is pending -- the same
+    // window as the sibling test above -- the run reports CANCELLED with the
+    // resume record preserved, and the queued input must survive with it:
+    // `resumeQueuedToolUseFromResumeData` never restores follow-ups on this
+    // success path, so dropping the item here would lose it for good.
     const executionId = 'abc-cancel-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-followup' as StreamTabId;
     const snapshot = buildToolUseResumeData(executionId, streamId);
@@ -1552,18 +1470,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     });
 
     try {
-      const result = await runPersistedFlow(
-        executionId,
-        streamId,
-        snapshot,
-        {
+      const result = await runPersistedFlow(executionId, streamId, snapshot, {
+        attachment: {
           attach: (context) => {
             flowContext = context;
             context.session.appendFollowUp({ text: 'queued during resume' });
           },
         },
         session,
-      );
+      });
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(session.followUps.getAll(streamId)).toEqual([
@@ -1610,18 +1525,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          {
+        runPersistedFlow(executionId, streamId, snapshot, {
+          attachment: {
             attach: (context) => {
               flowContext = context;
             },
           },
           session,
-          { takePendingFollowUps: () => [] },
-        ),
+          takePendingFollowUps: () => [],
+        }),
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
         'late active-turn input',
@@ -1667,17 +1579,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
 
     try {
       await expect(
-        runPersistedFlow(
-          executionId,
-          streamId,
-          snapshot,
-          {
+        runPersistedFlow(executionId, streamId, snapshot, {
+          attachment: {
             attach: (context) => {
               flowContext = context;
             },
           },
           session,
-        ),
+        }),
       ).rejects.toBe(abortError);
       expect(session.followUps.getAll(streamId)).toEqual([
         'queued for next turn',

@@ -162,12 +162,11 @@ export const BackendOwnedFieldsSchema = z.object({
   subagents: z.array(ActiveChildInfoSchema).prefault([]),
 });
 
-const BackendOwnedMetadataFieldsSchema = BackendOwnedFieldsSchema.extend({
+export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
+  // Nullable over the wire: an explicit `null` clears a stage the frontend
+  // still holds, which a plain omission cannot express.
   roundStage: RoundStageSchema.nullable().optional(),
   phaseStage: PhaseStageSchema.nullable().optional(),
-});
-
-export const StreamMetadataSchema = BackendOwnedMetadataFieldsSchema.extend({
   kind: AgentCategorySchema,
 });
 

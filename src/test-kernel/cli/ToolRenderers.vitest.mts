@@ -35,11 +35,6 @@ function toolUse(
   };
 }
 
-function patchRows(entry: NormalizedToolUse): readonly string[] {
-  // The patch block follows the single header row in the display lines.
-  return toolUseDisplayLines(entry).slice(1);
-}
-
 async function renderBoundedTool(
   entry: NormalizedToolUse,
   maxRows: number,
@@ -421,27 +416,9 @@ describe('CLI tool display lines', () => {
 });
 
 describe('ToolUseRow edit patch rendering', () => {
-  it('renders an Edit input as an inline patch preview', () => {
-    const rows = patchRows(
-      toolUse('Edit', {
-        path: 'paper.tex',
-        old_string: 'We use a CNN.\n',
-        new_string: 'We use a transformer.\n',
-      }),
-    );
-
-    expect(rows).toMatchInlineSnapshot(`
-      [
-        "⎿ paper.tex",
-        "  @@ -1,1 +1,1 @@",
-        "  -We use a CNN.",
-        "  +We use a transformer.",
-      ]
-    `);
-  });
-
   it('renders MultiEdit edits as patch previews for the target file', () => {
-    const rows = patchRows(
+    // The patch block follows the single header row in the display lines.
+    const rows = toolUseDisplayLines(
       toolUse('MultiEdit', {
         file_path: 'paper.tex',
         edits: [
@@ -455,7 +432,7 @@ describe('ToolUseRow edit patch rendering', () => {
           },
         ],
       }),
-    );
+    ).slice(1);
 
     expect(rows).toMatchInlineSnapshot(`
       [

@@ -1,11 +1,9 @@
 /**
  * Agent selection, directory, and team handlers.
  *
- * Extracted from SettingsViewMessageHandler to improve cohesion.
  * Handles agent enable/disable, create/customize/delete, YAML editing,
  * custom agent directories, and agent teams.
  */
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { getAgent, loadAgents, refresh as refreshAgents } from '@agent/index';
@@ -44,9 +42,7 @@ import {
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
 
-/**
- * Agent selection, directory, and team handler delegate.
- */
+/** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
   private readonly directoryController: SettingsAgentDirectoryController;

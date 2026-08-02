@@ -24,10 +24,10 @@ const StreamDiagnosticsSchema = z.object({
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
 
 /** Reason a credential/quota is exhausted, requiring user action before an
- *  identical retry can succeed. The reasons are mutually
- *  exclusive — a single error is classified as exactly one — which is why
- *  this is a discriminant rather than independent booleans (see
- *  `isCredentialExhausted` below for the pre-refactor combined check). */
+ *  identical retry can succeed. The reasons are mutually exclusive — a single
+ *  error is classified as exactly one — which is why this is a discriminant
+ *  rather than independent booleans. `isCredentialExhausted` below answers the
+ *  combined "exhausted for any reason" question. */
 export const ExhaustionReasonSchema = z.enum([
   /** Relay monthly spending limit reached; the stored personal key is fine. */
   'relay-limit',
@@ -125,7 +125,7 @@ const ProviderErrorObjectSchema = z.object({
    *  provider credit depletion, or a subscription usage limit). Auto-
    *  retry is skipped and the retry panel offers a "Use your own API key"
    *  button for any of these. Use the `isCredentialExhausted` helper below
-   *  for the pre-refactor combined boolean check. */
+   *  for the combined check. */
   exhaustionReason: ExhaustionReasonSchema.optional(),
   requestId: z.string().optional(),
   /** True when the underlying failure was "no usable credential", detected via
@@ -200,10 +200,8 @@ export function isUpstreamCreditDepletedError(
 }
 
 /** Single source of truth for "auto-retry should be skipped because the
- *  credential/quota is exhausted" — the combined check the pre-refactor
- *  `isCredentialExhausted` boolean used to store directly. Kept as a derived
- *  predicate (not a stored field) so the exhaustion reasons cannot drift
- *  out of sync with it. */
+ *  credential/quota is exhausted". Derived from `exhaustionReason` rather than
+ *  stored as its own field, so the two cannot drift out of sync. */
 export function isCredentialExhausted(
   errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
 ): boolean {
@@ -216,10 +214,9 @@ export function isCredentialExhausted(
  * Structurally this is exactly a {@link ProviderError} without `rawErrorBody`
  * (large, not worth persisting in retry state) — that optional field is the
  * sole difference between the two shapes, so they round-trip by narrowing
- * (drop `rawErrorBody`) and widening (it stays absent) rather than by
- * re-listing the field set in three places. Deriving the schema with `.omit()`
- * keeps it from drifting out of sync with `ProviderErrorObjectSchema` as new
- * error fields are added.
+ * (drop `rawErrorBody`) and widening (it stays absent). Deriving the schema
+ * with `.omit()` keeps it from drifting out of sync with
+ * `ProviderErrorObjectSchema` as new error fields are added.
  */
 export const RetryErrorInfoSchema = z.preprocess(
   normalizeLegacyProviderErrorFields,

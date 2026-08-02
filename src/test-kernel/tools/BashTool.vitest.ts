@@ -58,14 +58,14 @@ import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
+import { testModelCell } from '../agent/modelCellTestUtils';
 import {
   recordSessionEvents,
   testRunScope,
   withTestRunContext,
 } from '../agent/progressTestUtils';
 
-// Third-party imports
-import { testModelCell } from '../agent/modelCellTestUtils';
+// Third-party type-only import (import/order places it last)
 import type OpenAI from 'openai';
 
 const testModelConfig: ModelConfig = {
@@ -233,6 +233,27 @@ function mockStreamingCommand(
   );
 }
 
+// Unit tests exercise the tool directly — no approval host is wired.
+const BASH_PLATFORM_OPTIONS = {
+  workspacePath: '/workspace',
+  config: { 'texra.toolUse.requireBashApproval': false },
+} as const;
+
+/** The execution and child-stream ids a background launch reports in its output. */
+function launchedIds(result: ToolResult): {
+  output: string;
+  executionId: string | undefined;
+  childStreamId: StreamTabId | undefined;
+} {
+  const output = String(result.output ?? '');
+  return {
+    output,
+    executionId: /Execution ID: (\S+)/.exec(output)?.[1],
+    childStreamId: /Stream tab: (\S+)/.exec(output)?.[1] as
+      StreamTabId | undefined,
+  };
+}
+
 function launchBackgroundBash(
   parentStreamId: StreamTabId,
 ): Promise<ToolResult> {
@@ -250,11 +271,7 @@ function launchBackgroundBash(
 }
 
 describe('BashTool', () => {
-  setupPlatform({
-    workspacePath: '/workspace',
-    // Unit tests exercise the tool directly — no approval host is wired.
-    config: { 'texra.toolUse.requireBashApproval': false },
-  });
+  setupPlatform(BASH_PLATFORM_OPTIONS);
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -620,12 +637,9 @@ describe('BashTool', () => {
       recorded.detach();
     }
 
-    // sendFollowUp is overloaded (string | FollowUpQueueInput); bash.ts always
-    // calls the object form, but Parameters<> on an overloaded function type
-    // resolves to the last signature, so assert the concrete shape here.
-    const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1] as unknown as
-      { text: string } | undefined;
-    const deliveredText = followUpArg?.text;
+    const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
+    const deliveredText =
+      typeof followUpArg === 'string' ? followUpArg : followUpArg?.text;
     assert.ok(
       typeof deliveredText === 'string' && deliveredText.includes(headMarker),
       'Delivered follow-up should retain the first fatal error (head)',
@@ -657,13 +671,9 @@ describe('BashTool', () => {
 
     const parentStreamId = 'bash-tool-bg-wake-parent' as StreamTabId;
     const tryResumeStream = vi.fn().mockResolvedValue(true);
-    await installPlatform(
-      {
-        workspacePath: '/workspace',
-        config: { 'texra.toolUse.requireBashApproval': false },
-      },
-      { agentResume: { tryResumeStream } },
-    );
+    await installPlatform(BASH_PLATFORM_OPTIONS, {
+      agentResume: { tryResumeStream },
+    });
     seedStreamStatusForTest(
       defaultSession().status,
       parentStreamId,
@@ -722,13 +732,9 @@ describe('BashTool', () => {
       });
       return true;
     });
-    await installPlatform(
-      {
-        workspacePath: '/workspace',
-        config: { 'texra.toolUse.requireBashApproval': false },
-      },
-      { agentResume: { tryResumeStream } },
-    );
+    await installPlatform(BASH_PLATFORM_OPTIONS, {
+      agentResume: { tryResumeStream },
+    });
     seedStreamStatusForTest(
       defaultSession().status,
       parentStreamId,
@@ -740,14 +746,12 @@ describe('BashTool', () => {
     try {
       const launchResult = await launchBackgroundBash(parentStreamId);
       assert.equal(launchResult.status, 'executed');
-      const executionIdMatch = /Execution ID: (\S+)/.exec(
-        String(launchResult.output ?? ''),
-      );
+      const launched = launchedIds(launchResult);
       assert.ok(
-        executionIdMatch,
+        launched.executionId,
         'Launch output should report an execution id',
       );
-      executionId = executionIdMatch![1]!;
+      executionId = launched.executionId;
 
       await vi.waitFor(() => {
         assert.ok(
@@ -779,17 +783,12 @@ describe('BashTool', () => {
           resolveCommand = resolve;
         }),
     );
-    await installPlatform({
-      workspacePath: '/workspace',
-      config: { 'texra.toolUse.requireBashApproval': false },
-    });
+    await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
     const recorded = recordSessionEvents(defaultSession().events);
 
     const launchResult = await launchBackgroundBash(parentStreamId);
-    const executionId = /Execution ID: (\S+)/.exec(
-      String(launchResult.output ?? ''),
-    )?.[1];
+    const { executionId } = launchedIds(launchResult);
     assert.ok(executionId, JSON.stringify(launchResult));
     const store = getExecutionStore(executionId);
     vi.spyOn(store, 'writeResultMeta').mockRejectedValueOnce(
@@ -828,20 +827,14 @@ describe('BashTool', () => {
     vi.spyOn(subagentResults, 'formatBashDelivery').mockImplementation(() => {
       throw new Error('delivery formatting blew up');
     });
-    await installPlatform({
-      workspacePath: '/workspace',
-      config: { 'texra.toolUse.requireBashApproval': false },
-    });
+    await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-completion-path-throw' as StreamTabId;
     const recorded = recordSessionEvents(defaultSession().events);
 
     const launchResult = await launchBackgroundBash(parentStreamId);
-    const launchOutput = String(launchResult.output ?? '');
-    const executionId = /Execution ID: (\S+)/.exec(launchOutput)?.[1];
-    const childStreamId = /Stream tab: (\S+)/.exec(launchOutput)?.[1] as
-      StreamTabId | undefined;
-    assert.ok(executionId, launchOutput);
-    assert.ok(childStreamId, launchOutput);
+    const { output, executionId, childStreamId } = launchedIds(launchResult);
+    assert.ok(executionId, output);
+    assert.ok(childStreamId, output);
 
     resolveCommand?.({
       success: true,
@@ -872,20 +865,14 @@ describe('BashTool', () => {
           resolveCommand = resolve;
         }),
     );
-    await installPlatform({
-      workspacePath: '/workspace',
-      config: { 'texra.toolUse.requireBashApproval': false },
-    });
+    await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-killed-background' as StreamTabId;
     const recorded = recordSessionEvents(defaultSession().events);
 
     const launchResult = await launchBackgroundBash(parentStreamId);
-    const launchOutput = String(launchResult.output ?? '');
-    const executionId = /Execution ID: (\S+)/.exec(launchOutput)?.[1];
-    const childStreamId = /Stream tab: (\S+)/.exec(launchOutput)?.[1] as
-      StreamTabId | undefined;
-    assert.ok(executionId, launchOutput);
-    assert.ok(childStreamId, launchOutput);
+    const { output, executionId, childStreamId } = launchedIds(launchResult);
+    assert.ok(executionId, output);
+    assert.ok(childStreamId, output);
 
     // The user stop lands CANCELLED on the stream phase; only afterwards does
     // the killed process report its non-zero exit.

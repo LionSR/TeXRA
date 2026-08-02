@@ -68,7 +68,17 @@ type ControllerOptions = ConstructorParameters<
 >[0];
 type Fixture = Awaited<ReturnType<typeof createFixture>>;
 
-async function createFixture(overrides: Partial<ControllerOptions> = {}) {
+/** Prompt answers the fixture's recording `prompt` port replies with. */
+type FixtureOverrides = Partial<ControllerOptions> & {
+  promptInput?: string;
+  confirmResult?: boolean;
+};
+
+async function createFixture({
+  promptInput,
+  confirmResult = true,
+  ...overrides
+}: FixtureOverrides = {}) {
   const globalState =
     (overrides.globalState as FakeStateStore | undefined) ??
     new FakeStateStore();
@@ -117,10 +127,10 @@ async function createFixture(overrides: Partial<ControllerOptions> = {}) {
       },
     },
     prompt: {
-      input: async () => undefined,
+      input: async () => promptInput,
       confirm: async (message) => {
         confirms.push(message);
-        return true;
+        return confirmResult;
       },
     },
     externalOpener: {
@@ -193,17 +203,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     const secretName = apiKeySecretName('openai');
     const secrets = new FakeSecrets({ [secretName]: 'sk-test' });
     const deleteSpy = vi.spyOn(secrets, 'delete');
-    const confirms: string[] = [];
-    const fixture = await createFixture({
-      secrets,
-      prompt: {
-        input: async () => undefined,
-        confirm: async (message) => {
-          confirms.push(message);
-          return false;
-        },
-      },
-    });
+    const fixture = await createFixture({ secrets, confirmResult: false });
 
     await assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
       {
@@ -212,7 +212,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       },
     );
 
-    expect(confirms).toEqual([
+    expect(fixture.confirms).toEqual([
       'Remove the OpenAI API key? This cannot be undone.',
     ]);
     expect(deleteSpy).not.toHaveBeenCalled();
@@ -253,16 +253,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     const secretName = apiKeySecretName('openai');
     const secrets = new FakeSecrets({ [secretName]: 'old-key' });
     const deleteSpy = vi.spyOn(secrets, 'delete');
-    const confirms: string[] = [];
     const fixture = await createFixture({
       secrets,
-      prompt: {
-        input: async () => '  replacement  ',
-        confirm: async (message) => {
-          confirms.push(message);
-          return true;
-        },
-      },
+      promptInput: '  replacement  ',
     });
 
     await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
@@ -280,7 +273,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     );
     expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
     expect(await secrets.get(secretName)).toBeUndefined();
-    expect(confirms).toEqual([
+    expect(fixture.confirms).toEqual([
       'Remove the OpenAI API key? This cannot be undone.',
     ]);
   });

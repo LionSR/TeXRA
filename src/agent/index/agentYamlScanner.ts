@@ -191,9 +191,6 @@ function scanYaml(
   definitions: Map<string, ParsedAgentYaml>,
 ): AgentEntry | null {
   try {
-    const validated = entry.definition;
-
-    // Extract lightweight metadata
     const settingsBlock = inheritedDefinitionBlock(
       entry,
       definitions,
@@ -211,7 +208,6 @@ function scanYaml(
 
     const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
 
-    // Determine category from source or explicit setting
     const rawCategory = rawSettings.agentCategory as string | undefined;
     const category =
       source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
@@ -240,7 +236,7 @@ function scanYaml(
       source,
       path: entry.path,
       category,
-      description: validated.description,
+      description: entry.definition.description,
       tools: tools?.length ? tools : undefined,
       defaultOutputFiles: defaultOutputFiles?.length
         ? defaultOutputFiles

@@ -36,7 +36,7 @@ const COMPILE_FAILURE: CompileFailure = {
   logRelativePath: 'paper.log',
 };
 
-function workflowRunDetailLines(
+function detailLines(
   facts: Parameters<typeof selectWorkflowRunDetailLines>[0],
   maxRows = Number.MAX_SAFE_INTEGER,
 ) {
@@ -47,9 +47,9 @@ afterEach(() => {
   resetCliState();
 });
 
-describe('workflowRunDetailLines', () => {
+describe('selectWorkflowRunDetailLines', () => {
   it('joins lifecycle, planned rounds, generated files, and warnings', () => {
-    const lines = workflowRunDetailLines({
+    const lines = detailLines({
       taskGroups: [
         {
           id: 'run',
@@ -112,7 +112,7 @@ describe('workflowRunDetailLines', () => {
   });
 
   it('renders a normalized rN round and sanitizes terminal controls', () => {
-    const lines = workflowRunDetailLines({
+    const lines = detailLines({
       taskGroups: projectTaskGroupsFromStreamLog([
         {
           seqNo: 1,
@@ -136,7 +136,7 @@ describe('workflowRunDetailLines', () => {
   });
 
   it('shows a round-qualified alert when only one detail row fits', () => {
-    const [line] = workflowRunDetailLines(
+    const [line] = detailLines(
       {
         taskGroups: [
           {
@@ -169,7 +169,7 @@ describe('workflowRunDetailLines', () => {
     ['round without an index', 'round'],
     ['session stage', 'session'],
   ] as const)('keeps a %s lifecycle group visible', (_case, kind) => {
-    const lines = workflowRunDetailLines({
+    const lines = detailLines({
       taskGroups: projectTaskGroupsFromStreamLog([
         {
           seqNo: 1,
@@ -240,7 +240,7 @@ describe('workflowRunDetailLines', () => {
   });
 
   it('keeps warning context ahead of generated files and future plans', () => {
-    const lines = workflowRunDetailLines(
+    const lines = detailLines(
       {
         taskGroups: [
           {

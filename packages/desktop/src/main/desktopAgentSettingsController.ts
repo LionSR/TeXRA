@@ -1,6 +1,5 @@
 import path from 'node:path';
 
-// Local imports
 import { getAgent } from '@agent/index';
 import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import type {

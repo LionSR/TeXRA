@@ -51,9 +51,6 @@ export class MainViewProvider
   public static readonly viewType = 'texra.mainView';
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: BundledViewContentProvider;
-  private fileWatcher: vscode.FileSystemWatcher | undefined;
-  private agentWatcher: vscode.Disposable | undefined;
-
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
 
@@ -254,19 +251,19 @@ export class MainViewProvider
     );
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
-    this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
-    this.fileWatcher.onDidCreate(this.refreshFiles.bind(this));
-    this.fileWatcher.onDidDelete(this.refreshFiles.bind(this));
-    this.context.subscriptions.push(this.fileWatcher);
+    const fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
+    fileWatcher.onDidCreate(this.refreshFiles.bind(this));
+    fileWatcher.onDidDelete(this.refreshFiles.bind(this));
+    this.context.subscriptions.push(fileWatcher);
   }
 
   private setupAgentWatcher() {
-    this.agentWatcher = agentDirectories.watchAgentDirectories({
-      pattern: '**/*.yaml',
-      onEvent: () => this.debouncedRefreshAgentOptions(),
-    });
-
-    this.context.subscriptions.push(this.agentWatcher);
+    this.context.subscriptions.push(
+      agentDirectories.watchAgentDirectories({
+        pattern: '**/*.yaml',
+        onEvent: () => this.debouncedRefreshAgentOptions(),
+      }),
+    );
   }
 
   private async refreshFiles() {

@@ -44,10 +44,9 @@ function createDeferredResumability(): DeferredResumability {
 }
 
 /**
- * `SessionHandle.repairWaitingIfResumable` is the re-homed lazy WAITING repair
- * that used to be a private helper in the VS Code `texra.sendFollowUp` command
- * (stage 7 item 1). It probes the same `deriveResumability` the startup pass
- * uses, so a follow-up for a resumable execution reaches the resume queue
+ * `SessionHandle.repairWaitingIfResumable` is the lazy WAITING repair every
+ * host follow-up path runs. It probes the same `deriveResumability` the startup
+ * pass uses, so a follow-up for a resumable execution reaches the resume queue
  * rather than `no_session`.
  */
 describe('SessionHandle.repairWaitingIfResumable', () => {
@@ -58,21 +57,25 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
   let streamId: StreamTabId;
   let executionId: ExecutionId;
 
+  function ownStream(owner: ExecutionId): void {
+    session.snapshots.setRunDescriptor(
+      buildRunDescriptor({
+        streamId,
+        executionId: owner,
+        agent: 'assistant',
+        category: AgentCategory.ToolUse,
+        kind: 'agent',
+      }),
+    );
+  }
+
   beforeEach(() => {
     const n = caseCounter++;
     resumabilityMocks.deriveResumability.mockReset();
     session = createTestSession();
     streamId = `stream:waiting-repair-${n}` as StreamTabId;
     executionId = `b${n.toString(16).padStart(5, '0')}` as ExecutionId;
-    session.snapshots.setRunDescriptor(
-      buildRunDescriptor({
-        streamId,
-        executionId,
-        agent: 'assistant',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    ownStream(executionId);
   });
 
   function seedCancelled(): void {
@@ -268,15 +271,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
     const repair = session.repairWaitingIfResumable(streamId);
     const replacementExecutionId = `c${executionId.slice(1)}` as ExecutionId;
-    session.snapshots.setRunDescriptor(
-      buildRunDescriptor({
-        streamId,
-        executionId: replacementExecutionId,
-        agent: 'assistant',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    ownStream(replacementExecutionId);
     deferred.resolve();
 
     await expect(repair).resolves.toBe(false);
@@ -299,15 +294,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
     const original = session.repairWaitingIfResumable(streamId);
     const replacementExecutionId = `d${executionId.slice(1)}` as ExecutionId;
-    session.snapshots.setRunDescriptor(
-      buildRunDescriptor({
-        streamId,
-        executionId: replacementExecutionId,
-        agent: 'assistant',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    ownStream(replacementExecutionId);
     const replacement = session.repairWaitingIfResumable(streamId);
 
     expect(resumabilityMocks.deriveResumability).toHaveBeenNthCalledWith(

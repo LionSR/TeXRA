@@ -60,7 +60,7 @@ export function defineInlineAgents(
   definitions: readonly unknown[],
 ): AgentEntry[] {
   // Validate every definition first — the module-level map must never contain
-  // orphaned entries from a partially-failed batch (Fix #2/#4).
+  // orphaned entries from a partially-failed batch.
   const validated = definitions.map((definition) =>
     normalizeInlineAgent(definition),
   );
@@ -75,7 +75,7 @@ export function defineInlineAgents(
  *
  * Each is a fresh copy: a published entry is reachable through `getAgent`, and
  * a consumer that mutates its `tools`/`defaultOutputFiles` array must not
- * corrupt the stored definition those arrays came from (Fix #1/#8).
+ * corrupt the stored definition those arrays came from.
  */
 export function inlineAgentEntries(): AgentEntry[] {
   return [...inlineAgents.values()].map((inline) =>
@@ -85,7 +85,7 @@ export function inlineAgentEntries(): AgentEntry[] {
 
 /**
  * Remove every registered inline definition so a host or test lifecycle can
- * start from a clean slate (Fix #5).
+ * start from a clean slate.
  */
 export function clearInlineAgentDefinitions(): void {
   inlineAgents.clear();
@@ -149,7 +149,7 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
   const defaultOutputFiles = settings.defaultOutputFiles;
 
   // Validate prompts against their finalized schema at registration time
-  // so an embedder discovers invalid prompts immediately (Fix #6).
+  // so an embedder discovers invalid prompts immediately.
   try {
     AgentPromptSchema.parse(parsed.prompts);
   } catch (error) {

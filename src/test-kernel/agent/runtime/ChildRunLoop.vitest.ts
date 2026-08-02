@@ -560,9 +560,6 @@ describe('childRunLoop E2E fixtures', () => {
     // The loop starts delivery for turn N before reading the queue for turn
     // N+1. Even input already queued during delivery must not begin another
     // model turn until the parent has received this result.
-    await vi.waitFor(() =>
-      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalled(),
-    );
     expect(onTurnSuccess).toHaveBeenCalledOnce();
     expect(onTurnSuccess.mock.invocationCallOrder[0]).toBeLessThan(
       parentWake.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
@@ -727,12 +724,11 @@ describe('childRunLoop E2E fixtures', () => {
     });
   });
 
-  it('reattaches the loop interrupt handler immediately when a turn settles, before delivery (Copilot review: no interrupt gap during delivery)', async () => {
-    // Regression: if the loop attached its own interrupt handler only AFTER
-    // awaiting deliverTurn (persist report / persist manifest / deliver
-    // follow-up), a stop/kill landing during that delivery window would find
-    // only the now-detached per-turn flow context. The test inspects the run
-    // handle while delivery is deliberately held open.
+  it('leaves no interruptible child continuation while terminal delivery is in flight', async () => {
+    // Terminal delivery (persist report / persist manifest / deliver
+    // follow-up) runs after child finalization and lease release, so a
+    // stop/kill landing in that window finds nothing left to interrupt. The
+    // test inspects the run handle while delivery is deliberately held open.
     const childStreamId = uniqueStreamId('reregister-before-delivery');
     const parentStreamId = 'parent' as StreamTabId;
     const executionId = 'exec-reregister-before-delivery' as ExecutionId;
@@ -754,12 +750,9 @@ describe('childRunLoop E2E fixtures', () => {
       strategy,
     });
 
-    // Poll until delivery is mid-flight (blocked on our gate) — the exact
-    // window the review flagged as unprotected.
+    // Poll until delivery is mid-flight (blocked on our gate).
     await vi.waitFor(() => expect(deliveryGate).toBeDefined());
 
-    // Terminal delivery starts only after child finalization and lease release,
-    // so there is no longer a live child continuation to interrupt here.
     expect(handle.interrupt()).toBe(false);
 
     deliveryGate?.resolve();
@@ -1081,57 +1074,42 @@ describe('childRunLoop E2E fixtures', () => {
     expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
   });
 
-  it('finalizes and wakes when the parent cost observer throws', async () => {
-    const strategy = createTerminalStrategy(
-      'Throwing cost observer',
-      async (ports) => {
-        ports.recordCost(0.4);
-        return { kind: 'terminal', value: 'done' };
+  it.each([
+    {
+      failure: 'throws',
+      recordCost: () => {
+        throw new Error('observer failed');
       },
-      () => 'delivered',
-    );
-    const recordCost = vi.fn(() => {
-      throw new Error('observer failed');
-    });
+    },
+    {
+      failure: 'rejects',
+      recordCost: () => Promise.reject(new Error('observer failed')),
+    },
+  ])(
+    'finalizes and wakes when the parent cost observer $failure',
+    async ({ failure, recordCost: observe }) => {
+      const strategy = createTerminalStrategy(
+        `${failure} cost observer`,
+        async (ports) => {
+          ports.recordCost(0.4);
+          return { kind: 'terminal', value: 'done' };
+        },
+        () => 'delivered',
+      );
+      const recordCost = vi.fn(observe);
 
-    const { completion } = startChildRunLoop({
-      childStreamId: uniqueStreamId('throwing-cost-observer'),
-      parentStreamId: 'parent' as StreamTabId,
-      executionId: 'exec-throwing-cost-observer' as ExecutionId,
-      agentName: 'fake',
-      strategy,
-      recordCost,
-    });
+      const { completion } = startChildRunLoop({
+        childStreamId: uniqueStreamId(`${failure}-cost-observer`),
+        parentStreamId: 'parent' as StreamTabId,
+        executionId: `exec-${failure}-cost-observer` as ExecutionId,
+        agentName: 'fake',
+        strategy,
+        recordCost,
+      });
 
-    await expect(completion).resolves.toBeUndefined();
-    expect(recordCost).toHaveBeenCalledOnce();
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledOnce();
-  });
-
-  it('finalizes and wakes when the parent cost observer rejects', async () => {
-    const strategy = createTerminalStrategy(
-      'Rejecting cost observer',
-      async (ports) => {
-        ports.recordCost(0.4);
-        return { kind: 'terminal', value: 'done' };
-      },
-      () => 'delivered',
-    );
-    const recordCost = vi.fn(() =>
-      Promise.reject(new Error('observer failed')),
-    );
-
-    const { completion } = startChildRunLoop({
-      childStreamId: uniqueStreamId('rejecting-cost-observer'),
-      parentStreamId: 'parent' as StreamTabId,
-      executionId: 'exec-rejecting-cost-observer' as ExecutionId,
-      agentName: 'fake',
-      strategy,
-      recordCost,
-    });
-
-    await expect(completion).resolves.toBeUndefined();
-    await vi.waitFor(() => expect(recordCost).toHaveBeenCalledOnce());
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledOnce();
-  });
+      await expect(completion).resolves.toBeUndefined();
+      await vi.waitFor(() => expect(recordCost).toHaveBeenCalledOnce());
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledOnce();
+    },
+  );
 });

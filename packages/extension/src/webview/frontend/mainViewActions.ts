@@ -118,37 +118,29 @@ export function announce(message: string): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Validates that a selection exists in options.
- * Returns current value if found, otherwise falls back to first available option.
+ * Resolve the model selection against the current options: keep the current
+ * value when it is present and enabled, otherwise prefer the first enabled
+ * option (models with a missing API key are disabled), then the current
+ * value even though it is disabled, then the first option.
  */
 function validateSelection<T extends { value: string; disabled?: boolean }>(
   options: T[],
   currentValue: string,
-  preferEnabled: boolean,
 ): string {
   const current = options.find((opt) => opt.value === currentValue);
-  if (current && (!preferEnabled || !current.disabled)) {
+  if (current && !current.disabled) {
     return currentValue;
   }
 
-  // Fallback: prefer enabled options (for models with missing API keys)
-  if (preferEnabled) {
-    const firstEnabled = options.find((opt) => !opt.disabled);
-    if (firstEnabled) return firstEnabled.value;
-  }
+  const firstEnabled = options.find((opt) => !opt.disabled);
+  if (firstEnabled) return firstEnabled.value;
   if (current) return currentValue;
   return options[0]?.value ?? '';
 }
 
 export function refreshModelSelectionForActiveSession(): void {
   const options = getModelOptionsForSession(sessionType$.get());
-  model$.set(
-    validateSelection(
-      options,
-      model$.get(),
-      true, // preferEnabled: skip disabled models
-    ),
-  );
+  model$.set(validateSelection(options, model$.get()));
 }
 
 export function enterToolUseSession(): void {

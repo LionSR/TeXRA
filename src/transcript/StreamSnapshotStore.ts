@@ -8,8 +8,7 @@
  * mutators below. Both paths persist the same field-scoped files, including the
  * `workPlan.json` giving todos/plan a durable home.
  *
- * It consolidates the accumulation logic previously split across the extension's
- * `OutputFilesManager` / `UsageStatsManager` / `StreamMetaManager`, talking to
+ * It owns the accumulation of output files, usage, and stream meta, talking to
  * `KVStore` directly via the shared `streamDataDir()` layout. Writes are
  * serialized per (stream, category) so concurrent deltas never interleave.
  *
@@ -86,8 +85,8 @@ import {
 
 const CHANNEL = 'StreamSnapshotStore';
 
-/** Bounded fan-out for seeding many streams' sidecars (mirrors the retired
- *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
+/** Bounded fan-out for seeding many streams' sidecars, so startup does not
+ *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
 
 /**
@@ -220,10 +219,7 @@ interface OverlayPatches {
  * supersedes everything recorded before it — it drops the earlier round
  * patch outright, matching a disk write of `{}` — while a later update
  * layers its round patch on top and preserves whichever reset flag is
- * already recorded. Without this, `clearMissingOutputs` staying on the
- * plain deferred `mutate()` path let it replay out of order relative to an
- * eagerly-overlaid `updateMissingOutputs`, silently dropping the newer
- * update or resurrecting rounds a clear was supposed to erase.
+ * already recorded.
  */
 function mergeMissingOutputsOverlay(
   existing: RoundOverlay<string> | undefined,
@@ -272,22 +268,15 @@ function descriptorFromConfig(
 
 /**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
- * (`records`) instead of 17 independently hand-synced parallel maps/sets (9
- * accumulator fields, `seeded`/`seedChain` seeding bookkeeping, 5 overlay
- * fields, and the cached `KVStore` handle). Because every field for a stream
- * lives on the same object, dropping a stream's memory is one
- * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION.
- * The old design needed a hand-maintained `perStreamStores()` list (#7892)
- * to keep `evict()`/`evictAll()`/`allKnownStreams()` from drifting apart —
- * and that list had already drifted once (`allKnownStreams()` omitted
- * `metaOverlays`) before #7892 unified it. A single record makes that whole
- * drift class structurally impossible: there is no second list to omit a
- * field from.
+ * (`records`): the accumulators, the `seeded`/`seedChain` seeding bookkeeping,
+ * the overlay patches, and the cached `KVStore` handles. Because every field
+ * for a stream lives on the same object, dropping a stream's memory is one
+ * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
+ * so `evict()`/`evictAll()` cannot drift from the field list.
  *
  * `streamVersions` (must survive eviction to keep guarding in-flight seed
  * races) and `writeMutexes` (keyed by the compound `${stream}::${key}`, not
- * a bare stream id) stay as their own maps on the store — the same two
- * exclusions #7892 already carved out of `perStreamStores()`.
+ * a bare stream id) stay as their own maps on the store.
  */
 interface StreamRecord {
   // -- Accumulated durable state (mirrors on-disk StreamData) --------------
@@ -640,7 +629,7 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Mutators (mirror the consolidated managers)
+  // Mutators
   // ==========================================================================
 
   /**
@@ -730,10 +719,9 @@ export class StreamSnapshotStore {
    * (used for effectively-empty patches). `applyStreamData`'s post-seed
    * reconciliation then replays the overlay on top of the freshly-read disk
    * state and persists it there, so an eager write racing ahead of its own
-   * seed is never clobbered by that seed's raw disk read. This is the
-   * guarantee `addOutputFiles`/`addUsage` used to hand-roll individually;
-   * every round/usage mutator now shares it here, so a future one inherits
-   * it by construction instead of needing its own bespoke overlay block.
+   * seed is never clobbered by that seed's raw disk read. Every round/usage
+   * mutator goes through here, so a new one inherits that guarantee instead
+   * of needing its own overlay block.
    */
   private mutateWithOverlay<T, K extends keyof OverlayPatches>(
     stream: StreamTabId,
@@ -849,8 +837,8 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Accumulate usage per run (mirrors UsageStatsManager.setRunUsage). Returns
-   * the accumulated value for the run so callers can forward it to the UI.
+   * Accumulate usage per run. Returns the accumulated value for the run so
+   * callers can forward it to the UI.
    */
   addUsage(
     stream: StreamTabId,
@@ -905,7 +893,7 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Read accessors over in-memory accumulated state (replace manager getters)
+  // Read accessors over in-memory accumulated state
   // ==========================================================================
 
   // Deep-enough copies (fresh record, fresh per-round array): a caller that
@@ -950,9 +938,9 @@ export class StreamSnapshotStore {
   /**
    * Clear the missing-outputs marker for a stream (memory + disk). Goes
    * through the same `mutateWithOverlay` shape as `updateMissingOutputs` (via
-   * the shared `reset`-aware overlay) rather than the plain deferred
-   * `mutate()` path, so a clear and an update racing on the same unseeded
-   * stream replay in call order instead of the clear always landing last.
+   * the shared `reset`-aware overlay), so a clear and an update racing on the
+   * same unseeded stream replay in call order instead of the clear always
+   * landing last.
    *
    * `existed` checks `missingOutputs` content specifically, not merely
    * whether the stream has a record: every record defaults `missingOutputs`
@@ -984,7 +972,7 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Lifecycle (replace manager evict/evictAll)
+  // Lifecycle
   // ==========================================================================
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
@@ -1494,7 +1482,7 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Meta accessors, setters, and queries (replace StreamMetaManager)
+  // Meta accessors, setters, and queries
   // ==========================================================================
 
   /**
@@ -2040,10 +2028,9 @@ export class StreamSnapshotStore {
     // Seeded with `data.legacyKeys` unconditionally (unlike the overlay
     // additions below, which are gated on that overlay actually being
     // present): a legacy key with no corresponding overlay data still gets
-    // an empty-object write in `writeMergedSidecars`. That's a broader net
-    // than the old per-field `has()` guards, but harmless — disk readers
-    // (`parsePersistedRoundIndexed` and friends) treat an absent sidecar and
-    // an empty-object one identically.
+    // an empty-object write in `writeMergedSidecars`, which is harmless —
+    // disk readers (`parsePersistedRoundIndexed` and friends) treat an absent
+    // sidecar and an empty-object one identically.
     const sidecarsToWrite = new Set<string>(data.legacyKeys);
 
     record.outputFiles = data.outputFiles;
@@ -2170,7 +2157,7 @@ export class StreamSnapshotStore {
   /**
    * One-time backfill for streams with an executionId but no description in
    * meta.json: read it from ExecutionMeta and persist so future loads skip the
-   * extra I/O. (Ported from StreamMetaManager.)
+   * extra I/O.
    */
   private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
     for (const [streamId, record] of [...this.records]) {

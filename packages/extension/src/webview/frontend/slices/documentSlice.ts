@@ -150,7 +150,7 @@ export const documentHandlers = {
       return;
     }
 
-    // Base/edited single-slot fields go through fileOptions like before.
+    // Base/edited are single-slot fields: they select out of fileOptions.
     const key = SINGLE_FILE_TYPE_TO_KEY[fileType];
     if (!key) return;
     const sf = singleFiles$.get();

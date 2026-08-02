@@ -123,7 +123,7 @@ export class SupabaseClient {
     this.config = { url, publicKey };
     this.instance = createClient(url, publicKey, {
       auth: {
-        persistSession: false, // VS Code manages session storage
+        persistSession: false, // The host's secret storage owns the session
         autoRefreshToken: false, // Manual refresh via auth provider
         // PKCE: browser OAuth returns a one-time ?code= (not tokens) to the
         // callback. The code_verifier stays in this client and is consumed by
