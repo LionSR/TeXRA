@@ -67,6 +67,7 @@ import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
+  EXECUTION_STREAM_ID_SOURCE,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -115,6 +116,32 @@ function logRow(
     messageType: messageType as never,
     ...fields,
   };
+}
+
+async function persistRows(
+  executionId: ExecutionId,
+  rowsByStream: ReadonlyMap<
+    StreamTabId,
+    readonly Parameters<StreamLogStore['append']>[1][]
+  >,
+): Promise<void> {
+  const logs = await StreamLogStore.open();
+  for (const [streamId, rows] of rowsByStream) {
+    const writer = logs.acquireWriter(streamId, executionId);
+    try {
+      for (const row of rows) writer.appendSettled(row);
+    } finally {
+      writer.close();
+    }
+  }
+  await logs.flush();
+  for (const streamId of rowsByStream.keys()) logs.requestEviction(streamId);
+
+  const reopened = await StreamLogStore.openReadOnly();
+  for (const streamId of rowsByStream.keys()) {
+    await reopened.ensureLoaded(streamId);
+    expect(reopened.get(streamId)).toBeDefined();
+  }
 }
 
 /** Write the sidecar fixture: transcript rows + snapshot meta/todos. */
@@ -739,6 +766,7 @@ describe('completedRunArchive facade', () => {
     expect(result).toEqual({
       source: 'streamLog',
       streamId: fullStream,
+      associatedStreamIds: [emptyStream],
       conversation: [
         { role: 'user', content: 'Real question' },
         {
@@ -747,6 +775,181 @@ describe('completedRunArchive facade', () => {
         },
       ],
     });
+  });
+
+  it('does not merge a disjoint exact-execution sidecar with missing parent metadata', async () => {
+    const executionId = '0888ba0888ba' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888ba0888ba' as StreamTabId;
+    const ambiguousChild = 'zOrchestrator@new#0888ba0888ba' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      ambiguousChild,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          canonical,
+          [
+            {
+              ...logRow(MESSAGE_TYPES.USER_MESSAGE, {
+                text: 'Canonical question',
+              }),
+              timestamp: 9000,
+            },
+          ],
+        ],
+        [
+          ambiguousChild,
+          [
+            {
+              ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+                text: 'Unproven child answer',
+              }),
+              // A reversed clock cannot order a disconnected sidecar.
+              timestamp: 1000,
+            },
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      candidateStreamIds: [canonical, ambiguousChild],
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain('Source: none');
+    expect(endpoint.output).toContain('Stream: none');
+    expect(endpoint.output).toContain(
+      `Ambiguous candidate streams: ${canonical}, ${ambiguousChild}`,
+    );
+    expect(endpoint.output).not.toContain('Canonical question');
+    expect(endpoint.output).not.toContain('Unproven child answer');
+  });
+
+  it('uses legacy KV without hiding ambiguous exact-execution candidates', async () => {
+    const executionId = '0888b50888b5' as ExecutionId;
+    const first = 'aOrchestrator@old#0888b50888b5' as StreamTabId;
+    const second = 'zOrchestrator@new#0888b50888b5' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          first,
+          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First sidecar' })],
+        ],
+        [
+          second,
+          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Second sidecar' })],
+        ],
+      ]),
+    );
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'user', content: 'Legacy canonical conversation' },
+    ]);
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'legacyKV',
+      candidateStreamIds: [first, second],
+      conversation: [
+        { role: 'user', content: 'Legacy canonical conversation' },
+      ],
+    });
+  });
+
+  it('reports conflicting copied text, role, and status instead of silently deduplicating', async () => {
+    const executionId = '0888bd0888bd' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888bd0888bd' as StreamTabId;
+    const conflicting = 'zOrchestrator@new#0888bd0888bd' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(conflicting, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const copiedText = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Canonical answer' }),
+      id: 'copied-text',
+    };
+    const copiedRole = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, {
+        text: 'Role-sensitive prompt',
+        data: { archivedRole: 'user' },
+      }),
+      id: 'copied-role',
+    };
+    const copiedStatus = {
+      ...logRow(MESSAGE_TYPES.TOOL_USE, {
+        data: {
+          toolName: 'read_file',
+          input: { path: 'proof.tex' },
+          output: 'Proof text',
+          status: 'completed',
+        },
+      }),
+      id: 'copied-status',
+    };
+    const copiedTimestamp = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Timed answer' }),
+      id: 'copied-timestamp',
+      timestamp: 1000,
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [copiedText, copiedRole, copiedStatus, copiedTimestamp]],
+        [
+          conflicting,
+          [
+            { ...copiedText, text: 'Conflicting answer' },
+            { ...copiedRole, data: { archivedRole: 'system' } },
+            {
+              ...copiedStatus,
+              data: {
+                toolName: 'read_file',
+                input: { path: 'proof.tex' },
+                output: 'Proof text',
+                status: 'failed',
+              },
+            },
+            { ...copiedTimestamp, timestamp: 2000 },
+          ],
+        ],
+      ]),
+    );
+
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
+      source: 'none',
+      conversation: null,
+      candidateStreamIds: [canonical, conflicting],
+      conflicts: [
+        { rowId: 'copied-role', streamIds: [canonical, conflicting] },
+        { rowId: 'copied-status', streamIds: [canonical, conflicting] },
+        { rowId: 'copied-text', streamIds: [canonical, conflicting] },
+        { rowId: 'copied-timestamp', streamIds: [canonical, conflicting] },
+      ],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain(
+      'Conflicting row IDs: copied-role, copied-status, copied-text, copied-timestamp',
+    );
   });
 
   it('merges matched roots, excluding children and only deduplicating row identity', async () => {
@@ -799,8 +1002,8 @@ describe('completedRunArchive facade', () => {
     const result = await readCompletedRunConversation(executionId);
     expect(result).toEqual({
       source: 'streamLog',
-      streamId: firstRoot,
       streamIds: [firstRoot, secondRoot],
+      associatedStreamIds: [child],
       conversation: [
         { role: 'user', content: 'First question' },
         {
@@ -851,7 +1054,6 @@ describe('completedRunArchive facade', () => {
 
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       source: 'streamLog',
-      streamId: resumedRoot,
       streamIds: [resumedRoot, firstRoot],
       conversation: [
         { role: 'user', content: 'Copied question' },
@@ -861,6 +1063,732 @@ describe('completedRunArchive facade', () => {
         },
       ],
     });
+  });
+
+  it('does not choose an overlap component when another exact candidate is disconnected', async () => {
+    const executionId = '0888be0888be' as ExecutionId;
+    const streams = ['a', 'b', 'c', 'd', 'z'].map(
+      (name) => `orchestrator@${name}#0888be0888be` as StreamTabId,
+    );
+    const [streamA, streamB, streamC, streamD, disconnected] = streams;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of streams) {
+      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    }
+    await snapshots.flush();
+
+    const rows = ['A', 'B', 'C', 'D', 'E'].map((text) => ({
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text }),
+      id: `transitive-${text.toLowerCase()}`,
+    }));
+    const disconnectedRow = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Disconnected' }),
+      timestamp: 1,
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [streamA, [rows[0], rows[1]]],
+        [streamB, [rows[1], rows[2]]],
+        [streamC, [rows[2], rows[3]]],
+        [streamD, [rows[3], rows[4]]],
+        [disconnected, [disconnectedRow]],
+      ]),
+    );
+
+    const archived = await readCompletedRunConversation(executionId);
+    expect(archived).toEqual({
+      source: 'none',
+      candidateStreamIds: streams,
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 200,
+      limit: 2,
+    });
+    expect(endpoint.output).toContain(
+      `Ambiguous candidate streams: ${streams.join(', ')}`,
+    );
+    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
+    expect(endpoint.output).not.toContain('Merged streams:');
+    expect(endpoint.output).not.toContain('Disconnected');
+  });
+
+  it('reports overlap conflicts without selecting an unproven component', async () => {
+    const executionId = '0888b60888b6' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b60888b6' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b60888b6' as StreamTabId;
+    const conflicting = 'cOrchestrator@other#0888b60888b6' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [canonical, continuation, conflicting]) {
+      snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    }
+    await snapshots.flush();
+
+    const prefix = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prefix' });
+    const copied = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared answer' }),
+      id: 'shared-conflict-row',
+    };
+    const continued = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Valid continuation',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [prefix, copied]],
+        [continuation, [copied, continued]],
+        [conflicting, [{ ...copied, text: 'Incompatible copy' }]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      conversation: null,
+      candidateStreamIds: [canonical, continuation, conflicting],
+      conflicts: [
+        {
+          rowId: 'shared-conflict-row',
+          streamIds: [canonical, continuation, conflicting],
+        },
+      ],
+    });
+  });
+
+  it('ignores divergent diagnostic rows when conversation chronology has one continuation', async () => {
+    const executionId = '0888b80888b8' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b80888b8' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b80888b8' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const shared = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
+      id: 'diagnostic-shared-prompt',
+    };
+    const answer = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Unique continuation',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          canonical,
+          [
+            shared,
+            logRow(MESSAGE_TYPES.STATISTICS, {
+              text: 'Usage - input: 10, output: 5',
+            }),
+          ],
+        ],
+        [
+          continuation,
+          [
+            shared,
+            logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Resuming...' }),
+            answer,
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conversation: [
+        { role: 'user', content: 'Shared prompt' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Unique continuation' }],
+        },
+      ],
+    });
+  });
+
+  it('ignores divergent diagnostics that reconverge around one conversation chronology across pages', async () => {
+    const executionId = '0888b90888b9' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b90888b9' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b90888b9' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const prompt = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Reconverged prompt' }),
+      id: 'reconverged-prompt',
+    };
+    const answer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Reconverged answer' }),
+      id: 'reconverged-answer',
+    };
+    const followUp = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Later unique turn',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          canonical,
+          [
+            prompt,
+            logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage branch A' }),
+            answer,
+          ],
+        ],
+        [
+          continuation,
+          [
+            prompt,
+            logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Branch B' }),
+            answer,
+            followUp,
+          ],
+        ],
+      ]),
+    );
+
+    const archived = await readCompletedRunConversation(executionId);
+    expect(archived).toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conversation: [
+        { role: 'user', content: 'Reconverged prompt' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Reconverged answer' }],
+        },
+        { role: 'user', content: 'Later unique turn' },
+      ],
+    });
+
+    const firstPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 0,
+      limit: 2,
+    });
+    const secondPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 2,
+      limit: 1,
+    });
+    for (const page of [firstPage, secondPage]) {
+      expect(page.output).toContain(
+        `Merged streams: ${canonical}, ${continuation}`,
+      );
+      expect(page.output).not.toContain('Complete chronology established: no');
+      expect(page.output).not.toContain('Ordering cycle detected: yes');
+      expect(page.output).not.toContain('Usage branch A');
+      expect(page.output).not.toContain('Branch B');
+    }
+    expect(firstPage.output).toContain('Returned message interval: [0, 2)');
+    expect(firstPage.output).toContain('Next offset: 2');
+    expect(secondPage.output).toContain('Returned message interval: [2, 3)');
+    expect(secondPage.output).toContain('Next offset: none');
+  });
+
+  it('reports divergent diagnostic payloads without vetoing a unique conversation merge', async () => {
+    const executionId = '0888b00888b0' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b00888b0' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b00888b0' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const prompt = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Payload prompt' }),
+      id: 'payload-prompt',
+    };
+    const answer = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Payload answer' }),
+      id: 'payload-answer',
+    };
+    const statistics = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, {
+        text: 'Usage branch A',
+        data: { inputTokens: 10 },
+      }),
+      id: 'divergent-statistics',
+    };
+    const followUp = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Payload continuation',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [prompt, statistics, answer]],
+        [
+          continuation,
+          [
+            prompt,
+            {
+              ...statistics,
+              text: 'Usage branch B',
+              data: { inputTokens: 20 },
+            },
+            answer,
+            followUp,
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conflicts: [
+        {
+          rowId: 'divergent-statistics',
+          streamIds: [canonical, continuation],
+        },
+      ],
+      conversation: [
+        { role: 'user', content: 'Payload prompt' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Payload answer' }],
+        },
+        { role: 'user', content: 'Payload continuation' },
+      ],
+    });
+  });
+
+  it('keeps incompatible copied diagnostics distinct while ordering conversation rows', async () => {
+    const executionId = '0888b20888b2' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b20888b2' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b20888b2' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First turn' });
+    const shared = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared turn' }),
+      id: 'shared-conversation-row',
+    };
+    const diagnostic = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, {
+        text: 'Usage branch A',
+        data: { inputTokens: 10 },
+      }),
+      id: 'incompatible-diagnostic-row',
+    };
+    const last = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Last turn' });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [first, diagnostic, shared]],
+        [
+          continuation,
+          [
+            shared,
+            {
+              ...diagnostic,
+              text: 'Usage branch B',
+              data: { inputTokens: 20 },
+            },
+            last,
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conflicts: [
+        {
+          rowId: 'incompatible-diagnostic-row',
+          streamIds: [canonical, continuation],
+        },
+      ],
+      conversation: [
+        { role: 'user', content: 'First turn' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Shared turn' }],
+        },
+        { role: 'user', content: 'Last turn' },
+      ],
+    });
+  });
+
+  it('recognizes a connected diagnostic-only archive as an existing execution', async () => {
+    const executionId = '0888b30888b3' as ExecutionId;
+    const first = 'aOrchestrator@old#0888b30888b3' as StreamTabId;
+    const second = 'bOrchestrator@new#0888b30888b3' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const sharedDiagnostic = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
+      id: 'shared-diagnostic-only-row',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [first, [sharedDiagnostic]],
+        [second, [sharedDiagnostic]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      streamIds: [first, second],
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(`Merged streams: ${first}, ${second}`);
+    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
+  });
+
+  it('recognizes a sole diagnostic-only root as an existing execution', async () => {
+    const executionId = '0888c20888c2' as ExecutionId;
+    const streamId = 'orchestrator@model#0888c20888c2' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          streamId,
+          [logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' })],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      streamId,
+      conversation: null,
+    });
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(`Stream: ${streamId}`);
+  });
+
+  it('does not attribute a legacy conversation to diagnostic-only merged streams', async () => {
+    const executionId = '0888c10888c1' as ExecutionId;
+    const first = 'aOrchestrator@old#0888c10888c1' as StreamTabId;
+    const second = 'bOrchestrator@new#0888c10888c1' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const sharedDiagnostic = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
+      id: 'legacy-shared-diagnostic-row',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [first, [sharedDiagnostic]],
+        [second, [sharedDiagnostic]],
+      ]),
+    );
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'user', content: 'Legacy conversation' },
+    ]);
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'legacyKV',
+      conversation: [{ role: 'user', content: 'Legacy conversation' }],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain('Source: legacyKV');
+    expect(endpoint.output).toContain('Legacy conversation');
+    expect(endpoint.output).not.toContain('Merged streams:');
+    expect(endpoint.output).toContain('Stream: none');
+  });
+
+  it('uses proven child associations as existence evidence without reading them', async () => {
+    const executionId = '0888b40888b4' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = 'bash@tool#0888b40888b4' as StreamTabId;
+    const secondChild = 'codex@tool#0888b40888b4' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstChild, runConfig('bash'), executionId);
+    snapshots.setParentStream(firstChild, parent);
+    snapshots.setRunConfig(secondChild, runConfig('codex'), executionId);
+    snapshots.setParentStream(secondChild, parent);
+    await snapshots.flush();
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          firstChild,
+          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First child row' })],
+        ],
+        [
+          secondChild,
+          [
+            logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+              text: 'Second child row',
+            }),
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      associatedStreamIds: [firstChild, secondChild],
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(
+      `Associated streams: ${firstChild}, ${secondChild}`,
+    );
+    expect(endpoint.output).toContain('Conversation (0 messages)');
+    expect(endpoint.output).not.toContain('First child row');
+    expect(endpoint.output).not.toContain('Second child row');
+    expect(endpoint.output).not.toContain('Ambiguous candidate streams:');
+    expect(endpoint.output).not.toContain('Merged streams:');
+  });
+
+  it('contracts a copied diagnostic bridge while preserving conversation order', async () => {
+    const executionId = '0888b10888b1' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;
+    const continuation = 'bOrchestrator@new#0888b10888b1' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      continuation,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, {
+      text: 'Before diagnostic bridge',
+    });
+    const bridge = {
+      ...logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Copied status' }),
+      id: 'copied-diagnostic-bridge',
+    };
+    const second = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'After diagnostic bridge',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [first, bridge]],
+        [continuation, [bridge, second]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'streamLog',
+      streamIds: [canonical, continuation],
+      conversation: [
+        { role: 'user', content: 'Before diagnostic bridge' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'After diagnostic bridge' }],
+        },
+      ],
+    });
+  });
+
+  it('reports acyclic ambiguity without selecting an unproven archive', async () => {
+    const executionId = '0888b70888b7' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888b70888b7' as StreamTabId;
+    const ambiguous = 'bOrchestrator@new#0888b70888b7' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(ambiguous, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const shared = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
+      id: 'ambiguous-shared',
+    };
+    const canonicalSuccessor = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Canonical branch',
+    });
+    const ambiguousSuccessor = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+      text: 'Ambiguous branch',
+    });
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [shared, canonicalSuccessor]],
+        [ambiguous, [shared, ambiguousSuccessor]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      candidateStreamIds: [canonical, ambiguous],
+      hasOrderingAmbiguity: true,
+      conversation: null,
+    });
+
+    const firstPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 0,
+      limit: 1,
+    });
+    const secondPage = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+      offset: 1,
+      limit: 1,
+    });
+    for (const page of [firstPage, secondPage]) {
+      expect(page.output).toContain('Complete chronology established: no');
+      expect(page.output).toContain(
+        `Ambiguous candidate streams: ${canonical}, ${ambiguous}`,
+      );
+      expect(page.output).not.toContain('Canonical branch');
+      expect(page.output).not.toContain('Ambiguous branch');
+      expect(page.output).toContain('Returned message interval: [0, 0)');
+    }
+  });
+
+  it('reports copied-row cycles without selecting an unproven archive', async () => {
+    const executionId = '0888bf0888bf' as ExecutionId;
+    const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;
+    const contradictory = 'bOrchestrator@new#0888bf0888bf' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(canonical, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(
+      contradictory,
+      runConfig('orchestrator'),
+      executionId,
+    );
+    await snapshots.flush();
+
+    const first = {
+      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First' }),
+      id: 'cycle-first',
+    };
+    const second = {
+      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second' }),
+      id: 'cycle-second',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [canonical, [first, second]],
+        [contradictory, [second, first]],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      candidateStreamIds: [canonical, contradictory],
+      hasOrderingCycle: true,
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain('Ordering cycle detected: yes');
+    expect(endpoint.output).not.toContain('Merged streams:');
+  });
+
+  it('never falls back from an empty registered root to an explicit child', async () => {
+    const executionId = '0999ca0999ca' as ExecutionId;
+    const root = 'orchestrator@model#0999ca0999ca' as StreamTabId;
+    const child = 'child@tool#0999ca0999ca' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date().toISOString(),
+      streamId: root,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+    });
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(child, runConfig('child'), executionId);
+    snapshots.setParentStream(child, root);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(root);
+    logs.append(
+      child,
+      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+    });
+
+    const legacy = [{ role: 'user', content: 'Legacy root prompt' }];
+    await getExecutionStore(executionId).write('conversation', legacy);
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: legacy,
+      source: 'legacyKV',
+    });
+  });
+
+  it('preserves a sole diagnostic-only exact root as execution evidence', async () => {
+    const executionId = '0999cb0999cb' as ExecutionId;
+    const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const logs = await StreamLogStore.open();
+    logs.append(
+      root,
+      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
+    );
+    await logs.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+      streamId: root,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain('Conversation (0 messages)');
+    expect(endpoint.output).toContain(`Stream: ${root}`);
   });
 
   it('never substitutes child conversation rows for empty confirmed roots', async () => {
@@ -891,7 +1819,37 @@ describe('completedRunArchive facade', () => {
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       conversation: null,
       source: 'none',
+      streamId: root,
+      associatedStreamIds: [child],
     });
+  });
+
+  it('retains existence evidence when only several proven child streams remain', async () => {
+    const executionId = '0999ce0999ce' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = 'bash@tool#0999ce0999ce' as StreamTabId;
+    const secondChild = 'codex@tool#0999ce0999ce' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstChild, runConfig('bash'), executionId);
+    snapshots.setParentStream(firstChild, parent);
+    snapshots.setRunConfig(secondChild, runConfig('codex'), executionId);
+    snapshots.setParentStream(secondChild, parent);
+    await snapshots.flush();
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      conversation: null,
+      source: 'none',
+      associatedStreamIds: [firstChild, secondChild],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(
+      `Associated streams: ${firstChild}, ${secondChild}`,
+    );
+    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
   });
 
   it('reads a historical execution whose canonical stream is delegated', async () => {

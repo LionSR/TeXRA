@@ -89,7 +89,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     expect(resolved).toEqual({
       streamId,
       source: 'streamDataMeta',
-      associatedRootStreamIds: [streamId],
+      exactExecutionCandidateStreamIds: [streamId],
     });
   });
 
@@ -177,7 +177,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     expect(resolved).toEqual({
       streamId,
       source: 'streamDataMeta',
-      associatedRootStreamIds: [streamId],
+      exactExecutionCandidateStreamIds: [streamId],
     });
     await expect(
       getExecutionStore(executionId).readMeta(),
@@ -199,14 +199,12 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
       }),
     ).resolves.toEqual({
-      streamId,
       source: 'streamDataMeta',
-      fallbackStreamIds: [resumedStream],
-      associatedRootStreamIds: [streamId, resumedStream],
+      exactExecutionCandidateStreamIds: [streamId, resumedStream],
     });
   });
 
-  it('prefers a work-plan-bearing historical stream over a bare match', async () => {
+  it('does not treat a work plan as canonical-ownership evidence', async () => {
     const executionId = 'abc777' as ExecutionId;
     const firstStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
     const secondStream = 'zBashTool@tool#abc777' as StreamTabId;
@@ -224,14 +222,12 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
     expect(resolved).toEqual({
-      streamId: secondStream,
       source: 'streamDataMeta',
-      fallbackStreamIds: [firstStream],
-      associatedRootStreamIds: [firstStream, secondStream],
+      exactExecutionCandidateStreamIds: [firstStream, secondStream],
     });
   });
 
-  it('prefers a log-backed historical stream over a work-plan-only match', async () => {
+  it('does not treat a stream log as canonical-ownership evidence', async () => {
     const executionId = 'abc888' as ExecutionId;
     const workPlanStream = 'aOrchestrator@deepseekproT#abc888' as StreamTabId;
     const logStream = 'zBashTool@tool#abc888' as StreamTabId;
@@ -253,13 +249,88 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamLogStore: logStore,
     });
     expect(resolved).toEqual({
-      streamId: logStream,
       source: 'streamDataMeta',
-      fallbackStreamIds: [workPlanStream],
-      associatedRootStreamIds: [workPlanStream, logStream],
+      exactExecutionCandidateStreamIds: [workPlanStream, logStream],
     });
     expect(
       (await getExecutionStore(executionId).readMeta())?.streamId,
     ).toBeUndefined();
+  });
+
+  it('does not treat several proven children as competing archive roots', async () => {
+    const executionId = 'abc889' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = 'bash@tool#abc889' as StreamTabId;
+    const secondChild = 'codex@tool#abc889' as StreamTabId;
+    const snapshotWriter = new StreamSnapshotStore();
+    snapshotWriter.setRunConfig(firstChild, runConfig('bash'), executionId);
+    snapshotWriter.setParentStream(firstChild, parent);
+    snapshotWriter.setRunConfig(secondChild, runConfig('codex'), executionId);
+    snapshotWriter.setParentStream(secondChild, parent);
+    await snapshotWriter.flush();
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+      }),
+    ).resolves.toEqual({
+      source: 'streamDataMeta',
+      associatedStreamIds: [firstChild, secondChild],
+    });
+  });
+
+  it('resolves a sole delegated stream without treating it as an associated sibling', async () => {
+    const executionId = 'abc88a' as ExecutionId;
+    const streamId = 'bash@tool#abc88a' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(streamId, runConfig('bash'), executionId);
+    snapshots.setParentStream(
+      streamId,
+      'orchestrator@model#parent' as StreamTabId,
+    );
+    await snapshots.flush();
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+      }),
+    ).resolves.toEqual({ streamId, source: 'streamDataMeta' });
+  });
+
+  it('preserves the legacy streamData suffix fallback', async () => {
+    const executionId = 'abc999' as ExecutionId;
+    const first = 'a@model#abc999' as StreamTabId;
+    const second = 'z@model#abc999' as StreamTabId;
+    const writer = new StreamSnapshotStore();
+    writer.setTodos(first, [TODO]);
+    writer.setTodos(second, [TODO]);
+    await writer.flush();
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+      }),
+    ).resolves.toEqual({
+      streamId: first,
+      source: 'streamDataSuffix',
+      fallbackStreamIds: [second],
+    });
+  });
+
+  it('preserves the legacy streamLogs suffix fallback', async () => {
+    const executionId = 'abcaaa' as ExecutionId;
+    const streamId = 'agent@model#abcaaa' as StreamTabId;
+    const logs = await StreamLogStore.open();
+    await appendLogEntry(logs, streamId);
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+        streamLogStore: logs,
+      }),
+    ).resolves.toEqual({
+      streamId,
+      source: 'streamLogsSuffix',
+    });
   });
 });

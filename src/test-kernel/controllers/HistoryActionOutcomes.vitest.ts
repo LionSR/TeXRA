@@ -39,8 +39,11 @@ describe('HistoryActionOutcomes', () => {
     expect(htmlExportErrorMessage('config_missing')).toBe(
       'History item not found',
     );
+    expect(htmlExportErrorMessage('streamId_ambiguous')).toBe(
+      'Several historical transcripts match this execution, but none is proven canonical for trace export.',
+    );
     expect(htmlExportErrorMessage('streamLogs_missing')).toBe(
-      'No stored transcript available for this execution — it may predate transcript persistence.',
+      'No replayable execution-root transcript is available — it may predate transcript persistence or have only child transcripts.',
     );
   });
 

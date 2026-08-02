@@ -18,10 +18,11 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { StreamLogStore } from '@transcript';
+import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 
 const TEMPLATE =
@@ -128,6 +129,46 @@ describe('ChatExportController.exportAsHtml', () => {
       'exec-missing-logs',
       templatePath,
     );
+
+    expect(outcome).toEqual({ status: 'streamLogs_missing' });
+  });
+
+  it('returns streamId_ambiguous when no canonical transcript timeline is proven', async () => {
+    const templatePath = await writeTemplate();
+    const executionId = 'aaa555aaa555' as ExecutionId;
+    const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const first = `orchestrator@old#${executionId}` as StreamTabId;
+    const second = `orchestrator@new#${executionId}` as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, executionConfig, executionId);
+    snapshots.setRunConfig(second, executionConfig, executionId);
+    await snapshots.flush();
+
+    const outcome = await controller.exportAsHtml(executionId, templatePath);
+
+    expect(outcome).toEqual({ status: 'streamId_ambiguous' });
+  });
+
+  it('returns streamLogs_missing when only delegated child sidecars remain', async () => {
+    const templatePath = await writeTemplate();
+    const executionId = 'aaa556aaa556' as ExecutionId;
+    const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [
+      `bash@tool#${executionId}`,
+      `codex@tool#${executionId}`,
+    ] as StreamTabId[]) {
+      snapshots.setRunConfig(streamId, executionConfig, executionId);
+      snapshots.setParentStream(streamId, parent);
+    }
+    await snapshots.flush();
+
+    const outcome = await controller.exportAsHtml(executionId, templatePath);
 
     expect(outcome).toEqual({ status: 'streamLogs_missing' });
   });
