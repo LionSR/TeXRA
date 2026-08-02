@@ -2,6 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -304,6 +305,93 @@ describe('App foreground Escape ownership', () => {
     } finally {
       instance.unmount();
       runTrace.dispose();
+    }
+  });
+
+  it('preserves workflow selection when tasks share a child stream', async () => {
+    seedRootStream();
+    setStreamStatusInCliState({
+      streamId: CHILD,
+      status: STREAM_PHASE.RUNNING,
+    });
+    applySubagentRoster(ROOT, [
+      {
+        kind: 'subagent',
+        executionId: 'shared-child-execution',
+        agentName: 'shared-child',
+        childStreamId: CHILD,
+        status: STREAM_PHASE.RUNNING,
+      },
+    ]);
+    setParentStream(CHILD, ROOT);
+    patchStream(ROOT, (slice) => ({
+      ...slice,
+      agent: 'ambiguous-workflow',
+      category: AgentCategory.Workflow,
+      entries: ['first', 'second'].map((id) => ({
+        id: `task-${id}`,
+        role: 'workflowTask' as const,
+        text: `Running: ${id}`,
+        finalized: false,
+        task: {
+          id,
+          label: id,
+          status: 'running' as const,
+          childStreamId: CHILD,
+        },
+      })),
+    }));
+    const onInterruptStream = vi.fn();
+    const { ink, React } = await loadInk();
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(App, appProps(onInterruptStream)),
+      { columns: 100, debug: true, rows: 30 },
+    );
+    const currentFrame = (): string =>
+      stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write('\t');
+      await waitFor(() =>
+        currentFrame().includes('ambiguous-workflow · 0/2 done'),
+      );
+      stdin.write('\r');
+      await waitFor(() =>
+        currentFrame()
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('first · Running') && line.includes(POINTER),
+          ),
+      );
+      stdin.write('\u001b[B');
+      await waitFor(() =>
+        currentFrame()
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('second · Running') && line.includes(POINTER),
+          ),
+      );
+
+      focusStream(CHILD);
+      await waitFor(() => activeStreamId.get() === CHILD);
+      focusStream(ROOT);
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await waitFor(() =>
+        currentFrame()
+          .split('\n')
+          .some(
+            (line) =>
+              line.includes('second · Running') && line.includes(POINTER),
+          ),
+      );
+
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
     }
   });
 
