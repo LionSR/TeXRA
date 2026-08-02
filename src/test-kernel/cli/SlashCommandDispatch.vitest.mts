@@ -408,29 +408,29 @@ describe('handleTuiSlashCommand', () => {
     const overview = vi
       .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
       .mockResolvedValue([
-        'Model access: ChatGPT On · Kimi Code Off · fallback Personal API keys',
-        'Accounts: ChatGPT chatgpt@example.com · TeXRA texra@example.com',
-        'personal API keys: DeepSeek',
-        'tier: researcher · included usage this month: 25% used, 75% remaining',
+        'ChatGPT: preferred · signed in as chatgpt@example.com',
+        'Kimi Code: not preferred · key not configured',
+        'Fallback: Included TeXRA access · signed in as texra@example.com · Researcher · included usage this month: 25% used, 75% remaining',
+        'Other personal keys: DeepSeek',
       ]);
     const context = createContext();
 
     await handleTuiSlashCommand('/auth', context);
     const authStatusText = lastEntryText();
-    expect(authStatusText).toContain('ChatGPT On');
-    expect(authStatusText).toContain('Kimi Code Off');
-    expect(authStatusText).toContain('fallback Personal API keys');
-    expect(authStatusText).toContain('tier: researcher');
+    expect(authStatusText).toContain('ChatGPT: preferred');
+    expect(authStatusText).toContain('Kimi Code: not preferred');
+    expect(authStatusText).toContain('Fallback: Included TeXRA access');
+    expect(authStatusText).toContain('Researcher');
     expect(authStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
     );
 
     await handleTuiSlashCommand('/api status', context);
     const apiStatusText = lastEntryText();
-    expect(apiStatusText).toContain('ChatGPT On');
-    expect(apiStatusText).toContain('Kimi Code Off');
-    expect(apiStatusText).toContain('fallback Personal API keys');
-    expect(apiStatusText).toContain('tier: researcher');
+    expect(apiStatusText).toContain('ChatGPT: preferred');
+    expect(apiStatusText).toContain('Kimi Code: not preferred');
+    expect(apiStatusText).toContain('Fallback: Included TeXRA access');
+    expect(apiStatusText).toContain('Researcher');
     expect(apiStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
     );

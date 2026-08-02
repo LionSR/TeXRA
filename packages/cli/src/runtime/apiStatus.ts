@@ -43,13 +43,17 @@ export function formatCliAuthStatusLine(
     : account;
 }
 
+function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
+  if (!signedIn) return 'signed out';
+  return `signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
+}
+
 function formatAccountStatusLine(
   label: string,
   signedIn: boolean,
   accountLabel?: string,
 ): string {
-  if (!signedIn) return `${label}: signed out`;
-  return `${label}: signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
+  return `${label}: ${formatAccountStatus(signedIn, accountLabel)}`;
 }
 
 export interface CliModelAccessOverview {
@@ -63,15 +67,14 @@ interface CliAccessSnapshot {
   readonly personalKeyProviders: readonly string[];
 }
 
-/** Read the account, route, and credential facts once for every renderer. */
+/** Read the route-owned facts used by the detailed account renderer once. */
 async function loadCliAccessSnapshot(
   apiMode: ApiAccessMode,
-  options: { readonly includePersonalKeys?: boolean } = {},
 ): Promise<CliAccessSnapshot> {
   const [access, profile, configuredPersonalKeyProviders] = await Promise.all([
     readCliModelAccessStatus(apiMode),
     getCliAuthProfile(),
-    options.includePersonalKeys ? personalKeyProviders() : Promise.resolve([]),
+    personalKeyProviders(),
   ]);
   return {
     access: { ...access, texraSignedIn: profile.authenticated },
@@ -85,7 +88,10 @@ export async function loadCliModelAccessOverview(
   options: { readonly apiMode?: ApiAccessMode } = {},
 ): Promise<CliModelAccessOverview> {
   const apiMode = options.apiMode ?? getCliApiMode();
-  const { access, profile } = await loadCliAccessSnapshot(apiMode);
+  const [access, profile] = await Promise.all([
+    readCliModelAccessStatus(apiMode),
+    getCliAuthProfile(),
+  ]);
   const lines = [
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
     `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
@@ -98,22 +104,21 @@ export async function loadCliModelAccessOverview(
   ];
   if (profile.note) lines.push(profile.note);
   return {
-    access,
+    access: { ...access, texraSignedIn: profile.authenticated },
     lines,
   };
 }
 
-/**
- * Format the neutral personal-key inventory from the canonical access facts.
- */
+/** Format a neutral personal-key inventory. */
 export function formatPersonalApiKeysLine(
   personalKeyProviders: readonly string[],
+  label = 'personal API keys',
 ): string | undefined {
   if (personalKeyProviders.length === 0) return undefined;
   const providers = personalKeyProviders
     .map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider)
     .join(', ');
-  return `personal API keys: ${providers}`;
+  return `${label}: ${providers}`;
 }
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
@@ -193,11 +198,10 @@ export async function loadCliApiStatus(
   options: LoadCliApiStatusOptions = {},
 ): Promise<CliApiStatus> {
   const mode = options.apiMode ?? getCliApiMode();
-  const snapshot = await loadCliAccessSnapshot(mode, {
-    includePersonalKeys: true,
-  });
-  const { personalKeyProviders: configuredPersonalKeyProviders, profile } =
-    snapshot;
+  const [profile, configuredPersonalKeyProviders] = await Promise.all([
+    getCliAuthProfile(),
+    personalKeyProviders(),
+  ]);
   let authLine = formatCliAuthStatusLine(profile);
   const hasPersonalKey = configuredPersonalKeyProviders.length > 0;
   const actionHint = options.includeActionHint
@@ -228,16 +232,7 @@ export async function loadCliApiStatus(
   };
 }
 
-function formatPreferenceState(
-  state: 'off' | 'on',
-  missingCredential: 'key' | 'sign-in' | undefined,
-): string {
-  const label = state === 'on' ? 'On' : 'Off';
-  if (state === 'off' || missingCredential === undefined) return label;
-  return `${label} (${missingCredential === 'key' ? 'key' : 'sign in'} required)`;
-}
-
-/** Render the detailed account view once from the canonical access facts. */
+/** Render each detailed account/access fact on its owning route. */
 export async function loadCliDetailedAccountStatusLines(options: {
   readonly apiMode: ApiAccessMode;
 }): Promise<string[]> {
@@ -245,27 +240,64 @@ export async function loadCliDetailedAccountStatusLines(options: {
     access,
     personalKeyProviders: providers,
     profile,
-  } = await loadCliAccessSnapshot(options.apiMode, {
-    includePersonalKeys: true,
-  });
-  const chatGpt = formatPreferenceState(
-    access.preferences.chatGpt,
-    access.chatGptSignedIn ? undefined : 'sign-in',
-  );
-  const kimiCode = formatPreferenceState(
-    access.preferences.kimiCode,
-    access.kimiCodeKeySet === true ? undefined : 'key',
-  );
+  } = await loadCliAccessSnapshot(options.apiMode);
+  const includedUsage =
+    access.apiFallback === 'included'
+      ? await loadIncludedUsageLine(profile)
+      : undefined;
+  const routes = {
+    chatGpt: {
+      preferred: access.preferences.chatGpt === 'on',
+      account: formatAccountStatus(
+        access.chatGptSignedIn,
+        access.chatGptAccountLabel,
+      ),
+    },
+    kimiCode: {
+      preferred: access.preferences.kimiCode === 'on',
+      credential:
+        access.kimiCodeKeySet === true
+          ? 'key configured'
+          : 'key not configured',
+    },
+    fallback:
+      access.apiFallback === 'included'
+        ? {
+            kind: 'included' as const,
+            account: formatAccountStatus(
+              profile.authenticated,
+              profile.accountLabel,
+            ),
+            tier: profile.authenticated ? profile.tier : undefined,
+            usage: includedUsage,
+          }
+        : { kind: 'personal' as const },
+  };
   const lines = [
-    `Model access: ChatGPT ${chatGpt} · Kimi Code ${kimiCode} · fallback ${formatCliModelAccessRoute(access.apiFallback)}`,
-    `Accounts: ChatGPT ${access.chatGptSignedIn ? (access.chatGptAccountLabel ?? 'signed in') : 'signed out'} · TeXRA ${profile.authenticated ? (profile.accountLabel ?? 'signed in') : 'signed out'}`,
-    formatPersonalApiKeysLine(providers) ?? 'personal API keys: none',
+    `ChatGPT: ${routes.chatGpt.preferred ? 'preferred' : 'not preferred'} · ${routes.chatGpt.account}`,
+    `Kimi Code: ${routes.kimiCode.preferred ? 'preferred' : 'not preferred'} · ${routes.kimiCode.credential}`,
   ];
-  if (profile.note) lines.push(profile.note);
-  if (profile.authenticated && profile.tier) {
-    const usage = await loadIncludedUsageLine(profile);
-    lines.push(`tier: ${profile.tier}${usage ? ` · ${usage}` : ''}`);
+  if (routes.fallback.kind === 'included') {
+    lines.push(
+      [
+        'Fallback: Included TeXRA access',
+        routes.fallback.account,
+        routes.fallback.tier,
+        routes.fallback.usage,
+      ]
+        .filter((part): part is string => part !== undefined)
+        .join(' · '),
+    );
+  } else {
+    lines.push('Fallback: Personal API keys');
   }
+
+  const otherPersonalKeys = formatPersonalApiKeysLine(
+    providers.filter((provider) => provider !== 'kimiCode'),
+    'Other personal keys',
+  );
+  if (otherPersonalKeys) lines.push(otherPersonalKeys);
+  if (profile.note) lines.push(profile.note);
   return lines;
 }
 
