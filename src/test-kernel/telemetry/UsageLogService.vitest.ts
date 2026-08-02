@@ -592,5 +592,26 @@ describe('UsageLogService', () => {
         expect(batches).toEqual([]);
       },
     );
+
+    it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
+      await platform().config.update(
+        TELEMETRY_ENABLED_KEY,
+        'false',
+        'workspace',
+      );
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('optional'));
+      await UsageLogService.flush();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
   });
 });
