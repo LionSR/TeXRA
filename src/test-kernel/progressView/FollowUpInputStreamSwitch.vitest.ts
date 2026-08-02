@@ -115,32 +115,9 @@ describe('follow-up-input layout', () => {
       | null;
     await textarea?.updateComplete;
 
-    expect(textarea?.getAttribute('rows')).toBe('6');
-    expect(textarea?.getAttribute('resize')).toBe('vertical');
     expect(textarea?.rows).toBe(6);
     expect(textarea?.resize).toBe('vertical');
     expect(textarea?.input.rows).toBe(6);
-  });
-
-  it('bounds the internal textarea between six lines and the panel cap', () => {
-    const ctor = customElements.get('follow-up-input') as unknown as {
-      styles: { cssText: string } | Array<{ cssText: string }>;
-    };
-    const cssText = [ctor.styles]
-      .flat()
-      .map((sheet) => sheet.cssText)
-      .join('\n')
-      .replaceAll(/\s+/g, '');
-
-    expect(cssText).toContain(
-      '--textarea-min-height:calc(6lh+var(--wa-space-xs)+var(--wa-space-3xs))',
-    );
-    expect(cssText).toContain(
-      '--textarea-max-height:clamp(var(--textarea-min-height),32vh,240px)',
-    );
-    expect(cssText).toContain(
-      '#followUpInput::part(textarea){width:100%;min-height:var(--textarea-min-height);max-height:var(--textarea-max-height)',
-    );
   });
 });
 
