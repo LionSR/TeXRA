@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { ServerToolContentBlock } from '@agent/types/ServerToolTypes';
 import {
   FileLocationSchema,
+  PlanSchema,
   WorkPlanSnapshotSchema,
   planSummaryLine,
   TodoItemSchema,
@@ -362,15 +363,17 @@ const AgentWorkspaceLegacySnapshotSchema = z
   .refine(
     (record) => !Object.hasOwn(record, 'workPlan') || record.workPlan == null,
   )
-  .transform((record) =>
-    AgentWorkspaceSnapshotFieldsSchema.parse({
+  .transform((record) => {
+    const plan = PlanSchema.nullable().prefault(null).parse(record.plan);
+    return AgentWorkspaceSnapshotFieldsSchema.parse({
       ...record,
       workPlan: {
         todos: record.todos,
-        plan: record.plan,
+        plan,
+        planSummary: plan ? planSummaryLine(plan.objective) : null,
       },
-    }),
-  );
+    });
+  });
 
 const EmptyAgentWorkspaceSnapshotSchema = z
   .unknown()

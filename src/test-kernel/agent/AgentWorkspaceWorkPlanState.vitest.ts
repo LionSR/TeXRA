@@ -78,6 +78,7 @@ describe('agent workspace work-plan state', () => {
     });
 
     expect(state.workPlan.plan).toEqual(objectivePlan);
+    expect(state.workPlan.planSummary).toBe(objectivePlan.objective);
   });
 
   it('rejects a bare legacy todo object without a wrapper key', () => {
@@ -116,6 +117,7 @@ describe('agent workspace work-plan state', () => {
     const hydrated = AgentWorkspaceState.fromSnapshot(legacySnapshot);
     expect(hydrated.workPlan.todos).toEqual([todo]);
     expect(hydrated.workPlan.plan).toEqual(objectivePlan);
+    expect(hydrated.workPlan.planSummary).toBe(objectivePlan.objective);
 
     // Per-round node prep (ToolUseCycleNode, ResponseCycleNode,
     // MediaExtractionNode) only ever rehydrates this run's own canonical
