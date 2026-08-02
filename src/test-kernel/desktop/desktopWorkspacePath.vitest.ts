@@ -15,7 +15,7 @@ describe('desktop workspace path', () => {
   it('resolves CLI workspace path before stored workspace', () => {
     expect(
       resolveWorkspacePath({
-        argv: ['--texra-workspace', 'cli-workspace'],
+        argv: ['--texra-workspace-path', 'cli-workspace'],
         storedWorkspacePath: 'stored-workspace',
       }),
     ).toBe(resolve('cli-workspace'));
@@ -39,9 +39,9 @@ describe('desktop workspace path', () => {
       await mkdir(target);
       await symlink(target, link, 'dir');
 
-      expect(resolveWorkspacePath({ argv: ['--texra-workspace', link] })).toBe(
-        await realpath(target),
-      );
+      expect(
+        resolveWorkspacePath({ argv: ['--texra-workspace-path', link] }),
+      ).toBe(await realpath(target));
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -49,44 +49,48 @@ describe('desktop workspace path', () => {
 
   it('does not treat empty workspace flags as an opened workspace', () => {
     expect(
-      getWorkspacePathInput({ argv: ['--texra-workspace'] }),
+      getWorkspacePathInput({ argv: ['--texra-workspace-path'] }),
     ).toBeUndefined();
     expect(
-      getWorkspacePathInput({ argv: ['--texra-workspace='] }),
+      getWorkspacePathInput({ argv: ['--texra-workspace-path='] }),
     ).toBeUndefined();
     expect(
-      getWorkspacePathInput({ argv: ['--texra-workspace', 'paper'] }),
+      getWorkspacePathInput({ argv: ['--texra-workspace-path', 'paper'] }),
     ).toBe('paper');
   });
 
   it('does not treat option-like positional workspace values as paths', () => {
     expect(
-      getWorkspacePathInput({ argv: ['--texra-workspace', '--inspect'] }),
+      getWorkspacePathInput({
+        argv: ['--texra-workspace-path', '--inspect'],
+      }),
     ).toBeUndefined();
     expect(
-      resolveWorkspacePath({ argv: ['--texra-workspace', '--inspect'] }),
+      resolveWorkspacePath({
+        argv: ['--texra-workspace-path', '--inspect'],
+      }),
     ).toBeUndefined();
   });
 
   it('does not treat desktop protocol callback URLs as workspace paths', () => {
     expect(
       getWorkspacePathInput({
-        argv: ['--texra-workspace', 'texra://auth-callback?code=1'],
+        argv: ['--texra-workspace-path', 'texra://auth-callback?code=1'],
       }),
     ).toBeUndefined();
     expect(
       resolveWorkspacePath({
-        argv: ['--texra-workspace', 'texra://auth-callback?code=1'],
+        argv: ['--texra-workspace-path', 'texra://auth-callback?code=1'],
       }),
     ).toBeUndefined();
     expect(
       getWorkspacePathInput({
-        argv: ['--texra-workspace=texra://auth-callback?code=1'],
+        argv: ['--texra-workspace-path=texra://auth-callback?code=1'],
       }),
     ).toBeUndefined();
     expect(
       resolveWorkspacePath({
-        argv: ['--texra-workspace=texra://auth-callback?code=1'],
+        argv: ['--texra-workspace-path=texra://auth-callback?code=1'],
       }),
     ).toBeUndefined();
   });
@@ -100,7 +104,7 @@ describe('desktop workspace path', () => {
     expect(
       hasResolvedWorkspacePath({
         argv: [
-          '--texra-workspace',
+          '--texra-workspace-path',
           'renderer-process-argv-is-not-authoritative',
           serializeWorkspacePresenceArg(false),
         ],
@@ -114,12 +118,10 @@ describe('desktop workspace path', () => {
         [
           '/Applications/TeXRA.app',
           '--inspect',
-          '--texra-new-window',
-          '--texra-workspace',
+          '--texra-workspace-path',
           'old-workspace',
           '--flag',
           'texra://texra-ai.texra/auth-callback?state=old',
-          '--texra-workspace=/tmp/other-workspace',
           '--texra-workspace-path=/tmp/stale-workspace',
         ],
         '/Users/ray/paper',

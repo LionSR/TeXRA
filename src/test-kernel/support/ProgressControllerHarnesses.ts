@@ -26,7 +26,7 @@ export function createAgentConfig(
   return AgentConfigSchema.parse({
     agent: 'correct',
     model: 'gemini31p',
-    inputFile: 'input.tex',
+    inputFiles: ['input.tex'],
     outputFiles: ['declared.tex'],
     agentCategory: AgentCategory.Workflow,
     ...overrides,

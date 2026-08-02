@@ -3,65 +3,14 @@ import { SessionStores } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
-import { prepareDesktopLegacyStreamImport } from './desktopLegacyStreamImporter.js';
 import { toLogData } from './desktopLogUtils.js';
 
 /**
- * Load the process-owned desktop stores in migration-safe order.
- *
- * Claiming legacy identities must be the first step of opening the canonical
- * stores. The same canonical initialization runs when no legacy file exists.
- *
- * Legacy identities must be claimed in the transcript index before orphaned
- * sidecars are swept. The returned callback detaches this module's own
- * stream-removal subscription and deletion-ordered flusher during process
- * shutdown; the session owns the snapshot store's projection and flush.
- *
- * A claim retires the legacy row, so the import only runs against a persistent
- * transcript index. A launch degraded to an in-memory index leaves the legacy
- * file untouched for the next healthy one.
+ * Load the process-owned desktop stores and attach their lifecycle hooks.
  */
-export async function initializeDesktopProcessStores(options: {
-  session: SessionHandle;
-  legacyStreamFilePath?: string;
-}) {
-  const { session } = options;
+export async function initializeDesktopProcessStores(session: SessionHandle) {
   const { transcripts, snapshots } = session;
-  const logger = createChannelTrace('DesktopLegacyStreamImporter');
-  let legacyImport:
-    Awaited<ReturnType<typeof prepareDesktopLegacyStreamImport>> | undefined;
-  if (options.legacyStreamFilePath && transcripts.mode.kind !== 'persistent') {
-    logger.warn(
-      'Deferring the legacy desktop stream import: this launch has no persistent transcript index to claim the legacy identities.',
-    );
-  } else if (options.legacyStreamFilePath) {
-    try {
-      legacyImport = await prepareDesktopLegacyStreamImport(
-        options.legacyStreamFilePath,
-        {
-          transcriptStreamIds: transcripts.keys(),
-          sidecarStreamIds: await snapshots.listPersistedStreams(),
-        },
-      );
-    } catch (error) {
-      logger.warn(
-        'Retaining unreadable legacy desktop stream state for retry',
-        {
-          data: toLogData(error),
-        },
-      );
-    }
-  }
-
-  const claims = legacyImport?.claims ?? [];
-  for (const streamId of claims) {
-    transcripts.ensureStream(streamId);
-  }
-  if (claims.length > 0) {
-    await transcripts.flush();
-  }
-
-  const canonicalStreamIds = transcripts.keys();
+  const logger = createChannelTrace('DesktopProcessStores');
   const stores = new SessionStores({
     streamLogs: transcripts,
     snapshots,
@@ -74,19 +23,7 @@ export async function initializeDesktopProcessStores(options: {
       releaseStreamResources(stream, session);
     },
   });
-  await stores.sweepOrphanedStreams(new Set(canonicalStreamIds));
-  if (legacyImport) {
-    try {
-      await legacyImport.commit(claims);
-    } catch (error) {
-      logger.warn(
-        'Retaining legacy desktop stream state after cleanup failed',
-        {
-          data: toLogData(error),
-        },
-      );
-    }
-  }
+  await stores.sweepOrphanedStreams(new Set(transcripts.keys()));
 
   const detachStreamRemoval = session.events.subscribe(
     (sessionEvent) => {

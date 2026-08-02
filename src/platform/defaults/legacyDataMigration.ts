@@ -2,13 +2,12 @@
  * Best-effort, one-time moves of legacy host storage onto the shared
  * `~/.texra` data root (#7987, #8622).
  *
- * Shared by the desktop app (legacy Electron `userData` root) and the VS Code
- * extension (legacy `context.storageUri`/`globalStorageUri` buckets). Every
- * operation is non-throwing: a failed move logs the errno code and leaves the
- * legacy data in place, and an existing target entry is never overwritten —
- * it is skipped with a warning instead (the #5776 config-migration pattern:
- * log per entry, never clobber). Once an entry has moved it no longer exists,
- * so repeat calls on later startups are cheap no-ops.
+ * Used by the released VS Code extension to move its former
+ * `context.storageUri`/`globalStorageUri` buckets. Every operation is
+ * non-throwing: a failed move logs the errno code and leaves the legacy data in
+ * place, and an existing target entry is never overwritten. Once an entry has
+ * moved it no longer exists, so repeat calls on later startups are cheap
+ * no-ops.
  */
 
 // Node imports
@@ -127,7 +126,7 @@ export async function moveEntryIfAbsent(
   }
 }
 
-export async function readLegacyDirEntries(
+async function readLegacyDirEntries(
   legacyDir: string,
   logger: LegacyDataMigrationLogger,
 ): Promise<Dirent[] | undefined> {

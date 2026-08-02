@@ -6,11 +6,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import {
-  designTokens,
-  commonViewStyles,
-  settingsBannerStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -21,7 +17,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -37,7 +32,6 @@ export class MultiAgentTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -345,13 +339,6 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        ${renderSettingsBanner({
-          id: 'multi-agent-workflow-banner',
-          icon: 'building',
-          title: 'Teams',
-          description:
-            'Choose a team to activate it, select its orchestrator in the task composer, then review delegated work in Progress. Create and refine custom teams in Agents.',
-        })}
         ${renderSettingsSectionHeading({
           title: 'Available teams',
           description: 'Select a team to activate it.',

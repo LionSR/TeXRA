@@ -18,6 +18,10 @@ import {
   UsageLogService,
 } from '@telemetry/UsageLogService';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import {
+  createFakePlatform,
+  FakeScopedConfigProvider,
+} from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
@@ -321,18 +325,57 @@ describe('UsageLogService', () => {
     // mutation outlives the test — the file-scoped fake from setupFakePlatform
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
-    setupPlatform();
+    setupPlatform(() =>
+      createFakePlatform({}, { config: new FakeScopedConfigProvider() }),
+    );
 
     it('sends nothing while the setting is off', async () => {
       vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
         'token',
       );
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       const batches: unknown[] = [];
       const fetchMock = stubFetch(batches);
 
       UsageLogService.log(usageEntry('first'));
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
+
+    it('honours a workspace-scoped telemetry opt-out', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'workspace');
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('dropped'));
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
+
+    it('does not let a project opt in over a user-wide opt-out', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'workspace');
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('dropped'));
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
       );
@@ -352,7 +395,7 @@ describe('UsageLogService', () => {
       const fetchMock = stubFetch(batches);
 
       UsageLogService.log(usageEntry('before-opt-out'));
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       // ACCEPTED, not PENDING: the entry is gone, and PENDING means "kept for a
       // later retry" everywhere else in this service.
@@ -368,7 +411,7 @@ describe('UsageLogService', () => {
       vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
         'token',
       );
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       const batches: unknown[] = [];
       const fetchMock = stubFetch(batches);
@@ -377,7 +420,7 @@ describe('UsageLogService', () => {
       await UsageLogService.flush();
       expect(fetchMock).not.toHaveBeenCalled();
 
-      await platform().config.update(TELEMETRY_ENABLED_KEY, true);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
       UsageLogService.log(usageEntry('sent'));
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
@@ -400,7 +443,7 @@ describe('UsageLogService', () => {
         vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
           'token',
         );
-        await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+        await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
         const batches: unknown[] = [];
         const fetchMock = stubFetch(batches);
@@ -425,7 +468,7 @@ describe('UsageLogService', () => {
 
       UsageLogService.log({ ...usageEntry('byok'), usageRoute: 'api-key' });
       UsageLogService.log({ ...usageEntry('hosted'), usageRoute: 'relay' });
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
 
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
@@ -453,7 +496,7 @@ describe('UsageLogService', () => {
       UsageLogService.log(usageEntry('optional'));
       const flush = UsageLogService.flush();
 
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
       releaseToken();
 
       await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
@@ -472,7 +515,7 @@ describe('UsageLogService', () => {
       vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
         'token',
       );
-      await platform().config.update(TELEMETRY_ENABLED_KEY, true);
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
       vi.stubEnv(name, value);
 
       const batches: unknown[] = [];
@@ -493,7 +536,7 @@ describe('UsageLogService', () => {
         vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
           'token',
         );
-        await platform().config.update(TELEMETRY_ENABLED_KEY, true);
+        await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
         const batches: unknown[] = [];
@@ -537,7 +580,7 @@ describe('UsageLogService', () => {
         vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
           'token',
         );
-        await platform().config.update(TELEMETRY_ENABLED_KEY, value);
+        await platform().config.update(TELEMETRY_ENABLED_KEY, value, 'global');
 
         const batches: unknown[] = [];
         const fetchMock = stubFetch(batches);
@@ -549,5 +592,26 @@ describe('UsageLogService', () => {
         expect(batches).toEqual([]);
       },
     );
+
+    it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
+      await platform().config.update(
+        TELEMETRY_ENABLED_KEY,
+        'false',
+        'workspace',
+      );
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('optional'));
+      await UsageLogService.flush();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
   });
 });

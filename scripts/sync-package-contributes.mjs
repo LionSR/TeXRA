@@ -24,13 +24,11 @@ const require = createRequire(import.meta.url);
 const bundleDir = await mkdtemp(
   path.join(tmpdir(), 'texra-package-contributes-'),
 );
-let texraSettings;
 let commandCatalog;
 try {
   await build({
     absWorkingDir: rootDir,
     entryPoints: {
-      texraSettings: 'packages/extension/src/schemas/texraSettings.ts',
       commandCatalog: 'src/shared/commands/catalog.ts',
     },
     bundle: true,
@@ -40,21 +38,11 @@ try {
     outdir: bundleDir,
     tsconfig: 'tsconfig.json',
   });
-  texraSettings = require(path.join(bundleDir, 'texraSettings.js'));
   commandCatalog = require(path.join(bundleDir, 'commandCatalog.js'));
 } finally {
   await rm(bundleDir, { recursive: true, force: true });
 }
-const { buildTexraPackageConfiguration } = texraSettings;
 const { packageCommandContributions, commandKeybindings } = commandCatalog;
-
-function getConfigurationSections(packageJson) {
-  const configuration = packageJson.contributes?.configuration;
-  if (!Array.isArray(configuration)) {
-    throw new Error('package.json contributes.configuration must be an array');
-  }
-  return configuration;
-}
 
 function normalizeLineEndings(text) {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
@@ -63,18 +51,19 @@ function normalizeLineEndings(text) {
 const check = process.argv.includes('--check');
 const packageText = await readFile(packagePath, 'utf8');
 const packageJson = JSON.parse(packageText);
-// Spread preserves each key's existing position in `contributes`; only the
-// three catalog-derived values are regenerated in place.
+if (packageJson.contributes?.configuration !== undefined) {
+  throw new Error(
+    'packages/extension/package.json must not contribute TeXRA settings; use the native TeXRA settings view.',
+  );
+}
+const contributes = {
+  ...packageJson.contributes,
+  commands: packageCommandContributions,
+  keybindings: commandKeybindings,
+};
 const nextPackageJson = {
   ...packageJson,
-  contributes: {
-    ...packageJson.contributes,
-    configuration: buildTexraPackageConfiguration(
-      getConfigurationSections(packageJson),
-    ),
-    commands: packageCommandContributions,
-    keybindings: commandKeybindings,
-  },
+  contributes,
 };
 const nextPackageText = `${JSON.stringify(nextPackageJson, null, 2)}\n`;
 

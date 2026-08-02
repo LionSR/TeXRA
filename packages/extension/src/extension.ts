@@ -38,7 +38,6 @@ import { SecretManager } from '@frontend/secretManager';
 import {
   copyDefaultAgents,
   configureLatexSettings,
-  migrateLatexConfigToStorage,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
@@ -64,7 +63,7 @@ import {
 } from '@frontend/comments/inlineComments';
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
-import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
+import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -101,7 +100,6 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -124,16 +122,7 @@ async function refreshApiKeyStatus() {
   // funnel. This keeps ChatGPT subscription, Researcher Access, and direct API
   // keys in agreement about whether the first-run CTA should remain visible.
   const exists = await hasAnyUsableSetupCredential();
-  // `ui.showApiKeyReminders` is no longer declared in
-  // `contributes.configuration` and nothing writes it, so this is a read-only
-  // compat arm: a settings.json that predates the key's removal can still
-  // carry `false`, which is a deliberate opt-out worth honoring rather than
-  // making the CTA unsuppressible.
-  // Retire on 2026-11-01: drop this read and let the credential predicate
-  // alone decide whether the CTA shows.
-  const remindersOptOut =
-    getConfig<boolean>('ui.showApiKeyReminders', true) === false;
-  if (!exists && !remindersOptOut) {
+  if (!exists) {
     statusBarItem?.hide();
     apiKeyStatusBarItem.text = '$(rocket) TeXRA: Get Started';
     apiKeyStatusBarItem.tooltip =
@@ -217,12 +206,16 @@ export async function activate(context: vscode.ExtensionContext) {
     workspacePath: () => workspace.getWorkspacePath(),
   });
   await migrateLegacyVscodeStorage(context, storage);
+  const config = await createExtensionTexraConfig(
+    storage,
+    workspace.getWorkspacePath(),
+  );
   // Shared by the `Platform` tool-availability port and the setup platform's
   // extensions port, which both answer the same question.
   const isVscodeExtensionInstalled = (id: string) =>
     vscode.extensions.getExtension(id) !== undefined;
   initPlatform({
-    config: new VscodeConfigProvider(),
+    config,
     globalState: context.globalState,
     workspaceState: workspaceSM,
     fs: nodeFilesystem,
@@ -364,10 +357,6 @@ export async function activate(context: vscode.ExtensionContext) {
   // still matters: copyDefaultAgents populates the built-in directories,
   // registerAgentDirectoryRoots exposes them, and loadAgents scans them.
   await Promise.all([
-    // Per-key idempotent copy of LaTeX/compile/diff settings from VS Code
-    // config to TeXRA workspace storage. Safe to run on every activation —
-    // a key already in workspaceSM is left untouched.
-    migrateLatexConfigToStorage(),
     (async () => {
       await copyDefaultAgents(context);
       await registerAgentDirectoryRoots(context);
@@ -504,7 +493,11 @@ export async function activate(context: vscode.ExtensionContext) {
     );
   }
 
-  const progressViewProvider = new ProgressViewProvider(context);
+  const progressViewProvider = new ProgressViewProvider(
+    context,
+    config,
+    workspace,
+  );
   await progressViewProvider.initialize();
 
   logger.info('extension', 'TeXRA extension activated');
@@ -571,7 +564,8 @@ export async function activate(context: vscode.ExtensionContext) {
       );
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
-    // gates the GitHub PR subscription tool group.
+    // gates the GitHub PR subscription tool group. ProgressViewProvider owns
+    // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void refreshToolAvailability().catch(
         logRefreshFailure('workspace folder change'),

@@ -122,6 +122,31 @@ export const latexTabStyles: CSSResult = css`
     min-width: 180px;
   }
 
+  .replacement-groups-row,
+  .replacement-map-row {
+    align-items: flex-start;
+  }
+
+  .replacement-category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: var(--wa-space-xs);
+    margin-top: var(--wa-space-s);
+  }
+
+  .replacement-map-row wa-textarea {
+    width: min(760px, 100%);
+    margin-top: var(--wa-space-s);
+    font-family: var(--wa-font-family-mono, monospace), monospace;
+  }
+
+  .replacement-json-error {
+    display: block;
+    margin-top: var(--wa-space-2xs);
+    color: var(--color-status-error);
+    font-size: var(--font-size-sm);
+  }
+
   .setting-config-key {
     font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: var(--font-size-sm);

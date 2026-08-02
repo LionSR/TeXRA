@@ -6,7 +6,7 @@ import {
   AgentCategorySchema,
   AgentNameSchema,
 } from '@shared/schemas/agent';
-import { OUTPUT_DOCUMENTS_TAG, OUTPUT_END_TAG } from '@shared/schemas/output';
+import { OUTPUT_END_TAG } from '@shared/schemas/output';
 
 export { AgentCategory };
 
@@ -51,93 +51,10 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
     .prefault(AgentCategory.ToolUse),
 });
 
-/**
- * console.warn, not the structured trace logger: this module is a leaf schema
- * (`core/definition`, dependency-free by design — see
- * src/agent/core/README.md) and must not pull in the logger's transitive
- * `@shared/schemas` barrel just for deprecation notices. Same pattern as
- * `src/shared/schemas/streamData.ts`'s `warnDroppedItem`.
- */
-function warnRetiredSetting(message: string): void {
-  console.warn(`[AgentDataclass] ${message}`);
-}
-
-function isNonEmptyRecord(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).length > 0
-  );
-}
-
-/**
- * Drop obsolete settings accepted only for legacy YAML and persisted state.
- * Values that carried no behavior (`outputExt`, `prefills`, the default output
- * tags, and materialized empty maps) are dropped silently so old
- * bundled/persisted copies do not pollute CLI stderr; a value that used to do
- * something warns, because the agent now behaves differently:
- *
- * - `documentTag`/`endTag` configured the per-agent output container; every
- *   agent now emits the fixed
- *   `<documents><document name="...">...</document></documents>` protocol (see
- *   `@shared/schemas/output`).
- * - `internal` hid an agent from launcher listings; no agent uses it and every
- *   listing now shows the full category.
- * - `requiredFiles` mapped variables to workspace-relative files; agent-bundled
- *   files live in `requiredFilesInternal` and workspace files are attached per
- *   run as context files.
- * - `filePatternsContain` bound variables to files whose names matched a
- *   pattern within a UI file category.
- */
-function stripLegacySettingFields(input: unknown): unknown {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return input;
-  }
-  const {
-    outputExt: _outputExt,
-    prefills: _prefills,
-    documentTag,
-    endTag,
-    internal,
-    requiredFiles,
-    filePatternsContain,
-    ...rest
-  } = input as Record<string, unknown>;
-  const hasLegacyOutputTags = documentTag !== undefined || endTag !== undefined;
-  const usesDefaultOutputTags =
-    (documentTag === undefined || documentTag === OUTPUT_DOCUMENTS_TAG) &&
-    (endTag === undefined || endTag === OUTPUT_END_TAG);
-  if (hasLegacyOutputTags && !usesDefaultOutputTags) {
-    warnRetiredSetting(
-      'settings.documentTag/endTag are no longer configurable — every agent emits the fixed <documents><document name="..."> container. Ignoring the value from this agent definition.',
-    );
-  }
-  if (internal === true) {
-    warnRetiredSetting(
-      'settings.internal no longer hides an agent — this agent is listed with the rest of its category.',
-    );
-  }
-  if (isNonEmptyRecord(requiredFiles)) {
-    warnRetiredSetting(
-      'settings.requiredFiles (workspace-relative) is no longer loaded — bundle the file next to the agent YAML and map it under requiredFilesInternal, or attach it as a context file for the run.',
-    );
-  }
-  if (Array.isArray(filePatternsContain) && filePatternsContain.length > 0) {
-    warnRetiredSetting(
-      'settings.filePatternsContain is no longer loaded — its template variables render empty. Map the file under requiredFilesInternal or attach it as a context file for the run.',
-    );
-  }
-  return rest;
-}
-
-export const AgentSettingSchema = z.preprocess(
-  stripLegacySettingFields,
-  z.discriminatedUnion('agentCategory', [
-    AgentWorkflowSettingSchema,
-    AgentToolUseSettingSchema,
-  ]),
-);
+export const AgentSettingSchema = z.discriminatedUnion('agentCategory', [
+  AgentWorkflowSettingSchema,
+  AgentToolUseSettingSchema,
+]);
 
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 export type AgentWorkflowSetting = Extract<
@@ -178,10 +95,7 @@ const RawAgentSettingInputSchema = z.strictObject({
  * Raw YAML settings. This schema validates field shapes without materialising
  * defaults, so inherited child blocks only override fields the author wrote.
  */
-const AgentSettingInputSchema = z.preprocess(
-  stripLegacySettingFields,
-  RawAgentSettingInputSchema,
-);
+const AgentSettingInputSchema = RawAgentSettingInputSchema;
 
 export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
 
@@ -190,9 +104,9 @@ export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
  * settings, the category is known here, so category-specific fields can be
  * checked without importing the tool registry.
  */
-export const AgentRootSettingInputSchema = z.preprocess(
-  stripLegacySettingFields,
-  z.discriminatedUnion('agentCategory', [
+export const AgentRootSettingInputSchema = z.discriminatedUnion(
+  'agentCategory',
+  [
     z.strictObject({
       ...rawAgentSettingBaseFields,
       ...rawWorkflowSettingFields,
@@ -202,7 +116,7 @@ export const AgentRootSettingInputSchema = z.preprocess(
       ...rawAgentSettingBaseFields,
       agentCategory: z.literal(AgentCategory.ToolUse),
     }),
-  ]),
+  ],
 );
 
 /** Whether `fileContent` already contains the protocol's closing tag. */

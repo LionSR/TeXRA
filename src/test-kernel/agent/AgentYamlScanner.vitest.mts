@@ -51,20 +51,6 @@ describe('agent YAML scanner', () => {
         'prompts:',
         '  userRequest: child',
       ],
-      'assistant.yaml': [
-        'name: assistant',
-        'settings:',
-        '  agentCategory: workflow',
-        '  rounds: 5',
-        'prompts:',
-        '  userRequest: assistant',
-      ],
-      'alias-child.yaml': [
-        'name: alias-child',
-        'inherits: chat',
-        'prompts:',
-        '  userRequest: alias child',
-      ],
       'prompt-base.yaml': [
         'name: prompt-base',
         'settings:',
@@ -86,9 +72,6 @@ describe('agent YAML scanner', () => {
     const entries = await scanDirectory(agentDir, 'custom');
 
     expect(entries.find((entry) => entry.name === 'child')?.rounds).toBe(4);
-    expect(entries.find((entry) => entry.name === 'alias-child')?.rounds).toBe(
-      5,
-    );
     expect(entries.find((entry) => entry.name === 'prompt-child')?.rounds).toBe(
       3,
     );

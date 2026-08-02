@@ -3,12 +3,6 @@ import type { StateStore } from '@platform/interfaces';
 import { tryGlobalState } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-// Settings query constants for VS Code settings UI
-export const SETTINGS_QUERY = {
-  EXTENSION: '@ext:texra-ai.texra',
-  MODELS: '@ext:texra-ai.texra models',
-} as const;
-
 // Time constants
 export const REFRESH_THRESHOLD_MS = 200;
 export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;

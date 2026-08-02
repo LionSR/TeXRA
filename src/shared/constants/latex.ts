@@ -28,6 +28,61 @@ export const CORE_LATEX_TOOLS = Object.freeze([
 
 export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
 
+export const NON_REGEX_REPLACEMENT_CATEGORIES = [
+  'latex_spacing',
+  'equations',
+  'sections',
+  'latex_forbidden_commands',
+  'characters',
+  'font_commands',
+  'latex_xml',
+  'unicode',
+  'html_entities',
+  'latexdiff',
+  'gptness',
+  'personal_style',
+  'max_style',
+] as const;
+
+export const REGEX_REPLACEMENT_CATEGORIES = [
+  'fenced_latex_blocks',
+  'inline_math',
+  'parentheses',
+  'latexdiff_markup',
+  'equation_style',
+  'equation_macros',
+  'personal_style_contextual',
+  'max_style_regex',
+] as const;
+
+export type NonRegexReplacementCategory =
+  (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number];
+export type RegexReplacementCategory =
+  (typeof REGEX_REPLACEMENT_CATEGORIES)[number];
+
+export const DEFAULT_ENABLED_REPLACEMENTS = [
+  'latex_spacing',
+  'equations',
+  'sections',
+  'latex_forbidden_commands',
+  'characters',
+  'font_commands',
+  'latex_xml',
+  'unicode',
+  'html_entities',
+  'latexdiff',
+  'gptness',
+] satisfies NonRegexReplacementCategory[];
+
+export const DEFAULT_ENABLED_REGEX_REPLACEMENTS = [
+  'fenced_latex_blocks',
+  'inline_math',
+  'parentheses',
+  'latexdiff_markup',
+  'equation_style',
+  'personal_style_contextual',
+] satisfies RegexReplacementCategory[];
+
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';
 
@@ -437,8 +492,7 @@ export function getInstallGuide(guide: Guide, platform: string): string {
 // These constants are imported by:
 //   - readers in src/agent/, src/latex/, src/housekeeping/, src/commands/
 //   - the inbound/outbound message schemas in src/shared/schemas/
-//   - the LaTeX tab UI in src/settingsView/frontend/
-//   - the activation-time migration helper in src/frontend/setup.ts
+//   - the native LaTeX settings handlers and tab UI
 // so changing a default or range here propagates everywhere with no rot.
 //
 import { WorkspaceStateKey } from '@shared/state/stateKeys';

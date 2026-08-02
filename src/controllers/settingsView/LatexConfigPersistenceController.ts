@@ -15,10 +15,24 @@ import {
   type UpdateLatexConfigValuesMessage,
 } from '@shared/schemas/settingsViewMessages';
 
+const REPLACEMENT_CONFIG_FIELDS = {
+  wrapCritiqueInAlign: 'texra.latex.wrapCritiqueInAlign',
+  enabledReplacements: 'texra.latex.enabledReplacements',
+  enabledReplacementsRegex: 'texra.latex.enabledReplacementsRegex',
+  customReplacementsRegex: 'texra.latex.customReplacementsRegex',
+  customReplacements: 'texra.latex.customReplacements',
+} as const satisfies Partial<Record<keyof LatexConfigValues, string>>;
+
+interface CoreConfigReader {
+  get(key: string): unknown;
+  isExplicitlySet(key: string): boolean;
+}
+
 /** Builds storage-backed LaTeX config snapshots without host side effects. */
 export class LatexConfigPersistenceController {
   buildConfigValues(
     readStoredValue: (key: WorkspaceStateKey) => unknown,
+    coreConfig?: CoreConfigReader,
   ): LatexConfigValues {
     const values: Partial<Record<LatexConfigField, unknown>> = {};
 
@@ -33,16 +47,27 @@ export class LatexConfigPersistenceController {
       if (parsed.success) values[field] = parsed.data;
     }
 
+    if (coreConfig) {
+      for (const [field, key] of Object.entries(REPLACEMENT_CONFIG_FIELDS)) {
+        if (!coreConfig.isExplicitlySet(key)) continue;
+        const parsed = LatexConfigValuesSchema.shape[
+          field as keyof typeof REPLACEMENT_CONFIG_FIELDS
+        ].safeParse(coreConfig.get(key));
+        if (parsed.success) values[field as LatexConfigField] = parsed.data;
+      }
+    }
+
     return values as LatexConfigValues;
   }
 
   /** Wraps the current config values into the outbound settings-view message shape. */
   buildConfigMessage(
     readStoredValue: (key: WorkspaceStateKey) => unknown,
+    coreConfig?: CoreConfigReader,
   ): UpdateLatexConfigValuesMessage {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
-      values: this.buildConfigValues(readStoredValue),
+      values: this.buildConfigValues(readStoredValue, coreConfig),
     };
   }
 }

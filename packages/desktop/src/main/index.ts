@@ -49,7 +49,6 @@ import {
   type AgentSource,
 } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { debounce } from '@utils/core';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
@@ -234,12 +233,6 @@ function createWindow(options: {
   authCallbackState: DesktopAuthCallbackState;
   processSession: SessionHandle;
   sessionStores: SessionStores;
-  /**
-   * Captured in `initializeElectronPlatform` BEFORE the bundled-agent sync
-   * writes LAST_KNOWN_VERSION, so the onboarding backfill can tell a returning
-   * veteran from a fresh install. See ElectronPlatformInitResult.hasPriorInstall.
-   */
-  hasPriorInstall: boolean;
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
 }): void {
@@ -882,20 +875,10 @@ function createWindow(options: {
       );
     },
   });
-  // Opened once the one-shot backfill below has settled. The onboarding IPC
-  // awaits this before its first funnel derivation so a returning veteran
-  // (credential present, `firstRunDone` not yet written) can't have WEBVIEW_READY
-  // transiently derive State 1 — firing `selectSetupAgent` and clobbering the
-  // launcher's agent selection — before the backfill marks them `done`.
-  let openOnboardingReadyGate: () => void = () => {};
-  const onboardingReadyGate = new Promise<void>((resolve) => {
-    openOnboardingReadyGate = resolve;
-  });
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer },
     {
       hasCredential: probeCredential,
-      readyGate: onboardingReadyGate,
       selectSetupAgent: async () => {
         const entry = getAgent('setup', AgentCategory.ToolUse);
         ipcRef.current?.postToRenderer({
@@ -955,56 +938,6 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
-  // One-shot migration: existing desktop users with a credential or run
-  // history never see the welcome card (State 0) or setup auto-start (State
-  // 1). Mirrors the extension and CLI backfill.
-  void (async () => {
-    try {
-      const globalState = platform().globalState;
-      // Gate the whole probe + backfill on the flag being unwritten, so the
-      // credential/relay/`listExecutions` I/O only runs once (first launch
-      // after upgrade) rather than on every window creation.
-      if (
-        globalState.get<boolean | undefined>(
-          GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-        ) !== undefined
-      ) {
-        return;
-      }
-      const hasCredential = await probeCredential().catch(() => false);
-      // `options.hasPriorInstall` was read in `initializeElectronPlatform`
-      // BEFORE the bundled-agent sync wrote LAST_KNOWN_VERSION during this same
-      // session. Reading the key here instead would always be defined (the sync
-      // already ran and is awaited before createWindow), wrongly classifying a
-      // fresh credentialed user as a veteran → 'done', so State 1 never shows.
-      const hasPriorInstall = options.hasPriorInstall;
-      // Inline `listExecutions` import so the agent storage module tree-shakes
-      // from the desktop main bundle unless we actually reach the backfill
-      // path on the first launch.
-      const { listExecutions } = await import('@agent/storage');
-      const hasRunHistory = await listExecutions()
-        .then((entries) => entries.length > 0)
-        .catch(() => false);
-      await backfillFirstRunDone(globalState, {
-        hasCredential,
-        hasPriorInstall,
-        hasRunHistory,
-      });
-    } catch (error) {
-      // Never block window creation, but a swallowed failure here leaves the
-      // flag unwritten, so an existing user is re-shown the welcome card.
-      reportAsyncError(error);
-    } finally {
-      // Open the gate (whether we backfilled or early-returned) so the
-      // onboarding IPC's gated first refresh — driven by WEBVIEW_READY — derives
-      // the settled post-backfill state. That gated refresh covers both mount
-      // orders (webview before or after backfill), so no separate post-backfill
-      // refresh is issued here: a premature one could run before the renderer is
-      // listening and consume the one-time selectSetupAgent transition, leaving
-      // the launcher on the default agent while the setup card is shown.
-      openOnboardingReadyGate();
-    }
-  })();
   // Spawns `git log` under the active workspace to populate the launcher
   // banner's recent-commits picker. The host is stateless and re-probes per
   // request, so workspace switches don't need cache invalidation.
@@ -1269,12 +1202,8 @@ if (protocolLifecycle.shouldContinue) {
       // the same process-session shutdown used by an ordinary application
       // exit. Once this block completes, the lifecycle owns that cleanup.
       try {
-        const processStores = await initializeDesktopProcessStores({
-          session: processSession,
-          legacyStreamFilePath: protocolLifecycle.ownsSingleInstanceLock
-            ? join(app.getPath('userData'), 'streams.json')
-            : undefined,
-        });
+        const processStores =
+          await initializeDesktopProcessStores(processSession);
         disposeProcessStores = () => processStores.dispose();
         await processSession.waitUntilReady();
         sessionStores = processStores.stores;
@@ -1328,7 +1257,6 @@ if (protocolLifecycle.shouldContinue) {
             authCallbackState,
             processSession,
             sessionStores,
-            hasPriorInstall: platformInit.hasPriorInstall,
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();

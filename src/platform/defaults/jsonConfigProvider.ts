@@ -1,9 +1,8 @@
 import {
   canonicalConfigKey,
-  configKeyVariants,
   createWatcherRegistry,
-  firstStoredValue,
 } from '@shared/config/configKeys';
+import { getCoreSettingDefault } from '@shared/schemas/coreSettings';
 
 import type { JsonStore } from './jsonStore';
 import type {
@@ -20,14 +19,12 @@ export interface JsonConfigProviderOptions {
 
 /**
  * File-backed {@link ConfigProvider}. Keys are stored flat with the canonical
- * `texra.*` prefix; bare keys are accepted on read for legacy compatibility.
- * Writes use the canonical prefixed form unless a legacy unprefixed entry
- * already exists. Workspace values shadow global values on read and
+ * `texra.*` prefix. Workspace values shadow global values on read and
  * `update()` routes writes by {@link ConfigTarget}.
  */
 export class JsonConfigProvider implements ConfigProvider {
   private readonly watchers = createWatcherRegistry();
-  private readonly workspaceStore: JsonStore;
+  private workspaceStore: JsonStore;
   private readonly globalStore: JsonStore;
 
   constructor({ workspace, global }: JsonConfigProviderOptions) {
@@ -36,12 +33,23 @@ export class JsonConfigProvider implements ConfigProvider {
   }
 
   get<T>(key: string, defaultValue?: T): T {
-    const keys = configKeyVariants(key);
-    const workspaceValue = firstStoredValue<T>(this.workspaceStore, keys);
+    const storedKey = canonicalConfigKey(key);
+    const workspaceValue = this.workspaceStore.get<T>(storedKey);
     if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = firstStoredValue<T>(this.globalStore, keys);
+    const globalValue = this.globalStore.get<T>(storedKey);
     if (globalValue !== undefined) return globalValue;
-    return defaultValue as T;
+    const schemaDefault = getCoreSettingDefault(storedKey) as T | undefined;
+    return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
+  }
+
+  /** Switch workspace scope while retaining global values and subscriptions. */
+  replaceWorkspaceStore(workspaceStore: JsonStore): void {
+    const affectedKeys = new Set([
+      ...Object.keys(this.workspaceStore.snapshot()),
+      ...Object.keys(workspaceStore.snapshot()),
+    ]);
+    this.workspaceStore = workspaceStore;
+    for (const key of affectedKeys) this.watchers.notify(key);
   }
 
   async update<T>(
@@ -50,35 +58,30 @@ export class JsonConfigProvider implements ConfigProvider {
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
     const store = target === 'global' ? this.globalStore : this.workspaceStore;
-    const keys = configKeyVariants(key);
+    const storedKey = canonicalConfigKey(key);
     if (value === undefined) {
-      await Promise.all(
-        keys
-          .filter((candidate) => store.has(candidate))
-          .map((candidate) => store.set(candidate, undefined)),
-      );
+      await store.set(storedKey, undefined);
     } else {
-      const storedKey =
-        keys.find((candidate) => store.has(candidate)) ??
-        canonicalConfigKey(key);
       await store.set(storedKey, value);
     }
     this.watchers.notify(canonicalConfigKey(key));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {
-    const keys = configKeyVariants(key);
+    const storedKey = canonicalConfigKey(key);
+    const defaultValue = getCoreSettingDefault(storedKey) as T | undefined;
     return {
-      globalValue: firstStoredValue<T>(this.globalStore, keys),
-      workspaceValue: firstStoredValue<T>(this.workspaceStore, keys),
+      ...(defaultValue !== undefined && { defaultValue }),
+      globalValue: this.globalStore.get<T>(storedKey),
+      workspaceValue: this.workspaceStore.get<T>(storedKey),
       effectiveValue: this.get<T>(key),
     };
   }
 
   isExplicitlySet(key: string): boolean {
-    return configKeyVariants(key).some(
-      (candidate) =>
-        this.workspaceStore.has(candidate) || this.globalStore.has(candidate),
+    const storedKey = canonicalConfigKey(key);
+    return (
+      this.workspaceStore.has(storedKey) || this.globalStore.has(storedKey)
     );
   }
 

@@ -33,8 +33,8 @@ export { type HistoryItem } from './historyViewMessages';
 export {
   API_ACCESS_MODE_OPTIONS,
   type ProviderKeyStatus,
-  type ProviderVscodeSetting,
-  type NumberVscodeSetting,
+  type ProviderSetting,
+  type NumberSetting,
 } from './profileViewMessages';
 
 // Settings-specific data + outbound message schemas and the inbound schemas.
