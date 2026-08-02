@@ -43,13 +43,15 @@ export class JsonConfigProvider implements ConfigProvider {
   }
 
   /** Switch workspace scope while retaining global values and subscriptions. */
-  replaceWorkspaceStore(workspaceStore: JsonStore): void {
+  replaceWorkspaceStore(workspaceStore: JsonStore): JsonStore {
+    const previousStore = this.workspaceStore;
     const affectedKeys = new Set([
-      ...Object.keys(this.workspaceStore.snapshot()),
+      ...Object.keys(previousStore.snapshot()),
       ...Object.keys(workspaceStore.snapshot()),
     ]);
     this.workspaceStore = workspaceStore;
     for (const key of affectedKeys) this.watchers.notify(key);
+    return previousStore;
   }
 
   async update<T>(
