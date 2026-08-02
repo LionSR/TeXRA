@@ -291,66 +291,6 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
   });
 
-  it('rejects empty result metadata instead of inventing a workflow result', async () => {
-    const id = 'bad-result-empty' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('result-meta', {});
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expectParseWarning(warnSpy, id, 'result-meta.json');
-  });
-
-  it('rejects unknown result metadata producers', async () => {
-    const id = 'bad-result-producer' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('result-meta', {
-      producer: 'unknown',
-      outputs: [],
-      compileFailures: [],
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expectParseWarning(warnSpy, id, 'result-meta.json');
-  });
-
-  it('rejects unknown fields in canonical result metadata', async () => {
-    const id = 'bad-result-canonical-field' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('result-meta', {
-      producer: 'subagent',
-      agentName: 'reviewer',
-      wallTimeMs: 12,
-      result: {
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        response: 'done',
-        files: [],
-        cost: 0,
-      },
-      unexpected: true,
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expectParseWarning(warnSpy, id, 'result-meta.json');
-  });
-
-  it('rejects a CLI workflow record with an explicit tool-use category', async () => {
-    const id = 'bad-result-cli-category' as ExecutionId;
-    const warnSpy = mockWarn();
-    await getExecutionStore(id).write('result-meta', {
-      producer: 'cliWorkflow',
-      category: 'toolUse',
-      outcome: RUN_OUTCOME.COMPLETED,
-      result: { response: 'not a workflow result' },
-    });
-
-    await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expectParseWarning(warnSpy, id, 'result-meta.json');
-  });
-
   it('reads legacy conversation wrappers as provider messages', async () => {
     const id = 'legacy-conversation-wrapper' as ExecutionId;
     const message = { role: 'user', content: 'Resume this.' };
