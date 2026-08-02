@@ -62,7 +62,7 @@ import {
   resolvePersistedStreamIdForExecution,
 } from '@transcript';
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import { clamp, unique } from '@utils/core';
+import { assertNever, clamp, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { findExistingRunStoragePath } from '@utils/files/taskRunStorage';
@@ -79,6 +79,8 @@ function formatArchiveDiagnostic(
       return `Archive diagnostic: conflicting row ${diagnostic.rowId} in ${diagnostic.streamId}`;
     case 'orderingCycle':
       return `Archive diagnostic: ordering cycle in ${diagnostic.streamId}`;
+    default:
+      return assertNever(diagnostic, 'Unhandled archive diagnostic');
   }
 }
 
