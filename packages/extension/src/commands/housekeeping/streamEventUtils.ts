@@ -1,35 +1,19 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
 
 /**
- * Identity of a pack/clean operation, as far as the missing-outputs marker is
- * concerned. Structurally satisfied by both `PackConfig` and `CleanConfig`.
+ * Clear the missing-outputs marker for the single workflow tab a pack/clean
+ * operation addressed. Mutations are exactly addressed (#9590 rule A3): the
+ * caller supplies the `StreamTabId` it acted on. Agent/model/config identity
+ * is display data, not command authorization, so invocations without a stream
+ * context (command palette, main-view file buttons) clear nothing and must
+ * not call this.
  */
-interface FileOpTarget {
-  agent: string;
-  model: string;
-  inputFile: string;
-  outputFiles: readonly string[];
-  /** Toolbar invocations target one tab; palette invocations have none. */
-  streamId?: string;
-  skipProgressViewClear?: boolean;
-}
-
-/**
- * Clear the missing-outputs marker for the workflow tab(s) a pack/clean
- * operation touched. With a `streamId` the marker is cleared on that tab
- * alone; without one it is broadcast to every workflow tab whose taskState
- * matches the agent/model/inputFile identity.
- */
-export function emitClearMissingOutputs(target: FileOpTarget): void {
-  if (target.skipProgressViewClear) return;
-  const { agent, model, inputFile, outputFiles, streamId } = target;
+export function emitClearMissingOutputs(streamId: string): void {
   defaultSession().events.emit({
     scope: 'session',
     event: {
       type: 'clearMissingOutputs',
-      payload: streamId
-        ? { streamId }
-        : { streamConfig: { agent, model, inputFile, outputFiles } },
+      payload: { streamId },
     },
   });
 }
