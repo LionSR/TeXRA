@@ -101,28 +101,23 @@ function image(fileName: string): ExtractedClipboardImage {
 }
 
 describe('follow-up-input layout', () => {
-  it('uses two content-sized rows without Web Awesome auto-resize', async () => {
+  it('renders six rows with Web Awesome vertical resizing', async () => {
     const element = createFollowUpInput('stream-layout');
     await element.updateComplete;
 
-    const textarea = element.shadowRoot?.querySelector('wa-textarea');
-    expect(textarea?.getAttribute('rows')).toBe('2');
-    expect(textarea?.getAttribute('resize')).toBe('none');
-  });
+    const textarea = element.shadowRoot?.querySelector('wa-textarea') as
+      | (HTMLElement & {
+          rows: number;
+          resize: string;
+          input: HTMLTextAreaElement;
+          updateComplete: Promise<boolean>;
+        })
+      | null;
+    await textarea?.updateComplete;
 
-  it('grows with content through CSS field-sizing, not WA auto-resize', () => {
-    // The auto-grow behavior is pure CSS (jsdom cannot lay it out), so pin the
-    // declarations that carry it: content-driven sizing with a bounded band.
-    const ctor = customElements.get('follow-up-input') as unknown as {
-      styles: { cssText: string } | Array<{ cssText: string }>;
-    };
-    const cssText = [ctor.styles]
-      .flat()
-      .map((sheet) => sheet.cssText)
-      .join('\n');
-    expect(cssText).toContain('field-sizing: content');
-    expect(cssText).toContain('--textarea-min-height: calc(');
-    expect(cssText).toContain('min-height: var(--textarea-min-height)');
+    expect(textarea?.rows).toBe(6);
+    expect(textarea?.resize).toBe('vertical');
+    expect(textarea?.input.rows).toBe(6);
   });
 });
 
