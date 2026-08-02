@@ -10,29 +10,7 @@ import {
 
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
-const ROUTING_FETCH_MARKER = Symbol('texra.longRunningModelFetchRouter');
-type RoutingFetch = typeof fetch & { [ROUTING_FETCH_MARKER]?: true };
 type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
-
-function isGoogleClassicStreamingRequest(input: RequestInfo | URL): boolean {
-  let url: string;
-  if (typeof input === 'string') {
-    url = input;
-  } else if (input instanceof URL) {
-    url = input.href;
-  } else if (input instanceof Request) {
-    url = input.url;
-  } else {
-    return false;
-  }
-
-  try {
-    return new URL(url).pathname.endsWith(':streamGenerateContent');
-  } catch {
-    // Malformed input cannot identify a Google streaming endpoint.
-    return false;
-  }
-}
 
 async function normalizeModelRequest(
   input: RequestInfo | URL,
@@ -128,30 +106,3 @@ Object.defineProperty(longRunningModelFetchImpl, 'Response', {
 });
 export const longRunningModelFetch =
   longRunningModelFetchImpl as UploadCompatibleFetch;
-
-/**
- * Route Google classic streaming generation through the model transport.
- *
- * Only standalone hosts may call this. In particular, the VS Code extension
- * must not wrap fetch for every extension sharing its host process. Google
- * classic `generateContent` has no fetch injection seam, so CLI and desktop
- * intercept only its `:streamGenerateContent` action and preserve the host's
- * fetch implementation for every unrelated request.
- */
-export function installLongRunningModelFetch(): void {
-  const hostFetch = globalThis.fetch as RoutingFetch;
-  if (hostFetch[ROUTING_FETCH_MARKER] === true) return;
-
-  const routingFetch: RoutingFetch = function (
-    this: unknown,
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> {
-    if (isGoogleClassicStreamingRequest(input)) {
-      return longRunningModelFetch(input, init);
-    }
-    return Reflect.apply(hostFetch, this, [input, init]);
-  };
-  Object.defineProperty(routingFetch, ROUTING_FETCH_MARKER, { value: true });
-  globalThis.fetch = routingFetch;
-}

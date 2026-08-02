@@ -333,11 +333,24 @@ describe('ModelHandlerGoogleInteractions store:true chaining', () => {
     const client: any = capturingClient(calls, (i) =>
       completedEvents(i === 0 ? 'int_1' : 'int_2'),
     );
-    // Compaction summarizes via models.generateContent.
-    client.models.generateContent = async () => ({
-      text: 'SUMMARY',
-      usageMetadata: { candidatesTokenCount: 5 },
-    });
+    // Compaction uses a separate stateless, non-streaming Interactions call.
+    const create = client.interactions.create;
+    client.interactions.create = async (params: { stream?: boolean }) => {
+      if (params.stream === false) {
+        return {
+          id: 'compact',
+          status: 'completed',
+          steps: [
+            {
+              type: 'model_output',
+              content: [{ type: 'text', text: 'SUMMARY' }],
+            },
+          ],
+          usage: { total_output_tokens: 5 },
+        };
+      }
+      return create(params);
+    };
 
     // Round 1 establishes a chain.
     const messages: Step[] = [userStep('a'), userStep('b'), userStep('c')];
