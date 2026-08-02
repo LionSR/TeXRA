@@ -249,8 +249,6 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
     additions: 1,
     deletions: 1,
     language: 'latex',
-    originalPath: '/tmp/original/paper.tex',
-    proposedPath: '/tmp/proposed/paper.tex',
   };
 
   await launched.page.evaluate((message) => {

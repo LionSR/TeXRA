@@ -22,7 +22,9 @@ export const DESKTOP_DIFF_COMMANDS = {
 export const DesktopShowDiffMessageSchema = z.object({
   command: z.literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
   title: z.string(),
-  displayPath: z.string().optional(),
+  // The one path the Review workbench displays. Always supplied by the
+  // producer; no fallback reconstruction in the renderer.
+  displayPath: z.string(),
   originalText: z.string(),
   proposedText: z.string(),
   additions: z.int().nonnegative().prefault(0),
@@ -30,10 +32,6 @@ export const DesktopShowDiffMessageSchema = z.object({
   // Monaco language id (e.g. 'plaintext', 'typescript', 'latex'). The
   // renderer falls back to 'plaintext' on unknown values.
   language: z.string().default('plaintext'),
-  // File hints purely for the review header / a11y label. Not used to
-  // re-read content — the text is already in the payload.
-  originalPath: z.string().optional(),
-  proposedPath: z.string().optional(),
 });
 
 export type DesktopShowDiffMessage = z.infer<
