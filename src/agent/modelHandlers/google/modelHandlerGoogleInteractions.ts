@@ -1174,6 +1174,12 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     let updatedMessages: Step[] | undefined;
 
     const stateful = this.serverStateEnabled();
+    // Observing stateless mode invalidates any prior chain immediately. This is
+    // deliberately before token work, pending retrieval, and dispatch so every
+    // exit path (including timeout, abort, terminal status, or retrieval error)
+    // leaves a later re-enable on a safe full-resend boundary.
+    if (!stateful) this.invalidateChain();
+
     const generationConfig = this.buildGenerationConfig(endTag);
     const interactionsTools = tools?.length
       ? this.toInteractionsTools(tools)
@@ -1483,14 +1489,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
     // Capture the chain anchor from the COMPLETED polled interaction (NOT the
     // submit), so the next turn chains onto a server-retained, completed id.
-    // If server state was disabled while this interaction was pending, discard
-    // the old chain instead: a later re-enable must full-resend rather than skip
-    // over intervening stateless turns.
-    if (stateful) {
-      this.finalizeChain(completed, totalStepCount, true);
-    } else {
-      this.invalidateChain();
-    }
+    // Stateless mode invalidated the chain at entry and must not establish one.
+    if (stateful) this.finalizeChain(completed, totalStepCount, true);
     return { response: completed };
   }
 
