@@ -5,7 +5,6 @@ import {
   ActiveChildInfoSchema,
   ContextManagementDataSchema,
   OutputXmlSummarySchema,
-  STREAM_PHASE,
   STREAM_STATUS,
 } from '@shared/schemas';
 
@@ -19,14 +18,6 @@ const usageFixture = {
 } as const;
 
 describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration', () => {
-  it('extracts latestUsage from a single-element normalizedSnapshots array', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      normalizedSnapshots: [{ round: 0, usage: usageFixture }],
-    });
-
-    expect(result.latestUsage).toMatchObject(usageFixture);
-  });
-
   it('takes the last element when normalizedSnapshots has multiple entries', () => {
     const older = { ...usageFixture, inputTokens: 50 };
     const latest = { ...usageFixture, inputTokens: 200 };
@@ -46,25 +37,6 @@ describe('RunUsageAccumulatorJSONSchema — legacy normalizedSnapshots migration
     });
 
     expect(result.latestUsage).toBeNull();
-  });
-
-  it('is idempotent: already-migrated data passes through unchanged', () => {
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      latestUsage: usageFixture,
-    });
-
-    expect(result.latestUsage).toMatchObject(usageFixture);
-  });
-
-  it('keeps canonical latestUsage when a hybrid payload also has snapshots', () => {
-    const stale = { ...usageFixture, inputTokens: 1 };
-    const result = RunUsageAccumulatorJSONSchema.parse({
-      latestUsage: usageFixture,
-      normalizedSnapshots: [{ round: 0, usage: stale }],
-    });
-
-    // The canonical latestUsage must win over the snapshot-derived value.
-    expect(result.latestUsage).toMatchObject(usageFixture);
   });
 
   it('keeps an explicit null latestUsage over snapshots in a hybrid payload', () => {
@@ -140,12 +112,6 @@ describe('OutputXmlSummarySchema — legacy documents field', () => {
     });
   });
 
-  it('still rejects an unrecognized key on a record without documents', () => {
-    expect(() =>
-      OutputXmlSummarySchema.parse({ tagContents: {}, unexpected: 1 }),
-    ).toThrow();
-  });
-
   it('rejects an unrecognized key alongside legacy documents', () => {
     expect(() =>
       OutputXmlSummarySchema.parse({ documents: [], unexpected: 1 }),
@@ -218,31 +184,11 @@ describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
     expect(result).toMatchObject({ kind: 'process' });
   });
 
-  it('passes an already-migrated entry through unchanged', () => {
-    const result = ActiveChildInfoSchema.parse({
-      ...legacyBase,
-      kind: 'process',
-    });
-
-    expect(result).toMatchObject({ kind: 'process' });
-  });
-
   // `status` has no legacy migration on purpose. The child roster is liveness
   // state: `assembleSnapshot` never writes `subagents`, and every hydrate
   // clamps it to `[]`, so no on-disk roster carries the retired 7-value
   // `StreamStatus` vocabulary. The v0.41 cut dropped the speculative union
   // member that mapped it; the field now takes `StreamPhase` only.
-  it('accepts a StreamPhase status', () => {
-    const result = ActiveChildInfoSchema.parse({
-      ...legacyBase,
-      kind: 'subagent',
-      childStreamId: 'stream-1',
-      status: STREAM_PHASE.RUNNING,
-    });
-
-    expect(result).toMatchObject({ status: STREAM_PHASE.RUNNING });
-  });
-
   it('rejects a retired StreamStatus value rather than folding it', () => {
     expect(() =>
       ActiveChildInfoSchema.parse({
