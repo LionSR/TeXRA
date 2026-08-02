@@ -6,6 +6,7 @@ import type {
   HostBashApprovalRequest,
 } from '@agent/runtime/HostInteractions';
 import {
+  currentSession,
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -14,11 +15,14 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { StreamTabIdSchema, type BashPermission } from '@shared/schemas';
+import {
+  StreamTabIdSchema,
+  type BashPermission,
+  type StreamTabId,
+} from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
-import { createSessionBypassAccessors } from '@tools/approval/sessionBypassAccessors';
 import { errorResult } from '@tools/core/result';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -34,11 +38,24 @@ const DEFAULT_BASH_REJECTION_INSTRUCTION =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
   'Continue without running it, use a non-shell method, or explain what approval would be needed.';
 
-const {
-  setSessionBypass: setBashApprovalSessionBypass,
-  isBypassedForStream: isBashApprovalBypassedForStream,
-} = createSessionBypassAccessors((session) => session.approvals.bash.bypass);
-export { setBashApprovalSessionBypass, isBashApprovalBypassedForStream };
+export function setBashApprovalSessionBypass(
+  streamId: StreamTabId,
+  enabled: boolean,
+  options?: { silent?: boolean; session?: SessionHandle },
+): void {
+  (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
+    streamId,
+    enabled,
+    options,
+  );
+}
+
+export function isBashApprovalBypassedForStream(
+  streamId: StreamTabId,
+  session: SessionHandle = currentSession(),
+): boolean {
+  return session.approvals.bash.bypass.isBypassed(streamId);
+}
 
 /**
  * Build the bash permission payload every host publishes to its approval
