@@ -147,17 +147,11 @@ TeXRA intelligently handles file paths to ensure proper document processing:
 - **Output**: Workflow outputs are saved in task storage. Use **Accept** or
   **Pack** when you want to copy reviewed outputs back into the workspace.
 
-### File Path Configuration
+### File Discovery Rules
 
-You can customize file extensions and ignored paths via the `texra.files.*`
-settings — set them in `.texra/config.json` (CLI) or VS Code settings. The
-default values are listed in the [Configuration Guide](./configuration.md). A
-minimal example configuration might look like this:
-
-```json
-"texra.files.included.inputExtensions": [".tex", ".md"],
-"texra.files.ignored.directories": ["build", "node_modules"]
-```
+TeXRA uses built-in file extensions and exclusions when discovering inputs,
+context, edited files, and media. The former `texra.files.*` configuration keys
+have been removed. See the [Configuration Guide](./configuration.md#file-discovery).
 
 ## Output File Naming
 
