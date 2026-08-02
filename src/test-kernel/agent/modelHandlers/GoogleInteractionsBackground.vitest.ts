@@ -281,58 +281,112 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.cancel).toHaveLength(0);
   });
 
-  it.each(['background', 'serverState'] as const)(
-    'resumes a pending interaction when %s is disabled between attempts',
-    async (setting) => {
-      let background = true;
+  it('resumes a pending interaction when background is disabled and preserves its chain', async () => {
+    let background = true;
+    mockConfig({ background: () => background });
+    vi.useFakeTimers();
+    const handler = createHandler();
+    const messages = [userStep('a')];
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_background_resume', status: 'in_progress' }),
+      getSequence: [
+        new TypeError('fetch failed'),
+        completedInteraction('int_background_resume'),
+      ],
+    });
+
+    const first = respond(handler, client, messages);
+    const firstRejection = expect(first).rejects.toThrow('fetch failed');
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    await firstRejection;
+
+    background = false;
+    await expect(respond(handler, client, messages)).resolves.toMatchObject({
+      response: { status: 'completed' },
+    });
+
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual([
+      'int_background_resume',
+      'int_background_resume',
+    ]);
+    expect(calls.cancel).toHaveLength(0);
+
+    const { client: nextClient, calls: nextCalls } = bgClient({
+      submit: () => completedInteraction('int_after_background_change'),
+      getSequence: [completedInteraction('int_after_background_change')],
+    });
+    messages.push(userStep('b'));
+    await respond(handler, nextClient, messages);
+    expect(nextCalls.create[0].previousId).toBe('int_background_resume');
+    expect(nextCalls.create[0].input).toEqual([messages[1]]);
+  });
+
+  it.each(['completed', 'missing'] as const)(
+    'invalidates an existing chain before a disabled-server-state resume ends %s',
+    async (outcome) => {
       let serverState = true;
-      mockConfig({
-        background: () => background,
-        serverState: () => serverState,
-      });
+      mockConfig({ serverState: () => serverState });
       vi.useFakeTimers();
       const handler = createHandler();
       const messages = [userStep('a')];
-      const { client, calls } = bgClient({
-        submit: () => ({ id: 'int_setting_resume', status: 'in_progress' }),
-        getSequence: [
-          new TypeError('fetch failed'),
-          completedInteraction('int_setting_resume'),
-        ],
+
+      const { client: chainClient, calls: chainCalls } = bgClient({
+        submit: () => ({ id: 'int_chain', status: 'in_progress' }),
+        getSequence: [completedInteraction('int_chain')],
       });
+      await runWithPolls(respond(handler, chainClient, messages), 1);
+      expect(chainCalls.create).toHaveLength(1);
+      expect(chainCalls.get).toEqual(['int_chain']);
+      expect(chainCalls.cancel).toHaveLength(0);
 
-      const first = respond(handler, client, messages);
-      const firstRejection = expect(first).rejects.toThrow('fetch failed');
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-      await firstRejection;
-
-      if (setting === 'background') background = false;
-      else serverState = false;
-
-      await expect(respond(handler, client, messages)).resolves.toMatchObject({
-        response: { status: 'completed' },
-      });
-
-      expect(calls.create).toHaveLength(1);
-      expect(calls.get).toEqual(['int_setting_resume', 'int_setting_resume']);
-      expect(calls.cancel).toHaveLength(0);
-
-      // Chaining follows the setting that was active at completion: background
-      // off still permits the completed stored interaction as an anchor, while
-      // server state off discards the anchor so a later re-enable full-resends.
-      if (setting === 'serverState') serverState = true;
-      const { client: nextClient, calls: nextCalls } = bgClient({
-        submit: () => completedInteraction('int_after_setting_change'),
-        getSequence: [completedInteraction('int_after_setting_change')],
-      });
       messages.push(userStep('b'));
+      const resumeResult =
+        outcome === 'completed'
+          ? completedInteraction('int_pending_turn')
+          : new ApiError({ message: 'gone', status: 404 });
+      const { client: pendingClient, calls: pendingCalls } = bgClient({
+        submit: () => ({ id: 'int_pending_turn', status: 'in_progress' }),
+        getSequence: [new TypeError('fetch failed'), resumeResult],
+      });
+      const pending = respond(handler, pendingClient, messages);
+      const pendingRejection = expect(pending).rejects.toThrow('fetch failed');
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      await pendingRejection;
+      expect(pendingCalls.create[0].previousId).toBe('int_chain');
+
+      serverState = false;
+      if (outcome === 'completed') {
+        await expect(
+          respond(handler, pendingClient, messages),
+        ).resolves.toMatchObject({ response: { status: 'completed' } });
+        messages.push(userStep('c'));
+      } else {
+        const missing = await captureRejection(
+          respond(handler, pendingClient, messages),
+        );
+        expect(hasManualRetryOnlyErrorMarker(missing)).toBe(true);
+        expect(isProviderErrorAutoRetryable(missing)).toBe(false);
+      }
+
+      expect(pendingCalls.create).toHaveLength(1);
+      expect(pendingCalls.get).toEqual([
+        'int_pending_turn',
+        'int_pending_turn',
+      ]);
+      expect(pendingCalls.cancel).toHaveLength(0);
+
+      serverState = true;
+      const { client: nextClient, calls: nextCalls } = bgClient({
+        submit: () => completedInteraction('int_after_server_state_change'),
+        getSequence: [completedInteraction('int_after_server_state_change')],
+      });
       await respond(handler, nextClient, messages);
-      expect(nextCalls.create[0].previousId).toBe(
-        setting === 'background' ? 'int_setting_resume' : undefined,
-      );
-      expect(nextCalls.create[0].input).toHaveLength(
-        setting === 'background' ? 1 : 2,
-      );
+      expect(nextCalls.create).toHaveLength(1);
+      expect(nextCalls.create[0].previousId).toBeUndefined();
+      expect(nextCalls.create[0].input).toEqual(messages);
+      expect(nextCalls.get).toHaveLength(0);
+      expect(nextCalls.cancel).toHaveLength(0);
     },
   );
 
@@ -497,6 +551,11 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(calls.create).toHaveLength(1);
       expect(calls.get).toEqual(['int_missing_1']);
       expect(calls.cancel).toHaveLength(0);
+
+      await respond(handler, client, [userStep('a')]);
+      expect(calls.create).toHaveLength(2);
+      expect(calls.get).toEqual(['int_missing_1']);
+      expect(calls.cancel).toHaveLength(0);
     },
   );
 
@@ -506,8 +565,14 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       mockConfig();
       vi.useFakeTimers();
       const handler = createHandler();
+      let submitCount = 0;
       const { client, calls } = bgClient({
-        submit: () => ({ id: 'int_terminal', status: 'in_progress' }),
+        submit: () => {
+          submitCount += 1;
+          return submitCount === 1
+            ? { id: 'int_terminal', status: 'in_progress' }
+            : completedInteraction('int_after_terminal');
+        },
         getSequence: [{ id: 'int_terminal', status }],
       });
 
@@ -521,6 +586,11 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(normalizeProviderError(terminal).userRetryable).toBe(true);
       expect(isProviderErrorAutoRetryable(terminal)).toBe(false);
       expect(calls.create).toHaveLength(1);
+      expect(calls.get).toEqual(['int_terminal']);
+      expect(calls.cancel).toHaveLength(0);
+
+      await respond(handler, client, [userStep('a')]);
+      expect(calls.create).toHaveLength(2);
       expect(calls.get).toEqual(['int_terminal']);
       expect(calls.cancel).toHaveLength(0);
     },
