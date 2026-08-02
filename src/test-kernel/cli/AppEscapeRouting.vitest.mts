@@ -16,7 +16,10 @@ import {
   rootStreamId,
   setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
-import { setParentStream } from '@cli/chat/tui/state/childExecutions';
+import {
+  applySubagentRoster,
+  setParentStream,
+} from '@cli/chat/tui/state/childExecutions';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import {
   loadInk,
@@ -24,6 +27,12 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.mts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+
+vi.mock('@cli/runtime/shortcutLabels', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/shortcutLabels')>();
+  return { ...actual, defaultShortcutModifierLabel: () => 'Esc' };
+});
 
 const ROOT = 'escape-root' as StreamTabId;
 const CHILD = 'escape-child' as StreamTabId;
@@ -48,6 +57,24 @@ function seedChildHierarchy(): void {
       status: STREAM_PHASE.RUNNING,
     });
   }
+  applySubagentRoster(ROOT, [
+    {
+      kind: 'subagent',
+      executionId: 'escape-child-execution',
+      agentName: 'child',
+      childStreamId: CHILD,
+      status: STREAM_PHASE.RUNNING,
+    },
+  ]);
+  applySubagentRoster(CHILD, [
+    {
+      kind: 'subagent',
+      executionId: 'escape-grandchild-execution',
+      agentName: 'grandchild',
+      childStreamId: GRANDCHILD,
+      status: STREAM_PHASE.RUNNING,
+    },
+  ]);
   setParentStream(CHILD, ROOT);
   setParentStream(GRANDCHILD, CHILD);
 }
@@ -121,6 +148,27 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await waitFor(() => activeStreamId.get() === ROOT);
 
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('keeps an Esc-digit focus target after the bare-Escape window expires', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      stdin.write('1');
+      await waitFor(() => activeStreamId.get() === GRANDCHILD);
+      await sleep(600);
+
+      expect(activeStreamId.get()).toBe(GRANDCHILD);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();

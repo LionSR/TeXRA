@@ -1,6 +1,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
@@ -27,7 +28,11 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import { loadInk, renderInteractive } from '@test/support/inkTestHarness.mts';
+import {
+  loadInk,
+  renderInteractive,
+  type InkRenderHandles,
+} from '@test/support/inkTestHarness.mts';
 import {
   createDeferred,
   waitForCondition as waitFor,
@@ -53,6 +58,10 @@ function fakeHistory(entries: readonly string[]): InputHistory {
   };
 }
 
+function latestRenderedFrame(stdout: InkRenderHandles['stdout']): string {
+  return stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
+}
+
 beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
 
@@ -62,17 +71,18 @@ describe('InputBar history arrow boundaries', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, { onSubmit: vi.fn() }),
+      { debug: true },
     );
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('draft');
-      await waitFor(() => stdout.output.includes('draft'));
+      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
       stdin.write('\u001b[B');
       stdin.write('\u001b[A');
       await flushPromiseQueue();
 
-      expect(stdout.output).toContain('draft');
+      expect(latestRenderedFrame(stdout)).toContain('draft');
     } finally {
       instance.unmount();
     }
@@ -84,29 +94,38 @@ describe('InputBar history arrow boundaries', () => {
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, { onSubmit: vi.fn(), history }),
+      { debug: true },
     );
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('draft');
-      await waitFor(() => stdout.output.includes('draft'));
+      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
       stdin.write('\u001b[A');
-      await waitFor(() => stdout.output.includes('second command'));
+      await waitFor(() =>
+        latestRenderedFrame(stdout).includes('second command'),
+      );
       stdin.write('\u001b[A');
-      await waitFor(() => stdout.output.includes('first command'));
+      await waitFor(() =>
+        latestRenderedFrame(stdout).includes('first command'),
+      );
       stdin.write('\u001b[A');
       stdin.write('\u001b[A');
       await flushPromiseQueue();
-      expect(stdout.output).toContain('first command');
+      expect(latestRenderedFrame(stdout)).toContain('first command');
+      expect(latestRenderedFrame(stdout)).not.toContain('second command');
 
       stdin.write('\u001b[B');
-      await waitFor(() => stdout.output.includes('second command'));
+      await waitFor(() =>
+        latestRenderedFrame(stdout).includes('second command'),
+      );
       stdin.write('\u001b[B');
-      await waitFor(() => stdout.output.includes('draft'));
+      await waitFor(() => latestRenderedFrame(stdout).includes('draft'));
       stdin.write('\u001b[B');
       await flushPromiseQueue();
 
-      expect(stdout.output).toContain('draft');
+      expect(latestRenderedFrame(stdout)).toContain('draft');
+      expect(latestRenderedFrame(stdout)).not.toContain('second command');
     } finally {
       instance.unmount();
     }
