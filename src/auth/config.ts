@@ -197,7 +197,7 @@ export function getExtensionId(): string {
 
 /**
  * Get the OAuth callback URI for redirects.
- * Used by both OAuth and magic link flows.
+ * Used by the OAuth flow.
  *
  * Note: This returns the base URI. Use getExternalAuthCallbackInfo() for
  * the environment-appropriate callback URL (handles Codespaces, Remote SSH, etc.)

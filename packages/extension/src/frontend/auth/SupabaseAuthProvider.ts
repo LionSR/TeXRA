@@ -50,7 +50,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private uriHandler: SupabaseUriHandler | null = null;
   private uriHandlerSubscription: vscode.Disposable | null = null;
   private readonly sessionCoordinator: SupabaseSessionCoordinator;
-  /** Flag to prevent race conditions between OAuth and magic link handlers */
+  /** Prevent concurrent callback handlers from storing competing sessions. */
   private isProcessingCallback = false;
 
   private readonly notifier: AuthNotifier;
@@ -99,10 +99,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     this.uriHandler = handler;
 
-    // Set up persistent listener for late URI auth callbacks
-    // This handles cases where user clicks magic link outside of active OAuth flow
+    // Keep listening after an active sign-in wait ends so a late browser
+    // callback can still complete while its PKCE verifier remains in memory.
     this.uriHandlerSubscription = handler.onDidReceiveCallback(async (uri) => {
-      await this.handleMagicLinkCallback(uri);
+      await this.handleLateAuthCallback(uri);
     });
   }
 
@@ -115,11 +115,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Handle a late implicit-token auth callback URI.
+   * Handle a late PKCE auth callback URI.
    * This runs for all auth callbacks, but only processes if no session exists
    * and no OAuth flow is currently active.
    */
-  private async handleMagicLinkCallback(uri: vscode.Uri): Promise<void> {
+  private async handleLateAuthCallback(uri: vscode.Uri): Promise<void> {
     // Atomically claim processing - must be first check to prevent race
     if (this.isProcessingCallback) {
       return;
@@ -136,7 +136,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const result = await this.sessionCoordinator.createSessionFromCallback({
         path: uri.path,
         query: uri.query,
-        fragment: uri.fragment,
       });
 
       if (!result.success) {
@@ -144,8 +143,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           logger.error(CHANNEL, `Sign-in failed: ${result.error}`);
           this.notifier.showError(`Sign-in failed: ${result.error}`);
         } else {
-          // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)
-          logger.debug(CHANNEL, `Magic link callback ignored: ${result.error}`);
+          logger.debug(CHANNEL, `Auth callback ignored: ${result.error}`);
         }
         return;
       }
@@ -154,12 +152,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
       logger.info(
         CHANNEL,
-        `Magic link sign-in successful for ${result.session.account.label}`,
+        `Late sign-in successful for ${result.session.account.label}`,
       );
     } catch (error) {
       logger.error(
         CHANNEL,
-        `Error processing magic link callback: ${toErrorMessage(error)}`,
+        `Error processing auth callback: ${toErrorMessage(error)}`,
       );
       this.notifier.showError(`Sign-in failed: ${toErrorMessage(error)}`);
     } finally {
@@ -441,14 +439,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             await this.sessionCoordinator.createSessionFromCallback({
               path: uri.path,
               query: uri.query,
-              fragment: uri.fragment,
             });
 
           if (!result.success) {
-            if (result.error === 'Missing tokens in callback') {
+            if (result.error === 'Missing authorization code in callback') {
               logger.error(
                 CHANNEL,
-                `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
+                `Missing authorization code in OAuth callback. Has query: ${!!uri.query}`,
               );
             }
             reject(new Error(`OAuth error: ${result.error}. Try again.`));

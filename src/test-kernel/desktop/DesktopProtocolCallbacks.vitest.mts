@@ -62,14 +62,14 @@ describe('desktop protocol callbacks', () => {
   it('parses texra auth callback URLs into host-neutral callback parts', () => {
     expect(
       parseDesktopProtocolCallback(
-        'texra://texra-ai.texra/auth-callback?state=abc#access_token=tok&refresh_token=ref',
+        'texra://texra-ai.texra/auth-callback?state=abc&code=authorization-code',
       ),
     ).toEqual({
       rawUrl:
-        'texra://texra-ai.texra/auth-callback?state=abc#access_token=tok&refresh_token=ref',
+        'texra://texra-ai.texra/auth-callback?state=abc&code=authorization-code',
       path: '/auth-callback',
-      query: 'state=abc',
-      fragment: 'access_token=tok&refresh_token=ref',
+      query: 'state=abc&code=authorization-code',
+      fragment: '',
     });
   });
 
@@ -107,12 +107,12 @@ describe('desktop protocol callbacks', () => {
   it('accepts extension-auth-callback URLs for shared auth parsing', () => {
     expect(
       parseDesktopProtocolCallback(
-        'texra://extension-auth-callback?access_token=query&refresh_token=refresh',
+        'texra://extension-auth-callback?code=authorization-code',
       ),
     ).toEqual(
       expect.objectContaining({
         path: '/extension-auth-callback',
-        query: 'access_token=query&refresh_token=refresh',
+        query: 'code=authorization-code',
       }),
     );
   });
@@ -200,12 +200,12 @@ describe('desktop protocol callbacks', () => {
 
     app.listeners.openUrl?.(
       event,
-      'texra://texra-ai.texra/auth-callback#access_token=tok',
+      'texra://texra-ai.texra/auth-callback?code=authorization-code',
     );
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ fragment: 'access_token=tok' }),
+      expect.objectContaining({ query: 'code=authorization-code' }),
     );
     expect(focusMainWindow).toHaveBeenCalled();
   });
