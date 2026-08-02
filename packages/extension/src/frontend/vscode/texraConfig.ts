@@ -5,6 +5,9 @@ import * as path from 'node:path';
 // Third-party imports
 import PQueue from 'p-queue';
 
+// Local imports - agent
+import type { WorkspaceStorageTransitionHooks } from '@agent/runtime/SessionHandle';
+
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
 
@@ -62,13 +65,6 @@ async function openWorkspaceConfigStore(
   return JsonStore.open(internalConfigPath);
 }
 
-export interface ExtensionConfigWorkspaceTransitionHooks {
-  readonly workspacePath: string | undefined;
-  afterStorageCommit(): Promise<void>;
-  afterStorageRollback(): void;
-  afterStorageFinalize(): void;
-}
-
 export interface ExtensionConfigWorkspaceTransition {
   readonly generation: number;
   readonly completion: Promise<void>;
@@ -111,9 +107,7 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
   /** Capture and serialize a complete storage/config workspace transition. */
   enqueueWorkspaceTransition(
     workspaceRoot: string | undefined,
-    reloadStorage: (
-      hooks: ExtensionConfigWorkspaceTransitionHooks,
-    ) => Promise<void>,
+    reloadStorage: (hooks: WorkspaceStorageTransitionHooks) => Promise<void>,
   ): ExtensionConfigWorkspaceTransition {
     const generation = ++this.transitionGeneration;
     const completion = this.workspaceQueue.add(async () => {
