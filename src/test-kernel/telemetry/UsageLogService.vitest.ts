@@ -18,6 +18,10 @@ import {
   UsageLogService,
 } from '@telemetry/UsageLogService';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import {
+  createFakePlatform,
+  FakeScopedConfigProvider,
+} from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
@@ -321,7 +325,9 @@ describe('UsageLogService', () => {
     // mutation outlives the test — the file-scoped fake from setupFakePlatform
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
-    setupPlatform();
+    setupPlatform(() =>
+      createFakePlatform({}, { config: new FakeScopedConfigProvider() }),
+    );
 
     it('sends nothing while the setting is off', async () => {
       vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
@@ -346,6 +352,25 @@ describe('UsageLogService', () => {
         'token',
       );
       await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'workspace');
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('dropped'));
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
+
+    it('does not let a project opt in over a user-wide opt-out', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'workspace');
 
       const batches: unknown[] = [];
       const fetchMock = stubFetch(batches);
