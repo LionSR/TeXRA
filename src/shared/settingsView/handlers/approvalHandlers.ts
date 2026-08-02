@@ -5,11 +5,6 @@
  * applies updates from inbound messages. Both hosts hold the same workspace
  * state shape — the only host-specific dependency is the bash-approval flag,
  * which lives in `ConfigProvider` rather than workspace state.
- *
- * The legacy global-scope bash-approval migration lives in
- * `@controllers/settingsView/BashApprovalGlobalMigration` — it is a stateful,
- * host-triggered one-shot workflow (not a pure message builder), so it
- * belongs with host-neutral orchestration rather than here.
  */
 import type { ConfigProvider } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
