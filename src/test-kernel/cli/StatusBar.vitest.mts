@@ -257,6 +257,24 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('retains full output before compact setup controls for a parent', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        width: 68,
+        shortcuts: {
+          agentSelectionAvailable: true,
+          childNavigationAvailable: false,
+          parentNavigationAvailable: true,
+          transcriptAvailable: true,
+        },
+      }),
+    );
+
+    expect(display.bindings).toBe(
+      'Esc back · Ctrl-T full output · Ctrl-C exit',
+    );
+  });
+
   it('omits Esc back at the same bounded width without a parent', () => {
     const display = buildStatusBarDisplay(statusInput({ width: 10 }));
 
