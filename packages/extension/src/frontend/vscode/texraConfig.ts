@@ -73,16 +73,17 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
     super({ workspace: workspaceStore, global: globalStore });
   }
 
-  /** Follow VS Code when its first workspace folder changes. */
+  /** Follow VS Code after its workspace-storage replacement has committed. */
   rebindWorkspace(workspaceRoot: string | undefined): Promise<void> {
-    const internalConfigPath = path.join(
-      this.storage.getStoragePath(),
-      TEXRA_CONFIG_FILE_NAME,
-    );
     return this.rebindQueue.add(async () => {
+      if (this.storage.hasPendingWorkspaceStorageChange?.()) {
+        throw new Error(
+          'Cannot rebind TeXRA settings before the workspace storage change commits.',
+        );
+      }
       const workspaceStore = await openWorkspaceConfigStore(
         workspaceRoot,
-        internalConfigPath,
+        path.join(this.storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
       );
       this.replaceWorkspaceStore(workspaceStore);
     }) as Promise<void>;
