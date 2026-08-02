@@ -129,17 +129,12 @@ function createOAuthClient() {
   };
 }
 
-function authCallbackUrl(input: {
-  accessToken: string;
-  refreshToken: string;
-  nonce?: string;
-}): string {
-  const fragment = new URLSearchParams({
-    access_token: input.accessToken,
-    refresh_token: input.refreshToken,
+function authCallbackUrl(input: { code: string; nonce?: string }): string {
+  const query = new URLSearchParams({
+    code: input.code,
   });
-  const query = input.nonce ? `?app_nonce=${input.nonce}` : '';
-  return `texra://texra-ai.texra/auth-callback${query}#${fragment}`;
+  if (input.nonce) query.set('app_nonce', input.nonce);
+  return `texra://texra-ai.texra/auth-callback?${query}`;
 }
 
 /** Extract the app_nonce that signIn placed on its OAuth redirect_to. */
@@ -154,12 +149,9 @@ function nonceFor(oauthClient: ReturnType<typeof createOAuthClient>): string {
 function routeMatchingCallback(
   router: DesktopProtocolCallbackRouter,
   oauthClient: ReturnType<typeof createOAuthClient>,
-  tokens: { accessToken: string; refreshToken: string } = {
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
-  },
+  code = 'authorization-code',
 ): void {
-  router.routeUrl(authCallbackUrl({ ...tokens, nonce: nonceFor(oauthClient) }));
+  router.routeUrl(authCallbackUrl({ code, nonce: nonceFor(oauthClient) }));
 }
 
 function installAuthenticatedSupabaseProvider() {
@@ -291,8 +283,9 @@ describe('desktop Supabase auth', () => {
     });
     expect(coordinator.createSessionFromCallback).toHaveBeenCalledWith({
       path: '/auth-callback',
-      query: expect.stringMatching(/^app_nonce=[0-9a-f]{32}$/),
-      fragment: 'access_token=access-token&refresh_token=refresh-token',
+      query: expect.stringMatching(
+        /^code=authorization-code&app_nonce=[0-9a-f]{32}$/,
+      ),
     });
     expect(onSessionChanged).toHaveBeenCalled();
 
@@ -431,12 +424,11 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    // Attacker-delivered deeplink carrying valid tokens for another account but
+    // Attacker-delivered deeplink carrying a valid code for another account but
     // NOT the nonce this client minted in its redirect_to.
     router.routeUrl(
       authCallbackUrl({
-        accessToken: 'attacker-access',
-        refreshToken: 'attacker-refresh',
+        code: 'attacker-code',
         nonce: 'deadbeefdeadbeefdeadbeefdeadbeef',
       }),
     );
@@ -461,8 +453,7 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
     router.routeUrl(
       authCallbackUrl({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
+        code: 'authorization-code',
       }),
     );
     await Promise.resolve();
@@ -483,7 +474,7 @@ describe('desktop Supabase auth', () => {
     });
 
     router.routeUrl(
-      'texra://texra-ai.texra/auth-callback#access_token=access-token&refresh_token=refresh-token',
+      'texra://texra-ai.texra/auth-callback?code=authorization-code',
     );
 
     await Promise.resolve();
@@ -568,8 +559,7 @@ describe('desktop Supabase auth', () => {
 
       router.routeUrl(
         authCallbackUrl({
-          accessToken: 'access-token',
-          refreshToken: 'refresh-token',
+          code: 'authorization-code',
         }),
       );
       await Promise.resolve();
@@ -690,13 +680,8 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    routeMatchingCallback(router, oauthClient, {
-      accessToken: 'first',
-      refreshToken: 'first',
-    });
-    router.routeUrl(
-      authCallbackUrl({ accessToken: 'second', refreshToken: 'second' }),
-    );
+    routeMatchingCallback(router, oauthClient, 'first');
+    router.routeUrl(authCallbackUrl({ code: 'second' }));
 
     await vi.waitFor(() => {
       expect(coordinator.createSessionFromCallback).toHaveBeenCalledTimes(1);
@@ -759,10 +744,7 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    routeMatchingCallback(router, oauthClient, {
-      accessToken: 'stale-access-token',
-      refreshToken: 'stale-refresh-token',
-    });
+    routeMatchingCallback(router, oauthClient, 'stale-code');
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
@@ -799,10 +781,7 @@ describe('desktop Supabase auth', () => {
     });
 
     await auth.signIn();
-    routeMatchingCallback(router, oauthClient, {
-      accessToken: 'stale-access-token',
-      refreshToken: 'stale-refresh-token',
-    });
+    routeMatchingCallback(router, oauthClient, 'stale-code');
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledOnce();
     });
@@ -818,10 +797,7 @@ describe('desktop Supabase auth', () => {
     expect(callbackState.hasPendingSignIn()).toBe(true);
     expect(onSessionChanged).not.toHaveBeenCalled();
 
-    routeMatchingCallback(router, oauthClient, {
-      accessToken: 'new-access-token',
-      refreshToken: 'new-refresh-token',
-    });
+    routeMatchingCallback(router, oauthClient, 'new-code');
     await vi.waitFor(() => {
       expect(coordinator.storeSession).toHaveBeenCalledTimes(2);
       expect(onSessionChanged).toHaveBeenCalledOnce();
@@ -852,10 +828,7 @@ describe('desktop Supabase auth', () => {
       });
 
       await auth.signIn();
-      routeMatchingCallback(router, oauthClient, {
-        accessToken: 'stale-access-token',
-        refreshToken: 'stale-refresh-token',
-      });
+      routeMatchingCallback(router, oauthClient, 'stale-code');
       await vi.waitFor(() => {
         expect(onSessionChanged).toHaveBeenCalledOnce();
       });
@@ -927,10 +900,7 @@ describe('desktop Supabase auth', () => {
     await expect(first).resolves.toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    routeMatchingCallback(router, oauthClient, {
-      accessToken: 'new-access-token',
-      refreshToken: 'new-refresh-token',
-    });
+    routeMatchingCallback(router, oauthClient, 'new-code');
 
     await expect(second).resolves.toBe(true);
     expect(coordinator.storeSession).toHaveBeenCalledOnce();
