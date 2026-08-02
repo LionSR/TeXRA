@@ -150,8 +150,8 @@ const originalGetConfig = configModule.getConfig;
  */
 function mockConfig(
   opts: {
-    serverState?: boolean;
-    background?: boolean;
+    serverState?: boolean | (() => boolean);
+    background?: boolean | (() => boolean);
   } = {},
 ): void {
   const serverState = opts.serverState ?? true;
@@ -159,10 +159,14 @@ function mockConfig(
   vi.spyOn(configModule, 'getConfig').mockImplementation(
     <T>(key: string, defaultValue?: T): T => {
       if (key === 'texra.model.useGoogleInteractionsServerState') {
-        return serverState as T;
+        return (
+          typeof serverState === 'function' ? serverState() : serverState
+        ) as T;
       }
       if (key === 'texra.model.useBackgroundResponses') {
-        return background as T;
+        return (
+          typeof background === 'function' ? background() : background
+        ) as T;
       }
       return originalGetConfig(key, defaultValue);
     },
@@ -247,8 +251,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     const promise = respond(handler, client, [userStep('a')]);
     const result = await runWithPolls(promise, 4);
 
-    expect(calls.get.length).toBeGreaterThanOrEqual(3);
-    expect(calls.get.every((id) => id === 'int_1')).toBe(true);
+    expect(calls.get).toEqual(['int_1', 'int_1', 'int_1']);
     expect(result.response.status).toBe('completed');
   });
 
@@ -277,6 +280,61 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get).toEqual(['int_resume', 'int_resume']);
     expect(calls.cancel).toHaveLength(0);
   });
+
+  it.each(['background', 'serverState'] as const)(
+    'resumes a pending interaction when %s is disabled between attempts',
+    async (setting) => {
+      let background = true;
+      let serverState = true;
+      mockConfig({
+        background: () => background,
+        serverState: () => serverState,
+      });
+      vi.useFakeTimers();
+      const handler = createHandler();
+      const messages = [userStep('a')];
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_setting_resume', status: 'in_progress' }),
+        getSequence: [
+          new TypeError('fetch failed'),
+          completedInteraction('int_setting_resume'),
+        ],
+      });
+
+      const first = respond(handler, client, messages);
+      const firstRejection = expect(first).rejects.toThrow('fetch failed');
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      await firstRejection;
+
+      if (setting === 'background') background = false;
+      else serverState = false;
+
+      await expect(respond(handler, client, messages)).resolves.toMatchObject({
+        response: { status: 'completed' },
+      });
+
+      expect(calls.create).toHaveLength(1);
+      expect(calls.get).toEqual(['int_setting_resume', 'int_setting_resume']);
+      expect(calls.cancel).toHaveLength(0);
+
+      // Chaining follows the setting that was active at completion: background
+      // off still permits the completed stored interaction as an anchor, while
+      // server state off discards the anchor so a later re-enable full-resends.
+      if (setting === 'serverState') serverState = true;
+      const { client: nextClient, calls: nextCalls } = bgClient({
+        submit: () => completedInteraction('int_after_setting_change'),
+        getSequence: [completedInteraction('int_after_setting_change')],
+      });
+      messages.push(userStep('b'));
+      await respond(handler, nextClient, messages);
+      expect(nextCalls.create[0].previousId).toBe(
+        setting === 'background' ? 'int_setting_resume' : undefined,
+      );
+      expect(nextCalls.create[0].input).toHaveLength(
+        setting === 'background' ? 1 : 2,
+      );
+    },
+  );
 
   it('keeps the original id through a transient failure, in_progress, and completion', async () => {
     mockConfig();
@@ -394,13 +452,20 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
 
     const first = respond(handler, client, [userStep('a')]);
-    const firstRejection = expect(first).rejects.toBe(forbidden);
+    const firstErrorPromise = captureRejection(first);
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
-    await firstRejection;
-    await respond(handler, client, [userStep('a')]);
+    const firstError = await firstErrorPromise;
 
+    expect(firstError).toBe(forbidden);
+    expect(isProviderErrorAutoRetryable(firstError)).toBe(false);
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toEqual(['int_forbidden']);
+    expect(calls.cancel).toHaveLength(0);
+
+    await respond(handler, client, [userStep('a')]);
     expect(calls.create).toHaveLength(1);
     expect(calls.get).toEqual(['int_forbidden', 'int_forbidden']);
+    expect(calls.cancel).toHaveLength(0);
   });
 
   it.each([404, 410])(
@@ -430,9 +495,8 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(normalizeProviderError(missing).userRetryable).toBe(true);
       expect(isProviderErrorAutoRetryable(missing)).toBe(false);
       expect(calls.create).toHaveLength(1);
-
-      await respond(handler, client, [userStep('a')]);
-      expect(calls.create).toHaveLength(2);
+      expect(calls.get).toEqual(['int_missing_1']);
+      expect(calls.cancel).toHaveLength(0);
     },
   );
 
@@ -458,6 +522,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       expect(isProviderErrorAutoRetryable(terminal)).toBe(false);
       expect(calls.create).toHaveLength(1);
       expect(calls.get).toEqual(['int_terminal']);
+      expect(calls.cancel).toHaveLength(0);
     },
   );
 
