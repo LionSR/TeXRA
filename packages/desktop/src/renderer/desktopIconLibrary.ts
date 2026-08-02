@@ -13,10 +13,7 @@ import {
 } from '@awesome.me/webawesome/dist/components/icon/library.js';
 import iconNodes from 'lucide-static/icon-nodes.json';
 
-import {
-  TEXRA_ICON_LIBRARY,
-  LEGACY_ICON_ALIASES,
-} from '@shared/wa/webAwesomeIcons';
+import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 /**
  * Our icon name -> Lucide icon name.
@@ -71,7 +68,6 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   gears: 'settings-2',
   screwdriver: 'wrench',
   'screwdriver-wrench': 'wrench',
-  tools: 'wrench',
   'wand-magic-sparkles': 'wand-sparkles',
   flask: 'flask-conical',
   microphone: 'mic',
@@ -195,13 +191,7 @@ function lucideSvg(name: string): string | undefined {
  * Direct lookup: canonical name → Lucide equivalent → fallback to name.
  */
 function resolveLucideName(name: string): string {
-  const canonical =
-    (LEGACY_ICON_ALIASES as Record<string, string>)[name] ?? name;
-  return (
-    LUCIDE_NAME_BY_TEXRA_NAME[canonical] ??
-    LUCIDE_NAME_BY_TEXRA_NAME[name] ??
-    name
-  );
+  return LUCIDE_NAME_BY_TEXRA_NAME[name] ?? name;
 }
 
 function svgDataUri(svg: string): string {
