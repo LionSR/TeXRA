@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,12 +22,18 @@ import {
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { StorageFS } from '@utils/files';
+
+const tempDirs: string[] = [];
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -131,7 +137,7 @@ function mockCompletedExecution(): void {
 }
 
 describe('ExecutionsTool', () => {
-  setupPlatform({}, { fs: nodeFilesystem });
+  setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -142,6 +148,10 @@ describe('ExecutionsTool', () => {
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
+  });
+
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
   });
 
   it.each([
@@ -246,60 +256,62 @@ describe('ExecutionsTool', () => {
         'delivered automatically',
       );
     } finally {
-      session.dispose();
-    }
-  });
-
-  it('reads running task lists from session snapshot state', async () => {
-    const session = createTestSession();
-    const executionId = 'abc124';
-    const parentStreamId = 'stream:parent-live-todos' as StreamTabId;
-    const childStreamId = 'stream:child-live-todos' as StreamTabId;
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId,
-      childStreamId,
-      agent: 'review',
-    });
-
-    try {
-      session.executions.track(handle);
-      seedStreamStatusForTest(session.status, childStreamId, {
-        phase: STREAM_PHASE.RUNNING,
-      });
-      session.snapshots.setTodos(childStreamId, [
-        {
-          content: 'Read live snapshot state',
-          status: 'in_progress',
-          activeForm: 'Reading live snapshot state',
-        },
-      ]);
       await session.snapshots.flush();
-      mocks.readMeta.mockResolvedValue({
-        timestamp: '2026-06-15T09:36:02.345Z',
-        category: 'toolUse',
-      });
-
-      const [summary, todos] = await withRunContext(
-        createRunContext({ streamId: parentStreamId, session }),
-        () =>
-          Promise.all([
-            new ExecutionsTool().call({
-              path: `/executions/${executionId}`,
-            }),
-            new ExecutionsTool().call({
-              path: `/executions/${executionId}/todos`,
-            }),
-          ]),
-      );
-
-      expect(summary.output).toContain('Read live snapshot state');
-      expect(todos.output).toContain('Read live snapshot state');
-      expect(mocks.readTodos).not.toHaveBeenCalled();
-    } finally {
       session.dispose();
     }
   });
+
+  it('reads running task lists from session snapshot state', () =>
+    withTempStorage(async () => {
+      const session = createTestSession();
+      const executionId = 'abc124';
+      const parentStreamId = 'stream:parent-live-todos' as StreamTabId;
+      const childStreamId = 'stream:child-live-todos' as StreamTabId;
+      const handle = testExecutionHandle({
+        executionId,
+        parentStreamId,
+        childStreamId,
+        agent: 'review',
+      });
+
+      try {
+        session.executions.track(handle);
+        seedStreamStatusForTest(session.status, childStreamId, {
+          phase: STREAM_PHASE.RUNNING,
+        });
+        session.snapshots.setTodos(childStreamId, [
+          {
+            content: 'Read live snapshot state',
+            status: 'in_progress',
+            activeForm: 'Reading live snapshot state',
+          },
+        ]);
+        await session.snapshots.flush();
+        mocks.readMeta.mockResolvedValue({
+          timestamp: '2026-06-15T09:36:02.345Z',
+          category: 'toolUse',
+        });
+
+        const [summary, todos] = await withRunContext(
+          createRunContext({ streamId: parentStreamId, session }),
+          () =>
+            Promise.all([
+              new ExecutionsTool().call({
+                path: `/executions/${executionId}`,
+              }),
+              new ExecutionsTool().call({
+                path: `/executions/${executionId}/todos`,
+              }),
+            ]),
+        );
+
+        expect(summary.output).toContain('Read live snapshot state');
+        expect(todos.output).toContain('Read live snapshot state');
+        expect(mocks.readTodos).not.toHaveBeenCalled();
+      } finally {
+        session.dispose();
+      }
+    }));
 
   it('keeps completed wait summary reports inline when parent delivery cannot be confirmed', async () => {
     mocks.readMeta.mockResolvedValue({
