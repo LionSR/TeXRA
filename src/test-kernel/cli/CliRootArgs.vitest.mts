@@ -38,7 +38,7 @@ import {
   expandWorkflowInputSpecs,
   hasMixedStdinWorkflowInputSpecs,
   isMaterializedStdinWorkflowInputPath,
-  workflowInputGlobOptionsForTests,
+  workflowInputGlobOptions,
 } from '@cli/runtime/workflowInputs';
 import {
   resolveWorkflowOutput,
@@ -783,12 +783,20 @@ describe('CLI root argument routing', () => {
   it('selects platform-specific backslash glob semantics', () => {
     const pattern = String.raw`refs\*.bib`;
 
-    expect(hasMagic(pattern, workflowInputGlobOptionsForTests('win32'))).toBe(
-      true,
-    );
-    expect(hasMagic(pattern, workflowInputGlobOptionsForTests('linux'))).toBe(
-      false,
-    );
+    expect(hasMagic(pattern, workflowInputGlobOptions('win32'))).toBe(true);
+    expect(hasMagic(pattern, workflowInputGlobOptions('linux'))).toBe(false);
+  });
+
+  it('prefers an exact filename containing glob syntax', async () => {
+    await withTempDir('texra-cli-literal-magic-', async (root) => {
+      await fs.mkdir(path.join(root, 'refs'));
+      await fs.writeFile(path.join(root, 'refs', '[ab].bib'), 'literal');
+      await fs.writeFile(path.join(root, 'refs', 'a.bib'), 'glob match');
+
+      await expect(
+        expandWorkflowInputSpecs([path.join('refs', '[ab].bib')], root),
+      ).resolves.toEqual(['refs/[ab].bib']);
+    });
   });
 
   it('expands host-native globs for both --input and --context', async () => {
