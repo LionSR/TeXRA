@@ -192,10 +192,20 @@ function dispatchMainViewInboundOnShell(
 ): boolean {
   switch (message.command) {
     case COMMON_COMMANDS.SWITCH_VIEW: {
-      if (message.view === 'main') actions.showLauncher();
-      if (message.view === 'dashboard') actions.showSettings();
-      // The conversation is the permanent desktop canvas, so "progress" is
-      // already visible and intentionally needs no action.
+      switch (message.view) {
+        case 'main':
+          actions.showLauncher();
+          break;
+        case 'dashboard':
+          actions.showSettings();
+          break;
+        case 'progress':
+          // The conversation is the permanent desktop canvas, so progress is
+          // already visible and intentionally needs no action.
+          break;
+        default:
+          message.view satisfies never;
+      }
       return true;
     }
     case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:
