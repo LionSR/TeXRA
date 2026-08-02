@@ -154,6 +154,73 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('does not apply delayed child back after a foreground pane opens', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      openInfoPane('Late reference', 'Foreground content');
+      await waitFor(() => infoPane.get()?.title === 'Late reference');
+      await sleep(600);
+
+      expect(activeStreamId.get()).toBe(CHILD);
+      expect(infoPane.get()?.title).toBe('Late reference');
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('does not apply failed-chord child back after a foreground pane opens', async () => {
+    seedChildHierarchy();
+    focusStream(CHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      openInfoPane('Late failed-chord reference', 'Foreground content');
+      await waitFor(
+        () => infoPane.get()?.title === 'Late failed-chord reference',
+      );
+      stdin.write('x');
+      await sleep(50);
+
+      expect(activeStreamId.get()).toBe(CHILD);
+      expect(infoPane.get()?.title).toBe('Late failed-chord reference');
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('preserves two quick bare-Escape actions through the chord window', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === CHILD);
+      await waitFor(() => activeStreamId.get() === ROOT);
+
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('keeps an Esc-digit focus target after the bare-Escape window expires', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
