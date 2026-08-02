@@ -32,7 +32,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/streams/streamStatus';
-import { formatDuration } from '@utils/core';
+import { formatDuration, onAbort } from '@utils/core';
 import {
   type ExecutionHandle,
   type ExecutionStatusInfo,
@@ -503,15 +503,14 @@ export class ExecutionRegistry {
   waitForChange(executionId: string, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve) => {
       const cb = (): void => {
-        signal?.removeEventListener('abort', onAbort);
-        resolve();
-      };
-      const onAbort = (): void => {
-        this.removeChangeCallback(executionId, cb);
+        detach();
         resolve();
       };
       this.addChangeCallback(executionId, cb);
-      signal?.addEventListener('abort', onAbort, { once: true });
+      const detach = onAbort(signal, () => {
+        this.removeChangeCallback(executionId, cb);
+        resolve();
+      });
     });
   }
 
@@ -525,20 +524,14 @@ export class ExecutionRegistry {
   ): Promise<string> {
     return new Promise<string>((resolve) => {
       let resolved = false;
+      let detach: () => void = () => {};
       const callbacks = new Map<string, () => void>();
 
       const cleanup = (): void => {
-        signal?.removeEventListener('abort', onAbort);
+        detach();
         for (const [id, cb] of callbacks) {
           this.removeChangeCallback(id, cb);
         }
-      };
-
-      const onAbort = (): void => {
-        if (resolved) return;
-        resolved = true;
-        cleanup();
-        resolve('');
       };
 
       for (const id of executionIds) {
@@ -552,7 +545,12 @@ export class ExecutionRegistry {
         this.addChangeCallback(id, cb);
       }
 
-      signal?.addEventListener('abort', onAbort, { once: true });
+      detach = onAbort(signal, () => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        resolve('');
+      });
     });
   }
 
