@@ -6,7 +6,7 @@ import {
   formatToolUseAgentRunInstruction,
   formatUnavailableApprovalInstruction,
 } from '@cli/commands/_helpers/runInstructions';
-import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
+import { approvalPromptsUnavailable } from '@cli/runtime/approval/approvalPolicy';
 
 const workingDirectory = '/tmp/texra-workspace';
 
