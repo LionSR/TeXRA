@@ -17,7 +17,6 @@ import {
 } from '@agent/core/definition/AgentCycleOptions';
 import {
   ProviderMessageArraySchema,
-  normalizeProviderMessages,
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
@@ -118,14 +117,6 @@ export type SharedStateMigrationResult =
   | { success: true; data: ToolUseRunShared; migrated: boolean }
   | { success: false; error: z.ZodError };
 
-function failedSharedMigration(value: unknown): SharedStateMigrationResult {
-  const result = ToolUseRunSharedSchema.safeParse(value);
-  if (result.success) {
-    throw new Error('Expected invalid tool-use shared state');
-  }
-  return result;
-}
-
 export function findLastAssistantText(
   messages: ProviderMessage[],
   extractAssistantText: (message: ProviderMessage) => string | undefined,
@@ -146,38 +137,13 @@ export function assertPreparedShared(
 }
 
 /**
- * Parse persisted shared state once, normalizing the legacy conversation key,
- * outer state wrapper, workspace snapshot, and pre-`modelId` model identity
- * before live flow code sees it.
+ * Parse persisted shared state once, normalizing the workspace snapshot and
+ * pre-`modelId` model identity before live flow code sees it.
  */
 export function migrateSharedState(
   shared: unknown,
 ): SharedStateMigrationResult {
-  if (!shared || typeof shared !== 'object') {
-    return failedSharedMigration(shared);
-  }
-
-  // Unwrap nested `{ state: {...} }` wrapper if present. The unwrap itself
-  // counts as a migration even if the inner shape is already canonical.
-  const nested = 'state' in shared;
-  const obj = nested ? (shared as Record<string, unknown>).state : shared;
-  if (!obj || typeof obj !== 'object') return failedSharedMigration(obj);
-
-  const record = obj as Record<string, unknown>;
-  // `normalizeProviderMessages` already prefers `record.messages` and falls
-  // back to the legacy `record.conversation` key — shared with the same
-  // messages/conversation normalization used to infer a keyless persisted
-  // run's model-handler compatibility key.
-  const messages = normalizeProviderMessages(record);
-  if (!messages) {
-    return failedSharedMigration(obj);
-  }
-
-  const { conversation: _legacyConversation, ...candidate } = record;
-  candidate.messages = messages;
-  const migrated = nested || Object.hasOwn(record, 'conversation');
-
-  const parsed = ToolUseRunSharedSchema.safeParse(candidate);
+  const parsed = ToolUseRunSharedSchema.safeParse(shared);
   if (!parsed.success) return parsed;
 
   // Records written before `modelId` existed carry the run's model only in the
@@ -197,6 +163,6 @@ export function migrateSharedState(
   return {
     success: true,
     data,
-    migrated: migrated || !isDeepStrictEqual(candidate, data),
+    migrated: !isDeepStrictEqual(shared, data),
   };
 }
