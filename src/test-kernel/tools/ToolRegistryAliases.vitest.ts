@@ -2,30 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { resolveToolDefinitions } from '@tools/registry';
 
-describe('tool registry aliases', () => {
-  it('keeps legacy add_criticism configs on the diagnostics tool', () => {
-    expect(
-      resolveToolDefinitions(['add_criticism']).map((tool) => tool.name),
-    ).toEqual(['diagnostics']);
-  });
-
-  it('keeps legacy crossref_doi configs on the unified Crossref tool', () => {
-    // Remove with the dated Crossref alias row in #6981 (2026-08-19).
-    const [tool] = resolveToolDefinitions(['crossref_doi']);
-    const [canonicalTool] = resolveToolDefinitions(['crossref_search']);
-
-    expect(tool?.name).toBe('crossref_search');
-    expect(tool?.parameters).toEqual(canonicalTool?.parameters);
-  });
-
+describe('tool registry resolution', () => {
   it('replaces a declared contract with the registered tool definition', () => {
-    // Remove with the dated Crossref alias row in #6981 (2026-08-19).
     const warn = vi.fn();
     const [tool] = resolveToolDefinitions(
       [
         {
-          name: 'crossref_doi',
-          description: 'Retired DOI-only contract',
+          name: 'crossref_search',
+          description: 'Untrusted replacement contract',
           parameters: {
             type: 'object',
             properties: { doi: { type: 'string' } },
@@ -38,10 +22,10 @@ describe('tool registry aliases', () => {
     const [canonicalTool] = resolveToolDefinitions(['crossref_search']);
 
     expect(tool?.name).toBe('crossref_search');
-    expect(tool?.description).not.toBe('Retired DOI-only contract');
+    expect(tool?.description).not.toBe('Untrusted replacement contract');
     expect(tool?.parameters).toEqual(canonicalTool?.parameters);
     expect(warn).toHaveBeenCalledWith(
-      'crossref_doi',
+      'crossref_search',
       expect.stringContaining('the registered definition is used instead'),
     );
   });
@@ -71,15 +55,6 @@ describe('tool registry aliases', () => {
 
     expect(resolveToolDefinitions([declared], warn)).toEqual([declared]);
     expect(warn).toHaveBeenCalledWith('embedder_tool', 'not found in registry');
-  });
-
-  it('deduplicates aliases that resolve to the same canonical tool', () => {
-    // Remove with the dated Crossref alias row in #6981 (2026-08-19).
-    expect(
-      resolveToolDefinitions(['crossref_search', 'crossref_doi']).map(
-        (tool) => tool.name,
-      ),
-    ).toEqual(['crossref_search']);
   });
 
   it('warns once for a name the registry does not hold', () => {

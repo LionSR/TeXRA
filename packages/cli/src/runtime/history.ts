@@ -161,8 +161,7 @@ export async function readCliHistoryDetails(
     store.readConfig(),
     store.readResultMeta(),
     store.readReport(),
-    // Transcript sidecar owns completed-run display (#7246 Decision 1); the
-    // facade keeps `conversation.json` as a read-only legacy fallback.
+    // Transcript sidecar owns completed-run display (#7246 Decision 1).
     readCompletedRunConversation(id),
     store.readWorkspaceFiles(),
     listGeneratedFiles(id),

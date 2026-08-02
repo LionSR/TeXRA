@@ -123,25 +123,6 @@ describe('task-group-list ungrouped message indexes', () => {
     expect(audio.playCompletionSound).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps legacy workflow r<N> groups eligible for completion sound', () => {
-    const list = createList([]);
-    const running = createGroup('legacy-round', STREAM_PHASE.RUNNING, {
-      name: 'r2',
-    });
-    const stopped = createGroup('legacy-round', STREAM_PHASE.COMPLETED, {
-      name: 'r2',
-    });
-
-    audio.playCompletionSound.mockClear();
-
-    list.groups = [running];
-    list.willUpdate(new Map([['groups', []]]));
-    list.groups = [stopped];
-    list.willUpdate(new Map([['groups', [running]]]));
-
-    expect(audio.playCompletionSound).toHaveBeenCalledTimes(1);
-  });
-
   it('refreshes fallback timeline message refs through the ungrouped-message index', () => {
     const original = [
       createMessage('m1', 'one', 1),

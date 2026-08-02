@@ -75,102 +75,18 @@ const AnsweredInquiryTurnSchema = z.object({
 });
 type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
 
-/**
- * Legacy single-shot turn whose answer text still lives only on disk
- * (`answerRelativePath`) and hasn't been hydrated into `answer` yet.
- * `hydrateAnswersFromDisk` (invoked from `readExternalInquiryThread`)
- * always attempts to promote these to `answered` on read; this variant
- * only survives when the on-disk answer file is itself unreadable or
- * missing (see the catch in `hydrateAnswersFromDisk`).
- */
-const AnsweredUnhydratedInquiryTurnSchema = z.object({
-  ...InquiryTurnBaseShape,
-  kind: z.literal('answeredUnhydrated'),
-  answerRelativePath: z.string().min(1),
-  answeredAt: z.string().nullish(),
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
-});
-
-const CanonicalTurnRecordSchema = z.discriminatedUnion('kind', [
+const ExternalInquiryTurnRecordSchema = z.discriminatedUnion('kind', [
   OpenInquiryTurnSchema,
   AnsweredInquiryTurnSchema,
-  AnsweredUnhydratedInquiryTurnSchema,
 ]);
-type ExternalInquiryTurnRecord = z.infer<typeof CanonicalTurnRecordSchema>;
-
-/**
- * Raw, untagged shape turns were persisted in prior to this discriminated
- * union — every lifecycle field is nullable and there is no `kind`. Parsing
- * always goes through this shape first so historical manifest.json files
- * (which never wrote `kind`) keep loading; `toCanonicalTurn` below is the
- * single, centralized place that infers the lifecycle state from field
- * presence, replacing the ad hoc `turn.answer`/`turn.answerRelativePath`
- * probes that used to be scattered across this module's consumers.
- */
-const RawTurnShape = {
-  ...InquiryTurnBaseShape,
-  answerRelativePath: z.string().nullish(),
-  sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
-  answer: z.string().nullish(),
-  answeredAt: z.string().nullish(),
-  draft: InquiryDraftSchema.nullish(),
-};
-
-function toCanonicalTurn(
-  raw: z.infer<typeof RawTurnRecordSchema>,
-): ExternalInquiryTurnRecord {
-  const base = {
-    turnIndex: raw.turnIndex,
-    timestamp: raw.timestamp,
-    question: raw.question,
-    context: raw.context ?? undefined,
-    questionRelativePath: raw.questionRelativePath,
-    contextRelativePath: raw.contextRelativePath ?? undefined,
-    suggestSearch: raw.suggestSearch ?? undefined,
-    attachFiles: raw.attachFiles ?? undefined,
-  };
-
-  if (raw.answer != null) {
-    return {
-      ...base,
-      kind: 'answered',
-      answer: raw.answer,
-      answeredAt: raw.answeredAt || raw.timestamp,
-      answerRelativePath:
-        raw.answerRelativePath ||
-        normalizeFilePath(path.join(turnDir(raw.turnIndex), 'answer.txt')),
-      sessionLinks: raw.sessionLinks ?? undefined,
-    };
-  }
-
-  if (raw.answerRelativePath) {
-    return {
-      ...base,
-      kind: 'answeredUnhydrated',
-      answerRelativePath: raw.answerRelativePath,
-      answeredAt: raw.answeredAt || undefined,
-      sessionLinks: raw.sessionLinks ?? undefined,
-    };
-  }
-
-  return {
-    ...base,
-    kind: 'open',
-    draft: raw.draft ?? undefined,
-  };
-}
-
-const RawTurnRecordSchema = z.looseObject(RawTurnShape);
-const ExternalInquiryTurnRecordSchema =
-  RawTurnRecordSchema.transform(toCanonicalTurn);
+type ExternalInquiryTurnRecord = z.infer<
+  typeof ExternalInquiryTurnRecordSchema
+>;
 
 const EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION = 1;
 
 const ManifestBaseShape = {
-  /** Stamped on every write; absent on manifests written before it existed. */
-  schemaVersion: z
-    .literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION)
-    .prefault(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
+  schemaVersion: z.literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
   threadId: ExternalInquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
   status: z.enum(['open', 'answered', 'dropped']),
@@ -184,40 +100,7 @@ const ManifestBaseShape = {
  */
 const CanonicalManifestSchema = z.looseObject(ManifestBaseShape);
 
-/**
- * Legacy form: pre-async manifest with no `status` or `parentStreamId`.
- * Every turn was atomic Q+A (both `question` and `answer` recorded), so we
- * treat the whole thread as `answered` with no parent (continuation off).
- *
- * Legacy predates versioning, so this arm only accepts version-ABSENT data:
- * a manifest that carries any `schemaVersion` (even the current one, on a
- * shape the canonical arm rejected) is corrupt/unsupported, never legacy.
- */
-const LegacyManifestSchema = z
-  .looseObject({
-    schemaVersion: z.undefined().optional(),
-    threadId: ExternalInquiryThreadIdSchema,
-    createdAt: z.string().min(1),
-    updatedAt: z.string().min(1),
-    turns: z.array(ExternalInquiryTurnRecordSchema),
-  })
-  .transform((raw): ExternalInquiryThreadManifest => ({
-    schemaVersion: EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION,
-    threadId: raw.threadId,
-    parentStreamId: null,
-    status: 'answered' as const,
-    createdAt: raw.createdAt,
-    updatedAt: raw.updatedAt,
-    turns: raw.turns,
-  }));
-
-/**
- * Entry-point schema: try canonical (new format) first, then legacy.
- */
-const ExternalInquiryThreadManifestSchema = z.union([
-  CanonicalManifestSchema,
-  LegacyManifestSchema,
-]);
+const ExternalInquiryThreadManifestSchema = CanonicalManifestSchema;
 export type ExternalInquiryThreadManifest = z.infer<
   typeof CanonicalManifestSchema
 >;
@@ -283,44 +166,6 @@ function threadTurnDir(
 }
 
 /**
- * Hydrate inline `answer` from disk for any turn still tagged
- * `answeredUnhydrated`. Legacy single-shot manifests stored the answer
- * text only on disk; the canonical `answered` shape carries it inline so
- * renderers don't need a second read.
- */
-async function hydrateAnswersFromDisk(
-  threadId: ExternalInquiryThreadId,
-  manifest: ExternalInquiryThreadManifest,
-): Promise<{
-  manifest: ExternalInquiryThreadManifest;
-  didHydrate: boolean;
-}> {
-  let didHydrate = false;
-  const turns = await Promise.all(
-    manifest.turns.map(async (turn): Promise<ExternalInquiryTurnRecord> => {
-      if (turn.kind !== 'answeredUnhydrated') return turn;
-      try {
-        const content = await GlobalStorageFS.read(
-          path.join(threadDir(threadId), turn.answerRelativePath),
-        );
-        didHydrate = true;
-        return {
-          ...turn,
-          kind: 'answered',
-          answer: content,
-          answeredAt: turn.answeredAt || manifest.updatedAt,
-        };
-      } catch {
-        // Answer file unreadable/missing — leave the turn unhydrated (benign:
-        // the manifest still loads, the answer is simply not inlined yet).
-        return turn;
-      }
-    }),
-  );
-  return { manifest: { ...manifest, turns }, didHydrate };
-}
-
-/**
  * Loud read (#6966 bullet 5): a missing manifest is the expected "no such
  * thread" case, but a corrupt/unparseable one is a real failure that must
  * not be silently conflated with it — every consumer here treats `null` as
@@ -346,8 +191,7 @@ async function readThreadManifest(
   }
   // Version discrimination happens BEFORE shape validation: a manifest that
   // carries a schemaVersion we don't know (e.g. written by a newer TeXRA) is
-  // unsupported data, not a shape to reinterpret — without this gate it would
-  // fail the canonical union arm and fall through to a bogus legacy parse.
+  // unsupported data, not a shape to reinterpret.
   // Warn and treat as unreadable; the on-disk file is left untouched.
   if (
     isObject(raw) &&
@@ -786,32 +630,15 @@ export function manifestToTranscript(
 // Public read API
 // ============================================================================
 
-/**
- * Read a thread manifest and normalize legacy answer files at the boundary.
- * Legacy turns with only `answerRelativePath` are hydrated once and written
- * back so callers always see inline answers when answer text is available.
- */
+/** Read a canonical thread manifest. */
 export async function readExternalInquiryThread(
   threadId: string,
 ): Promise<ExternalInquiryThreadManifest | null> {
   const parsed = ExternalInquiryThreadIdSchema.safeParse(threadId);
   if (!parsed.success) return null;
-  return threadMutex.runExclusive(parsed.data, async () => {
-    const manifest = await readThreadManifest(parsed.data);
-    if (!manifest) return null;
-    const hydrated = await hydrateAnswersFromDisk(parsed.data, manifest);
-    if (hydrated.didHydrate) {
-      try {
-        await writeThreadManifest(hydrated.manifest);
-      } catch (err) {
-        logger.warn(
-          `Failed to persist hydrated inquiry manifest for ${parsed.data}`,
-          { data: err },
-        );
-      }
-    }
-    return hydrated.manifest;
-  });
+  return threadMutex.runExclusive(parsed.data, () =>
+    readThreadManifest(parsed.data),
+  );
 }
 
 function manifestToSummary(

@@ -297,12 +297,6 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
       case 'open':
         lines.push('', '(awaiting user answer)');
         break;
-      case 'answeredUnhydrated':
-        lines.push(
-          '',
-          '(answer recorded but not yet loaded — reload the thread)',
-        );
-        break;
     }
   }
 

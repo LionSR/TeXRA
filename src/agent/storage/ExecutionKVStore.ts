@@ -2,7 +2,7 @@
  * Execution-scoped key-value store infrastructure.
  *
  * Provides a unified storage interface for all execution-scoped data,
- * including typed accessors for well-known keys (meta, config, todos, etc.)
+ * including typed accessors for well-known keys (meta, config, report, etc.)
  * and generic read/write for arbitrary keys.
  */
 
@@ -13,7 +13,6 @@ import {
   type AgentConfig,
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import { normalizeProviderMessages } from '@agent/types/ProviderMessage';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
@@ -43,8 +42,6 @@ const SINGLE_VALUE_KEYS = {
   META: 'meta',
   CONFIG: 'config',
   REPORT: 'report',
-  TODOS: 'todos',
-  CONVERSATION: 'conversation',
   WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
 } as const;
@@ -59,8 +56,8 @@ const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
 
 /**
  * True when `key` is one of ExecutionKVStore's reserved keys — a single-value
- * key (meta, config, report, todos, conversation, workspace-files,
- * result-meta) or a per-child record key (`child-{id}`). Exported so callers
+ * key (meta, config, report, workspace-files, result-meta) or a per-child
+ * record key (`child-{id}`). Exported so callers
  * that walk an execution's storage directory (e.g.
  * `src/tools/executions/executionKvFiles.ts`) can recognize internal KV
  * entries without re-deriving this vocabulary themselves.
@@ -76,14 +73,11 @@ type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 // Domain types — Zod schemas as source of truth
 // ============================================================================
 
-/** Shape of a persisted todo item from tool-use flow state. */
-const TodoEntrySchema = z.object({
-  content: z.string().optional(),
-  status: z.string().optional(),
-});
-export type TodoEntry = z.infer<typeof TodoEntrySchema>;
-
-const TodoArraySchema = z.array(TodoEntrySchema);
+/** Display shape for a completed todo item. */
+export interface TodoEntry {
+  content?: string;
+  status?: string;
+}
 const WorkspaceFilePathArraySchema = z.array(z.string());
 
 /** Stored data for a child execution record (without the derived `id` field). */
@@ -131,8 +125,6 @@ export interface ExecutionKVStore {
   readMetaStrict(): Promise<ExecutionMeta | null>;
   readConfig(): Promise<AgentConfig | null>;
   readReport(): Promise<string | null>;
-  readTodos(): Promise<TodoEntry[]>;
-  readConversation(): Promise<unknown[] | null>;
   readWorkspaceFiles(): Promise<string[]>;
   readChildren(): Promise<ChildRecord[]>;
   readResultMeta(): Promise<ResultMeta | null>;
@@ -225,24 +217,6 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   async readReport(): Promise<string | null> {
     return (await this.read<string>(KEYS.REPORT)) ?? null;
-  }
-
-  async readTodos(): Promise<TodoEntry[]> {
-    return (await this.readValidated(KEYS.TODOS, TodoArraySchema)) ?? [];
-  }
-
-  async readConversation(): Promise<unknown[] | null> {
-    const raw = await this.read(KEYS.CONVERSATION);
-    if (raw == null) return null;
-    const messages = normalizeProviderMessages(raw);
-    if (messages === null) {
-      logger.warn(
-        CHANNEL,
-        `Failed to parse execution ${this.executionId} ${KEYS.CONVERSATION}.json as provider messages`,
-      );
-      return null;
-    }
-    return messages.length > 0 ? messages : null;
   }
 
   async readWorkspaceFiles(): Promise<string[]> {
