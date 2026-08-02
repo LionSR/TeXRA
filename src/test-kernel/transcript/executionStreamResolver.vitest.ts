@@ -275,7 +275,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       }),
     ).resolves.toEqual({
       source: 'streamDataMeta',
-      associatedChildStreamIds: [firstChild, secondChild],
+      associatedStreamIds: [firstChild, secondChild],
     });
   });
 

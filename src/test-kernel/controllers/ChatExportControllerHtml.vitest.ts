@@ -151,7 +151,7 @@ describe('ChatExportController.exportAsHtml', () => {
     expect(outcome).toEqual({ status: 'streamId_ambiguous' });
   });
 
-  it('returns rootStream_missing when only delegated child sidecars remain', async () => {
+  it('returns streamLogs_missing when only delegated child sidecars remain', async () => {
     const templatePath = await writeTemplate();
     const executionId = 'aaa556aaa556' as ExecutionId;
     const executionConfig = config();
@@ -170,7 +170,7 @@ describe('ChatExportController.exportAsHtml', () => {
 
     const outcome = await controller.exportAsHtml(executionId, templatePath);
 
-    expect(outcome).toEqual({ status: 'rootStream_missing' });
+    expect(outcome).toEqual({ status: 'streamLogs_missing' });
   });
 
   it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {

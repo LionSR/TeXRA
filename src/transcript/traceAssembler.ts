@@ -25,20 +25,15 @@ export type AssembleTraceResult =
   | {
       readonly status: 'streamId_ambiguous';
       readonly candidateStreamIds: readonly StreamTabId[];
-    }
-  | {
-      readonly status: 'rootStream_missing';
-      readonly associatedChildStreamIds: readonly StreamTabId[];
     };
 
 /**
- * `streamId_ambiguous` means several historical root sidecars claim the
- * execution, but persisted evidence does not identify one as canonical.
- * `rootStream_missing` means only proven child sidecars remain. By contrast,
- * `streamLogs_missing` is the expected outcome for executions recorded before
- * the headless-persistence fix (TeXRA#7057), when no replayable transcript was
- * written. Callers should surface both distinctions rather than reporting a
- * generic "not found".
+ * `streamId_ambiguous` means several unproven archive roots claim the
+ * execution, but persisted evidence does not identify one as canonical. By
+ * contrast, `streamLogs_missing` means no replayable execution-root timeline
+ * is available, either because the run predates transcript persistence or
+ * because its only exact associations are proven children. Callers should
+ * surface both distinctions rather than reporting a generic "not found".
  */
 export async function assembleTrace(
   executionId: ExecutionId,
@@ -64,16 +59,10 @@ export async function assembleTrace(
     streamLogStore,
   });
   if (resolved && !resolved.streamId) {
-    if (resolved.associatedChildStreamIds) {
-      return {
-        status: 'rootStream_missing',
-        associatedChildStreamIds: resolved.associatedChildStreamIds,
-      };
-    }
-    return {
-      status: 'streamId_ambiguous',
-      candidateStreamIds: resolved.exactExecutionCandidateStreamIds ?? [],
-    };
+    const candidateStreamIds = resolved.exactExecutionCandidateStreamIds ?? [];
+    return candidateStreamIds.length > 0
+      ? { status: 'streamId_ambiguous', candidateStreamIds }
+      : { status: 'streamLogs_missing' };
   }
   const streamId = resolved?.streamId ?? fallbackStreamId;
 

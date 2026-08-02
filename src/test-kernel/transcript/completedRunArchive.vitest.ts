@@ -765,6 +765,7 @@ describe('completedRunArchive facade', () => {
     expect(result).toEqual({
       source: 'streamLog',
       streamId: fullStream,
+      associatedStreamIds: [emptyStream],
       conversation: [
         { role: 'user', content: 'Real question' },
         {
@@ -1001,6 +1002,7 @@ describe('completedRunArchive facade', () => {
     expect(result).toEqual({
       source: 'streamLog',
       streamIds: [firstRoot, secondRoot],
+      associatedStreamIds: [child],
       conversation: [
         { role: 'user', content: 'First question' },
         {
@@ -1467,6 +1469,55 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).toContain('Returned message interval: [0, 0)');
   });
 
+  it('uses proven child associations as existence evidence without reading them', async () => {
+    const executionId = '0888b40888b4' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const firstChild = 'bash@tool#0888b40888b4' as StreamTabId;
+    const secondChild = 'codex@tool#0888b40888b4' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(firstChild, runConfig('bash'), executionId);
+    snapshots.setParentStream(firstChild, parent);
+    snapshots.setRunConfig(secondChild, runConfig('codex'), executionId);
+    snapshots.setParentStream(secondChild, parent);
+    await snapshots.flush();
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          firstChild,
+          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First child row' })],
+        ],
+        [
+          secondChild,
+          [
+            logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
+              text: 'Second child row',
+            }),
+          ],
+        ],
+      ]),
+    );
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'none',
+      associatedStreamIds: [firstChild, secondChild],
+      conversation: null,
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.status).toBe('executed');
+    expect(endpoint.output).toContain(
+      `Associated streams: ${firstChild}, ${secondChild}`,
+    );
+    expect(endpoint.output).toContain('Conversation (0 messages)');
+    expect(endpoint.output).not.toContain('First child row');
+    expect(endpoint.output).not.toContain('Second child row');
+    expect(endpoint.output).not.toContain('Ambiguous candidate streams:');
+    expect(endpoint.output).not.toContain('Merged streams:');
+  });
+
   it('contracts a copied diagnostic bridge while preserving conversation order', async () => {
     const executionId = '0888b10888b1' as ExecutionId;
     const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;
@@ -1637,6 +1688,8 @@ describe('completedRunArchive facade', () => {
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       conversation: null,
       source: 'none',
+      streamId: root,
+      associatedStreamIds: [child],
     });
   });
 
@@ -1655,7 +1708,7 @@ describe('completedRunArchive facade', () => {
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
       conversation: null,
       source: 'none',
-      associatedChildStreamIds: [firstChild, secondChild],
+      associatedStreamIds: [firstChild, secondChild],
     });
 
     const endpoint = await new ExecutionsTool().call({
@@ -1663,7 +1716,7 @@ describe('completedRunArchive facade', () => {
     });
     expect(endpoint.status).toBe('executed');
     expect(endpoint.output).toContain(
-      `Associated child streams: ${firstChild}, ${secondChild}`,
+      `Associated streams: ${firstChild}, ${secondChild}`,
     );
     expect(endpoint.output).toContain('Returned message interval: [0, 0)');
   });

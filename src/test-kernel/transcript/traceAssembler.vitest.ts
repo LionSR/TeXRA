@@ -137,24 +137,35 @@ describe('assembleTrace', () => {
     });
   });
 
-  it('reports child-only associations separately from ambiguous archive roots', async () => {
-    const executionId = 'abcde2abcde2' as ExecutionId;
+  it('does not classify children-only associations as ambiguous or choose a fallback', async () => {
+    const executionId = 'aaa445aaa445' as ExecutionId;
     const executionConfig = config();
+    await getExecutionStore(executionId).writeConfig(executionConfig);
+
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const firstChild = `bash@tool#${executionId}` as StreamTabId;
     const secondChild = `codex@tool#${executionId}` as StreamTabId;
-    await getExecutionStore(executionId).writeConfig(executionConfig);
-
+    const derived = getStreamTabId(
+      executionConfig.agent,
+      executionConfig.model,
+      { executionId },
+    );
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(firstChild, executionConfig, executionId);
+    snapshots.setRunConfig(firstChild, config({ agent: 'bash' }), executionId);
     snapshots.setParentStream(firstChild, parent);
-    snapshots.setRunConfig(secondChild, executionConfig, executionId);
+    snapshots.setRunConfig(
+      secondChild,
+      config({ agent: 'codex' }),
+      executionId,
+    );
     snapshots.setParentStream(secondChild, parent);
     await snapshots.flush();
+    await appendLogEntry(firstChild, 'first child must not be selected');
+    await appendLogEntry(secondChild, 'second child must not be selected');
+    await appendLogEntry(derived, 'derived fallback must not be selected');
 
     await expect(assembleTrace(executionId)).resolves.toEqual({
-      status: 'rootStream_missing',
-      associatedChildStreamIds: [firstChild, secondChild],
+      status: 'streamLogs_missing',
     });
   });
 

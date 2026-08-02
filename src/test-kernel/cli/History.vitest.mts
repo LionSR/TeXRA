@@ -1386,6 +1386,22 @@ describe('CLI history runtime', () => {
         return resourcesPath;
       }
 
+      it('reports missing replayable roots without an empty sidecar list', async () => {
+        mocks.assembleTrace.mockResolvedValue({ status: 'streamLogs_missing' });
+
+        const exitCode = await runHistoryExport(
+          makeContext('/resources'),
+          'a1' as ExecutionId,
+          'html',
+          {},
+        );
+
+        expect(exitCode).toBe(CliExitCode.Usage);
+        expect(stdout).toBe('');
+        expect(stderr).toContain('no replayable execution-root transcript');
+        expect(stderr).not.toContain('sidecars (');
+      });
+
       it('reports ambiguous transcript ownership without exporting an arbitrary trace', async () => {
         mocks.assembleTrace.mockResolvedValue({
           status: 'streamId_ambiguous',
@@ -1407,28 +1423,6 @@ describe('CLI history runtime', () => {
         expect(stderr).toContain('no canonical trace timeline');
         expect(stderr).toContain('HTML trace export was not written');
         expect(stderr).not.toContain('texra history show');
-      });
-
-      it('reports child-only transcript associations without calling them ambiguous', async () => {
-        mocks.assembleTrace.mockResolvedValue({
-          status: 'rootStream_missing',
-          associatedChildStreamIds: ['bash@tool#a1', 'codex@tool#a1'],
-        });
-
-        const exitCode = await runHistoryExport(
-          makeContext('/resources'),
-          'a1' as ExecutionId,
-          'html',
-          {},
-        );
-
-        expect(exitCode).toBe(CliExitCode.Usage);
-        expect(stdout).toBe('');
-        expect(stderr).toContain(
-          'represented only by delegated child transcript sidecars (bash@tool#a1, codex@tool#a1)',
-        );
-        expect(stderr).toContain('HTML trace export was not written');
-        expect(stderr).not.toContain('multiple associated transcript');
       });
 
       it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {

@@ -863,7 +863,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       streamId,
       streamIds,
       candidateStreamIds,
-      associatedChildStreamIds,
+      associatedStreamIds,
       conflicts,
       hasOrderingCycle,
       hasOrderingAmbiguity,
@@ -879,7 +879,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         resumability.resumable ||
         (streamIds?.length ?? 0) > 0 ||
         (candidateStreamIds?.length ?? 0) > 0 ||
-        (associatedChildStreamIds?.length ?? 0) > 0;
+        (associatedStreamIds?.length ?? 0) > 0;
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
@@ -891,14 +891,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             'Source: none',
             'Stream: none',
             ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+            ...(associatedStreamIds
+              ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
+              : []),
             ...(candidateStreamIds
               ? [
                   `Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`,
-                ]
-              : []),
-            ...(associatedChildStreamIds
-              ? [
-                  `Associated child streams: ${associatedChildStreamIds.join(', ')}`,
                 ]
               : []),
             ...(conflicts
@@ -929,11 +927,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         `Source: ${source}`,
         `Stream: ${streamId ?? 'none'}`,
         ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+        ...(associatedStreamIds
+          ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
+          : []),
         ...(candidateStreamIds
           ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
-          : []),
-        ...(associatedChildStreamIds
-          ? [`Associated child streams: ${associatedChildStreamIds.join(', ')}`]
           : []),
         ...(conflicts
           ? [

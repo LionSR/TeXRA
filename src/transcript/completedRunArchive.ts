@@ -108,8 +108,8 @@ export interface CompletedRunConversationReadResult {
   readonly streamIds?: readonly StreamTabId[];
   /** Exact-execution sidecars excluded because persisted evidence is insufficient. */
   readonly candidateStreamIds?: readonly StreamTabId[];
-  /** Proven child sidecars associated with the run when no archive root exists. */
-  readonly associatedChildStreamIds?: readonly StreamTabId[];
+  /** Proven child associations retained as evidence but never read as archive rows. */
+  readonly associatedStreamIds?: readonly StreamTabId[];
   /** Same row ID persisted with incompatible conversation payload or state. */
   readonly conflicts?: readonly CompletedRunConversationConflict[];
   /** Overlap constraints contradicted one another. */
@@ -696,6 +696,10 @@ async function readSidecarConversation(
   // release/reopen regression proves resumed turns append there. Only
   // pre-registration resolutions scan historical candidates, so keep the
   // ordinary completed-read path constant-time.
+  const associationDiagnostics =
+    resolved.associatedStreamIds && resolved.associatedStreamIds.length > 0
+      ? { associatedStreamIds: resolved.associatedStreamIds }
+      : {};
   const exactCandidates = resolved.exactExecutionCandidateStreamIds;
   if (exactCandidates !== undefined) {
     const orderedCandidates = resolved.streamId
@@ -712,6 +716,7 @@ async function readSidecarConversation(
       resolved.streamId,
     );
     const diagnostics = {
+      ...associationDiagnostics,
       ...(resolved.streamId ? { streamId: resolved.streamId } : {}),
       ...(merged.streamIds.length > 1 ? { streamIds: merged.streamIds } : {}),
       ...(merged.candidateStreamIds.length > 0
@@ -733,17 +738,16 @@ async function readSidecarConversation(
     }
     // Exact metadata established the selected stream and candidate set. An
     // empty selected conversation falls back to the legacy projection, never
-    // to a child, disconnected candidate, or suffix-only sidecar.
-    return null;
+    // to a child, disconnected candidate, or suffix-only sidecar. Preserve
+    // child association evidence so an empty legacy fallback remains findable.
+    return resolved.associatedStreamIds?.length
+      ? { conversation: null, source: 'none', ...diagnostics }
+      : null;
   }
 
   if (!resolved.streamId) {
-    return resolved.associatedChildStreamIds
-      ? {
-          conversation: null,
-          source: 'none',
-          associatedChildStreamIds: resolved.associatedChildStreamIds,
-        }
+    return resolved.associatedStreamIds?.length
+      ? { conversation: null, source: 'none', ...associationDiagnostics }
       : null;
   }
   const primaryConversation = await conversationFromStream(
@@ -755,6 +759,7 @@ async function readSidecarConversation(
       conversation: primaryConversation,
       source: 'streamLog',
       streamId: resolved.streamId,
+      ...associationDiagnostics,
     };
   }
 
@@ -768,7 +773,12 @@ async function readSidecarConversation(
   for (const streamId of fallbackStreamIds) {
     const conversation = await conversationFromStream(streamLogStore, streamId);
     if (conversation.length > 0) {
-      return { conversation, source: 'streamLog', streamId };
+      return {
+        conversation,
+        source: 'streamLog',
+        streamId,
+        ...associationDiagnostics,
+      };
     }
   }
   return null;

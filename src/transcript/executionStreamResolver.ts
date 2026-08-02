@@ -22,8 +22,8 @@ export interface PersistedStreamIdResolution {
   readonly fallbackStreamIds?: readonly StreamTabId[];
   /** Exact-execution sidecars eligible for overlap-gated archive merging. */
   readonly exactExecutionCandidateStreamIds?: readonly StreamTabId[];
-  /** Proven child sidecars associated with the run when no archive root exists. */
-  readonly associatedChildStreamIds?: readonly StreamTabId[];
+  /** Proven child associations excluded from archive ownership and row reads. */
+  readonly associatedStreamIds?: readonly StreamTabId[];
 }
 
 export interface PersistedStreamIdResolverOptions {
@@ -47,6 +47,8 @@ interface ExecutionStreamScan {
   readonly metaMatched: StreamTabId[];
   /** Exact execution matches not positively identified as child streams. */
   readonly mergeCandidateMetaMatched: StreamTabId[];
+  /** Exact execution matches positively identified as child streams. */
+  readonly childMetaMatched: StreamTabId[];
 }
 
 /**
@@ -77,6 +79,14 @@ async function scanPersistedStreamsForExecution(
         (candidate) =>
           candidate.association.executionId === executionId &&
           candidate.association.parentStreamId === undefined,
+      )
+      .map((candidate) => candidate.streamId)
+      .toSorted(),
+    childMetaMatched: scanned
+      .filter(
+        (candidate) =>
+          candidate.association.executionId === executionId &&
+          candidate.association.parentStreamId !== undefined,
       )
       .map((candidate) => candidate.streamId)
       .toSorted(),
@@ -154,8 +164,12 @@ export async function resolvePersistedStreamIdForExecution(
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, metaMatched, mergeCandidateMetaMatched } =
-    await scanPersistedStreamsForExecution(executionId, snapshotStore);
+  const {
+    persistedStreams,
+    metaMatched,
+    mergeCandidateMetaMatched,
+    childMetaMatched,
+  } = await scanPersistedStreamsForExecution(executionId, snapshotStore);
 
   if (metaMatched.length > 0) {
     // A sole delegated stream can itself be the historical execution being
@@ -169,6 +183,9 @@ export async function resolvePersistedStreamIdForExecution(
       mergeCandidateMetaMatched.length === 1
         ? mergeCandidateMetaMatched[0]
         : soleDelegatedStream;
+    const associatedStreamIds = childMetaMatched.filter(
+      (candidate) => candidate !== streamId,
+    );
     if (metaMatched.length === 1 && streamId) {
       await writeLegacyExecutionStreamId(executionId, streamId);
     }
@@ -183,15 +200,17 @@ export async function resolvePersistedStreamIdForExecution(
           ? {
               exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
             }
-          : { associatedChildStreamIds: metaMatched }),
+          : {}),
+        ...(associatedStreamIds.length > 0 ? { associatedStreamIds } : {}),
       };
     }
+    const excludedChildren = new Set(associatedStreamIds);
     const suffixMatched = findExecutionSuffixMatches(
       [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
       executionId,
-    );
+    ).filter((candidate) => !excludedChildren.has(candidate));
     const fallbackStreamIds = orderedFallbacks(streamId, [
-      ...metaMatched,
+      ...mergeCandidateMetaMatched,
       ...suffixMatched,
     ]);
     return {
@@ -203,6 +222,7 @@ export async function resolvePersistedStreamIdForExecution(
             exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
           }
         : {}),
+      ...(associatedStreamIds.length > 0 ? { associatedStreamIds } : {}),
     };
   }
 

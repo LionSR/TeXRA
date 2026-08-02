@@ -145,18 +145,9 @@ export async function runHistoryExport(
         break;
       case 'streamLogs_missing':
         writeTextStderr(
-          `Execution ${id} exists but has no stored transcript to export (it ` +
-            'may predate transcript persistence, or the run never produced ' +
-            'any output). Run `texra history show ' +
-            id +
-            '` to see what is available.',
-        );
-        break;
-      case 'rootStream_missing':
-        writeTextStderr(
-          `Execution ${id} is represented only by delegated child transcript ` +
-            `sidecars (${traceResult.associatedChildStreamIds.join(', ')}); ` +
-            'no root transcript is available, so HTML trace export was not written.',
+          `Execution ${id} exists but has no replayable execution-root transcript ` +
+            '(it may predate transcript persistence, the run may have produced ' +
+            'no output, or only proven child transcripts may remain).',
         );
         break;
       case 'streamId_ambiguous':
