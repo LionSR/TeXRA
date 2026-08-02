@@ -24,6 +24,8 @@ import { appSignals } from '@eventBus/AppSignals';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
+import type { ExtensionTexraConfig } from '@frontend/vscode/texraConfig';
+import type { WorkspaceProvider } from '@platform/interfaces';
 import type {
   AgentProposalPermission,
   ProgressViewOutboundMessage,
@@ -93,7 +95,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private _mainViewProvider?: MainViewProvider;
   private readonly detachHostInteractions: () => void;
 
-  constructor(protected readonly context: vscode.ExtensionContext) {
+  constructor(
+    protected readonly context: vscode.ExtensionContext,
+    private readonly config: ExtensionTexraConfig,
+    private readonly workspace: WorkspaceProvider,
+  ) {
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 
@@ -206,20 +212,37 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+        let storageReloadError: unknown;
         try {
           await this.backend.reloadAfterStorageRootChange();
-          this.syncFullView();
         } catch (error) {
-          this.logger.error(
-            'Failed to reload transcripts after workspace change',
-            {
-              data: error,
-            },
-          );
-          void vscode.window.showErrorMessage(
-            'TeXRA could not reload the transcript view after the workspace changed. Retry the workspace change or restart TeXRA.',
-          );
+          storageReloadError = error;
         }
+
+        let configReloadError: unknown;
+        try {
+          await this.config.rebindWorkspace(this.workspace.getWorkspacePath());
+        } catch (error) {
+          configReloadError = error;
+        }
+
+        if (!storageReloadError && !configReloadError) {
+          this.syncFullView();
+          return;
+        }
+        const error =
+          storageReloadError && configReloadError
+            ? new AggregateError(
+                [storageReloadError, configReloadError],
+                'Failed to reload workspace storage and configuration',
+              )
+            : (storageReloadError ?? configReloadError);
+        this.logger.error('Failed to reload after workspace change', {
+          data: error,
+        });
+        void vscode.window.showErrorMessage(
+          'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
+        );
       }),
       vscode.window.onDidChangeActiveColorTheme(() => {
         if (this.isViewVisible()) {
