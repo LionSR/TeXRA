@@ -235,7 +235,7 @@ export function convertGoogleToolSchema(
 // exclusiveMaximum, and multipleOf are deliberately absent: the SDK does not
 // represent them (and independently drops additionalProperties). The original
 // Zod schema remains authoritative when TeXRA validates a returned tool call.
-const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set([
+const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>([
   'anyOf',
   'default',
   'description',
@@ -258,7 +258,7 @@ const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set([
   'required',
   'title',
   'type',
-]);
+] as const satisfies readonly (keyof GeminiSchema)[]);
 
 /** Keep only the OpenAPI subset represented by the Google SDK's Schema type. */
 function toGoogleOpenApiSchemaNode(value: unknown): unknown {
@@ -281,6 +281,17 @@ function toGoogleOpenApiSchemaNode(value: unknown): unknown {
       continue;
     }
     converted[key] = toGoogleOpenApiSchemaNode(child);
+  }
+
+  // Google has no exclusive-bound fields, but integer exclusivity can be
+  // represented exactly with the adjacent inclusive integer.
+  if (value.type === 'integer') {
+    if (value.exclusiveMinimum === true && typeof value.minimum === 'number') {
+      converted.minimum = Math.floor(value.minimum) + 1;
+    }
+    if (value.exclusiveMaximum === true && typeof value.maximum === 'number') {
+      converted.maximum = Math.ceil(value.maximum) - 1;
+    }
   }
   return converted;
 }
