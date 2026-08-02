@@ -69,6 +69,7 @@ export interface InputBarProps {
 }
 
 export interface InputBarHandle {
+  readonly appendInput: (input: string) => void;
   readonly discardDraft: () => boolean;
 }
 
@@ -168,6 +169,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     clearDraft();
     return { value: '', cursor: 0 };
   }, [clearDraft]);
+  const appendInput = useCallback(
+    (input: string): void => setValue(`${draftValueRef.current}${input}`),
+    [setValue],
+  );
   const discardDraft = useCallback((): boolean => {
     if (
       draftValueRef.current.length === 0 &&
@@ -179,7 +184,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     clearDraft();
     return true;
   }, [clearDraft, imagePasteQueue]);
-  useImperativeHandle(props.controlRef, () => ({ discardDraft }), [
+  useImperativeHandle(props.controlRef, () => ({ appendInput, discardDraft }), [
+    appendInput,
     discardDraft,
   ]);
   const replaceSlashTriggerInput = useCallback(
