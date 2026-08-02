@@ -3,7 +3,6 @@ description: Mathematical paper enhancer with two-phase workflow. Rewrites docum
 
 settings:
   agentCategory: workflow
-  outputExt: tex
 
 prompts:
   systemPrompt: |

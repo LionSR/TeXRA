@@ -4,7 +4,6 @@ description: Mathematical substance enhancer for research papers. Identifies ele
 settings:
   agentCategory: workflow
   rounds: 2
-  outputExt: tex
 
 prompts:
   systemPrompt: |

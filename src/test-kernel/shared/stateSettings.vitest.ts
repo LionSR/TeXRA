@@ -375,7 +375,7 @@ describe('state settings catalog', () => {
     //    handlers before falling back to provider defaults.
     //  - the provider routing/region toggles (Prefer Kimi Code, the China
     //    region switches, GLM Coding Plan) are CLI-only catalog rows mirroring
-    //    the extension's PROVIDER_VSCODE_SETTINGS controls, read through
+    //    the extension's PROVIDER_SETTINGS controls, read through
     //    providerConfig/ProxyConfigResolver during CLI model dispatch.
     //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
     //    dual-backend Kimi models in CLI runs.

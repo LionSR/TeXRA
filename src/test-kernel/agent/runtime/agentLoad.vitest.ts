@@ -151,27 +151,6 @@ describe('loadAgentSettingAndPrompts', () => {
     assert.strictEqual(prompts.userRequest, 'unified variant');
   });
 
-  it('loads legacy workflow settings that still declare outputExt', async () => {
-    const resolution = customResolution('legacy', AgentCategory.Workflow);
-
-    fileContents.set(
-      normalize(resolution.definitionPath),
-      [
-        'name: legacy',
-        'settings:',
-        '  agentCategory: workflow',
-        '  outputExt: tex',
-        'prompts:',
-        '  userRequest: fix it',
-        '',
-      ].join('\n'),
-    );
-
-    const [settings] = await loadAgentSettingAndPrompts(resolution);
-    assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
-    assert.strictEqual(Object.hasOwn(settings, 'outputExt'), false);
-  });
-
   it('rejects with a wrapped error naming the path for malformed YAML', async () => {
     const resolution = customResolution('broken', AgentCategory.Workflow);
 

@@ -163,7 +163,6 @@ export interface ExtensionCommandActions {
     agentSubTab?: AgentCategory,
   ): Promise<void>;
   resetMainView(): Promise<void>;
-  openWorkbenchSettings(): Thenable<unknown>;
   cleanBuild(): Promise<void>;
   cleanOutput(): Promise<void>;
   pack(config: PackConfig): Promise<void>;
@@ -236,7 +235,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.showSettings(SETTINGS_TAB.MULTI_AGENT)),
   'texra.showGitSettings': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.GIT)),
-  'texra.openSettings': (actions) => awaitTrue(actions.openWorkbenchSettings()),
   'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
   'texra.cleanOutput': (actions) => awaitTrue(actions.cleanOutput()),
   'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),

@@ -3,7 +3,6 @@ description: Removes LLM stylistic tells from research prose. Phase 1 annotates 
 
 settings:
   agentCategory: workflow
-  outputExt: tex
 
 prompts:
   systemPrompt: |
