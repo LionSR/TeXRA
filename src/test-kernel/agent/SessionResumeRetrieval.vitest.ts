@@ -65,10 +65,6 @@ const CONFIG = AgentConfigSchema.parse({
   workingDirectory: '/workspace',
 });
 const GOOGLE_CONFIG: AgentConfig = { ...CONFIG, model: 'gemini35f' };
-const GOOGLE_WORKFLOW_CONFIG: AgentConfig = {
-  ...GOOGLE_CONFIG,
-  agentCategory: AgentCategory.Workflow,
-};
 const TOOL_USE_SETTING = AgentToolUseSettingSchema.parse({});
 const TOOL_USE_PROMPT = AgentPromptSchema.parse({});
 const ACTIVE_COMPATIBILITY_KEY = 'ModelHandlerOpenAIResponse';
@@ -507,29 +503,27 @@ describe('retrieveSessionResumeData', () => {
     expect(resume.parentStreamId).toBe(parentStreamId);
   });
 
-  it('infers the legacy Google GenAI handler for old Google Content transcripts', async () => {
+  it('rejects a Google record without persisted handler identity', async () => {
     const executionId = 'abc124' as ExecutionId;
     const streamId = 'chat@gemini35f#abc124' as StreamTabId;
-    await writeFlowRecord(executionId, {
+    const shared = {
       messages: [
         {
-          role: 'user',
-          parts: [{ text: 'Continue the old chat transcript.' }],
+          type: 'user_input',
+          content: [{ type: 'text', text: 'Continue.' }],
         },
       ],
       shouldSkipCycle: false,
       stateSlices: defaultStateSlices('gemini35f'),
-    });
+    };
+    await writeFlowRecord(executionId, shared);
 
-    const resume = await retrieveToolUseResume(
-      streamId,
-      executionId,
-      GOOGLE_CONFIG,
+    await expect(
+      retrieveSessionResumeData(streamId, executionId, GOOGLE_CONFIG),
+    ).rejects.toThrow(
+      `Failed to retrieve tool-use resume data for stream: ${streamId}`,
     );
-
-    expect(resume.shared.modelHandlerCompatibilityKey).toBe(
-      'ModelHandlerGoogleGenAI',
-    );
+    expect((await readFlowRecord(executionId))?.shared).toEqual(shared);
   });
 
   it('normalizes legacy nested conversation shared state for tool-use resume', async () => {
@@ -627,56 +621,6 @@ describe('retrieveSessionResumeData', () => {
     ).rejects.toThrow(
       `Failed to retrieve tool-use resume data for stream: ${streamId}`,
     );
-  });
-
-  it('infers the legacy Google GenAI handler for old workflow transcripts', async () => {
-    const executionId = 'abc125' as ExecutionId;
-    const streamId = 'workflow@gemini35f#abc125' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      currentRound: 1,
-      totalRounds: 2,
-      conversation: [
-        {
-          role: 'user',
-          parts: [{ text: 'Continue the old workflow transcript.' }],
-        },
-      ],
-    });
-
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      GOOGLE_WORKFLOW_CONFIG,
-    );
-
-    expect(resume?.type).toBe('workflow');
-    if (resume?.type !== 'workflow') return;
-    expect(resume.modelHandlerCompatibilityKey).toBe('ModelHandlerGoogleGenAI');
-  });
-
-  it('normalizes legacy workflow messages shared state for resume routing', async () => {
-    const executionId = 'abc132' as ExecutionId;
-    const streamId = 'workflow@gemini35f#abc132' as StreamTabId;
-    await writeFlowRecord(executionId, {
-      currentRound: 1,
-      totalRounds: 2,
-      messages: [
-        {
-          role: 'user',
-          parts: [{ text: 'Continue the old workflow messages.' }],
-        },
-      ],
-    });
-
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      GOOGLE_WORKFLOW_CONFIG,
-    );
-
-    expect(resume?.type).toBe('workflow');
-    if (resume?.type !== 'workflow') return;
-    expect(resume.modelHandlerCompatibilityKey).toBe('ModelHandlerGoogleGenAI');
   });
 });
 
