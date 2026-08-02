@@ -28,8 +28,6 @@ export interface DesktopShortcutService {
 
 export const DESKTOP_SHORTCUT_STORAGE_KEY =
   'texra.desktop.shortcutOverrides.v1';
-export const DESKTOP_SHORTCUT_INVALID_BACKUP_KEY =
-  'texra.desktop.shortcutOverrides.invalidBackup.v1';
 
 export const DesktopShortcutOverridesSchema = z.record(
   z.string(),

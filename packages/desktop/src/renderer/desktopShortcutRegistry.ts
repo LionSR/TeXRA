@@ -4,7 +4,6 @@ import type {
   DesktopShortcutService,
 } from '@shared/commands/shortcutPreferences';
 import {
-  DESKTOP_SHORTCUT_INVALID_BACKUP_KEY,
   DESKTOP_SHORTCUT_STORAGE_KEY,
   DesktopShortcutOverridesSchema,
   installDesktopShortcutService,
@@ -49,20 +48,13 @@ export interface DesktopShortcutRegistry extends DesktopShortcutService {
   dispose(): void;
 }
 
-interface StoredShortcutOverrides {
-  readonly overrides: DesktopShortcutOverrides;
-  readonly invalidRaw?: string;
-}
-
 /** Installs the one desktop shortcut dispatcher and Settings service. */
 export function createDesktopShortcutRegistry(
   options: DesktopShortcutRegistryOptions,
 ): DesktopShortcutRegistry {
   const view = options.document.defaultView;
   const platform = options.platform ?? getRendererPlatform(view);
-  const stored = readOverrides(view?.localStorage);
-  let overrides = stored.overrides;
-  let invalidRaw = stored.invalidRaw;
+  let overrides = readOverrides(view?.localStorage);
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void
   >();
@@ -105,16 +97,16 @@ export function createDesktopShortcutRegistry(
       ...overrides,
       [id]: accelerator ?? null,
     };
-    writeOverrides(view?.localStorage, overrides, invalidRaw);
-    invalidRaw = undefined;
+    view?.localStorage.setItem(
+      DESKTOP_SHORTCUT_STORAGE_KEY,
+      JSON.stringify(overrides),
+    );
     notify();
   }
 
   function reset(): void {
     overrides = {};
-    invalidRaw = undefined;
     view?.localStorage.removeItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-    view?.localStorage.removeItem(DESKTOP_SHORTCUT_INVALID_BACKUP_KEY);
     notify();
   }
 
@@ -235,27 +227,16 @@ function hasPrimaryModifier(event: KeyboardEvent): boolean {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
-function readOverrides(storage: Storage | undefined): StoredShortcutOverrides {
-  if (!storage) return { overrides: {} };
+function readOverrides(storage: Storage | undefined): DesktopShortcutOverrides {
+  if (!storage) return {};
   const raw = storage.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-  if (!raw) return { overrides: {} };
+  if (!raw) return {};
   try {
     const parsed: unknown = JSON.parse(raw);
     const result = DesktopShortcutOverridesSchema.safeParse(parsed);
-    if (result.success) return { overrides: result.data };
+    if (result.success) return result.data;
   } catch {
-    // The invalid value is retained and backed up on the next explicit write.
+    // Malformed JSON resolves to the same empty defaults as a failed schema parse.
   }
-  return { overrides: {}, invalidRaw: raw };
-}
-
-function writeOverrides(
-  storage: Storage | undefined,
-  overrides: DesktopShortcutOverrides,
-  invalidRaw: string | undefined,
-): void {
-  if (invalidRaw) {
-    storage?.setItem(DESKTOP_SHORTCUT_INVALID_BACKUP_KEY, invalidRaw);
-  }
-  storage?.setItem(DESKTOP_SHORTCUT_STORAGE_KEY, JSON.stringify(overrides));
+  return {};
 }
