@@ -130,7 +130,6 @@ function restoreState(
     toolUseAgent: 'orchestrator',
     model: 'restored-model',
     commit: 'abc1234',
-    instruction: '',
     workflowInstruction: '',
     toolUseInstruction: '',
     editedFile: 'restored_edited.tex',
