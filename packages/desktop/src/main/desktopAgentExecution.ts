@@ -111,11 +111,11 @@ import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  postDesktopSettingsRoute,
+  postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
 } from '../desktopCommandSurface.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
-import { buildDesktopSetRouteMessage } from '../desktopShellMessages.js';
+import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { createDesktopHostInteractions } from './desktopHostInteractions.js';
 import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
@@ -500,7 +500,7 @@ export class DesktopProgressBridge {
       readKey: (provider) => lookupApiKey(platform().secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
       promptForApiKey: async () => {
-        this.routeToSettings(SETTINGS_TAB.MODELS);
+        this.showSettings(SETTINGS_TAB.MODELS);
         await this.options.host.showInfoMessage(
           'Add a provider API key in Models, then use "Retry" on the request.',
         );
@@ -1034,10 +1034,10 @@ export class DesktopProgressBridge {
       },
       // Settings navigation
       openMemoryView: () => {
-        this.routeToSettings(SETTINGS_TAB.MEMORY);
+        this.showSettings(SETTINGS_TAB.MEMORY);
       },
       openProfile: () => {
-        this.routeToSettings();
+        this.showSettings();
       },
       // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
       // a single window.
@@ -1084,8 +1084,8 @@ export class DesktopProgressBridge {
    * owner the rail and menu commands use, so a stream-initiated navigation
    * lands identically.
    */
-  private routeToSettings(tabIndex?: SettingsTab): void {
-    postDesktopSettingsRoute(
+  private showSettings(tabIndex?: SettingsTab): void {
+    postDesktopSettingsView(
       (message) => this.postToRenderer(message),
       tabIndex,
     );
@@ -1301,7 +1301,7 @@ export class DesktopProgressBridge {
 
   /**
    * Restore a run's setup into the main view: builds the host-neutral
-   * persisted-state snapshot and routes the renderer there. Shared by the
+   * persisted-state snapshot and shows it in the launcher. Shared by the
    * in-session "restore this proposal" flow (`agentProposal.restoreRunConfig`
    * above) and desktop history's "Setup" action (settings IPC), which mirrors
    * the extension's `texra.restoreState` command.
@@ -1316,7 +1316,9 @@ export class DesktopProgressBridge {
       });
       return false;
     }
-    this.postToRenderer(buildDesktopSetRouteMessage('main'));
+    this.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
+    });
     this.postToRenderer({
       command: COMMON_COMMANDS.STATE_RESTORE,
       state,

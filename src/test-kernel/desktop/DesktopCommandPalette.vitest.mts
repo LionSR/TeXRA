@@ -19,7 +19,8 @@ interface DesktopCommandPaletteModule {
   createDesktopCommandPalette(options: {
     document: Document;
     actions: {
-      showRoute(route: string): void;
+      showLauncher(): void;
+      openWorkbench(kind: 'settings' | 'logs'): void;
       showSettings(tabIndex?: number): void;
       showStream?(streamId: string): void;
     };
@@ -151,7 +152,11 @@ describe('desktop command palette', () => {
     const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
     const controller = createDesktopCommandPalette({
       document,
-      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
+      actions: {
+        showLauncher: vi.fn(),
+        openWorkbench: vi.fn(),
+        showSettings: vi.fn(),
+      },
       platform: 'darwin',
       ...options,
     });
@@ -168,7 +173,8 @@ describe('desktop command palette', () => {
 
   it('renders catalog entries and dispatches the active command on Enter', async () => {
     const actions = {
-      showRoute: vi.fn(),
+      showLauncher: vi.fn(),
+      openWorkbench: vi.fn(),
       showSettings: vi.fn(),
     };
     const controller = await mountPalette({ actions });
@@ -199,7 +205,8 @@ describe('desktop command palette', () => {
 
   it('adds current streams as switch commands when opened', async () => {
     const actions = {
-      showRoute: vi.fn(),
+      showLauncher: vi.fn(),
+      openWorkbench: vi.fn(),
       showSettings: vi.fn(),
       showStream: vi.fn(),
     };
@@ -237,7 +244,8 @@ describe('desktop command palette', () => {
 
   it('clicking an item dispatches its command and closes the dialog', async () => {
     const actions = {
-      showRoute: vi.fn(),
+      showLauncher: vi.fn(),
+      openWorkbench: vi.fn(),
       showSettings: vi.fn(),
     };
     const controller = await mountPalette({ actions });
@@ -251,7 +259,7 @@ describe('desktop command palette', () => {
     button!.click();
     await flushDialogTicks();
 
-    expect(actions.showRoute).toHaveBeenCalledWith('main');
+    expect(actions.showLauncher).toHaveBeenCalledOnce();
     expect(controller.element.open).toBe(false);
   });
 

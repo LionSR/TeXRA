@@ -20,7 +20,8 @@ interface ShortcutRegistryModule {
   createDesktopShortcutRegistry(options: {
     document: Document;
     actions: {
-      showRoute(route: string): void;
+      showLauncher(): void;
+      openWorkbench(kind: 'settings' | 'logs'): void;
       showSettings(tabIndex?: number): void;
     };
     openCommands(): void;
@@ -39,7 +40,8 @@ async function createRegistry(
   return createDesktopShortcutRegistry({
     document,
     actions: {
-      showRoute: vi.fn(),
+      showLauncher: vi.fn(),
+      openWorkbench: vi.fn(),
       showSettings: vi.fn(),
     },
     openCommands,

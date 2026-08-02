@@ -1,6 +1,5 @@
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory } from '@shared/schemas/agent';
-import { type SwitchViewTarget } from '@shared/schemas/commonViewMessages';
 import {
   MainViewInboundMessageSchema,
   type MainViewInboundMessage,
@@ -10,10 +9,9 @@ import {
   type SettingsTab,
 } from '@shared/schemas/settingsViewMessages';
 import {
-  buildDesktopSetRouteMessage,
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
-  type DesktopRoute,
+  type DesktopWorkbenchKind,
 } from '../desktopShellMessages.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import {
@@ -26,7 +24,7 @@ import {
   buildDesktopMainViewResetMessage,
   DESKTOP_DOCS_URL,
   DESKTOP_LOCAL_COMMANDS,
-  postDesktopSettingsRoute,
+  postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
   type DesktopCommandActions,
 } from '../desktopCommandSurface.js';
@@ -62,30 +60,21 @@ export interface DesktopShellActions extends DesktopCommandActions {
   showInfoMessage(message: string): void;
 }
 
-// The desktop task shell has no separate progress surface: the conversation is
-// the permanent canvas, so a 'progress' target is already on screen and maps to
-// no route change.
-const SWITCH_VIEW_ROUTES = {
-  main: 'main',
-  progress: undefined,
-  dashboard: 'settings',
-} satisfies Record<SwitchViewTarget, DesktopRoute | undefined>;
-
 export function createDesktopShellActions(
   renderer: DesktopRenderer,
   options: DesktopShellActionFactoryOptions,
 ): DesktopShellActions {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
-  function postRoute(route: DesktopRoute) {
-    renderer.postToRenderer(buildDesktopSetRouteMessage(route));
+  function openWorkbench(kind: DesktopWorkbenchKind) {
+    renderer.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH,
+      kind,
+    });
   }
 
-  function postSettingsRoute(
-    tabIndex?: SettingsTab,
-    agentSubTab?: AgentCategory,
-  ) {
-    postDesktopSettingsRoute(
+  function showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory) {
+    postDesktopSettingsView(
       (message) => renderer.postToRenderer(message),
       tabIndex,
       agentSubTab,
@@ -99,7 +88,7 @@ export function createDesktopShellActions(
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {
-      postSettingsRoute(SETTINGS_TAB.AGENTS);
+      showSettings(SETTINGS_TAB.AGENTS);
       return;
     }
     void openCustomAgentDirectory().catch(reportAsyncError);
@@ -122,7 +111,9 @@ export function createDesktopShellActions(
   }
 
   function resetMainView() {
-    postRoute('main');
+    renderer.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
+    });
     renderer.postToRenderer(buildDesktopMainViewResetMessage());
   }
 
@@ -164,8 +155,13 @@ export function createDesktopShellActions(
           postReply([], false);
         });
     },
-    showRoute: postRoute,
-    showSettings: postSettingsRoute,
+    showLauncher: () => {
+      renderer.postToRenderer({
+        command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
+      });
+    },
+    openWorkbench,
+    showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
     toggleSidePanel: () => toggleLayout('sidePanel'),
     toggleSummaryBar: () => toggleLayout('summaryBar'),
@@ -196,8 +192,10 @@ function dispatchMainViewInboundOnShell(
 ): boolean {
   switch (message.command) {
     case COMMON_COMMANDS.SWITCH_VIEW: {
-      const route = SWITCH_VIEW_ROUTES[message.view];
-      if (route) actions.showRoute(route);
+      if (message.view === 'main') actions.showLauncher();
+      if (message.view === 'dashboard') actions.showSettings();
+      // The conversation is the permanent desktop canvas, so "progress" is
+      // already visible and intentionally needs no action.
       return true;
     }
     case MAIN_VIEW_COMMANDS.SETTINGS_OPEN:

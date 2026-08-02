@@ -31,7 +31,6 @@ import {
   WORKBENCH_KINDS,
   WORKBENCH_MAX_WIDTH,
   WORKBENCH_MIN_WIDTH,
-  workbenchKindForRoute,
   workbenchTab,
   workspaceInitials,
   workspaceName,
@@ -338,12 +337,6 @@ describe('desktop task shell model', () => {
     expect(setWorkbenchWidth(initial, 10_000).workbenchWidth).toBe(
       WORKBENCH_MAX_WIDTH,
     );
-  });
-
-  it('maps only artifact routes into the workbench', () => {
-    expect(workbenchKindForRoute('settings')).toBe('settings');
-    expect(workbenchKindForRoute('logs')).toBe('logs');
-    expect(workbenchKindForRoute('main')).toBeUndefined();
   });
 
   it('derives concise workspace labels from POSIX and Windows paths', () => {
