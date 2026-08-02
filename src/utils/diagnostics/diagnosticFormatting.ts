@@ -115,6 +115,9 @@ const SECTION_TITLE_BY_SEVERITY: Partial<Record<number, string>> = {
 export function formatGroupedSections(
   diagnostics: GenericDiagnostic[],
 ): string {
+  // Diagnostics with an unrecognized severity key to `undefined` and are
+  // dropped by the `.get(title) ?? []` lookups below — same silent omission
+  // as the three `.filter()` calls this replaced.
   const bySectionTitle = groupBy(
     diagnostics,
     (d) => SECTION_TITLE_BY_SEVERITY[d.severity],
