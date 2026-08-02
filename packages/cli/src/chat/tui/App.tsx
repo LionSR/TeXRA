@@ -545,18 +545,14 @@ export function App(props: AppProps): React.JSX.Element {
       clearPendingEscapeInterrupt();
       if (isEscapeInput(input, key)) {
         const previousStreamId = activeStreamIdSignal.get();
-        if (
-          !handlePendingBareEscape(
-            pendingEscape.streamId,
-            pendingEscape.parentStreamId,
-          )
-        ) {
-          return;
-        }
+        const handledPendingEscape = handlePendingBareEscape(
+          pendingEscape.streamId,
+          pendingEscape.parentStreamId,
+        );
         const currentStreamId = activeStreamIdSignal.get();
         if (
           currentStreamId === undefined ||
-          currentStreamId === previousStreamId ||
+          (handledPendingEscape && currentStreamId === previousStreamId) ||
           !bareEscapeActive(currentStreamId)
         ) {
           return;
