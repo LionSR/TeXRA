@@ -55,6 +55,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
@@ -533,7 +534,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await listExecutions();
 
     if (entries.length === 0) {
-      return { status: 'executed', output: 'No execution history found.' };
+      return executed('No execution history found.');
     }
 
     const { page, start, end, total } = paginateToolListing(
@@ -544,10 +545,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const lines = page.map(formatListingLine);
 
     const header = formatListingHeader(start, end, total);
-    return {
-      status: 'executed',
-      output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
-    };
+    return executed(
+      `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
+    );
   }
 
   private async showSummary(
@@ -587,7 +587,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         },
       );
 
-      return { status: 'executed', output: lines.join('\n') };
+      return executed(lines.join('\n'));
     }
 
     // Completed execution: full KV fetch
@@ -605,10 +605,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       if (!resumability.resumable) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
-      return {
-        status: 'executed',
-        output: `Execution: ${executionId}\nStatus: resumable\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
-      };
+      return executed(
+        `Execution: ${executionId}\nStatus: resumable\n(No metadata available - use /executions/${executionId}/conversation to view messages)`,
+      );
     }
 
     const category = resolveExecutionDisplayCategory(
@@ -636,7 +635,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       },
     );
 
-    return { status: 'executed', output: lines.join('\n') };
+    return executed(lines.join('\n'));
   }
 
   /**
@@ -716,10 +715,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       detachActiveChildren: detachSubagentsOnStop(),
     });
     if (success) {
-      return {
-        status: 'executed',
-        output: `Execution ${executionId} terminated.`,
-      };
+      return executed(`Execution ${executionId} terminated.`);
     }
     throw new ToolError(`Execution ${executionId} could not be terminated.`);
   }
@@ -739,11 +735,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
-    return {
-      status: 'executed',
-      summary: `Subscribed to ${executionId}`,
-      output: `Subscribed to ${executionId}. Status and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
-    };
+    return executed(
+      `Subscribed to ${executionId}. Status and termination events will arrive as follow-ups wrapped in <execution-activity>. Auto-disposes when the execution finishes or this stream is released. Call again with action='unsubscribe' to stop sooner.`,
+      `Subscribed to ${executionId}`,
+    );
   }
 
   private handleUnsubscribe(executionId: ExecutionId): ToolResult {
@@ -752,12 +747,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       streamId,
       executionId,
     );
-    return {
-      status: 'executed',
-      output: removed
+    return executed(
+      removed
         ? `Unsubscribed from ${executionId}.`
         : `No active subscription to ${executionId} on this stream.`,
-    };
+    );
   }
 
   /**
@@ -775,27 +769,23 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       : (await readCompletedRunTodos(executionId)).todos;
 
     if (todos.length === 0) {
-      return {
-        status: 'executed',
-        output: `No task list found for execution ${executionId}.`,
-      };
+      return executed(`No task list found for execution ${executionId}.`);
     }
 
     const lines = formatTodoSection(todos);
     const header = formatTodoHeader(executionId, todos);
 
-    return { status: 'executed', output: `${header}\n\n${lines.join('\n')}` };
+    return executed(`${header}\n\n${lines.join('\n')}`);
   }
 
   private async showReport(executionId: ExecutionId): Promise<ToolResult> {
     const report = await getExecutionStore(executionId).readReport();
     if (!report) {
-      return {
-        status: 'executed',
-        output: `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
-      };
+      return executed(
+        `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
+      );
     }
-    return { status: 'executed', output: report };
+    return executed(report);
   }
 
   /**
@@ -805,31 +795,23 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private async showResultMeta(executionId: ExecutionId): Promise<ToolResult> {
     const resultMeta = await getExecutionStore(executionId).readResultMeta();
     if (!resultMeta) {
-      return {
-        status: 'executed',
-        output: `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
-      };
+      return executed(
+        `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
+      );
     }
-    return {
-      status: 'executed',
-      output: JSON.stringify(unwrapResultMeta(resultMeta), null, 2),
-    };
+    return executed(JSON.stringify(unwrapResultMeta(resultMeta), null, 2));
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {
     const children = await getExecutionStore(executionId).readChildren();
     if (children.length === 0) {
-      return {
-        status: 'executed',
-        output: `No child executions found for ${executionId}.`,
-      };
+      return executed(`No child executions found for ${executionId}.`);
     }
 
     const lines = await this.formatChildren(children);
-    return {
-      status: 'executed',
-      output: `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
-    };
+    return executed(
+      `Children of ${executionId} (${children.length}):\n\n${lines.join('\n')}`,
+    );
   }
 
   private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
@@ -844,10 +826,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       config.agent,
       config.agentCategory,
     );
-    return {
-      status: 'executed',
-      output: serializeFilteredConfig(config, category),
-    };
+    return executed(serializeFilteredConfig(config, category));
   }
 
   private async showConversation(
@@ -900,9 +879,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
-      return {
-        status: 'executed',
-        output: formatConversation([], {
+      return executed(
+        formatConversation([], {
           totalMessages: 0,
           metadata: [
             'Source: none',
@@ -911,7 +889,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
             'Next offset: none',
           ],
         }),
-      };
+      );
     }
 
     const pageStart = Math.min(offset, conversation.length);
@@ -928,7 +906,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       ],
     });
 
-    return { status: 'executed', output };
+    return executed(output);
   }
 
   /**
@@ -954,12 +932,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       throw new ToolError(`Execution not found: ${executionId}`);
     }
     if (meta?.category !== 'process') {
-      return {
-        status: 'executed',
-        output:
-          `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
+      return executed(
+        `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
           `Use /executions/${executionId}/conversation for an agent run's message history.`,
-      };
+      );
     }
 
     const transcripts = currentSession().transcripts;
@@ -976,12 +952,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (streamId) await transcripts.ensureLoaded(streamId);
     const log = streamId ? transcripts.get(streamId) : undefined;
     if (!log) {
-      return {
-        status: 'executed',
-        output:
-          `No retained output for ${executionId} — its stream log is no longer available. ` +
+      return executed(
+        `No retained output for ${executionId} — its stream log is no longer available. ` +
           `Use /executions/${executionId}/report for the result summary.`,
-      };
+      );
     }
 
     const { lines, chars } = projectProcessOutput(log.toJSON());
@@ -995,7 +969,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     if (lines.length === 0) {
       out.push('', footer);
-      return { status: 'executed', output: out.join('\n') };
+      return executed(out.join('\n'));
     }
     out.push('Lines are in arrival order; `err:` marks one written to stderr.');
 
@@ -1016,7 +990,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         '',
         footer,
       );
-      return { status: 'executed', output: out.join('\n') };
+      return executed(out.join('\n'));
     }
 
     let hint = '';
@@ -1033,37 +1007,29 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       footer,
     );
 
-    return {
-      status: 'executed',
-      summary: `Read lines ${first}-${last} of /executions/${executionId}/output`,
-      output: out.join('\n'),
-    };
+    return executed(
+      out.join('\n'),
+      `Read lines ${first}-${last} of /executions/${executionId}/output`,
+    );
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
     const runDir = await findExistingRunStoragePath(executionId);
     if (!runDir) {
-      return {
-        status: 'executed',
-        output: 'No files generated for this execution.',
-      };
+      return executed('No files generated for this execution.');
     }
 
     const entries = await listRunDirectoryFiles(runDir);
 
     if (entries.length === 0) {
-      return {
-        status: 'executed',
-        output: 'No files generated for this execution.',
-      };
+      return executed('No files generated for this execution.');
     }
 
     const lines = formatSizedEntryLines(entries);
 
-    return {
-      status: 'executed',
-      output: `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
-    };
+    return executed(
+      `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
+    );
   }
 
   private async readFile(
@@ -1107,10 +1073,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await listExecutionWorkspaceFiles(config, paths);
 
     if (entries.length === 0) {
-      return {
-        status: 'executed',
-        output: `No workspace files recorded for execution ${executionId}.`,
-      };
+      return executed(
+        `No workspace files recorded for execution ${executionId}.`,
+      );
     }
 
     const lines = formatSizedEntryLines(
@@ -1121,12 +1086,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       })),
     );
 
-    return {
-      status: 'executed',
-      output:
-        `Workspace files for /executions/${executionId}/workspace-files:\n\n` +
+    return executed(
+      `Workspace files for /executions/${executionId}/workspace-files:\n\n` +
         lines.join('\n'),
-    };
+    );
   }
 
   private async readWorkspaceFile(
