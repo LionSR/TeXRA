@@ -118,7 +118,6 @@ export function createStubDesktopCredentialSettingsController(
       setChatGptPreferSubscription: noOp,
     },
     modelSelectionController: createModelSelectionController(state),
-    prepareModelSelectionData: noOp,
     postMainModelOptionsData: noOp,
     postStartupData: noOp,
     refreshAuthDependentData: noOp,

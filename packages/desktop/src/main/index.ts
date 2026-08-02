@@ -78,7 +78,6 @@ import {
   createDesktopOnboardingIpc,
   type DesktopOnboardingIpc,
 } from './desktopOnboardingIpc.js';
-import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
 import { DesktopPromptController } from './desktopPromptController.js';
 import { createDesktopProgressIpc } from './desktopProgressIpc.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
@@ -294,7 +293,6 @@ function createWindow(options: {
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
-  const modelListRefresh = refreshDesktopModelListStateIfNeeded();
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -739,7 +737,6 @@ function createWindow(options: {
           getServerSideKeyService().getUseIncludedModelAccess(),
         getUserTier: () => getServerSideKeyService().getUserTier() ?? undefined,
       },
-      modelListRefresh,
       onCredentialChanged: async () => {
         await onboardingIpcRef.current?.refreshOnboardingFunnel();
       },
@@ -1052,7 +1049,6 @@ function createWindow(options: {
       },
     },
     shellActions,
-    modelListRefresh,
     getAuthStatus: async () => ({
       authenticated: await SupabaseClient.isAuthenticated(),
     }),

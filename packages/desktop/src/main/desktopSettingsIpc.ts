@@ -112,8 +112,6 @@ export function createDesktopSettingsIpc(
   const settingsHost = new SettingsViewHost({
     state: { workspaceState, globalState },
     respond: options.postToRenderer,
-    beforeModelSelectionMessage: () =>
-      options.credentialSettingsController.prepareModelSelectionData(),
     controllers: {
       modelSelection:
         options.credentialSettingsController.modelSelectionController,
