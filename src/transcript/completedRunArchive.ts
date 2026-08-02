@@ -830,7 +830,21 @@ export async function readCompletedRunConversation(
   const legacy = await tryLegacy();
   if (legacy) {
     return sidecar
-      ? { ...sidecar, conversation: legacy.conversation, source: 'legacyKV' }
+      ? {
+          conversation: legacy.conversation,
+          source: 'legacyKV',
+          ...(sidecar.candidateStreamIds
+            ? { candidateStreamIds: sidecar.candidateStreamIds }
+            : {}),
+          ...(sidecar.associatedStreamIds
+            ? { associatedStreamIds: sidecar.associatedStreamIds }
+            : {}),
+          ...(sidecar.conflicts ? { conflicts: sidecar.conflicts } : {}),
+          ...(sidecar.hasOrderingCycle ? { hasOrderingCycle: true } : {}),
+          ...(sidecar.hasOrderingAmbiguity
+            ? { hasOrderingAmbiguity: true }
+            : {}),
+        }
       : legacy;
   }
   return sidecar ?? { conversation: null, source: 'none' };

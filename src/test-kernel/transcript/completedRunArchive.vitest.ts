@@ -1469,6 +1469,44 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).toContain('Returned message interval: [0, 0)');
   });
 
+  it('does not attribute a legacy conversation to diagnostic-only merged streams', async () => {
+    const executionId = '0888c10888c1' as ExecutionId;
+    const first = 'aOrchestrator@old#0888c10888c1' as StreamTabId;
+    const second = 'bOrchestrator@new#0888c10888c1' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(first, runConfig('orchestrator'), executionId);
+    snapshots.setRunConfig(second, runConfig('orchestrator'), executionId);
+    await snapshots.flush();
+
+    const sharedDiagnostic = {
+      ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
+      id: 'legacy-shared-diagnostic-row',
+    };
+    await persistRows(
+      executionId,
+      new Map([
+        [first, [sharedDiagnostic]],
+        [second, [sharedDiagnostic]],
+      ]),
+    );
+    await getExecutionStore(executionId).write('conversation', [
+      { role: 'user', content: 'Legacy conversation' },
+    ]);
+
+    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+      source: 'legacyKV',
+      conversation: [{ role: 'user', content: 'Legacy conversation' }],
+    });
+
+    const endpoint = await new ExecutionsTool().call({
+      path: `/executions/${executionId}/conversation`,
+    });
+    expect(endpoint.output).toContain('Source: legacyKV');
+    expect(endpoint.output).toContain('Legacy conversation');
+    expect(endpoint.output).not.toContain('Merged streams:');
+    expect(endpoint.output).toContain('Stream: none');
+  });
+
   it('uses proven child associations as existence evidence without reading them', async () => {
     const executionId = '0888b40888b4' as ExecutionId;
     const parent = 'orchestrator@model#parent' as StreamTabId;
