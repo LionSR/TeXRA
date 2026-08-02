@@ -82,6 +82,11 @@ const views = [
     attributes: {
       'data-desktop-view': 'progress',
     },
+    viewport: {
+      width: 420,
+      height: 600,
+    },
+    assertions: ['progressComposerLayout'],
     seedMessages: [
       {
         command: 'updateStreams',

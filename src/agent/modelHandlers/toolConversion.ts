@@ -16,7 +16,11 @@ import type {
   Tool as AnthropicTool,
   ToolUnion,
 } from '@anthropic-ai/sdk/resources/messages';
-import type { Tool as GeminiTool, FunctionDeclaration } from '@google/genai';
+import type {
+  Tool as GeminiTool,
+  FunctionDeclaration,
+  Schema as GeminiSchema,
+} from '@google/genai';
 import type { ChatCompletionFunctionTool } from 'openai/resources/chat/completions';
 import type {
   FunctionTool,
@@ -31,6 +35,14 @@ import type {
 const CHANNEL = 'toolConversion';
 
 type JSONSchemaObject = Record<string, unknown>;
+
+function schemaLiteralValue(schema: JSONSchemaObject): unknown {
+  if (schema.const !== undefined) return schema.const;
+  if (Array.isArray(schema.enum) && schema.enum.length === 1) {
+    return schema.enum[0];
+  }
+  return undefined;
+}
 
 /**
  * OpenAI, Gemini, and Anthropic all require function parameter schemas whose
@@ -87,8 +99,8 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     }
     // Discriminator: every branch pins this prop to a literal value.
     const constValues = branchSchemas
-      .map((s) => s.const)
-      .filter((c) => c !== undefined);
+      .map(schemaLiteralValue)
+      .filter((value) => value !== undefined);
     if (constValues.length === branchSchemas.length) {
       const descriptions = branchSchemas
         .map((s) => s.description)
@@ -162,6 +174,226 @@ export function convertToolSchema(
   }
   if (!schema) return null;
   return stripDollarSchema(flattenTopLevelUnion(schema));
+}
+
+function isSchemaObject(value: unknown): value is JSONSchemaObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const GOOGLE_TOOL_JSON_SCHEMA_OPTIONS = Object.freeze({
+  ...TOOL_JSON_SCHEMA_OPTIONS,
+  target: 'openapi-3.0',
+  cycles: 'throw',
+} as const);
+
+function containsSchemaReference(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsSchemaReference);
+  if (!isSchemaObject(value)) return false;
+  return (
+    typeof value.$ref === 'string' ||
+    Object.entries(value).some(([key, child]) => {
+      if (key === 'default' || key === 'example') return false;
+      if (
+        (key === 'properties' || key === '$defs' || key === 'definitions') &&
+        isSchemaObject(child)
+      ) {
+        return Object.values(child).some(containsSchemaReference);
+      }
+      return containsSchemaReference(child);
+    })
+  );
+}
+
+/**
+ * Convert a tool directly from its canonical Zod schema to the finite OpenAPI
+ * subset accepted by Google's model APIs. Recursive references are rejected
+ * locally rather than weakened on the wire.
+ */
+export function convertGoogleToolSchema(
+  def: ToolDefinition,
+): JSONSchemaObject | null {
+  let schema: JSONSchemaObject | null;
+  if (def.zodSchema) {
+    try {
+      schema = toJSONSchema(
+        def.zodSchema,
+        GOOGLE_TOOL_JSON_SCHEMA_OPTIONS,
+      ) as JSONSchemaObject;
+    } catch (error) {
+      throw new Error(
+        `Google tool "${def.name}" must use a finite parameter schema without recursive references.`,
+        { cause: error },
+      );
+    }
+  } else {
+    schema = (def.parameters ?? null) as JSONSchemaObject | null;
+  }
+  if (!schema) return null;
+  const normalized = stripDollarSchema(flattenTopLevelUnion(schema));
+  if (containsSchemaReference(normalized)) {
+    throw new Error(
+      `Google tool "${def.name}" must use a finite parameter schema without references.`,
+    );
+  }
+  const { $defs: _defs, definitions: _definitions, ...finite } = normalized;
+  return toGoogleOpenApiSchemaNode(finite) as JSONSchemaObject;
+}
+
+// This mirrors @google/genai's Schema interface. Validation-only JSON Schema
+// keywords such as additionalProperties, exclusiveMinimum,
+// exclusiveMaximum, and multipleOf are deliberately absent: the SDK does not
+// represent them (and independently drops additionalProperties). The original
+// Zod schema remains authoritative when TeXRA validates a returned tool call.
+const GOOGLE_OPENAPI_SCHEMA_KEY_LIST = [
+  'anyOf',
+  'default',
+  'description',
+  'enum',
+  'example',
+  'format',
+  'items',
+  'maxItems',
+  'maxLength',
+  'maxProperties',
+  'maximum',
+  'minItems',
+  'minLength',
+  'minProperties',
+  'minimum',
+  'nullable',
+  'pattern',
+  'properties',
+  'propertyOrdering',
+  'required',
+  'title',
+  'type',
+] as const satisfies readonly (keyof GeminiSchema)[];
+
+type AssertNever<T extends never> = T;
+type _GoogleSchemaKeysAreExhaustive = AssertNever<
+  Exclude<keyof GeminiSchema, (typeof GOOGLE_OPENAPI_SCHEMA_KEY_LIST)[number]>
+>;
+
+const GOOGLE_OPENAPI_SCHEMA_KEYS = new Set<string>(
+  GOOGLE_OPENAPI_SCHEMA_KEY_LIST,
+);
+const GOOGLE_SCHEMA_CONVERSION_KEYS = new Set([
+  'additionalProperties',
+  'const',
+  'deprecated',
+  'exclusiveMaximum',
+  'exclusiveMinimum',
+  'readOnly',
+  'writeOnly',
+]);
+
+/** Keep only the OpenAPI subset represented by the Google SDK's Schema type. */
+function toGoogleOpenApiSchemaNode(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toGoogleOpenApiSchemaNode);
+  if (!isSchemaObject(value)) return value;
+  const unsupportedKey = Object.keys(value).find(
+    (key) =>
+      !GOOGLE_OPENAPI_SCHEMA_KEYS.has(key) &&
+      !GOOGLE_SCHEMA_CONVERSION_KEYS.has(key),
+  );
+  if (unsupportedKey) {
+    throw new Error(
+      `Google tool schemas do not support the "${unsupportedKey}" keyword.`,
+    );
+  }
+  if (Array.isArray(value.type)) {
+    throw new Error('Google tool schemas require a single scalar type.');
+  }
+  if (
+    (value.const !== undefined && typeof value.const !== 'string') ||
+    (Array.isArray(value.enum) &&
+      value.enum.some((entry) => typeof entry !== 'string'))
+  ) {
+    throw new Error(
+      'Google tool schemas support only string literal constraints.',
+    );
+  }
+
+  if (
+    typeof value.const === 'string' &&
+    Array.isArray(value.enum) &&
+    !value.enum.includes(value.const)
+  ) {
+    throw new Error(
+      'Google tool schemas cannot represent contradictory const and enum constraints.',
+    );
+  }
+
+  const converted: JSONSchemaObject = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (!GOOGLE_OPENAPI_SCHEMA_KEYS.has(key)) continue;
+    if (key === 'default' || key === 'example') {
+      converted[key] = child;
+      continue;
+    }
+    if (key === 'properties' && isSchemaObject(child)) {
+      converted.properties = Object.fromEntries(
+        Object.entries(child).map(([name, schema]) => [
+          name,
+          toGoogleOpenApiSchemaNode(schema),
+        ]),
+      );
+      continue;
+    }
+    converted[key] = toGoogleOpenApiSchemaNode(child);
+  }
+
+  if (typeof value.const === 'string') {
+    converted.enum = [value.const];
+  }
+
+  // Google has no exclusive-bound fields, but integer exclusivity can be
+  // represented exactly with the adjacent inclusive integer.
+  if (value.type === 'integer') {
+    let exclusiveMinimum: number | undefined;
+    if (typeof value.exclusiveMinimum === 'number') {
+      exclusiveMinimum = Math.floor(value.exclusiveMinimum) + 1;
+    } else if (
+      value.exclusiveMinimum === true &&
+      typeof value.minimum === 'number'
+    ) {
+      exclusiveMinimum = Math.floor(value.minimum) + 1;
+    }
+    if (exclusiveMinimum !== undefined) {
+      converted.minimum =
+        typeof converted.minimum === 'number'
+          ? Math.max(converted.minimum, exclusiveMinimum)
+          : exclusiveMinimum;
+    }
+
+    let exclusiveMaximum: number | undefined;
+    if (typeof value.exclusiveMaximum === 'number') {
+      exclusiveMaximum = Math.ceil(value.exclusiveMaximum) - 1;
+    } else if (
+      value.exclusiveMaximum === true &&
+      typeof value.maximum === 'number'
+    ) {
+      exclusiveMaximum = Math.ceil(value.maximum) - 1;
+    }
+    if (exclusiveMaximum !== undefined) {
+      converted.maximum =
+        typeof converted.maximum === 'number'
+          ? Math.min(converted.maximum, exclusiveMaximum)
+          : exclusiveMaximum;
+    }
+  }
+  return converted;
+}
+
+/**
+ * Build the SDK-native function schema used by Generate Content. Unlike
+ * `parametersJsonSchema`, `parameters` is normalized locally by @google/genai
+ * and does not invoke Google's server-side JSON-Schema flattening path.
+ */
+function convertGoogleFunctionParameters(
+  def: ToolDefinition,
+): GeminiSchema | null {
+  return convertGoogleToolSchema(def) as GeminiSchema | null;
 }
 
 /**
@@ -374,7 +606,7 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parametersJsonSchema: convertToolSchema(d) ?? undefined,
+    parameters: convertGoogleFunctionParameters(d) ?? undefined,
   }));
 
   return [{ functionDeclarations: declarations }];
