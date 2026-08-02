@@ -37,6 +37,7 @@ import {
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
+import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
@@ -495,11 +496,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           );
         }
         if (runMeta?.terminalStatus !== EXECUTION_STATUS.COMPLETED) {
-          return {
-            status: 'error',
+          return errorResult(report, {
             summary: `Workflow script '${meta.name}' failed`,
-            error: report,
-          } satisfies ToolResult;
+          });
         }
         return {
           status: 'executed',

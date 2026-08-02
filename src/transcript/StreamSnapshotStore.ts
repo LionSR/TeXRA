@@ -65,6 +65,7 @@ import { mapToRecord, normalizeFilePath } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
+import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
   canUseStreamDataDir,
   decodeStreamId,
@@ -274,9 +275,12 @@ function descriptorFromConfig(
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
  * so `evict()`/`evictAll()` cannot drift from the field list.
  *
- * `streamVersions` (must survive eviction to keep guarding in-flight seed
- * races) and `writeMutexes` (keyed by the compound `${stream}::${key}`, not
- * a bare stream id) stay as their own maps on the store.
+ * Per-stream version counters (must survive eviction to keep guarding
+ * in-flight seed races) live inside the shared {@link ResidentStreamRegistry}
+ * container that backs `records`, not on the record itself. `writeMutexes`
+ * (keyed by the compound `${stream}::${key}`, not a bare stream id) stays as
+ * its own map on the store — the same exclusion #7892 already carved out of
+ * `perStreamStores()`.
  */
 interface StreamRecord {
   // -- Accumulated durable state (mirrors on-disk StreamData) --------------
@@ -353,7 +357,26 @@ type RollbackState = IdleRollbackState | RecoveringRollbackState;
 type DeletionState = StagedDeletionState | RollbackState;
 
 export class StreamSnapshotStore {
-  private readonly records = new Map<StreamTabId, StreamRecord>();
+  private readonly records = new ResidentStreamRegistry<
+    StreamTabId,
+    StreamRecord
+  >(() => ({
+    outputFiles: {},
+    missingOutputs: {},
+    compileFailures: {},
+    usage: new Map(),
+    usageUnparsed: new Map(),
+    workPlan: EMPTY_WORK_PLAN,
+    meta: undefined,
+    runDescriptor: undefined,
+    runConfig: undefined,
+    seeded: false,
+    seedChain: undefined,
+    metaOverlay: false,
+    overlays: {},
+    kv: undefined,
+    writeKv: undefined,
+  }));
   /**
    * Writes arriving while a stream's live directory is reversibly staged.
    * Keeping the latest value per sidecar makes the staging rename a real
@@ -365,32 +388,10 @@ export class StreamSnapshotStore {
   // -- Per (stream, category) serialized write locks -------------------------
   private readonly writeMutexes = new Map<string, Mutex>();
 
-  private readonly streamVersions = new Map<StreamTabId, number>();
   private hasAuthoritativeStreamSet = false;
 
   private getOrCreateRecord(stream: StreamTabId): StreamRecord {
-    let record = this.records.get(stream);
-    if (!record) {
-      record = {
-        outputFiles: {},
-        missingOutputs: {},
-        compileFailures: {},
-        usage: new Map(),
-        usageUnparsed: new Map(),
-        workPlan: EMPTY_WORK_PLAN,
-        meta: undefined,
-        runDescriptor: undefined,
-        runConfig: undefined,
-        seeded: false,
-        seedChain: undefined,
-        metaOverlay: false,
-        overlays: {},
-        kv: undefined,
-        writeKv: undefined,
-      };
-      this.records.set(stream, record);
-    }
-    return record;
+    return this.records.getOrCreate(stream);
   }
 
   private kv(streamId: StreamTabId): KVStore {
@@ -435,11 +436,11 @@ export class StreamSnapshotStore {
   }
 
   private streamVersion(stream: StreamTabId): number {
-    return this.streamVersions.get(stream) ?? 0;
+    return this.records.version(stream);
   }
 
   private bumpStreamVersion(stream: StreamTabId): void {
-    this.streamVersions.set(stream, this.streamVersion(stream) + 1);
+    this.records.bumpVersion(stream);
   }
 
   private canMutateSynchronously(stream: StreamTabId): boolean {
@@ -977,16 +978,14 @@ export class StreamSnapshotStore {
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   evict(stream: StreamTabId): void {
-    this.bumpStreamVersion(stream);
-    this.records.delete(stream);
+    this.records.evict(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (key.startsWith(`${stream}::`)) this.writeMutexes.delete(key);
     }
   }
 
   evictAll(): void {
-    for (const stream of this.records.keys()) this.bumpStreamVersion(stream);
-    this.records.clear();
+    this.records.evictAll();
     this.writeMutexes.clear();
     for (const state of this.deletionStates.values()) {
       if (state.kind === 'staging') state.resolveSettled();

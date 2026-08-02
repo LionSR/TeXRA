@@ -34,13 +34,6 @@ import {
   getRunContextStreamId,
   getRunContextWorkingDirectory,
 } from '@agent/runtime/RunContext';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  startChildRunLoop,
-  type ChildRunPorts,
-  type ChildRunStrategy,
-} from '@agent/runtime/childRunLoop';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import type {
@@ -64,9 +57,9 @@ import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { type ChildStream } from './childStream';
 import { CodexThreads } from './agentCliSessionStores';
 import {
-  publishAgentCliStreamUsage,
   launchAgentCliSession,
   resumeOrLaunchAgentCliSession,
+  startAgentCliLoop,
   withAgentCliApproval,
 } from './agentCliShared';
 import {
@@ -405,97 +398,42 @@ function startCodexLoop(params: {
   const { childStreamId, logger } = childStream;
   const fallbackThreadId = params.resumeThreadId;
 
-  // Fresh and resumed thread IDs are registered after the first successful
-  // turn is persisted, immediately before its result reaches the parent.
-  const registerThread = (threadId: string, session: SessionHandle): void => {
-    if (CodexThreads.lookup(threadId)) return;
-    CodexThreads.register(threadId, {
+  startAgentCliLoop({
+    childStream,
+    parentStreamId,
+    executionId,
+    agentName: 'codex',
+    stageLabel: 'Codex session',
+    initialPrompt,
+    store: CodexThreads,
+    releaseFallbackClaim: params.releaseFallbackClaim,
+    runProviderTurn: (prompt, _ports, abortController) =>
+      runStreamedTurn(
+        thread,
+        prompt,
+        childStreamId,
+        logger,
+        abortController.signal,
+      ),
+    buildEntry: (session) => ({
       thread,
       childStreamId,
       parentStreamId,
       executionId,
       executions: session.executions,
-    });
-  };
-
-  // The joined prompt text for whichever turn is currently in flight —
-  // captured here (rather than threaded through the loop contract) since
-  // `formatDelivery`/`formatError` run strictly after the turn that set it.
-  let lastPrompt = initialPrompt;
-  const runTurn = (
-    followUps: readonly FollowUpQueueBatchItem[],
-    _ports: ChildRunPorts,
-    abortController: AbortController,
-  ): Promise<RunResult> => {
-    lastPrompt = followUps.map((f) => f.text).join('\n\n');
-    return runStreamedTurn(
-      thread,
-      lastPrompt,
-      childStreamId,
-      logger,
-      abortController.signal,
-    );
-  };
-
-  const strategy: ChildRunStrategy<RunResult> = {
-    stageLabel: 'Codex session',
-    launch: (ports, abortController) =>
-      runTurn(
-        [{ text: initialPrompt, origin: 'user' }],
-        ports,
-        abortController,
-      ),
-    runTurn,
-    isTerminal: () => false,
+    }),
+    resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: (turn) => turn.usage,
-    onLoopStart: (session) => {
-      CodexThreads.trackInFlight({
-        thread,
-        childStreamId,
-        parentStreamId,
-        executionId,
-        executions: session.executions,
-      });
-    },
-    onTurnSuccess: (_turn, session) => {
-      if (fallbackThreadId) registerThread(fallbackThreadId, session);
-      if (thread.id) registerThread(thread.id, session);
-    },
-    publishUsage: (turn) => {
-      if (turn.usage) {
-        publishAgentCliStreamUsage(
-          childStreamId,
-          executionId,
-          buildCodexUsageStats(turn.usage),
-          logger,
-        );
-      }
-    },
-    formatDelivery: (turn, wallTimeMs) =>
+    buildUsageStats: (turn) =>
+      turn.usage ? buildCodexUsageStats(turn.usage) : undefined,
+    formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatCodexDelivery(executionId, lastPrompt, wallTimeMs, turn, thread.id),
-    formatError: (_turn, err) =>
+    formatError: (_turn, err, lastPrompt) =>
       formatChildRunError(
         { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
         { message: toErrorMessage(err) },
       ),
-    releaseSessionOwnership: () => {
-      params.releaseFallbackClaim?.();
-      CodexThreads.releaseByExecutionId(executionId);
-    },
-  };
-
-  const { completion } = startChildRunLoop({
-    childStream,
-    childStreamId,
-    parentStreamId,
-    executionId,
-    agentName: 'codex',
-    strategy,
-  });
-  void completion.catch((error: unknown) => {
-    childStream.logger.error(`Codex run loop failed after launch`, {
-      data: error,
-    });
+    loopFailedMessage: 'Codex run loop failed after launch',
   });
 }
 

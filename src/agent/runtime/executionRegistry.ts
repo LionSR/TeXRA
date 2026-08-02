@@ -33,6 +33,7 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/streams/streamStatus';
 import { formatDuration, onAbort } from '@utils/core';
+import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import {
   type ExecutionHandle,
   type ExecutionStatusInfo,
@@ -152,16 +153,16 @@ export class ExecutionRegistry {
     string,
     Set<(handle: ExecutionHandle | undefined) => void>
   >();
-  private readonly registrationListeners = new Set<
+  private readonly registrationListeners: ListenerSet<
     (executionId: string, handle: ExecutionHandle | undefined) => void
-  >();
+  > = createListenerSet();
   private readonly childActivations = new Map<
     string,
     ChildExecutionActivation
   >();
-  private readonly childActivationListeners = new Set<
+  private readonly childActivationListeners: ListenerSet<
     (activation: ChildExecutionActivation, active: boolean) => void
-  >();
+  > = createListenerSet();
 
   constructor(options: ExecutionRegistryInit = {}) {
     const events = options.events ?? new SessionEventHub();
@@ -650,10 +651,7 @@ export class ExecutionRegistry {
   addRegistrationListener(
     cb: (executionId: string, handle: ExecutionHandle | undefined) => void,
   ): () => void {
-    this.registrationListeners.add(cb);
-    return () => {
-      this.registrationListeners.delete(cb);
-    };
+    return this.registrationListeners.add(cb);
   }
 
   /**
@@ -679,10 +677,7 @@ export class ExecutionRegistry {
   addChildActivationListener(
     cb: (activation: ChildExecutionActivation, active: boolean) => void,
   ): () => void {
-    this.childActivationListeners.add(cb);
-    return () => {
-      this.childActivationListeners.delete(cb);
-    };
+    return this.childActivationListeners.add(cb);
   }
 
   private emitChildActivity(parentStreamId: StreamTabId): void {

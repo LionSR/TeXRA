@@ -42,11 +42,9 @@ export class OpenPdfTool extends defineTool({
   protected async execute(input: OpenPdfInput): Promise<ToolResult> {
     const openPdf = currentSession().interactions.openPdf;
     if (!openPdf) {
-      return {
-        status: 'error',
-        error:
-          'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
-      };
+      throw new ToolError(
+        'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
+      );
     }
 
     const location = resolvePdfLocation(input.path);
