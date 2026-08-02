@@ -6,6 +6,7 @@
  * and Lean tool diagnostics satisfy this interface.
  */
 
+import { groupBy } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
@@ -104,19 +105,28 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
  * **Line 10:** Unexpected token
  * **Line 20:** Missing semicolon
  */
+const SECTION_TITLE_BY_SEVERITY: Partial<Record<number, string>> = {
+  [SEVERITY_ERROR]: 'Errors',
+  [SEVERITY_WARNING]: 'Warnings',
+  [SEVERITY_INFO]: 'Info/Hints',
+  [SEVERITY_HINT]: 'Info/Hints',
+};
+
 export function formatGroupedSections(
   diagnostics: GenericDiagnostic[],
 ): string {
+  // Diagnostics with an unrecognized severity key to `undefined` and are
+  // dropped by the `.get(title) ?? []` lookups below — same silent omission
+  // as the three `.filter()` calls this replaced.
+  const bySectionTitle = groupBy(
+    diagnostics,
+    (d) => SECTION_TITLE_BY_SEVERITY[d.severity],
+  );
   const sections: Array<[title: string, items: GenericDiagnostic[]]> = [
-    ['Errors', diagnostics.filter((d) => d.severity === SEVERITY_ERROR)],
-    ['Warnings', diagnostics.filter((d) => d.severity === SEVERITY_WARNING)],
-    [
-      'Info/Hints',
-      diagnostics.filter(
-        (d) => d.severity === SEVERITY_INFO || d.severity === SEVERITY_HINT,
-      ),
-    ],
-  ];
+    'Errors',
+    'Warnings',
+    'Info/Hints',
+  ].map((title) => [title, bySectionTitle.get(title) ?? []]);
 
   return sections
     .filter(([, items]) => items.length > 0)
