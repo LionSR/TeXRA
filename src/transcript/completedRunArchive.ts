@@ -573,10 +573,10 @@ async function mergeConnectedConversation(
     return streamId ? [{ streamId, entries }] : [];
   });
   while (pending.length > 0) {
-    const candidateIndex = pending.findIndex(({ entries }) =>
-      entries.some((entry) => admittedRows.has(entry.id)),
+    const overlappingIndexes = pending.flatMap(({ entries }, index) =>
+      entries.some((entry) => admittedRows.has(entry.id)) ? [index] : [],
     );
-    if (candidateIndex === -1) {
+    if (overlappingIndexes.length === 0) {
       diagnostics.push(
         ...pending.map(({ streamId }) => ({
           kind: 'disconnectedStream' as const,
@@ -585,27 +585,85 @@ async function mergeConnectedConversation(
       );
       break;
     }
-    const candidate = pending.splice(candidateIndex, 1)[0];
+
+    const rejected = new Map<number, CompletedRunArchiveDiagnostic>();
+    for (const index of overlappingIndexes) {
+      const candidate = pending[index]!;
+      const conflict = candidate.entries.find(
+        (entry) =>
+          admittedRows.has(entry.id) &&
+          !entriesAgree(admittedRows.get(entry.id)!, entry),
+      );
+      if (conflict) {
+        rejected.set(index, {
+          kind: 'conflictingRow',
+          streamId: candidate.streamId,
+          rowId: conflict.id,
+        });
+      } else if (!isSingleContinuation(ordered, candidate.entries)) {
+        rejected.set(index, {
+          kind: 'branchingHistory',
+          streamId: candidate.streamId,
+        });
+      }
+    }
+
+    const compatibleIndexes = overlappingIndexes.filter(
+      (index) => !rejected.has(index),
+    );
+    for (const [position, leftIndex] of compatibleIndexes.entries()) {
+      const left = pending[leftIndex]!;
+      for (const rightIndex of compatibleIndexes.slice(position + 1)) {
+        const right = pending[rightIndex]!;
+        const conflictingRow = left.entries.find((leftEntry) => {
+          const rightEntry = right.entries.find(
+            (entry) => entry.id === leftEntry.id,
+          );
+          return rightEntry && !entriesAgree(leftEntry, rightEntry);
+        });
+        if (conflictingRow) {
+          rejected.set(leftIndex, {
+            kind: 'conflictingRow',
+            streamId: left.streamId,
+            rowId: conflictingRow.id,
+          });
+          rejected.set(rightIndex, {
+            kind: 'conflictingRow',
+            streamId: right.streamId,
+            rowId: conflictingRow.id,
+          });
+        } else if (!isSingleContinuation(left.entries, right.entries)) {
+          rejected.set(leftIndex, {
+            kind: 'branchingHistory',
+            streamId: left.streamId,
+          });
+          rejected.set(rightIndex, {
+            kind: 'branchingHistory',
+            streamId: right.streamId,
+          });
+        }
+      }
+    }
+
+    if (rejected.size > 0) {
+      for (const index of [...rejected.keys()].toSorted((a, b) => b - a)) {
+        pending.splice(index, 1);
+      }
+      diagnostics.push(
+        ...[...rejected.entries()]
+          .toSorted(([left], [right]) => left - right)
+          .map(([, diagnostic]) => diagnostic),
+      );
+      continue;
+    }
+
+    const candidateIndex = compatibleIndexes[0];
+    const candidate =
+      candidateIndex === undefined
+        ? undefined
+        : pending.splice(candidateIndex, 1)[0];
     if (!candidate) continue;
     const { entries: candidateEntries, streamId } = candidate;
-    const overlaps = candidateEntries.filter((entry) =>
-      admittedRows.has(entry.id),
-    );
-    const conflict = overlaps.find(
-      (entry) => !entriesAgree(admittedRows.get(entry.id)!, entry),
-    );
-    if (conflict) {
-      diagnostics.push({
-        kind: 'conflictingRow',
-        streamId,
-        rowId: conflict.id,
-      });
-      continue;
-    }
-    if (!isSingleContinuation(ordered, candidateEntries)) {
-      diagnostics.push({ kind: 'branchingHistory', streamId });
-      continue;
-    }
     const nextEntries = [...admittedEntries, candidateEntries];
     const nextOrder = orderMergedEntries(nextEntries);
     if (nextOrder === null) {

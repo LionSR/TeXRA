@@ -1016,15 +1016,11 @@ describe('completedRunArchive facade', () => {
     expect(result).toEqual({
       source: 'streamLog',
       streamId: canonical,
-      streamIds: [canonical, continued],
-      diagnostics: [{ kind: 'branchingHistory', streamId: forked }],
-      conversation: [
-        { role: 'user', content: 'Anchor' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Chosen continuation' }],
-        },
+      diagnostics: [
+        { kind: 'branchingHistory', streamId: continued },
+        { kind: 'branchingHistory', streamId: forked },
       ],
+      conversation: [{ role: 'user', content: 'Anchor' }],
     });
   });
 
