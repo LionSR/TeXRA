@@ -76,7 +76,7 @@ describe('desktop icon library', () => {
   });
 
   it('keeps canonical and unknown runtime names visible in both libraries', async () => {
-    const canonicalSvg = decodeSvg(await resolve(texraResolver, 'send'));
+    const canonicalSvg = decodeSvg(await resolve(texraResolver, 'paper-plane'));
     const unknownSvg = decodeSvg(
       await resolve(defaultResolver, 'unexpected-runtime-icon'),
     );
