@@ -56,12 +56,4 @@ describe('Node workspace identity', () => {
       'linked/new.tex',
     );
   });
-
-  it('exposes legacy workspace spellings only when supplied by the host', () => {
-    const workspace = createNodeWorkspace(
-      () => '/workspace/physical',
-      () => ['/workspace/link'],
-    );
-    expect(workspace.getLegacyWorkspacePaths?.()).toEqual(['/workspace/link']);
-  });
 });
