@@ -1285,6 +1285,16 @@ export class StreamSnapshotStore {
       this.bumpStreamVersion(stream);
       await Promise.all(pending);
     };
+    const waitForSeedChain = async (ignoreFailure = false): Promise<void> => {
+      let seedChain = this.records.get(stream)?.seedChain;
+      while (seedChain) {
+        if (ignoreFailure) await seedChain.catch(() => undefined);
+        else await seedChain;
+        const current = this.records.get(stream)?.seedChain;
+        if (!current || current === seedChain) return;
+        seedChain = current;
+      }
+    };
 
     try {
       if (canUseStreamDataDir(stream)) {
@@ -1303,13 +1313,7 @@ export class StreamSnapshotStore {
       // may already contain sidecars while execution-config hydration is still
       // in flight, so invalidating that seed would make neither disk nor memory
       // authoritative for rollback.
-      let seedChain = this.records.get(stream)?.seedChain;
-      while (seedChain) {
-        await seedChain;
-        const current = this.records.get(stream)?.seedChain;
-        if (!current || current === seedChain) break;
-        seedChain = current;
-      }
+      await waitForSeedChain();
 
       await cancelWrites();
 
@@ -1387,6 +1391,10 @@ export class StreamSnapshotStore {
       };
     } catch (error) {
       const failures: unknown[] = [error];
+      // An initial namespace inspection can fail before the normal seed wait.
+      // Let any active refresh restore or replace authoritative memory before
+      // the version bump invalidates its continuation.
+      await waitForSeedChain(true);
       await cancelWrites();
       const failedRollback = this.markRollbackFailed(stream, state);
       try {
