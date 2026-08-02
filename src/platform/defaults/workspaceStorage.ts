@@ -22,11 +22,10 @@ const STORAGE_LAYOUT = {
 
 export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
-export const LEGACY_RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.legacyRuns;
 export const WORKSPACE_STORAGE_COLLECTIONS_MERGED_PER_CHILD = [
   RUNS_STORAGE_DIR,
   WORKSPACE_STORAGE_LAYOUT.executionLeases,
-  LEGACY_RUNS_STORAGE_DIR,
+  WORKSPACE_STORAGE_LAYOUT.legacyRuns,
   WORKSPACE_STORAGE_LAYOUT.streamData,
   WORKSPACE_STORAGE_LAYOUT.streamLogs,
   MEMORY_STORAGE_DIR,
@@ -91,10 +90,6 @@ export function resolveRunStoragePath(...segments: string[]): string {
   return join(RUNS_STORAGE_DIR, ...segments);
 }
 
-export function resolveLegacyRunStoragePath(...segments: string[]): string {
-  return join(LEGACY_RUNS_STORAGE_DIR, ...segments);
-}
-
 export function resolveRunOriginalSnapshotPath(
   executionId: string,
   workspaceRelativePath: string,
@@ -114,17 +109,6 @@ export function resolveRunStorageRelativePath(
   return (
     relative(runDirectory, absolutePath).replaceAll('\\', '/') || undefined
   );
-}
-
-export async function resolveExistingRunStoragePath(
-  segments: readonly string[],
-  exists: (storagePath: string) => Promise<boolean>,
-): Promise<string | undefined> {
-  const primary = resolveRunStoragePath(...segments);
-  if (await exists(primary)) return primary;
-  const legacy = resolveLegacyRunStoragePath(...segments);
-  if (await exists(legacy)) return legacy;
-  return undefined;
 }
 
 function resolveLegacyWorkspaceStoragePath(

@@ -9,10 +9,14 @@
  * the storage port moves. VS Code Memento state and SecretStorage remain
  * host-owned; TeXRA configuration uses the shared JSON stores.
  */
+// Node imports
+import { join } from 'node:path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import * as logger from '@logger/logUtils';
 import type { StorageProvider } from '@platform/interfaces';
 import {
@@ -39,6 +43,11 @@ const GLOBAL_MERGE_PER_CHILD = [
   CUSTOM_AGENTS_STORAGE_DIR,
   EXTERNAL_INQUIRY_THREADS_DIR,
 ] as const;
+const mergeTaskRuns: BucketMigration = (sourcePath, targetPath, options) =>
+  mergeLegacyStorageBucket(sourcePath, targetPath, {
+    ...options,
+    mergePerChild: 'all',
+  });
 
 /**
  * Best-effort, one-time move of the extension's legacy `context.storageUri` /
@@ -55,13 +64,14 @@ export async function migrateLegacyVscodeStorage(
     warn: (message: string) => logger.warn('extension', message),
   };
   async function migrateBucket(
-    sourcePath: string | undefined,
+    getSourcePath: () => string | undefined,
     getTargetPath: () => string,
     label: string,
     migrate: BucketMigration,
   ): Promise<void> {
-    if (!sourcePath) return;
     try {
+      const sourcePath = getSourcePath();
+      if (!sourcePath) return;
       await migrate(sourcePath, getTargetPath(), {
         label,
         logger: migrationLogger,
@@ -76,13 +86,27 @@ export async function migrateLegacyVscodeStorage(
   // Resolve and migrate each bucket independently: a workspace-root failure
   // must not prevent an otherwise valid global migration, or vice versa.
   await migrateBucket(
-    context.storageUri?.fsPath,
+    () => context.storageUri?.fsPath,
     () => storage.getStoragePath(),
     'vscode-workspace-storage',
     mergeLegacyWorkspaceStorageBucket,
   );
   await migrateBucket(
-    context.globalStorageUri?.fsPath,
+    () =>
+      context.storageUri &&
+      join(context.storageUri.fsPath, WORKSPACE_STORAGE_LAYOUT.legacyRuns),
+    () => join(storage.getStoragePath(), WORKSPACE_STORAGE_LAYOUT.runs),
+    'vscode-workspace-storage/taskRuns',
+    mergeTaskRuns,
+  );
+  await migrateBucket(
+    () => join(storage.getStoragePath(), WORKSPACE_STORAGE_LAYOUT.legacyRuns),
+    () => join(storage.getStoragePath(), WORKSPACE_STORAGE_LAYOUT.runs),
+    'shared-workspace-storage/taskRuns',
+    mergeTaskRuns,
+  );
+  await migrateBucket(
+    () => context.globalStorageUri?.fsPath,
     () => storage.getGlobalStoragePath(),
     'vscode-global-storage',
     (sourcePath, targetPath, options) =>
