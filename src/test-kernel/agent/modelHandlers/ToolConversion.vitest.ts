@@ -4,12 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
+  convertGoogleToolSchema,
   toAnthropicTools,
   toGoogleTools,
   toOpenAITools,
   toOpenAIResponseTools,
 } from '@agent/modelHandlers/toolConversion';
 import type { ToolDefinition } from '@model/ToolDefinition';
+import { resolveToolDefinitions } from '@tools/registry';
 import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { BashTool } from '@tools/bash';
 import { EditFileTool } from '@tools/EditTool';
@@ -679,24 +681,74 @@ describe('toGoogleTools', () => {
     assert.deepEqual(params.required, ['command']);
   });
 
-  it('removes null-only union branches from optional Google parameters', () => {
-    const tools = toGoogleTools([
-      {
-        name: 'optional_input',
-        zodSchema: z.strictObject({
-          query: z.string().nullish(),
-          count: z.number().positive().nullish(),
-        }),
-      },
-    ]);
+  it('generates optional Google parameters directly in OpenAPI form', () => {
+    const definition = {
+      name: 'optional_input',
+      zodSchema: z.strictObject({
+        query: z.string().nullish(),
+        count: z.number().positive().nullish(),
+      }),
+    };
+    const interactionParams = convertGoogleToolSchema(definition) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    expect(interactionParams.properties.query).toStrictEqual({
+      nullable: true,
+      type: 'string',
+    });
+    expect(interactionParams.properties.count).toStrictEqual({
+      nullable: true,
+      type: 'number',
+      minimum: 0,
+      exclusiveMinimum: true,
+    });
+    expect(JSON.stringify(interactionParams)).not.toContain('anyOf');
+
+    const tools = toGoogleTools([definition]);
     const params = (tools[0] as GeminiTool).functionDeclarations?.[0]
       .parameters as {
       properties: Record<string, Record<string, unknown>>;
     };
 
-    expect(params.properties.query).toStrictEqual({ type: 'string' });
-    expect(params.properties.count).toStrictEqual({ type: 'number' });
+    expect(params.properties.query).toStrictEqual({
+      nullable: true,
+      type: 'string',
+    });
+    expect(params.properties.count).toStrictEqual({
+      nullable: true,
+      type: 'number',
+      minimum: 0,
+    });
     expect(params).not.toHaveProperty('additionalProperties');
+  });
+
+  it('generates finite schemas for the scientific review tool roster', () => {
+    const reviewTools = resolveToolDefinitions([
+      'wolfram',
+      'todo_write',
+      'bash',
+      'read_file',
+      'write_file',
+      'edit_file',
+      'glob',
+      'grep',
+      'extract_figures',
+      'extract_bib_entries',
+      'extract_tikz_figures',
+      'texcount',
+      'arxiv_search',
+      'arxiv_metadata',
+      'crossref_search',
+      'diagnostics',
+    ]);
+
+    expect(reviewTools).toHaveLength(16);
+    for (const definition of reviewTools) {
+      const serialized = JSON.stringify(convertGoogleToolSchema(definition));
+      expect(serialized, definition.name).not.toContain('"type":"null"');
+      expect(serialized, definition.name).not.toContain('$ref');
+      expect(serialized, definition.name).not.toContain('$defs');
+    }
   });
 
   it('preserves constraints attached to nested Google parameters', () => {
@@ -707,13 +759,13 @@ describe('toGoogleTools', () => {
           type: 'object',
           properties: {
             mode: {
-              $ref: '#/$defs/mode',
+              type: 'string',
+              enum: ['brief', 'full'],
               description: 'Mode selected for this call',
             },
             action: { type: 'string', const: 'review' },
           },
           required: ['mode', 'action'],
-          $defs: { mode: { type: 'string', enum: ['brief', 'full'] } },
         },
       },
     ]);
@@ -733,20 +785,31 @@ describe('toGoogleTools', () => {
     });
   });
 
-  it('bounds recursive JSON values before Google flattens the schema', () => {
-    const tools = toGoogleTools([
-      {
-        name: 'json_input',
-        zodSchema: z.strictObject({ value: z.json().nullish() }),
-      },
-    ]);
-    const declaration = (tools[0] as GeminiTool).functionDeclarations?.[0];
-    const params = declaration?.parameters as Record<string, unknown>;
-    const serialized = JSON.stringify(params);
+  it('rejects recursive Google schemas instead of weakening them', () => {
+    expect(() =>
+      toGoogleTools([
+        {
+          name: 'json_input',
+          zodSchema: z.strictObject({ value: z.json().nullish() }),
+        },
+      ]),
+    ).toThrow(
+      'Google tool "json_input" must use a finite parameter schema without recursive references.',
+    );
+  });
 
-    expect(serialized.includes('$ref')).toBe(false);
-    expect(serialized.includes('$defs')).toBe(false);
-    expect(serialized.length < 1_000).toBe(true);
-    expect(declaration?.parametersJsonSchema).toBe(undefined);
+  it('rejects referenced external Google schemas instead of flattening them', () => {
+    expect(() =>
+      convertGoogleToolSchema({
+        name: 'referenced_input',
+        parameters: {
+          type: 'object',
+          properties: { mode: { $ref: '#/$defs/mode' } },
+          $defs: { mode: { type: 'string' } },
+        },
+      }),
+    ).toThrow(
+      'Google tool "referenced_input" must use a finite parameter schema without references.',
+    );
   });
 });
