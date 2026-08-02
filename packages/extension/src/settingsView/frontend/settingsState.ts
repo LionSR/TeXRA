@@ -7,7 +7,7 @@
  * SettingsApp has no persistence/restore path: every signal here is written
  * only by the composed `messageHandlers` registry (see `messageDispatcher.ts`
  * + `slices/`) in response to backend SETTINGS_VIEW_COMMANDS messages — the
- * backend/VS Code config is the actual source of truth, this file is a pure
+ * backend configuration is the actual source of truth, this file is a pure
  * receiver.
  *
  * Singleton scope: only one Settings view per webview/page. If we ever need
@@ -37,7 +37,7 @@ import {
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
   type LatexConfigValues,
-  type NumberVscodeSetting,
+  type NumberSetting,
   type Goal,
   type PRSubscriptionEntry,
   type ToolDashboardItem,
@@ -152,9 +152,7 @@ export const orchestratorAgents = trackedSignal<string[]>(() => []);
 // ---------------------------------------------------------------------------
 // Multi-agent coordination state
 // ---------------------------------------------------------------------------
-export const reliabilitySettings = trackedSignal<NumberVscodeSetting[]>(
-  () => [],
-);
+export const reliabilitySettings = trackedSignal<NumberSetting[]>(() => []);
 export const allowOrchestratorKill = trackedSignal(() => true);
 export const detachSubagentsOnStop = trackedSignal(() => false);
 

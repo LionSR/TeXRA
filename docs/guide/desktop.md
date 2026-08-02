@@ -67,9 +67,8 @@ On first launch, configure the desktop app explicitly:
 
 <p class="hero-caption">First-run setup is explicit: open your project, sign in, add keys, review settings, then confirm a small task lands in the Progress view.</p>
 
-If you are moving from the VS Code extension, see
-[Migrating to the Desktop App](/guide/desktop-migration). The recommended v1
-path is re-authentication and manual reconfiguration.
+For details about which settings, history, and credentials are shared with the
+extension and CLI, see [Shared Data Across TeXRA Apps](/guide/desktop-migration).
 
 ## Logs
 
@@ -98,7 +97,7 @@ Docs will be updated when signed installers and auto-update manifests are live.
 
 ## Related Docs
 
-- [Migrating to the Desktop App](/guide/desktop-migration)
+- [Shared Data Across TeXRA Apps](/guide/desktop-migration)
 - [Configuration](/guide/configuration)
 - [Remote Agents](/guide/remote-agents)
 - [Troubleshooting](/guide/troubleshooting)

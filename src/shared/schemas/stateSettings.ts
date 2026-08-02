@@ -689,7 +689,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- Provider routing & region toggles --------------------------------------
   // Same idiom as the OpenRouter row above: every toggle stays in
-  // PROVIDER_VSCODE_SETTINGS for the extension/desktop Models tab, and the
+  // PROVIDER_SETTINGS for the Models tab, and the
   // catalog row is CLI-only so later settings-view catalog rendering does not
   // duplicate those existing controls. Label/description are reused by
   // reference from the named provider-setting consts; `.prefault()` matches

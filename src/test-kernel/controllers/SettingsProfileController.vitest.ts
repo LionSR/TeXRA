@@ -5,12 +5,12 @@ import {
   type SettingsProfileConfigValue,
 } from '@controllers/settingsView/SettingsProfileController';
 import type { StateStore } from '@platform/interfaces';
-import type { ProviderVscodeSettingDef } from '@shared/constants/providers';
+import type { ProviderSettingDef } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-const providerVscodeSettings = {
+const providerSettings = {
   openai: [
     {
       key: 'texra.model.useOpenAIResponsesAPI',
@@ -27,7 +27,7 @@ const providerVscodeSettings = {
       defaultValue: true,
     },
   ],
-  openrouter: [
+  openRouter: [
     {
       key: GlobalStateKey.USE_OPENROUTER,
       label: 'Use OpenRouter',
@@ -35,7 +35,7 @@ const providerVscodeSettings = {
       globalStateKey: GlobalStateKey.USE_OPENROUTER,
     },
   ],
-  kimicode: [
+  kimiCode: [
     {
       key: GlobalStateKey.KIMI_CODE_PREFER,
       label: 'Prefer Kimi Code',
@@ -44,7 +44,7 @@ const providerVscodeSettings = {
       globalStateKey: GlobalStateKey.KIMI_CODE_PREFER,
     },
   ],
-} satisfies Record<string, readonly ProviderVscodeSettingDef[]>;
+} satisfies Record<string, readonly ProviderSettingDef[]>;
 
 function createController(
   options: {
@@ -65,22 +65,22 @@ function createController(
   return {
     controller: new SettingsProfileController({
       globalState: state,
-      providerIds: ['openai', 'google', 'openrouter'],
-      providerVscodeSettings,
+      providerIds: ['openai', 'google', 'openRouter'],
+      providerSettings,
       providerDisplayNames: {
         openai: 'OpenAI',
         google: 'Google',
-        openrouter: 'OpenRouter',
+        openRouter: 'OpenRouter',
       },
       providerKeyUrls: {
         openai: 'https://platform.openai.com/api-keys',
         google: 'https://aistudio.google.com/app/apikey',
-        openrouter: 'https://openrouter.ai/keys',
+        openRouter: 'https://openrouter.ai/keys',
       },
       loadProviderKeyStatuses: async () => ({
         openai: 'set',
         google: 'not-set',
-        openrouter: 'not-set',
+        openRouter: 'not-set',
       }),
       getProviderDisplayName: (_provider, defaultName) => defaultName,
       getProviderKeyUrl: (_provider, defaultUrl) => defaultUrl,
@@ -142,11 +142,11 @@ describe('SettingsProfileController', () => {
     const state = new FakeStateStore();
     const { controller, invalidations } = createController({ state });
 
-    const rejected = await controller.setProviderVscodeSetting({
+    const rejected = await controller.setProviderSetting({
       key: 'texra.unknownSetting',
       value: true,
     });
-    const updated = await controller.setProviderVscodeSetting({
+    const updated = await controller.setProviderSetting({
       key: GlobalStateKey.USE_OPENROUTER,
       value: true,
     });
@@ -167,7 +167,7 @@ describe('SettingsProfileController', () => {
     const state = new FakeStateStore();
     const { controller, invalidations } = createController({ state });
 
-    const updated = await controller.setProviderVscodeSetting({
+    const updated = await controller.setProviderSetting({
       key: GlobalStateKey.KIMI_CODE_PREFER,
       value: true,
     });
@@ -189,7 +189,7 @@ describe('SettingsProfileController', () => {
       (status) => status.provider === 'google',
     );
 
-    expect(google?.vscodeSettings).toContainEqual(
+    expect(google?.providerSettings).toContainEqual(
       expect.objectContaining({
         key: 'texra.model.useGoogleInteractionsAPI',
         value: true,
@@ -200,7 +200,7 @@ describe('SettingsProfileController', () => {
   it('keeps reliability settings in config-backed model policy', async () => {
     const { controller, config, invalidations } = createController();
 
-    const result = await controller.setProviderVscodeSetting({
+    const result = await controller.setProviderSetting({
       key: 'texra.model.retry.maxAttempts',
       value: 3,
     });
@@ -228,7 +228,7 @@ describe('SettingsProfileController', () => {
     async (value) => {
       const { controller, config } = createController();
 
-      const result = await controller.setProviderVscodeSetting({
+      const result = await controller.setProviderSetting({
         key: 'texra.model.retry.maxAttempts',
         value,
       });
@@ -273,7 +273,7 @@ describe('SettingsProfileController', () => {
   it('preserves raw compaction writes without a runtime schema', async () => {
     const { controller, config } = createController();
 
-    const result = await controller.setProviderVscodeSetting({
+    const result = await controller.setProviderSetting({
       key: 'texra.model.compactionThresholdPercent',
       value: 101,
     });

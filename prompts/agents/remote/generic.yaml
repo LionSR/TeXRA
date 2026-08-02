@@ -3,7 +3,6 @@ description: General-purpose LaTeX document editor. Flexibly processes research 
 
 settings:
   agentCategory: workflow
-  outputExt: tex
 
 prompts:
   systemPrompt: |

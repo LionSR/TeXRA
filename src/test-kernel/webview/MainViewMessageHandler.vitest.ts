@@ -84,9 +84,7 @@ vi.mock('@shared/state/onboardingState', () => ({
   setFirstRunDone: vi.fn(),
   setOnboardingDeclined: vi.fn(),
 }));
-vi.mock('@utils/config/constants', () => ({
-  SETTINGS_QUERY: { EXTENSION: '@ext:texra.extension' },
-}));
+vi.mock('@utils/config/constants', () => ({}));
 vi.mock('@utils/config/configUtils', () => ({
   getConfig: vi.fn(),
   updateConfig: vi.fn(),
@@ -199,7 +197,7 @@ describe('MainViewMessageHandler interaction mappings', () => {
     });
 
     expect(mocks.safeExecuteCommand.mock.calls).toEqual([
-      ['workbench.action.openSettings', ['@ext:texra.extension'], 'MainView'],
+      ['texra.showDashboard', [], 'MainView'],
       ['texra.showAgents', [undefined], 'MainView'],
       ['texra.showAgents', ['toolUse'], 'MainView'],
     ]);
