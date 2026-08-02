@@ -239,6 +239,24 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe('Esc back · Ctrl-C stop root');
   });
 
+  it('retains full output before dropping to the parent Ctrl-C pair', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        ctrlCAction: 'stop root',
+        width: 50,
+        shortcuts: {
+          childNavigationAvailable: true,
+          parentNavigationAvailable: true,
+          transcriptAvailable: true,
+        },
+      }),
+    );
+
+    expect(display.bindings).toBe(
+      'Esc back · Ctrl-T full output · Ctrl-C stop root',
+    );
+  });
+
   it('omits Esc back at the same bounded width without a parent', () => {
     const display = buildStatusBarDisplay(statusInput({ width: 10 }));
 
