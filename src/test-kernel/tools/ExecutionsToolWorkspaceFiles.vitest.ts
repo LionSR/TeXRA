@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,12 +22,18 @@ import {
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import {
+  cleanupTempDirs,
+  createTempDirPlatform,
+} from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { StorageFS } from '@utils/files';
+
+const tempDirs: string[] = [];
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -131,7 +137,7 @@ function mockCompletedExecution(): void {
 }
 
 describe('ExecutionsTool', () => {
-  setupPlatform({}, { fs: nodeFilesystem });
+  setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -142,6 +148,10 @@ describe('ExecutionsTool', () => {
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
+  });
+
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
   });
 
   it.each([
@@ -246,6 +256,7 @@ describe('ExecutionsTool', () => {
         'delivered automatically',
       );
     } finally {
+      await session.snapshots.flush();
       session.dispose();
     }
   });

@@ -319,6 +319,8 @@ interface StreamRecord {
   seedChain: Promise<void> | undefined;
   /** Incremented for each refresh attempt; seed-gated mutations do not change it. */
   seedRefreshGeneration: number;
+  /** Authoritative seeded state captured before the current refresh chain began. */
+  seedRefreshBaseline: boolean | undefined;
 
   // -- Overlays: patches applied eagerly to memory while a seed is in flight,
   // so `applyStreamData`'s post-seed reconciliation can replay them on top of
@@ -383,6 +385,7 @@ export class StreamSnapshotStore {
     seeded: false,
     seedChain: undefined,
     seedRefreshGeneration: 0,
+    seedRefreshBaseline: undefined,
     metaOverlay: false,
     overlays: {},
     kv: undefined,
@@ -601,13 +604,14 @@ export class StreamSnapshotStore {
     apply: () => unknown,
   ): Promise<void> {
     const next: Promise<void> = this.ensureSeeded(stream, version)
+      .catch((err: unknown) => {
+        if (!this.records.get(stream)?.seeded) throw err;
+      })
       .then(() => {
         if (this.streamVersion(stream) !== version) return;
         const record = this.records.get(stream);
         if (!record?.seeded) {
-          if (record?.seedChain === next) {
-            record.seedChain = undefined;
-          }
+          if (record?.seedChain === next) record.seedChain = undefined;
           return;
         }
         apply();
@@ -1271,6 +1275,14 @@ export class StreamSnapshotStore {
       resolveSettled,
     };
     this.deletionStates.set(stream, state);
+    let writesCancelled = false;
+    const cancelWrites = async (): Promise<void> => {
+      if (writesCancelled) return;
+      writesCancelled = true;
+      const pending = this.cancelPendingWritesForStream(stream);
+      this.bumpStreamVersion(stream);
+      await Promise.all(pending);
+    };
 
     try {
       if (canUseStreamDataDir(stream)) {
@@ -1297,9 +1309,7 @@ export class StreamSnapshotStore {
         seedChain = current;
       }
 
-      const pending = this.cancelPendingWritesForStream(stream);
-      this.bumpStreamVersion(stream);
-      await Promise.all(pending);
+      await cancelWrites();
 
       const canStage = canUseStreamDataDir(stream);
       const liveDir = canStage ? streamDataDir(stream) : undefined;
@@ -1375,6 +1385,7 @@ export class StreamSnapshotStore {
       };
     } catch (error) {
       const failures: unknown[] = [error];
+      await cancelWrites();
       const failedRollback = this.markRollbackFailed(stream, state);
       try {
         if (state.phase === 'live') {
@@ -2061,7 +2072,8 @@ export class StreamSnapshotStore {
   private refreshSeed(stream: StreamTabId): Promise<void> {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
-    const wasSeeded = record.seeded;
+    const refreshBaseline = record.seedRefreshBaseline ?? record.seeded;
+    record.seedRefreshBaseline = refreshBaseline;
     const refreshGeneration = ++record.seedRefreshGeneration;
     record.seeded = false;
     const prev = record.seedChain?.catch(() => undefined) ?? Promise.resolve();
@@ -2074,17 +2086,32 @@ export class StreamSnapshotStore {
       if (this.streamVersion(stream) !== version) return;
       await this.applyStreamData(stream, data);
     });
-    const next = work.catch((error: unknown) => {
-      const current = this.records.get(stream);
-      if (
-        current?.seedRefreshGeneration === refreshGeneration &&
-        this.streamVersion(stream) === version
-      ) {
-        current.seeded = wasSeeded;
-        if (current.seedChain === next) current.seedChain = undefined;
-      }
-      throw error;
-    });
+    const next = work.then(
+      () => {
+        const current = this.records.get(stream);
+        if (
+          current?.seedRefreshGeneration === refreshGeneration &&
+          this.streamVersion(stream) === version
+        ) {
+          current.seedRefreshBaseline = undefined;
+        }
+      },
+      (error: unknown) => {
+        const current = this.records.get(stream);
+        if (
+          current?.seedRefreshGeneration === refreshGeneration &&
+          this.streamVersion(stream) === version
+        ) {
+          current.seeded = refreshBaseline;
+          current.seedRefreshBaseline = undefined;
+          if (refreshBaseline) {
+            this.persistEagerOverlays(stream, current);
+          }
+          if (current.seedChain === next) current.seedChain = undefined;
+        }
+        throw error;
+      },
+    );
     record.seedChain = next;
     return next;
   }
@@ -2291,6 +2318,37 @@ export class StreamSnapshotStore {
           break;
       }
     }
+  }
+
+  /** Persist eager in-memory patches when a refresh falls back to prior state. */
+  private persistEagerOverlays(
+    stream: StreamTabId,
+    record: StreamRecord,
+  ): void {
+    if (record.metaOverlay) {
+      if (record.meta) this.writeMeta(stream, record.meta);
+      record.metaOverlay = false;
+    }
+
+    const keys = new Set<string>();
+    const { overlays } = record;
+    if (overlays.outputFiles) {
+      keys.add(STREAM_DATA_KEYS.OUTPUT_FILES);
+      overlays.outputFiles = undefined;
+    }
+    if (overlays.missingOutputs) {
+      keys.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
+      overlays.missingOutputs = undefined;
+    }
+    if (overlays.compileFailures) {
+      keys.add(STREAM_DATA_KEYS.COMPILE_FAILURES);
+      overlays.compileFailures = undefined;
+    }
+    if (overlays.usage) {
+      keys.add(STREAM_DATA_KEYS.USAGE_STATS);
+      overlays.usage = undefined;
+    }
+    this.writeMergedSidecars(stream, record, keys);
   }
 
   /**
