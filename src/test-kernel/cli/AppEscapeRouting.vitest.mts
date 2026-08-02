@@ -79,6 +79,16 @@ function seedChildHierarchy(): void {
   setParentStream(GRANDCHILD, CHILD);
 }
 
+function finishNestedHierarchyAndFocusRoot(): void {
+  for (const streamId of [GRANDCHILD, CHILD]) {
+    setStreamStatusInCliState({
+      streamId,
+      status: STREAM_PHASE.COMPLETED,
+    });
+  }
+  focusStream(ROOT);
+}
+
 function appProps(
   onInterruptStream: (streamId: StreamTabId) => void,
 ): AppProps {
@@ -176,6 +186,27 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
+  it('discards delayed child back after lifecycle focus advances', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      finishNestedHierarchyAndFocusRoot();
+      await waitFor(() => activeStreamId.get() === ROOT);
+      await sleep(600);
+
+      expect(activeStreamId.get()).toBe(ROOT);
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('does not apply failed-chord child back after a foreground pane opens', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
@@ -195,6 +226,28 @@ describe('App foreground Escape ownership', () => {
 
       expect(activeStreamId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late failed-chord reference');
+      expect(onInterruptStream).not.toHaveBeenCalled();
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('discards failed-chord child back after lifecycle focus advances', async () => {
+    seedChildHierarchy();
+    focusStream(GRANDCHILD);
+    const onInterruptStream = vi.fn();
+    const { instance, stdin } = await renderApp(appProps(onInterruptStream));
+
+    try {
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+      stdin.write(ESC);
+      await sleep(50);
+      finishNestedHierarchyAndFocusRoot();
+      await waitFor(() => activeStreamId.get() === ROOT);
+      stdin.write('x');
+      await sleep(50);
+
+      expect(activeStreamId.get()).toBe(ROOT);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();

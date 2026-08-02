@@ -501,7 +501,12 @@ export function App(props: AppProps): React.JSX.Element {
   };
 
   const handleBareEscape = (streamId: StreamTabId): boolean => {
-    if (!bareEscapeActive(streamId)) return false;
+    if (
+      activeStreamIdSignal.get() !== streamId ||
+      !bareEscapeActive(streamId)
+    ) {
+      return false;
+    }
     const parentId = parentStreamSignal.get().get(streamId);
     if (parentId !== undefined) {
       focusStreamAndPromoteApprovals(parentId);
