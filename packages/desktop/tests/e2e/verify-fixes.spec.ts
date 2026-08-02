@@ -4,7 +4,8 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
-  setRoute,
+  openWorkbench,
+  showLauncher,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -55,7 +56,7 @@ async function readToolsPanelMetrics(): Promise<{
 }
 
 test('main view no longer renders inner Launcher/Progress toolbar', async ({}, testInfo) => {
-  await setRoute(launched, 'main');
+  await showLauncher(launched);
   await launched.page.screenshot({
     path: testInfo.outputPath('verify-fixes', 'main-view.png'),
     fullPage: false,
@@ -81,7 +82,7 @@ test('main view no longer renders inner Launcher/Progress toolbar', async ({}, t
 });
 
 test('command palette keeps each icon and label in one compact row', async ({}, testInfo) => {
-  await setRoute(launched, 'main');
+  await showLauncher(launched);
   const closeWorkbench = launched.page.locator('.task-workbench-close');
   if (await closeWorkbench.isVisible()) {
     await closeWorkbench.click();
@@ -144,7 +145,7 @@ test('command palette keeps each icon and label in one compact row', async ({}, 
 });
 
 test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
-  await setRoute(launched, 'settings');
+  await openWorkbench(launched, 'settings');
   await launched.page.evaluate(
     ({ command, tabIndex }) => {
       window.postMessage({ command, tabIndex }, '*');

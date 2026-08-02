@@ -11,8 +11,6 @@
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, getBasename } from '@utils/core';
 
-import type { DesktopRoute } from './desktopShellMessages.js';
-
 export const WORKBENCH_KINDS = [
   'editor',
   'terminal',
@@ -463,14 +461,6 @@ export function setWorkbenchWidth(
       WORKBENCH_MAX_WIDTH,
     ),
   };
-}
-
-export function workbenchKindForRoute(
-  route: DesktopRoute,
-): WorkbenchKind | undefined {
-  if (route === 'settings') return 'settings';
-  if (route === 'logs') return 'logs';
-  return undefined;
 }
 
 export function workspaceInitials(workspacePath: string | undefined): string {

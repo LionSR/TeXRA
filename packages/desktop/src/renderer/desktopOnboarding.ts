@@ -30,8 +30,6 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-import type { DesktopRoute } from '../desktopShellMessages';
-
 interface StartupPanelController {
   isVisible(): boolean;
   template(): TemplateResult | typeof nothing;
@@ -42,7 +40,7 @@ interface StartupPanelController {
 export interface DesktopStartupTeamPanelOptions {
   dismiss(): void;
   onVisibilityChanged(): void;
-  setRoute(route: DesktopRoute): void;
+  showLauncher(): void;
   /** Opens the Settings tab focused on the team picker, for fine-tuning. */
   openMultiAgent(): void;
 }
@@ -108,7 +106,7 @@ function presetById(presetId: string): AgentModePreset | undefined {
 export function createStartupTeamPanel({
   dismiss: postDismissed,
   onVisibilityChanged,
-  setRoute,
+  showLauncher,
   openMultiAgent,
 }: DesktopStartupTeamPanelOptions): StartupPanelController {
   const titleId = nextPanelTitleId();
@@ -330,7 +328,7 @@ export function createStartupTeamPanel({
           data-walkthrough-primary
           @click=${() => {
             closePanel();
-            setRoute('main');
+            showLauncher();
           }}
         >
           Start working
