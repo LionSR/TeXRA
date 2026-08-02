@@ -2149,6 +2149,28 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan()).plan).toEqual(PLAN);
   });
 
+  it('succeeds when flush durably retries a refresh write failure', async () => {
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+    const writeError = new Error('snapshot disk is full');
+    const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
+    let writeCount = 0;
+    vi.spyOn(StorageFS, 'writeAtomic').mockImplementation((...args) => {
+      writeCount += 1;
+      if (writeCount <= 4) return Promise.reject(writeError);
+      return writeAtomic(...args);
+    });
+
+    store.setPlan(STREAM, PLAN);
+    await vi.waitFor(() => expect(writeCount).toBe(1));
+    const refresh = store.load([STREAM]);
+    const flushing = store.flush();
+
+    await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
+    await expect(flushing).resolves.toBeUndefined();
+    expect((await reloadWorkPlan()).plan).toEqual(PLAN);
+  });
+
   it('lets a newer successful write supersede an older failed value', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
