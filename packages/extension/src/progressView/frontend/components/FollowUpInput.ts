@@ -176,24 +176,6 @@ export class FollowUpInput extends LitElement {
         border-radius: var(--wa-border-radius-circle);
       }
 
-      .follow-up-actions .composer-send {
-        margin-left: auto;
-      }
-
-      .follow-up-actions .composer-send::part(base) {
-        color: var(--wa-color-surface-default);
-        background: var(--wa-color-text-normal);
-      }
-
-      .follow-up-actions .composer-send::part(base):hover {
-        color: var(--wa-color-surface-default);
-        background: color-mix(
-          in srgb,
-          var(--wa-color-text-normal) 86%,
-          var(--wa-color-surface-default)
-        );
-      }
-
       .follow-up-actions .recording::part(base) {
         color: var(--wa-color-danger-on-quiet);
         background: var(--wa-color-danger-fill-quiet);
@@ -463,8 +445,9 @@ export class FollowUpInput extends LitElement {
               icon: 'arrow-up',
               label: 'Send',
               tooltip: 'Send follow-up message',
-              className: 'composer-send',
+              className: 'composer-primary-action',
               appearance: 'filled',
+              size: 'l',
               onClick: this.emitSend,
             })}
           </div>

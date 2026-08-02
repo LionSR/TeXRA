@@ -72,11 +72,8 @@ describe('instruction-panel desktop composer', () => {
     expect(query(desktop, '#executeButton').getAttribute('aria-label')).toBe(
       'Send request',
     );
-    expect(query(desktop, '.execute-button__label').textContent?.trim()).toBe(
-      'Send',
-    );
-    expect(query(desktop, '#executeButton wa-icon').getAttribute('slot')).toBe(
-      'start',
+    expect(query(desktop, '#executeButton wa-icon').getAttribute('name')).toBe(
+      'arrow-up',
     );
     expect(desktop.shadowRoot?.querySelector('#sessionTypeToggle')).toBeNull();
     expect(desktop.shadowRoot?.querySelector('#launchTargetToggle')).toBeNull();
@@ -101,15 +98,15 @@ describe('instruction-panel desktop composer', () => {
     expect(
       query(extension, '.instruction-header #sessionTypeToggle'),
     ).toBeTruthy();
+    expect(query(extension, '#executeButton').getAttribute('aria-label')).toBe(
+      'Run agent',
+    );
     expect(
-      query(extension, '#executeButton wa-icon').getAttribute('slot'),
-    ).toBe('start');
+      query(extension, '#executeButton wa-icon').getAttribute('name'),
+    ).toBe('arrow-up');
     expect(
       query(extension, '#sessionTypeToolUse').getAttribute('appearance'),
     ).toBe('default');
-    expect(query(extension, '.execute-button__label').textContent?.trim()).toBe(
-      'Run',
-    );
   });
 
   it('maps the unified desktop mode picker to the existing session state', async () => {
