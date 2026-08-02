@@ -408,12 +408,11 @@ export class LatexDiffManager {
     });
 
     if (!compiled.ok) {
-      // No MESSAGE_TYPES.INTERNAL here (unlike the diagnostic logs above) —
-      // this is a real failure (the diff PDF silently doesn't appear), so it
-      // must reach the standard channel subscriber, and the tail belongs in
-      // the visible message itself since `data` is only shown in debug mode.
+      // Keep the missing auxiliary PDF visible, but leave the compiler tail in
+      // structured diagnostic data. Dumping that tail into the message makes a
+      // recoverable latexdiff failure dominate the workflow transcript.
       this.logger.warn(
-        `Failed to compile latexdiff PDF:\n${compiled.logTail}`,
+        `Failed to compile latexdiff PDF: ${path.basename(diffLocation.absolutePath)}`,
         {
           data: {
             diffFile: diffLocation.absolutePath,
