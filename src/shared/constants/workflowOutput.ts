@@ -19,6 +19,9 @@ import { getCleanAgentName } from '@shared/schemas/agent';
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
 
+/** The fixed extension for TeXRA-named LaTeX workflow outputs. */
+export const WORKFLOW_DOCUMENT_OUTPUT_EXT = 'tex';
+
 /** The fixed extension for raw workflow round output. */
 export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
 
