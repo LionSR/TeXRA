@@ -173,6 +173,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Ctrl-C stop');
     expect(display.bindings).not.toContain('Alt-s');
     // Stream-navigation hints stay hidden in a single-stream chat.
+    expect(display.bindings).not.toContain('Esc back');
     expect(display.bindings).not.toContain('Tab children');
     expect(display.bindings).not.toContain('Alt-1..9 focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
@@ -212,6 +213,19 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Alt-s subagents');
   });
 
+  it('advertises bare-Escape back only when an immediate parent exists', () => {
+    const child = buildStatusBarDisplay(
+      statusInput({
+        width: 100,
+        shortcuts: { parentNavigationAvailable: true },
+      }),
+    );
+    const topLevel = buildStatusBarDisplay(statusInput({ width: 100 }));
+
+    expect(child.bindings).toContain('Esc back');
+    expect(topLevel.bindings).not.toContain('Esc back');
+  });
+
   it('advertises list-owned keys while the child list has focus', () => {
     const display = buildStatusBarDisplay(
       statusInput({
@@ -224,6 +238,7 @@ describe('CLI StatusBar display model', () => {
         },
         shortcuts: {
           childNavigationAvailable: true,
+          parentNavigationAvailable: true,
           streamFocusAvailable: true,
         },
       }),
@@ -236,6 +251,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('k kill');
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
+    expect(display.bindings).not.toContain('Esc back');
     expect(display.bindings).not.toContain('Tab children');
   });
 
@@ -253,10 +269,12 @@ describe('CLI StatusBar display model', () => {
           selectionKind: 'stream',
           selectionKillable: true,
         },
+        shortcuts: { parentNavigationAvailable: true },
       }),
     );
 
     expect(display.bindings).toContain('Esc close');
+    expect(display.bindings).not.toContain('Esc back');
     expect(display.bindings).not.toContain('Up/Down select');
     expect(display.bindings).not.toContain('v full output');
   });
@@ -1603,12 +1621,14 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         shortcuts: {
           childNavigationAvailable: true,
+          parentNavigationAvailable: true,
           streamFocusAvailable: true,
           modifierLabel: defaultShortcutModifierLabel('darwin'),
         },
       }),
     );
 
+    expect(display.bindings).toContain('Esc back');
     expect(display.bindings).toContain('Esc 1..9 focus');
     expect(display.bindings).not.toContain('Esc p tasks');
     expect(display.bindings).not.toContain('Esc s subagents');
