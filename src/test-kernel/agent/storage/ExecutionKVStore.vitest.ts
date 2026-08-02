@@ -291,28 +291,11 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
   });
 
-  it('reads legacy conversation wrappers as provider messages', async () => {
-    const id = 'legacy-conversation-wrapper' as ExecutionId;
-    const message = { role: 'user', content: 'Resume this.' };
-
-    await getExecutionStore(id).write('conversation', { messages: [message] });
-    await expect(getExecutionStore(id).readConversation()).resolves.toEqual([
-      message,
-    ]);
-
-    await getExecutionStore(id).write('conversation', {
-      conversation: [message],
-    });
-    await expect(getExecutionStore(id).readConversation()).resolves.toEqual([
-      message,
-    ]);
-  });
-
   it('warns when conversation storage is malformed instead of silently dropping it', async () => {
-    const id = 'bad-conversation-wrapper' as ExecutionId;
+    const id = 'bad-conversation' as ExecutionId;
     const warnSpy = mockWarn();
 
-    await getExecutionStore(id).write('conversation', { messages: ['text'] });
+    await getExecutionStore(id).write('conversation', ['text']);
 
     await expect(getExecutionStore(id).readConversation()).resolves.toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(

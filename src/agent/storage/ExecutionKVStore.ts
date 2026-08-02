@@ -13,7 +13,7 @@ import {
   type AgentConfig,
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import { normalizeProviderMessages } from '@agent/types/ProviderMessage';
+import { ProviderMessageArraySchema } from '@agent/types/ProviderMessage';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
@@ -234,15 +234,15 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   async readConversation(): Promise<unknown[] | null> {
     const raw = await this.read(KEYS.CONVERSATION);
     if (raw == null) return null;
-    const messages = normalizeProviderMessages(raw);
-    if (messages === null) {
+    const result = ProviderMessageArraySchema.safeParse(raw);
+    if (!result.success) {
       logger.warn(
         CHANNEL,
         `Failed to parse execution ${this.executionId} ${KEYS.CONVERSATION}.json as provider messages`,
       );
       return null;
     }
-    return messages.length > 0 ? messages : null;
+    return result.data.length > 0 ? result.data : null;
   }
 
   async readWorkspaceFiles(): Promise<string[]> {
