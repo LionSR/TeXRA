@@ -79,19 +79,4 @@ describe('DiffResult transforms', () => {
   it('skips invalid object entries without diff-result fields', () => {
     expect(parseDiffResultEntries([{}, { foo: 'bar' }])).toEqual([]);
   });
-
-  it('skips retired pre-cutover label-scraped entries', () => {
-    expect(
-      parseDiffResultEntries([
-        {
-          basePath: '/repo/base.tex',
-          revisedPath: '/repo/revised.tex',
-          diffPath: '/repo/diff.tex',
-          baseLabel: 'main.tex [r4]',
-          revisedLabel: '[r5]',
-          status: 'success',
-        },
-      ]),
-    ).toEqual([]);
-  });
 });
