@@ -273,6 +273,32 @@ function workflowPhaseGroups(root: StreamSlice): WorkflowPhaseGroup[] {
   return groups;
 }
 
+/** Number of content rows the dashboard can display at the current width. */
+export function workflowDashboardPanelItemCount(
+  root: StreamSlice,
+  selectedValue: ChildListValue | undefined,
+  columns: number,
+): number {
+  const groups = workflowPhaseGroups(root);
+  const taskCount = groups.reduce(
+    (total, group) => total + group.tasks.length,
+    0,
+  );
+  if (taskCount === 0) return 0;
+  if (columns < WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS) {
+    return 1 + groups.length + taskCount;
+  }
+  const activeGroup =
+    groups.find(
+      (group) =>
+        group.value === selectedValue ||
+        group.tasks.some(
+          (task) => workflowTaskListValue(task.id) === selectedValue,
+        ),
+    ) ?? groups[0];
+  return 1 + Math.max(groups.length, activeGroup?.tasks.length ?? 0);
+}
+
 type WorkflowChildTaskIndex = ReadonlyMap<
   StreamTabId,
   WorkflowTaskEntry | null

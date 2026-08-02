@@ -8,7 +8,7 @@ import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -31,8 +31,7 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
-import { SubagentList } from './SubagentList';
-import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from './SubagentListDisplay';
+import { SubagentList, workflowDashboardPanelItemCount } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
@@ -174,30 +173,18 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
-  const workflowDashboardEntries =
-    snapshot.childListTarget.slice?.category === AgentCategory.Workflow
-      ? snapshot.childListTarget.slice.entries.filter(
-          (entry) => entry.role === 'phase' || entry.role === 'workflowTask',
-        )
-      : [];
-  const workflowTaskCount = workflowDashboardEntries.filter(
-    (entry) => entry.role === 'workflowTask',
-  ).length;
-  const workflowPhaseKeys = new Set(
-    workflowDashboardEntries.map((entry) => {
-      const phase =
-        entry.role === 'phase' ? entry.phaseLabel : entry.task.phase;
-      return phase === undefined ? 'unphased' : `phase:${phase}`;
-    }),
-  );
-  const workflowPhaseCount = workflowPhaseKeys.size;
+  const workflowDashboardItemCount = snapshot.childListTarget.slice
+    ? workflowDashboardPanelItemCount(
+        snapshot.childListTarget.slice,
+        snapshot.selectedChildValue,
+        columns,
+      )
+    : 0;
   const sessionPanelItemCount =
-    workflowTaskCount > 0
-      ? 1 +
-        (columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS
-          ? Math.max(workflowPhaseCount, workflowTaskCount)
-          : workflowPhaseCount + workflowTaskCount)
+    workflowDashboardItemCount > 0
+      ? workflowDashboardItemCount
       : snapshot.sessionViews.length;
+  const minimumSessionPanelRows = workflowDashboardItemCount > 0 ? 3 : 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
@@ -206,12 +193,14 @@ export function ConversationRegion({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
     sessionCount: foregroundOpen ? 0 : sessionPanelItemCount,
     childListFocused: snapshot.childListFocused,
+    minimumSessionPanelRows,
     todosPlanContentRows,
     transcriptRows,
   });
   const conversationRows = transcriptRows - bottomPanelBudget;
   const childListHasRows = sessionPanelItemCount > 0;
-  const childListVisible = childListHasRows && subagentRows > 1;
+  const childListVisible =
+    childListHasRows && subagentRows >= minimumSessionPanelRows;
   useLayoutEffect(() => {
     if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
       onCancelChildList();

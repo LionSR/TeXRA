@@ -709,6 +709,21 @@ describe('CLI TUI row allocation', () => {
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
+
+    expect(
+      allocateConversationBottomPanelRows({
+        maxRows: 10,
+        sessionCount: 3,
+        childListFocused: true,
+        minimumSessionPanelRows: 3,
+        todosPlanContentRows: 0,
+        transcriptRows: 2,
+      }),
+    ).toEqual({
+      bottomPanelRows: 0,
+      sessionPanelRows: 0,
+      todosPlanRows: 0,
+    });
   });
 
   it('keeps the child list collapsed until it receives focus', () => {
