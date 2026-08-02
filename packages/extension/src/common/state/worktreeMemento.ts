@@ -19,12 +19,11 @@ export class WorktreeMemento implements vscode.Memento {
   ) {}
 
   keys(): readonly string[] {
-    const all = new Set(this.workspaceState.keys());
+    const all = new Set(
+      this.workspaceState.keys().filter((key) => !this.sharedKeys.has(key)),
+    );
     for (const key of this.sharedKeys) {
-      if (
-        this.globalState.get(this.namespacedKey(key)) !== undefined ||
-        this.workspaceState.get(key) !== undefined
-      ) {
+      if (this.globalState.get(this.namespacedKey(key)) !== undefined) {
         all.add(key);
       }
     }
@@ -40,19 +39,9 @@ export class WorktreeMemento implements vscode.Memento {
         : this.workspaceState.get<T>(key, defaultValue);
     }
 
-    const namespacedKey = this.namespacedKey(key);
-    const sharedValue = this.globalState.get<T>(namespacedKey);
-    if (sharedValue !== undefined) {
-      return sharedValue;
-    }
-
-    const legacyValue = this.workspaceState.get<T>(key);
-    if (legacyValue !== undefined) {
-      void this.update(key, legacyValue);
-      return legacyValue;
-    }
-
-    return defaultValue;
+    return defaultValue === undefined
+      ? this.globalState.get<T>(this.namespacedKey(key))
+      : this.globalState.get<T>(this.namespacedKey(key), defaultValue);
   }
 
   async update(key: string, value: unknown): Promise<void> {
@@ -62,7 +51,6 @@ export class WorktreeMemento implements vscode.Memento {
     }
 
     await this.globalState.update(this.namespacedKey(key), value);
-    await this.workspaceState.update(key, undefined);
   }
 
   private namespacedKey(key: string): string {

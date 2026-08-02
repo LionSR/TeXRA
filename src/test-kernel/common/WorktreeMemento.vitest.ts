@@ -64,18 +64,16 @@ describe('WorktreeMemento', () => {
     expect(workspaceState.get(sharedKey)).toBeUndefined();
   });
 
-  it('migrates legacy workspace values before returning defaults', async () => {
-    const { workspaceState, globalState, memento } = setup({
+  it('ignores un-namespaced shared values', () => {
+    const { memento } = setup({
       workspace: new Map([[sharedKey, ['correct']]]),
     });
 
-    expect(memento.get(sharedKey, [])).toEqual(['correct']);
-    expect(globalState.get(namespacedKey)).toEqual(['correct']);
-    await Promise.resolve();
-    expect(workspaceState.get(sharedKey)).toBeUndefined();
+    expect(memento.get(sharedKey, [])).toEqual([]);
+    expect(memento.keys()).not.toContain(sharedKey);
   });
 
-  it('clears legacy workspace values when shared keys are updated', async () => {
+  it('updates only the namespaced shared value', async () => {
     const { workspaceState, globalState, memento } = setup({
       workspace: new Map([[sharedKey, ['stale']]]),
       global: new Map([[namespacedKey, ['current']]]),
@@ -84,7 +82,7 @@ describe('WorktreeMemento', () => {
     await memento.update(sharedKey, undefined);
 
     expect(globalState.get(namespacedKey)).toBeUndefined();
-    expect(workspaceState.get(sharedKey)).toBeUndefined();
+    expect(workspaceState.get(sharedKey)).toEqual(['stale']);
     expect(memento.get(sharedKey, [])).toEqual([]);
   });
 

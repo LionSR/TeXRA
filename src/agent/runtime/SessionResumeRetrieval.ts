@@ -80,18 +80,12 @@ function throwIfResumeStorageUnreadable(
  * Minimal schema for validating workflow flow record exists and has resumable state.
  * Full validation happens when the flow actually resumes.
  */
-const WorkflowFlowRecordStateSchema = z
-  .looseObject({
-    currentRound: z.int().nonnegative(),
-    totalRounds: z.int().nonnegative(),
-    conversation: ProviderMessageArraySchema.nullish(),
-    messages: ProviderMessageArraySchema.nullish(),
-    modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
-  })
-  .transform(({ messages, conversation, ...state }) => ({
-    ...state,
-    conversation: conversation ?? messages ?? [],
-  }));
+const WorkflowFlowRecordStateSchema = z.looseObject({
+  currentRound: z.int().nonnegative(),
+  totalRounds: z.int().nonnegative(),
+  conversation: ProviderMessageArraySchema,
+  modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
+});
 
 /**
  * Retrieve resume data for a WAITING session.
