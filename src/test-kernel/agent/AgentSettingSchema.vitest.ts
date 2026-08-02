@@ -41,34 +41,6 @@ describe('AgentSettingSchema', () => {
 
   it.each([
     {
-      scenario: 'ignores default legacy documentTag/endTag without warning',
-      documentTag: 'documents',
-      endTag: '</documents>',
-      expectedWarnings: 0,
-    },
-    {
-      scenario: 'warns when stripping bespoke legacy documentTag/endTag values',
-      documentTag: 'latex_document',
-      endTag: '</latex_document>',
-      expectedWarnings: 1,
-    },
-  ])('$scenario', ({ documentTag, endTag, expectedWarnings }) => {
-    const { result: setting, warnings } = withWarningCount(() =>
-      AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-        documentTag,
-        endTag,
-      }),
-    );
-
-    expect(setting.agentCategory).toBe(AgentCategory.Workflow);
-    expect(Object.hasOwn(setting, 'documentTag')).toBe(false);
-    expect(Object.hasOwn(setting, 'endTag')).toBe(false);
-    expect(warnings).toBe(expectedWarnings);
-  });
-
-  it.each([
-    {
       scenario: 'warns once per retired setting that carried a value',
       legacy: {
         internal: true,

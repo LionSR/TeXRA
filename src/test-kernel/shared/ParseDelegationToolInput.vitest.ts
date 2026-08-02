@@ -70,16 +70,6 @@ describe('parseDelegationToolInput', () => {
     }
   });
 
-  it('migrates legacy single-slot file fields into the canonical lists', () => {
-    const proposal = parseDelegationToolInput(
-      { agent: 'correct', instruction: 'fix', inputFile: 'legacy.tex' },
-      'delegate_workflow',
-    );
-    if (proposal?.agentCategory === AgentCategory.Workflow) {
-      expect(proposal.inputFiles).toEqual(['legacy.tex']);
-    }
-  });
-
   it('returns null when required fields are missing', () => {
     // instruction is required by the canonical proposal schema.
     expect(

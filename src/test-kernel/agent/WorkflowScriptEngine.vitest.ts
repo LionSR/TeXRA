@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   parseWorkflowScript,
   runWorkflowScript,
-  WORKFLOW_JOURNAL_KEY_FORMAT,
   WORKFLOW_SKIPPED_RESULT,
   WorkflowRunAbortError,
   WorkflowScriptParseError,
@@ -2013,7 +2012,6 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       {
         index: 0,
         key: expect.any(String),
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         result: 'attempt-2',
       },
     ]);

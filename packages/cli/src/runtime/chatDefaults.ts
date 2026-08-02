@@ -115,12 +115,7 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   );
   const mostRecent = candidates[0];
   if (!mostRecent) return {};
-  return {
-    model: commandConfigModel(
-      parseCliConfigValues({ model: mostRecent.agentConfig.model }),
-      'chat',
-    ),
-  };
+  return { model: mostRecent.agentConfig.model };
 }
 
 function deriveSource(sources: {

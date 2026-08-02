@@ -13,7 +13,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AGENT_SOURCE } from '@shared/schemas';
-import { MainViewPersistedStateSchema } from '@shared/schemas/mainView';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 
 describe('ToolConfigSchema', () => {
@@ -84,31 +83,6 @@ describe('AgentConfigSchema', () => {
         outputFiles: ['result.tex'],
       }),
     );
-  });
-
-  it('migrates legacy single file slots into canonical file lists', () => {
-    const parsed = AgentConfigSchema.parse({
-      inputFile: 'main.tex',
-      inputFiles: ['chapter.tex'],
-      contextFile: 'refs.bib',
-      mediaFile: 'figure.png',
-    });
-
-    assert.deepStrictEqual(parsed.inputFiles, ['main.tex', 'chapter.tex']);
-    assert.deepStrictEqual(parsed.contextFiles, ['refs.bib']);
-    assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
-  });
-
-  it('migrates legacy main-view file slots into canonical file lists', () => {
-    const parsed = MainViewPersistedStateSchema.parse({
-      inputFile: 'main.tex',
-      referenceFile: 'refs.bib',
-      mediaFile: 'figure.png',
-    });
-
-    assert.deepStrictEqual(parsed.inputFiles, ['main.tex']);
-    assert.deepStrictEqual(parsed.contextFiles, ['refs.bib']);
-    assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
   });
 });
 

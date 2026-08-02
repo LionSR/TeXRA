@@ -22,12 +22,9 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import type { ConfigKeyValueStore } from '@shared/config/configKeys';
 import {
   canonicalConfigKey,
-  configKeyVariants,
   createWatcherRegistry,
-  firstStoredValue,
 } from '@shared/config/configKeys';
 
 /** Filesystem locations used by the default Node platform. */
@@ -37,29 +34,16 @@ export interface NodePlatformOptions {
   readonly storageDir?: string;
 }
 
-function asConfigKeyValueStore(
-  map: ReadonlyMap<string, unknown>,
-): ConfigKeyValueStore {
-  return {
-    has: (key) => map.has(key),
-    get<T>(key: string): T | undefined {
-      return map.get(key) as T | undefined;
-    },
-  };
-}
-
 class MemoryConfigProvider implements ConfigProvider {
   private readonly global = new Map<string, unknown>();
   private readonly workspace = new Map<string, unknown>();
-  private readonly globalStore = asConfigKeyValueStore(this.global);
-  private readonly workspaceStore = asConfigKeyValueStore(this.workspace);
   private readonly watchers = createWatcherRegistry();
 
   get<T>(key: string, defaultValue?: T): T {
-    const keys = configKeyVariants(key);
-    const workspaceValue = firstStoredValue<T>(this.workspaceStore, keys);
+    const storedKey = canonicalConfigKey(key);
+    const workspaceValue = this.workspace.get(storedKey) as T | undefined;
     if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = firstStoredValue<T>(this.globalStore, keys);
+    const globalValue = this.global.get(storedKey) as T | undefined;
     if (globalValue !== undefined) return globalValue;
     return defaultValue as T;
   }
@@ -70,32 +54,27 @@ class MemoryConfigProvider implements ConfigProvider {
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
     const values = target === 'global' ? this.global : this.workspace;
-    const keys = configKeyVariants(key);
+    const storedKey = canonicalConfigKey(key);
     if (value === undefined) {
-      for (const candidate of keys) values.delete(candidate);
+      values.delete(storedKey);
     } else {
-      const storedKey =
-        keys.find((candidate) => values.has(candidate)) ??
-        canonicalConfigKey(key);
       values.set(storedKey, value);
     }
     this.watchers.notify(canonicalConfigKey(key));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {
-    const keys = configKeyVariants(key);
+    const storedKey = canonicalConfigKey(key);
     return {
-      globalValue: firstStoredValue<T>(this.globalStore, keys),
-      workspaceValue: firstStoredValue<T>(this.workspaceStore, keys),
+      globalValue: this.global.get(storedKey) as T | undefined,
+      workspaceValue: this.workspace.get(storedKey) as T | undefined,
       effectiveValue: this.get<T>(key),
     };
   }
 
   isExplicitlySet(key: string): boolean {
-    return configKeyVariants(key).some(
-      (candidate) =>
-        this.workspace.has(candidate) || this.global.has(candidate),
-    );
+    const storedKey = canonicalConfigKey(key);
+    return this.workspace.has(storedKey) || this.global.has(storedKey);
   }
 
   watch(
