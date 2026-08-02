@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file.
   been removed with explicit maintainer approval. Streamed NDJSON
   progress records are unchanged.
 
+#### Features
+
+- **Workflow runs have a phase-and-task dashboard** — the terminal shows
+  canonical workflow progress, task status, model, elapsed time, generated
+  tokens, and cost. Wide terminals provide separate navigable phase and task
+  panes, while narrow terminals retain source order in one pane.
+
 #### Bug Fixes
 
 - **Automatic CLI runs stop after their model retry limit** — automatic
@@ -25,7 +32,7 @@ All notable changes to this project will be documented in this file.
 
 ### Extension (VS Code) and Desktop
 
-#### Improvements
+#### Features
 
 - **The follow-up composer is larger and resizable** — it starts at six lines
   and can be resized vertically for longer instructions.
@@ -52,6 +59,8 @@ All notable changes to this project will be documented in this file.
   defaults without importing older host-specific settings. Skills, telemetry,
   tool approvals, and LaTeX replacement rules now have native controls in the
   TeXRA settings view.
+- **OpenAI Fast models use the priority service tier** — their requests now ask
+  OpenAI for priority processing instead of the standard service tier.
 - **Workflow scripts are available to the software-engineering and Lean team
   leads** — after enabling Workflow Script in the Tools panel, these teams can
   run predetermined parallel and sequential agent pipelines that resume safely
@@ -86,11 +95,6 @@ All notable changes to this project will be documented in this file.
   lines** — callers of `/executions/{id}/conversation` should replace
   `view_range` with `offset` and `limit`. Responses report the returned message
   interval and next offset.
-
-#### Improvements
-
-- **OpenAI Fast models use the priority service tier** — their requests now ask
-  OpenAI for priority processing instead of the standard service tier.
 
 #### Bug Fixes
 
