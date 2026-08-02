@@ -9,7 +9,10 @@ import {
 } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { currentSession, type SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   startChildRunLoop,
   type ChildRunPorts,
