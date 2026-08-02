@@ -56,6 +56,24 @@ interface ManualRetryPromptResult {
   clientPrepared?: boolean;
 }
 
+type RetryAttemptSource = 'automatic' | 'human';
+
+interface RetryLifecycleState {
+  readonly operationId: string;
+  readonly startedAt: number;
+  readonly automaticAttemptLimit: number;
+  attemptOrdinal: number;
+  lastAttemptSource?: RetryAttemptSource;
+  nextAttemptSource: RetryAttemptSource;
+}
+
+type RetryLifecycleEvent =
+  | 'attempt_started'
+  | 'attempt_succeeded'
+  | 'attempt_failed'
+  | 'retry_decision_requested'
+  | 'retry_decided';
+
 /**
  * Invocation result after retry handling. A `failed` result has already
  * emitted its canonical error at this boundary; outer cycles only propagate
@@ -104,6 +122,7 @@ export abstract class RetryableInvocationNode<
   protected _hasAttemptedTokenRefresh = false;
   protected _persistent401Error: Error | null = null;
   protected _retryBackoffMs: number;
+  private _retryLifecycle: RetryLifecycleState | undefined;
 
   constructor() {
     const config = getNodeRetryConfig();
@@ -118,7 +137,36 @@ export abstract class RetryableInvocationNode<
     cloned._userCancelled = false;
     cloned._hasAttemptedTokenRefresh = false;
     cloned._persistent401Error = null;
+    cloned._retryLifecycle = undefined;
     return cloned;
+  }
+
+  /** Persist a compact, normally hidden diagnostic row on the run trace. */
+  private logRetryLifecycle(
+    event: RetryLifecycleEvent,
+    details: Record<string, unknown> = {},
+  ): void {
+    const lifecycle = this._retryLifecycle;
+    if (!lifecycle) return;
+    const { runScope, modelCell } = this.services;
+    this.services.logger.info('Model retry lifecycle', {
+      verbose: true,
+      data: {
+        kind: 'model_retry_lifecycle',
+        event,
+        operationId: lifecycle.operationId,
+        operation: this.getOperationName(),
+        executionId: runScope.executionId,
+        streamId: runScope.streamId,
+        agentName: runScope.agentName,
+        model: this.services.config.model,
+        credentialRoute: modelCell.route,
+        attemptOrdinal: lifecycle.attemptOrdinal,
+        automaticAttemptLimit: lifecycle.automaticAttemptLimit,
+        elapsedMs: Date.now() - lifecycle.startedAt,
+        ...details,
+      },
+    });
   }
 
   /**
@@ -211,21 +259,65 @@ export abstract class RetryableInvocationNode<
       }
     }
 
+    const lifecycle = this._retryLifecycle;
+    if (lifecycle) lifecycle.attemptOrdinal += 1;
+    const attemptSource = lifecycle?.nextAttemptSource ?? 'automatic';
+    if (lifecycle) {
+      lifecycle.lastAttemptSource = attemptSource;
+      lifecycle.nextAttemptSource = 'automatic';
+    }
+    this.logRetryLifecycle('attempt_started', {
+      decisionSource: attemptSource,
+    });
+
     try {
-      return await operation(signal);
+      const result = await operation(signal);
+      this.logRetryLifecycle('attempt_succeeded', {
+        decisionSource: attemptSource,
+      });
+      return result;
     } catch (err) {
+      const formatted = normalizeProviderError(err);
       // Reactive 401 recovery: refresh token (single-flighted at the auth
       // boundary) and retry once within this same node attempt. 401 is not
       // auto-retryable, so without this the run would halt at the manual
       // retry prompt on every token rotation.
-      const formatted = normalizeProviderError(err);
       if (
         (formatted.isRelayError || services.modelCell.route === 'relay') &&
         isUnauthorizedProviderError(formatted) &&
         !this._hasAttemptedTokenRefresh
       ) {
-        return this.attemptRelay401Recovery(err, operation, signal);
+        try {
+          const result = await this.attemptRelay401Recovery(
+            err,
+            operation,
+            signal,
+          );
+          this.logRetryLifecycle('attempt_succeeded', {
+            decisionSource: attemptSource,
+            credentialRefresh: true,
+          });
+          return result;
+        } catch (retryErr) {
+          const retryFormatted = normalizeProviderError(retryErr);
+          this.logRetryLifecycle('attempt_failed', {
+            decisionSource: attemptSource,
+            credentialRefresh: true,
+            userRetryable: retryFormatted.userRetryable,
+            statusCode: retryFormatted.statusCode,
+            provider: retryFormatted.provider,
+            isRelayError: retryFormatted.isRelayError,
+          });
+          throw retryErr;
+        }
       }
+      this.logRetryLifecycle('attempt_failed', {
+        decisionSource: attemptSource,
+        userRetryable: formatted.userRetryable,
+        statusCode: formatted.statusCode,
+        provider: formatted.provider,
+        isRelayError: formatted.isRelayError,
+      });
       throw err;
     }
   }
@@ -258,6 +350,13 @@ export abstract class RetryableInvocationNode<
 
     this.maxRetries = maxRetries;
     this._retryBackoffMs = config.backoffMs;
+    this._retryLifecycle = {
+      operationId: `model-operation-${generateShortId()}`,
+      startedAt: Date.now(),
+      automaticAttemptLimit: maxRetries,
+      attemptOrdinal: 0,
+      nextAttemptSource: 'automatic',
+    };
     // This local delay is the fallback for retryable failures that do not
     // implicate a shared route. For classified route failures it overlaps the
     // gate's cooling interval, so the gate waits only for any remaining time.
@@ -282,6 +381,9 @@ export abstract class RetryableInvocationNode<
     }
 
     if (result.shouldRetry) {
+      if (this._retryLifecycle) {
+        this._retryLifecycle.nextAttemptSource = 'human';
+      }
       this._persistent401Error = null;
       this._hasAttemptedTokenRefresh = false;
       // Always refresh the client on manual retry. The user may have
@@ -315,6 +417,13 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
+    this.logRetryLifecycle('retry_decision_requested', {
+      afterAttemptSource: this._retryLifecycle?.lastAttemptSource,
+      userRetryable: formatted.userRetryable,
+      statusCode: formatted.statusCode,
+      provider: formatted.provider,
+    });
+
     logErrorData(logger, `${operationName} failed`, formatted);
 
     streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait', {
@@ -346,6 +455,14 @@ export abstract class RetryableInvocationNode<
       throw new Error('HostInteractions.requestRetry is required');
     }
     const result = await interaction;
+    let decisionSource: 'human' | 'denied' | 'cancelled';
+    if (result.action === 'retry') decisionSource = 'human';
+    else if (result.action === 'deny') decisionSource = 'denied';
+    else decisionSource = 'cancelled';
+    this.logRetryLifecycle('retry_decided', {
+      action: result.action,
+      decisionSource,
+    });
 
     if (result.action === 'retry') {
       logger.debug('Manual retry triggered');

@@ -14,7 +14,7 @@ import {
 } from 'vitest';
 
 // Local imports
-import { noopTrace, type AgentTrace } from '@agent/trace';
+import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import {
@@ -67,6 +67,9 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
+import { StreamLogStore } from '@transcript/StreamLogStore';
+import { isObject } from '@utils/core';
 
 // Local file imports
 import {
@@ -417,6 +420,135 @@ describe('RetryState', () => {
     expect(node.maxRetries).toBe(
       1 + DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
     );
+  });
+
+  it('records cumulative attempt and manual-decision diagnostics', async () => {
+    await installPlatform({
+      config: { 'texra.model.retry.maxAttempts': 0 },
+    });
+    const streamId = 'retry-diagnostics' as StreamTabId;
+    const logger = new TraceEmitter();
+    const transcript = StreamLogStore.ephemeral('retry diagnostics test');
+    transcript.ensureStream(streamId);
+    const recorder = attachTranscriptRecorder(
+      logger,
+      transcript.acquireWriter(streamId, streamId),
+    );
+    const requestRetry = vi.fn(async () => ({ action: 'retry' as const }));
+    const session = sessionWithInteractions(
+      { requestRetry, cancel: () => {} },
+      new StreamStatusMachine(),
+    );
+
+    class DiagnosticRetryNode extends ExposedRetryNode {
+      attempts = 0;
+
+      override async exec(): Promise<string> {
+        return this.runWithRelayRecovery(async () => {
+          this.attempts += 1;
+          if (this.attempts === 1) {
+            throw new Error('temporary provider failure');
+          }
+          return 'recovered';
+        });
+      }
+    }
+
+    const node = new DiagnosticRetryNode().setServices({
+      config: { model: 'openai:test' },
+      runScope: testRunScope(streamId, { session }),
+      streamId,
+      interactions: new SessionHostInteractions(),
+      logger,
+      modelCell: testRetryModelCell(undefined, 'api-key'),
+    });
+
+    try {
+      seedStreamStatusForTest(session.status, streamId, STREAM_STATUS.RUNNING);
+
+      await expect(node._exec(undefined)).resolves.toBe('recovered');
+
+      const rows = transcript.get(streamId)?.getRange(0) ?? [];
+      const diagnostics = rows
+        .map((row) => row.data)
+        .filter(
+          (data): data is Record<string, unknown> =>
+            isObject(data) && data.kind === 'model_retry_lifecycle',
+        );
+      expect(
+        diagnostics.map((data) => ({
+          event: data.event,
+          attemptOrdinal: data.attemptOrdinal,
+          decisionSource: data.decisionSource,
+        })),
+      ).toEqual([
+        {
+          event: 'attempt_started',
+          attemptOrdinal: 1,
+          decisionSource: 'automatic',
+        },
+        {
+          event: 'attempt_failed',
+          attemptOrdinal: 1,
+          decisionSource: 'automatic',
+        },
+        {
+          event: 'retry_decision_requested',
+          attemptOrdinal: 1,
+          decisionSource: undefined,
+        },
+        {
+          event: 'retry_decided',
+          attemptOrdinal: 1,
+          decisionSource: 'human',
+        },
+        {
+          event: 'attempt_started',
+          attemptOrdinal: 2,
+          decisionSource: 'human',
+        },
+        {
+          event: 'attempt_succeeded',
+          attemptOrdinal: 2,
+          decisionSource: 'human',
+        },
+      ]);
+      expect(diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            executionId: 'deadbeef',
+            streamId,
+            automaticAttemptLimit: 1,
+            credentialRoute: 'api-key',
+          }),
+          expect.objectContaining({
+            event: 'retry_decision_requested',
+            afterAttemptSource: 'automatic',
+          }),
+        ]),
+      );
+      expect(
+        rows
+          .filter(
+            (row) =>
+              isObject(row.data) && row.data.kind === 'model_retry_lifecycle',
+          )
+          .every((row) => row.verbose === true),
+      ).toBe(true);
+      expect(new Set(diagnostics.map((data) => data.operationId)).size).toBe(1);
+      expect(
+        diagnostics
+          .map((data) => data.elapsedMs as number)
+          .every((elapsed, index, values) =>
+            index === 0
+              ? elapsed >= 0
+              : elapsed >= (values.at(index - 1) ?? elapsed),
+          ),
+      ).toBe(true);
+    } finally {
+      recorder.unsubscribe();
+      clearStreamStatusForTest(session.status, streamId);
+    }
   });
 
   it('treats user aborts as cancellations instead of failed invocations', () => {
