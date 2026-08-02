@@ -22,6 +22,7 @@ export {
   hasContextWindowErrorMarker,
   attachMissingApiKeyError,
   hasMissingApiKeyErrorMarker,
+  attachManualRetryOnlyError,
 } from './sdkError/errorMetadata';
 
 export { handleStreamingFailure } from './sdkError/streamFailure';
