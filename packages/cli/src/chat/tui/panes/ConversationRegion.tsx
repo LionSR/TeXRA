@@ -8,7 +8,7 @@ import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -31,7 +31,7 @@ import {
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
 import { StaticConversationTranscript } from './StaticConversationTranscript';
-import { SubagentList } from './SubagentList';
+import { SubagentList, workflowDashboardPanelItemCount } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import { type ChildListValue } from '../state/childListSelection';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
@@ -173,20 +173,34 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
+  const workflowDashboardItemCount = snapshot.childListTarget.slice
+    ? workflowDashboardPanelItemCount(
+        snapshot.childListTarget.slice,
+        snapshot.selectedChildValue,
+        columns,
+      )
+    : 0;
+  const sessionPanelItemCount =
+    workflowDashboardItemCount > 0
+      ? workflowDashboardItemCount
+      : snapshot.sessionViews.length;
+  const minimumSessionPanelRows = workflowDashboardItemCount > 0 ? 3 : 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     sessionPanelRows: subagentRows,
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
-    sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
+    sessionCount: foregroundOpen ? 0 : sessionPanelItemCount,
     childListFocused: snapshot.childListFocused,
+    minimumSessionPanelRows,
     todosPlanContentRows,
     transcriptRows,
   });
   const conversationRows = transcriptRows - bottomPanelBudget;
-  const childListHasRows = snapshot.sessionViews.length > 0;
-  const childListVisible = childListHasRows && subagentRows > 1;
+  const childListHasRows = sessionPanelItemCount > 0;
+  const childListVisible =
+    childListHasRows && subagentRows >= minimumSessionPanelRows;
   useLayoutEffect(() => {
     if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
       onCancelChildList();
@@ -259,8 +273,10 @@ export function ConversationRegion({
               onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
+              listRootSlice={snapshot.childListTarget.slice}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
+              streams={snapshot.streams}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
