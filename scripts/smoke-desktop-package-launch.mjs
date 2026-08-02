@@ -261,7 +261,7 @@ try {
   phase = 'launching packaged Electron app';
   application = await electron.launch({
     executablePath,
-    args: ['--texra-workspace', paths.workspace],
+    args: ['--texra-workspace-path', paths.workspace],
     cwd: paths.workspace,
     env: buildDesktopSmokeEnvironment(process.env, paths),
     timeout: READINESS_TIMEOUT_MS,

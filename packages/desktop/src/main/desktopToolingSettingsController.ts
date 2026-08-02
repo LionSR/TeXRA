@@ -1,6 +1,7 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type {
@@ -90,8 +91,9 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   postLatexConfigValues(): void {
     this.options.renderer.postToRenderer(
-      this.options.latexConfigPersistenceController.buildConfigMessage((key) =>
-        this.options.workspaceState.get(key),
+      this.options.latexConfigPersistenceController.buildConfigMessage(
+        (key) => this.options.workspaceState.get(key),
+        platform().config,
       ),
     );
   }

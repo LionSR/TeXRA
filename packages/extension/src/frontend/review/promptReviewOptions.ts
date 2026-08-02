@@ -9,14 +9,11 @@
 
 // Third-party imports
 import * as vscode from 'vscode';
-import { z } from 'zod';
 
 // Local imports
 import { listBaseBranchCandidates } from '@agent/review/reviewDiff';
 import type { ReviewApproach } from '@agent/review/reviewIssues';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
-import { AGENT_REVIEW_APPROACHES } from '@shared/schemas/coreSettings';
-import { getValidatedConfig } from '@utils/config/configUtils';
 
 export interface ReviewOptions {
   /** Free-text focus for the reviewer; omitted when left blank. */
@@ -88,11 +85,6 @@ export async function promptReviewOptions(
   // Escape returns undefined; an empty submission returns "".
   if (userInstructions === undefined) return undefined;
 
-  const currentApproach = getValidatedConfig(
-    'agentReview.approach',
-    z.enum(AGENT_REVIEW_APPROACHES),
-    'quick',
-  );
   const quickItem: ApproachItem = {
     label: 'Quick',
     detail: 'Verify only the strongest suspicions with tools — fast and cheap.',
@@ -104,11 +96,7 @@ export async function promptReviewOptions(
       'Read every changed file, check callers, and pull diagnostics — deeper, higher cost.',
     value: 'thorough',
   };
-  // List the configured default first so Enter keeps the current behavior.
-  const approachItems =
-    currentApproach === 'thorough'
-      ? [thoroughItem, quickItem]
-      : [quickItem, thoroughItem];
+  const approachItems = [quickItem, thoroughItem];
   const trimmedInstructions = userInstructions.trim();
   // Echo the step-1 focus text when present; otherwise keep the original
   // approach explanation visible.

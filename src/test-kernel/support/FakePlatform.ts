@@ -146,8 +146,8 @@ export class FakeConfigProvider implements ConfigProvider {
     changedKey: string,
   ): boolean {
     if (watchedKey instanceof RegExp) {
-      // Match VscodeConfigProvider: VS Code does not expose changed keys for
-      // regex watchers, so regex subscriptions conservatively refresh.
+      // Host adapters do not expose changed keys uniformly for regex watchers,
+      // so regex subscriptions conservatively refresh.
       return true;
     }
     if (typeof watchedKey === 'string') {
@@ -184,7 +184,7 @@ export class FakeConfigProvider implements ConfigProvider {
 
 /**
  * `ConfigProvider` fake with real folder -> workspace -> global fallback,
- * mirroring `VscodeConfigProvider`/`JsonConfigProvider`'s resolution order.
+ * mirroring the platform config providers' resolution order.
  * Unlike `FakeConfigProvider` above (which records one target per key and
  * so cannot hold a folder override and a global value for the same key at
  * once), this tracks the three scopes independently.
