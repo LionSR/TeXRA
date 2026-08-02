@@ -236,7 +236,7 @@ function readOverrides(storage: Storage | undefined): DesktopShortcutOverrides {
     const result = DesktopShortcutOverridesSchema.safeParse(parsed);
     if (result.success) return result.data;
   } catch {
-    return {};
+    // Malformed JSON resolves to the same empty defaults as a failed schema parse.
   }
   return {};
 }
