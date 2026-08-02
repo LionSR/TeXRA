@@ -95,7 +95,6 @@ interface ModelSwitchingFlowInput {
 function buildResumeContext(
   executionId: ExecutionId,
   streamId: StreamTabId,
-  usageMonitor: { setModelInfo: ReturnType<typeof vi.fn> },
 ): AgentLaunchContext {
   const abortController = new AbortController();
   return {
@@ -116,7 +115,7 @@ function buildResumeContext(
       transient: { MODEL: 'test-model' },
     },
     attachedMemoryMisses: [],
-    usageMonitor: { recordUsage: vi.fn(), ...usageMonitor },
+    usageMonitor: { recordUsage: vi.fn() },
     interrupt: () => abortController.abort(),
   } as unknown as AgentLaunchContext;
 }
@@ -152,9 +151,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     });
     mocks.buildAgentLaunchContext.mockImplementationOnce(async () => {
       order.push('launch');
-      return buildResumeContext(executionId, streamId, {
-        setModelInfo: vi.fn(),
-      });
+      return buildResumeContext(executionId, streamId);
     });
     mocks.hasPersistedParent.mockResolvedValueOnce(true);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
@@ -363,9 +360,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('mirrors a mid-run model switch onto the persisted config only', async () => {
     const executionId = 'e9421-model' as ExecutionId;
     const streamId = 'stream-9421-model' as StreamTabId;
-    const ctx = buildResumeContext(executionId, streamId, {
-      setModelInfo: vi.fn(),
-    });
+    const ctx = buildResumeContext(executionId, streamId);
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
     mocks.hasPersistedParent.mockResolvedValueOnce(false);
     mocks.runFlowWithLifecycle.mockImplementationOnce(
@@ -400,7 +395,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       userRetryable: true,
     };
     mocks.buildAgentLaunchContext.mockResolvedValueOnce(
-      buildResumeContext(executionId, streamId, { setModelInfo: vi.fn() }),
+      buildResumeContext(executionId, streamId),
     );
     mocks.hasPersistedParent.mockResolvedValueOnce(true);
     mocks.runFlowWithLifecycle.mockImplementationOnce(

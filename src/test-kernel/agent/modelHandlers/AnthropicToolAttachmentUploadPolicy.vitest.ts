@@ -1,6 +1,6 @@
 // Standard library imports
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - agent
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -118,20 +118,18 @@ describe('anthropicTools.uploadToolAttachments attachment failure policy (#7465)
       100,
     );
 
-    assert.equal(
+    expect(
       result.uploaded.length,
-      1,
       'an unparseable PDF still uploads so the API can enforce its own limit',
-    );
-    assert.equal(result.pageLimitExceeded.length, 0);
-    assert.equal(
+    ).toBe(1);
+    expect(result.pageLimitExceeded.length).toBe(0);
+    expect(
       pageCounts.length,
-      0,
       'no page count is reported when the PDF cannot be parsed',
-    );
-    assert.ok(
+    ).toBe(0);
+    expect(
       warnMessages.some((m) => m.includes('corrupt.pdf')),
       'the skipped local page-limit check must be logged, not silent',
-    );
+    ).toBe(true);
   });
 });

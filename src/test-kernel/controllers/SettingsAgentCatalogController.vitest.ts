@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - shared
 import {
@@ -167,12 +167,13 @@ describe('SettingsAgentCatalogController', () => {
     });
 
     const resolved = controller.resolvePreset('custom-team');
-    assert.ok(resolved.ok);
-    assert.deepEqual(resolved.preset, {
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) throw new Error('expected the preset to resolve');
+    expect(resolved.preset).toStrictEqual({
       ...persistedPreset,
       icon: 'bookmark',
     });
-    assert.deepEqual(resolved.resolution.unresolvedNames, ['missing']);
+    expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
     await controller.commitPresetResolution(
       resolved.preset,
       resolved.resolution,
@@ -187,7 +188,7 @@ describe('SettingsAgentCatalogController', () => {
   it('reports unknown presets without writing enabled agent state', () => {
     const { controller, enabled } = createController();
 
-    assert.deepEqual(controller.resolvePreset('missing'), {
+    expect(controller.resolvePreset('missing')).toStrictEqual({
       ok: false,
       reason: 'unknownPreset',
     });
