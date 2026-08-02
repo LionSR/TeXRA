@@ -14,7 +14,13 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
 const mocks = vi.hoisted(() => ({
@@ -89,7 +95,11 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import type { TraceDocument } from '@transcript';
+import {
+  StreamLogStore,
+  StreamSnapshotStore,
+  type TraceDocument,
+} from '@transcript';
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
@@ -360,6 +370,82 @@ describe('CLI history runtime', () => {
     await expect(
       readCliHistoryDetails('dead' as ExecutionId),
     ).resolves.toBeNull();
+  });
+
+  it('treats candidate-only sidecar associations as a found execution', async () => {
+    const executionId = 'a11ce5a11ce5' as ExecutionId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(
+      `orchestrator@old#${executionId}` as StreamTabId,
+      config,
+      executionId,
+    );
+    snapshots.setRunConfig(
+      `orchestrator@new#${executionId}` as StreamTabId,
+      config,
+      executionId,
+    );
+    await snapshots.flush();
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+
+    await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
+      id: executionId,
+      status: 'unknown',
+      conversationPreview: null,
+    });
+    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
+      status: 'incomplete',
+    });
+  });
+
+  it('treats children-only associations as incomplete markdown export evidence', async () => {
+    const executionId = 'a11ce6a11ce6' as ExecutionId;
+    const parent = 'orchestrator@model#parent' as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    for (const streamId of [
+      `bash@tool#${executionId}`,
+      `codex@tool#${executionId}`,
+    ] as StreamTabId[]) {
+      snapshots.setRunConfig(streamId, config, executionId);
+      snapshots.setParentStream(streamId, parent);
+    }
+    await snapshots.flush();
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+
+    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
+      status: 'incomplete',
+    });
+  });
+
+  it('finds a sole diagnostic-only exact root in CLI history details', async () => {
+    const executionId = 'a11ce7a11ce7' as ExecutionId;
+    const root = `orchestrator@model#${executionId}` as StreamTabId;
+    const snapshots = new StreamSnapshotStore();
+    snapshots.setRunConfig(root, config, executionId);
+    await snapshots.flush();
+    const logs = await StreamLogStore.open();
+    logs.append(root, {
+      id: 'diagnostic-only-root',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1000,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      text: 'Root status only',
+    });
+    await logs.flush();
+    mocks.readConfig.mockResolvedValue(null);
+    mocks.readMeta.mockResolvedValue(null);
+    mocks.exists.mockResolvedValue(false);
+
+    await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
+      id: executionId,
+      status: 'unknown',
+      conversationPreview: null,
+    });
   });
 
   it('treats full-only conversation data as a found execution', async () => {
@@ -1172,6 +1258,29 @@ describe('CLI history runtime', () => {
       ).resolves.toEqual({ status: 'not_found' });
     });
 
+    it('reports candidate-only sidecars as incomplete rather than not found', async () => {
+      const executionId = 'a11ce6a11ce6' as ExecutionId;
+      const snapshots = new StreamSnapshotStore();
+      snapshots.setRunConfig(
+        `orchestrator@old#${executionId}` as StreamTabId,
+        config,
+        executionId,
+      );
+      snapshots.setRunConfig(
+        `orchestrator@new#${executionId}` as StreamTabId,
+        config,
+        executionId,
+      );
+      await snapshots.flush();
+      mocks.readConfig.mockResolvedValue(null);
+      mocks.readMeta.mockResolvedValue(null);
+      mocks.readConversation.mockResolvedValue(null);
+
+      await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
+        status: 'incomplete',
+      });
+    });
+
     it('reports "incomplete" (not "not_found") when config exists but conversation does not', async () => {
       // history show would still display this execution (it has a config) —
       // export just has nothing to render, which is a different failure than
@@ -1385,6 +1494,45 @@ describe('CLI history runtime', () => {
         );
         return resourcesPath;
       }
+
+      it('reports missing replayable roots without an empty sidecar list', async () => {
+        mocks.assembleTrace.mockResolvedValue({ status: 'streamLogs_missing' });
+
+        const exitCode = await runHistoryExport(
+          makeContext('/resources'),
+          'a1' as ExecutionId,
+          'html',
+          {},
+        );
+
+        expect(exitCode).toBe(CliExitCode.Usage);
+        expect(stdout).toBe('');
+        expect(stderr).toContain('no replayable execution-root transcript');
+        expect(stderr).not.toContain('sidecars (');
+      });
+
+      it('reports ambiguous transcript ownership without exporting an arbitrary trace', async () => {
+        mocks.assembleTrace.mockResolvedValue({
+          status: 'streamId_ambiguous',
+          candidateStreamIds: ['orchestrator@old#a1', 'orchestrator@new#a1'],
+        });
+
+        const exitCode = await runHistoryExport(
+          makeContext('/resources'),
+          'a1' as ExecutionId,
+          'html',
+          { assetsDir: '/assets' },
+        );
+
+        expect(exitCode).toBe(CliExitCode.Usage);
+        expect(stdout).toBe('');
+        expect(stderr).toContain(
+          'multiple associated transcript sidecars (orchestrator@old#a1, orchestrator@new#a1)',
+        );
+        expect(stderr).toContain('no canonical trace timeline');
+        expect(stderr).toContain('HTML trace export was not written');
+        expect(stderr).not.toContain('texra history show');
+      });
 
       it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
         const resourcesPath = await makeTempDir(

@@ -56,6 +56,7 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { requireRunStream, requireStreamId } from '@tools/contextHelpers';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import {
+  hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
   readCompletedRunTodos,
   resolvePersistedStreamIdForExecution,
@@ -857,15 +858,47 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     limit: number,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const { conversation, source, streamId, streamIds } =
-      await readCompletedRunConversation(executionId);
+    const conversationResult = await readCompletedRunConversation(executionId);
+    const {
+      conversation,
+      source,
+      streamId,
+      streamIds,
+      candidateStreamIds,
+      associatedStreamIds,
+      conflicts,
+      hasOrderingCycle,
+      hasOrderingAmbiguity,
+    } = conversationResult;
+    const streamDiagnostics = [
+      `Stream: ${streamId ?? 'none'}`,
+      ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+      ...(associatedStreamIds
+        ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
+        : []),
+      ...(candidateStreamIds
+        ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
+        : []),
+      ...(conflicts
+        ? [
+            `Conflicting row IDs: ${conflicts
+              .map(({ rowId }) => rowId)
+              .join(', ')}`,
+          ]
+        : []),
+      ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
+      ...(hasOrderingAmbiguity ? ['Complete chronology established: no'] : []),
+    ];
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
       // when the shared storage decision says it is resumable.
       const meta = await store.readMeta();
       const resumability = await deriveResumability(executionId);
-      const exists = meta !== null || resumability.resumable;
+      const exists =
+        meta !== null ||
+        resumability.resumable ||
+        hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         throw new ToolError(`Execution not found: ${executionId}`);
       }
@@ -875,7 +908,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
           totalMessages: 0,
           metadata: [
             'Source: none',
-            'Stream: none',
+            ...streamDiagnostics,
             'Returned message interval: [0, 0)',
             'Next offset: none',
           ],
@@ -891,8 +924,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       totalMessages: conversation.length,
       metadata: [
         `Source: ${source}`,
-        `Stream: ${streamId ?? 'none'}`,
-        ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
+        ...streamDiagnostics,
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],
