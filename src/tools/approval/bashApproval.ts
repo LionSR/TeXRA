@@ -19,6 +19,7 @@ import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { createSessionBypassAccessors } from '@tools/approval/sessionBypassAccessors';
+import { errorResult } from '@tools/core/result';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -103,10 +104,8 @@ export function buildBashApprovalRejectedResult(
   const preview = truncateWithEllipsis(command, 60);
   const message = `User rejected command: ${preview}`;
   const feedback = rejectionFeedback?.trim();
-  return {
-    status: 'error',
+  return errorResult(message, {
     summary: message,
-    error: message,
     userInstruction: feedback || DEFAULT_BASH_REJECTION_INSTRUCTION,
-  };
+  });
 }

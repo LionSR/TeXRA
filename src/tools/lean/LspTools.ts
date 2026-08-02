@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
+import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -127,11 +128,10 @@ Tips:
       const diagnostics =
         await getLeanLanguageServices().fetchDiagnosticsForFile(file);
       if (!diagnostics) {
-        return {
-          status: 'error',
-          summary: 'Failed to open file',
-          error: `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
-        };
+        return errorResult(
+          `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
+          { summary: 'Failed to open file' },
+        );
       }
 
       await getLeanLanguageServices().navigateToFirstError(file, diagnostics);
@@ -140,11 +140,7 @@ Tips:
       const countsStr = formatCounts(counts);
 
       if (diagnostics.length === 0) {
-        return {
-          status: 'executed',
-          summary: '✓ No diagnostics',
-          output: NO_DIAGNOSTICS_HELP,
-        };
+        return executed(NO_DIAGNOSTICS_HELP, '✓ No diagnostics');
       }
 
       const baseDiagnostics = { ...counts, total: diagnostics.length };
@@ -194,17 +190,12 @@ Requires: Lean 4 VS Code extension installed and active.`,
         file,
       );
       if (!success) {
-        return {
-          status: 'error',
-          summary: 'Command failed',
-          error: `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
-        };
+        return errorResult(
+          `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
+          { summary: 'Command failed' },
+        );
       }
-      return {
-        status: 'executed',
-        summary: description,
-        output: `Executed "${command}" on ${file}`,
-      };
+      return executed(`Executed "${command}" on ${file}`, description);
     } catch (error) {
       throw new ToolError(`Error: ${toErrorMessage(error)}`, {
         cause: error,
@@ -245,18 +236,13 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
       await getLeanLanguageServices().executeProjectCommand(command);
 
       if (command === 'build') {
-        return {
-          status: 'executed',
-          summary: description,
-          output: `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
-        };
+        return executed(
+          `Build started. Note: this command does not capture build output directly.\n\nTo check for errors and warnings, run lean_diagnostics on the relevant .lean files.`,
+          description,
+        );
       }
 
-      return {
-        status: 'executed',
-        summary: description,
-        output: `Executed "${command}" successfully`,
-      };
+      return executed(`Executed "${command}" successfully`, description);
     } catch (error) {
       throw new ToolError(
         `Error executing "${command}": ${toErrorMessage(error)}`,
@@ -324,27 +310,21 @@ Requires: Lean 4 VS Code extension installed and active.`,
     );
 
     if (!data) {
-      return {
-        status: 'error',
-        summary: 'No goal state',
-        error: `Could not get goal state at ${location}${error ? `\nError: ${error}` : ''}`,
-      };
+      return errorResult(
+        `Could not get goal state at ${location}${error ? `\nError: ${error}` : ''}`,
+        { summary: 'No goal state' },
+      );
     }
 
     if (data.goals.length === 0) {
-      return {
-        status: 'executed',
-        summary: 'No goals',
-        output: 'No goals at this position. The proof may be complete here.',
-      };
+      return executed(
+        'No goals at this position. The proof may be complete here.',
+        'No goals',
+      );
     }
 
     const goalCount = data.goals.length;
-    return {
-      status: 'executed',
-      summary: formatResultCount(goalCount, 'goal'),
-      output: data.rendered,
-    };
+    return executed(data.rendered, formatResultCount(goalCount, 'goal'));
   }
 
   private async executeTermGoal(
@@ -360,14 +340,13 @@ Requires: Lean 4 VS Code extension installed and active.`,
     );
 
     if (!data) {
-      return {
-        status: 'error',
-        summary: 'No term goal',
-        error: `No expected type at ${location}${error ? `\nError: ${error}` : ''}`,
-      };
+      return errorResult(
+        `No expected type at ${location}${error ? `\nError: ${error}` : ''}`,
+        { summary: 'No term goal' },
+      );
     }
 
-    return { status: 'executed', summary: 'Term goal', output: data.goal };
+    return executed(data.goal, 'Term goal');
   }
 
   private async executeHover(
@@ -383,22 +362,19 @@ Requires: Lean 4 VS Code extension installed and active.`,
     );
 
     if (!data) {
-      return {
-        status: 'error',
-        summary: 'No hover info',
-        error: `No information at ${location}${error ? `\nError: ${error}` : ''}`,
-      };
+      return errorResult(
+        `No information at ${location}${error ? `\nError: ${error}` : ''}`,
+        { summary: 'No hover info' },
+      );
     }
 
     const text = extractHoverText(data.contents);
     if (!text) {
-      return {
-        status: 'error',
+      return errorResult(`Empty hover response at ${location}`, {
         summary: 'No hover info',
-        error: `Empty hover response at ${location}`,
-      };
+      });
     }
 
-    return { status: 'executed', summary: 'Hover info', output: text };
+    return executed(text, 'Hover info');
   }
 }

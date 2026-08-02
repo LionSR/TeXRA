@@ -46,6 +46,7 @@ import {
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { errorResult, executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createChannelTrace('PlanTool');
@@ -167,28 +168,24 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   ): Promise<ToolResult> {
     const goal = GoalStore.getForStream(streamId);
     if (!goal) {
-      return {
-        status: 'executed',
-        summary: 'No autonomous goal to pause.',
-        output:
-          'No autonomous goal is currently running on this stream, so there is nothing to pause. ' +
+      return executed(
+        'No autonomous goal is currently running on this stream, so there is nothing to pause. ' +
           'If you need user input, ask the user directly in your next message; do not call plan(command="pause") again.',
-      };
+        'No autonomous goal to pause.',
+      );
     }
     if (goal.status !== 'active') {
-      return {
-        status: 'executed',
-        summary: `Goal already ${goal.status} — pause is a no-op.`,
-        output: `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
-      };
+      return executed(
+        `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
+        `Goal already ${goal.status} — pause is a no-op.`,
+      );
     }
     const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
     await this.setBashAutoApproval(streamId, false);
-    return {
-      status: 'executed',
-      summary: 'Goal paused.',
-      output: `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
-    };
+    return executed(
+      `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
+      'Goal paused.',
+    );
   }
 
   /**
@@ -286,12 +283,13 @@ pause/complete only affect autonomous goals; with no goal running they return gu
       logger.info('Plan rejected by user');
     }
 
-    return {
-      status: 'error',
-      summary: 'Plan rejected — revise approach',
-      error: `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
-      ...(feedback ? { userInstruction: feedback } : {}),
-    };
+    return errorResult(
+      `The user rejected this plan.${feedbackNote}\nPlease revise your approach based on the feedback and create an updated plan.`,
+      {
+        summary: 'Plan rejected — revise approach',
+        ...(feedback ? { userInstruction: feedback } : {}),
+      },
+    );
   }
 
   /**
@@ -309,16 +307,14 @@ pause/complete only affect autonomous goals; with no goal running they return gu
         'Run as Goal requested but goal feature flag is off; ' +
           'continuing without an autonomous goal.',
       );
-      return {
-        status: 'executed',
-        summary: 'Plan approved — autonomous run unavailable',
-        output:
-          `The user selected Run as Goal, but the goal feature flag is ` +
+      return executed(
+        `The user selected Run as Goal, but the goal feature flag is ` +
           `currently disabled. The plan is approved, but no autonomous ` +
           `goal was started.\n\n` +
           `Work toward the objective as a normal turn-by-turn workflow, ` +
           `tracking concrete steps with the todo tool.`,
-      };
+        'Plan approved — autonomous run unavailable',
+      );
     }
 
     const objective = plan.objective;
@@ -335,11 +331,8 @@ pause/complete only affect autonomous goals; with no goal running they return gu
             ? ((await GoalStore.setStatus(streamId, 'active')) ?? retargeted)
             : retargeted;
         await this.setBashAutoApproval(streamId, true);
-        return {
-          status: 'executed',
-          summary: `Plan approved — goal ${active.goalId} retargeted`,
-          output:
-            `The user approved a new plan while goal ${active.goalId} ` +
+        return executed(
+          `The user approved a new plan while goal ${active.goalId} ` +
             `was already in flight. The goal has been retargeted to the ` +
             `new objective.\n\n` +
             `${formatGoalView(active)}\n\n` +
@@ -349,24 +342,25 @@ pause/complete only affect autonomous goals; with no goal running they return gu
             `- Do not call plan(command="complete") until the stopping condition is verifiably true.\n` +
             `- If you genuinely need user input, call plan(command="pause") with a reason.\n\n` +
             `Objective:\n${objective}`,
-        };
+          `Plan approved — goal ${active.goalId} retargeted`,
+        );
       } catch (err) {
         const reason = toErrorMessage(err);
         logger.warn(
           'Failed to retarget in-flight goal for approved plan; returning an explicit error result.',
           { data: err },
         );
-        return {
-          status: 'error',
-          summary:
-            'Plan approved — goal could not be retargeted, proceeding without it',
-          error:
-            `The user approved this plan and requested autonomous execution, ` +
+        return errorResult(
+          `The user approved this plan and requested autonomous execution, ` +
             `but the in-flight goal could not be retargeted: ${reason}\n\n` +
             `Work toward the new objective turn-by-turn. The pre-existing ` +
             `goal is still active and will keep injecting continuations ` +
             `against its previous objective until the user pauses or abandons it.`,
-        };
+          {
+            summary:
+              'Plan approved — goal could not be retargeted, proceeding without it',
+          },
+        );
       }
     }
 

@@ -17,6 +17,7 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
+import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
   AgentRuntimeEmitOptions,
@@ -354,7 +355,8 @@ interface PendingSessionInteraction {
 export class SessionHostInteractions implements HostInteractions {
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
-  private readonly pendingCountListeners = new Set<(count: number) => void>();
+  private readonly pendingCountListeners: ListenerSet<(count: number) => void> =
+    createListenerSet();
   private readonly pendingPresentationReplays: Array<
     (interactions: HostInteractions) => Promise<void> | void
   > = [];
@@ -369,8 +371,7 @@ export class SessionHostInteractions implements HostInteractions {
   /** Observe transitions between no pending requests and at least one. */
   onPendingCountChange(listener: (count: number) => void): () => void {
     if (this.disposed) return () => {};
-    this.pendingCountListeners.add(listener);
-    return () => this.pendingCountListeners.delete(listener);
+    return this.pendingCountListeners.add(listener);
   }
 
   use(interactions: HostInteractions): () => void {
