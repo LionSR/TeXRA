@@ -501,27 +501,6 @@ describe('StreamSnapshotStore', () => {
     warnSpy.mockRestore();
   });
 
-  it('migrates the legacy nested {runId:{round}} shape to flat ONCE at the load entry', async () => {
-    await writeStreamFile(STREAM, 'missingOutputs.json', {
-      'run-1': { '0': ['a.tex'], '1': ['b.tex'] },
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-    await store.flush();
-
-    // The on-disk file is now FLAT — migrated once at the load entry, never
-    // re-resolved on subsequent reads.
-    const raw = await readStreamFile(STREAM, 'missingOutputs.json');
-    expect(raw).toEqual({ '0': ['a.tex'], '1': ['b.tex'] });
-    // …and a fresh read sees the flattened data.
-    const snap = await new StreamSnapshotStore().read(STREAM);
-    expect(snap.missingOutputsByRound).toEqual({
-      '0': ['a.tex'],
-      '1': ['b.tex'],
-    });
-  });
-
   it('seeds existing disk data before an unloaded usage mutation, so it is not erased', async () => {
     // A prior session persisted usage for run-1.
     await writeStreamFile(STREAM, 'usageStats.json', {
@@ -671,27 +650,6 @@ describe('StreamSnapshotStore', () => {
 
     const raw = await readStreamFile(OTHER_STREAM, 'outputFiles.json');
     expect(raw).toMatchObject({
-      '0': [prior],
-      '1': [next],
-    });
-  });
-
-  it('keeps output overlays when flattening legacy output files after preload', async () => {
-    const prior = outputFile('prior.tex', 0);
-    const next = outputFile('next.tex', 1);
-    await writeStreamFile(OTHER_STREAM, 'outputFiles.json', {
-      [RUN]: { '0': [prior] },
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    store.addOutputFiles(OTHER_STREAM, { 1: [next] });
-    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'outputFiles.json');
-    expect(raw).toEqual({
       '0': [prior],
       '1': [next],
     });
@@ -1245,10 +1203,9 @@ describe('StreamSnapshotStore', () => {
     await Promise.all([
       writeMetaFile(STREAM, {
         executionId,
-        activeRunId: RUN,
       }),
       writeStreamFile(STREAM, 'missingOutputs.json', {
-        [RUN]: { '0': ['legacy.tex'] },
+        '0': ['current.tex'],
       }),
       getExecutionStore(executionId).writeConfig(toolUseConfig()),
     ]);
@@ -2150,10 +2107,8 @@ describe('StreamSnapshotStore', () => {
       writeMetaFile(STREAM, {
         executionId,
       }),
-      // Legacy nested shape → `missingOutputs` lands in `data.legacyKeys`,
-      // arming the merged-sidecar rewrite regardless of overlays.
       writeStreamFile(STREAM, 'missingOutputs.json', {
-        'run-1': { '0': ['stale.tex'] },
+        '0': ['stale.tex'],
       }),
       getExecutionStore(executionId).writeConfig(toolUseConfig()),
     ]);
@@ -2163,6 +2118,7 @@ describe('StreamSnapshotStore', () => {
     const wasDeleteInjected = injectDuringExecutionConfigHydration(
       executionId,
       () => {
+        store.updateMissingOutputs(STREAM, { 1: ['late.tex'] });
         deletion = store.deleteStream(STREAM);
       },
     );
@@ -2435,60 +2391,5 @@ describe('StreamSnapshotStore', () => {
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
     expect(snap.description).toBe('Prior session');
-  });
-
-  // `readLegacyInstruction` reads a pre-#3061 tab's original prompt from its
-  // archival runInstructions.json/legacyInstructions.json file; still needed
-  // until the persisted-run retention window guarding those tabs expires.
-  describe('readLegacyInstruction', () => {
-    it('returns null when no archival file exists', async () => {
-      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
-        STREAM,
-      );
-      expect(legacy).toBeNull();
-    });
-
-    it('reads the canonical legacyInstructions.json', async () => {
-      await writeStreamFile(STREAM, 'legacyInstructions.json', {
-        'run-1': { text: 'Polish the introduction', timestamp: 100 },
-      });
-
-      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
-        STREAM,
-      );
-      expect(legacy?.text).toBe('Polish the introduction');
-    });
-
-    it('falls back to the older runInstructions.json key, unmodified', async () => {
-      const dir = streamDataDir(STREAM);
-      await writeStreamFile(STREAM, 'runInstructions.json', {
-        'run-1': { text: 'Rewrite the abstract' },
-      });
-
-      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
-        STREAM,
-      );
-      expect(legacy?.text).toBe('Rewrite the abstract');
-      // Read-only: no migration/rename happens on disk.
-      expect(
-        await StorageFS.exists(path.join(dir, 'runInstructions.json')),
-      ).toBe(true);
-      expect(
-        await StorageFS.exists(path.join(dir, 'legacyInstructions.json')),
-      ).toBe(false);
-    });
-
-    it('prefers meta.activeRunId when multiple archived runs exist', async () => {
-      await writeStreamFile(STREAM, 'legacyInstructions.json', {
-        older: { text: 'older instruction', timestamp: 100 },
-        active: { text: 'active instruction', timestamp: 50 },
-      });
-      await writeStreamFile(STREAM, 'meta.json', { activeRunId: 'active' });
-
-      const legacy = await new StreamSnapshotStore().readLegacyInstruction(
-        STREAM,
-      );
-      expect(legacy?.text).toBe('active instruction');
-    });
   });
 });
