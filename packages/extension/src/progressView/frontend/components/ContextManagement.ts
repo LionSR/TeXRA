@@ -1,7 +1,7 @@
 /** Displays compaction / clearing / max_tokens reduction events as collapsible details. */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -17,6 +17,9 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
+
+// Local imports - styles
+import { contextManagementStyles } from './ContextManagement.styles';
 
 /** Stat item to display */
 export interface StatItem {
@@ -37,71 +40,7 @@ export class ContextManagement extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    css`
-      :host {
-        display: block;
-        margin: var(--wa-space-2xs) 0;
-      }
-
-      wa-details {
-        margin: 0;
-        content-visibility: auto;
-        contain-intrinsic-size: auto 40px;
-      }
-
-      /* Extend .details-summary from commonViewStyles with accent color */
-      .details-summary,
-      .details-summary .icon,
-      .context-title {
-        color: var(--accent-color, var(--wa-color-text-normal));
-      }
-
-      .context-title {
-        font-weight: var(--font-weight-medium);
-      }
-
-      .context-content {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--wa-space-s);
-      }
-
-      .stat-item {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        font-size: var(--font-size-sm);
-      }
-
-      .stat-item wa-icon {
-        opacity: var(--opacity-subtle);
-      }
-
-      .summary-block {
-        margin-top: var(--wa-space-2xs);
-        display: block;
-        width: 100%;
-      }
-
-      .summary-title {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        margin-bottom: var(--wa-space-3xs);
-      }
-
-      .summary-text {
-        margin: 0;
-        padding: var(--wa-space-2xs);
-        white-space: pre-wrap;
-        word-break: break-word;
-        border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--border-radius-small);
-        background: var(--wa-color-surface-raised);
-      }
-    `,
+    contextManagementStyles,
   ];
 
   /** Log ID for tracking */
