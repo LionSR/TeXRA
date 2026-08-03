@@ -942,7 +942,7 @@ reached through the public `endRunningGroups(status = END_GROUP_STATUS.ERROR)`
 / `endRunningGroupsForStreams(...)` API. This is the restart-repair /
 orphan-sweep path that finalizes rows still `running` after a crash or
 reload. Callers: `ProgressViewState.endRunningTaskGroups`
-(`src/controllers/progressView/backend/state/ProgressViewState.ts:316-326`)
+(`src/controllers/progressView/backend/ProgressViewState.ts:316-326`)
 and desktop's `closeRunningTaskGroupsForStreams`
 (`packages/desktop/src/main/desktopAgentExecution.ts:812-826`), both of which
 already pass an explicit `EndGroupStatus` decided by restart-repair

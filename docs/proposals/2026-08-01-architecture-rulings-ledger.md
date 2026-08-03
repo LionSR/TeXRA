@@ -66,7 +66,7 @@ There are **four** production sites, and the fourth is not single-owner:
 
 | Site                                                                       | Key                                     | Single owner?                                     |
 | -------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------- |
-| `src/controllers/progressView/backend/state/ProgressViewState.ts`          | `WorkspaceStateKey.PROGRESS_VIEW_PREFS` | yes                                               |
+| `src/controllers/progressView/backend/ProgressViewState.ts`                | `WorkspaceStateKey.PROGRESS_VIEW_PREFS` | yes                                               |
 | `packages/extension/src/webview/frontend/persistence.ts`                   | `'mainViewState'`                       | yes, documented in-file                           |
 | `packages/extension/src/settingsView/frontend/components/history/state.ts` | `'historyView'`                         | yes                                               |
 | `packages/extension/src/progressView/frontend/components/LogList.ts`       | `logListStateKey(streamId)`             | **no — one per stream, behind an evicting cache** |

@@ -130,7 +130,7 @@ frozen deep-import lists, not another lint rule.
   - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
-  - `utils/prompt/` - Prompt builder utilities
+  - `src/utils/prompt.ts` - Prompt builder utilities
 
 - `packages/extension/src/commands/` - VS Code commands grouped by domain
 - `packages/extension/src/settingsView/` - Unified settings webview combining Memory, History, Models, Agents, Multi-Agent, Tools, AI Agents, Git, LaTeX, and Goal tabs
