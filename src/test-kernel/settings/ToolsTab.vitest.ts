@@ -64,6 +64,14 @@ describe('tools-tab availability summary', () => {
     expect(element.shadowRoot?.textContent).toContain('1/2 available');
   });
 
+  it('reports complete availability without a missing-state label', async () => {
+    const element = await mount([
+      tool('first', 'available'),
+      tool('second', 'available'),
+    ]);
+    expect(element.shadowRoot?.textContent).toContain('2/2 available');
+  });
+
   it('renders and updates the shared agent-skills switch', async () => {
     const element = await mount([]);
     const skillSwitch = element.shadowRoot?.querySelector<

@@ -98,7 +98,12 @@ async function captureRequestParams(
 // Any fullName not listed as non-thinking defaults ON, so 'deepseek-future'
 // stands in for unlisted models. Update getThinkingParameter if a new
 // non-thinking model is added.
-const DEFAULT_ON_MODELS = ['deepseek-reasoner', 'deepseek-future'];
+const DEFAULT_ON_MODELS = [
+  'deepseek-reasoner',
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'deepseek-future',
+];
 
 describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
   it('deepseek-chat defaults OFF: omits param when reasoning disabled', () => {

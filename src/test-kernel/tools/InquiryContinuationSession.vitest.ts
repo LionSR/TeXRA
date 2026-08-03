@@ -252,6 +252,21 @@ describe('external inquiry continuation session routing', () => {
     expect(outcome).toBe('resumed');
   });
 
+  it('passes an undefined session through to the wake decision when none was provided', async () => {
+    submitFollowUpMock.mockResolvedValueOnce({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'resumed' as const,
+    });
+
+    const outcome = await injectContinuationForAnsweredThread(
+      THREAD,
+      answeredManifest(),
+    );
+
+    expect(outcome).toBe('resumed');
+  });
+
   it('archives inquiries when the follow-up owner drops a stale queue', async () => {
     submitFollowUpMock.mockResolvedValueOnce({
       status: 'dropped' as const,

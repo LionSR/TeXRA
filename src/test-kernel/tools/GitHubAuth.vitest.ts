@@ -61,6 +61,11 @@ describe('getGitHubToken', () => {
       },
       expected: 'gh-env-token',
     },
+    {
+      name: 'ignores blank environment token values',
+      processEnv: { GITHUB_TOKEN: '   ', GH_TOKEN: 'gh-env-token' },
+      expected: 'gh-env-token',
+    },
   ])('$name', async (tokenCase) => {
     stubProcessEnv(tokenCase);
 

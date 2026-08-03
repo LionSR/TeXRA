@@ -150,6 +150,23 @@ describe('GitHub subscription app signals and follow-ups', () => {
     }
   });
 
+  it('publishes issue binding changes without a runtime host', () => {
+    const signal = recordAppSignal('issueSubscriptionBindingsChanged');
+
+    try {
+      emitGitHubSubscriptionChanged(
+        'issueSubscriptionBindingsChanged',
+        undefined,
+      );
+
+      expect(signal.events).toEqual([
+        { event: 'issueSubscriptionBindingsChanged', payload: undefined },
+      ]);
+    } finally {
+      signal.dispose();
+    }
+  });
+
   it('reports token invalid events through app signals', () => {
     const host = createRecordingHost();
     const signal = recordAppSignal('githubTokenInvalid');

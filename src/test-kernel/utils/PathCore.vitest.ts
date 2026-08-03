@@ -52,6 +52,7 @@ describe('normalizeLatexPath', () => {
     ['./', '.'],
     ['foo/bar.tex', 'foo/bar.tex'],
     ['./foo/bar.tex', 'foo/bar.tex'],
+    ['.//sections//intro', 'sections/intro'],
     ['sections//intro', 'sections/intro'],
     ['sections/../main.tex', 'main.tex'],
   ])('normalizes %j → %j', (input, expected) => {

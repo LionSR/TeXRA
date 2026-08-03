@@ -23,4 +23,14 @@ describe('getExecutionStatusInfo', () => {
 
     assert.strictEqual(info.status, 'unknown');
   });
+
+  it('reports unknown when terminalStatus fails to parse', () => {
+    mocks.currentSession.mockReturnValue({
+      executions: { getHandle: () => undefined },
+    });
+
+    const info = getExecutionStatusInfo('exec-2', 'not-a-real-status');
+
+    assert.strictEqual(info.status, 'unknown');
+  });
 });

@@ -187,6 +187,10 @@ describe('XmlOutputManager', () => {
       'removes compact markdown fence info strings after percent headers',
       ['% main.tex', '```latex', ...RECOVERED_DOCUMENT_LINES, '```'],
     ],
+    [
+      'removes spaced markdown fence info strings after percent headers',
+      ['% main.tex', '``` latex', ...RECOVERED_DOCUMENT_LINES, '```'],
+    ],
   ] satisfies readonly (readonly [string, readonly string[]])[])(
     '%s',
     async (_name, output) => {
@@ -381,6 +385,39 @@ describe('XmlOutputManager', () => {
       [
         '\\documentclass{article}',
         '% macros.tex',
+        '\\begin{document}',
+        'Body.',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+    await expect(AbsoluteFS.read('/tmp/run/appendix.tex')).resolves.toBe(
+      'Appendix text.\n',
+    );
+  });
+
+  it('keeps multiple percent filename comments in a LaTeX document preamble', async () => {
+    const outputs = await writeAndSplitDocuments([
+      '% main.tex',
+      '\\documentclass{article}',
+      '% macros.tex',
+      '% notation.tex',
+      '\\begin{document}',
+      'Body.',
+      '\\end{document}',
+      '% appendix.tex',
+      'Appendix text.',
+    ]);
+
+    expect(outputs.map((output) => output.source)).toEqual([
+      'main.tex',
+      'appendix.tex',
+    ]);
+    await expect(AbsoluteFS.read('/tmp/run/main.tex')).resolves.toBe(
+      [
+        '\\documentclass{article}',
+        '% macros.tex',
+        '% notation.tex',
         '\\begin{document}',
         'Body.',
         '\\end{document}',

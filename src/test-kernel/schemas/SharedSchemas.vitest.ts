@@ -116,8 +116,10 @@ describe('web tool URL sanitization (issue #7230)', () => {
   describe('dangerous schemes are stripped', () => {
     const dangerous = [
       'javascript:alert(1)',
+      'javascript:alert(document.cookie)',
       'JavaScript:alert(1)', // scheme match must not be case-sensitive-bypassable
       'data:text/html,<script>alert(1)</script>',
+      'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
       'vbscript:msgbox(1)',
       'file:///etc/passwd',
       '  javascript:alert(1)', // leading whitespace shouldn't bypass the scheme check
