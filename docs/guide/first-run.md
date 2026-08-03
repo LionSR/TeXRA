@@ -27,7 +27,7 @@ A credential is the one step no agent can do for you. Three ways in:
   needed (recommended). In VS Code, run **TeXRA: Sign In** from the
   command palette; in the terminal, run `texra login`.
 - **Use ChatGPT subscription** — Codex models through your ChatGPT plan.
-  In VS Code, open **Settings → Models** and use the ChatGPT subscription
+  In VS Code, open **Settings → Account** and use the ChatGPT subscription
   sign-in section; in the terminal, run `texra auth chatgpt login`.
 - **Use GitHub Copilot in VS Code** — compatible models through your Copilot
   subscription. Open **Settings → Models → Copilot in VS Code** and grant

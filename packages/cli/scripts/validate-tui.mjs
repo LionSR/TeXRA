@@ -1223,7 +1223,7 @@ const SCENARIOS = [
       '/tools',
       'Toggle available external integrations',
       'always on ·',
-      'Workflow Script — disabled · detected · Ready',
+      'Multi-Agent Workflow — disabled · detected · Ready',
       'disabled · detected · Ready',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
@@ -1242,7 +1242,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/tools',
-      'Workflow Script — enabled · detected · Ready',
+      'Multi-Agent Workflow — enabled · detected · Ready',
       '1-7/Enter toggle',
     ],
   },
