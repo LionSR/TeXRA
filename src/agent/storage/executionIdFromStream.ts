@@ -3,6 +3,7 @@ import {
   ExecutionIdSchema,
   registeredStreamId,
   type ExecutionId,
+  type ExecutionMeta,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -22,15 +23,31 @@ function executionIdFromStream(stream: StreamTabId): ExecutionId | undefined {
  * directory even when an unrelated stream resembles it by suffix. Records
  * without registration provenance (pre-#9590 history, or a stream whose
  * sidecar was lost) keep the suffix-derived answer.
+ *
+ * `malformedMeta` states the caller's stance on a present-but-unparseable
+ * record, which may well register another owner stream (the parse failure is
+ * logged at warn by the store):
+ * - `'reject'` — deletion admission: corruption blocks the execution
+ *   directory from being admitted, instead of reading as an absent legacy
+ *   record.
+ * - `'admit'` — restart repair: corruption cannot disprove the suffix, and
+ *   the repair path's own strict settlement read fails loudly on the corrupt
+ *   record before any repair mutation, while settled historical corruption
+ *   must not abort the whole pass.
  */
 export async function legacyExecutionIdFromStreamSuffix(
   stream: StreamTabId,
+  options: { readonly malformedMeta: 'reject' | 'admit' },
 ): Promise<ExecutionId | undefined> {
   const derived = executionIdFromStream(stream);
   if (derived === undefined) return undefined;
-  const registered = registeredStreamId(
-    await getExecutionStore(derived).readMeta(),
-  );
+  let meta: ExecutionMeta | null;
+  try {
+    meta = await getExecutionStore(derived).readMetaStrict();
+  } catch {
+    return options.malformedMeta === 'reject' ? undefined : derived;
+  }
+  const registered = registeredStreamId(meta);
   return registered !== undefined && registered !== stream
     ? undefined
     : derived;

@@ -288,7 +288,9 @@ export class SessionStores {
   ): Promise<ExecutionId | undefined> {
     return (
       (await this.snapshots.readPersistedExecutionId(stream)) ??
-      (await legacyExecutionIdFromStreamSuffix(stream))
+      (await legacyExecutionIdFromStreamSuffix(stream, {
+        malformedMeta: 'reject',
+      }))
     );
   }
 
@@ -339,7 +341,9 @@ export class SessionStores {
     }
     for (const stream of streamIds) {
       if (executionIdsByStream.has(stream)) continue;
-      const derived = await legacyExecutionIdFromStreamSuffix(stream);
+      const derived = await legacyExecutionIdFromStreamSuffix(stream, {
+        malformedMeta: 'reject',
+      });
       if (derived) executionIdsByStream.set(stream, derived);
     }
 

@@ -175,6 +175,32 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     }
   });
 
+  it('fails closed when the suffix-named execution has malformed metadata', async () => {
+    const session = createTestSession();
+    const executionId = 'abc999' as ExecutionId;
+    // Malformed present metadata may well register another owner stream; it
+    // must not be treated like an absent legacy record.
+    await getExecutionStore(executionId).write('meta', { timestamp: 42 });
+    const stream = `corrupt@model#${executionId}` as StreamTabId;
+    session.transcripts.ensureStream(stream);
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+      expect(deleteExecution).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      session.dispose();
+    }
+  });
+
   it('keeps the suffix boundary for legacy records without registration provenance', async () => {
     const session = createTestSession();
     const executionId = 'abc888' as ExecutionId;

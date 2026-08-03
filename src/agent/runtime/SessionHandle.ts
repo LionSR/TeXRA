@@ -564,7 +564,9 @@ export class SessionHandle {
     const executionIds = new Map(snapshotExecutionIds);
     for (const streamId of this.transcripts.keys()) {
       if (executionIds.has(streamId)) continue;
-      const derived = await legacyExecutionIdFromStreamSuffix(streamId);
+      const derived = await legacyExecutionIdFromStreamSuffix(streamId, {
+        malformedMeta: 'admit',
+      });
       if (derived) executionIds.set(streamId, derived);
     }
     let waitingStreams: Set<StreamTabId>;
