@@ -20,6 +20,7 @@ import {
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import { assembleTrace, StreamLogStore } from '@transcript';
 import {
   parseTraceData,
@@ -74,7 +75,7 @@ describe('trace-viewer TraceDataSchema', () => {
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
     const store = await StreamLogStore.open();
-    store.append(streamId, {
+    appendTranscriptEntry(store, streamId, {
       id: 'entry-1',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,

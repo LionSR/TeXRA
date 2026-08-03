@@ -23,6 +23,10 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
+import {
   resolvePersistedStreamIdForExecution,
   StreamLogStore,
   StreamSnapshotStore,
@@ -41,7 +45,7 @@ async function appendLogEntry(
   logStore: StreamLogStore,
   streamId: StreamTabId,
 ): Promise<void> {
-  logStore.append(streamId, {
+  appendTranscriptEntry(logStore, streamId, {
     id: 'entry-1',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -79,7 +83,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const streamId = 'orchestrator@deepseekproT#abc111' as StreamTabId;
 
     const store = new StreamSnapshotStore();
-    store.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    snapshotFacts(store).setRunConfig(
+      streamId,
+      runConfig('orchestrator'),
+      executionId,
+    );
     await store.flush();
 
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
@@ -101,7 +109,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       const seedStore = new StreamSnapshotStore();
       for (let i = 0; i < streamCount; i++) {
         const idHex = i.toString(16).padStart(2, '0');
-        seedStore.setRunConfig(
+        snapshotFacts(seedStore).setRunConfig(
           `agent${i}@model#abcd${idHex}` as StreamTabId,
           runConfig('agent'),
           `abcd${idHex}` as ExecutionId,
@@ -165,7 +173,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
 
     const store = new StreamSnapshotStore();
-    store.setRunConfig(streamId, runConfig('orchestrator'), executionId);
+    snapshotFacts(store).setRunConfig(
+      streamId,
+      runConfig('orchestrator'),
+      executionId,
+    );
     await store.flush();
 
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
@@ -184,7 +196,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
 
     const resumedStream = 'zOrchestrator@newModel#abc666' as StreamTabId;
-    store.setRunConfig(
+    snapshotFacts(store).setRunConfig(
       resumedStream,
       runConfig('orchestrator', 'newModel'),
       executionId,
@@ -206,13 +218,17 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const firstStream = 'aOrchestrator@deepseekproT#abc777' as StreamTabId;
     const secondStream = 'zBashTool@tool#abc777' as StreamTabId;
     const snapshotWriter = new StreamSnapshotStore();
-    snapshotWriter.setRunConfig(
+    snapshotFacts(snapshotWriter).setRunConfig(
       firstStream,
       runConfig('orchestrator'),
       executionId,
     );
-    snapshotWriter.setRunConfig(secondStream, runConfig('bash'), executionId);
-    snapshotWriter.setTodos(secondStream, [TODO]);
+    snapshotFacts(snapshotWriter).setRunConfig(
+      secondStream,
+      runConfig('bash'),
+      executionId,
+    );
+    snapshotFacts(snapshotWriter).setTodos(secondStream, [TODO]);
     await snapshotWriter.flush();
     // Seed a stamp-able record: the backfill write no-ops on absent metadata,
     // so without this a wrongful stamp attempt would be invisible below.
@@ -239,13 +255,17 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const workPlanStream = 'aOrchestrator@deepseekproT#abc888' as StreamTabId;
     const logStream = 'zBashTool@tool#abc888' as StreamTabId;
     const snapshotWriter = new StreamSnapshotStore();
-    snapshotWriter.setRunConfig(
+    snapshotFacts(snapshotWriter).setRunConfig(
       workPlanStream,
       runConfig('orchestrator'),
       executionId,
     );
-    snapshotWriter.setRunConfig(logStream, runConfig('bash'), executionId);
-    snapshotWriter.setTodos(workPlanStream, [TODO]);
+    snapshotFacts(snapshotWriter).setRunConfig(
+      logStream,
+      runConfig('bash'),
+      executionId,
+    );
+    snapshotFacts(snapshotWriter).setTodos(workPlanStream, [TODO]);
     await snapshotWriter.flush();
     // Seed a stamp-able record: the backfill write no-ops on absent metadata,
     // so without this a wrongful stamp attempt would be invisible below.
@@ -275,10 +295,18 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const firstChild = 'bash@tool#abc889' as StreamTabId;
     const secondChild = 'codex@tool#abc889' as StreamTabId;
     const snapshotWriter = new StreamSnapshotStore();
-    snapshotWriter.setRunConfig(firstChild, runConfig('bash'), executionId);
-    snapshotWriter.setParentStream(firstChild, parent);
-    snapshotWriter.setRunConfig(secondChild, runConfig('codex'), executionId);
-    snapshotWriter.setParentStream(secondChild, parent);
+    snapshotFacts(snapshotWriter).setRunConfig(
+      firstChild,
+      runConfig('bash'),
+      executionId,
+    );
+    snapshotFacts(snapshotWriter).setParentStream(firstChild, parent);
+    snapshotFacts(snapshotWriter).setRunConfig(
+      secondChild,
+      runConfig('codex'),
+      executionId,
+    );
+    snapshotFacts(snapshotWriter).setParentStream(secondChild, parent);
     await snapshotWriter.flush();
 
     await expect(
@@ -295,8 +323,12 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const executionId = 'abc88a' as ExecutionId;
     const streamId = 'bash@tool#abc88a' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(streamId, runConfig('bash'), executionId);
-    snapshots.setParentStream(
+    snapshotFacts(snapshots).setRunConfig(
+      streamId,
+      runConfig('bash'),
+      executionId,
+    );
+    snapshotFacts(snapshots).setParentStream(
       streamId,
       'orchestrator@model#parent' as StreamTabId,
     );
@@ -314,8 +346,8 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const first = 'a@model#abc999' as StreamTabId;
     const second = 'z@model#abc999' as StreamTabId;
     const writer = new StreamSnapshotStore();
-    writer.setTodos(first, [TODO]);
-    writer.setTodos(second, [TODO]);
+    snapshotFacts(writer).setTodos(first, [TODO]);
+    snapshotFacts(writer).setTodos(second, [TODO]);
     await writer.flush();
     // Seed a stamp-able record: the backfill write no-ops on absent metadata,
     // so without this a wrongful stamp attempt would be invisible below.
@@ -342,7 +374,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const sidecarStream = 'a@model#abcbbb' as StreamTabId;
     const logStream = 'z@model#abcbbb' as StreamTabId;
     const writer = new StreamSnapshotStore();
-    writer.setTodos(sidecarStream, [TODO]);
+    snapshotFacts(writer).setTodos(sidecarStream, [TODO]);
     await writer.flush();
     const logs = await StreamLogStore.open();
     await appendLogEntry(logs, logStream);

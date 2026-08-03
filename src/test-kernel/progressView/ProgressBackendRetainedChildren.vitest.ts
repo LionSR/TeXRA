@@ -21,6 +21,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import {
   createIsolatedRecordingBackend,
   createRecordingBackend,
@@ -113,7 +114,10 @@ describe('retained finished children', () => {
     seedParent(backend);
     const child = subagent('late');
     const childStreamId = 'late-stream' as StreamTabId;
-    backend.state.snapshots.setParentStream(childStreamId, PARENT);
+    snapshotFacts(backend.state.snapshots).setParentStream(
+      childStreamId,
+      PARENT,
+    );
 
     // Roster drop first — the child is still `running` at this point.
     backend.factApplier.updateChildRoster(PARENT, [child]);
@@ -151,7 +155,10 @@ describe('retained finished children', () => {
     backend.setupEventListeners();
     seedParent(backend);
     const childStreamId = 'doomed-stream' as StreamTabId;
-    backend.state.snapshots.setParentStream(childStreamId, PARENT);
+    snapshotFacts(backend.state.snapshots).setParentStream(
+      childStreamId,
+      PARENT,
+    );
 
     // Roster drop first, so the retained row is stamped `running`.
     backend.factApplier.updateChildRoster(PARENT, [

@@ -23,6 +23,7 @@ import {
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { StreamSnapshotStore } from '@transcript';
 
 const retrieveSessionResumeData = vi.spyOn(
@@ -72,7 +73,7 @@ function attachResultPresenter(session: SessionHandle): {
 
 function createSnapshots(): StreamSnapshotStore {
   const snapshots = new StreamSnapshotStore();
-  snapshots.setRunConfig(stream, config, executionId);
+  snapshotFacts(snapshots).setRunConfig(stream, config, executionId);
   return snapshots;
 }
 

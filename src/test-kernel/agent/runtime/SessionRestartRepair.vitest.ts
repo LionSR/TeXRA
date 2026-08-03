@@ -23,6 +23,7 @@ import {
 } from '@shared/schemas';
 import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import { StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 
@@ -43,7 +44,7 @@ function appendRunningGroup(
   id: string,
   timestamp = 1_000,
 ): void {
-  transcripts.append(stream, {
+  appendTranscriptEntry(transcripts, stream, {
     id,
     type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
     level: LOG_LEVELS.INFO,

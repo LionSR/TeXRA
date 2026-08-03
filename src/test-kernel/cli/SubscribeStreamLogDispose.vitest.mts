@@ -26,6 +26,7 @@ import {
   STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import type { StreamLogStore } from '@transcript';
 
 const streamA = 'stream-a' as StreamTabId;
@@ -37,7 +38,7 @@ function appendUserMessage(
   id: string,
   text: string,
 ): void {
-  store.append(streamId, {
+  appendTranscriptEntry(store, streamId, {
     id,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
