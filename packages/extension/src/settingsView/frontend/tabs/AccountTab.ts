@@ -1,4 +1,4 @@
-/** Account identity, authentication, and included-access usage. */
+/** Account identity, authentication, usage, and account connections. */
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -15,6 +15,7 @@ import {
   designTokens,
   settingsBannerStyles,
 } from '@shared/styles';
+import type { ChatGptAuthStatus } from '@shared/schemas';
 import type {
   SpendingStatus,
   SpendingStatusError,
@@ -26,6 +27,7 @@ import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - settings view components
+import '../components/profile/CodexSubscriptionSection';
 import '../components/profile/RelayQuotaMeter';
 
 @customElement('account-tab')
@@ -67,6 +69,7 @@ export class AccountTab extends LitElement {
   spendingStatusError: SpendingStatusError | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ type: Boolean }) telemetryEnabled = true;
+  @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
 
   private readonly handleSignIn = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
@@ -225,30 +228,9 @@ export class AccountTab extends LitElement {
           ${this.renderUsage()}
         </section>
 
-        <section>
-          ${renderSettingsSectionHeading({
-            title: 'Privacy',
-            description:
-              'Choose whether TeXRA records anonymous usage metadata.',
-          })}
-          <div class="settings-section">
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <span class="settings-row-label">Share usage telemetry</span>
-                <span class="settings-row-help">
-                  Sends model, token, cost, timing, route, and host metadata.
-                  Prompt text, document content, and file names are never sent.
-                </span>
-              </div>
-              <wa-switch
-                class="settings-row-control"
-                aria-label="Share usage telemetry"
-                ?checked=${this.telemetryEnabled}
-                @change=${this.handleTelemetryChange}
-              ></wa-switch>
-            </div>
-          </div>
-        </section>
+        <codex-subscription-section
+          .chatgptAuth=${this.chatgptAuth}
+        ></codex-subscription-section>
 
         <section>
           ${renderSettingsSectionHeading({
@@ -273,6 +255,31 @@ export class AccountTab extends LitElement {
                   onClick: () => this.handleManageProviderKeys(),
                 })}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          ${renderSettingsSectionHeading({
+            title: 'Privacy',
+            description:
+              'Choose whether TeXRA records anonymous usage metadata.',
+          })}
+          <div class="settings-section">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-label">Share usage telemetry</span>
+                <span class="settings-row-help">
+                  Sends model, token, cost, timing, route, and host metadata.
+                  Prompt text, document content, and file names are never sent.
+                </span>
+              </div>
+              <wa-switch
+                class="settings-row-control"
+                aria-label="Share usage telemetry"
+                ?checked=${this.telemetryEnabled}
+                @change=${this.handleTelemetryChange}
+              ></wa-switch>
             </div>
           </div>
         </section>
