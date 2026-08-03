@@ -41,12 +41,12 @@ describe('external tool definitions', () => {
 
     assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
     assert.strictEqual(texraCli.category, 'ai-agents');
-    assert.strictEqual(texraCli.comingSoon, true);
-    assert.strictEqual(texraCli.hideFromCli, true);
+    assert.strictEqual(texraCli.visibility?.comingSoon, true);
+    assert.strictEqual(texraCli.visibility?.hideFromCli, true);
     assert.strictEqual(texraCli.toggleable, undefined);
     assert.deepStrictEqual(texraCli.tools, []);
     assert.ok(
-      texraCli.installGuide?.includes('requires Node.js >=22.9.0'),
+      texraCli.install?.guide?.includes('requires Node.js >=22.9.0'),
       'TeXRA CLI install guide should match the published Node engine range',
     );
   });

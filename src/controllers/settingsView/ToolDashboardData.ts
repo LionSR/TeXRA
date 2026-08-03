@@ -50,7 +50,9 @@ export function planToolTerminalAction(input: {
   if (!def) return { kind: 'none', reason: 'unknownTool' };
 
   const command =
-    input.commandKind === 'install' ? def.installCommand : def.authCommand;
+    input.commandKind === 'install'
+      ? def.install?.command
+      : def.auth?.command;
   if (!command) return { kind: 'none', reason: 'missingCommand' };
 
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
@@ -177,7 +179,7 @@ export async function buildToolDashboardItems(
   const externalItems: ToolDashboardItem[] = [];
   for (const { id, tools, status, statusLabel, statusDetail } of results) {
     const def = findExternalToolDef(id);
-    if (!def || def.hideFromDashboard) continue;
+    if (!def || def.visibility?.hideFromDashboard) continue;
     externalItems.push({
       id: def.id,
       name: def.name,
@@ -187,14 +189,14 @@ export async function buildToolDashboardItems(
       status,
       statusLabel,
       requiresSetup: true,
-      installGuide: def.installGuide,
-      installUrl: def.installUrl,
-      installExtensionId: def.installExtensionId,
-      installCommand: def.installCommand,
-      authCommand: def.authCommand,
+      installGuide: def.install?.guide,
+      installUrl: def.install?.url,
+      installExtensionId: def.install?.extensionId,
+      installCommand: def.install?.command,
+      authCommand: def.auth?.command,
       configNotes: def.configNotes,
       statusDetail,
-      authNote: def.authNote,
+      authNote: def.auth?.note,
       toggleable: def.toggleable,
       enabled: !disabledIds.has(def.id),
     });

@@ -144,7 +144,7 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
         check,
         statusLabel: getStatusLabel,
         detailCheck,
-        comingSoon,
+        visibility,
       }): Promise<ExternalToolCheckResult> => {
         // Run check/status/detail from one shared probe result. Some groups
         // (Codex, Zotero, GitHub PR) touch async local state, so running the
@@ -169,7 +169,7 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
           id,
           tools,
           name,
-          status: comingSoon ? 'coming-soon' : probedStatus,
+          status: visibility?.comingSoon ? 'coming-soon' : probedStatus,
           detected:
             probedStatus === 'unknown' ? null : probedStatus === 'available',
           statusLabel,

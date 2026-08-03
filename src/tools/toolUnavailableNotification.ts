@@ -49,9 +49,9 @@ function mapToolNamesToGroups(
       seen.add(def.id);
       groups.push({
         name: def.name,
-        hideFromDashboard: def.hideFromDashboard ?? false,
-        installActionCommand: def.installActionCommand,
-        installActionLabel: def.installActionLabel,
+        hideFromDashboard: def.visibility?.hideFromDashboard ?? false,
+        installActionCommand: def.install?.actionCommand,
+        installActionLabel: def.install?.actionLabel,
       });
     }
   }

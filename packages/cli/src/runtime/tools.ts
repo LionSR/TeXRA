@@ -31,7 +31,7 @@ export interface CliToolGuide {
 
 const cliToolDefs = (): ExternalToolDef[] =>
   EXTERNAL_TOOL_DEFS.filter(
-    (def) => !def.hideFromDashboard && !def.hideFromCli,
+    (def) => !def.visibility?.hideFromDashboard && !def.visibility?.hideFromCli,
   );
 
 function detectedFromStatus(status: string): boolean | null {
@@ -45,9 +45,10 @@ function noteForTool(
   detected: boolean | null,
   statusLabel?: string,
 ): string {
-  if (detected === false && def.installCommand) return def.installCommand;
+  const installCommand = def.install?.command;
+  if (detected === false && installCommand) return installCommand;
   return (
-    statusLabel ?? def.authNote ?? def.configNotes ?? def.installCommand ?? ''
+    statusLabel ?? def.auth?.note ?? def.configNotes ?? installCommand ?? ''
   );
 }
 
@@ -57,7 +58,7 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
 
   return cliToolDefs().map((def) => {
     const check = checks.get(def.id);
-    const comingSoon = def.comingSoon === true;
+    const comingSoon = def.visibility?.comingSoon === true;
     const toggleable = def.toggleable === true;
     const status = check?.status ?? (comingSoon ? 'coming-soon' : 'unknown');
     const detected = check?.detected ?? detectedFromStatus(status);
@@ -72,8 +73,8 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
       statusDetail: check?.statusDetail,
       toggleable,
       comingSoon,
-      installCommand: def.installCommand,
-      authCommand: def.authCommand,
+      installCommand: def.install?.command,
+      authCommand: def.auth?.command,
       note: noteForTool(def, detected, check?.statusLabel),
     };
   });
@@ -101,23 +102,25 @@ export function readCliToolGuide(
   if (!def) return undefined;
 
   if (kind === 'install') {
-    const lines = [def.installGuide ?? def.configNotes ?? 'No install guide.'];
-    if (def.installCommand) {
+    const lines = [
+      def.install?.guide ?? def.configNotes ?? 'No install guide.',
+    ];
+    if (def.install?.command) {
       lines.push('');
-      lines.push(`Command: ${def.installCommand}`);
+      lines.push(`Command: ${def.install.command}`);
     }
-    if (def.installUrl) {
-      lines.push(`URL: ${def.installUrl}`);
+    if (def.install?.url) {
+      lines.push(`URL: ${def.install.url}`);
     }
-    return { text: lines.join('\n'), command: def.installCommand };
+    return { text: lines.join('\n'), command: def.install?.command };
   }
 
-  const lines = [def.authNote ?? def.configNotes ?? 'No auth guide.'];
-  if (def.authCommand) {
+  const lines = [def.auth?.note ?? def.configNotes ?? 'No auth guide.'];
+  if (def.auth?.command) {
     lines.push('');
-    lines.push(`Command: ${def.authCommand}`);
+    lines.push(`Command: ${def.auth.command}`);
   }
-  return { text: lines.join('\n'), command: def.authCommand };
+  return { text: lines.join('\n'), command: def.auth?.command };
 }
 
 export async function setCliToolEnabled(
