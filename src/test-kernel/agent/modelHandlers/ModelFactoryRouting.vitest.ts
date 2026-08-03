@@ -179,6 +179,35 @@ describe('Copilot route preference on a canonical base model', () => {
     );
   });
 
+  it('scopes a direct retry override without changing concurrent route selection', async () => {
+    await installCopilotRoute({
+      'texra.copilotRouteModels': ['sonnet46'],
+    });
+
+    const config = MODEL_CONFIGS.sonnet46;
+    expect(modelHandlerCompatibilityKey(config, false, false, 'direct')).toBe(
+      'ModelHandlerAnthropic',
+    );
+    expect(modelHandlerCompatibilityKey(config, false, false)).toBe(
+      'ModelHandlerVscodeLm',
+    );
+
+    const directHandler = await createModelHandler(
+      config,
+      undefined,
+      undefined,
+      'direct',
+    );
+    const concurrentHandler = await createModelHandler(config);
+    try {
+      expect(directHandler.constructor.name).toBe('ModelHandlerAnthropic');
+      expect(concurrentHandler.constructor.name).toBe('ModelHandlerVscodeLm');
+    } finally {
+      directHandler.dispose();
+      concurrentHandler.dispose();
+    }
+  });
+
   it('rejects a preferred route the editor cannot serve instead of falling through', async () => {
     invalidateRuntimeModelRegistry();
     await installPlatform(
@@ -217,6 +246,7 @@ describe('Copilot route preference on a canonical base model', () => {
   it('applies the discovered context ceiling and zero-cost subscription overrides', async () => {
     await installCopilotRoute({
       'texra.copilotRouteModels': ['sonnet46'],
+      'texra.reasoningLevels': { sonnet46: 'low' },
     });
 
     const handler = await createModelHandler(MODEL_CONFIGS.sonnet46);
@@ -224,6 +254,13 @@ describe('Copilot route preference on a canonical base model', () => {
       expect(handler.config.contextWindow).toBe(160_000);
       expect(handler.config.inputPrice).toBe(0);
       expect(handler.config.outputPrice).toBe(0);
+      expect(handler.config.capabilities.supportsReasoningEffort).toBe(false);
+      expect(handler.supportsReasoningLevelOverride).toBe(false);
+      // The persisted override is intentionally ignored because VS Code's LM
+      // request surface has no reasoning-effort parameter.
+      expect(handler.config.capabilities.reasoningEffort).toBe(
+        MODEL_CONFIGS.sonnet46.capabilities.reasoningEffort,
+      );
     } finally {
       handler.dispose();
     }

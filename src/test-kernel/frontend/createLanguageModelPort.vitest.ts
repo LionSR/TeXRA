@@ -81,7 +81,10 @@ const mocks = vi.hoisted(() => ({
   onDidChangeChatModels: vi.fn(() => ({ dispose: vi.fn() })),
   canSendRequest: vi.fn(),
   onDidChangeAccess: vi.fn(() => ({ dispose: vi.fn() })),
+  warn: vi.fn(),
 }));
+
+vi.mock('@logger/logUtils', () => ({ warn: mocks.warn }));
 
 vi.mock('vscode', () => ({
   lm: {
@@ -331,6 +334,29 @@ describe('createLanguageModelPort', () => {
 
     expect(cancellationSources[0]?.cancel).toHaveBeenCalledOnce();
     if (mode !== 'return') await iterator.return?.();
+  });
+
+  it('logs discovery failures at the VS Code language-model adapter boundary', async () => {
+    const nativeError = new Error('discovery failed');
+    mocks.selectChatModels.mockRejectedValue(nativeError);
+
+    await expect(
+      createPort().selectModels({ vendor: 'copilot' }),
+    ).rejects.toMatchObject({
+      name: 'LanguageModelPortError',
+      code: LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN,
+      cause: nativeError,
+    });
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'LanguageModelPort',
+      'Could not discover editor-supplied language models.',
+      {
+        data: expect.objectContaining({
+          name: 'LanguageModelPortError',
+          code: LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN,
+        }),
+      },
+    );
   });
 
   it.each([

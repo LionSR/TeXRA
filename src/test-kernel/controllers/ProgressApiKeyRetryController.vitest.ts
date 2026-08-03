@@ -422,7 +422,7 @@ describe('ProgressApiKeyRetryController', () => {
     assert.equal(harness.invalidations, 1);
   });
 
-  it('suppresses the Copilot route preference only during the fallback launch', async () => {
+  it('keeps the global Copilot preference while scoping direct routing to the fallback launch', async () => {
     const { FakeStateStore } = await import('@test/support/FakePlatform');
     const store = new FakeStateStore({
       'texra.copilotRouteModels': ['sonnet46'],
@@ -439,10 +439,11 @@ describe('ProgressApiKeyRetryController', () => {
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
     const started = await harness.controller.runCopilotFallbackWithRouting(
       { model: 'sonnet46', exhaustionReason: 'copilot-subscription' },
-      async () => {
-        // Handler construction during launch must not see the preference,
-        // or the retry would dispatch through Copilot again (#9635).
-        expect(prefersCopilotRoute('sonnet46')).toBe(false);
+      async (copilotRouteOverride) => {
+        expect(copilotRouteOverride).toBe('direct');
+        // A concurrent launch still sees the user's standing preference; only
+        // the replacement request receives the direct-route override.
+        expect(prefersCopilotRoute('sonnet46')).toBe(true);
         return true;
       },
     );

@@ -4,10 +4,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - shared constants and types
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
-import type {
-  FileStateContextValue,
-  MainViewPersistedState,
-  SessionContextValue,
+import {
+  MainViewPersistedStateSchema,
+  type FileStateContextValue,
+  type MainViewPersistedState,
+  type SessionContextValue,
 } from '@shared/schemas';
 
 // Local imports - component type (type-only: the module loads inside the DOM harness)
@@ -185,6 +186,24 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
+  it('keeps the shared persisted-state schema current-only', () => {
+    expect(
+      MainViewPersistedStateSchema.parse({
+        ...PERSISTED_SEED,
+        model: 'copilot:sonnet46',
+      }).model,
+    ).toBe('copilot:sonnet46');
+  });
+
+  it('normalizes a legacy Copilot model id during VS Code mount-time restore', async () => {
+    seedWebviewState({ ...PERSISTED_SEED, model: 'copilot:sonnet46' });
+
+    const element = await mountMainApp();
+
+    expect(contextsOf(element).session.model).toBe('sonnet46');
+    expect(storageWrites).toHaveLength(0);
+  });
+
   it('restores persisted state on mount through the canonical state applicator', async () => {
     const element = await mountMainApp();
     const { fileState, session } = contextsOf(element);
@@ -276,6 +295,20 @@ describe('MainApp persistence and restore characterization', () => {
       launchTarget: 'agent',
       selectedTeamId: 'physicist',
     });
+  });
+
+  it('normalizes a legacy Copilot model id during VS Code backend restore', async () => {
+    const element = await mountMainApp();
+    storageWrites.length = 0;
+
+    dispatchHostMessage({
+      command: COMMON_COMMANDS.STATE_RESTORE,
+      state: restoreState({ model: 'copilot:sonnet46' }),
+    });
+    await element.updateComplete;
+
+    expect(contextsOf(element).session.model).toBe('sonnet46');
+    expect(lastPersistedBlob().model).toBe('sonnet46');
   });
 
   it('applies a backend-pushed restore with exactly one storage write and forced output reset', async () => {

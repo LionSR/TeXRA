@@ -27,6 +27,7 @@ import {
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
 import { AgentError } from '@common/errors';
+import type { CopilotRouteOverride } from '@model/copilotRouting';
 import {
   type RequestEnsureProgressViewPayload,
   type StreamTabId,
@@ -369,6 +370,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   allowWaitingResult?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
+  copilotRouteOverride?: CopilotRouteOverride;
 }
 
 export function executeAgent(
@@ -405,6 +408,7 @@ export async function executeAgent(
         options.suppressErrorNotification ?? options.isSubagent,
       session: options.session,
       modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      copilotRouteOverride: options.copilotRouteOverride,
     });
     const runContextOptions = {
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,

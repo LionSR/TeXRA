@@ -2,6 +2,7 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { platform } from '@platform/platform';
 import type {
   LanguageModelAccessState,
@@ -16,6 +17,7 @@ import type {
  */
 export const COPILOT_MODEL_PREFIX = 'copilot:';
 const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
+const MODEL_ACCESS_DISCOVERY_ATTEMPTS = 2;
 
 /**
  * The Copilot access route for one canonical base model: the exact editor
@@ -26,12 +28,8 @@ const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
 export interface CopilotModelRoute {
   readonly access: LanguageModelAccessState;
   readonly reference: LanguageModelReference;
-  /**
-   * Editor-reported input-token ceiling for the discovered model. Carried so
-   * the routed handler caps context at what the route actually serves, not
-   * the base provider's window.
-   */
-  readonly maxInputTokens: number;
+  /** Base config with the editor's context ceiling and subscription pricing. */
+  readonly effectiveConfig: ModelConfig;
 }
 
 export interface RuntimeModelDirectFallback {
@@ -59,7 +57,9 @@ interface RuntimeModelCatalogue {
   /** Whether {@link entries} reflect a discovery that is still current. */
   readonly discovered: boolean;
   /** The in-flight discovery, if one is running. */
-  readonly pending?: Promise<void>;
+  readonly pending?: Promise<RefreshRuntimeModelRegistryResult>;
+  /** Whether the in-flight discovery explicitly bypasses a fresh cache. */
+  readonly pendingForceDiscovery?: boolean;
 }
 
 let catalogue: RuntimeModelCatalogue = {
@@ -115,32 +115,73 @@ async function discoverCopilotRoutes(): Promise<
         vendor: info.vendor,
         id: info.id,
       },
-      maxInputTokens: info.maxInputTokens,
+      effectiveConfig: {
+        ...MODEL_CONFIGS[baseModel],
+        ...zeroCostAccessOverrides(info.maxInputTokens),
+        capabilities: {
+          ...MODEL_CONFIGS[baseModel].capabilities,
+          // VS Code's LM route chooses the model's own reasoning behavior and
+          // exposes no per-request effort control.
+          supportsReasoningEffort: false,
+          maxReasoningEffort: undefined,
+          supportedReasoningEfforts: undefined,
+        },
+      },
     });
   }
   return entries;
 }
 
+export interface RefreshRuntimeModelRegistryOptions {
+  /** Re-query the adapter even when the current catalogue is marked fresh. */
+  forceDiscovery?: boolean;
+}
+
+export type RefreshRuntimeModelRegistryResult = 'current' | 'superseded';
+
 /** Refresh editor-supplied routes after the native model/access cache changes. */
-export async function refreshRuntimeModelRegistry(): Promise<void> {
-  if (catalogue.discovered) return;
+export async function refreshRuntimeModelRegistry(
+  options: RefreshRuntimeModelRegistryOptions = {},
+): Promise<RefreshRuntimeModelRegistryResult> {
+  if (options.forceDiscovery) {
+    // Overlapping user actions share one forced probe. A normal probe that
+    // started earlier is superseded because its access snapshot may predate
+    // the action that must authorize persistence.
+    if (catalogue.pendingForceDiscovery && catalogue.pending) {
+      return catalogue.pending;
+    }
+    invalidateRuntimeModelRegistry();
+  }
+  if (catalogue.discovered) return 'current';
   if (catalogue.pending) return catalogue.pending;
 
   // Both outcomes below replace the catalogue wholesale, which is also what
   // clears `pending`; a result whose generation has moved on was superseded by
   // an invalidation and is dropped instead of committed.
-  const { generation } = catalogue;
-  const request = (async () => {
+  const { generation, entries: previousEntries } = catalogue;
+  const request = (async (): Promise<RefreshRuntimeModelRegistryResult> => {
     const entries = await discoverCopilotRoutes();
-    if (catalogue.generation !== generation) return;
+    if (catalogue.generation !== generation) return 'superseded';
     catalogue = { generation, entries, discovered: true };
+    return 'current';
   })();
-  catalogue = { ...catalogue, pending: request };
+  catalogue = {
+    ...catalogue,
+    pending: request,
+    pendingForceDiscovery: options.forceDiscovery === true,
+  };
   try {
-    await request;
+    return await request;
   } catch (error) {
     if (catalogue.generation === generation) {
-      catalogue = { generation, entries: new Map(), discovered: false };
+      catalogue = {
+        generation,
+        // Discovery failure marks last-known presentation stale but does not
+        // blank it. Authorization callers still receive the thrown error and
+        // therefore cannot act on these retained entries.
+        entries: previousEntries,
+        discovered: false,
+      };
     }
     throw error;
   }
@@ -204,7 +245,9 @@ export function copilotRouteForModel(
  * Refresh and return the discovered Copilot routes keyed by canonical base
  * model id. Runtime discovery is an optional host capability: the host
  * adapter logs port-level discovery failures (see `createLanguageModelPort`),
- * and consumers receive an empty catalogue instead of stale entries.
+ * and presentation consumers retain the last-known catalogue while it is
+ * stale. Authorization never uses this fallback: access requests force a new
+ * probe and propagate its failure.
  */
 export async function discoveredCopilotRoutes(): Promise<
   ReadonlyMap<string, CopilotModelRoute>
@@ -212,7 +255,7 @@ export async function discoveredCopilotRoutes(): Promise<
   try {
     await refreshRuntimeModelRegistry();
   } catch {
-    return new Map();
+    return catalogue.entries;
   }
   return catalogue.entries;
 }
@@ -246,7 +289,18 @@ export type RuntimeModelAccessRequestResult =
 export async function requestRuntimeModelAccess(
   model: string,
 ): Promise<RuntimeModelAccessRequestResult> {
-  await refreshRuntimeModelRegistry();
+  let refreshResult: RefreshRuntimeModelRegistryResult = 'superseded';
+  for (
+    let attempt = 0;
+    attempt < MODEL_ACCESS_DISCOVERY_ATTEMPTS && refreshResult === 'superseded';
+    attempt += 1
+  ) {
+    refreshResult = await refreshRuntimeModelRegistry({ forceDiscovery: true });
+  }
+  // Repeated native invalidations must fail closed rather than authorize from
+  // the retained last-known catalogue.
+  if (refreshResult === 'superseded') return 'unavailable';
+
   const route = catalogue.entries.get(model);
   if (!route) return 'unavailable';
   if (route.access === 'allowed') return 'already-allowed';
