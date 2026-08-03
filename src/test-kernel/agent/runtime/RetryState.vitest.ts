@@ -1359,20 +1359,17 @@ describe('RetryState', () => {
     expect(classifyFailure(unauthorized)).toBeUndefined();
   });
 
-  it(
-    'does not gate unrelated calls after a 401 on the api-key route',
-    async () => {
-      const { classifyFailure } = await captureModelRetry(
-        'https://api.example/v1',
-        'api-key',
-      );
-      const unauthorized = Object.assign(new Error('credential rejected'), {
-        status: 401,
-      });
+  it('does not gate unrelated calls after a 401 on the api-key route', async () => {
+    const { classifyFailure } = await captureModelRetry(
+      'https://api.example/v1',
+      'api-key',
+    );
+    const unauthorized = Object.assign(new Error('credential rejected'), {
+      status: 401,
+    });
 
-      expect(classifyFailure(unauthorized)).toBeUndefined();
-    },
-  );
+    expect(classifyFailure(unauthorized)).toBeUndefined();
+  });
 
   it('does not share model-specific permission failures across relay calls', async () => {
     const { classifyFailure } = await captureModelRetry(
@@ -1452,18 +1449,23 @@ describe('RetryState', () => {
     }
   });
 
-  it('lets the host prepare a replacement client without refreshing it twice', async () => {
+  it('clears persistent 401 recovery state after the host prepares a replacement client', async () => {
     const streamId = 'retry-state-prepared-client' as StreamTabId;
     const rebind = vi.fn(async () => undefined);
     const { node, session, streamStatus, requestRetry } = createRetryNode(
       streamId,
       rebind,
+      'relay',
     );
     requestRetry.mockImplementationOnce(async (_request, options) => {
       await options?.prepareRetry?.('configured');
       return { action: 'retry' };
     });
     node.seedPersistent401Guards();
+    const ensureFreshToken = vi.fn(async () => 'replacement-token');
+    SupabaseClient.setAuthProvider(
+      createAuthTokenProvider({ ensureFreshToken }),
+    );
 
     try {
       seedStreamStatusForTest(streamStatus, streamId, {
@@ -1476,7 +1478,20 @@ describe('RetryState', () => {
         ),
       ).resolves.toBe(true);
 
-      expect(rebind).toHaveBeenCalledOnce();
+      const unauthorized = Object.assign(new Error('new relay 401'), {
+        status: 401,
+      });
+      const operation = vi
+        .fn<(signal: AbortSignal) => Promise<string>>()
+        .mockRejectedValueOnce(unauthorized)
+        .mockResolvedValueOnce('recovered');
+
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'recovered',
+      );
+      expect(operation).toHaveBeenCalledTimes(2);
+      expect(ensureFreshToken).toHaveBeenCalledOnce();
+      expect(rebind).toHaveBeenCalledTimes(2);
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
@@ -1582,25 +1597,22 @@ describe('RetryState', () => {
     // getRelayAccessToken() read cache-only and skip the session refresh
     // these cases exercise; the outer beforeEach pins it unset for every
     // test in this file unless a case opts in.
-    it(
-      'never rebuilds a client on a non-relay route for an expiring session token',
-      async () => {
-        const streamId = 'retry-state-proactive-api-key' as StreamTabId;
-        const rebind = vi.fn(async () => undefined);
-        const { node } = createRetryNode(streamId, rebind, 'api-key');
-        SupabaseClient.setAuthProvider(
-          createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
-        );
+    it('never rebuilds a client on a non-relay route for an expiring session token', async () => {
+      const streamId = 'retry-state-proactive-api-key' as StreamTabId;
+      const rebind = vi.fn(async () => undefined);
+      const { node } = createRetryNode(streamId, rebind, 'api-key');
+      SupabaseClient.setAuthProvider(
+        createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
+      );
 
-        const operation = vi.fn(async () => 'response');
-        await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
-          'response',
-        );
+      const operation = vi.fn(async () => 'response');
+      await expect(node.runWithRelayRecovery(operation)).resolves.toBe(
+        'response',
+      );
 
-        expect(operation).toHaveBeenCalledOnce();
-        expect(rebind).not.toHaveBeenCalled();
-      },
-    );
+      expect(operation).toHaveBeenCalledOnce();
+      expect(rebind).not.toHaveBeenCalled();
+    });
 
     it('rebuilds the relay client once when the session token rotates', async () => {
       const streamId = 'retry-state-proactive-relay-rotation' as StreamTabId;

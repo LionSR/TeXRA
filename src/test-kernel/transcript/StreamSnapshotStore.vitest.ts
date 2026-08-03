@@ -874,12 +874,17 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('forces the current meta schema version over stale cached meta', async () => {
+  it('rejects unsupported meta schemas before writing a current record', async () => {
     await installPlatform();
-    await writeMetaFile(STREAM, { schemaVersion: 0 });
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: 0,
+      description: 'Unsupported stale session',
+    });
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
+    expect(store.getDescription(STREAM)).toBeUndefined();
+
     store.setDescription(STREAM, 'Updated session');
     await store.flush();
 

@@ -1636,6 +1636,101 @@ describe('ModelHandlerAnthropic forced compaction', () => {
 });
 
 describe('ModelHandlerAnthropic file-reference token estimation', () => {
+  it('drops compacted file metadata before estimating later requests', async () => {
+    const handler = createAnthropicHandler({
+      supportsNativePdf: true,
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    handler.config.fullName = 'claude-opus-4-6';
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    stubHandlerForTest(handler);
+    stubCompactionThresholdPercent(75);
+
+    const pdf = await PDFDocument.create();
+    pdf.addPage();
+    const pdfData = Buffer.from(await pdf.save()).toString('base64');
+    const initialMessages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: pdfData,
+            },
+            title: 'uploaded.pdf',
+          },
+          {
+            type: 'document',
+            source: { type: 'file', file_id: 'file_estimated' },
+            title: 'estimated.txt',
+          },
+        ] as unknown as ContentBlockParam[],
+      },
+    ];
+    const retrieveMetadata = vi.fn(async (_fileId: string) => ({
+      mime_type: 'text/plain',
+      size_bytes: 4_000,
+    }));
+    const { client } = createCapturingAnthropicClient('claude-opus-4-6');
+    client.beta.files = {
+      upload: vi.fn(async () => ({ id: 'file_uploaded' })),
+      retrieveMetadata,
+    };
+
+    await handler.createResponse({
+      client,
+      messages: initialMessages,
+      temperature: 0,
+    });
+    expect(retrieveMetadata.mock.calls.map(([fileId]) => fileId)).toEqual([
+      'file_estimated',
+    ]);
+
+    await handler.createResponse({
+      client,
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            { type: 'compaction', content: '<summary>state</summary>' },
+          ] as unknown as ContentBlockParam[],
+        },
+        ...helloMessages(),
+      ],
+      temperature: 0,
+    });
+
+    await handler.createResponse({
+      client,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'file', file_id: 'file_uploaded' },
+            },
+            {
+              type: 'document',
+              source: { type: 'file', file_id: 'file_estimated' },
+            },
+          ] as unknown as ContentBlockParam[],
+        },
+      ],
+      temperature: 0,
+    });
+
+    expect(retrieveMetadata.mock.calls.map(([fileId]) => fileId)).toEqual([
+      'file_estimated',
+      'file_uploaded',
+      'file_estimated',
+    ]);
+  });
+
   it.each([
     {
       label: 'large',
