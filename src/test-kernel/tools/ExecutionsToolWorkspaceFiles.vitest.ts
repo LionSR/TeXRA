@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   readChildren: vi.fn(),
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
+  readTurnState: vi.fn(),
   readWorkspaceFiles: vi.fn(),
   listExecutions: vi.fn(),
 }));
@@ -56,6 +57,7 @@ vi.mock('@agent/storage', async () => {
       readChildren: mocks.readChildren,
       readReport: mocks.readReport,
       readResultMeta: mocks.readResultMeta,
+      readTurnState: mocks.readTurnState,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
     listExecutions: mocks.listExecutions,

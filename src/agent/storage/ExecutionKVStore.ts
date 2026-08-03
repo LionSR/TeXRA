@@ -44,6 +44,7 @@ const SINGLE_VALUE_KEYS = {
   REPORT: 'report',
   WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
+  TURN_STATE: 'turn-state',
 } as const;
 
 const KEYS = {
@@ -92,6 +93,32 @@ export interface ChildRecord extends ChildRecordData {
   id: ExecutionId;
 }
 
+/**
+ * Logical identity of one child run turn (#9531, introduced 2026-08-03): a
+ * stable turn token plus the delivery id its single parent delivery is
+ * admitted under. Minted by the child-run loop per accepted turn — not by a
+ * global registry — so the same logical delivery always carries the same id
+ * and distinct turns never share one.
+ */
+const TurnRefSchema = z.object({
+  token: z.string(),
+  deliveryId: z.string(),
+});
+export type ChildTurnRef = z.infer<typeof TurnRefSchema>;
+
+/**
+ * Turn attribution for a child run's single latest-value report/result
+ * slots: the turn currently running (or interrupted mid-flight before its
+ * result was persisted) versus the latest turn whose result WAS persisted.
+ * Absent entirely on executions that predate turn identity or never had
+ * turns (e.g. background commands).
+ */
+const ChildTurnStateSchema = z.object({
+  activeTurn: TurnRefSchema.optional(),
+  lastCompletedTurn: TurnRefSchema.optional(),
+});
+export type ChildTurnState = z.infer<typeof ChildTurnStateSchema>;
+
 // ============================================================================
 // Interface
 // ============================================================================
@@ -128,6 +155,7 @@ export interface ExecutionKVStore {
   readWorkspaceFiles(): Promise<string[]>;
   readChildren(): Promise<ChildRecord[]>;
   readResultMeta(): Promise<ResultMeta | null>;
+  readTurnState(): Promise<ChildTurnState | null>;
 
   // -- Typed writers --------------------------------------------------------
   writeMeta(meta: ExecutionMetaInput): Promise<void>;
@@ -136,6 +164,7 @@ export interface ExecutionKVStore {
   writeWorkspaceFiles(paths: readonly string[]): Promise<void>;
   writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void>;
   writeResultMeta(data: ResultMeta): Promise<void>;
+  writeTurnState(state: ChildTurnState): Promise<void>;
 }
 
 // ============================================================================
@@ -252,6 +281,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return record ? applyExecutionOutcome(record, meta?.outcome) : null;
   }
 
+  async readTurnState(): Promise<ChildTurnState | null> {
+    return this.readValidated(KEYS.TURN_STATE, ChildTurnStateSchema);
+  }
+
   // -- Typed writers --------------------------------------------------------
 
   async writeMeta(meta: ExecutionMetaInput): Promise<void> {
@@ -276,6 +309,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   async writeResultMeta(data: ResultMeta): Promise<void> {
     await this.write(KEYS.RESULT_META, ResultMetaSchema.parse(data));
+  }
+
+  async writeTurnState(state: ChildTurnState): Promise<void> {
+    await this.write(KEYS.TURN_STATE, ChildTurnStateSchema.parse(state));
   }
 }
 

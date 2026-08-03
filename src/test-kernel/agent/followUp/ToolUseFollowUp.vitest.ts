@@ -302,6 +302,40 @@ describe('submitFollowUp', () => {
     expect(tryResumeStream).not.toHaveBeenCalled();
   });
 
+  it('admits a replayed child delivery at most once and wakes at most once', async () => {
+    const streamId = id('stream:replay-child-delivery');
+    const session = fakeSession({ kind: 'queue', reason: 'children_running' });
+    const tryResumeStream = vi.fn(async () => true);
+    const delivery = {
+      text: 'child result',
+      origin: 'subagent_result' as const,
+      deliveryId: 'exec-1:turn:1:delivery',
+    };
+
+    await expect(
+      submitFollowUp(streamId, delivery, {
+        session,
+        resumePort: { tryResumeStream },
+        mode: 'child_delivery',
+      }),
+    ).resolves.toMatchObject({ status: 'queued', continuation: 'resumed' });
+    expect(tryResumeStream).toHaveBeenCalledTimes(1);
+
+    // A producer repeating the same logical result callback must not append
+    // another parent message nor trigger another parent wake.
+    for (let replay = 0; replay < 100; replay++) {
+      await expect(
+        submitFollowUp(streamId, delivery, {
+          session,
+          resumePort: { tryResumeStream },
+          mode: 'child_delivery',
+        }),
+      ).resolves.toEqual({ status: 'duplicate' });
+    }
+    expect(tryResumeStream).toHaveBeenCalledTimes(1);
+    expect(session.followUps.getAll(streamId)).toEqual(['child result']);
+  });
+
   it('rejects terminal queues and never invokes recovery', async () => {
     const streamId = id('stream:terminal');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });

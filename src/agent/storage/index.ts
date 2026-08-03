@@ -8,6 +8,8 @@ export {
   type ExecutionKVStore,
   type TodoEntry,
   type ChildRecord,
+  type ChildTurnRef,
+  type ChildTurnState,
   getExecutionStore,
   clearStoreCache,
   isReservedKvKeyName,

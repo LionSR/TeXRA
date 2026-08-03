@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
+  persistChildRunTurnState: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
   runWithOwnedExecutionLease: vi.fn(
     (_executionId: ExecutionId, operation: () => unknown) => operation(),
@@ -51,6 +52,7 @@ vi.mock('@agent/runtime/executionOwnership', () => ({
 vi.mock('@tools/delegation/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
+  persistChildRunTurnState: mocks.persistChildRunTurnState,
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
@@ -233,6 +235,7 @@ beforeEach(() => {
     return { kind: 'persisted' as const, msg };
   });
   mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
+  mocks.persistChildRunTurnState.mockResolvedValue({ kind: 'persisted' });
   mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
 });
 
