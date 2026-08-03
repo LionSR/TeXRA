@@ -313,6 +313,8 @@ export interface SubagentRunOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
+  /** Record that this run encountered an executable policy denial. */
+  onApprovalPolicyDenial?: () => void;
   /** Hide tools unavailable because the current host/runtime cannot support them. */
   runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state. Defaults to the process session. */
@@ -412,6 +414,7 @@ export async function executeAgent(
     });
     const runContextOptions = {
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       stopAfterCycle: options.stopAfterCycle,
     };
@@ -566,6 +569,7 @@ export async function resumeToolUseFromResumeData(
     }
     const runContextOptions = {
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
     };
     const { setting } = ctx;

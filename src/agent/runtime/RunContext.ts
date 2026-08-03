@@ -14,6 +14,7 @@ interface RunContextCommon {
    */
   readonly model?: string;
   readonly approvalPromptsUnavailable?: boolean;
+  readonly onApprovalPolicyDenial?: () => void;
   readonly runtimeUnavailableTools?: readonly string[];
   readonly stopAfterCycle?: boolean;
 }
@@ -57,6 +58,7 @@ interface CreateRunContextCommon {
    */
   modelCell?: Pick<ModelCell, 'modelId'>;
   approvalPromptsUnavailable?: boolean;
+  onApprovalPolicyDenial?: () => void;
   runtimeUnavailableTools?: readonly string[];
   stopAfterCycle?: boolean;
 }
@@ -84,7 +86,10 @@ const runContextScope = new AsyncLocalStorage<RunContext>();
 // ---------------------------------------------------------------------------
 
 type CommonRunContextFieldNames =
-  'approvalPromptsUnavailable' | 'runtimeUnavailableTools' | 'stopAfterCycle';
+  | 'approvalPromptsUnavailable'
+  | 'onApprovalPolicyDenial'
+  | 'runtimeUnavailableTools'
+  | 'stopAfterCycle';
 
 /**
  * Fields shared by both `RunContext` kinds, forwarded as-is from the input
@@ -95,6 +100,7 @@ function commonRunContextFields<T extends CreateRunContextCommon>(
 ): Pick<T, CommonRunContextFieldNames> {
   return {
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    onApprovalPolicyDenial: options.onApprovalPolicyDenial,
     runtimeUnavailableTools: options.runtimeUnavailableTools,
     stopAfterCycle: options.stopAfterCycle,
   } satisfies Pick<T, CommonRunContextFieldNames>;
