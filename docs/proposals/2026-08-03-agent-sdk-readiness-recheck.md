@@ -1,7 +1,7 @@
 # Agent-SDK readiness re-check (agent core · model handler · logger · surface)
 
 > **Status:** Audit note. Written 2026-08-03, all figures recomputed at HEAD
-> `434b89d`. This is a *current-state* re-measurement, not a new plan. It sits
+> `434b89d`. This is a _current-state_ re-measurement, not a new plan. It sits
 > under the plan of record
 > [`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md)
 > and the two measurements it depends on
@@ -21,7 +21,7 @@
 four areas the task names — agent core, model handler, logger, and the package
 surface — are already converged on the Claude-Agent-SDK shape by deliberate,
 documented work, and the guardrails that hold them there (the
-`config/ratchets/` baselines and the free-zone import fence) are *tightening*,
+`config/ratchets/` baselines and the free-zone import fence) are _tightening_,
 not slipping. This re-check adds evidence over the July docs: two of the four
 tracked "finish-the-endgame" deltas have since landed cleanly, the host
 boundary has measurably shrunk, and the fourth (TD-2a) turns out to already be
@@ -30,7 +30,7 @@ executed, since executing it would have broken the npm package's tested
 minimal-host contract for zero runtime benefit.
 
 This matches the standing conclusion of the `-05-30 → -07-26` chain: the open
-work is *deciding* the product line and shipping the package, not untangling
+work is _deciding_ the product line and shipping the package, not untangling
 abstractions. Re-deriving that here would duplicate ~23 prior docs.
 
 ## 1. Surface — `@texra-ai/agent` (`packages/agent/src/index.ts`)
@@ -71,7 +71,7 @@ API shape.
   `src/agent/runtime/README.md` — not a pass-through wrapper.
 - **The flow engine is not indirection.** `src/agent/node/index.ts` (~250 LoC)
   is the sole local definition of `BaseNode`/`Node`/`Flow`; nodes create and run
-  flows directly. There is no upstream-PocketFlow layer to collapse. (It *does*
+  flows directly. There is no upstream-PocketFlow layer to collapse. (It _does_
   carry an unattended-attribution license obligation — see B2 of the
   open-source-readiness audit — but that is a NOTICE file, not a refactor.)
 - **The session quartet is the seed surface** — `SessionHandle`,
@@ -123,7 +123,7 @@ first-class runtime concepts; there is nothing to newly carve out:
 - `AgentRosterController` (`src/agent/roster/`) — the multi-agent roster.
 - `detachSubagentsOnStop`, `resumeQueuedToolUse` — subagent lifecycle/resume.
 
-The delegation *tools* are exactly the closure that pulls in the heaviest import
+The delegation _tools_ are exactly the closure that pulls in the heaviest import
 graph (step-3 doc B1: 19 tools share one ~630-file closure), which is the real
 packaging seam for a multi-agent SDK — a decision about where the product line
 falls, already tracked, not a boundary to invent here.
@@ -133,13 +133,13 @@ falls, already tracked, not a boundary to invent here.
 The plan of record listed a four-item "finish-the-endgame" quartet (TD-2) and
 warned the host boundary was eroding. Re-measured:
 
-| Item | July status | HEAD `434b89d` |
-| --- | --- | --- |
-| Host `@agent/*` deep-import width (ext/cli/desktop) | 49 / 35 / 27, growing ~2.5/wk | **39 / 32 / 25** — shrunk; ratchet-frozen at current |
-| TD-2(b) phantom `RuntimeInteractionEventPayloads` arms | 6 to relocate | **landed** — symbol absent repo-wide |
-| TD-2(c) `runFact.` string-prefix protocol (dated v0.41) | retire on schedule | **landed** — absent under `src/agent` |
-| TD-2(a) `HostInteractions` request methods optional | 7/7 `?`, 6 runtime-hard-required | **retired, not executed** — optionality is the tested minimal-host contract the npm package depends on; see §7 |
-| TD-2(d) status dual-rail | complete atomically | trace `status` arm still present (`trace/events.ts:153`); not independently confirmed here |
+| Item                                                    | July status                      | HEAD `434b89d`                                                                                                 |
+| ------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Host `@agent/*` deep-import width (ext/cli/desktop)     | 49 / 35 / 27, growing ~2.5/wk    | **39 / 32 / 25** — shrunk; ratchet-frozen at current                                                           |
+| TD-2(b) phantom `RuntimeInteractionEventPayloads` arms  | 6 to relocate                    | **landed** — symbol absent repo-wide                                                                           |
+| TD-2(c) `runFact.` string-prefix protocol (dated v0.41) | retire on schedule               | **landed** — absent under `src/agent`                                                                          |
+| TD-2(a) `HostInteractions` request methods optional     | 7/7 `?`, 6 runtime-hard-required | **retired, not executed** — optionality is the tested minimal-host contract the npm package depends on; see §7 |
+| TD-2(d) status dual-rail                                | complete atomically              | trace `status` arm still present (`trace/events.ts:153`); not independently confirmed here                     |
 
 ## 7. TD-2(a) re-investigated and retired (not executed — executing it would regress the SDK surface)
 
@@ -156,16 +156,16 @@ cleanup**, for reasons the July docs didn't have in front of them:
   `SessionHostInteractions.enqueue()`** (`HostInteractions.ts:594–618`), whose
   `dispatch()` (`:686–715`) treats a missing method on the attached host
   exactly like a normal decline: `if (!result) { …; pending.settle(pending
-  .cancellationResult()); return; }` — no crash, no thrown error, a typed
+.cancellationResult()); return; }` — no crash, no thrown error, a typed
   cancellation/deny result. `openExternalInquiry` is the deliberate exception,
   bypassing the queue to throw loud when unattached (comment at
   `HostInteractions.ts:525–528`).
 - **This is a tested, documented contract, not an accident.** `warnParked`'s
-  own message says it outright: *"A headless embedder must attach at least
-  `{ cancel: () => {} }`, or blocking requests never settle."*
+  own message says it outright: _"A headless embedder must attach at least
+  `{ cancel: () => {} }`, or blocking requests never settle."_
   `SessionInteractions.vitest.ts:606` (`'settles against the documented
-  minimal `{ cancel }` host'`) asserts exactly this: a bare `{ cancel: vi.fn()
-  }` host makes `requestPlanApproval` resolve `{ action: 'reject' }`, not
+minimal `{ cancel }` host'`) asserts exactly this: a bare `{ cancel: vi.fn()
+}` host makes `requestPlanApproval` resolve `{ action: 'reject' }`, not
   throw. Every other request method degrades the same way.
 - **The npm package depends on this contract to exist at all.**
   `packages/agent/src/index.ts:234–238` attaches `{ cancel, requestRetry }` —
@@ -187,7 +187,7 @@ cleanup**, for reasons the July docs didn't have in front of them:
   this codebase's own conventions rule out.
 
 **Verdict: retire TD-2(a).** The "optional-with-graceful-decline" shape is not
-residue from the dead legacy fallback A2 removed — it is the *replacement*
+residue from the dead legacy fallback A2 removed — it is the _replacement_
 design, already shipped, tested, and load-bearing for the npm package's
 minimal-host contract. Converting it to required would trade a working
 progressive-capability host model for a rigid one, for no runtime benefit
