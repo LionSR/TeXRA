@@ -11,7 +11,6 @@
  * surface across all three builds.
  */
 
-import { warn } from '@logger/logUtils';
 import {
   formatCompactDuration,
   formatResultCount,
@@ -34,30 +33,12 @@ export interface LeanServerInfo {
   readonly errorMessage?: string;
 }
 
-type Listener = (snapshot: readonly LeanServerInfo[]) => void;
-
 const servers = new Map<string, LeanServerInfo>();
-const listeners = new Set<Listener>();
 
 function snapshot(): readonly LeanServerInfo[] {
   return [...servers.values()].sort((a, b) =>
     a.workspaceRoot.localeCompare(b.workspaceRoot),
   );
-}
-
-function notify(): void {
-  const view = snapshot();
-  for (const listener of listeners) {
-    try {
-      listener(view);
-    } catch (error) {
-      // Isolate observers so one bad listener can't break the others, but
-      // surface the failure since a throwing listener is unexpected.
-      warn('lean.serverRegistry', 'Lean server listener threw', {
-        data: error,
-      });
-    }
-  }
 }
 
 export function listLeanServers(): readonly LeanServerInfo[] {
@@ -66,11 +47,6 @@ export function listLeanServers(): readonly LeanServerInfo[] {
 
 export function isLeanServerActive(info: LeanServerInfo): boolean {
   return info.status === 'starting' || info.status === 'running';
-}
-
-export function subscribeLeanServers(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
 }
 
 export interface RegisterLeanServerInit {
@@ -92,7 +68,6 @@ export function registerLeanServer(init: RegisterLeanServerInit): void {
     toolchain: init.toolchain,
     pid: init.pid,
   });
-  notify();
 }
 
 export interface UpdateLeanServerPatch {
@@ -118,19 +93,15 @@ export function updateLeanServer(
         ? undefined
         : (patch.errorMessage ?? existing.errorMessage),
   });
-  notify();
 }
 
 export function unregisterLeanServer(id: string): void {
-  if (!servers.delete(id)) return;
-  notify();
+  servers.delete(id);
 }
 
-/** Clear all entries — only used by tests and shutdown handlers. */
+/** Clear all entries so registry-dependent tests remain isolated. */
 export function clearLeanServerRegistry(): void {
-  if (servers.size === 0) return;
   servers.clear();
-  notify();
 }
 
 function statusTail(info: LeanServerInfo, now: number): string {
