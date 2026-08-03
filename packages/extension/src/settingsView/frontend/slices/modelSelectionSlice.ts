@@ -4,6 +4,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
+  copilotRouteInfos,
   helperModel,
   modelSelectionItems,
   preferShortModelNames,
@@ -14,5 +15,6 @@ export const modelSelectionHandlers = {
     modelSelectionItems.set(data.models);
     helperModel.set(data.helperModel);
     preferShortModelNames.set(data.preferShortModelNames);
+    copilotRouteInfos.set(data.copilotModels);
   },
 } satisfies Partial<SettingsViewOutboundHandlerRegistry>;

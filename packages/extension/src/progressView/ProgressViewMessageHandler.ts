@@ -747,6 +747,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       await this.apiKeyRetryController.runCopilotFallbackWithRouting(
         {
           provider: fallback.provider,
+          model: fallback.model,
           exhaustionReason: data.exhaustionReason,
           chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
           viaRelay: data.viaRelay,

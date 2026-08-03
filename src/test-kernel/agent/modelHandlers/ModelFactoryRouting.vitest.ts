@@ -35,6 +35,10 @@ import {
 } from '@auth/codex';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
+  invalidateRuntimeModelRegistry,
+  refreshRuntimeModelRegistry,
+} from '@model/runtimeModelRegistry';
+import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   type LanguageModelPort,
 } from '@platform/languageModel';
@@ -105,6 +109,180 @@ describe('Copilot model handler routing', () => {
     );
 
     const handler = await createModelHandler(copilotConfig);
+    try {
+      expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
+      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerVscodeLm',
+      );
+    } finally {
+      handler.dispose();
+    }
+  });
+});
+
+describe('Copilot route preference on a canonical base model', () => {
+  const SONNET_DISCOVERY = {
+    id: 'claude-sonnet-4.6',
+    name: 'Claude Sonnet 4.6',
+    family: 'claude-sonnet-4.6',
+    vendor: 'copilot',
+    version: '2026-07',
+    maxInputTokens: 160_000,
+    access: 'allowed' as const,
+  };
+
+  async function installCopilotRoute(
+    globalState: Record<string, unknown> = {},
+  ): Promise<void> {
+    invalidateRuntimeModelRegistry();
+    await installPlatform(
+      { globalState },
+      {
+        languageModel: {
+          ...AVAILABLE_LANGUAGE_MODEL_PORT,
+          selectModels: async () => [SONNET_DISCOVERY],
+        },
+      },
+    );
+    await refreshRuntimeModelRegistry();
+  }
+
+  afterEach(() => {
+    invalidateRuntimeModelRegistry();
+  });
+
+  it('routes the base model through Copilot when the preference and access align', async () => {
+    await installCopilotRoute({
+      'texra.copilotRouteModels': ['sonnet46'],
+      'texra.useOpenRouter': true,
+    });
+
+    const config = MODEL_CONFIGS.sonnet46;
+    expect(modelHandlerCompatibilityKey(config, true, false)).toBe(
+      'ModelHandlerVscodeLm',
+    );
+
+    const handler = await createModelHandler(config);
+    try {
+      expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
+      expect(handler.config.name).toBe('sonnet46');
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('keeps the ordinary provider route without the preference', async () => {
+    await installCopilotRoute();
+
+    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet46, false)).toBe(
+      'ModelHandlerAnthropic',
+    );
+  });
+
+  it('rejects a preferred route the editor cannot serve instead of falling through', async () => {
+    invalidateRuntimeModelRegistry();
+    await installPlatform(
+      { globalState: { 'texra.copilotRouteModels': ['sonnet46'] } },
+      {
+        languageModel: {
+          ...AVAILABLE_LANGUAGE_MODEL_PORT,
+          selectModels: async () => [
+            { ...SONNET_DISCOVERY, access: 'consent-required' as const },
+          ],
+        },
+      },
+    );
+    await refreshRuntimeModelRegistry();
+
+    // A Copilot preference is a hard route choice (#9635): consent-required
+    // must surface as a named failure, never a silent direct-key dispatch.
+    expect(() =>
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet46, false),
+    ).toThrowError(/consent/);
+    await expect(
+      createModelHandler(MODEL_CONFIGS.sonnet46),
+    ).rejects.toThrowError(/consent/);
+  });
+
+  it('reports an undiscovered preferred route as unavailable', async () => {
+    await installCopilotRoute({
+      'texra.copilotRouteModels': ['gpt55'],
+    });
+
+    expect(() =>
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false),
+    ).toThrowError(/does not currently offer "gpt55"/);
+  });
+
+  it('applies the discovered context ceiling and zero-cost subscription overrides', async () => {
+    await installCopilotRoute({
+      'texra.copilotRouteModels': ['sonnet46'],
+    });
+
+    const handler = await createModelHandler(MODEL_CONFIGS.sonnet46);
+    try {
+      expect(handler.config.contextWindow).toBe(160_000);
+      expect(handler.config.inputPrice).toBe(0);
+      expect(handler.config.outputPrice).toBe(0);
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('keeps the Copilot route ahead of the Codex subscription override', async () => {
+    // A Copilot-preferred OpenAI model with a routable ChatGPT session must
+    // still dispatch through Copilot — the picker says "Via Copilot", so the
+    // async Codex override may not win dispatch (#9635).
+    const GPT_56_DISCOVERY = {
+      id: 'gpt-5.6',
+      name: 'GPT-5.6',
+      family: 'gpt-5.6',
+      vendor: 'copilot',
+      version: '2026-07',
+      maxInputTokens: 128_000,
+      access: 'allowed' as const,
+    };
+    invalidateRuntimeModelRegistry();
+    await installPlatform(
+      {
+        config: { 'texra.chatgptCodex.preferSubscription': true },
+        globalState: { 'texra.copilotRouteModels': ['gpt56'] },
+        secrets: {
+          [CODEX_SESSION_SECRET_KEY]: JSON.stringify({
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+            expiresAtMs: Date.now() + 10 * 60_000,
+            accountId: 'account-id',
+          }),
+        },
+      },
+      {
+        languageModel: {
+          ...AVAILABLE_LANGUAGE_MODEL_PORT,
+          selectModels: async () => [GPT_56_DISCOVERY],
+        },
+      },
+    );
+    await refreshRuntimeModelRegistry();
+
+    const handler = await createModelHandler(MODEL_CONFIGS.gpt56);
+    try {
+      expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
+      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerVscodeLm',
+      );
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('rebuilds the VS Code handler for a persisted canonical session', async () => {
+    await installCopilotRoute();
+
+    const handler = await createModelHandlerForCompatibilityKey(
+      MODEL_CONFIGS.sonnet46,
+      'ModelHandlerVscodeLm',
+    );
     try {
       expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
       expect(activeModelHandlerCompatibilityKey(handler)).toBe(

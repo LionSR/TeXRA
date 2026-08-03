@@ -50,6 +50,7 @@ import {
   invalidateRuntimeModelRegistry,
   requestRuntimeModelAccess,
 } from '@model/runtimeModelRegistry';
+import { setCopilotRoutePreference } from '@model/copilotRouting';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -931,6 +932,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           this.channel,
           'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
         );
+      } else {
+        // Granting access is the user's explicit choice of the Copilot route
+        // for this model; persist it so the canonical model row routes
+        // through Copilot from here on (#9635).
+        await setCopilotRoutePreference(modelName, true);
       }
     } catch (error) {
       if (
