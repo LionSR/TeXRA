@@ -3,8 +3,8 @@
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
   type CompileFailure,
@@ -125,7 +125,7 @@ export interface SessionMeta {
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly apiMode: ApiAccessMode;
-  readonly approvalPolicy: CliApprovalPolicy;
+  readonly approvalPolicy: TexraApprovalPolicy;
   readonly canDelegate: boolean;
   readonly transcriptMode: 'persistent' | 'ephemeral';
   readonly teamName?: string;

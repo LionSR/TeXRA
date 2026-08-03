@@ -32,6 +32,11 @@ import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
+  formatTexraApprovalPolicy,
+  parseTexraApprovalPolicy,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import {
   AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -133,10 +138,6 @@ import {
   formatCliAuthStatusLine,
 } from '../src/runtime/apiStatus';
 import {
-  formatCliApprovalPolicy,
-  parseCliApprovalPolicy,
-} from '../src/runtime/approvalPolicyText';
-import {
   cliMultiAgentPresets,
   planCliMultiAgentPresets,
 } from '../src/runtime/multiAgentPresets';
@@ -150,7 +151,6 @@ import {
   CLI_HISTORY_RESUMABLE_STATUS,
   type CliHistoryEntry,
 } from '../src/runtime/history';
-import { type CliApprovalPolicy } from '../src/schemas/cliSettings';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
@@ -319,8 +319,8 @@ const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 // Seed only: `sessionMeta.approvalPolicy` is the live value once the harness
 // session state exists, exactly as in the real chat session.
-const HARNESS_INITIAL_APPROVAL_POLICY: CliApprovalPolicy =
-  parseCliApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ?? 'ask';
+const HARNESS_INITIAL_APPROVAL_POLICY: TexraApprovalPolicy =
+  parseTexraApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ?? 'ask';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
@@ -2119,13 +2119,13 @@ function defaultHarnessTranscriptStreamId(): StreamTabId {
   });
 }
 
-function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
+function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
   });
   appendHarnessAssistantTranscript(
-    `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
+    `Approval mode set to ${formatTexraApprovalPolicy(policy)}.`,
   );
 }
 
@@ -2146,7 +2146,7 @@ function applyHarnessApprovalPolicySelection(
     if (openCliSlashCommandForm('approval', input)) return;
   }
 
-  const policy = parseCliApprovalPolicy(normalized);
+  const policy = parseTexraApprovalPolicy(normalized);
   if (!policy) {
     appendHarnessAssistantTranscript(usage);
     return;
@@ -2249,7 +2249,7 @@ function appendHarnessStatus(): void {
         subscriptionActive: false,
         usageRoute: slice?.usage?.usageRoute,
       }),
-      approval: formatCliApprovalPolicy(meta.approvalPolicy),
+      approval: formatTexraApprovalPolicy(meta.approvalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       goal: GoalStore.getForStream(streamId),

@@ -46,14 +46,16 @@ import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '@cli/runtime/terminalRequirements';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
 import { platform } from '@platform/platform';
+import {
+  formatTexraApprovalPolicy,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -335,18 +337,18 @@ export async function runChat(
   // bar, the runtime context handed to each run, and `/approval` all read the
   // same signal, so a mid-session change cannot be visible in one surface and
   // stale in another.
-  const getApprovalPolicy = (): CliApprovalPolicy =>
+  const getApprovalPolicy = (): TexraApprovalPolicy =>
     sessionMetaSignal.get().approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
     apiMode: sessionMetaSignal.get().apiMode,
-    get approvalPolicy(): CliApprovalPolicy {
+    get approvalPolicy(): TexraApprovalPolicy {
       return getApprovalPolicy();
     },
     helperModel,
     quietLogs: true,
   });
-  const setApprovalPolicy = (policy: CliApprovalPolicy): void => {
+  const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
     patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
@@ -565,7 +567,7 @@ export async function runChat(
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
       appendLocalAssistantTranscript(
-        `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
+        `Approval mode set to ${formatTexraApprovalPolicy(policy)}.`,
       );
     },
     canSelectModel: canSelectCurrentModel,

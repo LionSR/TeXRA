@@ -37,7 +37,7 @@ import {
   cliApiFallbackSelection,
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { AgentCategory } from '@shared/schemas/agent';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.mts';
 import {
@@ -664,7 +664,7 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(approval, '')).toBe(true);
 
     const approvalNode = renderFormAdapter<{
-      onSelect?: (value: CliApprovalPolicy) => void;
+      onSelect?: (value: TexraApprovalPolicy) => void;
     }>(
       activeForm.get()?.render(() => {
         closed = true;

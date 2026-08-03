@@ -1,10 +1,8 @@
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-import type {
-  CliApprovalPolicy,
-  CliOutputFormat,
-} from '../schemas/cliSettings';
+import type { CliOutputFormat } from '../schemas/cliSettings';
 import type { CliGlobalArgs } from './cliContext';
 
 /**
@@ -19,7 +17,7 @@ export interface ParsedGlobalArgs {
   readonly quiet?: boolean;
   readonly cwd?: string;
   readonly 'output-format'?: CliOutputFormat;
-  readonly 'approval-policy'?: CliApprovalPolicy;
+  readonly 'approval-policy'?: TexraApprovalPolicy;
   readonly 'api-mode'?: ApiAccessMode | string;
   // Positively-named boolean (default `true`); citty sets this to `false`
   // when the user passes `--no-color`.

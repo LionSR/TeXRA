@@ -1,9 +1,9 @@
-import {
-  formatCliApprovalPolicy,
-  parseCliApprovalPolicy,
-} from '@cli/runtime/approvalPolicyText';
-
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import {
+  formatTexraApprovalPolicy,
+  parseTexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+
 import { openCliSlashCommandForm } from '../slashForms';
 import { type SlashCommandContext } from './slashContext';
 
@@ -20,7 +20,7 @@ export function applyCliApprovalPolicySelection(
     return;
   }
 
-  const policy = parseCliApprovalPolicy(normalized);
+  const policy = parseTexraApprovalPolicy(normalized);
   if (!policy) {
     appendLocalAssistantTranscript(usage);
     return;
@@ -28,6 +28,6 @@ export function applyCliApprovalPolicySelection(
 
   context.setApprovalPolicy(policy);
   appendLocalAssistantTranscript(
-    `Approval mode set to ${formatCliApprovalPolicy(policy)}.`,
+    `Approval mode set to ${formatTexraApprovalPolicy(policy)}.`,
   );
 }
