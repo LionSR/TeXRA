@@ -1,12 +1,14 @@
 # Agent-SDK readiness re-check (agent core · model handler · logger · surface)
 
 > **Status:** Audit note. Written 2026-08-03, all figures recomputed at HEAD
-> `434b89d`. This is a _current-state_ re-measurement, not a new plan. It sits
-> under the plan of record
-> [`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md)
+> `434b89d`. This is a _current-state_ re-measurement, not a new plan. It
+> continues the daily checkpoint series — read alongside the immediately prior
+> [`2026-08-02-agent-sdk-readiness-checkpoint.md`](./2026-08-02-agent-sdk-readiness-checkpoint.md) —
+> and sits under the plan of record
+> [`2026-07-09-agent-sdk-north-star.md`](../../proposals/2026-07-09-agent-sdk-north-star.md)
 > and the two measurements it depends on
-> ([`2026-07-26-agent-sdk-foundation-gap.md`](./2026-07-26-agent-sdk-foundation-gap.md),
-> [`2026-07-27-agent-npm-package-step3.md`](./2026-07-27-agent-npm-package-step3.md)).
+> ([`2026-07-26-agent-sdk-foundation-gap.md`](../../proposals/2026-07-26-agent-sdk-foundation-gap.md),
+> [`2026-07-27-agent-npm-package-step3.md`](../../proposals/2026-07-27-agent-npm-package-step3.md)).
 > Its job is to confirm whether those conclusions still hold and flag what has
 > since landed or remains open — nothing here overrides a maintainer ruling.
 >
