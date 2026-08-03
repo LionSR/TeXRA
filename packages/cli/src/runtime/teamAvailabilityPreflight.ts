@@ -4,11 +4,9 @@ import {
   type TeamAvailabilityPreflightResult,
 } from '@common/teams/TeamAvailabilityPreflight';
 import { teamHostedNamesForPreflight } from '@common/teams/TeamRoster';
+import { teamTexraHostedMissingNames } from '@common/teams/TeamPlan';
 
-import {
-  cliMultiAgentTexraHostedMissingNames,
-  type CliMultiAgentPresetRunPlan,
-} from './multiAgentPresets';
+import type { CliMultiAgentPresetRunPlan } from './multiAgentPresets';
 
 export interface CliTeamAvailabilityPreflightDeps {
   readonly plan: CliMultiAgentPresetRunPlan;
@@ -27,7 +25,7 @@ export function preflightCliTeamAvailability(
 ): Promise<TeamAvailabilityPreflightResult<CliMultiAgentPresetRunPlan>> {
   return preflightTeamAvailability({
     initial: deps.plan,
-    unresolvedNames: cliMultiAgentTexraHostedMissingNames,
+    unresolvedNames: teamTexraHostedMissingNames,
     texraHostedNames: teamHostedNamesForPreflight(deps.plan.preset, [
       ...deps.plan.missingWorkflowAgents,
       ...deps.plan.missingToolUseAgents,

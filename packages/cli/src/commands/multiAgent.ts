@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
@@ -13,8 +14,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
-  cliMultiAgentPlanHasGaps,
-  cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresetListRecords,
   formatCliMultiAgentTeamLaunchBlockMessage,
@@ -157,7 +156,7 @@ export async function runMultiAgentPreset(
     // Otherwise the silent second load makes runs behave differently from a
     // signed-out shell with no visible reason.
     writeTextStderr(
-      cliMultiAgentPlanHasGaps(plan)
+      teamPlanHasGaps(plan)
         ? `Preset ${plan.preset.id} attempted to load remote agents before launch, but some team members are still unavailable. ${inspectAdvice}`
         : `Preset ${plan.preset.id} loaded remote agents before launch. ${inspectAdvice}`,
     );
@@ -167,7 +166,7 @@ export async function runMultiAgentPreset(
       missingToolUseAgentMessage(plan.missingAgentOverride),
     );
   }
-  if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
+  if (!canLaunchTeam(plan)) {
     const singleAgentAdvice = plan.rootAgent
       ? `Start a single-agent chat with \`texra chat --agent ${plan.rootAgent.name}\` if that is what you want.`
       : 'Install or sign in for a runnable team root before launching this preset.';

@@ -5,24 +5,26 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  cliMultiAgentPresetAvailability,
-  cliMultiAgentPlanHasGaps,
-  cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
-  cliMultiAgentPresets,
-  findCliMultiAgentPreset,
   formatCliMultiAgentPresetLauncherHints,
   formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   formatCliMultiAgentPresetRunWarnings,
-  cliMultiAgentPresetTeamLaunchBlockReason,
-  planCliMultiAgentPresets,
-  planCliMultiAgentPresetRun,
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
+import {
+  canLaunchTeam,
+  findTeamPreset,
+  planTeamRun,
+  planTeamRuns,
+  teamAvailability,
+  teamLaunchBlockReason,
+  teamPlanHasGaps,
+  teamPresets,
+} from '@common/teams/TeamPlan';
 
 function agent(
   name: string,
@@ -40,14 +42,17 @@ function agent(
 }
 
 function findPreset(id: string) {
-  return findCliMultiAgentPreset(cliMultiAgentPresets(undefined), id)!;
+  return findTeamPreset(teamPresets(undefined), id)!;
 }
 
-type TeamPreset = Parameters<typeof planCliMultiAgentPresetRun>[0];
-type TeamRunOptions = Parameters<typeof planCliMultiAgentPresetRun>[1];
+// `AgentEntry`-pinned so the derived parameter/return types below match
+// `CliMultiAgentPresetRunPlan` instead of the unpinned `TeamCatalogAgent` bound.
+const planTeamRunForAgentEntry = planTeamRun<AgentEntry>;
+type TeamPreset = Parameters<typeof planTeamRunForAgentEntry>[0];
+type TeamRunOptions = Parameters<typeof planTeamRunForAgentEntry>[1];
 
 function planRun(preset: TeamPreset, options: Partial<TeamRunOptions> = {}) {
-  return planCliMultiAgentPresetRun(preset, {
+  return planTeamRunForAgentEntry(preset, {
     workflowAgents: [],
     toolUseAgents: [],
     ...options,
@@ -88,7 +93,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('preserves missing hosted provenance on a legacy custom preset', () => {
-    const presets = cliMultiAgentPresets([
+    const presets = teamPresets([
       {
         id: 'legacy',
         name: 'Legacy',
@@ -100,13 +105,13 @@ describe('CLI multi-agent presets', () => {
     ]);
 
     expect(
-      findCliMultiAgentPreset(presets, 'legacy')?.texraHostedAgents,
+      findTeamPreset(presets, 'legacy')?.texraHostedAgents,
     ).toBeUndefined();
   });
 
   it('lists planned built-in team presets with stable counts', () => {
-    const presets = cliMultiAgentPresets(undefined);
-    const plans = planCliMultiAgentPresets(presets, {
+    const presets = teamPresets(undefined);
+    const plans = planTeamRuns(presets, {
       workflowAgents: presets.flatMap((preset) =>
         preset.workflowAgents.map((name) =>
           agent(name, AgentCategory.Workflow),
@@ -164,11 +169,9 @@ describe('CLI multi-agent presets', () => {
     const plan = partialLeanProjectPlan();
 
     expect(plan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPresetAvailability(plan).status).toBe('unavailable');
-    expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
-      'no runnable team root',
-    );
-    expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(false);
+    expect(teamAvailability(plan).status).toBe('unavailable');
+    expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
+    expect(canLaunchTeam(plan)).toBe(false);
   });
 
   it('keeps degraded presets launchable when they still have delegation', () => {
@@ -176,8 +179,8 @@ describe('CLI multi-agent presets', () => {
       toolUseAgents: degradedPhysicistToolUse(),
     });
 
-    expect(cliMultiAgentPresetAvailability(plan).status).toBe('degraded');
-    expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
+    expect(teamAvailability(plan).status).toBe('degraded');
+    expect(canLaunchTeam(plan)).toBe(true);
   });
 
   it('formats compact launcher summaries from planned availability', () => {
@@ -228,7 +231,7 @@ describe('CLI multi-agent presets', () => {
       toolUseAgents: toolUseTeam(preset, 'orchestrator'),
     });
 
-    expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
+    expect(teamAvailability(plan)).toMatchObject({
       status: 'available',
       toolUse: { available: 9, total: 9 },
       workflow: { available: 6, total: 6 },
@@ -243,9 +246,9 @@ describe('CLI multi-agent presets', () => {
 
     expect(plan.rootAgent?.name).toBe('engineer');
     expect(plan.missingToolUseAgents).toEqual([]);
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
-    expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
-    expect(cliMultiAgentPresetAvailability(plan).toolUse).toMatchObject({
+    expect(teamPlanHasGaps(plan)).toBe(false);
+    expect(canLaunchTeam(plan)).toBe(true);
+    expect(teamAvailability(plan).toolUse).toMatchObject({
       available: 5,
       total: 5,
     });
@@ -257,14 +260,12 @@ describe('CLI multi-agent presets', () => {
       toolUseAgents: [],
     });
 
-    expect(cliMultiAgentPresetAvailability(plan)).toMatchObject({
+    expect(teamAvailability(plan)).toMatchObject({
       status: 'unavailable',
       toolUse: { available: 0, total: 9 },
       workflow: { available: 0, total: 6 },
     });
-    expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
-      'no runnable team root',
-    );
+    expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
   });
 
   it('formats team launch block messages from the planned preset state', () => {
@@ -315,7 +316,7 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('keeps built-in teams unavailable until their orchestrator root is present', () => {
-    const plans = planCliMultiAgentPresets(cliMultiAgentPresets(undefined), {
+    const plans = planTeamRuns(teamPresets(undefined), {
       workflowAgents: [
         agent('correct', AgentCategory.Workflow),
         agent('polish', AgentCategory.Workflow),
@@ -331,10 +332,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     const launchBlockReasons = new Map(
-      plans.map((plan) => [
-        plan.preset.id,
-        cliMultiAgentPresetTeamLaunchBlockReason(plan),
-      ]),
+      plans.map((plan) => [plan.preset.id, teamLaunchBlockReason(plan)]),
     );
 
     expect(launchBlockReasons).toEqual(
@@ -415,7 +413,7 @@ describe('CLI multi-agent presets', () => {
       },
     ];
     const customPresets = (raw: unknown) =>
-      cliMultiAgentPresets(raw).filter((preset) => preset.source === 'custom');
+      teamPresets(raw).filter((preset) => preset.source === 'custom');
 
     expect(customPresets(valid)).toEqual([
       {
@@ -475,20 +473,12 @@ describe('CLI multi-agent presets', () => {
   });
 
   it('finds presets by id, name, or slugified name', () => {
-    const presets = cliMultiAgentPresets(undefined);
+    const presets = teamPresets(undefined);
 
-    expect(findCliMultiAgentPreset(presets, 'PHYSICIST')?.name).toBe(
-      'Physicist',
-    );
-    expect(findCliMultiAgentPreset(presets, 'physicist')?.name).toBe(
-      'Physicist',
-    );
-    expect(findCliMultiAgentPreset(presets, 'Lean Project')?.id).toBe(
-      'lean-project',
-    );
-    expect(findCliMultiAgentPreset(presets, 'computer-scientist')?.id).toBe(
-      'cs-ml',
-    );
+    expect(findTeamPreset(presets, 'PHYSICIST')?.name).toBe('Physicist');
+    expect(findTeamPreset(presets, 'physicist')?.name).toBe('Physicist');
+    expect(findTeamPreset(presets, 'Lean Project')?.id).toBe('lean-project');
+    expect(findTeamPreset(presets, 'computer-scientist')?.id).toBe('cs-ml');
   });
 
   it('formats an inspection plan with root and missing members', () => {
@@ -580,7 +570,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(plan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
+    expect(teamPlanHasGaps(plan)).toBe(true);
   });
 
   it('does not select built-in team specialists as implicit roots', () => {
@@ -599,7 +589,7 @@ describe('CLI multi-agent presets', () => {
 
     expect(plan.rootAgent).toBeUndefined();
     expect(onlySimplifierPlan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPlanHasGaps(onlySimplifierPlan)).toBe(true);
+    expect(teamPlanHasGaps(onlySimplifierPlan)).toBe(true);
   });
 
   it('keeps delegating built-in specialists as members instead of roots', () => {
@@ -612,9 +602,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(plan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPresetTeamLaunchBlockReason(plan)).toBe(
-      'no runnable team root',
-    );
+    expect(teamLaunchBlockReason(plan)).toBe('no runnable team root');
   });
 
   it.each([
@@ -677,7 +665,7 @@ describe('CLI multi-agent presets', () => {
     // the regression these rows exist to catch.
     if (rootAgent === undefined) expect(plan.rootAgent).toBeUndefined();
     else expect(plan.rootAgent?.name).toBe(rootAgent);
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(hasGaps);
+    expect(teamPlanHasGaps(plan)).toBe(hasGaps);
   });
 
   it('reports no gaps when every preset member resolves', () => {
@@ -688,7 +676,7 @@ describe('CLI multi-agent presets', () => {
 
     expect(plan.rootAgent?.name).toBe('leanOrchestrator');
     expect(plan.missingToolUseAgents).toEqual([]);
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+    expect(teamPlanHasGaps(plan)).toBe(false);
   });
 
   it('flags a gap when no root agent can be selected', () => {
@@ -698,7 +686,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(plan.rootAgent).toBeUndefined();
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
+    expect(teamPlanHasGaps(plan)).toBe(true);
   });
 
   it('adds an explicit root override to the visible tool-use team', () => {
@@ -748,6 +736,6 @@ describe('CLI multi-agent presets', () => {
     expect(plan.missingAgentOverride).toBe('definitely-not-real');
     expect(plan.rootAgent?.name).toBe('leanOrchestrator');
     expect(plan.missingToolUseAgents).toEqual([]);
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
+    expect(teamPlanHasGaps(plan)).toBe(true);
   });
 });
