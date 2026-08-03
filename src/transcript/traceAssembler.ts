@@ -22,7 +22,7 @@ import { StreamSnapshotStore } from './StreamSnapshotStore';
 import {
   resolvePersistedStreamIdForExecution,
   type PersistedStreamIdResolution,
-} from './executionStreamResolver';
+} from './legacyExecutionIdentity';
 import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
@@ -61,13 +61,16 @@ export async function assembleTrace(
   const registered = registeredStreamId(meta);
   const resolved: PersistedStreamIdResolution | null =
     registered !== undefined
-      ? { streamId: registered }
+      ? { streamId: registered, fallbackStreamIds: [] }
       : await resolvePersistedStreamIdForExecution(executionId, {
           snapshotStore,
           streamLogStore,
         });
   if (resolved && !resolved.streamId) {
-    const candidateStreamIds = resolved.exactExecutionCandidateStreamIds ?? [];
+    const candidateStreamIds =
+      resolved.exactExecutionCandidateStreamIds ??
+      resolved.suffixCandidateStreamIds ??
+      [];
     return candidateStreamIds.length > 0
       ? { status: 'streamId_ambiguous', candidateStreamIds }
       : { status: 'streamLogs_missing' };

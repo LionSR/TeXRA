@@ -35,7 +35,6 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
@@ -44,6 +43,7 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import { legacyExecutionIdFromStreamSuffix } from '@transcript/legacyExecutionIdentity';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';

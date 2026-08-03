@@ -6,7 +6,7 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 
-import { getExecutionStore, type TodoEntry } from '@agent/storage';
+import type { TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
@@ -15,7 +15,6 @@ import {
 } from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
-  registeredStreamId,
   STREAM_LOG_ENTRY_TYPES,
   ToolUseLogSchema,
   UserMessagePayloadSchema,
@@ -31,10 +30,9 @@ import { ToolResultSchema } from '@shared/schemas/toolResult';
 import { assertNever, generateShortId, isObject } from '@utils/core';
 
 import {
-  findPersistedStreamFallbacksForExecution,
   resolvePersistedStreamIdForExecution,
   type PersistedStreamIdResolution,
-} from './executionStreamResolver';
+} from './legacyExecutionIdentity';
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
@@ -54,37 +52,18 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
 }
 
 /**
- * A registration-proven record resolves directly from its execution metadata:
- * one canonical stream, no historical fallback candidates, and no sidecar or
- * suffix scan (`fallbackStreamIds` is empty by proof, not omitted as
- * unknown). Only legacy records — no registration provenance — enter the
- * compatibility resolver (#9590 A1).
- */
-async function resolveCompletedRunStream(
-  executionId: ExecutionId,
-  options: {
-    snapshotStore: StreamSnapshotStore;
-    streamLogStore?: StreamLogStore;
-  },
-): Promise<PersistedStreamIdResolution | null> {
-  const registered = registeredStreamId(
-    await getExecutionStore(executionId).readMeta(),
-  );
-  if (registered !== undefined) {
-    return { streamId: registered, fallbackStreamIds: [] };
-  }
-  return resolvePersistedStreamIdForExecution(executionId, options);
-}
-
-/**
  * Read the archived task list for a completed run from the durable stream
  * sidecar (`streamData/{stream}/workPlan.json`).
+ *
+ * A registration-proven record resolves directly from its execution metadata
+ * (the resolver's constant-time fast path); only legacy records enter the
+ * legacy boundary's sidecar/suffix scans (#9590 A1).
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
 ): Promise<CompletedRunTodosReadResult> {
   const snapshotStore = new StreamSnapshotStore();
-  const resolved = await resolveCompletedRunStream(executionId, {
+  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
     snapshotStore,
   });
 
@@ -116,7 +95,8 @@ export interface CompletedRunConversationReadResult {
   readonly streamId?: StreamTabId;
   /** All overlap-connected sidecars used for a merged archive. */
   readonly streamIds?: readonly StreamTabId[];
-  /** Exact-execution sidecars excluded because persisted evidence is insufficient. */
+  /** Exact-execution or suffix-matched streams excluded because persisted
+   *  evidence is insufficient to prove a canonical archive root. */
   readonly candidateStreamIds?: readonly StreamTabId[];
   /** Proven child associations retained as evidence but never read as archive rows. */
   readonly associatedStreamIds?: readonly StreamTabId[];
@@ -710,9 +690,7 @@ async function mergedCandidateConversation(
  * are tried in deterministic order before the legacy projection.
  */
 async function readSidecarConversation(
-  executionId: ExecutionId,
   resolved: PersistedStreamIdResolution,
-  snapshotStore: StreamSnapshotStore,
   streamLogStore: StreamLogStore,
 ): Promise<CompletedRunConversationReadResult | null> {
   // Current executions register one canonical stream at birth; a disk-backed
@@ -764,6 +742,17 @@ async function readSidecarConversation(
   }
 
   if (!resolved.streamId) {
+    // Explicit ambiguity from the legacy boundary: several suffix-matched
+    // streams with no ownership proof. Surface the candidates instead of
+    // silently reading one; suffix resemblance never selects an archive.
+    if (resolved.suffixCandidateStreamIds?.length) {
+      return {
+        conversation: null,
+        source: 'none',
+        candidateStreamIds: resolved.suffixCandidateStreamIds,
+        ...associationDiagnostics,
+      };
+    }
     return resolved.associatedStreamIds?.length
       ? { conversation: null, source: 'none', ...associationDiagnostics }
       : null;
@@ -781,14 +770,9 @@ async function readSidecarConversation(
     };
   }
 
-  const fallbackStreamIds =
-    resolved.fallbackStreamIds ??
-    (await findPersistedStreamFallbacksForExecution(
-      executionId,
-      resolved.streamId,
-      { snapshotStore, streamLogStore },
-    ));
-  for (const streamId of fallbackStreamIds) {
+  // The resolution always states its fallback candidates (empty by proof for
+  // registered records), so an empty primary never triggers a re-scan here.
+  for (const streamId of resolved.fallbackStreamIds) {
     const conversation = await conversationFromStream(streamLogStore, streamId);
     if (conversation.length > 0) {
       return {
@@ -815,18 +799,13 @@ export async function readCompletedRunConversation(
   // nor mutates persistence.
   const streamLogStore = await StreamLogStore.openReadOnly();
 
-  const resolved = await resolveCompletedRunStream(executionId, {
+  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
     snapshotStore,
     streamLogStore,
   });
 
   const sidecar = resolved
-    ? await readSidecarConversation(
-        executionId,
-        resolved,
-        snapshotStore,
-        streamLogStore,
-      )
+    ? await readSidecarConversation(resolved, streamLogStore)
     : null;
   return sidecar ?? { conversation: null, source: 'none' };
 }
