@@ -71,6 +71,34 @@ describe('remote agent listing', () => {
     expect(agents.map((agent) => agent.name)).toEqual(['review']);
   });
 
+  it('drops remote rows without an agent category', async () => {
+    installRemoteAgentListClient({
+      data: [
+        {
+          id: 'agent-1',
+          name: 'uncategorized',
+          description: 'Invalid row',
+          visibility: ['public'],
+          tools: [],
+          agent_category: null,
+        },
+        {
+          id: 'agent-2',
+          name: 'review',
+          description: 'Canonical row',
+          visibility: ['public'],
+          tools: [],
+          agent_category: 'toolUse',
+        },
+      ],
+      error: null,
+    });
+
+    const agents = await listRemoteAgents();
+
+    expect(agents.map((agent) => agent.name)).toEqual(['review']);
+  });
+
   it('returns no agents when the list query fails', async () => {
     const selectedColumns = installRemoteAgentListClient({
       data: null,
