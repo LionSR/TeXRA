@@ -1110,7 +1110,7 @@
     "llm-zoo": "^1.24.0",
     "lru-cache": "^11.5.2",
     "mark.js": "^8.11.1",
-    "markdown-it": "^14.3.0",
+    "markdown-it": "^15.0.0",
     "markdown-it-texmath": "^1.0.0",
     "mime-types": "^3.0.1",
     "minimatch": "^10.2.6",
