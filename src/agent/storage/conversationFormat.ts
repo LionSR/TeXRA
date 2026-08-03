@@ -9,7 +9,12 @@
  * `{text}`/`{functionCall}`/`{functionResponse}` parts, VS Code LM's
  * `{kind: 'text'|'toolCall'|'toolResult'}` parts, or OpenAI's top-level
  * `tool_calls`. This module recognizes those shapes once, instead of every
- * caller re-parsing them with its own drifted truncation rules.
+ * caller re-parsing them with its own drifted truncation rules. The VS Code
+ * `kind`-tag and top-level `tool_calls` shapes are recognized via the schema
+ * and normalizers in `@agent/types/ContentBlockSchema`, shared with
+ * `assistantBlockToNode` in `@agent/export/normalizeConversation` so a new
+ * provider block type is added in one place instead of two independently
+ * hand-rolled switches.
  *
  * Used by:
  *  - `ExecutionsTool`'s `/executions/{id}/conversation` endpoint
@@ -22,6 +27,10 @@
  * truncation for the CLI). Provider-native message and content recognition is
  * shared here.
  */
+import {
+  extractFunctionToolCallFields,
+  normalizeVsCodeLmBlock,
+} from '@agent/types/ContentBlockSchema';
 import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
@@ -192,8 +201,10 @@ function formatWebFetchResultMarker(
  * Render a single content-block (an element of a message's `content`/`parts`
  * array) to text. Handles Anthropic's `{type: ...}` discriminated blocks,
  * Google's discriminator-less `{text}`/`{functionCall}`/`{functionResponse}`
- * parts, VS Code LM's `kind`-discriminated parts, and falls back to a JSON dump
- * for unrecognized shapes.
+ * parts, VS Code LM's `kind`-discriminated parts (via
+ * {@link normalizeVsCodeLmBlock}, shared with `assistantBlockToNode` in
+ * `@agent/export/normalizeConversation`), and falls back to a JSON dump for
+ * unrecognized shapes.
  */
 function formatConversationBlock(
   block: unknown,
@@ -209,17 +220,24 @@ function formatConversationBlock(
       options,
     );
   }
-  switch (block.kind) {
-    case 'text':
-      return truncate(asText(block.text), options.textLimit, options);
-    case 'toolCall':
-      return formatToolUseMarker(
-        asText(block.name) || 'unknown',
-        block.input,
-        options,
-      );
-    case 'toolResult':
-      return formatToolResultMarker(block.text, options);
+  // VS Code language-model bridge's `kind`-tagged parts normalize into the
+  // canonical `type`-tagged shape rendered below — anything else (including
+  // every other provider's already `type`-tagged blocks, which never carry a
+  // `kind` field) falls through unchanged.
+  const vsCodeBlock = normalizeVsCodeLmBlock(block);
+  if (vsCodeBlock) {
+    switch (vsCodeBlock.type) {
+      case 'text':
+        return truncate(asText(vsCodeBlock.text), options.textLimit, options);
+      case CONVERSATION_BLOCK_TYPES.toolUse:
+        return formatToolUseMarker(
+          asText(vsCodeBlock.name) || 'unknown',
+          vsCodeBlock.input,
+          options,
+        );
+      case CONVERSATION_BLOCK_TYPES.toolResult:
+        return formatToolResultMarker(vsCodeBlock.content, options);
+    }
   }
   // Google's `parts` entries have no `type` discriminator at all — a plain
   // `text` field is the only signal, so check it before the `type` switch.
@@ -261,10 +279,11 @@ function formatConversationBlock(
     );
   }
 
-  // Non-text tags are shared with the `assistantBlockToNode` switch in
-  // `@agent/export/normalizeConversation` via `CONVERSATION_BLOCK_TYPES`
-  // (`@agent/types/ConversationBlockTypes`) and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
-  // (`@agent/types/ServerToolTypes`) — both switches must recognize the same
+  // Non-text tags are the same `ContentBlockSchema` vocabulary consumed by
+  // the `assistantBlockToNode` switch in `@agent/export/normalizeConversation`
+  // (`@agent/types/ContentBlockSchema`, `CONVERSATION_BLOCK_TYPES` from
+  // `@agent/types/ConversationBlockTypes`, and `ANTHROPIC_SERVER_TOOL_BLOCK_TYPES`
+  // from `@agent/types/ServerToolTypes`) — both switches recognize the same
   // tags, just into different output shapes (a truncated marker string here
   // vs. a structured `ExportNode` there). `text`/`input_text`/`output_text`
   // are the exception: they're caught by the duck-typed `block.text` check
@@ -401,12 +420,10 @@ function formatTopLevelToolCall(
       options,
     )}]`;
   }
-  const nestedFunction = isObject(toolCall.function)
-    ? toolCall.function
-    : undefined;
-  const name =
-    asText(nestedFunction?.name) || asText(toolCall.name) || 'unknown';
-  const input =
-    nestedFunction?.arguments ?? toolCall.arguments ?? toolCall.input ?? {};
-  return formatToolUseMarker(name, input, options);
+  // Shared with `getAssistantToolCalls` in `@agent/export/normalizeConversation`
+  // via `extractFunctionToolCallFields` (`@agent/types/ContentBlockSchema`) —
+  // that path additionally SDK-validates each entry as a genuine function
+  // tool call; this one renders whatever shape is present.
+  const { name, input } = extractFunctionToolCallFields(toolCall);
+  return formatToolUseMarker(name || 'unknown', input ?? {}, options);
 }
