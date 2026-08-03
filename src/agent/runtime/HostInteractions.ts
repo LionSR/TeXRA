@@ -2,10 +2,6 @@ import { createChannelTrace } from '@agent/trace';
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@platform/interfaces';
-import type {
   AgentProposal,
   FileLocation,
   Plan,
@@ -17,6 +13,10 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
+import type {
+  ToolEditApprovalRequest,
+  ToolEditApprovalResult,
+} from '@tools/approval/toolEditApproval';
 import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
