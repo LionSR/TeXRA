@@ -460,6 +460,12 @@ describe('executeCliRequest', () => {
       const config = AgentConfigSchema.parse(toolUseConfig());
 
       await getExecutionStore(executionId).writeConfig(config);
+      // Emitter contract (#9590 A4/Stage 6): the authority write to
+      // `ExecutionMeta.description` lands before the display event below.
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: new Date(0).toISOString(),
+        description: 'chat / gpt54',
+      });
       defaultSession().events.emit({
         scope: 'run',
         streamId,
@@ -532,7 +538,14 @@ describe('executeCliRequest', () => {
       cost: 0.5,
     });
     expect(snapshot.executionId).toBe(executionId);
-    expect(snapshot.description).toBe('chat / gpt54');
+    // Current records read the description via ExecutionMeta (#9590 Stage 6);
+    // the snapshot field is the legacy sidecar mirror and stays unwritten.
+    expect(reader.getDescription(streamId)).toBe('chat / gpt54');
+    expect(snapshot.description).toBeUndefined();
+    const { getExecutionStore } = await import('@agent/storage');
+    expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
+      'chat / gpt54',
+    );
     expect(snapshot.parentStreamId).toBe(parentStreamId);
     expect(reader.getRunConfig(streamId)).toMatchObject({
       agent: 'chat',
