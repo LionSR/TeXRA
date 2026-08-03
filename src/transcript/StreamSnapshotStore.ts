@@ -1579,7 +1579,7 @@ export class StreamSnapshotStore {
   /**
    * Execution id recorded in a stream sidecar's `meta.json`, without seeding
    * memory or reading the stream's other sidecar files. Callers that scan
-   * every persisted stream (the `executionStreamResolver` meta-match, bulk
+   * every persisted stream (the `legacyExecutionIdentity` meta-match, bulk
    * admin sweeps in `SessionStores`) only ever need this one field, so this
    * reads just `meta.json` rather than the full 6-file `readStreamData()`.
    */
