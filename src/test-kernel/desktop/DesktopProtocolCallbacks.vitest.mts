@@ -69,7 +69,6 @@ describe('desktop protocol callbacks', () => {
         'texra://texra-ai.texra/auth-callback?state=abc&code=authorization-code',
       path: '/auth-callback',
       query: 'state=abc&code=authorization-code',
-      fragment: '',
     });
   });
 
@@ -78,7 +77,6 @@ describe('desktop protocol callbacks', () => {
       rawUrl: 'texra://auth-callback',
       path: '/auth-callback',
       query: '',
-      fragment: '',
     });
   });
 
@@ -87,7 +85,6 @@ describe('desktop protocol callbacks', () => {
       rawUrl: 'texra://auth-callback/',
       path: '/auth-callback',
       query: '',
-      fragment: '',
     });
   });
 
@@ -100,7 +97,6 @@ describe('desktop protocol callbacks', () => {
       rawUrl: 'texra://texra-ai.texra/auth-callback/?state=abc',
       path: '/auth-callback',
       query: 'state=abc',
-      fragment: '',
     });
   });
 
