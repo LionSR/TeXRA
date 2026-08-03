@@ -10,10 +10,6 @@ import {
 } from '@agent/runtime/RunContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@platform/interfaces';
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
@@ -33,7 +29,41 @@ import {
 } from '@utils/text/diff';
 import { countLines } from '@utils/text/stringUtils';
 
-export type { ToolEditApprovalRequest, ToolEditApprovalResult };
+/**
+ * Tool-edit approval request / result shapes.
+ *
+ * Hosts receive these through `SessionHandle.interactions`, not through the
+ * process-wide Platform object — this is a session-scoped host-interaction
+ * contract, not a `Platform` port.
+ */
+export interface ToolEditApprovalRequest {
+  readonly path: string;
+  readonly originalContent: string;
+  readonly proposedContent: string;
+  readonly sourceTool: string;
+  readonly streamId?: string | null;
+}
+
+/**
+ * `appliedContent` is required on acceptance — every host implementation
+ * always supplies the content the user actually approved, so this is a
+ * type-level guarantee rather than a convention callers must null-check.
+ */
+export type ToolEditApprovalResult =
+  | {
+      readonly accepted: true;
+      readonly appliedContent: string;
+      readonly userPatch?: string;
+      readonly lineChanges?: {
+        readonly added: number;
+        readonly removed: number;
+      };
+      readonly startLine?: number;
+    }
+  | {
+      readonly accepted: false;
+      readonly userMessage?: string;
+    };
 
 const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
