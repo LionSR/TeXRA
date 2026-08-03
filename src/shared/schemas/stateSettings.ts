@@ -264,6 +264,12 @@ const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/pathResolution.ts',
 } satisfies CliRuntimeReachability;
+const AGENT_SKILLS_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/utils/userVars.ts',
+} satisfies CliRuntimeReachability;
 
 const PROXY_CONFIG_CONSUMER =
   'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
@@ -750,10 +756,14 @@ const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
   STATE_SETTINGS.map((entry) => [entry.key, entry]),
 );
 
-// These two rows already belong to CoreSettingsShape, so they must not enter
-// the state-backed catalog above. They carry only the storage and rebroadcast
+// These rows already belong to CoreSettingsShape, so they must not enter the
+// state-backed catalog above. They carry only the storage and rebroadcast
 // metadata needed by the settings view's unified scalar-write boundary.
-const SETTINGS_VIEW_CORE_SETTINGS = [
+// Exported so host rosters and the guardrail suite can iterate the full
+// catalog (state-backed plus settings-view rows) in one place. Typed at the
+// catalog-entry level (not `as const`) so `hosts.includes('cli')` checks
+// compile against the widened `SettingHost` union.
+export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: 'texra.latex.wrapCritiqueInAlign',
     schema: CoreSettingsShape.latex.unwrap().shape.wrapCritiqueInAlign,
@@ -835,7 +845,9 @@ const SETTINGS_VIEW_CORE_SETTINGS = [
       'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
     category: 'tools',
     store: 'config',
-    hosts: ['vscode', 'desktop'],
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/agent/utils/userVars.ts',
+    cliRuntimeReachability: AGENT_SKILLS_RUNTIME_REACHABILITY,
     settingsViewSnapshot: 'agent-skills',
   },
   {
@@ -850,7 +862,7 @@ const SETTINGS_VIEW_CORE_SETTINGS = [
     hosts: ['vscode', 'desktop'],
     settingsViewSnapshot: 'telemetry',
   },
-] as const satisfies readonly StateSettingEntry[];
+];
 
 const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
   string,
@@ -877,12 +889,17 @@ export function settingsViewSettingByKey(
 }
 
 /**
- * The single canonical "CLI roster" — catalog entries the CLI consumes. Both
- * the `/config` panel and any key-list derivation come from this one filter so
- * the `hosts.includes('cli')` predicate lives in exactly one place.
+ * The single canonical "CLI roster" — catalog entries the CLI consumes,
+ * spanning both the state-backed catalog and the settings-view core rows
+ * (e.g. Agent skills, which the CLI reads from `texra.skills.enabled` in
+ * config). Both the `/config` panel and any key-list derivation come from
+ * this one filter so the `hosts.includes('cli')` predicate lives in exactly
+ * one place.
  */
-export const CLI_STATE_SETTINGS: readonly StateSettingEntry[] =
-  STATE_SETTINGS.filter((entry) => entry.hosts.includes('cli'));
+export const CLI_STATE_SETTINGS: readonly StateSettingEntry[] = [
+  ...STATE_SETTINGS,
+  ...SETTINGS_VIEW_CORE_SETTINGS,
+].filter((entry) => entry.hosts.includes('cli'));
 
 /** The entry's schema with the outer `.prefault()` wrapper peeled off. */
 function innerSchema(entry: StateSettingEntry): unknown {

@@ -51,6 +51,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 import {
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_NAME,
+  SETTINGS_VIEW_CORE_SETTINGS,
   STATE_SETTINGS,
   type StateSettingEntry,
 } from '@shared/schemas/stateSettings';
@@ -212,9 +213,9 @@ function openConfigFormProps(
 describe('ConfigForm helpers', () => {
   it('rosters exactly the CLI-consumed catalog entries', () => {
     expect([...CLI_STATE_SETTINGS].map((entry) => entry.key)).toEqual(
-      STATE_SETTINGS.filter((entry) => entry.hosts.includes('cli')).map(
-        (entry) => entry.key,
-      ),
+      [...STATE_SETTINGS, ...SETTINGS_VIEW_CORE_SETTINGS]
+        .filter((entry) => entry.hosts.includes('cli'))
+        .map((entry) => entry.key),
     );
     expect(CLI_STATE_SETTINGS.length).toBeGreaterThan(0);
     // Every rostered entry must be reachable from the CLI's store set.
