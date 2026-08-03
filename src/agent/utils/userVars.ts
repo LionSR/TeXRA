@@ -1,7 +1,12 @@
 import * as path from 'node:path';
 
+import { z } from 'zod';
+
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
+import {
+  AttachedMemoryMissSchema,
+  type AttachedMemoryMiss,
+} from '@agent/types/AttachedMemory';
 import {
   AgentSetting,
   AgentPrompt,
@@ -46,65 +51,87 @@ import { StorageFS } from '@utils/files/storageFS';
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 
 /**
- * User variables for prompt rendering
- */
-export type UserVars = Record<string, unknown>;
-
-/**
- * Fixed runtime template variables owned by `buildUserVars`.
+ * Fixed runtime template variables owned by `buildUserVars`, with the exact
+ * type each builder produces. This is the single source of truth: both the
+ * `UserVars` type and `USER_VAR_RUNTIME_TOKENS` are derived from it, so a
+ * builder that drops or misspells a key is a compile error instead of a
+ * silent runtime gap.
  *
  * Agent-creation templates render once when a YAML file is produced, then the
  * generated agent renders again at runtime. These tokens must pass through the
  * creation render literally so the runtime render can substitute them later.
  * User-defined `requiredFilesInternal` variables are intentionally not in this
- * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
- * disabled until there is a separate validation story for them.
+ * fixed schema; they remain caller-supplied names carried as a plain
+ * `Record<string, string>`, and `throwOnUndefined` stays disabled until there
+ * is a separate validation story for them.
  */
-export const USER_VAR_RUNTIME_TOKENS = [
-  'MODEL',
-  'INSTRUCTION',
-  'IS_OPENAI_MODEL',
-  'IS_ANTHROPIC_MODEL',
-  'IS_GOOGLE_MODEL',
-  'WORKFLOW_AGENTS',
-  'TOOL_USE_AGENTS',
-  'CWD',
-  'DEFAULT_BIB_PATH',
-  'BUILTIN_WORKFLOW_DIR',
-  'BUILTIN_TOOLUSE_DIR',
-  'CUSTOM_AGENTS_DIR',
-  'AGENT_DOCS_DIR',
-  'INPUT_FILE',
-  'INPUT_CONTENT',
-  'INPUT_FILES',
-  'ALL_INPUTS',
-  'LIST_OF_ALL_INPUTS',
-  'CONTEXT_FILE',
-  'CONTEXT_CONTENT',
-  'CONTEXT_FILES',
-  'ALL_CONTEXTS',
-  'LIST_OF_ALL_CONTEXTS',
-  'EDITED_FILE',
-  'EDITED_CONTENT',
-  'EDITED_FILES',
-  'ALL_EDITEDS',
-  'LIST_OF_ALL_EDITEDS',
-  'MEDIA_FILE',
-  'MEDIA_CONTENT',
-  'OUTPUT_FILES',
-  'AUTO_EXTRACT_FIGURE',
-  'AUTO_EXTRACT_TIKZ_FIGURE',
-  'INCLUDE_TEX_COUNT',
-  'PRINT_INPUT_PROMPT',
-  'AUTO_COMPILE_INPUT_PDF',
-  'CODEX_GUIDANCE',
-  'CLAUDE_CODE_GUIDANCE',
-  'ROUNDS',
-  'LATEX_STYLE_RULES',
-  'ATTACHED_MEMORIES',
-  'ATTACHED_MEMORY_MISSES',
-  'AVAILABLE_SKILLS',
-] as const;
+const UserVarsSchema = z.object({
+  MODEL: z.string(),
+  INSTRUCTION: z.string(),
+  IS_OPENAI_MODEL: z.boolean(),
+  IS_ANTHROPIC_MODEL: z.boolean(),
+  IS_GOOGLE_MODEL: z.boolean(),
+  WORKFLOW_AGENTS: z.string(),
+  TOOL_USE_AGENTS: z.string(),
+  CWD: z.string(),
+  DEFAULT_BIB_PATH: z.string(),
+  BUILTIN_WORKFLOW_DIR: z.string(),
+  BUILTIN_TOOLUSE_DIR: z.string(),
+  CUSTOM_AGENTS_DIR: z.string(),
+  AGENT_DOCS_DIR: z.string(),
+
+  INPUT_FILE: z.string().nullable(),
+  INPUT_CONTENT: z.string().nullable(),
+  INPUT_FILES: z.array(z.string()),
+  ALL_INPUTS: z.string().nullable(),
+  LIST_OF_ALL_INPUTS: z.string(),
+
+  CONTEXT_FILE: z.string().nullable(),
+  CONTEXT_CONTENT: z.string().nullable(),
+  CONTEXT_FILES: z.array(z.string()),
+  ALL_CONTEXTS: z.string().nullable(),
+  LIST_OF_ALL_CONTEXTS: z.string(),
+
+  EDITED_FILE: z.string().nullable(),
+  EDITED_CONTENT: z.string().nullable(),
+  EDITED_FILES: z.array(z.string()),
+  ALL_EDITEDS: z.string().nullable(),
+  LIST_OF_ALL_EDITEDS: z.string(),
+
+  MEDIA_FILE: z.string().nullable(),
+  MEDIA_CONTENT: z.null(),
+
+  // Only set when there are usable output files at all.
+  OUTPUT_FILES: z.array(z.string()).nullish(),
+
+  AUTO_EXTRACT_FIGURE: z.boolean(),
+  AUTO_EXTRACT_TIKZ_FIGURE: z.boolean(),
+  INCLUDE_TEX_COUNT: z.boolean(),
+  PRINT_INPUT_PROMPT: z.boolean(),
+  AUTO_COMPILE_INPUT_PDF: z.boolean(),
+  CODEX_GUIDANCE: z.string(),
+  CLAUDE_CODE_GUIDANCE: z.string(),
+  // Only computed for workflow agents, not tool-use agents.
+  ROUNDS: z.number().nullish(),
+
+  LATEX_STYLE_RULES: z.string(),
+  ATTACHED_MEMORIES: z.string().nullable(),
+  ATTACHED_MEMORY_MISSES: z.array(AttachedMemoryMissSchema),
+  AVAILABLE_SKILLS: z.string(),
+});
+
+type KnownUserVars = z.infer<typeof UserVarsSchema>;
+
+/**
+ * User variables for prompt rendering: the fixed, known set above plus
+ * caller-supplied `requiredFilesInternal` var names, which aren't part of the
+ * fixed schema (see `UserVarsSchema`'s doc comment).
+ */
+export type UserVars = KnownUserVars & Record<string, unknown>;
+
+export const USER_VAR_RUNTIME_TOKENS = Object.keys(
+  UserVarsSchema.shape,
+) as ReadonlyArray<keyof KnownUserVars>;
 
 export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
@@ -140,10 +167,11 @@ export interface BuildUserVarsOptions {
 }
 
 /**
- * Result of loading file-based variables
+ * Result of loading the caller-supplied `requiredFilesInternal` file vars.
+ * Keyed by arbitrary YAML `varName`s, not part of the fixed `UserVarsSchema`.
  */
 type FileVarsResult = {
-  vars: UserVars;
+  vars: Record<string, string>;
   files: LoadedFileEntry[];
 };
 
@@ -227,7 +255,22 @@ function getBasicVars(
   agentConfig: AgentConfig,
   providerFlags: ModelProviderFlags,
   options: BuildUserVarsOptions,
-): UserVars {
+): Pick<
+  KnownUserVars,
+  | 'MODEL'
+  | 'INSTRUCTION'
+  | 'IS_OPENAI_MODEL'
+  | 'IS_ANTHROPIC_MODEL'
+  | 'IS_GOOGLE_MODEL'
+  | 'WORKFLOW_AGENTS'
+  | 'TOOL_USE_AGENTS'
+  | 'CWD'
+  | 'DEFAULT_BIB_PATH'
+  | 'BUILTIN_WORKFLOW_DIR'
+  | 'BUILTIN_TOOLUSE_DIR'
+  | 'CUSTOM_AGENTS_DIR'
+  | 'AGENT_DOCS_DIR'
+> {
   // Build agent lists for template use. Tool-use agents append their tools.
   function formatAgentList(
     agents: Pick<AgentEntry, 'name' | 'description' | 'tools'>[],
@@ -288,14 +331,20 @@ function getBasicVars(
  * label cannot break prompt rendering. Absent roots render as empty strings
  * (e.g. in tests that don't run activation).
  */
-function getAgentDirectoryVars(): UserVars {
+function getAgentDirectoryVars(): Pick<
+  KnownUserVars,
+  | 'BUILTIN_WORKFLOW_DIR'
+  | 'BUILTIN_TOOLUSE_DIR'
+  | 'CUSTOM_AGENTS_DIR'
+  | 'AGENT_DOCS_DIR'
+> {
   const KIND_TO_VAR: Record<ExternalRootKind, string> = {
     builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
     builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
     custom: 'CUSTOM_AGENTS_DIR',
     agentDocs: 'AGENT_DOCS_DIR',
   };
-  const vars: UserVars = {
+  const vars: Record<string, string> = {
     BUILTIN_WORKFLOW_DIR: '',
     BUILTIN_TOOLUSE_DIR: '',
     CUSTOM_AGENTS_DIR: '',
@@ -304,40 +353,76 @@ function getAgentDirectoryVars(): UserVars {
   for (const root of listExternalRoots()) {
     vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
   }
-  return vars;
+  // Loop writes computed keys from KIND_TO_VAR's values, which TS can't
+  // verify incrementally match the four literal keys seeded above.
+  return vars as Pick<
+    KnownUserVars,
+    | 'BUILTIN_WORKFLOW_DIR'
+    | 'BUILTIN_TOOLUSE_DIR'
+    | 'CUSTOM_AGENTS_DIR'
+    | 'AGENT_DOCS_DIR'
+  >;
 }
 
-// Maps a template prefix to its canonical file-list field.
+// Maps a template prefix to its canonical file-list field, via typed
+// accessors rather than a `keyof AgentConfig` lookup table — that would need
+// an `as string[]`/`as string | null` cast at the read site to recover the
+// per-field type a bare key name can't express.
 type FileCategoryConfig = {
-  multiple: keyof AgentConfig;
-  single?: keyof AgentConfig;
+  readonly getMultiple: (config: AgentConfig) => string[];
+  readonly getSingle?: (config: AgentConfig) => string | null;
 };
 
 const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
-  INPUT: { multiple: 'inputFiles' },
-  CONTEXT: { multiple: 'contextFiles' },
-  MEDIA: { multiple: 'mediaFiles' },
-  EDITED: { multiple: 'editedFiles', single: 'editedFile' },
+  INPUT: { getMultiple: (config) => config.inputFiles },
+  CONTEXT: { getMultiple: (config) => config.contextFiles },
+  MEDIA: { getMultiple: (config) => config.mediaFiles },
+  EDITED: {
+    getMultiple: (config) => config.editedFiles,
+    getSingle: (config) => config.editedFile,
+  },
 };
 
 /** Get the multi-list for a category (filtering empties) */
 function getCategoryFiles(config: AgentConfig, category: string): string[] {
   const cat = FILE_CATEGORIES[category];
   if (!cat) return [];
-  const list = (config[cat.multiple] as string[] | undefined) ?? [];
-  const single = cat.single ? (config[cat.single] as string | null) : null;
+  const list = cat.getMultiple(config);
+  const single = cat.getSingle ? cat.getSingle(config) : null;
   return unique([single, ...list].filter(isNonEmptyString));
 }
 
 /** Categories used for building file vars (excludes MEDIA which is display-only) */
 const FILE_VAR_CATEGORIES = ['INPUT', 'CONTEXT', 'EDITED'];
 
+type FileCategoryVarKeys =
+  | 'INPUT_FILE'
+  | 'INPUT_CONTENT'
+  | 'INPUT_FILES'
+  | 'ALL_INPUTS'
+  | 'LIST_OF_ALL_INPUTS'
+  | 'CONTEXT_FILE'
+  | 'CONTEXT_CONTENT'
+  | 'CONTEXT_FILES'
+  | 'ALL_CONTEXTS'
+  | 'LIST_OF_ALL_CONTEXTS'
+  | 'EDITED_FILE'
+  | 'EDITED_CONTENT'
+  | 'EDITED_FILES'
+  | 'ALL_EDITEDS'
+  | 'LIST_OF_ALL_EDITEDS'
+  | 'MEDIA_FILE'
+  | 'MEDIA_CONTENT';
+
 async function getFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentTrace,
-): Promise<UserVars> {
-  const userVars: UserVars = {};
+): Promise<Pick<KnownUserVars, FileCategoryVarKeys>> {
+  // Keys are computed per FILE_VAR_CATEGORIES entry (`${prefix}_FILE`, etc.),
+  // which TS can't verify incrementally match FileCategoryVarKeys — see the
+  // single contained cast at the return below.
+  const userVars: Record<string, unknown> = {};
 
   const contextFiles = getCategoryFiles(agentConfig, 'CONTEXT');
 
@@ -379,7 +464,7 @@ async function getFileVars(
   userVars.MEDIA_FILE = mediaFiles[0] ?? null;
   userVars.MEDIA_CONTENT = null;
 
-  return userVars;
+  return userVars as Pick<KnownUserVars, FileCategoryVarKeys>;
 }
 
 /**
@@ -431,7 +516,7 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
 ): Promise<FileVarsResult> {
-  const vars: UserVars = {};
+  const vars: Record<string, string> = {};
   const files: LoadedFileEntry[] = [];
 
   for (const [varName, filePath] of Object.entries(
@@ -500,8 +585,8 @@ async function getAttachedMemories(
 export function resolveOutputFiles(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-): UserVars {
-  const userVars: UserVars = {};
+): Pick<KnownUserVars, 'OUTPUT_FILES'> {
+  const userVars: Pick<KnownUserVars, 'OUTPUT_FILES'> = {};
   const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
   const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
     Boolean,
@@ -523,12 +608,22 @@ export function resolveOutputFiles(
   return userVars;
 }
 
+type ToolFlagsKeys =
+  | 'AUTO_EXTRACT_FIGURE'
+  | 'AUTO_EXTRACT_TIKZ_FIGURE'
+  | 'INCLUDE_TEX_COUNT'
+  | 'PRINT_INPUT_PROMPT'
+  | 'AUTO_COMPILE_INPUT_PDF'
+  | 'CODEX_GUIDANCE'
+  | 'CLAUDE_CODE_GUIDANCE'
+  | 'ROUNDS';
+
 export function getToolFlags(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
-): UserVars {
-  const flags: UserVars = {
+): Pick<KnownUserVars, ToolFlagsKeys> {
+  const flags: Pick<KnownUserVars, ToolFlagsKeys> = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
