@@ -36,7 +36,7 @@ import {
  * `extensionCommandSurface.ts`, which wires the real actions against VS
  * Code APIs) so it — and the catalog-derived types/handler map it
  * exports — can be imported directly from Vitest suites without a
- * `vscode` mock, the same way `packages/desktop/src/desktopCommandSurface.ts`
+ * `vscode` mock, the same way `packages/desktop/src/shared/desktopCommandSurface.ts`
  * is testable today.
  */
 

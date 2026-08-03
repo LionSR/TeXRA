@@ -25,7 +25,7 @@ slow and token-expensive in three compounding ways:
    `docs/pocketflow/core_abstraction/parallel.md` but not implemented.
 3. **Results and files only flow between agents through an LLM.** A child's
    typed `AgentFlowResult` is flattened by `formatSubagentDelivery`
-   (`src/tools/subagentResults.ts`) into an XML string injected into the
+   (`src/tools/delegation/subagentResults.ts:150`) into an XML string injected into the
    parent's conversation; chaining one agent's output into another's input
    requires the orchestrator to call `accept_run_files` and re-list paths —
    two more model round-trips per pipeline edge.

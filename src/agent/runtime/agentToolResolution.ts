@@ -46,12 +46,12 @@ import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
 import {
   availableModelNamesFromOptions,
   withDelegationModelAvailability,
-} from '@tools/delegationModelAvailability';
+} from '@tools/delegation/delegationModelAvailability';
 import {
   visibleDelegationAgentsBlock,
   withDelegationAgentAvailability,
-} from '@tools/delegationAgentAvailability';
-import { withDelegationWorktreeAvailability } from '@tools/delegationWorktreeAvailability';
+} from '@tools/delegation/delegationAgentAvailability';
+import { withDelegationWorktreeAvailability } from '@tools/delegation/delegationWorktreeAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   SharedToolInjectionRegistry,

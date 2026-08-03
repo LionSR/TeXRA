@@ -29,10 +29,6 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
-  createRehydratedChildStream,
-  getChildStreamId,
-} from '@tools/childStream';
-import {
   assertWritable,
   resolveWorkspaceRelativePath,
 } from '@tools/pathResolution';
@@ -41,6 +37,7 @@ import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
+import { createRehydratedChildStream, getChildStreamId } from './childStream';
 
 // Local file imports
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';

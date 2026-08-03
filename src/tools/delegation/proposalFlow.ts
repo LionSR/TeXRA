@@ -22,19 +22,19 @@ import {
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovals } from '@tools/approval';
-import {
-  availableModelNamesFromOptions,
-  selectDelegationModelFromAvailableNames,
-} from '@tools/delegationModelAvailability';
+import { errorResult, executed } from '@tools/core/result';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   getDelegationAgent,
   getDelegationAgentForScope,
   getDelegationAgents,
   getDelegationAgentsForScope,
-} from '@tools/delegationAgentAvailability';
-import { errorResult, executed } from '@tools/core/result';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+} from './delegationAgentAvailability';
+import {
+  availableModelNamesFromOptions,
+  selectDelegationModelFromAvailableNames,
+} from './delegationModelAvailability';
 
 // Local file imports
 import { executeSubagent } from './subagentExecution';

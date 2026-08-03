@@ -381,7 +381,7 @@ function toStringArray(value: unknown): string[] | undefined {
 
 /**
  * `DelegateAgentInput`/`WorkflowAgentInput` derive from host-only schemas
- * (`@tools/DelegationTools`, `@tools/delegation/inputFields`), unavailable as
+ * (`@tools/delegation/DelegationTools`, `@tools/delegation/inputFields`), unavailable as
  * runtime imports here (see the import-block comment above). Each displayed
  * field is read with its own guard.
  */

@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - desktop messages and test support
-import { DESKTOP_LOCAL_COMMANDS } from '@desktop/desktopCommandSurface';
-import { DESKTOP_LOG_COMMANDS } from '@desktop/desktopLogMessages';
+import { DESKTOP_LOCAL_COMMANDS } from '@desktop/shared/desktopCommandSurface';
+import { DESKTOP_LOG_COMMANDS } from '@desktop/shared/desktopLogMessages';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 import { repoPath } from './desktopTestPaths.mjs';
 

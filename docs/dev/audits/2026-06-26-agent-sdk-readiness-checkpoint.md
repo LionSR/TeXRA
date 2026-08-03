@@ -174,7 +174,7 @@ mechanism**; the only gap is that it is a _tool call_, not a typed primitive:
   subagent is a YAML + tool-list, never new flow code.
 - Teams (`AGENT_MODE_PRESETS`) are the SDK "available subagents" roster;
   `delegate_agent`/`delegate_workflow` + `executeSubagent`
-  (`src/tools/DelegationTools.ts`) are the isolated-context delegation primitive
+  (`src/tools/delegation/DelegationTools.ts`) are the isolated-context delegation primitive
   (own `RunContext`, KV store, usage accumulator, depth-gating, cost roll-up,
   async result delivery via `FollowUpQueue`); read-only-by-tool reviewers
   (`changeReviewer`, no bash) already model SDK tool-scoping.
