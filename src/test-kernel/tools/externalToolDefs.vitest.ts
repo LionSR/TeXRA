@@ -28,7 +28,7 @@ describe('external tool definitions', () => {
   });
 
   it('keeps the workflow script tool as a user-toggleable, always-available group', async () => {
-    const workflowScript = findExternalToolDef('multi-agent-workflow');
+    const workflowScript = findExternalToolDef('workflow-script');
 
     assert.ok(workflowScript, 'Workflow script tool definition should exist');
     assert.strictEqual(workflowScript.toggleable, true);

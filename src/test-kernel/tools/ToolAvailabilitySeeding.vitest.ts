@@ -3,15 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
-import {
-  getDisabledToolNames,
-  seedDisabledToolDefaults,
-} from '@tools/toolAvailability';
-import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 const VERSION_KEY = 'test.lastKnownVersion';
 
@@ -56,36 +51,5 @@ describe('seedDisabledToolDefaults', () => {
     expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
       [],
     );
-  });
-});
-
-describe('renamed tool group IDs', () => {
-  afterEach(async () => {
-    await installPlatform();
-  });
-
-  it('keeps a group disabled when its persisted ID was renamed', async () => {
-    await installPlatform({
-      globalState: { [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script'] },
-    });
-
-    expect(getDisabledToolIds().has('multi-agent-workflow')).toBe(true);
-    expect(getDisabledToolNames().has(DELEGATE_MULTI_AGENTS_TOOL_NAME)).toBe(
-      true,
-    );
-  });
-
-  it('rewrites the persisted list to the current ID on the next toggle', async () => {
-    await installPlatform({
-      globalState: {
-        [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script', 'lean4'],
-      },
-    });
-
-    await setToolEnabled('lean4', true);
-
-    expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual([
-      'multi-agent-workflow',
-    ]);
   });
 });

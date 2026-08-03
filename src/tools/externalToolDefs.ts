@@ -453,7 +453,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     }),
   },
   {
-    id: 'multi-agent-workflow',
+    id: 'workflow-script',
     tools: [DELEGATE_MULTI_AGENTS_TOOL_NAME],
     name: 'Multi-Agent Workflow',
     category: 'workflow',

@@ -422,7 +422,7 @@ await initLocalCliPlatform({
   version: '0.0.0-harness',
 });
 if (RESET_WORKFLOW_SCRIPT_DISABLED) {
-  await setCliToolEnabled('multi-agent-workflow', false);
+  await setCliToolEnabled('workflow-script', false);
 }
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
