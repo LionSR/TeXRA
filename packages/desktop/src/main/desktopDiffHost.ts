@@ -18,7 +18,7 @@ import {
   DESKTOP_DIFF_COMMANDS,
   type DesktopShowDiffMessage,
   monacoLanguageForFilePath,
-} from '../desktopDiffMessages.js';
+} from '../shared/desktopDiffMessages.js';
 import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,

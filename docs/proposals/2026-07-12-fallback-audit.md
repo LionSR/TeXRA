@@ -901,7 +901,7 @@ uncertainty should fail closed.
   through to route inference;
 - `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:433-450`:
   launch-time repair for a leftover flow without a resume snapshot;
-- `packages/extension/src/MainViewProvider.ts:231-236`: producer dual-writes
+- `packages/extension/src/webview/MainViewProvider.ts:233-242`: producer dual-writes
   `optionsData` and `optionsDataByCategory`;
 - `src/shared/schemas/mainView/outbound.ts:21-30` and
   `packages/extension/src/webview/frontend/slices/catalogSlice.ts:70-87`: the UI

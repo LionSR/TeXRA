@@ -85,7 +85,7 @@ async function createOnboardingHarness({
     { DESKTOP_ONBOARDING_DISMISSED_STATE_KEY },
   ] = await Promise.all([
     loadSourceModule('@desktop/main/desktopOnboardingIpc'),
-    loadSourceModule('@desktop/desktopOnboardingMessages'),
+    loadSourceModule('@desktop/shared/desktopOnboardingMessages'),
   ]);
   const state = new FakeStateStore({ ...seed });
   const update = vi.spyOn(state, 'update');

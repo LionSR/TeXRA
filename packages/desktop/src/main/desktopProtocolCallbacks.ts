@@ -4,7 +4,7 @@ import {
   isDesktopProtocolUrl,
   TEXRA_PROTOCOL,
   TEXRA_PROTOCOL_SCHEME,
-} from '../desktopProtocol.js';
+} from '../shared/desktopProtocol.js';
 
 export interface DesktopProtocolCallback {
   rawUrl: string;

@@ -14,7 +14,7 @@ import {
   buildDesktopOnboardingSetStateMessage,
   DESKTOP_ONBOARDING_COMMANDS,
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-} from '../desktopOnboardingMessages.js';
+} from '../shared/desktopOnboardingMessages.js';
 import {
   createCommandHandler,
   type DesktopMessageHandler,

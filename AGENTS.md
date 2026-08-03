@@ -444,7 +444,7 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `DelegationTools.ts` or a resume path). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
+- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts` or a resume path). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - Resume a persisted tool-use session via `resumeToolUseFromResumeData` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
 - Add new model handlers under `src/agent/modelHandlers/<provider>/` (no barrel — import via the `@agent/modelHandlers/<provider>/<File>` alias, per that directory's `README.md`), and register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
@@ -468,7 +468,7 @@ The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`,
 descendant of upstream PocketFlow and does **not** implement the upstream
 `BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, or the
 `params`/`setParams` channel; do not write code against them. State slices that
-travel through the flows are described in `docs/pocketflow/state_architecture.md`.
+travel through the flows are described in `docs/architecture/pocketflow-state.md`.
 
 **Webviews and UI**
 

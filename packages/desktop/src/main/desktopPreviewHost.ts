@@ -13,7 +13,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DESKTOP_PDF_COMMANDS,
   type DesktopShowPdfMessage,
-} from '../desktopPdfMessages.js';
+} from '../shared/desktopPdfMessages.js';
 import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,

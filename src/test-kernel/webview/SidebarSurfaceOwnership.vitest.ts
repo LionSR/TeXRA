@@ -86,8 +86,7 @@ vi.mock('@utils/config/configUtils', () => ({ watchConfig: vi.fn() }));
 
 const { SIDEBAR_VIEWS, getActiveSidebarView, setActiveSidebarView } =
   await import('@common/webview');
-const { MainViewProvider } =
-  await import('../../../packages/extension/src/MainViewProvider');
+const { MainViewProvider } = await import('@webview/MainViewProvider');
 
 function createWebviewView() {
   return {

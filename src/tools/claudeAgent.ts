@@ -63,7 +63,7 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { type ChildStream } from './childStream';
+import { type ChildStream } from './delegation/childStream';
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   launchAgentCliSession,
@@ -74,7 +74,7 @@ import {
 import {
   formatChildRunDelivery,
   formatChildRunError,
-} from './deliveryEnvelope';
+} from './delegation/deliveryEnvelope';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,

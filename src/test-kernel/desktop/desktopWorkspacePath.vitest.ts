@@ -8,7 +8,7 @@ import {
   hasResolvedWorkspacePath,
   serializeWorkspacePresenceArg,
   withWorkspacePathArg,
-} from '@desktop/workspacePath';
+} from '@desktop/shared/workspacePath';
 import { resolveWorkspacePath } from '@desktop/main/platform/paths';
 
 describe('desktop workspace path', () => {

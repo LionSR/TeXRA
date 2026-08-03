@@ -5,7 +5,7 @@ import {
   DESKTOP_PROMPT_COMMANDS,
   type DesktopSettlePromptMessage,
   type DesktopShowPromptMessage,
-} from '../desktopPromptMessages';
+} from '../shared/desktopPromptMessages';
 import { createOverlayDialog } from './overlayDialog';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 

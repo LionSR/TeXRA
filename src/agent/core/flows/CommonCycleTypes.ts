@@ -16,7 +16,7 @@ import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import { RetryErrorInfoSchema } from '@shared/schemas';
-import { formatPostCompactionContext } from '@tools/subagentResults';
+import { formatPostCompactionContext } from '@tools/delegation/subagentResults';
 
 /** Base schema for fields common to all cycle flows. */
 export const BaseCycleFieldsSchema = z.object({

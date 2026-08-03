@@ -104,9 +104,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
-} from '../desktopCommandSurface.js';
-import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
-import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
+} from '../shared/desktopCommandSurface.js';
+import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
+import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { createDesktopHostInteractions } from './desktopHostInteractions.js';
 import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';

@@ -77,7 +77,7 @@ cut. The layering inside the `agent` subsystem is a cycle, not a stack:
   `SessionResumeRetrieval.ts:25-26`.
 - `core/flows` → **`@tools`** (a _value_, not a type):
   `CommonCycleTypes.ts:20` imports `formatPostCompactionContext` from
-  `@tools/subagentResults`.
+  `@tools/delegation/subagentResults`.
 - `runtime` → **`@tools`**: 14 imports across `agentToolResolution.ts`,
   `childRunLoop.ts`, `agentLoad.ts`, `toolInjection.ts`, `agentShutdown.ts`.
 
@@ -92,7 +92,7 @@ without also lifting `runtime/RunContext`, `runtime/textConnection`, and the
 
 **Recommendation (only if/when a real package cut is pursued):** push the
 ambient-ALS `RunContext` down into `core` (or a shared `core/context`), inject
-`textConnection` and the `@tools/subagentResults` formatting helper as ports
+`textConnection` and the `@tools/delegation/subagentResults` formatting helper as ports
 rather than importing them from `core/flows`, and add an **intra-`agent` edge
 ratchet** so the cycle can't regrow. Absent a package cut, this is documentation,
 not urgent work.
@@ -186,7 +186,7 @@ subagent boundaries already exist as strategy seams:
   atomic `claimTerminalFinalize`).
 
 **The one tangle** is the same as finding #1: subagent _delivery formatting_
-(`@tools/subagentResults`, `@tools/childRunDelivery`, `@tools/subagentDeliveryFormat`)
+(`@tools/delegation/subagentResults`, `@tools/delegation/childRunDelivery`, `@tools/delegation/subagentDeliveryFormat`)
 lives in `@tools` but is driven from `runtime/childRunLoop` and even `core/flows`. In
 an SDK cut, "how a subagent's result is formatted and delivered to its parent" wants
 to sit next to the runtime that drives it, or behind an injected port — not in the
@@ -234,7 +234,7 @@ Clean and well-factored; the only defect is finding #2 above.
    by the persisted contract (finding #3). No action.
 3. **Only if a real `@texra/core` cut is pursued:** invert the intra-`agent`
    dependency web (finding #1) — relocate/inject `RunContext`, `textConnection`, and
-   the `@tools/subagentResults` formatting helper behind ports — and add an
+   the `@tools/delegation/subagentResults` formatting helper behind ports — and add an
    intra-`agent` edge ratchet. This is the gating item for extraction; nothing else
    here blocks it.
 

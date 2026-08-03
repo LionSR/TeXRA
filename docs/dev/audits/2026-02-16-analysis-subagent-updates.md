@@ -467,7 +467,7 @@ executeAgent(options: { onProgress })                           │
 
 | File                                                                | Change                                                          |
 | ------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `src/tools/subagentResults.ts`                                      | New `SubagentProgressUpdate` types + `formatSubagentProgress()` |
+| `src/tools/delegation/subagentResults.ts`                           | New `SubagentProgressUpdate` types + `formatSubagentProgress()` |
 | `src/tools/WorkflowTool.ts`                                         | `onProgress` callback in `executeSubagent()`                    |
 | `src/agent/runtime/executeAgent.ts`                                 | `onProgress` in `ExecuteAgentOptions`, wired to both paths      |
 | `src/agent/implementations/flows/tooluse/ToolUseServices.ts`        | `onProgress` field on services interface                        |

@@ -64,7 +64,7 @@ vi.mock('@utils/files/taskRunStorage', () => ({
   ensureRunDir: mocks.ensureRunDir,
 }));
 
-vi.mock('@tools/childStream', () => ({
+vi.mock('@tools/delegation/childStream', () => ({
   createChildStream: mocks.createChildStream,
   getChildStreamId: (executionId: string, prefix: string) =>
     `${prefix}#${executionId}`,

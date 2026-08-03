@@ -5,7 +5,7 @@ import { loadSourceModule } from './loadSourceModule.mjs';
 describe('monacoLanguageForFilePath', () => {
   it('maps known LaTeX extensions', async () => {
     const { monacoLanguageForFilePath } = await loadSourceModule(
-      '@desktop/desktopDiffMessages',
+      '@desktop/shared/desktopDiffMessages',
     );
     expect(monacoLanguageForFilePath('foo.tex')).toBe('latex');
     expect(monacoLanguageForFilePath('/abs/path/foo.bib')).toBe('bibtex');
@@ -14,7 +14,7 @@ describe('monacoLanguageForFilePath', () => {
 
   it('falls back to plaintext on unknown / missing extensions', async () => {
     const { monacoLanguageForFilePath } = await loadSourceModule(
-      '@desktop/desktopDiffMessages',
+      '@desktop/shared/desktopDiffMessages',
     );
     expect(monacoLanguageForFilePath(undefined)).toBe('plaintext');
     expect(monacoLanguageForFilePath('Makefile')).toBe('plaintext');
@@ -23,7 +23,7 @@ describe('monacoLanguageForFilePath', () => {
 
   it('is case-insensitive', async () => {
     const { monacoLanguageForFilePath } = await loadSourceModule(
-      '@desktop/desktopDiffMessages',
+      '@desktop/shared/desktopDiffMessages',
     );
     expect(monacoLanguageForFilePath('FOO.TEX')).toBe('latex');
     expect(monacoLanguageForFilePath('Foo.MD')).toBe('markdown');
@@ -33,7 +33,7 @@ describe('monacoLanguageForFilePath', () => {
 describe('DesktopShowDiffMessageSchema', () => {
   it('round-trips a complete payload', async () => {
     const { DesktopShowDiffMessageSchema } = await loadSourceModule(
-      '@desktop/desktopDiffMessages',
+      '@desktop/shared/desktopDiffMessages',
     );
     const parsed = DesktopShowDiffMessageSchema.parse({
       command: 'desktop:showDiff',
@@ -52,7 +52,7 @@ describe('DesktopShowDiffMessageSchema', () => {
 
   it('requires displayPath', async () => {
     const { DesktopShowDiffMessageSchema } = await loadSourceModule(
-      '@desktop/desktopDiffMessages',
+      '@desktop/shared/desktopDiffMessages',
     );
     const result = DesktopShowDiffMessageSchema.safeParse({
       command: 'desktop:showDiff',
@@ -65,7 +65,7 @@ describe('DesktopShowDiffMessageSchema', () => {
 
   it('defaults missing language to plaintext', async () => {
     const { DesktopShowDiffMessageSchema } = await loadSourceModule(
-      '@desktop/desktopDiffMessages',
+      '@desktop/shared/desktopDiffMessages',
     );
     const parsed = DesktopShowDiffMessageSchema.parse({
       command: 'desktop:showDiff',

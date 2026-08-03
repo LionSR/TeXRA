@@ -15,7 +15,7 @@ import {
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandId,
-} from '../desktopCommandSurface';
+} from '../shared/desktopCommandSurface';
 import { getRendererPlatform } from './rendererPlatform';
 
 export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';

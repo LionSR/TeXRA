@@ -12,16 +12,16 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   computeAndWriteWorkflowDiffs,
   type DiffFileInfo,
-} from '@tools/subagentDiffs';
+} from './subagentDiffs';
 import {
   buildSubagentResultMeta,
   formatSubagentDelivery,
   type SubagentResultMeta,
-} from '@tools/subagentResults';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+} from './subagentResults';
 
 const LOG_CHANNEL = 'subagentDelivery';
 

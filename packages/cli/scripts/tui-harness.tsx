@@ -1536,7 +1536,7 @@ function emitChildEventOrderEdge(
   });
 }
 
-// `removeStream` session fact — the real removal wiring (src/tools/childStream.ts).
+// `removeStream` session fact — the real removal wiring (src/tools/delegation/childStream.ts).
 function emitChildEventOrderRemoval(streamId: StreamTabId): void {
   defaultSession().events.emit({
     scope: 'session',
