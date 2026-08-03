@@ -9,6 +9,8 @@
 //
 // Host-agnostic, VS Code-free.
 
+import PQueue from 'p-queue';
+
 import type { ChildTurnRef, ChildTurnState, ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
@@ -461,6 +463,8 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
+  /** Serializes turn-state writes against the acceptance write (#9531). */
+  turnStateWrites: PQueue;
 }): Promise<PendingChildDelivery | undefined> {
   const {
     strategy,
@@ -495,11 +499,16 @@ async function deliverTurn<TTurn>(params: {
   await persistReportBestEffort(executionId, msg, logger);
   await persistResultMetaBestEffort(executionId, stampedMeta, logger);
   // The turn's result slots now hold this turn: record it as the latest
-  // completed turn, clearing the active marker written at acceptance.
-  await persistTurnStateBestEffort(
-    executionId,
-    { lastCompletedTurn: turnRef },
-    logger,
+  // completed turn, clearing the active marker written at acceptance. The
+  // store does not serialize per-key writes, so this must queue behind the
+  // acceptance write — otherwise a late acceptance write can overwrite this
+  // newer completion record (Cursor Bugbot on PR #9664).
+  await params.turnStateWrites.add(() =>
+    persistTurnStateBestEffort(
+      executionId,
+      { lastCompletedTurn: turnRef },
+      logger,
+    ),
   );
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
@@ -697,6 +706,10 @@ export function startChildRunLoop<TTurn>(
     // is carried forward so an interrupted turn never overwrites it.
     let turnIndex = 0;
     let lastCompletedTurn: ChildTurnRef | undefined;
+    // KVStore does not serialize per-key writes: queue turn-state writes so
+    // the fire-and-forget acceptance write cannot land after the completion
+    // record deliverTurn writes for the same turn.
+    const turnStateWrites = new PQueue({ concurrency: 1 });
     try {
       while (!loop.isInterrupted()) {
         turnIndex += 1;
@@ -704,13 +717,15 @@ export function startChildRunLoop<TTurn>(
         // Acceptance creates the pending-turn record: until this turn's
         // result is persisted, /report and /result keep attributing the
         // latest-value slots to the last completed turn. Fire-and-forget —
-        // the first turn must still reach strategy.launch synchronously, and
-        // the store serializes per-key writes, so this active record always
-        // lands before the completion record deliverTurn writes later.
-        void persistTurnStateBestEffort(
-          executionId,
-          { activeTurn: turnRef, lastCompletedTurn },
-          logger,
+        // the first turn must still reach strategy.launch synchronously; the
+        // queue (not the store) guarantees it lands before the completion
+        // record deliverTurn writes later.
+        void turnStateWrites.add(() =>
+          persistTurnStateBestEffort(
+            executionId,
+            { activeTurn: turnRef, lastCompletedTurn },
+            logger,
+          ),
         );
         const startedAt = Date.now();
         const abortController = loop.startTurn();
@@ -746,6 +761,7 @@ export function startChildRunLoop<TTurn>(
           err,
           wallTimeMs,
           isError: turnFailed,
+          turnStateWrites,
           prepareParentDelivery: () => {
             if (loop.isInterrupted()) {
               releaseSessionOwnershipOnce();
