@@ -996,6 +996,63 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
+  it('omits an invalid run descriptor without discarding other stream metadata', async () => {
+    const executionId = 'aa11bb33' as ExecutionId;
+    const validDescriptor = buildRunDescriptor({
+      streamId: STREAM,
+      executionId,
+      agent: 'legacy-search',
+      category: AgentCategory.ToolUse,
+      kind: 'agent',
+    });
+    const invalidDescriptors = [
+      { ...validDescriptor, kind: undefined },
+      { kind: 'agent', executionId: 'not-hex!!' },
+    ];
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+
+    for (const [index, runDescriptor] of invalidDescriptors.entries()) {
+      const description = `Prior session ${index}`;
+      await writeMetaFile(STREAM, {
+        parentStreamId: OTHER_STREAM,
+        description,
+        runDescriptor,
+      });
+
+      const store = new StreamSnapshotStore();
+      await expect(
+        store.readPersistedStreamAssociation(STREAM),
+      ).resolves.toEqual({ parentStreamId: OTHER_STREAM });
+      await expect(store.read(STREAM)).resolves.toMatchObject({
+        executionId: undefined,
+        parentStreamId: OTHER_STREAM,
+        description,
+      });
+    }
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('unreadable run descriptor'),
+      expect.anything(),
+    );
+  });
+
+  it('warns and rejects malformed outer stream metadata', async () => {
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    await writeStreamFile(STREAM, 'meta.json', ['not', 'stream', 'metadata']);
+
+    const snapshot = await new StreamSnapshotStore().read(STREAM);
+
+    expect(snapshot.executionId).toBeUndefined();
+    expect(snapshot.parentStreamId).toBeUndefined();
+    expect(snapshot.description).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('unreadable persisted stream metadata'),
+      expect.anything(),
+    );
+  });
+
   it('serves a current record description from ExecutionMeta without writing a sidecar mirror (#9590 Stage 6)', async () => {
     await installPlatform();
     const executionId = 'aa22cc33' as ExecutionId;

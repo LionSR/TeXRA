@@ -16,6 +16,7 @@ import {
   OutputFileInfoSchema,
   parsePersistedRoundIndexed,
   parseUsageData,
+  PersistedRunDescriptorSchema,
   PersistedWorkPlanSchema,
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
@@ -35,6 +36,9 @@ import { isObject, mapToRecord } from '@utils/core';
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
 const CHANNEL = 'StreamSnapshotStore';
+const StreamTabMetaWithoutRunDescriptorSchema = StreamTabMetaSchema.omit({
+  runDescriptor: true,
+});
 
 /** The canonical empty work plan (no todos, no plan). Single source for the
  *  "no durable plan yet" value, reused by the store's in-memory default. */
@@ -87,8 +91,27 @@ export async function readMeta(
 ): Promise<StreamTabMeta | undefined> {
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
-  const parsed = StreamTabMetaSchema.safeParse(raw);
-  return parsed.success ? parsed.data : undefined;
+  const parsed = StreamTabMetaWithoutRunDescriptorSchema.safeParse(raw);
+  if (!parsed.success) {
+    logger.warn(CHANNEL, 'Discarding unreadable persisted stream metadata.', {
+      data: parsed.error,
+    });
+    return undefined;
+  }
+  if (!isObject(raw) || !Object.hasOwn(raw, 'runDescriptor')) {
+    return parsed.data;
+  }
+
+  const descriptor = PersistedRunDescriptorSchema.safeParse(raw.runDescriptor);
+  if (!descriptor.success) {
+    logger.warn(
+      CHANNEL,
+      'Ignoring unreadable run descriptor in persisted stream metadata.',
+      { data: descriptor.error },
+    );
+    return parsed.data;
+  }
+  return { ...parsed.data, runDescriptor: descriptor.data };
 }
 
 /**
