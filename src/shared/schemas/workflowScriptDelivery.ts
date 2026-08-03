@@ -17,8 +17,7 @@ export const WorkflowScriptDeliverySummarySchema = z.strictObject({
   durationMs: z.int().nonnegative(),
   files: z.array(WorkflowScriptDeliveryFileSchema),
   scriptPath: z.string(),
-  // Older persisted deliveries predate structured failure causes.
-  errorCause: z.string().nullable().prefault(null),
+  errorCause: z.string().nullable(),
 });
 
 export type WorkflowScriptDeliverySummary = z.infer<
