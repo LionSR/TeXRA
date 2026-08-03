@@ -402,6 +402,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         }),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName),
+      clearCopilotRoute: (message) =>
+        this.handleClearCopilotRoute(message.modelName),
       setAgentEnabled: (message) =>
         this.agentHandlers.handleSetAgentEnabled(message),
       setAllAgentsEnabled: (message) =>
@@ -964,6 +966,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         ),
       ]);
     }
+  }
+
+  /** Clear the per-model Copilot route preference (#9659), returning the
+   * canonical model to direct-provider routing. */
+  private async handleClearCopilotRoute(modelName: string): Promise<void> {
+    await setCopilotRoutePreference(modelName, false);
+    invalidateModelOptionsCache();
+    await Promise.all([
+      safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
+      this.withActiveWebview((webview) => this.sendModelSelectionData(webview)),
+    ]);
   }
 
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */

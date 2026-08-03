@@ -216,33 +216,44 @@ export class ModelsTab extends LitElement {
     const optInModel = models.find(
       (model) => model.access === 'allowed' && !model.preferred,
     );
+    // A chosen route needs an explicit undo (#9659): clearing the
+    // preference returns the canonical model to direct-provider routing.
+    const preferredModel = models.find((model) => model.preferred);
     const unavailableCount = models.filter(
       (model) => model.access === 'unavailable',
     ).length;
     let status: string;
     if (consentModel) {
       status = 'VS Code is ready to ask for your consent.';
+    } else if (preferredModel) {
+      status = `${preferredModel.label} runs through Copilot.`;
     } else if (readyCount > 0) {
       status = `${readyCount} ${pluralize(readyCount, 'Copilot model is', 'Copilot models are')} ready.`;
     } else {
       status = `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
     }
 
-    // The single route action: consent first, then opt-in for an
-    // already-authorized route the user has not chosen yet.
-    const actionModel = consentModel ?? optInModel;
+    // The single route action: consent first, then undo for a chosen route,
+    // then opt-in for an already-authorized route not chosen yet.
+    const actionModel = consentModel ?? preferredModel ?? optInModel;
+    let actionText = '';
+    let actionCommand: string = SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS;
+    if (consentModel) {
+      actionText = 'Grant access';
+    } else if (preferredModel) {
+      actionText = `Stop using Copilot for ${preferredModel.label}`;
+      actionCommand = SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE;
+    } else if (optInModel) {
+      actionText = `Use Copilot for ${optInModel.label}`;
+    }
     const action = actionModel
       ? renderLabeledActionButton({
           icon: 'shield',
-          text: consentModel
-            ? 'Grant access'
-            : `Use Copilot for ${actionModel.label}`,
+          text: actionText,
           kind: 'primary',
           appearance: consentModel ? 'filled' : 'outlined',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
-              modelName: actionModel.name,
-            }),
+            postMessage(actionCommand, { modelName: actionModel.name }),
         })
       : nothing;
 
