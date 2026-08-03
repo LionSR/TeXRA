@@ -214,6 +214,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     snapshotWriter.setRunConfig(secondStream, runConfig('bash'), executionId);
     snapshotWriter.setTodos(secondStream, [TODO]);
     await snapshotWriter.flush();
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
@@ -242,6 +247,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     snapshotWriter.setRunConfig(logStream, runConfig('bash'), executionId);
     snapshotWriter.setTodos(workPlanStream, [TODO]);
     await snapshotWriter.flush();
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     const logStore = await StreamLogStore.open();
     await appendLogEntry(logStore, logStream);
@@ -307,6 +317,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     writer.setTodos(first, [TODO]);
     writer.setTodos(second, [TODO]);
     await writer.flush();
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     await expect(
       resolvePersistedStreamIdForExecution(executionId, {
@@ -364,6 +379,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     // `StreamLogStore.ensureStream` with no sidecar and no execution record.
     const logs = await StreamLogStore.open();
     logs.ensureStream(orphanStream);
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     // The suffix arm may still surface the orphan for compatibility display
     // reads, but resemblance is not proof: no LEGACY_RESOLUTION identity is
