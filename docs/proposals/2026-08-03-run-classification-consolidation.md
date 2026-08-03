@@ -2,7 +2,7 @@
 
 Status: proposed
 Date: 2026-08-03
-Revision: 5 (no projections, no resolvers; orchestration lineage; all removals in scope)
+Revision: 6 (Part II: lifecycle state, stream ids, legacy retirement, derived data, roster)
 
 TeXRA classifies "what kind of thing is running" in six places, and represents
 "X is a child of Y" in twenty-six. Most are false at some write site, derived
@@ -51,6 +51,17 @@ previously deferred:
   `DELEGATION_AVAILABILITY_CATEGORY` fabricated row, the fabricated
   per-run `config.json` lies, and `ActiveChildInfo.kind` — whose `process`
   arm turns out to be **dead code** (never constructed in production).
+
+Revision 6 adds **Part II**: three further audits (lifecycle state,
+string-encoded identity + legacy healing, derived-data recomputation) found
+four more axes with the same disease — 19 state vocabularies with 18
+independent re-derivation sites and 20 middle-layer healing sites; a
+374-line legacy identity resolver that pays an O(all-streams) scan on hot
+paths and is contractually forbidden from retiring itself; round artifacts
+accumulated in four places and usage deltas in five; and 39
+`workflow*`/`toolUse*` field-pair declarations re-shaping one durable value.
+Part II applies the same rulings — one authority, migrate at the entrance,
+delete the middle layers — as PRs 10–15.
 
 ## Problem
 
@@ -522,7 +533,8 @@ Per-PR element deltas are counted against the tree at implementation time.
 
 ## Executable plan
 
-Nine PRs. Every PR builds, type-checks (`npm run typecheck` — builds alone do
+Fifteen PRs — Part I is PRs 1–9 below; Part II (PRs 10–15) is specified in
+its own section. Every PR builds, type-checks (`npm run typecheck` — builds alone do
 not), passes `npm test` and `npm run check:dead-code-ratchet`, and is
 independently revertable. Each lists Add / Delete / Tests / grep-able
 Acceptance; the deletes are the point.
@@ -654,6 +666,174 @@ deep-import specifier in any host; update `src/agent/core/README.md` and this
 proposal's status.
 **Acceptance:** all ratchets pass with smaller baselines.
 
+## Part II — further axes
+
+Three audits beyond run identity found the same disease on four more axes.
+The rulings follow the same discipline: one authority per fact, migration at
+the entrance (one-shot, quarantined), no read-path branches, no recomputation
+of what an authority already holds. Each axis gets its ruling, its removals,
+and its PR.
+
+### Axis S — lifecycle state (PRs 10–11)
+
+**Findings.** 19 distinct state vocabularies; the persisted terminal fact is
+*two* fields (`ExecutionMeta.terminalStatus`, an untyped string, plus
+`outcome: RunOutcome`), kept consistent by a `superRefine`
+(`stream.ts:98-110`) and healed by a `.transform` on **every read and write**
+(`stream.ts:112-119`, applied via `ExecutionKVStore.ts:290`) — a permanent
+middle-layer fix for a write-side problem. 18 sites re-derive status
+independently of the `StreamStatusMachine`, including:
+`WorkflowScriptTool.ts:505` deciding a script call's success by comparing the
+raw `terminalStatus` string; `AgentRunLifecycle.ts:183-189` reading the phase
+back out of the machine and silently **overriding the caller's outcome** with
+it; two parallel history-status projections reading *different* source fields
+into *different* vocabularies (`resolveHistoryRunStatus` over `outcome` →
+`HistoryRunStatus`; CLI `resolveCliHistoryStatus` over raw `terminalStatus` →
+plain string, `history.ts:426-434`); and the TUI detecting child errors by
+lowercasing arbitrary strings and regexing for exit codes
+(`childExecutionStatus.ts:6-15`).
+
+**Ruling.** Two vocabularies survive as authorities: **`StreamPhase`** for
+live state (owned solely by the `StreamStatusMachine`) and **`RunOutcome`**
+for terminal state (owned solely by `ExecutionMeta.outcome`).
+`ExecutionStatus` becomes an export-boundary projection (old traces carry it;
+the exporter keeps projecting via `runOutcomeToExecutionStatus` at that one
+boundary). Everything else is a display projection computed in one place.
+
+**PR 10 — one terminal field.** The one-shot migration (extending PR 4's
+walker, second store generation) stamps `outcome` on every row that has only
+`terminalStatus` (unmappable strings → `failed`, matching today's
+non-resumable treatment); after it, `outcome` is required on terminal rows
+and **`terminalStatus` is no longer written or read** — `writeTerminalStatus`
+writes `outcome` alone.
+*Delete:* the `superRefine`, the read/write `.transform`, every raw-string
+reader (`WorkflowScriptTool.ts:505` → `outcome === RUN_OUTCOME.COMPLETED`;
+`executionListing` carries `outcome`; `getExecutionStatusInfo` merges live
+phase ⊕ persisted `outcome`, its `StreamPhase | ExecutionStatus | 'unknown'`
+union narrowing to `StreamPhase | RunOutcome`).
+*Tests:* migration fixtures incl. an unmappable legacy string; resumability
+parity before/after.
+*Acceptance:* `rg -c 'terminalStatus' src/ packages/` → only the export
+projection and the migration module.
+
+**PR 11 — one projection per display decision.** One shared
+`resolveHistoryRunStatus` over `{resumable, outcome}` used by both hosts
+(the CLI's parallel string-typed variant deleted); the phase→outcome
+authority inversion at `AgentRunLifecycle.ts:183-189` replaced by an explicit
+`settleRun(outcome)` in which the machine's terminal transition and the meta
+write happen together, machine authoritative by construction;
+`isChildExecutionErrorStatus`'s string-lowercasing regex deleted (roster rows
+carry a typed `StreamPhase`; use `isTerminalOutcomePhase`); the retired
+7-value `StreamStatus` confined to the trace-viewer read boundary.
+*Acceptance:* `rg -c 'resolveCliHistoryStatus|isChildExecutionErrorStatus' packages/cli/` → 0.
+
+### Axis T — opaque stream ids, and retiring the legacy resolver (PR 12)
+
+**Findings.** The `@model` segment of
+`${cleanAgent}@${model}#${executionId}` has **zero production consumers** —
+no parser reads it; uniqueness comes from the `#executionId` suffix alone
+(`streamTab.vitest.ts:29-33`). Yet it costs: `AgentLaunchContext.ts:564`
+hard-fails a launch when `model` is missing *purely to mint the id*, and the
+fabricated display models (`CODEX_DISPLAY_MODEL`, `CLAUDE_AGENT_DISPLAY_MODEL`,
+the `DEFAULT_AGENT_MODEL` prefault leaking into bash stream ids —
+`streamTabInfo.ts:105-110` documents the leak) exist substantially to feed a
+dead segment. Separately, `legacyExecutionIdentity.ts` (374 lines) is the
+largest permanent middle-layer in the tree: every execution→stream read
+without registration provenance pays a bounded O(all-streams) sidecar scan
+**on hot paths** (every completed `/executions/{id}` summary, every
+`assembleTrace()`), and its backfill writes a cache that its own contract
+(`registeredStreamId`, `stream.ts:121-134`) forbids from ever becoming
+authoritative.
+
+**Ruling.** A stream id is an **opaque handle**, minted once as
+`${name}#${executionId}` — no model segment, no parsing, ever. The
+execution→stream mapping is resolved **once, at the entrance**: the PR 4/10
+migration walker runs the existing resolver per unresolved row, stamps a
+unique match as the authoritative `streamId`, and leaves genuinely ambiguous
+rows unresolved (exactly what the resolver reports today, computed once
+instead of per read).
+*Delete:* the model segment for new ids and the `model`-required launch guard
+(`AgentLaunchContext.ts:564`); `legacyExecutionIdentity.ts` whole (374
+lines), the `streamIdSource` enum and `registeredStreamId` contract;
+`parseLegacyTaskState` + `TaskState.ts` + the `StreamTabMeta.taskState` read
+shim (breakable sidecar cohort); the sidecar `description` mirrors and
+`hydrateDescriptionsFromExecutionMeta`'s per-stream meta read on every load
+(#9627, folded in); the `legacyRuns: 'taskRuns'` directory probe (one-shot
+rename). By this PR the last stream-id parsers are already gone (PRs 2/3/5),
+so the format change is safe for new runs and old ids stay opaque strings.
+*Kept, permanent by nature:* the filename-era workflow-output grammar
+(`workflowOutput.ts:57-106`) — it parses **user files on the user's disk**,
+which no migration of our store can rewrite.
+*Tests:* migration resolves a legacy fixture bucket; ambiguous rows stay
+unresolved with the same user-visible result; trace assembly and
+`/executions` summaries never invoke a scan.
+*Acceptance:* `rg -c 'legacyExecutionIdentity|streamIdSource|LEGACY_RESOLUTION' src/` → 0;
+launches without a model succeed for non-agent runs.
+
+### Axis U — derived data: one accumulator per fact (PR 13)
+
+**Findings.** Round artifacts (`outputFiles`/`missingOutputs`/
+`compileFailures`) are accumulated in **four** places (the
+`StreamSnapshotStore` sidecar accumulators; the CLI's live+durable merge with
+generation counters, `subscribeStreamArtifacts.ts:47-75` +
+`cliState.ts:327-345`; the CLI's independent live spread,
+`subscribeRuntimeHost.ts:169-189`; the extension frontend's third copy).
+Usage deltas are summed in **five** (store sidecar; extension webview
+per-render sums ×2; `StatusBarUsageTracker`'s own map; the CLI's dual
+`usage`/`cumulativeUsage`). `missingOutputs` has two representations that
+**disagree**: three `XmlOutputManager` paths write the transcript row without
+emitting the run fact, so the sidecar and the transcript diverge. The
+workspace-files fallback is read-time conversation-scraping that one reader
+uses and the other doesn't (`history.ts:181-185` vs
+`HistoryMessageBuilder.ts:33-38`). `UserMessage.ts:217` re-parses structured
+data **out of rendered message text**.
+
+**Ruling.** Facts carry deltas; **one accumulator per fact** — the
+`StreamSnapshotStore` — and every consumer reads the accumulated state
+through it. Derivations that exist to compensate for missing writes move to
+the write site.
+*Changes:* the CLI consumes store-projected artifact/usage state (its merge
+machinery, generation counters, and second live accumulation deleted; the
+NDJSON delta events stay — external contract); the extension's per-render
+usage sums become one selector; `StatusBarUsageTracker` projects from the
+store; one `reportMissingOutputs` helper emits row + fact together (the three
+fact-less paths deleted); the conversation-scrape for edited files runs
+**once at finalize** and persists, so both history readers read the persisted
+list and the read-time scraper dies; taskGroups use the incremental
+projection engine in both hosts (the CLI's full re-projection per sync tick
+deleted); `UserMessage`'s text re-parse replaced by structured data carried
+beside the text.
+*Acceptance:* `rg -c 'mergeArtifactSnapshot|streamArtifactRevision' packages/cli/` → 0;
+`rg -c 'listExecutionEditedFiles' src/` → only the finalize-time site.
+
+### Axis R — the roster pair collapse (PR 14)
+
+**Findings.** 39 `workflow*`/`toolUse*` field-pair declarations across four
+packages (7 roster-key pairs, 8 roster-list pairs, 11 record-keyed
+partitions, 11 main-view form-state pairs, 1 team-roster pair, 1 prompt-var
+pair) — and **exactly one of them is durable**
+(`WorkspaceStateKey.AGENT_ROSTER_SELECTION`). Every other pair is a
+re-shaping of that one value or of the preset catalog for a different
+consumer.
+
+**Ruling.** One generic shape, `ByCategory<T> = Record<AgentCategory, T>`,
+replaces every pair. The single durable memento migrates at its entrance
+(read the old paired shape once, write the record shape). The prompt
+variables `WORKFLOW_AGENTS`/`TOOL_USE_AGENTS` keep their names — they are an
+external prompt contract — but are built from the record.
+*Delete:* all 38 non-durable pair declarations and their branch-per-category
+read/write sites; the paired wire messages collapse to record-keyed ones (all
+ephemeral).
+*Tests:* memento migration fixture (old pair → record); roster resolution
+parity per category; settings/main-view round-trip.
+*Acceptance:* `rg -c 'workflowAgentKeys|toolUseAgentKeys|workflowAgents|toolUseAgents' src/ packages/`
+→ the memento migration module and prompt-var builder only.
+
+### PR 15 — Part II ratchet and close-out
+
+Same as PR 9, run after Part II: shrink baselines (never widen), confirm no
+new `@agent/*` deep-import specifiers, update this proposal's status.
+
 ## Separated work
 
 **The workflow-roster failure stays out.** The symptom (empty workflow roster
@@ -693,3 +873,16 @@ re-roots every checkpoint and defeats the double-launch guard
 - **Disk-scale numbers remain unmeasured** (rev 1's 142-of-478). The
   migration's dry-run count supplies the real figure before anything depends
   on it.
+- **Part II: the terminal-outcome migration changes semantics for unmappable
+  legacy strings** (stamped `failed`; today they are non-resumable via the
+  `TERMINAL_STATUS` cause — same user-visible result, asserted by fixture).
+- **Part II: retiring `legacyExecutionIdentity` fixes resolution at migration
+  time.** A row the resolver would have resolved differently *later* (new
+  sidecars appearing) loses that chance; accepted — post-birth-registration
+  rows never need it, and the ambiguous cohort's behavior is unchanged.
+- **Part II: the CLI's artifact merge deletion assumes the store is loaded in
+  TUI mode.** Headless NDJSON keeps delta events as the external contract;
+  parity is asserted per the `texra-cli` skill before the merge machinery is
+  removed.
+- **Part II: the roster memento migration is the second entrance migration**
+  (after the executions store). Same rules: idempotent, one-shot, quarantined.
