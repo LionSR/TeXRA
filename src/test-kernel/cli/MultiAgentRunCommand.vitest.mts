@@ -13,8 +13,16 @@ const mocks = vi.hoisted(() => ({
   emitCliResult: vi.fn(),
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
-  cliMultiAgentPlanHasGaps: vi.fn(),
-  cliMultiAgentPresetCanLaunchTeam: vi.fn(),
+  teamPlanHasGaps: vi.fn(),
+  canLaunchTeam: vi.fn(),
+  findTeamPreset: vi.fn(() => ({
+    id: 'mathematician',
+    name: 'Mathematician',
+    description: 'For math papers.',
+    workflowAgents: [],
+    toolUseAgents: ['orchestrator'],
+    source: 'built-in',
+  })),
   formatCliMultiAgentPresetRunWarnings: vi.fn(),
   formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
   getAgent: vi.fn(),
@@ -23,8 +31,8 @@ const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
   loadAgents: vi.fn(),
   refreshAgents: vi.fn(),
-  planCliMultiAgentPresets: vi.fn(),
-  planCliMultiAgentPresetRun: vi.fn(),
+  planTeamRuns: vi.fn(),
+  planTeamRun: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStdout: vi.fn(),
 }));
@@ -62,17 +70,7 @@ vi.mock('@cli/commands/_helpers/output', () => ({
 
 vi.mock('@cli/runtime/multiAgentPresets', () => {
   return {
-    cliMultiAgentPlanHasGaps: mocks.cliMultiAgentPlanHasGaps,
-    cliMultiAgentPresetCanLaunchTeam: mocks.cliMultiAgentPresetCanLaunchTeam,
     cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
-    findCliMultiAgentPreset: vi.fn(() => ({
-      id: 'mathematician',
-      name: 'Mathematician',
-      description: 'For math papers.',
-      workflowAgents: [],
-      toolUseAgents: ['orchestrator'],
-      source: 'built-in',
-    })),
     formatCliMultiAgentPresetInspection: vi.fn(() => ''),
     formatCliMultiAgentPresetList: vi.fn(() => ''),
     formatCliMultiAgentPresetRunWarnings:
@@ -82,9 +80,20 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
     MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
       'Root agent for the team run (defaults to the preset orchestrator)',
     MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION: 'Model for the team root agent',
-    planCliMultiAgentPresets: mocks.planCliMultiAgentPresets,
-    planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
     readCliMultiAgentPresets: vi.fn(() => []),
+  };
+});
+
+vi.mock('@common/teams/TeamPlan', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@common/teams/TeamPlan')>();
+  return {
+    ...actual,
+    canLaunchTeam: mocks.canLaunchTeam,
+    findTeamPreset: mocks.findTeamPreset,
+    planTeamRun: mocks.planTeamRun,
+    planTeamRuns: mocks.planTeamRuns,
+    teamPlanHasGaps: mocks.teamPlanHasGaps,
   };
 });
 
@@ -203,15 +212,15 @@ describe('CLI multi-agent run command', () => {
       inputFiles: ['problem.tex'],
       contextFiles: [],
     });
-    mocks.cliMultiAgentPlanHasGaps.mockReturnValue(false);
-    mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValue(true);
+    mocks.teamPlanHasGaps.mockReturnValue(false);
+    mocks.canLaunchTeam.mockReturnValue(true);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValue(
       'blocked preset message',
     );
     mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValue([]);
-    mocks.planCliMultiAgentPresets.mockImplementation((presets) =>
+    mocks.planTeamRuns.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
-        mocks.planCliMultiAgentPresetRun(preset, {
+        mocks.planTeamRun(preset, {
           workflowAgents: mocks.getAgentsByCategory('workflow'),
           toolUseAgents: mocks.getAgentsByCategory('toolUse'),
         }),
@@ -220,7 +229,7 @@ describe('CLI multi-agent run command', () => {
     mocks.getAgentsByCategory.mockImplementation((category: string) =>
       category === 'toolUse' ? [ORCHESTRATOR_AGENT] : [],
     );
-    mocks.planCliMultiAgentPresetRun.mockReturnValue(teamPlan());
+    mocks.planTeamRun.mockReturnValue(teamPlan());
     isAuthenticatedSpy.mockResolvedValue(false);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.executeCliToolUseConfig.mockResolvedValue({
@@ -296,7 +305,7 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
-    mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
+    mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
 
     const result = await loadCliMultiAgentRunPlan({
@@ -311,11 +320,11 @@ describe('CLI multi-agent run command', () => {
     // The remote-inclusive reload goes through `refresh()`, not a second
     // `loadAgents()`.
     expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
-    expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
+    expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
   });
 
   it('does not load remote agents for relay-token-only model authentication', async () => {
-    mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
+    mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     isAuthenticatedSpy.mockResolvedValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(false);
 
@@ -328,11 +337,11 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.refreshAgents).not.toHaveBeenCalled();
     expect(isAuthenticatedSpy).not.toHaveBeenCalled();
-    expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(1);
+    expect(mocks.planTeamRun).toHaveBeenCalledTimes(1);
   });
 
   it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
-    mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
+    mocks.teamPlanHasGaps.mockReturnValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
 
     const result = await loadCliMultiAgentPresetPlanSet([
@@ -352,15 +361,13 @@ describe('CLI multi-agent run command', () => {
       includeRemote: false,
     });
     expect(mocks.refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
-    expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
+    expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
   });
 
   it('reports resolved remote agent loads without implying final missing agents', async () => {
     const remoteLoadMessage =
       'Preset mathematician loaded remote agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
-    mocks.cliMultiAgentPlanHasGaps
-      .mockReturnValueOnce(true)
-      .mockReturnValueOnce(false);
+    mocks.teamPlanHasGaps.mockReturnValueOnce(true).mockReturnValueOnce(false);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
 
     const exitCode = await runPreset({
@@ -521,11 +528,11 @@ describe('CLI multi-agent run command', () => {
     });
     const message =
       'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.';
-    mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValueOnce(false);
+    mocks.canLaunchTeam.mockReturnValueOnce(false);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
       message,
     );
-    mocks.planCliMultiAgentPresetRun.mockReturnValue(plan);
+    mocks.planTeamRun.mockReturnValue(plan);
 
     const exitCode = await runPreset({
       instruction: 'Solve a short math problem.',
@@ -550,7 +557,7 @@ describe('CLI multi-agent run command', () => {
     const warning =
       'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.';
     mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValueOnce([warning]);
-    mocks.planCliMultiAgentPresetRun.mockReturnValue(
+    mocks.planTeamRun.mockReturnValue(
       teamPlan({
         missingWorkflowAgents: ['generic'],
         missingToolUseAgents: ['simplifier'],
@@ -573,11 +580,11 @@ describe('CLI multi-agent run command', () => {
     });
     const message =
       'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.';
-    mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValueOnce(false);
+    mocks.canLaunchTeam.mockReturnValueOnce(false);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
       message,
     );
-    mocks.planCliMultiAgentPresetRun.mockReturnValue(plan);
+    mocks.planTeamRun.mockReturnValue(plan);
 
     const exitCode = await runPreset({
       instruction: 'Solve a short math problem.',

@@ -28,6 +28,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -138,10 +139,6 @@ import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
 } from '../src/runtime/apiStatus';
-import {
-  cliMultiAgentPresets,
-  planCliMultiAgentPresets,
-} from '../src/runtime/multiAgentPresets';
 import {
   buildCliAgentItems,
   buildCliOrchestrationItems,
@@ -525,13 +522,10 @@ const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
   AgentCategory.ToolUse,
 );
 const HARNESS_ALL_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
-const HARNESS_PRESET_PLANS = planCliMultiAgentPresets(
-  cliMultiAgentPresets(undefined),
-  {
-    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-    toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
-  },
-);
+const HARNESS_PRESET_PLANS = planTeamRuns(teamPresets(undefined), {
+  workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
+  toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
+});
 const HARNESS_MODEL_ACCESS =
   SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
     ? {

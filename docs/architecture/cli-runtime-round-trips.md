@@ -18,7 +18,7 @@ flowchart TD
   agentsLocal[agentRegistry loadAgents includeRemote false]
   auth[supabaseAuth isAuthenticated]
   agentsRemote[agentRegistry loadAgents includeRemote true]
-  replan[planCliMultiAgentPresets replan]
+  replan[TeamPlan planTeamRuns replan]
   items[runtime/orchestration buildCliOrchestrationItems]
   modelList[runtime/modelAccess getCliModelAccessList]
   defaultModel[resolveChatDefaults + resolveCliRunnableModel]
