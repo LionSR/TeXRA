@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
 export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
 export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
+export const TEXRA_APPROVAL_POLICY_DEFAULT: TexraApprovalPolicy = 'ask';
 
 const TEXRA_APPROVAL_POLICY_COPY = {
   ask: {

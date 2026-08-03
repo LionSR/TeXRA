@@ -34,6 +34,7 @@ import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
@@ -317,10 +318,9 @@ const SHOW_COMPLETED_TODOS_ONLY = process.env.HARNESS_TODOS_COMPLETED === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
-// Seed only: `sessionMeta.approvalPolicy` is the live value once the harness
-// session state exists, exactly as in the real chat session.
 const HARNESS_INITIAL_APPROVAL_POLICY: TexraApprovalPolicy =
-  parseTexraApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ?? 'ask';
+  parseTexraApprovalPolicy(process.env.HARNESS_APPROVAL_POLICY ?? '') ??
+  TEXRA_APPROVAL_POLICY_DEFAULT;
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
@@ -333,7 +333,9 @@ const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
   apiMode: HARNESS_API_MODE,
-  approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
+  get approvalPolicy(): TexraApprovalPolicy {
+    return defaultSession().approvalPolicy;
+  },
   cliConfig: {},
   commandName: 'texra',
   configWarnings: [],
@@ -442,10 +444,11 @@ if (HARNESS_MEMORY_FILES.length > 0) {
     utimesSync(filePath, mtime, mtime);
   });
 }
-initializeDefaultSession({
+const harnessRuntimeSession = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
   responseTextProcessing: texraResponseTextProcessing,
 });
+harnessRuntimeSession.setApprovalPolicy(HARNESS_INITIAL_APPROVAL_POLICY);
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
   STREAM_ID,
   'flow',
@@ -2120,6 +2123,7 @@ function defaultHarnessTranscriptStreamId(): StreamTabId {
 }
 
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
+  harnessRuntimeSession.setApprovalPolicy(policy);
   sessionMeta.set({
     ...sessionMeta.get(),
     approvalPolicy: policy,
@@ -2249,7 +2253,7 @@ function appendHarnessStatus(): void {
         subscriptionActive: false,
         usageRoute: slice?.usage?.usageRoute,
       }),
-      approval: formatTexraApprovalPolicy(meta.approvalPolicy),
+      approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       goal: GoalStore.getForStream(streamId),
@@ -2332,7 +2336,7 @@ registerBuiltinSlashCommands({
   canSelectAgent: () => CAN_SELECT_AGENT,
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
-  getApprovalPolicy: () => sessionMeta.get().approvalPolicy,
+  getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) => {
     setCliSessionModelOverride(model);

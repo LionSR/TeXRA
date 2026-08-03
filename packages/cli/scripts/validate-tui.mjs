@@ -1183,8 +1183,14 @@ const SCENARIOS = [
   {
     name: 'approval-policy-status-bar',
     frame: 'scrollback',
-    env: { HARNESS_APPROVAL_POLICY: 'never', HARNESS_ENTRIES: '4' },
-    expect: ['personal', 'deny', '/status details'],
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/approval never', '\r', '/status', '\r'],
+    expect: [
+      'Approval mode: Deny Bash commands and tool edits.',
+      'personal',
+      'deny',
+      '/status details',
+    ],
     unexpect: ['keys deny', 'approval: deny privileged actions'],
   },
   {

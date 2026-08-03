@@ -231,6 +231,9 @@ describe('SessionHandle', () => {
         defaultSession().workflowControls,
       );
       expect(fresh.flushers).not.toBe(defaultSession().flushers);
+      fresh.setApprovalPolicy('yolo');
+      expect(fresh.approvalPolicy).toBe('yolo');
+      expect(defaultSession().approvalPolicy).toBe('ask');
     } finally {
       fresh.dispose();
     }
