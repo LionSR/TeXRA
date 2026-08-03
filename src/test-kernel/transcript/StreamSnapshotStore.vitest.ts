@@ -10,6 +10,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { KVStore } from '@common/storage/KVStore';
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
@@ -33,11 +34,13 @@ import {
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import {
   stagedStreamDataDir,
   STREAM_DATA_DIR,
   STREAM_DATA_DELETION_DIR,
+  STREAM_DATA_KEYS,
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files';
 
@@ -161,7 +164,7 @@ function readStreamFile(stream: StreamTabId, name: string): Promise<unknown> {
 async function storeWithPersistedPlan(): Promise<StreamSnapshotStore> {
   const store = new StreamSnapshotStore();
   await store.load([]);
-  store.setPlan(STREAM, PLAN);
+  snapshotFacts(store).setPlan(STREAM, PLAN);
   await store.flush();
   return store;
 }
@@ -173,7 +176,7 @@ async function stageDeletionWithBufferedClear(): Promise<{
 }> {
   const store = await storeWithPersistedPlan();
   const deletion = await store.stageDeleteStream(STREAM);
-  store.setPlan(STREAM, null);
+  snapshotFacts(store).setPlan(STREAM, null);
   return { store, deletion };
 }
 
@@ -215,11 +218,11 @@ describe('StreamSnapshotStore', () => {
   it('persists todos/plan/usage from direct mutators and reassembles them on a fresh store', async () => {
     const writer = new StreamSnapshotStore();
 
-    writer.setTodos(STREAM, [TODO]);
-    writer.setPlan(STREAM, PLAN);
+    snapshotFacts(writer).setTodos(STREAM, [TODO]);
+    snapshotFacts(writer).setPlan(STREAM, PLAN);
     // Two deltas for the same run must accumulate, not overwrite.
-    void writer.addUsage(STREAM, RUN, usage(100, 20, 0.5));
-    void writer.addUsage(STREAM, RUN, usage(50, 10, 0.25));
+    void snapshotFacts(writer).addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    void snapshotFacts(writer).addUsage(STREAM, RUN, usage(50, 10, 0.25));
 
     await writer.flush();
 
@@ -252,10 +255,10 @@ describe('StreamSnapshotStore', () => {
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const writer = new StreamSnapshotStore();
 
-    void writer.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    void snapshotFacts(writer).addUsage(STREAM, RUN, usage(100, 20, 0.5));
     // A delta with an uncoercible numeric field must not wipe out the
     // already-accumulated cost, and must warn rather than fail silently.
-    void writer.addUsage(STREAM, RUN, {
+    void snapshotFacts(writer).addUsage(STREAM, RUN, {
       ...usage(50, 10, 0.25),
       inputTokens: 'not-a-number' as unknown as number,
     });
@@ -524,7 +527,11 @@ describe('StreamSnapshotStore', () => {
 
     // A fresh store (NOT load()ed) handles a delta for a NEW run.
     const store = new StreamSnapshotStore();
-    void store.addUsage(STREAM, 'run-2' as StorageKey, usage(50, 10, 0.25));
+    void snapshotFacts(store).addUsage(
+      STREAM,
+      'run-2' as StorageKey,
+      usage(50, 10, 0.25),
+    );
     await store.flush();
 
     // run-1 (prior) survives — the unseeded write did not clobber it.
@@ -549,7 +556,11 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     // Force a seed + a write for an unrelated run so writeUsage() actually
     // rewrites usageStats.json from the in-memory accumulators.
-    const pending = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    const pending = snapshotFacts(store).addUsage(
+      STREAM,
+      RUN_2,
+      usage(50, 10, 0.25),
+    );
     await Promise.resolve(pending);
     await store.flush();
 
@@ -574,13 +585,8 @@ describe('StreamSnapshotStore', () => {
     });
 
     const store = new StreamSnapshotStore();
-    const pending = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
     expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 50,
-      outputTokens: 10,
-      cost: 0.25,
-    });
-    await expect(Promise.resolve(pending)).resolves.toMatchObject({
       inputTokens: 50,
       outputTokens: 10,
       cost: 0.25,
@@ -602,13 +608,8 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    const pending = store.addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
+    snapshotFacts(store).addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
     expect(store.getRunUsage(OTHER_STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 50,
-      outputTokens: 10,
-      cost: 0.25,
-    });
-    await expect(Promise.resolve(pending)).resolves.toMatchObject({
       inputTokens: 50,
       outputTokens: 10,
       cost: 0.25,
@@ -630,18 +631,20 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    const pending = store.addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
+    snapshotFacts(store).addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
     expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject({
       inputTokens: 50,
       outputTokens: 10,
       cost: 0.25,
     });
-    await expect(Promise.resolve(pending)).resolves.toMatchObject({
+    await store.flush();
+
+    // After the seed merges the disk baseline, the typed view shows the sum.
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject({
       inputTokens: 150,
       outputTokens: 30,
       cost: 0.75,
     });
-    await store.flush();
 
     const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
@@ -657,7 +660,7 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    store.addOutputFiles(OTHER_STREAM, { 1: [next] });
+    snapshotFacts(store).addOutputFiles(OTHER_STREAM, { 1: [next] });
     const returned = store.getOutputFiles(OTHER_STREAM);
     returned[1]?.push(outputFile('injected.tex', 1));
     expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
@@ -682,7 +685,9 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
+      1: ['next.tex'],
+    });
     // The overlay applies eagerly, so this synchronous read-back sees the
     // mutation while the seed is still in flight.
     expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
@@ -699,14 +704,16 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
 
-    store.updateMissingOutputs(STREAM, { 0: ['prior.tex'] });
+    snapshotFacts(store).updateMissingOutputs(STREAM, { 0: ['prior.tex'] });
     await store.flush();
 
     const malformedPatch = {
       0: ['replacement.tex'],
       1: ['invalid.tex', 42],
     } as unknown as RoundIndexed<string>;
-    expect(() => store.updateMissingOutputs(STREAM, malformedPatch)).toThrow();
+    // The event plane contains subscriber errors: the malformed patch is
+    // rejected inside the store and logged by the hub, never applied.
+    snapshotFacts(store).updateMissingOutputs(STREAM, malformedPatch);
 
     expect(store.getMissingOutputs(STREAM)).toEqual({ 0: ['prior.tex'] });
     await store.flush();
@@ -714,7 +721,7 @@ describe('StreamSnapshotStore', () => {
       '0': ['prior.tex'],
     });
 
-    store.updateMissingOutputs(STREAM, { 1: ['next.tex'] });
+    snapshotFacts(store).updateMissingOutputs(STREAM, { 1: ['next.tex'] });
     expect(store.getMissingOutputs(STREAM)).toEqual({
       0: ['prior.tex'],
       1: ['next.tex'],
@@ -740,8 +747,10 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    store.clearMissingOutputs(OTHER_STREAM);
-    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
+    snapshotFacts(store).clearMissingOutputs(OTHER_STREAM);
+    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
+      1: ['next.tex'],
+    });
     expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({ 1: ['next.tex'] });
     await store.flush();
 
@@ -757,8 +766,10 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    store.updateMissingOutputs(OTHER_STREAM, { 1: ['next.tex'] });
-    store.clearMissingOutputs(OTHER_STREAM);
+    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
+      1: ['next.tex'],
+    });
+    snapshotFacts(store).clearMissingOutputs(OTHER_STREAM);
     expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({});
     await store.flush();
 
@@ -832,7 +843,7 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    store.updateCompileFailures(OTHER_STREAM, { 1: [next] });
+    snapshotFacts(store).updateCompileFailures(OTHER_STREAM, { 1: [next] });
     // Eagerly applied for the same reason as the missing-outputs case above.
     expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
@@ -853,12 +864,11 @@ describe('StreamSnapshotStore', () => {
     const runConfig = toolUseConfig();
     const executionId = 'abc123' as ExecutionId;
 
-    store.setRunConfig(STREAM, runConfig, executionId);
+    snapshotFacts(store).setRunConfig(STREAM, runConfig, executionId);
     expect(store.getRunConfig(STREAM)).toEqual(runConfig);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
-    await expect(
-      Promise.resolve(store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25))),
-    ).resolves.toMatchObject({
+    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
       inputTokens: 50,
       outputTokens: 10,
       cost: 0.25,
@@ -885,7 +895,7 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
     expect(store.getDescription(STREAM)).toBeUndefined();
 
-    store.setDescription(STREAM, 'Updated session');
+    snapshotFacts(store).setDescription(STREAM, 'Updated session');
     await store.flush();
 
     const raw = await readStreamFile(STREAM, 'meta.json');
@@ -904,7 +914,7 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    store.setDescription(STREAM, 'Prior session');
+    snapshotFacts(store).setDescription(STREAM, 'Prior session');
     await store.flush();
 
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
@@ -980,12 +990,18 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     // Reconciliation is idempotent: with the mirror present, a second load
-    // runs no projection at all and both sides keep their values.
+    // runs no projection at all and both sides keep their values. Pinned at
+    // the persistence boundary: no sidecar meta write may be issued.
     const reloaded = new StreamSnapshotStore();
-    const projected = vi.spyOn(reloaded, 'setDescription');
+    const kvWrites = vi.spyOn(KVStore.prototype, 'write');
     await reloaded.load([STREAM]);
     expect(reloaded.getDescription(STREAM)).toBe('Meta authority label');
-    expect(projected).not.toHaveBeenCalled();
+    await reloaded.flush();
+    expect(kvWrites).not.toHaveBeenCalledWith(
+      STREAM_DATA_KEYS.META,
+      expect.anything(),
+    );
+    kvWrites.mockRestore();
     expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
       'Meta authority label',
     );
@@ -1046,7 +1062,8 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     const wasRuntimeUpdateInjected = injectDuringExecutionConfigHydration(
       oldExecutionId,
-      () => store.setRunConfig(STREAM, newConfig, newExecutionId),
+      () =>
+        snapshotFacts(store).setRunConfig(STREAM, newConfig, newExecutionId),
     );
 
     await store.load([STREAM]);
@@ -1082,7 +1099,7 @@ describe('StreamSnapshotStore', () => {
     // the live event wins because the seed only fills what it did not receive.
     const wasModelSwitchInjected = injectDuringExecutionConfigHydration(
       executionId,
-      () => store.setRunConfig(STREAM, switched, executionId),
+      () => snapshotFacts(store).setRunConfig(STREAM, switched, executionId),
     );
 
     await store.load([STREAM]);
@@ -1106,8 +1123,8 @@ describe('StreamSnapshotStore', () => {
     await getExecutionStore(executionId).writeConfig(runConfig);
 
     const store = new StreamSnapshotStore();
-    store.setRunDescriptor(workflowDescriptor);
-    store.setRunConfig(STREAM, runConfig, executionId);
+    snapshotFacts(store).setRunDescriptor(workflowDescriptor);
+    snapshotFacts(store).setRunConfig(STREAM, runConfig, executionId);
     await store.flush();
 
     // Disk meta drops back to the pre-descriptor shape for the same execution.
@@ -1129,7 +1146,11 @@ describe('StreamSnapshotStore', () => {
     const foreignConfig = toolUseConfig('foreign-search');
 
     const store = new StreamSnapshotStore();
-    store.setRunConfig(STREAM, toolUseConfig('live-search'), liveExecutionId);
+    snapshotFacts(store).setRunConfig(
+      STREAM,
+      toolUseConfig('live-search'),
+      liveExecutionId,
+    );
     await store.flush();
 
     await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
@@ -1249,7 +1270,7 @@ describe('StreamSnapshotStore', () => {
     // this stream any more.
     const wasRunStartInjected = injectDuringExecutionConfigHydration(
       oldExecutionId,
-      () => store.setRunDescriptor(newDescriptor),
+      () => snapshotFacts(store).setRunDescriptor(newDescriptor),
     );
     await store.load([STREAM]);
 
@@ -1273,9 +1294,9 @@ describe('StreamSnapshotStore', () => {
     const wereLateOverlaysInjected = injectDuringExecutionConfigHydration(
       executionId,
       () => {
-        store.clearMissingOutputs(STREAM);
-        store.updateMissingOutputs(STREAM, { 1: ['late.tex'] });
-        void store.addUsage(STREAM, RUN, usage(10, 2, 0.1));
+        snapshotFacts(store).clearMissingOutputs(STREAM);
+        snapshotFacts(store).updateMissingOutputs(STREAM, { 1: ['late.tex'] });
+        void snapshotFacts(store).addUsage(STREAM, RUN, usage(10, 2, 0.1));
       },
     );
 
@@ -1354,8 +1375,8 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
 
-    store.setTodos(STREAM, [TODO]);
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
 
     expect(store.getWorkPlan(STREAM)).toEqual({
       todos: [TODO],
@@ -1370,7 +1391,7 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
 
-    store.addUsage(STREAM, RUN, usage(1, 2, 0.03));
+    snapshotFacts(store).addUsage(STREAM, RUN, usage(1, 2, 0.03));
     await store.deleteStream(STREAM);
 
     expect(await StorageFS.exists(dir)).toBe(false);
@@ -1379,8 +1400,8 @@ describe('StreamSnapshotStore', () => {
   it('keeps the complete snapshot when atomic staging fails', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
-    store.setTodos(STREAM, [TODO]);
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await store.flush();
     const deletionError = new Error('stream data directory is locked');
     const renameSpy = vi
@@ -1408,8 +1429,8 @@ describe('StreamSnapshotStore', () => {
   it('recovers a crash-interrupted staged deletion before hydration', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
-    store.setTodos(STREAM, [TODO]);
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await store.flush();
 
     await store.stageDeleteStream(STREAM);
@@ -1438,7 +1459,7 @@ describe('StreamSnapshotStore', () => {
     const store = await storeWithPersistedPlan();
 
     const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    snapshotFacts(store).setPlan(STREAM, null);
     await store.flush();
 
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
@@ -1467,7 +1488,7 @@ describe('StreamSnapshotStore', () => {
       .spyOn(replayHarness, 'replayStagedWrites')
       .mockImplementationOnce(async (stream, state) => {
         await replay(stream, state);
-        store.setTodos(STREAM, [TODO]);
+        snapshotFacts(store).setTodos(STREAM, [TODO]);
       })
       .mockImplementation(replay);
 
@@ -1485,7 +1506,7 @@ describe('StreamSnapshotStore', () => {
     const store = await storeWithPersistedPlan();
 
     const firstDeletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    snapshotFacts(store).setPlan(STREAM, null);
     let secondStarted = false;
     const secondDeletion = store.stageDeleteStream(STREAM).then((deletion) => {
       secondStarted = true;
@@ -1540,7 +1561,7 @@ describe('StreamSnapshotStore', () => {
 
     const revisedPlan: Plan = { objective: 'Use the recovered draft' };
     writeSpy.mockRestore();
-    store.setPlan(STREAM, revisedPlan);
+    snapshotFacts(store).setPlan(STREAM, revisedPlan);
     await store.flush();
     expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
 
@@ -1592,7 +1613,7 @@ describe('StreamSnapshotStore', () => {
         if (target === otherPlanPath) await unrelatedWriteGate;
         return writeAtomic(target, data);
       });
-    store.setPlan(OTHER_STREAM, PLAN);
+    snapshotFacts(store).setPlan(OTHER_STREAM, PLAN);
     let flushSettled = false;
     const flushing = store.flush().finally(() => {
       flushSettled = true;
@@ -1625,7 +1646,7 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'stat')
       .mockImplementationOnce(async (target) => {
         expect(target).toBe(stagedDir);
-        store.setPlan(STREAM, null);
+        snapshotFacts(store).setPlan(STREAM, null);
         return stat(target);
       });
 
@@ -1651,7 +1672,7 @@ describe('StreamSnapshotStore', () => {
       .mockRejectedValueOnce(writeError)
       .mockImplementation(writeAtomic);
 
-    store.setPlan(STREAM, null);
+    snapshotFacts(store).setPlan(STREAM, null);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
 
     const setupError = new Error('cannot inspect staged snapshot');
@@ -1706,7 +1727,7 @@ describe('StreamSnapshotStore', () => {
     statSpy.mockRestore();
     readSpy.mockRestore();
     expect(store.getWorkPlan(STREAM).plan).toEqual(PLAN);
-    store.setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
     await store.flush();
 
     expect(await reloadWorkPlan()).toMatchObject({
@@ -1722,7 +1743,7 @@ describe('StreamSnapshotStore', () => {
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
       .mockImplementationOnce(async (source, destination) => {
-        store.setPlan(STREAM, null);
+        snapshotFacts(store).setPlan(STREAM, null);
         await rename(source, destination);
         throw renameError;
       })
@@ -1730,7 +1751,7 @@ describe('StreamSnapshotStore', () => {
 
     await expect(store.stageDeleteStream(STREAM)).rejects.toBe(renameError);
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     renameSpy.mockRestore();
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
@@ -1761,7 +1782,7 @@ describe('StreamSnapshotStore', () => {
         writeFinished.resolve(write);
         return write;
       });
-    store.setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
     await writeFinished.promise;
     expect(writeSpy).toHaveBeenCalledTimes(1);
     writeSpy.mockRestore();
@@ -1791,7 +1812,7 @@ describe('StreamSnapshotStore', () => {
     await expect(store.stageDeleteStream(STREAM)).rejects.toBe(setupError);
 
     statSpy.mockRestore();
-    store.setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     expect(await reloadWorkPlan()).toMatchObject({
@@ -1815,7 +1836,7 @@ describe('StreamSnapshotStore', () => {
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
       .mockImplementationOnce(async () => {
-        store.setTodos(STREAM, [TODO]);
+        snapshotFacts(store).setTodos(STREAM, [TODO]);
         throw renameError;
       });
     await expect(store.stageDeleteStream(STREAM)).rejects.toBe(renameError);
@@ -1861,11 +1882,11 @@ describe('StreamSnapshotStore', () => {
   it('keeps the staged base when failed rollback data also has live residue', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    void store.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    snapshotFacts(store).setPlan(STREAM, PLAN);
+    void snapshotFacts(store).addUsage(STREAM, RUN, usage(100, 20, 0.5));
     await store.flush();
     const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    snapshotFacts(store).setPlan(STREAM, null);
     const rollbackError = new Error('snapshot directory is still locked');
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
@@ -1895,11 +1916,11 @@ describe('StreamSnapshotStore', () => {
   it('discards staged residue when failed rollback data has a live base', async () => {
     const store = new StreamSnapshotStore();
     await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    void store.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    snapshotFacts(store).setPlan(STREAM, PLAN);
+    void snapshotFacts(store).addUsage(STREAM, RUN, usage(100, 20, 0.5));
     await store.flush();
     const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    snapshotFacts(store).setPlan(STREAM, null);
     const writeError = new Error('snapshot disk is full');
     const writeSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
@@ -2085,7 +2106,7 @@ describe('StreamSnapshotStore', () => {
     const ensureDirSpy = vi
       .spyOn(StorageFS, 'ensureDir')
       .mockImplementationOnce(async () => {
-        store.setPlan(STREAM, null);
+        snapshotFacts(store).setPlan(STREAM, null);
         throw setupError;
       })
       .mockImplementation(ensureDir);
@@ -2126,14 +2147,14 @@ describe('StreamSnapshotStore', () => {
       },
     );
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await initialWriteStart;
     const setupError = new Error('cannot inspect staged snapshot');
     const stat = StorageFS.stat.bind(StorageFS);
     const statSpy = vi
       .spyOn(StorageFS, 'stat')
       .mockImplementationOnce(async () => {
-        store.setPlan(STREAM, null);
+        snapshotFacts(store).setPlan(STREAM, null);
         throw setupError;
       })
       .mockImplementation(stat);
@@ -2161,8 +2182,8 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'feedface' as ExecutionId;
     const writer = new StreamSnapshotStore();
     await writer.load([]);
-    writer.setRunConfig(STREAM, toolUseConfig(), executionId);
-    writer.setPlan(STREAM, PLAN);
+    snapshotFacts(writer).setRunConfig(STREAM, toolUseConfig(), executionId);
+    snapshotFacts(writer).setPlan(STREAM, PLAN);
     await writer.flush();
     await getExecutionStore(executionId).writeConfig(toolUseConfig());
 
@@ -2185,7 +2206,7 @@ describe('StreamSnapshotStore', () => {
 
     expect(wasDeleteInjected).toHaveBeenCalledOnce();
     expect(store.getWorkPlan(STREAM).plan).toEqual(PLAN);
-    store.setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
     expect(store.getWorkPlan(STREAM).todos).toEqual([TODO]);
     await store.flush();
 
@@ -2215,7 +2236,7 @@ describe('StreamSnapshotStore', () => {
     const wasDeleteInjected = injectDuringExecutionConfigHydration(
       executionId,
       () => {
-        store.updateMissingOutputs(STREAM, { 1: ['late.tex'] });
+        snapshotFacts(store).updateMissingOutputs(STREAM, { 1: ['late.tex'] });
         deletion = store.deleteStream(STREAM);
       },
     );
@@ -2237,7 +2258,7 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'writeAtomic')
       .mockRejectedValue(writeError);
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await expect(store.flush()).rejects.toThrow('sidecar write');
 
     writeSpy.mockRestore();
@@ -2258,7 +2279,7 @@ describe('StreamSnapshotStore', () => {
       return writeAtomic(...args);
     });
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeCount).toBe(1));
     const refresh = store.load([STREAM]);
     const flushing = store.flush();
@@ -2277,8 +2298,8 @@ describe('StreamSnapshotStore', () => {
       .mockRejectedValueOnce(writeError);
     const revisedPlan: Plan = { objective: 'Use the revised draft' };
 
-    store.setPlan(STREAM, PLAN);
-    store.setPlan(STREAM, revisedPlan);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, revisedPlan);
     await store.flush();
 
     expect(writeSpy).toHaveBeenCalledTimes(2);
@@ -2292,10 +2313,10 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'writeAtomic')
       .mockRejectedValue(new Error('snapshot disk is full'));
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     const refresh = store.load([STREAM]);
-    store.setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
     await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
 
     writeSpy.mockRestore();
@@ -2315,10 +2336,10 @@ describe('StreamSnapshotStore', () => {
       .mockRejectedValue(new Error('snapshot disk is full'));
     const output = outputFile('revised.tex', 1);
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     const refresh = store.load([STREAM]);
-    store.addOutputFiles(STREAM, { 1: [output] });
+    snapshotFacts(store).addOutputFiles(STREAM, { 1: [output] });
     await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
 
     writeSpy.mockRestore();
@@ -2336,7 +2357,7 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'writeAtomic')
       .mockRejectedValue(new Error('snapshot disk is full'));
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     const firstRefresh = store.load([STREAM]);
     const secondRefresh = store.load([STREAM]);
@@ -2346,7 +2367,7 @@ describe('StreamSnapshotStore', () => {
     ]);
 
     expect(store.getWorkPlan(STREAM).plan).toEqual(PLAN);
-    store.setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
     writeSpy.mockRestore();
     await store.flush();
 
@@ -2364,7 +2385,7 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'writeAtomic')
       .mockRejectedValueOnce(writeError);
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledTimes(1));
     await store.deleteStream(STREAM);
     await store.flush();
@@ -2380,12 +2401,12 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'writeAtomic')
       .mockRejectedValueOnce(new Error('snapshot disk is full'));
 
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
     writeSpy.mockRestore();
 
     const staging = store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, revisedPlan);
+    snapshotFacts(store).setPlan(STREAM, revisedPlan);
     const deletion = await staging;
     await deletion.rollback();
     await store.flush();
@@ -2417,8 +2438,8 @@ describe('StreamSnapshotStore', () => {
       });
 
     // Both land on the same `${stream}::workPlan` write lock.
-    store.setTodos(STREAM, [TODO]);
-    store.setPlan(STREAM, PLAN);
+    snapshotFacts(store).setTodos(STREAM, [TODO]);
+    snapshotFacts(store).setPlan(STREAM, PLAN);
 
     // Let the first queued write actually begin before releasing it, so the
     // assertion below reflects genuine serialization, not incidental timing.

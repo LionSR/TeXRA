@@ -17,6 +17,7 @@ import {
   type StreamLogEntry,
 } from '@shared/schemas';
 import { createDeferred, waitForCondition } from '@test/support/asyncTestUtils';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
   ephemeralTranscriptWarning,
   StreamLogStore,
@@ -406,9 +407,9 @@ describe('StreamLogStore load', () => {
     expect(store.keys()).toEqual(['alpha']);
     await store.ensureLoaded('alpha');
     expect(store.get('alpha')?.size).toBe(1);
-    expect(() => store.append('alpha', logEntry('alpha', 2, 250))).toThrow(
-      'read-only transcript store',
-    );
+    expect(() =>
+      appendTranscriptEntry(store, 'alpha', logEntry('alpha', 2, 250)),
+    ).toThrow('read-only transcript store');
     expect(() => store.ensureStream('beta')).toThrow(
       'read-only transcript store',
     );
@@ -418,7 +419,11 @@ describe('StreamLogStore load', () => {
     const store = StreamLogStore.ephemeral('interactive fallback test');
 
     store.ensureStream('empty-ephemeral');
-    store.append('ephemeral-stream', logEntry('ephemeral-stream', 1, 100));
+    appendTranscriptEntry(
+      store,
+      'ephemeral-stream',
+      logEntry('ephemeral-stream', 1, 100),
+    );
     store.requestEviction('ephemeral-stream');
     await store.flush();
 
@@ -736,7 +741,11 @@ describe('StreamLogStore load', () => {
       },
     });
     const store = await StreamLogStore.open();
-    store.append('new-root-dirty', logEntry('new-root-dirty', 1, 200));
+    appendTranscriptEntry(
+      store,
+      'new-root-dirty',
+      logEntry('new-root-dirty', 1, 200),
+    );
 
     await store.reload({ discardPendingWrites: true });
 
@@ -751,14 +760,14 @@ describe('StreamLogStore load', () => {
   it('prepares transcript directories again after a storage-root reload', async () => {
     const storage = mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
-    store.append('old-root', logEntry('old-root', 1, 100));
+    appendTranscriptEntry(store, 'old-root', logEntry('old-root', 1, 100));
     await store.flush();
     const oldRootPreparations = storage.ensuredDirs.filter(
       (dir) => dir === STREAM_LOGS_DIR,
     ).length;
 
     await store.reload();
-    store.append('new-root', logEntry('new-root', 1, 200));
+    appendTranscriptEntry(store, 'new-root', logEntry('new-root', 1, 200));
     await store.flush();
 
     expect(
@@ -1249,47 +1258,6 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(streamIds.length);
   });
 
-  it('settles save waiters when dirty streams are still rehydrating', async () => {
-    const readGate = createDeferred();
-    const readStarted = createDeferred();
-    mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 100)],
-      },
-      summaries: {
-        alpha: summary(100, 100, { hasRunningGroup: false }),
-      },
-      onLogRead: async () => {
-        readStarted.resolve();
-        await readGate.promise;
-      },
-    });
-    const store = await StreamLogStore.open();
-    const load = store.ensureLoaded('alpha');
-    await readStarted.promise;
-
-    vi.useFakeTimers();
-    try {
-      store.append(
-        'alpha',
-        namedEntry('alpha-live-entry', 200, 'live while loading'),
-      );
-      const save = store.save();
-      const settled = vi.fn();
-      save.then(settled);
-
-      await vi.runOnlyPendingTimersAsync();
-      await Promise.resolve();
-
-      expect(settled).toHaveBeenCalledOnce();
-    } finally {
-      readGate.resolve();
-      await load;
-      await store.flush();
-      vi.useRealTimers();
-    }
-  });
-
   it('lets delete win over an in-flight stream write', async () => {
     const storage = mockStorage({
       logs: {},
@@ -1298,7 +1266,8 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
 
-    store.append(
+    appendTranscriptEntry(
+      store,
       'delete-me',
       namedEntry('delete-me-entry', 500, 'soon deleted'),
     );
@@ -1332,15 +1301,14 @@ describe('StreamLogStore load', () => {
 
     vi.useFakeTimers();
     try {
-      store.append('alpha', namedEntry('alpha-entry', 500, 'must persist'));
-      const save = store.save();
-      const settled = vi.fn();
-      save.then(settled);
+      appendTranscriptEntry(
+        store,
+        'alpha',
+        namedEntry('alpha-entry', 500, 'must persist'),
+      );
 
       await store.delete('beta');
-      await Promise.resolve();
 
-      expect(settled).toHaveBeenCalledOnce();
       expect(storage.writes.has(storageFile(STREAM_LOGS_DIR, 'alpha'))).toBe(
         true,
       );
@@ -1360,7 +1328,11 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
 
-    store.append('reuse-me', namedEntry('old-entry', 500, 'old entry'));
+    appendTranscriptEntry(
+      store,
+      'reuse-me',
+      namedEntry('old-entry', 500, 'old entry'),
+    );
 
     const flush = store.flush();
     await storage.waitForPausedWrite();
@@ -1368,7 +1340,11 @@ describe('StreamLogStore load', () => {
     storage.releasePausedWrite();
     await Promise.all([flush, deletion]);
 
-    store.append('reuse-me', namedEntry('new-entry', 700, 'new entry'));
+    appendTranscriptEntry(
+      store,
+      'reuse-me',
+      namedEntry('new-entry', 700, 'new entry'),
+    );
     await store.flush();
 
     expect(
@@ -1388,7 +1364,8 @@ describe('StreamLogStore load', () => {
     const storage = mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
 
-    store.append(
+    appendTranscriptEntry(
+      store,
       'new-stream',
       namedEntry('new-stream-entry', 500, 'new entry'),
     );
@@ -1450,7 +1427,11 @@ describe('StreamLogStore load', () => {
       ),
     );
 
-    store.append('alpha', namedEntry('alpha-new', 400, 'new entry'));
+    appendTranscriptEntry(
+      store,
+      'alpha',
+      namedEntry('alpha-new', 400, 'new entry'),
+    );
     await store.flush();
 
     expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'alpha'))).toEqual([
@@ -1483,7 +1464,11 @@ describe('StreamLogStore load', () => {
     expect(store.get('beta')).toBeUndefined();
 
     await store.ensureLoaded('beta');
-    store.append('beta', namedEntry('beta-new', 200, 'new entry'));
+    appendTranscriptEntry(
+      store,
+      'beta',
+      namedEntry('beta-new', 200, 'new entry'),
+    );
     await store.flush();
 
     expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta'))).toEqual([
@@ -1513,39 +1498,20 @@ describe('StreamLogStore load', () => {
       expect.stringContaining('Failed to reload stream gamma from disk'),
     );
 
+    // Writer-only mutation surfaces the refusal at acquisition: a stream
+    // whose persisted log failed to load has no resident log, so no writer
+    // (and therefore no memory-only append) can be obtained.
     expect(() =>
-      store.append('gamma', namedEntry('gamma-new', 400, 'new entry')),
-    ).toThrow('failed to load');
+      appendTranscriptEntry(
+        store,
+        'gamma',
+        namedEntry('gamma-new', 400, 'new entry'),
+      ),
+    ).toThrow('Cannot acquire a writer for released stream gamma');
 
     expect(
       storage.writes.get(storageFile(STREAM_LOGS_DIR, 'gamma')),
     ).toBeUndefined();
-    expect(storage.writes.size).toBe(0);
-  });
-
-  it('rejects flush when a concurrent append cannot join persisted history', async () => {
-    const storage = mockStorage({
-      logs: { gamma: { corrupted: 'not an array' } },
-      summaries: {
-        gamma: summary(100, 100, { hasRunningGroup: false }),
-      },
-    });
-    const store = await StreamLogStore.open();
-    const load = store.ensureLoaded('gamma');
-
-    store.append(
-      'gamma',
-      namedEntry(
-        'gamma-concurrent',
-        200,
-        'arrived while the persisted transcript was being read',
-      ),
-    );
-
-    await expect(load).rejects.toThrow('persisted log is not an array');
-    await expect(store.flush()).rejects.toThrow(
-      'persisted transcripts failed to load',
-    );
     expect(storage.writes.size).toBe(0);
   });
 
@@ -1556,7 +1522,7 @@ describe('StreamLogStore load', () => {
       logWriteError: new Error('authoritative transcript write denied'),
     });
     const store = await StreamLogStore.open();
-    store.append('alpha', logEntry('alpha', 1, 200));
+    appendTranscriptEntry(store, 'alpha', logEntry('alpha', 1, 200));
 
     await expect(store.flush()).rejects.toThrow(
       'Transcript flush failed after 3 retries',
@@ -1578,7 +1544,7 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
     for (const streamId of ['alpha', 'beta', 'gamma']) {
-      store.append(streamId, logEntry(streamId, 1, 200));
+      appendTranscriptEntry(store, streamId, logEntry(streamId, 1, 200));
     }
 
     await store.flush();

@@ -23,6 +23,10 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
+import {
   assembleTrace,
   StreamLogStore,
   StreamSnapshotStore,
@@ -36,7 +40,7 @@ async function appendLogEntry(
   text: string,
 ): Promise<void> {
   const store = await StreamLogStore.open();
-  store.append(streamId, {
+  appendTranscriptEntry(store, streamId, {
     id: 'entry-1',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -158,8 +162,8 @@ describe('assembleTrace', () => {
     expect(derived).not.toBe(second);
 
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(first, executionConfig, executionId);
-    snapshots.setRunConfig(second, executionConfig, executionId);
+    snapshotFacts(snapshots).setRunConfig(first, executionConfig, executionId);
+    snapshotFacts(snapshots).setRunConfig(second, executionConfig, executionId);
     await snapshots.flush();
     await appendLogEntry(first, 'first candidate');
     await appendLogEntry(second, 'second candidate');
@@ -178,8 +182,8 @@ describe('assembleTrace', () => {
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(first, config(), executionId);
-    snapshots.setRunConfig(second, config(), executionId);
+    snapshotFacts(snapshots).setRunConfig(first, config(), executionId);
+    snapshotFacts(snapshots).setRunConfig(second, config(), executionId);
     await snapshots.flush();
 
     await expect(assembleTrace(executionId)).resolves.toEqual({
@@ -202,14 +206,18 @@ describe('assembleTrace', () => {
       { executionId },
     );
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(firstChild, config({ agent: 'bash' }), executionId);
-    snapshots.setParentStream(firstChild, parent);
-    snapshots.setRunConfig(
+    snapshotFacts(snapshots).setRunConfig(
+      firstChild,
+      config({ agent: 'bash' }),
+      executionId,
+    );
+    snapshotFacts(snapshots).setParentStream(firstChild, parent);
+    snapshotFacts(snapshots).setRunConfig(
       secondChild,
       config({ agent: 'codex' }),
       executionId,
     );
-    snapshots.setParentStream(secondChild, parent);
+    snapshotFacts(snapshots).setParentStream(secondChild, parent);
     await snapshots.flush();
     await appendLogEntry(firstChild, 'first child must not be selected');
     await appendLogEntry(secondChild, 'second child must not be selected');

@@ -123,6 +123,10 @@ import {
   readCliHistoryStandaloneTemplate,
   stageCliHistoryTraceViewerAssets,
 } from '@cli/runtime/history';
+import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
 
 const config = AgentConfigSchema.parse({
   agent: 'correct',
@@ -382,12 +386,12 @@ describe('CLI history runtime', () => {
   it('treats candidate-only sidecar associations as a found execution', async () => {
     const executionId = 'a11ce5a11ce5' as ExecutionId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(
+    snapshotFacts(snapshots).setRunConfig(
       `orchestrator@old#${executionId}` as StreamTabId,
       config,
       executionId,
     );
-    snapshots.setRunConfig(
+    snapshotFacts(snapshots).setRunConfig(
       `orchestrator@new#${executionId}` as StreamTabId,
       config,
       executionId,
@@ -415,8 +419,8 @@ describe('CLI history runtime', () => {
       `bash@tool#${executionId}`,
       `codex@tool#${executionId}`,
     ] as StreamTabId[]) {
-      snapshots.setRunConfig(streamId, config, executionId);
-      snapshots.setParentStream(streamId, parent);
+      snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
+      snapshotFacts(snapshots).setParentStream(streamId, parent);
     }
     await snapshots.flush();
     mocks.readConfig.mockResolvedValue(null);
@@ -432,10 +436,10 @@ describe('CLI history runtime', () => {
     const executionId = 'a11ce7a11ce7' as ExecutionId;
     const root = `orchestrator@model#${executionId}` as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(root, config, executionId);
+    snapshotFacts(snapshots).setRunConfig(root, config, executionId);
     await snapshots.flush();
     const logs = await StreamLogStore.open();
-    logs.append(root, {
+    appendTranscriptEntry(logs, root, {
       id: 'diagnostic-only-root',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -1268,12 +1272,12 @@ describe('CLI history runtime', () => {
     it('reports candidate-only sidecars as incomplete rather than not found', async () => {
       const executionId = 'a11ce6a11ce6' as ExecutionId;
       const snapshots = new StreamSnapshotStore();
-      snapshots.setRunConfig(
+      snapshotFacts(snapshots).setRunConfig(
         `orchestrator@old#${executionId}` as StreamTabId,
         config,
         executionId,
       );
-      snapshots.setRunConfig(
+      snapshotFacts(snapshots).setRunConfig(
         `orchestrator@new#${executionId}` as StreamTabId,
         config,
         executionId,
