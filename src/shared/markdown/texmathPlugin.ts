@@ -39,7 +39,7 @@ function addDisplayMathParagraphInterruptions(
       'paragraph',
       `texmath_block_interrupt_${index}`,
       texmath.block(rule),
-      { alt: PARAGRAPH_INTERRUPTION_CHAINS },
+      { alt: [...PARAGRAPH_INTERRUPTION_CHAINS] },
     );
   }
 }
