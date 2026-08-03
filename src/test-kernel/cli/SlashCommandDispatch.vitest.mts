@@ -406,49 +406,31 @@ describe('handleTuiSlashCommand', () => {
   it('derives /auth and /api status from the same access overview', async () => {
     registerBuiltinSlashCommands();
     const overview = vi
-      .spyOn(apiStatus, 'loadCliModelAccessOverview')
-      .mockResolvedValue({
-        access: {
-          apiFallback: 'personal',
-          preferences: { chatGpt: 'on', kimiCode: 'off' },
-          chatGptSignedIn: true,
-          texraSignedIn: true,
-        },
-        lines: [
-          'ChatGPT preference: On · your account',
-          'Kimi Code preference: Off · key required to enable',
-          'API fallback: Personal API keys',
-          'TeXRA: signed in',
-        ],
-      });
-    vi.spyOn(apiStatus, 'loadCliApiStatus').mockResolvedValue({
-      lines: [
-        'api: included TeXRA access',
-        'auth: signed in · tier: researcher · included usage this month: 25% used, 75% remaining',
-      ],
-      detailLines: [
-        'tier: researcher',
-        'included usage this month: 25% used, 75% remaining',
-      ],
-    });
+      .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
+      .mockResolvedValue([
+        'ChatGPT: preferred · signed in as chatgpt@example.com',
+        'Kimi Code: not preferred · key not configured',
+        'Fallback: Included TeXRA access · signed in as texra@example.com · Researcher · included usage this month: 25% used, 75% remaining',
+        'Other personal keys: DeepSeek',
+      ]);
     const context = createContext();
 
     await handleTuiSlashCommand('/auth', context);
     const authStatusText = lastEntryText();
-    expect(authStatusText).toContain('ChatGPT preference: On');
-    expect(authStatusText).toContain('Kimi Code preference: Off');
-    expect(authStatusText).toContain('API fallback: Personal API keys');
-    expect(authStatusText).toContain('tier: researcher');
+    expect(authStatusText).toContain('ChatGPT: preferred');
+    expect(authStatusText).toContain('Kimi Code: not preferred');
+    expect(authStatusText).toContain('Fallback: Included TeXRA access');
+    expect(authStatusText).toContain('Researcher');
     expect(authStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
     );
 
     await handleTuiSlashCommand('/api status', context);
     const apiStatusText = lastEntryText();
-    expect(apiStatusText).toContain('ChatGPT preference: On');
-    expect(apiStatusText).toContain('Kimi Code preference: Off');
-    expect(apiStatusText).toContain('API fallback: Personal API keys');
-    expect(apiStatusText).toContain('tier: researcher');
+    expect(apiStatusText).toContain('ChatGPT: preferred');
+    expect(apiStatusText).toContain('Kimi Code: not preferred');
+    expect(apiStatusText).toContain('Fallback: Included TeXRA access');
+    expect(apiStatusText).toContain('Researcher');
     expect(apiStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
     );
