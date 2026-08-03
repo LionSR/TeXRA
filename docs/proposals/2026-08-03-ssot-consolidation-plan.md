@@ -5,7 +5,8 @@ updated: 2026-08-03
 
 # SSOT consolidation plan: projections, normalization, derived data, one host language
 
-**Status:** Draft plan (v2 — grounded in seven parallel codebase audits, 2026-08-03)
+**Status:** Draft plan (v3 — seven parallel codebase audits + open-issue
+reconciliation, 2026-08-03)
 **Branch:** `claude/texra-9597-design-review-5tyyls`
 **Companion docs:**
 [`2026-07-09-state-of-the-architecture.md`](./2026-07-09-state-of-the-architecture.md) (D1–D8, M/C/IF/FB items),
@@ -45,6 +46,16 @@ Rules of accounting (salvaged from the retired gold-standard PRD, still good):
 - **Anti-mixed-state:** each item ships as one atomic PR — new path and legacy
   removal in the same commit; never both paths alive across PRs
   (per the 2026-02-20 PRD's binding style ruling).
+- **No intermediate compatibility layers — a governing rule, not a
+  preference.** A PR moves a surface from its current state to its **final**
+  state. Temporary bridges, dual-writes, transitional schemas, re-export
+  shims, and "adopt later" shared modules are out of scope by definition:
+  a shared helper lands in the same PR as *all* of its consumers and the
+  deletion of *all* of its restatements, or it does not land. The only
+  sanctioned "temporary" code in this repo is a **dated retirement row** in
+  #9627/#9422 — and the dual of this rule is just as binding: code that
+  already has a death date is never *improved*, refactored around, or given
+  new machinery; it is only deleted on its date (§10.16).
 - Every PR: `npm run typecheck` (builds do not type check), `npm test` for
   touched kernels, `npm run lint`, `npm run check:dead-code-ratchet`.
 
@@ -84,6 +95,27 @@ wrong even if it "simplifies":
     folds take the `nodeHost.ts` shape: additional *named helpers called in
     order by each composition root*.
 
+### 0.2 Open-problem register (reconciled 2026-08-03)
+
+Every open issue touching this plan's territory, and how the plan relates to
+it. A PR from this plan that touches one of these updates it (per each
+issue's own completion condition).
+
+| Issue | State | Relation |
+| --- | --- | --- |
+| #9597 approval-policy tracking | open | owned by the companion PRD; F10 coordinates with its Stage C key hoist |
+| #9627 dated retirement queue (Aug–Nov 2026) | open | **collides with the original A1** — the legacy `EndGroupStatus` projection dies 2026-10-31 and the `rN` stage inference dies 2026-10-26; A1 is re-scoped below to ride the queue instead of building around it. The `FollowUpQueue.drain()` row (2026-09-30) is adjacent to F1 — F1 must not add a `drain` caller |
+| #9422 four persisted-format readers | open | the `meta.taskState` fallback (mid-layer branch the normalization audit flagged) is already queued for 2026-10-05 — **no plan item touches it**; A-items add no new migration machinery (the boundary-only migration ruling, #9434, is closed) |
+| #9590 store-surface reduction | open | Stages 1–6 landed; Stage 7 gated ≥2026-11-01. C6 makes the snapshot store the TUI artifact owner — compatible with (and strengthened by) the store being the single identity authority; C6 must not add any current-path resolver Stage 7 would delete |
+| #9698 switch-exhaustiveness (3 model-layer switches) | open | sibling of C9 — same defect class, different unions. Fold its three fixes into the C9 PR and close it |
+| #9531 resumed-subagent stale results | open, needs-validation | overlaps F1's territory (resume/follow-up). F1 lands the repair-probe fold only; it must not attempt this bug, and its regression test must not mask it |
+| #9532 retry batch bounds | open | adjacent to the yolo-retry rule (approval PRD Stage B); no file overlap expected — recheck at PR time |
+| #9044 trace-viewer sync ingest | open, Later | C7's replayTrace changes are orthogonal (shape, not ingestion); don't expand into it |
+| #6981 legacy retirement ledger | open, deferred | every deletion in §8 that removes a compat arm gets a ledger row update |
+| #6984 age-based retirements (D3) | open, deferred | the frozen CLI JSON deprecation clock lives here; C7's fake-incremental deletion keeps public NDJSON keys until this clock says otherwise |
+| #7724 SDK north star | open, deferred | this plan's deletions all reduce the surface Steps 0–3 must carry — no conflict |
+| #8974 tech-debt tournament ledger | open | its do-not-do list is honored via §0.1; tournament cycles should not re-file items this plan owns |
+
 ## 1. Workstream A — normalize at the entry point (schemas)
 
 The repo's rule: one `z.union().transform()` at deserialization; downstream
@@ -91,27 +123,34 @@ never branches on format. The audit found the rule mostly honored, with these
 violations. All items here are host-independent and unblock nothing/depend on
 nothing — they can land first and in any order.
 
-### A1. `GROUP_END`/`GROUP_START` status: four normalizers → one
+### A1. `GROUP_END`/`GROUP_START` status: ride the dated retirement — do NOT consolidate
 
 `StreamLogStore.ts:184-186` claims to be "The ONE app-side read boundary" for
-legacy `data.status` wire values. It is one of four:
+legacy `data.status` wire values. It is one of four
+(`StreamLogStore.ts:204-224`; `taskGroupProjection.ts:27-36`;
+`replayTrace.ts:105-133`; `subscribeStreamLog.ts:309-329`).
 
-| # | Site | Today |
-| --- | --- | --- |
-| 1 | `src/transcript/StreamLogStore.ts:204-224` (applied `:1448`) | the claimed boundary |
-| 2 | `src/shared/streams/taskGroupProjection.ts:27-36` | hand-rolled duplicate mapping at a consumer |
-| 3 | `packages/trace-viewer/src/replayTrace.ts:105-133` | re-derivation + two extra fallbacks |
-| 4 | `packages/cli/src/chat/tui/state/subscribeStreamLog.ts:309-329` | tolerant re-parse, comment admits duplication |
+**Re-scoped after open-issue reconciliation (v3).** The v2 plan proposed
+moving the mapping into `GroupLogPayloadSchema` as a read-side transform.
+That is now **withdrawn**: #9627 already schedules the legacy
+`EndGroupStatus` projection for deletion on **2026-10-31** and the `rN` stage
+inference for **2026-10-26** — current group-end rows write `TaskGroupStatus`.
+Building a consolidation transform around readers with a death date is an
+intermediate compatibility layer by this plan's own governing rule (§0,
+§10.16): three months of new machinery, then a deletion that has to unwind it.
 
-**Fix:** move the mapping into `GroupLogPayloadSchema`
-(`src/shared/schemas/taskGroup.ts:56-66`) as a **read-side** `.transform()`,
-so every parser of the payload inherits it (see §10.5 for the write-path
-hazard). **Delete:** `taskGroupEndStatus`'s legacy branch
-(`taskGroupProjection.ts:27-36`); the equivalent mapping inside
-`StreamLogStore.ts:204-224`; the legacy fallback arm in `replayTrace.ts`.
-Sites #3/#4 keep their parse call but lose their private mapping.
-**Result:** the `StreamLogStore` comment becomes true. Keep #3's structural
-heuristic for pre-`data.kind` traces — that is archaeology, not normalization.
+**What actually happens:**
+- **Now:** nothing structural. One 3-line comment PR: annotate the three
+  duplicate legacy mappings with `// dies 2026-10-31 with #9627 — do not
+  extend` and correct the false "ONE read boundary" claim at
+  `StreamLogStore.ts:185` to name the retirement row.
+- **On the #9627 dates:** the retirement deletes all four legacy arms as one
+  unit (the queue's own rule), leaving the canonical `TaskGroupStatus` parse
+  as the single boundary — the end state the v2 transform wanted, for free.
+- **Keep** `replayTrace`'s pre-`data.kind` structural heuristic — archived
+  traces are a permanent external parse boundary, which #9627's completion
+  condition explicitly allows when classified as such. Classify it in the
+  issue table.
 
 ### A2. `roundStage`/`phaseStage`: null↔undefined transform on the schema
 
@@ -331,6 +370,11 @@ added fact arm fails compilation everywhere it must be handled or explicitly
 ignored. Enabling change for C5 and any future fact promotion. (Recorded trap:
 no fact-router; the explicit ignore arm is the feature.)
 
+Fold **#9698** into the same PR — the identical defect class on three
+model-layer switches (`ModelHandler.ts:672-683` silently dropping a new
+credential route's usage attribution, `copilotRouting.ts:84-90`,
+`computeModelOptions.ts:385-392`) — and close that issue.
+
 ## 4. Workstream D — derived display: one source, host projections
 
 ### D1. Phase appearance: trait columns, not parallel maps
@@ -452,7 +496,10 @@ present})`, or move the probe inside `submitFollowUp` itself.
 **Delete:** ext `followUpCommand.ts:14-53` (~40 L), desktop
 `desktopAgentExecution.ts:1239-1272` (~34 L), CLI `runChatTui.tsx:717-768`
 (~50 L) — each collapses to its presentation verb. Ship labeled as a behavior
-fix for desktop/CLI, with a regression test (§10.9).
+fix for desktop/CLI, with a regression test (§10.9). Coordination: #9531
+(resumed-subagent staleness) lives in adjacent resume territory — F1 fixes the
+probe only, must not add a `FollowUpQueue.drain()` caller (that method dies
+2026-09-30 per #9627), and its test must not mask #9531.
 
 ### F2. Settings credential/profile sequences: one actions module
 
@@ -579,9 +626,11 @@ copies); the file-picker dropdown/banner policy (~60 L × 2); the
 2. **NDJSON parity fixture** — byte-comparison harness for headless output,
    run across C1/C5/C7 (the D4 ruling's acceptance criterion generalized).
 3. **Normalizer retirement gates** (Style-2 vitest, per the approval-policy
-   PRD's Stage E pattern): the `GROUP_END` mapping exists once (A1); the usage
-   fold and empty-predicate exist once (B1/B2). Symbol-scoped, with the
-   >100-files vacuity guard. Added **after** the corresponding deletions land.
+   PRD's Stage E pattern): the usage fold and empty-predicate exist once
+   (B1/B2); the `GROUP_END` gate is added only **after** the #9627 rows
+   delete the legacy arms (gating a mapping that still legitimately exists
+   four times would be noise). Symbol-scoped, with the >100-files vacuity
+   guard. Added **after** the corresponding deletions land.
 4. **Extension bundle-size check** riding F5's `hostRuntime.ts` split (the
    inlining it deletes existed for bundle reasons; the gate proves the reason
    is gone).
@@ -592,30 +641,105 @@ copies); the file-picker dropdown/banner policy (~60 L × 2); the
    `initPlatform.ts:293-296`'s false "as the extension and desktop hosts do"
    comment dies with F5.
 
-## 7. Ordering
+## 7. Execution order — holistic, no intermediate states
 
-```
-A1–A8 (independent, land anytime)
-B decision → B1..B5
-C9 → C5          C1, C2, C3, C4 (pre-authorized, independent)
-E1 → C6          C7, C8 (C7 replayTrace items after the D3 pure-core split)
-D1–D7 (independent of C except D4 ⇢ C7's elapsed deletion)
-F1, F5.1 (behavior fixes — early, standalone PRs)
-F2–F4, F6–F11 (sequence folds — any order; F10 after approval-PRD Stage C hoist)
-E2 rides C1/C5; E3 rides A1/B; E4 rides F5.3; E5 anytime
-```
+The order below is chosen so that **no PR ever builds a bridge for a later
+PR to cross and then demolish**. Three ordering principles drive it:
 
-Approval-policy PRD Stages A–E proceed in parallel; shared files of
-consequence: `cliPresentationHost.ts` (C5/C7), `SessionMeta.approvalPolicy`
-(that PRD's Stage B), the settings-catalog hoist (F10 coordinates with its
-Stage C).
+1. **Truth before traffic.** Anything that makes silent divergence loud
+   (exhaustive switches, order-invariant tests, parity fixtures) lands before
+   anything that moves a fact between channels — so migrations fail in CI,
+   not in production.
+2. **Bugs before folds.** Where a fold would change behavior (F1, F5.1), the
+   behavior fix ships first as its own labeled PR; the fold that follows is
+   then provably neutral. Never the reverse, never combined.
+3. **Death dates are load-bearing.** Code queued in #9627/#9422 is invisible
+   to this plan except as a date; no wave touches it. Waves are scheduled so
+   nothing lands in September that October's retirements would rework.
+
+### Wave 0 — enablers and live-bug fixes (now; all independent, no decisions needed)
+
+| PR | Content | Why first |
+| --- | --- | --- |
+| 0.1 | C9 + #9698: loud switches (SessionFact ×4, model-layer ×3) | every later fact/union change now compile-fails where it must be handled |
+| 0.2 | E1: hub subscriber-order invariant test | makes the re-read pattern's precondition explicit before C5/C6 rely on it |
+| 0.3 | E2: NDJSON byte-parity fixture (record/replay/compare) | the tripwire every channel move runs against |
+| 0.4 | C2: desktop `removeStream` (pre-authorized live bug) | leaked resources today |
+| 0.5 | F1: follow-up repair probe, all three hosts (behavior fix + wrapper fold in one PR — the fold *is* the fix delivery, both hosts' deletions included) | live correctness divergence; coordinate with #9531, no `drain()` callers |
+| 0.6 | F5.1: desktop `refreshModelListStateIfNeeded`; reliability stub wire-up (F9's gap) | stale models / dead panel today; usage-log half waits on decision 6 |
+| 0.7 | A1-rescoped comment PR + E5 doc corrections | costs nothing; stops future readers trusting five false comments |
+
+### Wave 1 — the decision sitting (owner, one pass)
+
+Resolve §9 items 1–8. Each has a recommended default; the sitting exists so
+Waves 2+ never stall. Nothing in Wave 0 depended on any of these.
+
+### Wave 2 — entry-point schemas (A2–A8; independent of each other and of C/D/F)
+
+Each is one atomic PR: transform on the schema + every hand-unwrap deleted +
+writer-emits-canonical test where a write path shares the schema (§10.5).
+A6's memo ships with its mtime/signal invalidation in the same PR — a blind
+memo followed by a "make it live again" fix would be an intermediate state.
+
+### Wave 3 — pre-authorized rail deletions (C1, C3, C4; independent)
+
+C1 (D4 atomic: guard + three projector arms, parity fixture green), C3
+(legacy tool-edit channel, −300..−450), C4 (PT-2). These are pure deletions
+of already-dead or already-ruled surfaces; they shrink the graph before the
+channel moves of Wave 4 touch it.
+
+### Wave 4 — channel moves and mechanical hops (C5 → C7 → C6, C8)
+
+- C5 (bypass → SessionFact) lands after 0.1/0.3: one PR carries the new arm,
+  the port-method deletion, the CLI rename-table deletion, and the
+  single-frontend-writer change. No dual-channel window exists even inside
+  the PR — the parity fixture is the proof.
+- C7 (mechanical batch) follows; its replayTrace rows depend on D3's
+  pure-core extraction, so D3 ships inside Wave 4 immediately before them —
+  extraction and *all* consumer repointing in one PR (no "extract now, adopt
+  later").
+- C6 (artifact owner) closes the wave, standing on 0.2.
+- C8 items each pair backend-guarantee + frontend-deletion atomically.
+
+### Wave 5 — canonical folds and display sources (B1–B5, D1–D7)
+
+B needs decision 1; each B PR switches a consumer *and* deletes its private
+fold together (§10.12: column selection preserves displayed numbers; the
+status-bar column fix is its own labeled PR). D-items are independent;
+D4's elapsed rule rides C7's `ActiveChildInfo` deletion, hence after Wave 4.
+
+### Wave 6 — sequence folds (F2–F4, F6–F11)
+
+Any order; each is atomic per §10.11 (shared module + both hosts' deletions
+in one PR — a fold that can't take both hosts in one PR is not ready).
+F10 lands after the approval-PRD Stage C key hoist so the catalog move
+happens once. F6 waits on decision 8 (the sweep asymmetry investigation).
+
+### Wave 7 — gates and closure (E3, E4)
+
+Retirement gates land only over surfaces whose deletions completed (usage
+fold, and — after the October #9627 dates — the `GROUP_END` boundary).
+E4's bundle check rides F5.3. Ledger updates (#6981, #9627) land with each
+deleting PR, not batched here.
+
+**Cross-plan files:** `cliPresentationHost.ts` (C5/C7 vs approval-PRD — no
+overlap in that PRD's stages, but sequence C5 and its Stage B on different
+days); `SessionMeta.approvalPolicy` (owned by that PRD's Stage B); the
+settings catalog (F10 after its Stage C).
+
+**What is deliberately NOT in any wave:** everything in #9627/#9422's queues
+(taskState fallback, `EndGroupStatus` legacy arms, `rN` inference,
+`drain()`, copilot cohort, #9590 Stage 7) — those execute on their dates
+under their own issues' rules, and this plan's only contribution is that
+Waves 0–6 leave their deletion sites untouched.
 
 ## 8. Consolidated deletion ledger
 
 Symbols that cease to exist (relocations excluded, per §0):
 
-**Workstream A:** `taskGroupProjection.ts:27-36` legacy branch;
-`StreamLogStore` private status map; `metadataToStreamStatePartial`;
+**Workstream A:** *(the `GROUP_END` legacy arms — `taskGroupProjection.ts:27-36`
+and the `StreamLogStore` private status map — are #9627's deletions, not this
+plan's; listed there, dated 2026-10-26/31)*; `metadataToStreamStatePartial`;
 `syncSlice` stage unwraps; `childExecutions` tri-state branch;
 `stateUtils.ts:106`; duplicate `TokenUsageStats` transform + `as` cast; four
 external-inquiry unwraps + one duplicate permission constructor;
@@ -900,7 +1024,56 @@ cache the approval getConfig reads too" — is already closed by constraint 9.
 telemetry) stall, and implementers either guess (re-introducing exactly the
 silent divergence this plan exists to kill) or skip to unblocked items,
 leaving the highest-value fixes last.
-**Clean fix:** every gated item has a recommended default recorded in §9; the
-pre-authorized and decision-free items (A*, C1–C4, C7 mechanical rows, D1
-mechanics, F1) form a full work queue that never blocks on §9. A decision
-changes *which* PR lands, never whether progress continues.
+**Clean fix:** every gated item has a recommended default recorded in §9;
+Wave 0 is decision-free by construction and the decision sitting is Wave 1,
+so no wave ever blocks on §9. A decision changes *which* PR lands, never
+whether progress continues.
+
+### 10.16 Building on code that is scheduled to die (the A1 lesson)
+
+**Risk:** an audit finds a genuine duplication, the plan designs its
+consolidation — and the duplicated code already has a deletion date in a
+retirement queue the audit didn't cross-check. The consolidation ships,
+works for ten weeks, then the dated retirement has to unwind the new
+machinery along with the old: two migrations where zero were needed. This
+plan *caught itself* doing exactly this: v2's A1 proposed a
+`GroupLogPayloadSchema` transform around legacy arms that #9627 kills on
+2026-10-26/31.
+**Symptom:** a retirement PR whose diff is half "revert the improvement from
+August".
+**Clean fix:** the open-problem register (§0.2) is a mandatory pre-flight for
+every item — any target symbol appearing in #9627/#9422/#9590-Stage-7 removes
+the item from this plan's scope, full stop. The residual action on such code
+is at most a comment naming its death date. The register is re-reconciled
+whenever a new retirement row is filed.
+
+### 10.17 Collision with in-flight bug fixes and sibling trackers
+
+**Risk:** F1 refactors the resume/follow-up seam while #9531 (stale resumed
+subagent results, needs-validation) is being investigated in the same
+territory; C9 and #9698 fix the same defect class in different files; a
+tournament cycle (#8974) re-files an item this plan owns. Parallel fixes in
+one seam produce merge conflicts at best and masked bugs at worst — a
+refactor's green tests can hide the very staleness #9531 describes.
+**Symptom:** #9531's reproduction stops reproducing after F1 without the bug
+being fixed; duplicate issues; churn.
+**Clean fix:** §0.2 assigns each overlap a rule: F1 fixes the probe only and
+its tests assert the probe, not resume-result freshness; #9698 folds *into*
+the C9 PR and closes; plan-owned items get a "tracked by the SSOT plan" note
+so the tournament skips them. Any new issue landing in a plan seam gets
+reconciled into §0.2 before the affected wave starts.
+
+### 10.18 The plan itself as a dual system
+
+**Risk:** this document decays into exactly what it fights — a second,
+stale source of truth beside the issues and the code. Its line numbers rot;
+its "open" items complete; future audits re-derive its content.
+**Symptom:** an implementer follows a v2 instruction (the A1 transform) that
+v3 withdrew.
+**Clean fix:** the plan is a *plan*, not a ledger: each wave's completion is
+recorded in the issues (per §0.2), and when a workstream fully lands, its
+section is compressed to a completion note pointing at the PRs — the
+convention #9590's issue body already demonstrates ("historical proposal
+text is available in the edit history"). The §8 deletion ledger is the
+checklist against which that compression happens; anything undelivered
+returns to an issue, not to a forgotten paragraph.
