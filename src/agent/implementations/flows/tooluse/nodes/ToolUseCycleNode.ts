@@ -38,19 +38,17 @@ export class ToolUseCycleNode<C> extends Node<
   async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
     assertPreparedShared(shared);
 
-    // stateSlices.workspaceSnapshot was produced by this same node's own
-    // toSnapshot() last round (or by ToolUsePrepareNode's one-time
-    // hydration) — never raw persisted/legacy data — so re-deriving it
-    // here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
-    const workspaceState = AgentWorkspaceState.fromCanonicalSnapshot(
-      shared.stateSlices.workspaceSnapshot,
-    );
     return {
       shouldSkipCycle: shared.shouldSkipCycle,
       messages: shared.messages,
       runState: shared.stateSlices.runStateSnapshot,
-      workspaceState,
-      cycleStartLastResponse: workspaceState.assembly.lastResponse,
+      // stateSlices.workspaceSnapshot was produced by this same node's own
+      // toSnapshot() last round (or by ToolUsePrepareNode's one-time
+      // hydration) — never raw persisted/legacy data — so re-deriving it
+      // here uses the canonical-only path (see AgentWorkspaceState.fromCanonicalSnapshot).
+      workspaceState: AgentWorkspaceState.fromCanonicalSnapshot(
+        shared.stateSlices.workspaceSnapshot,
+      ),
       userChannels: shared.stateSlices.userChannels,
       systemPrompt: shared.systemPrompt,
     };
@@ -210,18 +208,10 @@ export class ToolUseCycleNode<C> extends Node<
       workspaceSnapshot,
       userChannels: prepRes.userChannels,
     };
-    const assemblyResponse = prepRes.workspaceState.assembly.lastResponse;
     const cycleResponse =
       execRes.outcome === 'skipped'
         ? undefined
-        : (execRes.response ??
-          // The assembly fallback exists for text written during THIS cycle
-          // (the failure-path copy in exec). A value unchanged since prep is
-          // a previous turn's response — an answerless cycle must not return
-          // it as its result (#9531).
-          (assemblyResponse !== prepRes.cycleStartLastResponse
-            ? assemblyResponse
-            : undefined));
+        : (execRes.response ?? prepRes.workspaceState.assembly.lastResponse);
     shared.lastResponse = cycleResponse || shared.lastResponse;
     if (cycleResponse) {
       this.services.onCycleResponse?.(cycleResponse);

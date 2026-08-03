@@ -75,14 +75,12 @@ const plan: Plan = {
 function createPrepResult(
   workspaceState: AgentWorkspaceState,
   shouldSkipCycle = true,
-  cycleStartLastResponse = '',
 ): CyclePrepResult {
   return {
     shouldSkipCycle,
     messages: [],
     runState: AgentRunStateSnapshotSchema.parse({}),
     workspaceState,
-    cycleStartLastResponse,
     userChannels: { input: {}, transient: {} },
   };
 }
@@ -276,78 +274,6 @@ describe('tool-use progress events', () => {
     await node.post(shared, prepRes, { outcome: 'skipped' });
 
     expect(onCycleResponse).not.toHaveBeenCalled();
-  });
-
-  it('does not return the previous cycle response for an answerless completed cycle', async () => {
-    // Assembly text unchanged since prep is historical: the cycle produced no
-    // new assistant response, so it must not become this cycle's result (#9531).
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'previous turn response';
-    const prepRes = createPrepResult(
-      workspaceState,
-      false,
-      'previous turn response',
-    );
-    const shared = {
-      lastResponse: 'previous turn response',
-    } as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, { outcome: 'completed', messages: [] });
-
-    expect(onCycleResponse).not.toHaveBeenCalled();
-    expect(shared.lastResponse).toBe('previous turn response');
-  });
-
-  it('does not return the previous cycle response for an answerless failed cycle', async () => {
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'previous turn response';
-    const prepRes = createPrepResult(
-      workspaceState,
-      false,
-      'previous turn response',
-    );
-    const shared = {} as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, {
-      outcome: 'failed',
-      lastError: { message: 'stream failed', userRetryable: true },
-    });
-
-    expect(onCycleResponse).not.toHaveBeenCalled();
-    expect(shared.lastResponse).toBeUndefined();
-  });
-
-  it('reports assembly text written during the cycle over the prep baseline', async () => {
-    // The failure path in exec copies this cycle's partial text into assembly;
-    // differing from the prep-time baseline is what makes it reportable.
-    const workspaceState = AgentWorkspaceState.create();
-    workspaceState.assembly.lastResponse = 'partial cycle text';
-    const prepRes = createPrepResult(
-      workspaceState,
-      false,
-      'previous turn response',
-    );
-    const shared = {} as ToolUseRunShared;
-    const onCycleResponse = vi.fn();
-    const node = new ToolUseCycleNode().setServices({
-      onCycleResponse,
-    } as unknown as ToolUseServices);
-
-    await node.post(shared, prepRes, {
-      outcome: 'failed',
-      lastError: { message: 'stream failed', userRetryable: true },
-    });
-
-    expect(onCycleResponse).toHaveBeenCalledWith('partial cycle text');
-    expect(shared.lastResponse).toBe('partial cycle text');
   });
 
   it('persists a completed cycle structured result in shared state', async () => {
