@@ -15,10 +15,9 @@ import { DEFAULT_ATTACHMENT_MIME_TYPE } from '../utils/toolAttachmentUtils';
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 
 /**
- * Client setup and the media-attachment pipeline for the Google handlers. Both
- * handlers use the SAME `GoogleGenAI` SDK, so these run once from
- * `GoogleModelHandlerBase`; only the per-SDK media/text block shapes differ, and
- * those are supplied by the subclass through `buildMedia`.
+ * Client setup and the media-attachment pipeline for `ModelHandlerGoogleInteractions`,
+ * shared out of the handler file so it stays readable alongside the
+ * Interactions-specific wire logic.
  */
 
 export interface GoogleClientCache {

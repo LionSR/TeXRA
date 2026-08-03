@@ -1,17 +1,19 @@
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { refreshRemoteCatalogForGaps } from '@common/teams/TeamPlan';
+import {
+  findTeamPreset,
+  planTeamRun,
+  planTeamRuns,
+  refreshRemoteCatalogForGaps,
+  teamPlanHasGaps,
+} from '@common/teams/TeamPlan';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import {
-  cliMultiAgentPlanHasGaps,
-  findCliMultiAgentPreset,
   formatCliMultiAgentPresetRunWarnings,
-  planCliMultiAgentPresetRun,
-  planCliMultiAgentPresets,
   readCliMultiAgentPresets,
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
@@ -35,14 +37,11 @@ export interface MultiAgentPresetPlansLoadResult {
 function planCurrentMultiAgentRun(
   init: MultiAgentRunPlanInit,
 ): CliMultiAgentPresetRunPlan {
-  const preset = findCliMultiAgentPreset(
-    readCliMultiAgentPresets(),
-    init.preset,
-  );
+  const preset = findTeamPreset(readCliMultiAgentPresets(), init.preset);
   if (!preset) {
     throw new CliUsageError(missingMultiAgentPresetMessage(init.preset));
   }
-  return planCliMultiAgentPresetRun(preset, {
+  return planTeamRun(preset, {
     workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
     toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
     agentOverride: init.agent,
@@ -52,7 +51,7 @@ function planCurrentMultiAgentRun(
 function planLoadedCliMultiAgentPresets(
   presets: readonly CliMultiAgentPreset[],
 ): CliMultiAgentPresetRunPlan[] {
-  return planCliMultiAgentPresets(presets, {
+  return planTeamRuns(presets, {
     workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
     toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
   });
@@ -79,7 +78,7 @@ export async function loadCliMultiAgentRunPlan(
   }
   const result = await reloadRemoteAgentsForGaps(
     localPlan,
-    cliMultiAgentPlanHasGaps,
+    teamPlanHasGaps,
     () => planCurrentMultiAgentRun(init),
   );
   return {
@@ -94,7 +93,7 @@ export async function loadCliMultiAgentPresetPlanSet(
   await loadAgents({ includeRemote: false });
   const result = await reloadRemoteAgentsForGaps(
     planLoadedCliMultiAgentPresets(presets),
-    (plans) => plans.some(cliMultiAgentPlanHasGaps),
+    (plans) => plans.some(teamPlanHasGaps),
     () => planLoadedCliMultiAgentPresets(presets),
   );
   return {
