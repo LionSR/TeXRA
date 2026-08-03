@@ -35,7 +35,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
@@ -564,7 +564,7 @@ export class SessionHandle {
     const executionIds = new Map(snapshotExecutionIds);
     for (const streamId of this.transcripts.keys()) {
       if (executionIds.has(streamId)) continue;
-      const derived = executionIdFromStream(streamId);
+      const derived = await legacyExecutionIdFromStreamSuffix(streamId);
       if (derived) executionIds.set(streamId, derived);
     }
     let waitingStreams: Set<StreamTabId>;

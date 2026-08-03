@@ -6,7 +6,7 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 
-import type { TodoEntry } from '@agent/storage';
+import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@agent/storage/conversationFormat';
 import {
   MESSAGE_TYPES,
+  registeredStreamId,
   STREAM_LOG_ENTRY_TYPES,
   ToolUseLogSchema,
   UserMessagePayloadSchema,
@@ -53,6 +54,29 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
 }
 
 /**
+ * A registration-proven record resolves directly from its execution metadata:
+ * one canonical stream, no historical fallback candidates, and no sidecar or
+ * suffix scan (`fallbackStreamIds` is empty by proof, not omitted as
+ * unknown). Only legacy records — no registration provenance — enter the
+ * compatibility resolver (#9590 A1).
+ */
+async function resolveCompletedRunStream(
+  executionId: ExecutionId,
+  options: {
+    snapshotStore: StreamSnapshotStore;
+    streamLogStore?: StreamLogStore;
+  },
+): Promise<PersistedStreamIdResolution | null> {
+  const registered = registeredStreamId(
+    await getExecutionStore(executionId).readMeta(),
+  );
+  if (registered !== undefined) {
+    return { streamId: registered, fallbackStreamIds: [] };
+  }
+  return resolvePersistedStreamIdForExecution(executionId, options);
+}
+
+/**
  * Read the archived task list for a completed run from the durable stream
  * sidecar (`streamData/{stream}/workPlan.json`).
  */
@@ -60,7 +84,7 @@ export async function readCompletedRunTodos(
   executionId: ExecutionId,
 ): Promise<CompletedRunTodosReadResult> {
   const snapshotStore = new StreamSnapshotStore();
-  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
+  const resolved = await resolveCompletedRunStream(executionId, {
     snapshotStore,
   });
 
@@ -791,7 +815,7 @@ export async function readCompletedRunConversation(
   // nor mutates persistence.
   const streamLogStore = await StreamLogStore.openReadOnly();
 
-  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
+  const resolved = await resolveCompletedRunStream(executionId, {
     snapshotStore,
     streamLogStore,
   });

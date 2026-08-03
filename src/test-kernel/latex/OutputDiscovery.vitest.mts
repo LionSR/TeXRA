@@ -17,6 +17,7 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 // r0/r1 outputs on disk (the same source the `--run-id` path scans).
 const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
+  getExecutionStore: vi.fn(),
   findRunDir: vi.fn(),
   readOutputFiles: vi.fn(),
 }));
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage')>()),
   listExecutions: mocks.listExecutions,
+  getExecutionStore: mocks.getExecutionStore,
 }));
 
 vi.mock('@utils/files', async (importActual) => ({
@@ -64,7 +66,11 @@ describe('discoverLatestExecutionOutputs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await installPlatform({}, { fs: nodeFilesystem });
-    // No stream-tab snapshot exists for headless runs.
+    // Headless executions have no registered stream identity and no
+    // stream-tab snapshot.
+    mocks.getExecutionStore.mockReturnValue({
+      readMeta: async () => null,
+    } as never);
     mocks.readOutputFiles.mockResolvedValue(undefined);
   });
 
@@ -100,6 +106,34 @@ describe('discoverLatestExecutionOutputs', () => {
         .sort((a, b) => a - b),
     ).toEqual([0, 1]);
     expect(mocks.findRunDir).toHaveBeenCalledWith('exec-headless');
+  });
+
+  it('reads outputs under the registered stream identity instead of rebuilding it from configuration (#9590 A1)', async () => {
+    mocks.listExecutions.mockResolvedValue([
+      matchingExecution('exec-registered'),
+    ]);
+    // Registered under a stream the agent/model config would NOT derive.
+    mocks.getExecutionStore.mockReturnValue({
+      readMeta: async () => ({
+        timestamp: '2026-01-01T00:00:00.000Z',
+        streamId: 'polish@earlierModel#exec-registered',
+        streamIdSource: 'registration',
+      }),
+    } as never);
+    const rounds = { 0: [] };
+    mocks.readOutputFiles.mockResolvedValue(rounds);
+
+    const result = await discoverLatestExecutionOutputs({
+      agent: 'polish',
+      model: 'deepseek',
+      inputFile: 'paper.tex',
+    });
+
+    expect(mocks.readOutputFiles).toHaveBeenCalledWith(
+      'polish@earlierModel#exec-registered',
+    );
+    expect(result).toEqual({ executionId: 'exec-registered', rounds });
+    expect(mocks.findRunDir).not.toHaveBeenCalled();
   });
 
   it('returns null when neither the snapshot nor the run directory has outputs', async () => {

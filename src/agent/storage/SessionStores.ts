@@ -7,7 +7,7 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
-import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -277,13 +277,18 @@ export class SessionStores {
     );
   }
 
-  /** Persisted run-descriptor id, falling back to the stream-name id. */
+  /**
+   * Persisted run-descriptor id (the stream→execution reverse edge), falling
+   * back to the suffix-derived legacy boundary. Suffix resemblance alone never
+   * admits an execution directory into deletion: the boundary rejects a
+   * derived id whose registered metadata names a different stream (#9590 A2).
+   */
   private async persistedOrDerivedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
       (await this.snapshots.readPersistedExecutionId(stream)) ??
-      executionIdFromStream(stream)
+      (await legacyExecutionIdFromStreamSuffix(stream))
     );
   }
 
@@ -334,7 +339,7 @@ export class SessionStores {
     }
     for (const stream of streamIds) {
       if (executionIdsByStream.has(stream)) continue;
-      const derived = executionIdFromStream(stream);
+      const derived = await legacyExecutionIdFromStreamSuffix(stream);
       if (derived) executionIdsByStream.set(stream, derived);
     }
 

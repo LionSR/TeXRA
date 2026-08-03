@@ -39,6 +39,7 @@ import {
   ExecutionIdSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
+  registeredStreamId,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamLogEntry,
@@ -939,14 +940,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     const transcripts = currentSession().transcripts;
+    // A registration-proven record names its stream directly; only legacy
+    // records enter the compatibility resolver's scans (#9590 A1).
     const streamId =
       handle instanceof AgentExecutionHandle
         ? handle.childStreamId
-        : (
+        : (registeredStreamId(meta) ??
+          (
             await resolvePersistedStreamIdForExecution(executionId, {
               streamLogStore: transcripts,
             })
-          )?.streamId;
+          )?.streamId);
     // Resident while the command runs (an open writer refuses eviction); a
     // released stream rehydrates from disk, and an ephemeral store no-ops.
     if (streamId) await transcripts.ensureLoaded(streamId);
