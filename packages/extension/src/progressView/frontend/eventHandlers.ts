@@ -11,7 +11,7 @@ import {
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local imports - progress view
-import { deleteStreamState, firstStreamId, isToolUseState } from './store';
+import { firstStreamId, isToolUseState } from './store';
 import { deleteFollowUpInputTransientState } from './followUpInputState';
 import { addResolvedProposalId, removePrompt } from './slices/permissionSlice';
 import { updateToolUseState } from './stateUtils';
@@ -51,10 +51,9 @@ export function handleStreamDelete(
   // Optimistic removal: apply delete locally before notifying backend
   appState.set(
     create(appState.get(), (draft) => {
-      deleteStreamState(draft, streamId);
-      draft.streamById.delete(streamId);
+      draft.streams.delete(streamId);
       if (draft.activeStreamId === streamId) {
-        draft.activeStreamId = firstStreamId(draft.streamById);
+        draft.activeStreamId = firstStreamId(draft.streams);
       }
     }),
   );
@@ -95,7 +94,7 @@ export function handleFollowUpChange(
   event: CustomEvent<FollowUpChangeDetail>,
 ): void {
   const { mode = 'replace', streamId, value } = event.detail;
-  if (!appState.get().streamStates.has(streamId)) return;
+  if (!appState.get().streams.has(streamId)) return;
   updateToolUseState(streamId, (prev) =>
     create(prev, (draft) => {
       if (mode === 'replace') {
@@ -116,7 +115,7 @@ function getFollowUpText(
   streamId: StreamTabId,
 ): { streamId: StreamTabId; text: string } | null {
   const state = appState.get();
-  const streamState = state.streamStates.get(streamId);
+  const streamState = state.streams.get(streamId)?.state;
   if (!streamState || !isToolUseState(streamState)) return null;
 
   const text = streamState.ui.followUpText?.trim() ?? '';

@@ -80,7 +80,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed).toMatchObject({
       kind: AgentCategory.Workflow,
       files: {},
@@ -113,7 +113,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed).toMatchObject({
       kind: AgentCategory.ToolUse,
       todos: [{ content: 'Replay the plan' }],
@@ -161,7 +161,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(result.trace);
 
-    const replayed = appState.get().streamStates.get(result.trace.streamId);
+    const replayed = appState.get().streams.get(result.trace.streamId)?.state;
     expect(replayed?.status).toBe('failed');
   });
 
@@ -206,7 +206,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
@@ -254,7 +254,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
@@ -315,7 +315,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
@@ -324,7 +324,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
     expect(replayed?.status).toBe('failed');
   });
@@ -334,7 +334,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     // STOPPED folds into the canonical COMPLETED phase (the same collapse
     // `streamStatusToLifecycleStatus` performs everywhere else in the app) —
     // the point of this regression is that it must not silently become
@@ -348,7 +348,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = appState.get().streamStates.get(trace.streamId);
+    const replayed = appState.get().streams.get(trace.streamId)?.state;
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 });

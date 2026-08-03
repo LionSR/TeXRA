@@ -29,9 +29,9 @@ import { setsEqual } from './utils';
 import { clearFollowUpInputTransientStateStore } from './followUpInputState';
 import {
   createInitialState,
-  ensureStreamState,
   EMPTY_STREAM_LOGS,
   isToolUseState,
+  type StreamEntry,
   type StreamState,
 } from './store';
 import {
@@ -94,12 +94,62 @@ export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
 // Selector computeds: extract fields, auto-memoized by Object.is.
 // ---------------------------------------------------------------------------
 
-export const streamById$ = select(appState, (s) => s.streamById);
-export const streamStates$ = select(appState, (s) => s.streamStates);
-const streamLogs$ = select(appState, (s) => s.streamLogs);
+/** Raw per-stream record map. Changes identity on ANY field of ANY stream
+ *  (info, state, logs, or followup options all live on the same entry now)
+ *  — components that need to skip re-rendering on an unrelated facet's
+ *  change must read one of the memoized per-facet views below instead of
+ *  this signal directly. */
+const streamEntries$ = select(appState, (s) => s.streams);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);
 const inquiries$ = select(appState, (s) => s.inquiries);
-const followupOptions$ = select(appState, (s) => s.followupOptionsByStream);
+
+/**
+ * Builds a per-facet view Map from `streamEntries$`, reusing the previous
+ * Map instance when every entry's extracted facet is still reference-equal.
+ * `streamEntries$` changes identity on every per-stream write (info, state,
+ * logs, and followup options all live on the same consolidated entry now),
+ * so without this the facet views below would rebuild — and change
+ * identity — on ticks that don't touch them, defeating the render-skip Lit
+ * relies on for content components that only read one facet (mirrors the
+ * manual-cache pattern `phaseStages$` already uses below).
+ */
+function memoizedFacetView<V>(
+  prev: Map<StreamTabId, V>,
+  extract: (entry: StreamEntry) => V,
+): Map<StreamTabId, V> {
+  const entries = streamEntries$.get();
+  let changed = entries.size !== prev.size;
+  if (!changed) {
+    for (const [id, entry] of entries) {
+      if (prev.get(id) !== extract(entry)) {
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (!changed) return prev;
+  const next = new Map<StreamTabId, V>();
+  for (const [id, entry] of entries) next.set(id, extract(entry));
+  return next;
+}
+
+/** Canonical per-stream tab metadata. Only changes identity when a stream is
+ *  added/removed or its `StreamTabInfo` itself changes — not on a log or
+ *  meta-state tick for an existing stream. */
+let _prevStreamById: Map<StreamTabId, StreamTabInfo> = new Map();
+export const streamById$ = new Signal.Computed(() => {
+  _prevStreamById = memoizedFacetView(_prevStreamById, (e) => e.info);
+  return _prevStreamById;
+});
+
+/** Meta state per stream (status, todos, usage, ui, taskGroups, etc). Only
+ *  changes identity when some stream's meta state actually changes — not on
+ *  a log-only tick for an existing stream. */
+let _prevStreamStates: Map<StreamTabId, StreamState> = new Map();
+export const streamStates$ = new Signal.Computed(() => {
+  _prevStreamStates = memoizedFacetView(_prevStreamStates, (e) => e.state);
+  return _prevStreamStates;
+});
 
 // ---------------------------------------------------------------------------
 // Derived computeds: only re-evaluate when selector inputs propagate.
@@ -212,11 +262,17 @@ const activeStreamState$ = new Signal.Computed(() => {
   );
 });
 
-/** Only changes when the ACTIVE stream's logs change, not any stream. */
+/**
+ * Only changes when the ACTIVE stream's logs change, not any stream. Reads
+ * the consolidated `streamEntries$` directly (not a memoized facet view like
+ * `streamStates$`/`streamById$`) — it's a single-key lookup, not a rebuilt
+ * container, so its own return value is already reference-stable without
+ * needing the manual-cache treatment.
+ */
 const activeStreamLogs$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return EMPTY_STREAM_LOGS;
-  return streamLogs$.get().get(info.name) ?? EMPTY_STREAM_LOGS;
+  return streamEntries$.get().get(info.name)?.logs ?? EMPTY_STREAM_LOGS;
 });
 
 // ---------------------------------------------------------------------------
@@ -317,7 +373,7 @@ export const streamContext$ = new Signal.Computed((): StreamContextValue => {
   }
 
   const followupOptions =
-    followupOptions$.get().get(activeStreamInfo.name) ?? null;
+    streamEntries$.get().get(activeStreamInfo.name)?.followupOptions ?? null;
   return {
     streamInfo: activeStreamInfo,
     streamState: activeStreamState$.get(),
@@ -366,21 +422,14 @@ export function setStreamStateForId(
   updater: (prev: StreamState) => StreamState,
 ): void {
   const state = appState.get();
-  let current = state.streamStates.get(streamId);
-  if (!current) {
-    const streamInfo = state.streamById.get(streamId);
-    if (!streamInfo) return;
-    current = createStreamState(streamInfo.agentCategory);
-  }
-  const updated = updater(current);
-  if (updated === current) return;
+  const entry = state.streams.get(streamId);
+  if (!entry) return;
+  const updated = updater(entry.state);
+  if (updated === entry.state) return;
   appState.set(
     create(state, (draft) => {
-      // Backfills streamLogs/followupOptionsByStream alongside streamStates
-      // when this is the first handler to observe the stream (see
-      // `ensureStreamState`'s doc comment for the owned key list).
-      ensureStreamState(draft, streamId, current.kind);
-      draft.streamStates.set(streamId, updated);
+      const target = draft.streams.get(streamId);
+      if (target) target.state = updated;
     }),
   );
 }

@@ -1393,7 +1393,7 @@ function openCommandPalette(): void {
 }
 
 function switchToStream(streamId: StreamTabId): void {
-  if (!appState.get().streamById.has(streamId)) return;
+  if (!appState.get().streams.has(streamId)) return;
   appState.set(
     mutate(appState.get(), (draft) => {
       draft.activeStreamId = streamId;

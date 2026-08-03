@@ -7,6 +7,7 @@ import {
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import {
+  createEmptyStreamLogs,
   createInitialState,
   type ProgressState,
 } from '@progressView/frontend/store';
@@ -36,7 +37,18 @@ const STREAM_ID = 'stream-a' as StreamTabId;
 function seedWorkflowStream(): () => ProgressState {
   const state = createInitialState();
   state.activeStreamId = STREAM_ID;
-  state.streamStates.set(STREAM_ID, createStreamState(AgentCategory.Workflow));
+  state.streams.set(STREAM_ID, {
+    info: {
+      kind: 'agent',
+      name: STREAM_ID,
+      label: STREAM_ID,
+      agentCategory: AgentCategory.Workflow,
+      creationTimestamp: 1,
+    },
+    state: createStreamState(AgentCategory.Workflow),
+    logs: createEmptyStreamLogs(),
+    followupOptions: {},
+  });
   appState.set(state);
   return () => appState.get();
 }
@@ -80,7 +92,7 @@ describe('LOG_DELTA text deltas', () => {
       updates: [],
     } as unknown as ProgressViewOutboundMessage);
 
-    expect(getState().streamLogs.get(STREAM_ID)?.logs[0]?.text).toBe('hello');
+    expect(getState().streams.get(STREAM_ID)?.logs.logs[0]?.text).toBe('hello');
   });
 
   it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
@@ -102,7 +114,7 @@ describe('LOG_DELTA text deltas', () => {
       textDeltas: [{ id: 'model-response', appendText: ' world' }],
     });
 
-    const streamedLogs = getState().streamLogs.get(STREAM_ID);
+    const streamedLogs = getState().streams.get(STREAM_ID)?.logs;
     const streamed = streamedLogs?.logs[0];
     expect(streamed?.text).toBe('hello world');
     expect(streamedLogs?.updatedMessageIndices).toEqual([0]);
@@ -116,7 +128,7 @@ describe('LOG_DELTA text deltas', () => {
       textDeltas: [],
     });
 
-    const finalizedLogs = getState().streamLogs.get(STREAM_ID);
+    const finalizedLogs = getState().streams.get(STREAM_ID)?.logs;
     const finalized = finalizedLogs?.logs[0];
     expect(finalized?.text).toBe('hello world');
     expect(finalizedLogs?.updatedMessageIndices).toEqual([0]);
@@ -164,7 +176,7 @@ describe('LOG_DELTA text deltas', () => {
       textDeltas: [],
     });
 
-    const streamLogs = getState().streamLogs.get(STREAM_ID);
+    const streamLogs = getState().streams.get(STREAM_ID)?.logs;
     expect(streamLogs?.logs.map(({ id }) => id)).toEqual(['model-response']);
     expect([...(streamLogs?.logIndex.keys() ?? [])]).toEqual([
       'model-response',
@@ -192,7 +204,7 @@ describe('LOG_DELTA text deltas', () => {
       textDeltas: [],
     });
 
-    const group = getState().streamStates.get(STREAM_ID)?.taskGroups[0];
+    const group = getState().streams.get(STREAM_ID)?.state.taskGroups[0];
     expect(group?.status).toBe(STREAM_PHASE.RUNNING);
     expect(group?.kind).toBe('round');
     expect(group?.index).toBe(1);
@@ -273,7 +285,7 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
         textDeltas: [],
       });
 
-      const taskGroups = getState().streamStates.get(STREAM_ID)?.taskGroups;
+      const taskGroups = getState().streams.get(STREAM_ID)?.state.taskGroups;
       expect(taskGroups?.[0]?.status).toBe(expectedStatus);
     },
   );
@@ -294,7 +306,7 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
     });
 
     const extensionTaskGroups =
-      getState().streamStates.get(STREAM_ID)?.taskGroups;
+      getState().streams.get(STREAM_ID)?.state.taskGroups;
     expect(extensionTaskGroups).toEqual(
       projectTaskGroupsFromStreamLog([legacyRound]),
     );

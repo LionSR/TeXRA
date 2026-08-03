@@ -13,7 +13,7 @@ import {
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 
 import { appState } from '../progressState';
-import { ensureStreamState, type StreamLogs, type StreamState } from '../store';
+import type { StreamLogs, StreamState } from '../store';
 
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
   return {
@@ -117,14 +117,17 @@ export const logHandlers = {
 
     appState.set(
       create(appState.get(), (draft) => {
-        const streamState = draft.streamStates.get(streamId);
-        if (!streamState) return;
-
-        // Backfills streamLogs (and followupOptionsByStream) if this is the
-        // first handler to observe the stream — see `ensureStreamState`.
-        ensureStreamState(draft, streamId, streamState.kind);
-        // Non-null: ensureStreamState above guarantees this entry exists.
-        const streamLogs: StreamLogs = draft.streamLogs.get(streamId)!;
+        const streamEntry = draft.streams.get(streamId);
+        if (!streamEntry) return;
+        // `streamState`/`streamLogs` are the same draft proxies as
+        // `streamEntry.state`/`.logs`, so `applyEntry`'s in-place field
+        // mutations (taskGroups, contextState) land on the entry directly —
+        // no separate write-back needed, and when `stateChanged` stays
+        // false, Mutative keeps `streamEntry.state` reference-stable so a
+        // log-only tick doesn't re-render content components that only read
+        // stream state.
+        const streamState = streamEntry.state;
+        const streamLogs: StreamLogs = streamEntry.logs;
 
         let logChanged = false;
         let stateChanged = false;
@@ -154,18 +157,18 @@ export const logHandlers = {
         }
 
         if (logChanged) {
-          draft.streamLogs.set(streamId, {
+          streamEntry.logs = {
             logs: streamLogs.logs,
             logIndex: streamLogs.logIndex,
             taskGroupIndex: streamLogs.taskGroupIndex,
             updatedMessageIndices: [...updatedMessageIndices],
             updatedMessageBaseGeneration,
             generation: streamLogs.generation + 1,
-          });
+          };
         }
 
         if (stateChanged) {
-          draft.streamStates.set(streamId, streamState);
+          streamEntry.state = streamState;
         }
       }),
     );

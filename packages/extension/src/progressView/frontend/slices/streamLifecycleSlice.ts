@@ -9,6 +9,7 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  createStreamState,
   type ProgressViewOutboundHandlerRegistry,
   type StreamMetadata,
   type StreamTabId,
@@ -16,11 +17,10 @@ import {
 } from '@shared/schemas';
 
 import {
-  deleteStreamState,
-  ensureStreamState,
+  createEmptyStreamLogs,
   firstStreamId,
   type ProgressState,
-  type StreamState,
+  type StreamEntry,
 } from '../store';
 import {
   appState,
@@ -53,62 +53,49 @@ function updateStreamInfo(
   streams: StreamTabInfo[],
   backendMetadata?: Record<string, StreamMetadata>,
 ): ProgressState {
-  // Pre-compute merged states outside the draft (mergeBackendOwnedState uses
-  // create() internally, which cannot operate on draft proxies). Fold the
-  // pending-description drain into the same pass — no extra iteration.
-  // Explicit description on StreamTabInfo wins over the pending buffer.
-  const mergedStates = new Map<string, StreamState>();
-  const newStreamById = new Map<string, StreamTabInfo>();
-  // Streams with no backend metadata and no prior state yet: routed through
-  // `ensureStreamState` below so their default streamStates entry and its
-  // streamLogs/followupOptionsByStream companions are created together,
-  // instead of synthesizing a bare streamStates default here.
-  const streamsNeedingDefaultState: StreamTabInfo[] = [];
+  // Pre-compute the replacement `streams` map outside the draft
+  // (mergeBackendOwnedState uses create() internally, which cannot operate
+  // on draft proxies). Fold the pending-description drain into the same
+  // pass — no extra iteration. Explicit description on StreamTabInfo wins
+  // over the pending buffer. Built wholesale (not patched in place) so a
+  // stream absent from `streams` is naturally dropped — the single-map
+  // equivalent of the old delete-from-every-map pass.
+  const newStreams = new Map<StreamTabId, StreamEntry>();
   for (const stream of streams) {
-    const existing = state.streamStates.get(stream.name);
+    const existing = state.streams.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
-    if (metadata) {
-      mergedStates.set(stream.name, mergeBackendOwnedState(existing, metadata));
-    } else if (!existing) {
-      streamsNeedingDefaultState.push(stream);
-    }
+    const streamState = metadata
+      ? mergeBackendOwnedState(existing?.state, metadata)
+      : (existing?.state ?? createStreamState(stream.agentCategory));
+
     // Always drain the pending buffer so stale entries don't linger once the
     // stream registers, even if the payload already carries a description.
     // Stream-payload description wins (it's the authoritative value).
     const pending = takePendingDescription(stream.name);
     const description = stream.description ?? pending;
-    newStreamById.set(
-      stream.name,
-      description !== stream.description ? { ...stream, description } : stream,
-    );
+    const info =
+      description !== stream.description ? { ...stream, description } : stream;
+
+    newStreams.set(stream.name, {
+      info,
+      state: streamState,
+      logs: existing?.logs ?? createEmptyStreamLogs(),
+      followupOptions: existing?.followupOptions ?? {},
+    });
   }
 
   // Clean up removed streams' pending-description buffer outside the
   // mutative draft callback so the side effect doesn't run if the draft
   // later throws.
-  for (const key of state.streamStates.keys()) {
-    if (!newStreamById.has(key)) {
+  for (const key of state.streams.keys()) {
+    if (!newStreams.has(key)) {
       pendingDescriptions.delete(key);
       deleteFollowUpInputTransientState(key);
     }
   }
 
   return create(state, (draft) => {
-    for (const key of draft.streamStates.keys()) {
-      if (!newStreamById.has(key)) {
-        deleteStreamState(draft, key);
-      }
-    }
-
-    for (const [name, merged] of mergedStates) {
-      draft.streamStates.set(name, merged);
-    }
-
-    for (const stream of streamsNeedingDefaultState) {
-      ensureStreamState(draft, stream.name, stream.agentCategory);
-    }
-
-    draft.streamById = newStreamById;
+    draft.streams = newStreams;
   });
 }
 
@@ -120,11 +107,11 @@ function updateStreamInfo(
  */
 function resolveActiveStreamId(
   activeStream: StreamTabId | '',
-  streamById: Map<StreamTabId, StreamTabInfo>,
+  streams: Map<StreamTabId, StreamEntry>,
 ): StreamTabId | null {
   if (activeStream === '') return null;
-  if (activeStream && streamById.has(activeStream)) return activeStream;
-  return firstStreamId(streamById);
+  if (activeStream && streams.has(activeStream)) return activeStream;
+  return firstStreamId(streams);
 }
 
 // ============================================================
@@ -153,7 +140,7 @@ export const streamLifecycleHandlers = {
     // re-pick a filtered-out tab and render hidden-category content.
     const nextActiveStreamId = resolveActiveStreamId(
       data.activeStream,
-      updated.streamById,
+      updated.streams,
     );
 
     appState.set(
@@ -167,7 +154,7 @@ export const streamLifecycleHandlers = {
     const prev = appState.get();
     const nextActiveStreamId = resolveActiveStreamId(
       data.activeStream,
-      prev.streamById,
+      prev.streams,
     );
     if (nextActiveStreamId === prev.activeStreamId) return;
     appState.set(
@@ -193,8 +180,7 @@ export const streamLifecycleHandlers = {
     pendingDescriptions.delete(streamId);
     appState.set(
       create(appState.get(), (draft) => {
-        deleteStreamState(draft, streamId);
-        draft.streamById.delete(streamId);
+        draft.streams.delete(streamId);
         if (draft.activeStreamId === streamId) {
           draft.activeStreamId = null;
         }
@@ -213,18 +199,15 @@ export const streamLifecycleHandlers = {
     permissions$.set([]);
 
     // Every remaining stream's persisted toggle state loses its only future
-    // consumer here (the stream itself is about to disappear from
-    // streamById below) — read the ids before the reset wipes them.
-    for (const streamId of appState.get().streamById.keys()) {
+    // consumer here (the stream itself is about to disappear from `streams`
+    // below) — read the ids before the reset wipes them.
+    for (const streamId of appState.get().streams.keys()) {
       webviewStorage.delete(logListStateKey(streamId));
     }
 
     appState.set(
       create(appState.get(), (draft) => {
-        draft.streamById = new Map();
-        draft.streamStates = new Map();
-        draft.streamLogs = new Map();
-        draft.followupOptionsByStream = new Map();
+        draft.streams = new Map();
         draft.activeStreamId = null;
       }),
     );

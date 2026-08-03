@@ -26,11 +26,16 @@ import {
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
+import { createEmptyStreamLogs } from '@progressView/frontend/store';
 import {
   logListStateKey,
   webviewStorage,
 } from '@progressView/frontend/webviewStorage';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  createStreamState,
+  type StreamTabId,
+} from '@shared/schemas';
 import { MAIN_VIEW_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchProgressViewOutbound,
@@ -193,18 +198,23 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
 
     expect(handled).toBe(true);
     expect(permissions$.get()).toEqual([]);
-    expect(appState.get().streamById.size).toBe(0);
+    expect(appState.get().streams.size).toBe(0);
     expect(onError).not.toHaveBeenCalled();
   });
 
   it("DELETE_ALL clears every remaining stream's persisted LogList toggle state", () => {
     const streamId = 'stream-delete-all' as StreamTabId;
-    appState.get().streamById.set(streamId, {
-      kind: 'agent',
-      name: streamId,
-      label: 'stream-delete-all',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
+    appState.get().streams.set(streamId, {
+      info: {
+        kind: 'agent',
+        name: streamId,
+        label: 'stream-delete-all',
+        agentCategory: AgentCategory.Workflow,
+        creationTimestamp: 1,
+      },
+      state: createStreamState(AgentCategory.Workflow),
+      logs: createEmptyStreamLogs(),
+      followupOptions: {},
     });
     webviewStorage.set(logListStateKey(streamId), {
       groupToggleStates: [['group-1', true]],
@@ -222,12 +232,17 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
 
   it("DELETE_STREAM clears that stream's persisted LogList toggle state", () => {
     const streamId = 'stream-delete-one' as StreamTabId;
-    appState.get().streamById.set(streamId, {
-      kind: 'agent',
-      name: streamId,
-      label: 'stream-delete-one',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
+    appState.get().streams.set(streamId, {
+      info: {
+        kind: 'agent',
+        name: streamId,
+        label: 'stream-delete-one',
+        agentCategory: AgentCategory.Workflow,
+        creationTimestamp: 1,
+      },
+      state: createStreamState(AgentCategory.Workflow),
+      logs: createEmptyStreamLogs(),
+      followupOptions: {},
     });
     webviewStorage.set(logListStateKey(streamId), {
       groupToggleStates: [['group-1', true]],

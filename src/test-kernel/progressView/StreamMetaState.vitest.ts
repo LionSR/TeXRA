@@ -13,9 +13,9 @@ import {
   topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import {
+  createEmptyStreamLogs,
   createInitialState,
   type ProgressState,
-  type StreamState,
 } from '@progressView/frontend/store';
 import {
   AgentCategory,
@@ -57,13 +57,20 @@ function registerStream(
   streamId: StreamTabId,
   overrides: Partial<Extract<StreamTabInfo, { kind: 'agent' }>> = {},
 ): void {
-  state.streamById.set(streamId, {
+  const info: StreamTabInfo = {
     kind: 'agent',
     name: streamId,
     label: streamId,
     agentCategory: AgentCategory.Workflow,
     creationTimestamp: 1,
     ...overrides,
+  };
+  const existing = state.streams.get(streamId);
+  state.streams.set(streamId, {
+    info,
+    state: existing?.state ?? createStreamState(info.agentCategory),
+    logs: existing?.logs ?? createEmptyStreamLogs(),
+    followupOptions: existing?.followupOptions ?? {},
   });
 }
 
@@ -106,10 +113,12 @@ describe('stream meta frontend state', () => {
       creationTimestamp: 2,
     });
     registerStream(state, streamId);
-    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    state.streamStates.set(
-      siblingId,
-      createStreamState(AgentCategory.ToolUse, {
+    state.streams.get(streamId)!.state = createStreamState(
+      AgentCategory.Workflow,
+    );
+    state.streams.get(siblingId)!.state = createStreamState(
+      AgentCategory.ToolUse,
+      {
         status: STREAM_PHASE.RUNNING,
         subagents: [
           {
@@ -119,7 +128,7 @@ describe('stream meta frontend state', () => {
             agentName: 'old child',
           },
         ],
-      } satisfies Partial<StreamState>),
+      },
     );
     const getState = seedState(state);
 
@@ -147,12 +156,12 @@ describe('stream meta frontend state', () => {
       activeStream: siblingId,
     });
 
-    expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
-    expect(getState().streamById.get(siblingId)).toMatchObject({
+    expect(getState().streams.get(streamId)?.info.label).toBe('stream-a');
+    expect(getState().streams.get(siblingId)?.info).toMatchObject({
       label: 'search',
       model: 'deepseekproT',
     });
-    expect(getState().streamStates.get(siblingId)).toMatchObject({
+    expect(getState().streams.get(siblingId)?.state).toMatchObject({
       status: STREAM_PHASE.WAITING,
       lastTimestamp: 9,
       conversationProgress: {
@@ -162,18 +171,18 @@ describe('stream meta frontend state', () => {
       subagents: [],
     });
     expect(getState().activeStreamId).toBe(siblingId);
-    expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
+    expect([...getState().streams.keys()]).toEqual([siblingId, streamId]);
   });
 
   it('updates and clears stream substate with status changes', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
+    state.streams.get(streamId)!.state = createStreamState(
+      AgentCategory.Workflow,
+      {
         status: STREAM_PHASE.RUNNING,
-      } satisfies Partial<StreamState>),
+      },
     );
     const getState = seedState(state);
 
@@ -184,7 +193,7 @@ describe('stream meta frontend state', () => {
       substate: STREAM_SUBSTATE.STARTING,
     });
 
-    expect(getState().streamStates.get(streamId)?.substate).toBe(
+    expect(getState().streams.get(streamId)?.state.substate).toBe(
       STREAM_SUBSTATE.STARTING,
     );
 
@@ -194,10 +203,10 @@ describe('stream meta frontend state', () => {
       status: STREAM_PHASE.COMPLETED,
     });
 
-    expect(getState().streamStates.get(streamId)?.status).toBe(
+    expect(getState().streams.get(streamId)?.state.status).toBe(
       STREAM_PHASE.COMPLETED,
     );
-    expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
+    expect(getState().streams.get(streamId)?.state.substate).toBeUndefined();
   });
 
   it('clears stream substate when full metadata sync omits it', () => {
@@ -205,12 +214,12 @@ describe('stream meta frontend state', () => {
     const state = createInitialState();
     state.activeStreamId = streamId;
     registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
+    state.streams.get(streamId)!.state = createStreamState(
+      AgentCategory.Workflow,
+      {
         status: STREAM_PHASE.RUNNING,
         substate: STREAM_SUBSTATE.STARTING,
-      } satisfies Partial<StreamState>),
+      },
     );
     const getState = seedState(state);
 
@@ -239,21 +248,21 @@ describe('stream meta frontend state', () => {
       },
     });
 
-    expect(getState().streamStates.get(streamId)?.status).toBe(
+    expect(getState().streams.get(streamId)?.state.status).toBe(
       STREAM_PHASE.COMPLETED,
     );
-    expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
+    expect(getState().streams.get(streamId)?.state.substate).toBeUndefined();
   });
 
   it('clears round stage from a transport-safe metadata patch', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
+    state.streams.get(streamId)!.state = createStreamState(
+      AgentCategory.Workflow,
+      {
         roundStage: { index: 2 },
-      } satisfies Partial<StreamState>),
+      },
     );
     const getState = seedState(state);
 
@@ -279,7 +288,7 @@ describe('stream meta frontend state', () => {
 
     dispatch(streamMetaHandlers, message);
 
-    expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
+    expect(getState().streams.get(streamId)?.state.roundStage).toBeUndefined();
   });
 
   it('merges and clears a phase stage from a transport-safe metadata patch', () => {
@@ -316,14 +325,14 @@ describe('stream meta frontend state', () => {
       streamMetaHandlers,
       patch({ label: 'Reduce', index: 1, total: 3 }),
     );
-    expect(getState().streamStates.get(streamId)?.phaseStage).toEqual({
+    expect(getState().streams.get(streamId)?.state.phaseStage).toEqual({
       label: 'Reduce',
       index: 1,
       total: 3,
     });
 
     dispatch(streamMetaHandlers, patch(null));
-    expect(getState().streamStates.get(streamId)?.phaseStage).toBeUndefined();
+    expect(getState().streams.get(streamId)?.state.phaseStage).toBeUndefined();
   });
 
   it('keeps the phase-stage projection stable across unrelated stream ticks', () => {
@@ -332,11 +341,11 @@ describe('stream meta frontend state', () => {
     const state = createInitialState();
     registerStream(state, streamId);
     registerStream(state, otherId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
+    state.streams.get(streamId)!.state = createStreamState(
+      AgentCategory.Workflow,
+      {
         phaseStage: { label: 'Reduce', index: 1, total: 3 },
-      } satisfies Partial<StreamState>),
+      },
     );
     seedState(state);
 
@@ -347,9 +356,9 @@ describe('stream meta frontend state', () => {
       total: 3,
     });
 
-    // An unrelated stream's progress tick rebuilds streamStates, so the
-    // projection recomputes — but its identity must not change, or every
-    // consumer re-renders on a tick that touched no phase.
+    // An unrelated stream's progress tick rebuilds the streamStates$ facet
+    // view, so the projection recomputes — but its identity must not
+    // change, or every consumer re-renders on a tick that touched no phase.
     setStreamStateForId(otherId, (prev) => ({
       ...prev,
       conversationProgress: { toolCallCount: 7 },
@@ -382,12 +391,12 @@ describe('stream meta frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     registerStream(state, streamId);
-    state.streamStates.set(
-      streamId,
-      createStreamState(AgentCategory.Workflow, {
+    state.streams.get(streamId)!.state = createStreamState(
+      AgentCategory.Workflow,
+      {
         roundStage: { index: 2 },
         phaseStage: { label: 'Reduce', index: 1, total: 3 },
-      } satisfies Partial<StreamState>),
+      },
     );
     const getState = seedState(state);
 
@@ -411,8 +420,8 @@ describe('stream meta frontend state', () => {
 
     dispatch(syncHandlers, message);
 
-    expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
-    expect(getState().streamStates.get(streamId)?.phaseStage).toBeUndefined();
+    expect(getState().streams.get(streamId)?.state.roundStage).toBeUndefined();
+    expect(getState().streams.get(streamId)?.state.phaseStage).toBeUndefined();
   });
 
   it('honors an explicit empty active-stream selection', () => {
@@ -448,6 +457,6 @@ describe('stream meta frontend state', () => {
       parentStreamId: null,
     });
 
-    expect(getState().streamById.get(child)?.parentStreamId).toBeUndefined();
+    expect(getState().streams.get(child)?.info.parentStreamId).toBeUndefined();
   });
 });

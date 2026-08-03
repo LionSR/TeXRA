@@ -10,11 +10,14 @@ import {
   STREAM_PHASE,
   type ProgressViewOutboundHandlerRegistry,
   type StreamTabId,
-  type StreamTabInfo,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
-import { isToolUseState } from '../store';
+import {
+  createEmptyStreamLogs,
+  isToolUseState,
+  type StreamEntry,
+} from '../store';
 import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';
 
@@ -33,18 +36,31 @@ export function takePendingDescription(
   return desc;
 }
 
-function upsertSortedStreamInfo(
-  streams: Map<StreamTabId, StreamTabInfo>,
-  streamInfo: StreamTabInfo,
-): Map<StreamTabId, StreamTabInfo> {
-  const streamsWithoutPatch = [...streams.values()].filter(
-    (stream) => stream.name !== streamInfo.name,
-  );
-  const ordered = [...streamsWithoutPatch, streamInfo].toSorted(
+/**
+ * Insert/replace one stream's entry and re-sort the whole map by newest
+ * creation time. Every OTHER stream's entry is reused as-is (same object
+ * reference) — only the patched stream's entry and the map's key order
+ * change.
+ */
+function upsertSortedStreamEntry(
+  streams: Map<StreamTabId, StreamEntry>,
+  entry: StreamEntry,
+): Map<StreamTabId, StreamEntry> {
+  const name = entry.info.name;
+  const infosWithoutPatch = [...streams.values()]
+    .map((existing) => existing.info)
+    .filter((info) => info.name !== name);
+  const ordered = [...infosWithoutPatch, entry.info].toSorted(
     compareByNewestCreationTime,
   );
 
-  return new Map(ordered.map((stream) => [stream.name, stream]));
+  return new Map(
+    ordered.map((info) =>
+      info.name === name
+        ? [info.name, entry]
+        : [info.name, streams.get(info.name)!],
+    ),
+  );
 }
 
 // The composed registry is exhaustive (every ProgressView outbound command
@@ -59,7 +75,8 @@ export const streamMetaHandlers = {
     const pending = takePendingDescription(name);
 
     const prev = appState.get();
-    const existingInfo = prev.streamById.get(name);
+    const existingEntry = prev.streams.get(name);
+    const existingInfo = existingEntry?.info;
     const description =
       data.streamInfo.description ?? pending ?? existingInfo?.description;
     const streamInfo =
@@ -67,7 +84,7 @@ export const streamMetaHandlers = {
         ? { ...data.streamInfo, description }
         : data.streamInfo;
     const mergedState = mergeBackendOwnedState(
-      prev.streamStates.get(name),
+      existingEntry?.state,
       data.streamState,
     );
 
@@ -77,15 +94,19 @@ export const streamMetaHandlers = {
           !existingInfo ||
           existingInfo.creationTimestamp !== streamInfo.creationTimestamp
         ) {
-          draft.streamById = upsertSortedStreamInfo(
-            prev.streamById,
-            streamInfo,
-          );
+          draft.streams = upsertSortedStreamEntry(prev.streams, {
+            info: streamInfo,
+            state: mergedState,
+            logs: existingEntry?.logs ?? createEmptyStreamLogs(),
+            followupOptions: existingEntry?.followupOptions ?? {},
+          });
         } else {
-          draft.streamById.set(name, streamInfo);
+          const target = draft.streams.get(name);
+          if (target) {
+            target.info = streamInfo;
+            target.state = mergedState;
+          }
         }
-
-        draft.streamStates.set(name, mergedState);
 
         if (data.activeStream !== undefined) {
           draft.activeStreamId = data.activeStream || null;
@@ -119,20 +140,21 @@ export const streamMetaHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION]: (data) => {
     const { stream, description } = data;
     // Subagent description can race its own UPDATE_STREAMS registration; if
-    // the stream isn't in streamById yet, buffer out-of-band so
+    // the stream doesn't have an entry yet, buffer out-of-band so
     // streamLifecycleSlice can drain it on arrival.
-    if (!appState.get().streamById.has(stream)) {
+    const entry = appState.get().streams.get(stream);
+    if (!entry) {
       pendingDescriptions.set(stream, description);
       return;
     }
     appState.set(
       create(appState.get(), (draft) => {
-        const existing = draft.streamById.get(stream);
-        // Replace via set() so the Map value identity changes and selectors
+        const target = draft.streams.get(stream);
+        // Replace `.info` wholesale so its identity changes and selectors
         // observing streamById propagate the update (mirrors the pattern in
         // stateUtils.updateParentStreamId).
-        if (existing) {
-          draft.streamById.set(stream, { ...existing, description });
+        if (target) {
+          target.info = { ...entry.info, description };
         }
       }),
     );

@@ -7,9 +7,13 @@ import {
   logContext$,
   resetProgressState,
 } from '@progressView/frontend/progressState';
-import { createInitialState } from '@progressView/frontend/store';
+import {
+  createEmptyStreamLogs,
+  createInitialState,
+} from '@progressView/frontend/store';
 import {
   AgentCategory,
+  createStreamState,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -60,8 +64,16 @@ function seedStreams(
   appState.set({
     ...createInitialState(),
     activeStreamId,
-    streamById: new Map(
-      streams.map((stream) => [stream.name as StreamTabId, stream]),
+    streams: new Map(
+      streams.map((stream) => [
+        stream.name as StreamTabId,
+        {
+          info: stream,
+          state: createStreamState(stream.agentCategory),
+          logs: createEmptyStreamLogs(),
+          followupOptions: {},
+        },
+      ]),
     ),
   });
 }

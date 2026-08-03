@@ -23,7 +23,7 @@ export const followUpHandlers = {
       data.stream ??
       (data.kind === 'transcribed' ? appState.get().activeStreamId : null);
     if (!streamId) return;
-    if (!appState.get().streamStates.has(streamId)) return;
+    if (!appState.get().streams.has(streamId)) return;
 
     updateToolUseState(streamId, (prev) =>
       create(prev, (draft) => {
@@ -69,14 +69,17 @@ export const followUpHandlers = {
   },
 
   [PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS]: (data) => {
-    if (!appState.get().streamStates.has(data.stream)) return;
+    if (!appState.get().streams.has(data.stream)) return;
 
     appState.set(
       create(appState.get(), (draft) => {
-        draft.followupOptionsByStream.set(data.stream, {
-          toolUseAgentsData: data.toolUseAgentsData,
-          modelOptionsData: data.modelOptionsData,
-        });
+        const target = draft.streams.get(data.stream);
+        if (target) {
+          target.followupOptions = {
+            toolUseAgentsData: data.toolUseAgentsData,
+            modelOptionsData: data.modelOptionsData,
+          };
+        }
       }),
     );
   },

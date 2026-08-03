@@ -24,6 +24,7 @@ import {
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import {
+  createEmptyStreamLogs,
   createInitialState,
   isToolUseState,
   type ProgressState,
@@ -45,9 +46,9 @@ function createToolUseState(text: string): StreamState {
 }
 
 /**
- * Seed the shared appState singleton with two tool-use streams and return a
- * live reader over it. Streams are registered in `streamById` too, so the
- * real `setStreamStateForId` mutator accepts updates for them.
+ * Seed the shared appState singleton with two tool-use streams (info + state
+ * on one entry each) and return a live reader over it, so the real
+ * `setStreamStateForId` mutator accepts updates for them.
  */
 function seedState(): () => ProgressState {
   const state = createInitialState();
@@ -56,13 +57,17 @@ function seedState(): () => ProgressState {
     ['stream-a', 'draft'],
     ['stream-b', 'other'],
   ] as const) {
-    state.streamStates.set(streamId, createToolUseState(text));
-    state.streamById.set(streamId, {
-      kind: 'agent',
-      name: streamId as StreamTabId,
-      label: streamId,
-      agentCategory: AgentCategory.ToolUse,
-      creationTimestamp: 1,
+    state.streams.set(streamId, {
+      info: {
+        kind: 'agent',
+        name: streamId as StreamTabId,
+        label: streamId,
+        agentCategory: AgentCategory.ToolUse,
+        creationTimestamp: 1,
+      },
+      state: createToolUseState(text),
+      logs: createEmptyStreamLogs(),
+      followupOptions: {},
     });
   }
   appState.set(state);
@@ -70,7 +75,7 @@ function seedState(): () => ProgressState {
 }
 
 function followUpText(state: ProgressState, streamId: string): string {
-  const stream = state.streamStates.get(streamId);
+  const stream = state.streams.get(streamId)?.state;
   if (!stream || !isToolUseState(stream)) {
     throw new Error(`Expected tool-use state for ${streamId}`);
   }
