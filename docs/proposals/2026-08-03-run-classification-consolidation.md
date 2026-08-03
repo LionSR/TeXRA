@@ -2,7 +2,7 @@
 
 Status: proposed
 Date: 2026-08-03
-Revision: 7 (single-shot implementation; no staged merges)
+Revision: 8 (red-teamed: write-required/read-optional, idempotent entrance stamping)
 
 TeXRA classifies "what kind of thing is running" in six places, and represents
 "X is a child of Y" in twenty-six. Most are false at some write site, derived
@@ -62,6 +62,32 @@ accumulated in four places and usage deltas in five; and 39
 `workflow*`/`toolUse*` field-pair declarations re-shaping one durable value.
 Part II applies the same rulings — one authority, migrate at the entrance,
 delete the middle layers — as steps 10–15.
+
+Revision 7 collapsed the staged delivery into a single change. Revision 8 is
+the adversarial pass: three independent red-team reviews attacked the
+migration story, the "safe to delete" claims, and the runtime semantics.
+Five load-bearing claims were refuted and the core mechanism was redesigned:
+
+- **"Required with zero optional fields" is impossible, twice over.** The
+  shared `ExecutionMetaSchema` is transitively the *export* schema
+  (`TraceDocumentSchema.meta` embeds it, `traceDocumentSchema.ts:20`), and
+  `parseTraceData` throws on any mismatch — a required `identity` bricks
+  every pre-migration exported trace before any fallback can run. And the
+  schema is `z.object`, so a not-yet-updated binary's read-modify-write
+  (`enqueueMetaUpdate`, `executionLifecycle.ts:93-101`) **strips** the
+  stamped field from disk. The design is now: required at the **write
+  boundary** (`RegisteredExecutionMetaSchema`, used only by
+  `registerExecution`), optional on the shared read schema.
+- **The store-generation marker is abandoned.** An old binary un-migrating
+  rows, the extension's own legacy-bucket merge injecting v1 rows post-mark
+  (`workspaceStorage.ts:26-33` merges `executions/` child-by-child), lease
+  fences throwing on live rows, and restored backups all defeat a one-time
+  marker. Stamping is instead **idempotent at the store entrance**: skip
+  rows that carry `identity`, re-stamp on absence, every time. Healing is a
+  property of the store, not an event that mixed-version writers can undo.
+- The full findings and the per-step amendments are in "Red-team findings
+  and amendments" below; refuted claims are corrected inline where they
+  appeared.
 
 ## Problem
 
@@ -163,7 +189,7 @@ it too (`packages/agent/src/node.ts:109`). So breakability is a property of
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | **Protected durable** | `executions/*/meta.json` + `config.json` rows whose run is a native agent; exported traces of agent runs (the trace embeds `ExecutionMeta` and `AgentConfig` wholesale)                                                                                                   | Upgraded by the one-shot migration, or (traces — immutable) read via one confined fallback. |
 | **Breakable durable** | The same files' `process` and `workflowScript` rows; `streamData/*/meta.json` sidecars; main-view `sessionType` webview state (`mainView/state.ts:151-171`)                                                                                                              | Version-bump freely; degradation acceptable.                                               |
-| **Ephemeral**         | Every UI wire shape on every host (`StreamTabInfo`, `StreamMetadata`, `SYNC_STREAM_CONTENT`, proposals, history messages, `StreamState`, `ProgressStreamRunDetails`, CLI `StreamSlice`, NDJSON facts, desktop IPC, `ActiveChildInfo` roster). Audited: none persisted. | Recut atomically. Zero compatibility machinery, ever.                                      |
+| **Ephemeral**         | Every UI wire shape on every host (`StreamTabInfo`, `StreamMetadata`, `SYNC_STREAM_CONTENT`, proposals, history messages, `StreamState`, `ProgressStreamRunDetails`, CLI `StreamSlice`, desktop IPC, `ActiveChildInfo` roster — safe only because `assembleSnapshot` never populates `subagents`, `streamSnapshotRead.ts:184-201`). Audited: none persisted. **Exception: the headless NDJSON vocabulary is a declared frozen public contract** (`cliNdjsonProgressEvents.ts:26-34`, texra-cli skill: byte-identical) — projected at its boundary, never recut. | Recut atomically. Zero compatibility machinery, ever. |                                      |
 
 Two UI stacks, not three: desktop reuses the extension's Lit frontends and the
 identical `ProgressBackend`/`WebviewUpdater` wire
@@ -214,10 +240,14 @@ the behavior audit found no legitimate runtime consumer of any other copy.
 
 ### One home
 
-`ExecutionMeta.identity: RunIdentitySchema` — **required**, written exactly
-once at birth by `registerExecution` inside the fresh-lease scope, at all six
-call sites. Old rows are brought forward by the one-shot migration (below),
-not by read-path tolerance.
+`ExecutionMeta.identity: RunIdentitySchema` — **required at the write
+boundary** (`RegisteredExecutionMetaSchema`, used only by `registerExecution`
+inside the fresh-lease scope, at all six call sites) and **optional on the
+shared read schema**, which is transitively the trace-export schema and must
+keep accepting immutable pre-migration exports. Old rows are brought forward
+by idempotent entrance stamping (below), not by read-path branches: readers
+read `identity`; a row without one is an un-healed row and flows into the
+existing `incomplete` handling at the one listing boundary.
 
 There are **no projections**:
 
@@ -250,16 +280,36 @@ There are **no projections**:
 
 ### One migration
 
-`migrateExecutionStore()` runs once per store generation (a version marker on
-the store root), walks `executions/*/meta.json`, and for every row without
-`identity` writes it: `meta.category === 'process'` → `{kind:'process',
-tool: config?.agent ?? 'bash'}`; otherwise `{kind:'agent', agent:
-config.agent}` (the pre-identity population is agent-era; workflow-script rows
-predating the migration are a breakable cohort and read as agents, which is
-today's behavior). Rows without a config are already `incomplete`
-(`executionListing.ts:142-147`) and stay that way. All rows are terminal;
-writes are atomic per file. The migration module imports nothing from the hot
-path and nothing imports it back.
+`stampExecutionStore()` runs at store entrance, **every time, with no
+generation marker** — it is idempotent and cheap because rows already
+carrying `identity` are skipped. Red-team findings that forced this shape: an
+old binary's `z.object` read-modify-write strips stamped fields; the
+extension's legacy-bucket merge injects v1 rows into an already-migrated
+store; execution-lease fences throw on live or freshly-crashed rows; and
+users restore backups. Mechanics:
+
+- **Per row**: stamp `identity` (+ `outcome` from `terminalStatus`, Axis S)
+  under `runWithInactiveExecutionLease`, skipping rows with an active lease
+  (they heal on the next entrance) and rows younger than the lease-stale
+  horizon (registration writes `meta.json`/`config.json` via
+  `Promise.allSettled` — a half-born row must not be classified).
+- **Identity rule**: `meta.category === 'process'` → `{kind:'process', tool:
+  config?.agent ?? 'bash'}`; otherwise `{kind:'agent', agent: config.agent}`.
+  Rows without a readable config are **left unstamped** — the read schema is
+  optional, so they keep parsing and keep listing as `incomplete`, exactly
+  today's behavior. No sentinel names are fabricated.
+- **`streamId` stamping is evidence-gated**: only the resolver's
+  `metaMatched.length === 1` branch may stamp (the identical condition the
+  live backfill uses today, `legacyExecutionIdentity.ts:223-234`); suffix
+  matches are never stamped, and `streamIdSource` provenance is **kept** so
+  a wrong stamp remains demotable. The walk is inverted — one scan of
+  `streamData/` into a `Map<executionId, streamId[]>`, then stamp — O(N+M),
+  not the resolver's per-row scan.
+- **Demotion repair**: rows whose stamped identity is `process` or carries
+  `tool` get their `normalizeWriterCategory`-demoted `config.agentCategory`
+  bytes repaired in the same pass (breakable cohorts).
+- The stamper is the only writer of these fields outside `registerExecution`,
+  imports nothing from the hot path, and nothing imports it back.
 
 ## Responsibilities
 
@@ -306,9 +356,12 @@ to one), an index (kept, labeled), or a duplicate (deleted).
    deleted; `loadHistoryDefaults` (`chatDefaults.ts:108-114`) and
    `isUserVisibleExecution` filter on `identity.kind`. `runtimeCategory`,
    which exists purely to hide the demotion, goes with it.
-3. **Mis-classification is destructive.** `runExecution.ts:115-120` deletes
-   the flow record on category mismatch. Pinned by a fixture; identity is
-   validated at birth so the mismatch cannot arise from classification drift.
+3. **Destructive guard, pinned but out of scope.** `runExecution.ts:115-120`
+   deletes the flow record when a CLI command's demanded category
+   (`texra run` → Workflow, chat → ToolUse) mismatches the resolved run.
+   Red-team correction: this guards a *user-command* mismatch, not
+   classification drift — `RunIdentity` has no bearing on it. It is pinned
+   by a fixture and otherwise left alone.
 4. **Duplicated lineage predicates.** `isChildExecution` open-coded at
    `childStream.ts:335`, `waitCoordination.ts:47`, `summaryFormat.ts:47`,
    `DelegationTools.ts:300` beside the canonical `ExecutionHandle.ts:188-190`;
@@ -471,7 +524,7 @@ All step 2.
 | `ResumableAgentCliSession.parentStreamId`/`childStreamId` copies + duplicated follow-up authorization | `agentCliSessionStores.ts:12-30`, `agentCliShared.ts:97-102`                          | read the live handle; shared ownership check             |
 | `ActiveChildInfo` kind union (dead `process` arm) + CLI roster filter + webview tool-name icon sniffing | `streamState.ts:61-71`, `childExecutions.ts:259-268`, `BackgroundTasksPanel.ts:513-527` | flat roster row carrying `identity` + `childStreamId`    |
 | desktop hand-built `child.activity` re-emission                               | `desktopAgentExecution.ts:443-450`                                                    | a registry re-seed method (one author for the fact)      |
-| phase-label string as roster↔task join key                                    | `SubagentList.tsx:661-716` join semantics                                             | join on `childStreamId`; `workflowPhase` display-only    |
+| phase-label join scoped, not deleted (red-team: planned/cached/skipped calls have **no** `childStreamId`, `workflowCallProgress.ts:31-36` — the phase join is what makes `1/5` headers correct) | `SubagentList.tsx:661-716` | `childStreamId` joins row→task-card (both launched sides); `workflowPhase` remains the join key for phase-group headers and counters |
 
 ### Delegation gating (step 7)
 
@@ -631,7 +684,7 @@ tree). Subsumes live defect 1.
 _Ephemeral + in-memory._ **Add:** `handle.isOwnedBy(callerStreamId)`; one
 stream-id derivation function; a registry re-seed method for presentation
 attach; roster rows carry `identity` (+ `childStreamId` always); roster↔task
-join on `childStreamId`; unify the child-birth preamble (id mint +
+row→task-card join on `childStreamId`, phase-group headers still keyed by `workflowPhase` (see the scoped ruling in the step 6 table); unify the child-birth preamble (id mint +
 `registerExecution` + stream-id derivation) into one function used by the
 async, in-band, agent-CLI, and script paths — loop semantics untouched.
 **Delete:** the step 6 table above — 4 `isChildExecution` copies, 4 ownership
@@ -732,7 +785,15 @@ projection and the migration module.
 (the CLI's parallel string-typed variant deleted); the phase→outcome
 authority inversion at `AgentRunLifecycle.ts:183-189` replaced by an explicit
 `settleRun(outcome)` in which the machine's terminal transition and the meta
-write happen together, machine authoritative by construction;
+write happen together — with the resolution performed **inside** the
+machine: `resolved = isTerminalOutcomePhase(observedPhase) ? observedPhase :
+reportedOutcome`, preserving the user-stop-wins contract the current code at
+`AgentRunLifecycle.ts:176-189` implements (red-team: a naive
+`settleRun(callerOutcome)` would write `COMPLETED` over a `CANCELLED` phase
+and the fail-closed rule at `executionLifecycle.ts:283-285` would then
+**delete the flow record of a run the user merely stopped**). Fixture: stop →
+CANCELLED → runner reports COMPLETED → meta, phase, and `ResultEvent` all
+read CANCELLED and the flow record survives;
 `isChildExecutionErrorStatus`'s string-lowercasing regex deleted (roster rows
 carry a typed `StreamPhase`; use `isTerminalOutcomePhase`); the retired
 7-value `StreamStatus` confined to the trace-viewer read boundary.
@@ -741,9 +802,19 @@ carry a typed `StreamPhase`; use `isTerminalOutcomePhase`); the retired
 ### Axis T — opaque stream ids, and retiring the legacy resolver (step 12)
 
 **Findings.** The `@model` segment of
-`${cleanAgent}@${model}#${executionId}` has **zero production consumers** —
-no parser reads it; uniqueness comes from the `#executionId` suffix alone
-(`streamTab.vitest.ts:29-33`). Yet it costs: `AgentLaunchContext.ts:564`
+`${cleanAgent}@${model}#${executionId}` has **no display or logic parser**
+— uniqueness comes from the `#executionId` suffix alone
+(`streamTab.vitest.ts:29-33`). Red-team correction, twice: the CLI's child
+prefix regex reads the segment as a kind encoding (dies in step 3 anyway),
+and — load-bearing — the CLI resume paths **re-derive an existing id** from
+`config.agent + config.model` (`toolUseResumeData.ts:20`;
+`SessionResumeRetrieval.ts:196` → `executeAgent.ts:556`; workflow arm via
+`runAgent.ts:103`). The id is a *reproduction contract*, not a display
+string. Therefore: before the mint format changes, those call sites read
+`registeredStreamId(meta) ?? getStreamTabId(...)` — the stamped FK first,
+the legacy formula as fallback — with a resume fixture over a pre-migration
+`name@model#id` bucket, and an acceptance rule that every remaining
+`getStreamTabId` caller is a birth site. Yet it costs: `AgentLaunchContext.ts:564`
 hard-fails a launch when `model` is missing *purely to mint the id*, and the
 fabricated display models (`CODEX_DISPLAY_MODEL`, `CLAUDE_AGENT_DISPLAY_MODEL`,
 the `DEFAULT_AGENT_MODEL` prefault leaking into bash stream ids —
@@ -821,14 +892,24 @@ beside the text.
 **Findings.** 39 `workflow*`/`toolUse*` field-pair declarations across four
 packages (7 roster-key pairs, 8 roster-list pairs, 11 record-keyed
 partitions, 11 main-view form-state pairs, 1 team-roster pair, 1 prompt-var
-pair) — and **exactly one of them is durable**
+pair) — and **exactly two of them are durable**
 (`WorkspaceStateKey.AGENT_ROSTER_SELECTION`). Every other pair is a
 re-shaping of that one value or of the preset catalog for a different
 consumer.
 
 **Ruling.** One generic shape, `ByCategory<T> = Record<AgentCategory, T>`,
-replaces every pair. The single durable memento migrates at its entrance
-(read the old paired shape once, write the record shape). The prompt
+replaces every pair. **Both** durable values migrate at their entrances —
+`AGENT_ROSTER_SELECTION` *and* `CUSTOM_AGENT_PRESETS`
+(`agentPresets.ts:48-57` carries the pair in user-authored teams; a recut
+without migration would silently drop them — red-team fixture required). And
+"its entrance" is three entrances, not one: the extension's VS Code memento,
+plus the `state.json` shared by desktop **and** CLI
+(`packages/desktop/src/main/platform/index.ts:97-99`,
+`packages/cli/src/runtime/cliStateStores.ts:26-27`). Because two hosts of
+possibly different versions read that shared file, the new shape is written
+under a **versioned key** (`…agentRosterSelection.v2`) with the v1 key left
+readable and unmodified, and `readAgentRosterSelection` moves to `safeParse`
+with the inherited-roster fallback. The prompt
 variables `WORKFLOW_AGENTS`/`TOOL_USE_AGENTS` keep their names — they are an
 external prompt contract — but are built from the record.
 *Delete:* all 38 non-durable pair declarations and their branch-per-category
@@ -845,6 +926,103 @@ Run the full acceptance battery: all grep gates from every step, both
 typechecks, tests, ratchets with shrunk baselines (never widen), no new
 `@agent/*` deep-import specifiers, headless parity, and this proposal's
 status updated.
+
+## Red-team findings and amendments
+
+Three independent adversarial reviews (migration & persistence; deletion
+claims; runtime semantics) ran against revision 7. The corrections above are
+inline; this section records the remaining amendments, each now binding on
+the step it names. Claims that **survived** full adversarial scrutiny: the
+dead `ActiveChildInfo` `process` arm, and the descriptor early-render timing
+argument (both disk reads on the same hydration path; no path found where
+the sidecar exists but the execution meta does not — deletion order always
+removes stream state first, `SessionStores.ts:251-268`).
+
+**A. The write/read seam (steps 4, 10).** `RegisteredExecutionMetaSchema`
+(identity and outcome required) exists only at `registerExecution` and the
+finalize writers; the shared `ExecutionMetaSchema` keeps both optional
+forever, because it is transitively the trace-export schema and because old
+binaries' `z.object` read-modify-writes strip unknown fields. Fixture: a
+pre-migration exported `trace.json` parses and replays.
+
+**B. Idempotent entrance stamping, no marker (step 4).** Specified in "One
+migration". Neutralizes: old-binary stripping, the extension legacy-bucket
+merge injecting v1 rows, lease-fenced live rows, half-born rows, restored
+backups. The stamper's lease helper deletes stale lease files as a side
+effect (`executionLease.ts:854-856`) — stated, accepted.
+
+**C. Category is still a runtime fact for children (steps 4, 6, 8).**
+`handle.category` is sourced from the **launch-time in-memory config** —
+never the persisted record, never the descriptor. `waitCoordination` and
+report suppression become `handle.identity.kind === 'agent' &&
+handle.category === 'toolUse'`; a workflow subagent parked WAITING must keep
+blocking (`waitCoordination.ts:38-42`). Additional `handle.category`
+consumers the removal table missed, all sourced the same way:
+`ResultEvent.category` (required, `events.ts:329`), the running-summary
+`Category:` line (`summaryFormat.ts:94`), and the completion notice
+(`ExecutionSubscriptionBinder.ts:123`).
+
+**D. codex/claude stay on the agent arm (step 8).** The non-agent
+`RunRecord` arm is restricted to `process` + `workflowScript`; external-CLI
+runs keep a real `AgentConfig` (their `ToolUse` category is consumed by live
+machinery). The resume/rerun/restore gate is `identity.kind === 'agent' &&
+identity.tool === undefined` — otherwise defect 3 changes shape instead of
+dying for the codex cohort. Migrated pre-existing codex rows have `tool`
+absent; icon and gating predicates must tolerate that cohort.
+
+**E. `readConfig()` is deleted, not left nullable (step 8).** All ~19 call
+sites move to `readRunRecord()` in the same change so the typechecker
+enumerates them; a new-format bash record must never reach a reader that
+warn-and-nulls it into `incomplete`/"Execution not found". The read union
+stays permanently tolerant of `AgentConfig`-shaped non-agent rows (old
+binaries can rewrite them). `getAvailablePaths` becomes an explicit
+identity-keyed table with no `default` fallthrough. A workflow-script
+relaunch re-registers over the stamped meta — fixture asserts the overwrite
+yields `{kind:'workflowScript'}`, not a merge.
+
+**F. The birth preamble is a callback, and the lease error is sacred
+(step 6).** The in-band path invokes the shared preamble **after** its
+attempt-ledger reservation (`inspectStableAttempt` treats keys-without-marker
+as a hard reconciliation error, `inBandSubagentExecution.ts:222-227`); the
+preamble rethrows `ExecutionLeaseActiveError` untouched from all four
+callers (the double-launch guard at `WorkflowScriptTool.ts:381` is an
+`instanceof` check; the agent-CLI path's bare `catch` must not be the
+template). Crash-window fixtures at reserve↛register and register↛launched.
+
+**G. NDJSON is frozen; project at the boundary (steps 3, 8, 10, 11).**
+`setActiveStream.agentCategory` stays on the NDJSON payload as a
+projection-local field; `agentConfigToTaskState` gains an explicit non-agent
+arm (today it **throws** on an unknown category, on the event path);
+`history-entry.status` keeps the `ExecutionStatus` vocabulary via
+`runOutcomeToExecutionStatus` at that one boundary; stream-id format changes
+apply to new runs only. The byte-parity test lands **before** the deletions.
+
+**H. Provisional kinds are forbidden (steps 2, 3).** The `StreamState`
+kind-flip reset is lossy (it drops the user's typed follow-up text, todos,
+plan, `runUsage`, output files — `streamStateMerge.ts:39-46` preserves only
+`taskGroups`). Identity must be known before the first `createStreamState`:
+live paths have it at birth (`run.start`), rehydration reads it from the
+store, and the CLI populates `StreamSlice.identity` on cold read from the
+store FK before the prefix regex is deleted (a rehydrated terminal child
+stream never re-emits `run.start` — red-team S6). Fixture: focus a terminal
+child stream in a fresh process; assert no kind flip in normal flows.
+
+**I. `setRunConfig` without `run.start` (step 5).** The live synthesis path
+in `setRunConfig` (`StreamSnapshotStore.ts:1538-1552`) is specified, not
+silently deleted: a run that never emitted `run.start` leaves `identity`
+absent (renders pending, per "absent ≠ Workflow") and the
+description-reset-on-execution-change behavior is preserved explicitly.
+
+**J. Acceptance gates rewritten.** `terminalStatus` gate: zero hits outside
+the export projection (`traceDocumentSchema.ts:24` stays a required nullable
+trace field), the NDJSON boundary projection, the stamper, and
+`resumability.ts`'s unmappable-legacy escape. `legacyExecutionIdentity`
+gate: the forward per-read resolver is deleted; the ~30-line
+`legacyExecutionIdFromStreamSuffix` **survives as the deletion-admission
+boundary** (`SessionStores.ts:286-293,351,360`) — deleting it would orphan
+`executions/` directories of pre-descriptor streams forever. `streamIdSource`
+survives as stamp provenance. The step-14 grep excludes `agentPresets.ts`'s
+migration.
 
 ## Separated work
 
