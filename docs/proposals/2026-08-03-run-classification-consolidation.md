@@ -2,7 +2,7 @@
 
 Status: proposed
 Date: 2026-08-03
-Revision: 9 (Part III: one language across hosts — one view-model, one subscription)
+Revision: 10 (holistic build order; open-problems register)
 
 TeXRA classifies "what kind of thing is running" in six places, and represents
 "X is a child of Y" in twenty-six. Most are false at some write site, derived
@@ -98,6 +98,17 @@ resume, launch, roster, defaults, output) is reimplemented in
 `packages/cli/src/runtime/` with eleven behavioral divergences. Part III is
 the "one language" ruling: one session view-model, one subscription, one
 command layer — hosts keep only rendering and input policy.
+
+Revision 10 re-derives the build order holistically. The step numbers
+(1–18) reflect **discovery order, not build order** — and followed
+literally they would create the very intermediate layers this plan forbids:
+steps 2–3 recut the Lit wire shapes and add `StreamSlice.identity`, which
+step 16 then deletes when the unified view-model replaces `StreamSlice`
+entirely. The "Build order — holistic" section supersedes the step
+numbering with eight dependency-ordered phases in which **nothing is built
+twice and nothing is built to be deleted**; the steps survive as the
+per-area Add/Delete/Test/Gate specifications that the phases reference.
+An "Open problems" register consolidates what is genuinely undecided.
 
 ## Problem
 
@@ -1120,6 +1131,113 @@ the shared listing; the CLI adopts `selectAutoOpenFinalOutput`.
 
 **Step 18 — Part III gate sweep.** Ratchets shrink; no new `@agent/*`
 specifiers; the NDJSON byte-parity suite passes against the unified stack.
+
+## Build order — holistic
+
+Ordering criterion, applied adversarially to every phase: *is anything
+built here that a later phase deletes?* The answer must be no. The two
+violations found in the step numbering and removed: (a) `StreamSlice.identity`
+and the CLI reconstruction-by-reconstruction recut (old step 3) — deleted
+by the view-model adoption; the TUI never touches an upgraded `StreamSlice`,
+it moves straight onto the shared model; (b) the Lit wire-shape recut as a
+separate act (old step 2) — it is the view-model's projection, built once.
+
+**Phase 0 — schemas and stampers (pure additions, fixture-tested against
+old-format buckets before anything consumes them).** `RunIdentitySchema`,
+`ByCategory<T>`, `RunRecord` union, `RegisteredExecutionMetaSchema` (write
+boundary), the trace-boundary schema split; the idempotent entrance stamper
+(identity + outcome + streamId in one pass, lease-aware, no marker) and the
+two roster/preset entrance migrations. Nothing else changes; every fixture
+from the red-team passes runs here (old trace parses, old bucket stamps,
+ambiguous streamId stays unstamped, config-less row stays incomplete).
+
+**Phase 1 — runtime authorities.** Launch sites speak identity
+(`childStream.run`, six `registerExecution` sites); `handle` carries
+identity + launch-time in-memory category; `settleRun` with in-machine
+resolution; outcome-only terminal writes; delete `normalizeWriterCategory`,
+`meta.category` writes, the descriptor concept's writers. (Old steps 1, 4,
+10 core.)
+
+**Phase 2 — storage reads.** `readRunRecord()` replaces `readConfig()` at
+all ~19 sites; `executionListing` keyed on identity; **resume goes FK-first**
+(`registeredStreamId(meta) ?? legacy formula`) — a hard precondition for
+the id-format change; the forward legacy resolver dies, the ~30-line suffix
+helper survives as deletion admission; opaque mint format for new ids.
+(Old steps 5, 12.)
+
+**Phase 3 — orchestration lineage.** Handle predicates (`isChildExecution`,
+`isOwnedBy`) as the only spellings; birth preamble as post-reservation
+callback rethrowing `ExecutionLeaseActiveError`; one parent wire copy; flat
+roster rows carrying identity; agent-CLI registries read the handle.
+(Old step 6.)
+
+**Phase 4 — the session view-model.** Generalize `ProgressViewState` +
+`ProgressFactApplier` into `src/controllers/session/` with the final
+canonical shapes (identity verbatim, single `stage` slot, per-round maps,
+flat roster). One hub subscription. This is built **before** any UI is
+touched, so both stacks land directly on it. (Old steps 13-store, 16 core.)
+
+**Phase 5 — hosts as renderers.** Lit: `WebviewUpdater` projects the
+view-model (desktop free); resume/rerun gates on `identity.kind` (defect 3).
+TUI: signals adapter over the view-model; the parallel engine deleted in
+one motion (`StreamSlice`, `subscribeRuntimeHost` tables, `childExecutions`,
+artifact merge, stage-guard clones); transcript layout and settlement stay
+TUI-local over the shared projections. Headless renderer + NDJSON as
+boundary projections with byte-parity asserted. Fact-coverage deltas get
+their decided behaviors here. (Old steps 2, 3, 11-display, 13-UI, 16.)
+
+**Phase 6 — one command layer.** History service (with the one status
+projection), one resume funnel (delete `resolveCliResume`; CLI gains
+workflow resume), unified launcher validation, roster form on the
+controller, defaults on the shared listing, `selectAutoOpenFinalOutput`
+everywhere. (Old steps 11, 17.)
+
+**Phase 7 — gating, records, sweep.** Per-tool roster declaration replaces
+`DELEGATION_AVAILABILITY_CATEGORY`; honest `RunRecord` writes at the four
+fabrication sites; `getAvailablePaths` table; silent defaults; `ByCategory`
+recut of the 39 pairs; ratchets, full grep battery, both typechecks,
+headless parity. (Old steps 7, 8, 9, 14, 15, 18.)
+
+Dependency spine: 0 → 1 → 2 → {3, 4} → 5 → 6 → 7. Phases 3 and 4 are
+independent of each other. Review still proceeds phase-by-phase inside the
+single change; nothing merges separately.
+
+## Open problems
+
+Genuinely undecided or deferred items, so they are decided deliberately
+rather than discovered during implementation:
+
+1. **Wait/report predicate target.** Chosen: `identity.kind === 'agent' &&
+   handle.category === 'toolUse'` from launch-time config. The red-team's
+   alternative — an explicit `deliversResultPerTurn` flag set by the
+   launchers, naming the actual fact — is arguably cleaner; decide at
+   phase 1 review.
+2. **NDJSON non-agent `setTaskState` shape.** `agentConfigToTaskState`
+   needs an explicit non-agent arm that projects without inventing deleted
+   fields (today's default arm throws). Exact field set is fixed by the
+   byte-parity suite, decided at phase 5.
+3. **Fact-coverage deltas.** One decision each, applied to all hosts:
+   `followUpSent` (refresh or no-op), `goalPaused` (transcript row or
+   not), `goalStateChanged` and `inquiryThreadUpdated` in the TUI.
+4. **Old-host display degradation is accepted, not mitigated.** New rows
+   (outcome-only, no `terminalStatus`) show blank terminal status in
+   not-yet-updated binaries. The red-team's dual-write-for-one-release
+   option is **rejected** as a compatibility layer; the degradation is
+   cosmetic, bounded by update lag, and heals on update.
+5. **Migrated codex/claude rows lack `identity.tool`.** Icon and gating
+   predicates must tolerate the cohort; no healing possible (the fact was
+   never persisted).
+6. **The workflow-roster empty mechanism** (separated track) — now with a
+   concrete lead: `AgentRosterForm` bypasses
+   `AgentRosterController.allPresets()`, so custom presets are invisible
+   to the TUI. Phase 6 fixes the bypass; whether it is the whole
+   mechanism still requires the deterministic repro before any
+   nullability change.
+7. **Disk-scale numbers.** Still unmeasured; the stamper's dry-run count
+   is the measurement, logged before its first write.
+8. **`EXECUTION_META_SCHEMA_VERSION` stays 1.** Optional-field additions
+   are non-breaking under `z.object`; a bump would itself warn-and-null
+   old rows (red-team S11). Confirmed: no bump.
 
 ## Separated work
 
