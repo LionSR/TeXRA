@@ -1,5 +1,5 @@
 import {
-  loadCliApiStatus,
+  loadCliDetailedAccountStatusLines,
   loadCliModelAccessOverview,
 } from '@cli/runtime/apiStatus';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
@@ -9,14 +9,10 @@ export async function loadCliAccountStatusLines(options: {
   readonly apiMode: ApiAccessMode;
   readonly includeApiDetails?: boolean;
 }): Promise<string[]> {
-  const [overview, apiStatus] = await Promise.all([
-    loadCliModelAccessOverview({ apiMode: options.apiMode }),
-    options.includeApiDetails
-      ? loadCliApiStatus({ apiMode: options.apiMode })
-      : Promise.resolve(undefined),
-  ]);
-  const detailLines =
-    apiStatus?.detailLines.filter((line) => !overview.lines.includes(line)) ??
-    [];
-  return [...overview.lines, ...detailLines];
+  if (options.includeApiDetails) {
+    return loadCliDetailedAccountStatusLines({ apiMode: options.apiMode });
+  }
+  return [
+    ...(await loadCliModelAccessOverview({ apiMode: options.apiMode })).lines,
+  ];
 }

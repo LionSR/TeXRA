@@ -43,13 +43,17 @@ export function formatCliAuthStatusLine(
     : account;
 }
 
+function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
+  if (!signedIn) return 'signed out';
+  return `signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
+}
+
 function formatAccountStatusLine(
   label: string,
   signedIn: boolean,
   accountLabel?: string,
 ): string {
-  if (!signedIn) return `${label}: signed out`;
-  return `${label}: signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
+  return `${label}: ${formatAccountStatus(signedIn, accountLabel)}`;
 }
 
 export interface CliModelAccessOverview {
@@ -83,21 +87,16 @@ export async function loadCliModelAccessOverview(
   };
 }
 
-/**
- * Warn when a provider key is present at the same time as a relay sign-in: the
- * active `--api-mode` / `/api` setting decides which is actually used, so a
- * stale env key can silently shadow a fresh login (a documented footgun in
- * comparable CLIs). Returns `undefined` unless both credential paths exist.
- */
-export function formatApiKeyShadowWarning(
-  authenticated: boolean,
+/** Format a neutral personal-key inventory. */
+export function formatPersonalApiKeysLine(
   personalKeyProviders: readonly string[],
+  label = 'personal API keys',
 ): string | undefined {
-  if (!authenticated || personalKeyProviders.length === 0) return undefined;
+  if (personalKeyProviders.length === 0) return undefined;
   const providers = personalKeyProviders
     .map((provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider)
     .join(', ');
-  return `available: included TeXRA access; personal API keys: ${providers}`;
+  return `${label}: ${providers}`;
 }
 
 const CLI_API_STATUS_ACTION_HINTS: Record<
@@ -144,8 +143,6 @@ async function personalKeyProviders(): Promise<string[]> {
 export interface CliApiStatus {
   /** Compact lines used by the launcher. */
   readonly lines: readonly string[];
-  /** API account facts appended to the detailed account overview. */
-  readonly detailLines: readonly string[];
 }
 
 export interface LoadCliApiStatusOptions {
@@ -153,55 +150,54 @@ export interface LoadCliApiStatusOptions {
   readonly includeActionHint?: boolean;
 }
 
+async function loadIncludedUsageLine(
+  profile: CliAuthProfile,
+): Promise<string | undefined> {
+  if (!profile.authenticated || !profile.tier) return undefined;
+  // Usage reads usage_logs via PostgREST with a session token; a relay-scoped
+  // CI token cannot read it, while a session alongside that token can.
+  const canReadUsage =
+    profile.credentialSource !== 'relayToken' ||
+    (await getCliSessionAccessToken()) !== null;
+  if (!canReadUsage) {
+    return 'included usage: not available with a CI relay token (run `texra login` to view usage)';
+  }
+  try {
+    const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
+    return formatRelayUsageStatus(
+      await fetchRelayUsageSummary({ tier: usageTier }),
+    );
+  } catch (error: unknown) {
+    return `included usage: unavailable (${toErrorMessage(error)})`;
+  }
+}
+
 export async function loadCliApiStatus(
   options: LoadCliApiStatusOptions = {},
 ): Promise<CliApiStatus> {
   const mode = options.apiMode ?? getCliApiMode();
-  const profile = await getCliAuthProfile();
+  const [profile, configuredPersonalKeyProviders] = await Promise.all([
+    getCliAuthProfile(),
+    personalKeyProviders(),
+  ]);
   let authLine = formatCliAuthStatusLine(profile);
-  const configuredPersonalKeyProviders =
-    options.includeActionHint === true || profile.authenticated
-      ? await personalKeyProviders()
-      : [];
   const hasPersonalKey = configuredPersonalKeyProviders.length > 0;
   const actionHint = options.includeActionHint
     ? formatCliApiStatusActionHint(mode, profile, { hasPersonalKey })
     : undefined;
 
-  const shadowWarning = formatApiKeyShadowWarning(
-    profile.authenticated,
+  const personalKeysLine = formatPersonalApiKeysLine(
     configuredPersonalKeyProviders,
   );
   const supplementalLines = [
-    ...(shadowWarning ? [shadowWarning] : []),
+    ...(personalKeysLine ? [personalKeysLine] : []),
     ...(profile.note ? [profile.note] : []),
   ];
-  const detailLines = [...supplementalLines];
   if (profile.authenticated && profile.tier) {
-    detailLines.push(`tier: ${profile.tier}`);
-    // Usage reads usage_logs via PostgREST with a session token; a
-    // relay-scoped CI token cannot read it. Explain the limitation (same as
-    // `texra auth usage`) instead of surfacing a generic fetch error — but a
-    // session alongside the env token can still read its own usage.
-    const canReadUsage =
-      profile.credentialSource !== 'relayToken' ||
-      (await getCliSessionAccessToken()) !== null;
-    let usage: string;
-    if (!canReadUsage) {
-      usage =
-        'included usage: not available with a CI relay token (run `texra login` to view usage)';
-    } else {
-      try {
-        const usageTier = (await resolveCliUsageTier(profile)) ?? 'free';
-        usage = formatRelayUsageStatus(
-          await fetchRelayUsageSummary({ tier: usageTier }),
-        );
-      } catch (error: unknown) {
-        usage = `included usage: unavailable (${toErrorMessage(error)})`;
-      }
+    const usage = await loadIncludedUsageLine(profile);
+    if (usage) {
+      authLine = `${authLine} · ${usage}`;
     }
-    detailLines.push(usage);
-    authLine = `${authLine} · ${usage}`;
   }
 
   return {
@@ -211,8 +207,91 @@ export async function loadCliApiStatus(
       ...supplementalLines,
       ...(actionHint ? [actionHint] : []),
     ],
-    detailLines,
   };
+}
+
+/** Render each detailed account/access fact on its owning route. */
+export async function loadCliDetailedAccountStatusLines(options: {
+  readonly apiMode: ApiAccessMode;
+}): Promise<string[]> {
+  const [access, profile, providers] = await Promise.all([
+    readCliModelAccessStatus(options.apiMode),
+    getCliAuthProfile(),
+    personalKeyProviders(),
+  ]);
+  const includedUsage =
+    access.apiFallback === 'included'
+      ? await loadIncludedUsageLine(profile)
+      : undefined;
+  const routes = {
+    chatGpt: {
+      preferred: access.preferences.chatGpt === 'on',
+      account: formatAccountStatus(
+        access.chatGptSignedIn,
+        access.chatGptAccountLabel,
+      ),
+    },
+    kimiCode: {
+      preferred: access.preferences.kimiCode === 'on',
+      credential:
+        access.kimiCodeKeySet === true
+          ? 'key configured'
+          : 'key not configured',
+    },
+    fallback:
+      access.apiFallback === 'included'
+        ? {
+            kind: 'included' as const,
+            account: formatAccountStatus(
+              profile.authenticated,
+              profile.accountLabel,
+            ),
+            tier: profile.authenticated ? profile.tier : undefined,
+            usage: includedUsage,
+          }
+        : { kind: 'personal' as const },
+  };
+  const lines: string[] = [];
+  if (routes.chatGpt.preferred || access.chatGptSignedIn) {
+    const account =
+      routes.chatGpt.preferred && !access.chatGptSignedIn
+        ? 'sign in required'
+        : routes.chatGpt.account;
+    lines.push(
+      `ChatGPT: ${routes.chatGpt.preferred ? 'preferred' : 'not preferred'} · ${account}`,
+    );
+  }
+  if (routes.kimiCode.preferred || access.kimiCodeKeySet === true) {
+    const credential =
+      routes.kimiCode.preferred && access.kimiCodeKeySet !== true
+        ? 'key required'
+        : routes.kimiCode.credential;
+    lines.push(
+      `Kimi Code: ${routes.kimiCode.preferred ? 'preferred' : 'not preferred'} · ${credential}`,
+    );
+  }
+  if (routes.fallback.kind === 'included') {
+    lines.push(
+      [
+        'Fallback: Included TeXRA access',
+        routes.fallback.account,
+        routes.fallback.tier,
+        routes.fallback.usage,
+      ]
+        .filter((part): part is string => part !== undefined)
+        .join(' · '),
+    );
+  } else {
+    lines.push('Fallback: Personal API keys');
+  }
+
+  const otherPersonalKeys = formatPersonalApiKeysLine(
+    providers.filter((provider) => provider !== 'kimiCode'),
+    'Other personal keys',
+  );
+  if (otherPersonalKeys) lines.push(otherPersonalKeys);
+  if (profile.note) lines.push(profile.note);
+  return lines;
 }
 
 export async function loadCliApiStatusLines(
