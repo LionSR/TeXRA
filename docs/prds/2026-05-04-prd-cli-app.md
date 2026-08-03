@@ -622,8 +622,8 @@ The CLI must work in three settings, each with a different "where does the token
 1. CLI starts an HTTP server on `127.0.0.1` with a random free port (Node `net.createServer()` on port 0).
 2. Constructs a Supabase OAuth URL with `redirect_to=http://127.0.0.1:<port>/callback` and a PKCE challenge.
 3. Opens the URL via the `open` npm package (which respects `BROWSER` env var and falls back to `xdg-open`/`open`/`start`).
-4. Waits for the browser callback; the existing `parseAuthCallbackTokens()` from `src/auth/core/authCallback.ts` handles both fragment-based (implicit) and query-based callbacks — reused unchanged.
-5. Hands the parsed tokens to `SupabaseSessionCoordinator.setSession()`. From there refresh, expiry, and custom-endpoint logic are the existing host-neutral code.
+4. Waits for the browser callback; `parseAuthCallbackCode()` from `src/auth/authCallback.ts` extracts the query-based PKCE authorization code.
+5. Hands the code to the host-neutral session coordinator, which exchanges it for a session and retains the existing refresh, expiry, and custom-endpoint behavior.
 
 Total CLI-side code: ~150 LOC. The HTTP server is closed after the first valid callback (or 5-minute timeout). PKCE is mandatory (RFC 8252 §6).
 
@@ -724,7 +724,7 @@ Lazy-loaded only when `selectMode() === 'interactive'`. ~600 LOC of `.tsx` compo
 
 - **Wrap `render`/`createRoot` with auto-injected ThemeProvider.** Components import only from `cli/src/render/ink/index.ts`, never directly from `'ink'`. The wrapper module re-exports themed `Box`, `Text`, and the `render`/`createRoot` functions wrapped with `<ThemeProvider>` (CC's `src/ink.ts` pattern, ~30 LOC). Eliminates "did I mount the theme provider?" footguns and locks the theme contract at one site.
 - **Polymorphic `<ApprovalCard>` dispatching on `permission.kind`.** One card component switches on `TOOL_EDIT | BASH | PLAN_APPROVAL | PROPOSAL | RETRY | EXTERNAL_INQUIRY` to a per-kind subcomponent — direct mirror of the webview's `PermissionCard.ts` (499 LOC) and its `BaseFeedbackPanel` y/n/escape contract. The keystroke contract, the per-card `handleExtraKey` extension point, and the bypass-state-per-stream model are already proven; reuse the shape.
-- **Hot/cold context split for streaming updates.** The webview uses `streamLogContext` to isolate per-chunk updates from cold UI (`packages/extension/src/progressView/frontend/contexts/streamContexts.ts`). Mirror this in the TUI but tighter — three contexts segregated by update cadence: `logsContext` (hot, every chunk), `lifecycleContext` (`taskGroups`, `streamStatus`), `renderConfigContext` (cold: `streamName`, `terminalMode`, `isToolUse`). The webview's existing context leaks cold fields into the hot path; the TUI is the chance to do this right from day one.
+- **Hot/cold context split for streaming updates.** The webview uses `streamLogContext` to isolate per-chunk updates from cold UI (`packages/extension/src/progressView/frontend/streamContexts.ts`). Mirror this in the TUI but tighter — three contexts segregated by update cadence: `logsContext` (hot, every chunk), `lifecycleContext` (`taskGroups`, `streamStatus`), `renderConfigContext` (cold: `streamName`, `terminalMode`, `isToolUse`). The webview's existing context leaks cold fields into the hot path; the TUI is the chance to do this right from day one.
 - **Virtualize, don't `<Static>`/`<Box>`.** TeXRA's content is dense LaTeX (often 1,000–2,000 lines per response), not chat-shaped. Use Ink's ScrollBox + viewport-based virtual list. CC's `<Static />` workaround (`src/utils/staticRender.tsx:8-10`: writes JSX directly to stdout to bypass Ink's reflow) is a workaround for chat-density content; we don't need it. Plan for stable scroll anchoring during streaming.
 
 **Components:**

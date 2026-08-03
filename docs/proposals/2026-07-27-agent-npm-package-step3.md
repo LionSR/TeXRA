@@ -151,7 +151,7 @@ a compile error) plus a post-emit alias rewrite (below).
 >   emit: **~4 s** — fits existing CI shards, no separate job.
 
 **Two latent production bugs found here:** `nunjucks` and `semver` are `devDependencies`
-imported by production code (`agentTemplateRenderer.ts:1`, `utils/prompt/index.ts:3`,
+imported by production code (`agentTemplateRenderer.ts:1`, `utils/prompt.ts:3`,
 `semverUpdateCheck.ts:1`) — masked today because apps bundle; fatal for a published
 library. And two `import type { TeXRAIconName }` lines (`agentPresets.ts:12`,
 `todoDisplay.ts:1`) are the sole reason **Lit + ~200 FontAwesome modules** sit in the
