@@ -162,7 +162,7 @@ return await parallel(
 
 ## Production integration
 
-The opt-in `delegate_workflow_script` tool composes the production in-band
+The opt-in `delegate_multi_agents` tool composes the production in-band
 subagent runner, durable checkpoint store, task-run file hand-off, progress
 projection, parent cancellation, and completed-journal cost settlement. It
 accepts exactly one of newly submitted `script` source or an existing
@@ -176,7 +176,7 @@ agent's tool list
 agent's configuration is one half of the consent boundary for automated
 workflow fan-out. The other half is global: the "Workflow Script" toggle in
 the Tools dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`)
-strips `delegate_workflow_script` from every agent's resolved tools when
+strips `delegate_multi_agents` from every agent's resolved tools when
 switched off, regardless of what any individual agent configuration names —
 and new installs start with the switch off.
 

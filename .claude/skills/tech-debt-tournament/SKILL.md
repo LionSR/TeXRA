@@ -47,7 +47,7 @@ cursor from a previous conversation turn.
    must not edit files or run state-changing commands.
 
    This script targets Claude Code's Workflow runtime and its inline `schema`
-   option. Do not pass it to TeXRA's separate `delegate_workflow_script` tool;
+   option. Do not pass it to TeXRA's separate `delegate_multi_agents` tool;
    that host intentionally uses fixed result envelopes and JSON output files.
 
 4. **Inspect the result.** The workflow returns
