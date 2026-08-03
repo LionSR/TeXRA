@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Account status is concise and unambiguous** — `/auth` and `/api status`
+  now show model preferences, account identities, personal keys, and included
+  usage once each instead of repeating the same access in several forms.
 - **Automatic CLI runs stop after their model retry limit** — automatic
   approval mode no longer restarts another full retry sequence when every
   configured attempt has failed.

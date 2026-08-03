@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
-import { formatApiKeyShadowWarning } from '@cli/runtime/apiStatus';
+import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
 import {
   describeSavedKeyLocation,
@@ -82,14 +82,12 @@ describe('maskDisplayValue', () => {
   });
 });
 
-describe('formatApiKeyShadowWarning', () => {
-  it('warns only when signed in AND a personal key is present', () => {
-    expect(formatApiKeyShadowWarning(true, ['deepseek'])).toBe(
-      'available: included TeXRA access; personal API keys: DeepSeek',
+describe('formatPersonalApiKeysLine', () => {
+  it('formats the configured provider inventory without access claims', () => {
+    expect(formatPersonalApiKeysLine(['deepseek'])).toBe(
+      'personal API keys: DeepSeek',
     );
-    expect(formatApiKeyShadowWarning(true, [])).toBeUndefined();
-    expect(formatApiKeyShadowWarning(false, ['deepseek'])).toBeUndefined();
-    expect(formatApiKeyShadowWarning(false, [])).toBeUndefined();
+    expect(formatPersonalApiKeysLine([])).toBeUndefined();
   });
 });
 
