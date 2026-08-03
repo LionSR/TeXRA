@@ -8,7 +8,7 @@
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`).
  *
  * Both paths apply state through `applyState`, which owns output-file reset
- * and legacy-instruction precedence. Behavior is pinned by
+ * and per-mode instruction restore. Behavior is pinned by
  * `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
  *
  * ## Single writer
@@ -45,7 +45,6 @@ import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
   checkboxValues$,
   commit$,
-  instruction$,
   latexdiffsVisible$,
   launchTarget$,
   model$,
@@ -93,7 +92,6 @@ const persistedSnapshot$ = new Signal.Computed<MainViewPersistedState>(() => {
     toolUseAgent: toolUseAgent$.get(),
     model: model$.get(),
     commit: commit$.get(),
-    instruction: instruction$.get(),
     workflowInstruction: workflowInstruction$.get(),
     toolUseInstruction: toolUseInstruction$.get(),
     editedFile: sf.editedFile,
@@ -120,7 +118,6 @@ let lastWritten: MainViewPersistedState | undefined;
 
 /** Fields a keystroke moves. Their writes are rate-limited; nothing else is. */
 const DRAFT_FIELDS = new Set<keyof MainViewPersistedState>([
-  'instruction',
   'workflowInstruction',
   'toolUseInstruction',
 ]);
@@ -201,19 +198,9 @@ export function restorePersistedState(): void {
   watcher.watch(persistedSnapshot$);
 }
 
-/**
- * Restore per-mode instructions from persisted state, migrating the legacy
- * single `instruction` field for users who haven't saved per-mode fields yet.
- */
 function restorePerModeInstructions(state: MainViewPersistedState): void {
-  const wf =
-    state.workflowInstruction ||
-    (state.sessionType === SESSION_TYPES.WORKFLOW ? state.instruction : '');
-  const tu =
-    state.toolUseInstruction ||
-    (state.sessionType !== SESSION_TYPES.WORKFLOW ? state.instruction : '');
-  workflowInstruction$.set(wf);
-  toolUseInstruction$.set(tu);
+  workflowInstruction$.set(state.workflowInstruction);
+  toolUseInstruction$.set(state.toolUseInstruction);
 }
 
 /**

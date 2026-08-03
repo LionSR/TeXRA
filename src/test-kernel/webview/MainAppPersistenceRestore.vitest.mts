@@ -40,18 +40,15 @@ const posted: PostedMessage[] = [];
 const storageWrites: Array<Record<string, unknown>> = [];
 let webviewState: Record<string, unknown>;
 
-/**
- * Legacy persisted blob: predates the per-mode instruction fields (only the
- * single `instruction` field is present) and carries stale output-file state
- * that both restore entry points must discard.
- */
-const LEGACY_SEED = {
+/** Persisted blob with stale output-file state that restore must discard. */
+const PERSISTED_SEED = {
   sessionType: 'workflow',
   workflowAgent: 'correct',
   toolUseAgent: 'orchestrator',
   model: 'seed-model',
   commit: 'HEAD',
-  instruction: 'legacy single-field instruction',
+  workflowInstruction: 'persisted workflow instruction',
+  toolUseInstruction: '',
   editedFile: 'main_polish.tex',
   baseFile: 'main.tex',
   inputFiles: ['main.tex', 'appendix.tex'],
@@ -66,7 +63,9 @@ const LEGACY_SEED = {
   attachTeXCount: true,
 };
 
-function seedWebviewState(state: Record<string, unknown> = LEGACY_SEED): void {
+function seedWebviewState(
+  state: Record<string, unknown> = PERSISTED_SEED,
+): void {
   if (!webviewState) {
     webviewState = { mainViewState: structuredClone(state) };
     return;
@@ -131,7 +130,6 @@ function restoreState(
     toolUseAgent: 'orchestrator',
     model: 'restored-model',
     commit: 'abc1234',
-    instruction: '',
     workflowInstruction: '',
     toolUseInstruction: '',
     editedFile: 'restored_edited.tex',
@@ -173,7 +171,7 @@ describe('MainApp persistence and restore characterization', () => {
 
   it('normalizes stale workflow team state during mount-time restore', async () => {
     seedWebviewState({
-      ...LEGACY_SEED,
+      ...PERSISTED_SEED,
       launchTarget: 'team',
       selectedTeamId: 'physicist',
     });
@@ -197,9 +195,7 @@ describe('MainApp persistence and restore characterization', () => {
     expect(session.toolUseAgent).toBe('orchestrator');
     expect(session.model).toBe('seed-model');
 
-    // Legacy migration: active mode was workflow, so the single legacy
-    // `instruction` becomes the workflow instruction and stays active.
-    expect(session.instruction).toBe('legacy single-field instruction');
+    expect(session.instruction).toBe('persisted workflow instruction');
 
     // File state restored — except output files, which are transient.
     expect(fileState.singleFiles).toEqual({
@@ -223,7 +219,7 @@ describe('MainApp persistence and restore characterization', () => {
     // Mount-time restore alone must not write back to storage.
     expect(storageWrites).toHaveLength(0);
 
-    // A subsequent change persists the migrated per-mode instructions and the
+    // A subsequent change persists the per-mode instructions and the
     // forced-empty output state (never the stale seed values).
     dispatchHostMessage({
       command: MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED,
@@ -231,8 +227,7 @@ describe('MainApp persistence and restore characterization', () => {
     });
     await element.updateComplete;
     const blob = lastPersistedBlob();
-    expect(blob.instruction).toBe('legacy single-field instruction');
-    expect(blob.workflowInstruction).toBe('legacy single-field instruction');
+    expect(blob.workflowInstruction).toBe('persisted workflow instruction');
     expect(blob.toolUseInstruction).toBe('');
     expect(blob.outputFiles).toEqual([]);
     expect(blob).not.toHaveProperty('outputFilesActive');
@@ -314,7 +309,6 @@ describe('MainApp persistence and restore characterization', () => {
     // Restored output files are dropped, not re-persisted.
     expect(blob.outputFiles).toEqual([]);
     expect(blob).not.toHaveProperty('outputFilesActive');
-    expect(blob.instruction).toBe('restored tool-use instruction');
     expect(blob.workflowInstruction).toBe('restored workflow instruction');
     expect(blob.toolUseInstruction).toBe('restored tool-use instruction');
 
@@ -331,7 +325,7 @@ describe('MainApp persistence and restore characterization', () => {
     ).toHaveLength(0);
   });
 
-  it('migrates the legacy instruction to the workflow slot when restoring a workflow session', async () => {
+  it('restores both per-mode instructions', async () => {
     const element = await mountMainApp();
     storageWrites.length = 0;
 
@@ -339,51 +333,6 @@ describe('MainApp persistence and restore characterization', () => {
       command: COMMON_COMMANDS.STATE_RESTORE,
       state: restoreState({
         sessionType: 'workflow',
-        instruction: 'legacy only',
-        workflowInstruction: '',
-        toolUseInstruction: '',
-      }),
-    });
-    await element.updateComplete;
-
-    const blob = lastPersistedBlob();
-    expect(blob.workflowInstruction).toBe('legacy only');
-    expect(blob.toolUseInstruction).toBe('');
-    expect(blob.instruction).toBe('legacy only');
-    expect(contextsOf(element).session.instruction).toBe('legacy only');
-  });
-
-  it('migrates the legacy instruction to the tool-use slot when restoring a tool-use session', async () => {
-    const element = await mountMainApp();
-    storageWrites.length = 0;
-
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        sessionType: 'toolUse',
-        instruction: 'legacy only',
-        workflowInstruction: '',
-        toolUseInstruction: '',
-      }),
-    });
-    await element.updateComplete;
-
-    const blob = lastPersistedBlob();
-    expect(blob.workflowInstruction).toBe('');
-    expect(blob.toolUseInstruction).toBe('legacy only');
-    expect(blob.instruction).toBe('legacy only');
-    expect(contextsOf(element).session.instruction).toBe('legacy only');
-  });
-
-  it('prefers per-mode instructions over the legacy field when both are present', async () => {
-    const element = await mountMainApp();
-    storageWrites.length = 0;
-
-    dispatchHostMessage({
-      command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({
-        sessionType: 'workflow',
-        instruction: 'legacy loser',
         workflowInstruction: 'workflow winner',
         toolUseInstruction: 'tool-use winner',
       }),
@@ -393,7 +342,6 @@ describe('MainApp persistence and restore characterization', () => {
     const blob = lastPersistedBlob();
     expect(blob.workflowInstruction).toBe('workflow winner');
     expect(blob.toolUseInstruction).toBe('tool-use winner');
-    expect(blob.instruction).toBe('workflow winner');
     expect(contextsOf(element).session.instruction).toBe('workflow winner');
   });
 
@@ -441,7 +389,6 @@ describe('MainApp persistence and restore characterization', () => {
 
     expect(storageWrites).toHaveLength(1);
     const blob = lastPersistedBlob();
-    expect(blob.instruction).toBe('');
     expect(blob.workflowInstruction).toBe('');
     expect(blob.toolUseInstruction).toBe('');
     expect(blob.editedFile).toBe('');
@@ -492,7 +439,6 @@ describe('MainApp persistence and restore characterization', () => {
 
     expect(storageWrites).toHaveLength(1);
     const blob = lastPersistedBlob();
-    expect(blob.instruction).toBe('');
     expect(blob.workflowInstruction).toBe('');
     expect(blob.toolUseInstruction).toBe('');
     // Tool-use reset keeps file selections (SESSION_DEFAULTS.toolUse.resetFiles=false).
@@ -557,7 +503,7 @@ describe('MainApp persistence and restore characterization', () => {
 
         vi.advanceTimersByTime(1);
         expect(storageWrites).toHaveLength(1);
-        expect(lastPersistedBlob().instruction).toBe('hello');
+        expect(lastPersistedBlob().workflowInstruction).toBe('hello');
       } finally {
         vi.useRealTimers();
       }
@@ -582,7 +528,9 @@ describe('MainApp persistence and restore characterization', () => {
         await Promise.resolve();
 
         expect(storageWrites).toHaveLength(1);
-        expect(lastPersistedBlob().instruction).toBe('typed but not yet due');
+        expect(lastPersistedBlob().workflowInstruction).toBe(
+          'typed but not yet due',
+        );
 
         // The draft timer was cancelled by that write, not left to fire again.
         vi.advanceTimersByTime(1000);
@@ -608,7 +556,7 @@ describe('MainApp persistence and restore characterization', () => {
         // be written synchronously, not dropped on teardown.
         element.remove();
         expect(storageWrites).toHaveLength(1);
-        expect(lastPersistedBlob().instruction).toBe(
+        expect(lastPersistedBlob().workflowInstruction).toBe(
           'unsaved when disconnected',
         );
 

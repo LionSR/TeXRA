@@ -1040,11 +1040,12 @@ describe('StreamLogStore load', () => {
         ],
       },
       summaries: {
-        workflow: summary(100, 101, { hasNonterminalWorkflowTask: true }),
+        workflow: summary(100, 101, { hasNonterminalWorkflowCall: true }),
       },
     });
     const store = await StreamLogStore.open();
 
+    expect(store.getUnfinishedStreamIds()).toEqual(['workflow']);
     const affected = await store.endRunningGroupsForStreams(['workflow'], 300);
     await store.flush();
     expect(store.get('workflow')).toBeUndefined();

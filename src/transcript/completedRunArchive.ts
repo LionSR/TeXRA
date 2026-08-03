@@ -2,14 +2,11 @@
  * Completed-run archive reads (#7246 Decision 1): once a run finishes, its
  * durable display/export data is owned by the transcript sidecars
  * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
- * execution→stream mapping. The legacy `executions/{id}/conversation.json` /
- * `todos.json` KV projections are READ-ONLY fallbacks for runs recorded
- * before the sidecars existed. Each fact keeps exactly one legacy read arm,
- * here, tracked for D3 retirement in the #6981 ledger.
+ * execution→stream mapping.
  */
 import { isDeepStrictEqual } from 'node:util';
 
-import { getExecutionStore, type TodoEntry } from '@agent/storage';
+import type { TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
@@ -40,7 +37,7 @@ import {
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
-type CompletedRunTodosSource = 'streamData' | 'legacyKV' | 'none';
+type CompletedRunTodosSource = 'streamData' | 'none';
 
 export interface CompletedRunTodosReadResult {
   readonly todos: TodoEntry[];
@@ -55,20 +52,9 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
   };
 }
 
-async function readLegacyTodos(
-  executionId: ExecutionId,
-): Promise<CompletedRunTodosReadResult> {
-  const todos = await getExecutionStore(executionId).readTodos();
-  return {
-    todos,
-    source: todos.length > 0 ? 'legacyKV' : 'none',
-  };
-}
-
 /**
- * Read the archived task list for a completed run, preferring the durable
- * stream sidecar (`streamData/{stream}/workPlan.json`), with
- * `executions/{id}/todos.json` as a read-only fallback for historical runs.
+ * Read the archived task list for a completed run from the durable stream
+ * sidecar (`streamData/{stream}/workPlan.json`).
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
@@ -89,14 +75,14 @@ export async function readCompletedRunTodos(
       streamId: resolved.streamId,
     };
   }
-  return readLegacyTodos(executionId);
+  return { todos: [], source: 'none' };
 }
 
 // ============================================================================
 // Conversation
 // ============================================================================
 
-type CompletedRunConversationSource = 'streamLog' | 'legacyKV' | 'none';
+type CompletedRunConversationSource = 'streamLog' | 'none';
 
 export interface CompletedRunConversationReadResult {
   /** Provider-agnostic `{role, content}` messages, or `null` when neither
@@ -795,12 +781,7 @@ async function readSidecarConversation(
 /**
  * Read the archived conversation for a completed run from the transcript
  * sidecar (`streamLogs/{stream}.json`), reconstructed into provider-agnostic
- * messages, with the legacy `executions/{id}/conversation.json` projection
- * as the fallback arm.
- *
- * The sidecar is tried first. If it has no conversation-shaped rows, the
- * reader falls back once to the historical projection. An empty source never
- * wins over a source with content.
+ * messages.
  */
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
@@ -823,26 +804,5 @@ export async function readCompletedRunConversation(
         streamLogStore,
       )
     : null;
-  if (sidecar?.conversation) return sidecar;
-
-  // Legacy `conversation.json`; absent or empty leaves the sidecar diagnostics
-  // as the only answer.
-  const legacyConversation =
-    await getExecutionStore(executionId).readConversation();
-  if (!legacyConversation) {
-    return sidecar ?? { conversation: null, source: 'none' };
-  }
-  return {
-    conversation: legacyConversation,
-    source: 'legacyKV',
-    ...(sidecar?.candidateStreamIds
-      ? { candidateStreamIds: sidecar.candidateStreamIds }
-      : {}),
-    ...(sidecar?.associatedStreamIds
-      ? { associatedStreamIds: sidecar.associatedStreamIds }
-      : {}),
-    ...(sidecar?.conflicts ? { conflicts: sidecar.conflicts } : {}),
-    ...(sidecar?.hasOrderingCycle ? { hasOrderingCycle: true } : {}),
-    ...(sidecar?.hasOrderingAmbiguity ? { hasOrderingAmbiguity: true } : {}),
-  };
+  return sidecar ?? { conversation: null, source: 'none' };
 }

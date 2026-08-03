@@ -14,8 +14,7 @@
  *
  * The conversation comes from the completed-run archive facade
  * (`readCompletedRunConversation`): the transcript sidecar owns completed-run
- * display/export per #7246 Decision 1, with the legacy
- * `executions/{id}/conversation.json` projection as a read-only fallback.
+ * display/export per #7246 Decision 1.
  *
  * `store.readConfig()` already validates against `AgentConfigSchema`
  * internally and falls back to `null` on a schema mismatch (see the private

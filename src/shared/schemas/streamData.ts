@@ -39,7 +39,6 @@ export const StreamTabMetaSchema = z.object({
     .literal(RUN_DESCRIPTOR_SCHEMA_VERSION)
     .prefault(RUN_DESCRIPTOR_SCHEMA_VERSION),
   parentStreamId: z.string().optional(),
-  executionId: z.string().optional(),
   runDescriptor: PersistedRunDescriptorSchema.optional(),
   /** Legacy field — read-shimmed from pre-RunDescriptor snapshots only. */
   taskState: z.unknown().optional(),
