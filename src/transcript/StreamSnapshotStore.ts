@@ -1463,7 +1463,6 @@ export class StreamSnapshotStore {
     // — e.g. clearing a description to "" must round-trip, not silently vanish.
     const file: StreamTabMeta = {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-      ...(next.executionId !== undefined && { executionId: next.executionId }),
       ...(next.runDescriptor !== undefined && {
         runDescriptor: next.runDescriptor,
       }),
@@ -1518,7 +1517,6 @@ export class StreamSnapshotStore {
     }
     if (descriptor) record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
-      ...(executionId ? { executionId } : {}),
       ...(descriptor ? { runDescriptor: descriptor } : {}),
     });
   }
@@ -1541,7 +1539,6 @@ export class StreamSnapshotStore {
     }
     record.runDescriptor = descriptor;
     this.queueMetaPatch(stream, {
-      executionId: descriptor.executionId,
       runDescriptor: descriptor,
     });
   }
@@ -1566,11 +1563,7 @@ export class StreamSnapshotStore {
   }
 
   getExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    // `meta.executionId` is normalized to the canonical
-    // `runDescriptor.executionId` and validated at the single disk-read entry
-    // (`readMeta`), and every meta write sets both fields together, so no
-    // cast, re-validation, or descriptor fallback is needed here.
-    return this.records.get(stream)?.meta?.executionId;
+    return this.records.get(stream)?.runDescriptor?.executionId;
   }
 
   /** Streams with persisted sidecars under `streamData/`. */
@@ -1593,7 +1586,7 @@ export class StreamSnapshotStore {
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    return (await readMeta(this.kv(stream)))?.executionId;
+    return (await readMeta(this.kv(stream)))?.runDescriptor?.executionId;
   }
 
   /**
@@ -1606,7 +1599,9 @@ export class StreamSnapshotStore {
   }> {
     const meta = await readMeta(this.kv(stream));
     return {
-      ...(meta?.executionId ? { executionId: meta.executionId } : {}),
+      ...(meta?.runDescriptor?.executionId
+        ? { executionId: meta.runDescriptor.executionId }
+        : {}),
       ...(meta?.parentStreamId
         ? { parentStreamId: meta.parentStreamId as StreamTabId }
         : {}),
@@ -1637,7 +1632,8 @@ export class StreamSnapshotStore {
   getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
     const map = new Map<StreamTabId, ExecutionId>();
     for (const [stream, record] of this.records) {
-      if (record.meta?.executionId) map.set(stream, record.meta.executionId);
+      const executionId = record.runDescriptor?.executionId;
+      if (executionId) map.set(stream, executionId);
     }
     return map;
   }
@@ -2049,7 +2045,7 @@ export class StreamSnapshotStore {
       logger.warn(
         CHANNEL,
         `Loaded legacy taskState for stream ${stream}; run config should come from execution config on new writes.`,
-        { data: { stream, executionId: meta.executionId } },
+        { data: { stream, executionId: meta.runDescriptor?.executionId } },
       );
       return parsed.data.agentConfig;
     }
@@ -2060,7 +2056,7 @@ export class StreamSnapshotStore {
       {
         data: {
           stream,
-          executionId: meta.executionId,
+          executionId: meta.runDescriptor?.executionId,
           error: z.prettifyError(parsed.error),
         },
       },
@@ -2072,7 +2068,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     meta: StreamTabMeta,
   ): Promise<HydratedRunState> {
-    const executionId = meta.executionId;
+    const executionId = meta.runDescriptor?.executionId;
     let descriptor = meta.runDescriptor;
 
     if (executionId) {
@@ -2146,7 +2142,7 @@ export class StreamSnapshotStore {
     // stream was evicted during the await, that would resurrect a record for a
     // deleted stream and defeat `writeMergedSidecars`' eviction check (#8226);
     // an orphaned `record` is mutated harmlessly and never written.
-    const executionId = meta?.executionId;
+    const executionId = meta?.runDescriptor?.executionId;
     if (!meta || record.runDescriptor?.executionId !== executionId) {
       record.runDescriptor = undefined;
       record.runConfig = undefined;
@@ -2275,9 +2271,10 @@ export class StreamSnapshotStore {
   private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
     for (const [streamId, record] of [...this.records]) {
       const meta = record.meta;
-      if (!meta?.executionId || meta.description) continue;
+      const executionId = meta?.runDescriptor?.executionId;
+      if (!executionId || meta.description) continue;
       try {
-        const execMeta = await getExecutionStore(meta.executionId).readMeta();
+        const execMeta = await getExecutionStore(executionId).readMeta();
         if (execMeta?.description) {
           this.setDescription(streamId, execMeta.description);
         }

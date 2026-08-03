@@ -160,23 +160,6 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
   Exclude<CanonicalDelegationToolName, RegisteredToolName>
 >;
 
-/**
- * Legacy tool-name aliases — keep prior YAML configs working when a tool is
- * renamed. Each entry maps `<old name> → <canonical name>`. Aliases are
- * normalized while loading configs, rather than registered as extra tool names,
- * so the model sees only the canonical definition.
- */
-const TOOL_ALIASES: Record<string, RegisteredToolName> = {
-  add_criticism: 'diagnostics',
-  // Remove on 2026-08-19 after the custom-agent migration window; see #6981.
-  crossref_doi: 'crossref_search',
-  external_inquiry: 'inquiry',
-};
-
-function canonicalToolName(name: string): string {
-  return TOOL_ALIASES[name] ?? name;
-}
-
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
   if (!defaultRegistryInstance) {
@@ -237,21 +220,18 @@ export function resolveToolDefinitions(
 
   return tools.flatMap((item): ToolDefinition[] => {
     const name = typeof item === 'string' ? item : item.name;
-    const canonicalName = canonicalToolName(name);
-    if (seenNames.has(canonicalName)) {
+    if (seenNames.has(name)) {
       return [];
     }
-    seenNames.add(canonicalName);
+    seenNames.add(name);
 
-    const tool = VALID_TOOL_NAME.test(canonicalName)
-      ? registry.get(canonicalName)
-      : undefined;
+    const tool = VALID_TOOL_NAME.test(name) ? registry.get(name) : undefined;
 
     // Unregistered name: keep an embedder's own definition, and fall back to a
     // bare name for everything else so the entry is still visible downstream.
     if (!tool) {
       warnOnMissing?.(name, 'not found in registry');
-      return [typeof item === 'string' ? { name: canonicalName } : item];
+      return [typeof item === 'string' ? { name } : item];
     }
 
     if (overridesContract(item, tool.definition)) {

@@ -14,9 +14,22 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', () => ({
   getExecutionStore: vi.fn(() => ({
     readConfig: mocks.readConfig,
-    readConversation: mocks.readConversation,
     readMeta: mocks.readMeta,
   })),
+}));
+
+vi.mock('@transcript', () => ({
+  hasCompletedRunConversationEvidence: vi.fn(
+    ({ conversation }: { conversation: unknown[] | null }) =>
+      (conversation?.length ?? 0) > 0,
+  ),
+  readCompletedRunConversation: vi.fn(async () => {
+    const conversation = await mocks.readConversation();
+    return {
+      conversation,
+      source: conversation === null ? 'none' : 'streamLog',
+    };
+  }),
 }));
 
 // Imported after vi.mock so the mocked dependency is in place.

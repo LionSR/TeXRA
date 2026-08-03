@@ -1,7 +1,7 @@
 /**
  * Completed-run archive facade: the transcript sidecars own completed-run
  * display/export, with `executions/{id}/conversation.json` / `todos.json` as
- * read-only legacy fallbacks.
+ * transcript-sidecar archive reads.
  *
  * The fixtures build real completed executions on disk from sidecar data
  * alone, which is what a tool-use run persists, and prove that conversation
@@ -547,43 +547,16 @@ describe('completedRunArchive facade', () => {
     );
   });
 
-  it('falls back to the legacy KV projections when no sidecar exists', async () => {
-    const executionId = 'bbb222bbb222' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    await store.write('conversation', [
-      { role: 'user', content: 'Legacy question' },
-      { role: 'assistant', content: 'Legacy answer' },
-    ]);
-    await store.write('todos', [{ content: 'Legacy todo', status: 'pending' }]);
-
-    const conversationResult = await readCompletedRunConversation(executionId);
-    expect(conversationResult.source).toBe('legacyKV');
-    expect(conversationResult.conversation).toEqual([
-      { role: 'user', content: 'Legacy question' },
-      { role: 'assistant', content: 'Legacy answer' },
-    ]);
-
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult.source).toBe('legacyKV');
-    expect(todosResult.todos).toEqual([
-      { content: 'Legacy todo', status: 'pending' },
-    ]);
-  });
-
-  it('treats a present empty work plan as authoritative over stale legacy todos', async () => {
+  it('treats a present empty work plan as authoritative', async () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
     await seedStreams(executionId, [{ streamId, todos: [] }]);
-    await getExecutionStore(executionId).write('todos', [
-      { content: 'Stale legacy todo', status: 'pending' },
-    ]);
-
     const result = await readCompletedRunTodos(executionId);
 
     expect(result).toEqual({ todos: [], source: 'streamData', streamId });
   });
 
-  it('reports none when neither the sidecar nor the legacy projection has data', async () => {
+  it('reports none when no sidecar has data', async () => {
     const executionId = 'ccc333ccc333' as ExecutionId;
 
     const conversationResult = await readCompletedRunConversation(executionId);
@@ -613,21 +586,14 @@ describe('completedRunArchive facade', () => {
     });
   });
 
-  it('prefers the sidecar when a legacy conversation projection also exists', async () => {
+  it('reads a sidecar conversation', async () => {
     const executionId = 'ddd444ddd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
-    await getExecutionStore(executionId).write('conversation', [
-      { role: 'assistant', content: 'Legacy projection' },
-    ]);
-
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('streamLog');
     expect(result.streamId).toBe(streamId);
-    expect(result.conversation).not.toContainEqual({
-      role: 'assistant',
-      content: 'Legacy projection',
-    });
+    expect(result.conversation).not.toBeNull();
   });
 
   it('seeds a resumed legacy conversation into an empty transcript once', async () => {
@@ -737,12 +703,10 @@ describe('completedRunArchive facade', () => {
     ]);
   });
 
-  it('never lets an empty-but-present legacy file beat a full sidecar (non-empty rule)', async () => {
+  it('reads a full sidecar', async () => {
     const executionId = 'fff666fff666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
-    await getExecutionStore(executionId).write('conversation', []);
-
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('streamLog');
     expect(result.streamId).toBe(streamId);
@@ -846,37 +810,6 @@ describe('completedRunArchive facade', () => {
     );
     expect(endpoint.output).not.toContain('Canonical question');
     expect(endpoint.output).not.toContain('Unproven child answer');
-  });
-
-  it('uses legacy KV without hiding ambiguous exact-execution candidates', async () => {
-    const executionId = '0888b50888b5' as ExecutionId;
-    const first = 'aOrchestrator@old#0888b50888b5' as StreamTabId;
-    const second = 'zOrchestrator@new#0888b50888b5' as StreamTabId;
-    await seedStreams(executionId, [{ streamId: first }, { streamId: second }]);
-    await persistRows(
-      executionId,
-      new Map([
-        [
-          first,
-          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First sidecar' })],
-        ],
-        [
-          second,
-          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Second sidecar' })],
-        ],
-      ]),
-    );
-    await getExecutionStore(executionId).write('conversation', [
-      { role: 'user', content: 'Legacy canonical conversation' },
-    ]);
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'legacyKV',
-      candidateStreamIds: [first, second],
-      conversation: [
-        { role: 'user', content: 'Legacy canonical conversation' },
-      ],
-    });
   });
 
   it('reports conflicting copied text, role, and status instead of silently deduplicating', async () => {
@@ -1482,41 +1415,6 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).toContain(`Stream: ${streamId}`);
   });
 
-  it('does not attribute a legacy conversation to diagnostic-only merged streams', async () => {
-    const executionId = '0888c10888c1' as ExecutionId;
-    const first = 'aOrchestrator@old#0888c10888c1' as StreamTabId;
-    const second = 'bOrchestrator@new#0888c10888c1' as StreamTabId;
-    await seedStreams(executionId, [{ streamId: first }, { streamId: second }]);
-
-    const sharedDiagnostic = {
-      ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
-      id: 'legacy-shared-diagnostic-row',
-    };
-    await persistRows(
-      executionId,
-      new Map([
-        [first, [sharedDiagnostic]],
-        [second, [sharedDiagnostic]],
-      ]),
-    );
-    await getExecutionStore(executionId).write('conversation', [
-      { role: 'user', content: 'Legacy conversation' },
-    ]);
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'legacyKV',
-      conversation: [{ role: 'user', content: 'Legacy conversation' }],
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.output).toContain('Source: legacyKV');
-    expect(endpoint.output).toContain('Legacy conversation');
-    expect(endpoint.output).not.toContain('Merged streams:');
-    expect(endpoint.output).toContain('Stream: none');
-  });
-
   it('uses proven child associations as existence evidence without reading them', async () => {
     const executionId = '0888b40888b4' as ExecutionId;
     const parent = 'orchestrator@model#parent' as StreamTabId;
@@ -1698,41 +1596,6 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).not.toContain('Merged streams:');
   });
 
-  it('never falls back from an empty registered root to an explicit child', async () => {
-    const executionId = '0999ca0999ca' as ExecutionId;
-    const root = 'orchestrator@model#0999ca0999ca' as StreamTabId;
-    const child = 'child@tool#0999ca0999ca' as StreamTabId;
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: new Date().toISOString(),
-      streamId: root,
-      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
-    });
-    await seedStreams(executionId, [
-      { streamId: root },
-      { streamId: child, agent: 'child', parent: root },
-    ]);
-
-    const logs = await StreamLogStore.open();
-    logs.ensureStream(root);
-    logs.append(
-      child,
-      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
-    );
-    await logs.flush();
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      conversation: null,
-      source: 'none',
-    });
-
-    const legacy = [{ role: 'user', content: 'Legacy root prompt' }];
-    await getExecutionStore(executionId).write('conversation', legacy);
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      conversation: legacy,
-      source: 'legacyKV',
-    });
-  });
-
   it('preserves a sole diagnostic-only exact root as execution evidence', async () => {
     const executionId = '0999cb0999cb' as ExecutionId;
     const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
@@ -1847,32 +1710,5 @@ describe('completedRunArchive facade', () => {
         },
       ],
     });
-  });
-
-  it('falls back to legacy when the transcript holds no conversation-shaped rows', async () => {
-    const executionId = 'eee555eee555' as ExecutionId;
-    const streamId = 'orchestrator@deepseekproT#eee555eee555' as StreamTabId;
-
-    await seedStreams(executionId, [{ streamId }]);
-
-    const logs = await StreamLogStore.open();
-    logs.ensureStream(streamId);
-    logs.append(
-      streamId,
-      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Working...' }),
-    );
-    await logs.flush();
-
-    await getExecutionStore(executionId).write('conversation', [
-      { role: 'user', content: 'Pre-sidecar conversation' },
-    ]);
-    // The sidecar exists but reconstructs to zero messages, so the historical
-    // read fallback remains available.
-
-    const result = await readCompletedRunConversation(executionId);
-    expect(result.source).toBe('legacyKV');
-    expect(result.conversation).toEqual([
-      { role: 'user', content: 'Pre-sidecar conversation' },
-    ]);
   });
 });

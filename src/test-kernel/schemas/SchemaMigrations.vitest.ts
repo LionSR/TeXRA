@@ -5,6 +5,7 @@ import {
   ActiveChildInfoSchema,
   ContextManagementDataSchema,
   OutputXmlSummarySchema,
+  STREAM_PHASE,
   STREAM_STATUS,
 } from '@shared/schemas';
 
@@ -96,25 +97,16 @@ describe('OutputXmlSummarySchema — tagContents legacy string coercion', () => 
   });
 });
 
-describe('OutputXmlSummarySchema — legacy documents field', () => {
-  it('drops the documents copy a pre-removal record still carries', () => {
-    const result = OutputXmlSummarySchema.parse({
-      tagContents: { documents: ['Body A'] },
-      documents: ['Body A'],
-      singleOutputFile: '/tmp/run/main.tex',
-      sourceLocation: null,
-    });
-
-    expect(result).toStrictEqual({
-      tagContents: { documents: ['Body A'] },
-      singleOutputFile: '/tmp/run/main.tex',
-      sourceLocation: null,
-    });
+describe('OutputXmlSummarySchema — strict shape', () => {
+  it('still rejects an unrecognized key on a record without documents', () => {
+    expect(() =>
+      OutputXmlSummarySchema.parse({ tagContents: {}, unexpected: 1 }),
+    ).toThrow();
   });
 
-  it('rejects an unrecognized key alongside legacy documents', () => {
+  it('rejects the retired documents key', () => {
     expect(() =>
-      OutputXmlSummarySchema.parse({ documents: [], unexpected: 1 }),
+      OutputXmlSummarySchema.parse({ tagContents: {}, documents: [] }),
     ).toThrow();
   });
 });
@@ -160,27 +152,17 @@ describe('ContextManagementDataSchema — legacy missing tokensAfter/utilization
   });
 });
 
-describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
-  const legacyBase = {
+describe('ActiveChildInfoSchema — canonical discriminant', () => {
+  const base = {
     executionId: 'exec-1',
     agentName: 'review',
   };
 
-  it('infers kind: subagent from a legacy entry that has childStreamId', () => {
+  it('accepts a process entry', () => {
     const result = ActiveChildInfoSchema.parse({
-      ...legacyBase,
-      childStreamId: 'stream-1',
+      ...base,
+      kind: 'process',
     });
-
-    expect(result).toMatchObject({
-      kind: 'subagent',
-      childStreamId: 'stream-1',
-    });
-  });
-
-  it('infers kind: process from a legacy entry without childStreamId', () => {
-    const result = ActiveChildInfoSchema.parse({ ...legacyBase });
-
     expect(result).toMatchObject({ kind: 'process' });
   });
 
@@ -189,10 +171,21 @@ describe('ActiveChildInfoSchema — legacy missing kind discriminant', () => {
   // clamps it to `[]`, so no on-disk roster carries the retired 7-value
   // `StreamStatus` vocabulary. The v0.41 cut dropped the speculative union
   // member that mapped it; the field now takes `StreamPhase` only.
+  it('accepts a StreamPhase status', () => {
+    const result = ActiveChildInfoSchema.parse({
+      ...base,
+      kind: 'subagent',
+      childStreamId: 'stream-1',
+      status: STREAM_PHASE.RUNNING,
+    });
+
+    expect(result).toMatchObject({ status: STREAM_PHASE.RUNNING });
+  });
+
   it('rejects a retired StreamStatus value rather than folding it', () => {
     expect(() =>
       ActiveChildInfoSchema.parse({
-        ...legacyBase,
+        ...base,
         kind: 'process',
         status: STREAM_STATUS.INITIALIZING,
       }),

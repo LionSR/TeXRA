@@ -128,13 +128,28 @@ async function writeStreamFile(
 }
 
 /** Persist a stream's meta sidecar stamped with the current schema version. */
-function writeMetaFile(
+async function writeMetaFile(
   stream: StreamTabId,
   meta: Record<string, unknown>,
 ): Promise<void> {
-  return writeStreamFile(stream, 'meta.json', {
+  const { executionId, ...rest } = meta;
+  let runDescriptor = rest.runDescriptor;
+  if (runDescriptor === undefined && typeof executionId === 'string') {
+    const config = await getExecutionStore(
+      executionId as ExecutionId,
+    ).readConfig();
+    runDescriptor = buildRunDescriptor({
+      streamId: stream,
+      executionId: executionId as ExecutionId,
+      agent: config?.agent ?? 'search',
+      category: config?.agentCategory ?? AgentCategory.ToolUse,
+      kind: 'agent',
+    });
+  }
+  await writeStreamFile(stream, 'meta.json', {
     schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-    ...meta,
+    ...rest,
+    ...(runDescriptor === undefined ? {} : { runDescriptor }),
   });
 }
 
@@ -926,14 +941,12 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('resolves the descriptor execution id everywhere when the legacy mirror is malformed', async () => {
+  it('resolves the descriptor execution id everywhere', async () => {
     await installPlatform();
     const executionId = 'aa11bb22' as ExecutionId;
     const runConfig = toolUseConfig('legacy-search');
     await getExecutionStore(executionId).writeConfig(runConfig);
     await writeMetaFile(STREAM, {
-      // A legacy sidecar whose top-level mirror never held a real execution id.
-      executionId: 'not-an-execution-id!',
       runDescriptor: buildRunDescriptor({
         streamId: STREAM,
         executionId,
@@ -952,43 +965,6 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
     expect(store.getExecutionIdMap().get(STREAM)).toBe(executionId);
     expect((await store.read(STREAM)).executionId).toBe(executionId);
-  });
-
-  it('completes the run kind of a descriptor written before that field existed', async () => {
-    await installPlatform();
-    const store = new StreamSnapshotStore();
-    const legacy = async (
-      stream: StreamTabId,
-      executionId: ExecutionId,
-      agent: string,
-    ): Promise<void> => {
-      await getExecutionStore(executionId).writeConfig(toolUseConfig(agent));
-      await writeMetaFile(stream, {
-        executionId,
-        // A descriptor persisted before #9119 added `kind`.
-        runDescriptor: {
-          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-          streamId: stream,
-          executionId,
-          agent,
-          category: AgentCategory.ToolUse,
-          configRef: {
-            kind: 'executionConfig',
-            executionId,
-            path: `executions/${executionId}/config.json`,
-          },
-        },
-      });
-    };
-    await legacy(STREAM, 'cc33dd44' as ExecutionId, 'bash');
-    await legacy(OTHER_STREAM, 'dd44ee55' as ExecutionId, 'legacy-search');
-
-    await store.load([STREAM, OTHER_STREAM]);
-
-    // Completed at the read boundary, so no consumer re-derives the kind from
-    // the agent name for itself.
-    expect(store.getRunDescriptor(STREAM)?.kind).toBe('process');
-    expect(store.getRunDescriptor(OTHER_STREAM)?.kind).toBe('agent');
   });
 
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
@@ -1018,7 +994,7 @@ describe('StreamSnapshotStore', () => {
       executionId?: unknown;
       runDescriptor?: { executionId?: unknown; agent?: unknown };
     };
-    expect(raw.executionId).toBe(newExecutionId);
+    expect(raw.executionId).toBeUndefined();
     expect(raw.runDescriptor).toMatchObject({
       executionId: newExecutionId,
       agent: 'new-search',
