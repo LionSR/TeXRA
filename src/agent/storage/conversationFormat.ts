@@ -27,10 +27,7 @@
  * truncation for the CLI). Provider-native message and content recognition is
  * shared here.
  */
-import {
-  extractFunctionToolCallFields,
-  normalizeVsCodeLmBlock,
-} from '@agent/types/ContentBlockSchema';
+import { normalizeVsCodeLmBlock } from '@agent/types/ContentBlockSchema';
 import { CONVERSATION_BLOCK_TYPES } from '@agent/types/ConversationBlockTypes';
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
@@ -409,6 +406,30 @@ function formatTopLevelToolCalls(
     .join('\n');
 }
 
+/**
+ * Extract the `{name, input}` fields off one entry of an OpenAI Chat
+ * Completions assistant message's top-level `tool_calls` array: the
+ * `{function: {name, arguments}}` shape, or a flatter `{name,
+ * arguments|input}` fallback some archived/alternate shapes use. Both
+ * fields are `undefined` when absent — this renders a bare `'unknown'`
+ * marker either way (see the caller below).
+ */
+function extractFunctionToolCallFields(toolCall: Record<string, unknown>): {
+  name?: string;
+  input?: unknown;
+} {
+  const nestedFunction = isObject(toolCall.function)
+    ? toolCall.function
+    : undefined;
+  const nestedName =
+    typeof nestedFunction?.name === 'string' ? nestedFunction.name : '';
+  const topName = typeof toolCall.name === 'string' ? toolCall.name : '';
+  return {
+    name: nestedName || topName || undefined,
+    input: nestedFunction?.arguments ?? toolCall.arguments ?? toolCall.input,
+  };
+}
+
 function formatTopLevelToolCall(
   toolCall: unknown,
   options: ConversationFormatOptions,
@@ -420,10 +441,6 @@ function formatTopLevelToolCall(
       options,
     )}]`;
   }
-  // Shared with `getAssistantToolCalls` in `@agent/export/normalizeConversation`
-  // via `extractFunctionToolCallFields` (`@agent/types/ContentBlockSchema`) —
-  // that path additionally SDK-validates each entry as a genuine function
-  // tool call; this one renders whatever shape is present.
   const { name, input } = extractFunctionToolCallFields(toolCall);
   return formatToolUseMarker(name || 'unknown', input ?? {}, options);
 }

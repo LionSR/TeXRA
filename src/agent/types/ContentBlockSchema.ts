@@ -5,13 +5,12 @@
  * both `assistantBlockToNode` (`@agent/export/normalizeConversation`) and
  * `formatConversationBlock` (`@agent/storage/conversationFormat`) classify —
  * Anthropic/OpenAI `type`-tagged blocks (including Anthropic's server-side
- * tool blocks), the VS Code language-model bridge's `kind`-tagged blocks, and
- * OpenAI Chat Completions' top-level `tool_calls` array shape. Each consumer
- * still owns its own output shape (a structured `ExportNode` vs. a truncated
- * marker string) and its own further business rules (which block kinds are
- * visible, how they're truncated) — only the wire-shape recognition lives
- * here, so a new provider block type is added once instead of drifting
- * between two independently hand-rolled switches.
+ * tool blocks) and the VS Code language-model bridge's `kind`-tagged blocks.
+ * Each consumer still owns its own output shape (a structured `ExportNode`
+ * vs. a truncated marker string) and its own further business rules (which
+ * block kinds are visible, how they're truncated) — only the wire-shape
+ * recognition lives here, so a new provider block type is added once instead
+ * of drifting between two independently hand-rolled switches.
  *
  * Google GenAI's discriminator-less `{text}`/`{functionCall}`/
  * `{functionResponse}`/`{thought}` parts are deliberately NOT normalized
@@ -24,8 +23,6 @@
  * own Google-part handling.
  */
 import { z } from 'zod';
-
-import { isObject } from '@utils/core';
 
 import { CONVERSATION_BLOCK_TYPES } from './ConversationBlockTypes';
 import { ANTHROPIC_SERVER_TOOL_BLOCK_TYPES } from './ServerToolTypes';
@@ -161,34 +158,4 @@ export function normalizeVsCodeLmBlock(
 ): NormalizedVsCodeLmBlock | undefined {
   const parsed = VsCodeLmBlockSchema.safeParse(raw);
   return parsed.success ? parsed.data : undefined;
-}
-
-// ============================================================
-// OpenAI Chat Completions — top-level `tool_calls` array shape
-// ============================================================
-
-/**
- * Extract the `{name, input}` fields off one entry of an OpenAI Chat
- * Completions assistant message's top-level `tool_calls` array: the
- * `{function: {name, arguments}}` shape, or a flatter `{name,
- * arguments|input}` fallback some archived/alternate shapes use. Both
- * fields are `undefined` when absent — callers decide their own defaults
- * (`conversationFormat` renders a bare `'unknown'` marker either way;
- * `normalizeConversation`'s SDK-validated `getAssistantToolCalls` path keeps
- * its own extraction because it operates on an already-narrowed
- * `ChatCompletionMessageFunctionToolCall`, not this raw shape).
- */
-export function extractFunctionToolCallFields(
-  toolCall: Record<string, unknown>,
-): { name?: string; input?: unknown } {
-  const nestedFunction = isObject(toolCall.function)
-    ? toolCall.function
-    : undefined;
-  const nestedName =
-    typeof nestedFunction?.name === 'string' ? nestedFunction.name : '';
-  const topName = typeof toolCall.name === 'string' ? toolCall.name : '';
-  return {
-    name: nestedName || topName || undefined,
-    input: nestedFunction?.arguments ?? toolCall.arguments ?? toolCall.input,
-  };
 }

@@ -31,6 +31,7 @@ import {
   createInitialState,
   EMPTY_STREAM_LOGS,
   isToolUseState,
+  type FollowupOptionsState,
   type StreamEntry,
   type StreamState,
 } from './store';
@@ -151,6 +152,20 @@ export const streamStates$ = new Signal.Computed(() => {
   return _prevStreamStates;
 });
 
+/** Follow-up options per stream. Only changes identity when some stream's
+ *  follow-up options actually change — not on a log-only tick for an
+ *  existing stream. Read by `streamContext$` so its non-log consumers
+ *  (header, todos, usage, follow-up controls) don't re-render on every
+ *  streamed token. */
+let _prevFollowupOptions: Map<StreamTabId, FollowupOptionsState> = new Map();
+const followupOptions$ = new Signal.Computed(() => {
+  _prevFollowupOptions = memoizedFacetView(
+    _prevFollowupOptions,
+    (e) => e.followupOptions,
+  );
+  return _prevFollowupOptions;
+});
+
 // ---------------------------------------------------------------------------
 // Derived computeds: only re-evaluate when selector inputs propagate.
 // ---------------------------------------------------------------------------
@@ -213,12 +228,20 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
  * `permissions$.set([])` because that setter triggers `pendingApprovalIds$`
  * recomputation, which reads `_prevApprovalIds` for the stable-Set memo —
  * if we clear the cache after, the next read sees a stale prior Set and
- * returns it instead of the empty post-reset value. `_prevPhaseStages` is
- * the same memo over `appState`, so it is cleared before that setter too.
+ * returns it instead of the empty post-reset value. `_prevPhaseStages`,
+ * `_prevStreamById`, `_prevStreamStates`, and `_prevFollowupOptions` are the
+ * same kind of memo over `appState`, so they're all cleared before that
+ * setter too (each would otherwise self-heal on the next read anyway, since
+ * `memoizedFacetView`'s size check forces a rebuild once `streamEntries$`
+ * goes back to empty — clearing them here just keeps every memo cache
+ * consistently reset in one place rather than relying on that).
  */
 export function resetProgressState(): void {
   _prevApprovalIds = new Set();
   _prevPhaseStages = EMPTY_PHASE_STAGE_MAP;
+  _prevStreamById = new Map();
+  _prevStreamStates = new Map();
+  _prevFollowupOptions = new Map();
   clearFollowUpInputTransientStateStore();
   appState.set(createInitialState());
   placement.set('sidebar');
@@ -373,7 +396,7 @@ export const streamContext$ = new Signal.Computed((): StreamContextValue => {
   }
 
   const followupOptions =
-    streamEntries$.get().get(activeStreamInfo.name)?.followupOptions ?? null;
+    followupOptions$.get().get(activeStreamInfo.name) ?? null;
   return {
     streamInfo: activeStreamInfo,
     streamState: activeStreamState$.get(),
