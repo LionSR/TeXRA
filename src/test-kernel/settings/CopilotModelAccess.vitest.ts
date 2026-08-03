@@ -30,6 +30,14 @@ const consentRoute: CopilotRouteInfo = {
   name: 'sonnet46',
   label: 'Claude Sonnet 4.6',
   access: 'consent-required',
+  preferred: false,
+};
+
+const allowedRoute: CopilotRouteInfo = {
+  name: 'gpt55',
+  label: 'GPT-5.5',
+  access: 'allowed',
+  preferred: false,
 };
 
 function renderModelsTab(
@@ -66,5 +74,27 @@ describe('Copilot model access settings', () => {
     const tab = await renderModelsTab([]);
 
     expect(tab.shadowRoot?.querySelector('#copilot-access')).toBeNull();
+  });
+
+  it('offers an explicit opt-in for an already-authorized route', async () => {
+    const tab = await renderModelsTab([allowedRoute]);
+
+    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    expect(section?.textContent).toContain('1 Copilot model is ready');
+    const button = section?.querySelector<HTMLElement>('wa-button');
+    expect(button?.textContent).toContain('Use Copilot for GPT-5.5');
+
+    button?.click();
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'gpt55' }],
+    ]);
+  });
+
+  it('hides the opt-in once the route is preferred', async () => {
+    const tab = await renderModelsTab([{ ...allowedRoute, preferred: true }]);
+
+    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    expect(section?.textContent).toContain('1 Copilot model is ready');
+    expect(section?.querySelector('wa-button')).toBeNull();
   });
 });

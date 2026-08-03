@@ -240,6 +240,8 @@ const CopilotRouteInfoSchema = z.object({
   name: z.string(),
   label: z.string(),
   access: z.enum(['allowed', 'consent-required', 'unavailable']),
+  /** Whether the user has chosen this route for the base model (#9635). */
+  preferred: z.boolean(),
 });
 export type CopilotRouteInfo = z.infer<typeof CopilotRouteInfoSchema>;
 

@@ -148,31 +148,45 @@ export async function migrateCopilotModelRouteSelections(
 ): Promise<void> {
   if (state.get<number>(GlobalStateKey.COPILOT_ROUTE_MIGRATION) === 1) return;
 
+  const enabled = state.get<readonly string[]>(GlobalStateKey.ENABLED_MODELS);
+  const helperModel = state.get<string>(GlobalStateKey.HELPER_MODEL);
+  const reasoningLevels = state.get<Record<string, string>>(
+    GlobalStateKey.REASONING_LEVELS,
+  );
+
+  // Compute and persist the route preference FIRST: if activation stops
+  // mid-migration, the retry still sees the `copilot:*` ids and re-derives
+  // the same preference, so an interrupted run cannot lose it.
   const routeModels = new Set(
     state.get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS) ?? [],
   );
+  for (const model of [
+    ...(enabled ?? []),
+    ...(helperModel ? [helperModel] : []),
+    ...Object.keys(reasoningLevels ?? {}),
+  ]) {
+    if (model.startsWith(COPILOT_MODEL_PREFIX)) {
+      routeModels.add(normalizePersistedCopilotModelId(model));
+    }
+  }
+  await state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, [...routeModels]);
 
-  const enabled = state.get<readonly string[]>(GlobalStateKey.ENABLED_MODELS);
   if (enabled?.some((model) => model.startsWith(COPILOT_MODEL_PREFIX))) {
     const migrated: string[] = [];
     for (const model of enabled) {
       const canonical = normalizePersistedCopilotModelId(model);
-      if (canonical !== model) routeModels.add(canonical);
       if (!migrated.includes(canonical)) migrated.push(canonical);
     }
     await state.update(GlobalStateKey.ENABLED_MODELS, migrated);
   }
 
-  const helperModel = state.get<string>(GlobalStateKey.HELPER_MODEL);
   if (helperModel?.startsWith(COPILOT_MODEL_PREFIX)) {
-    const canonical = normalizePersistedCopilotModelId(helperModel);
-    routeModels.add(canonical);
-    await state.update(GlobalStateKey.HELPER_MODEL, canonical);
+    await state.update(
+      GlobalStateKey.HELPER_MODEL,
+      normalizePersistedCopilotModelId(helperModel),
+    );
   }
 
-  const reasoningLevels = state.get<Record<string, string>>(
-    GlobalStateKey.REASONING_LEVELS,
-  );
   if (
     reasoningLevels &&
     Object.keys(reasoningLevels).some((model) =>
@@ -191,6 +205,5 @@ export async function migrateCopilotModelRouteSelections(
     await state.update(GlobalStateKey.REASONING_LEVELS, migrated);
   }
 
-  await state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, [...routeModels]);
   await state.update(GlobalStateKey.COPILOT_ROUTE_MIGRATION, 1);
 }

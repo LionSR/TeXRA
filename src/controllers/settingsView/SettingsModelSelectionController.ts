@@ -6,6 +6,7 @@ import {
   LEVEL_TO_EFFORT,
 } from '@agent/modelHandlers/support/reasoningEffort';
 import { FREE_TIER, MAX_TIER } from '@auth/config';
+import { prefersCopilotRoute } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
   discoveredCopilotRoutes,
@@ -109,6 +110,7 @@ export class SettingsModelSelectionController {
       name,
       label: configs.get(name)?.label ?? name,
       access: route.access,
+      preferred: prefersCopilotRoute(name),
     }));
   }
 

@@ -1,4 +1,5 @@
 // Local imports
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type {
@@ -11,6 +12,7 @@ import type {
 import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
+import { AgentError } from '@common/errors';
 import type { SdkErrorKind } from '@common/errors/sdkErrorUtils';
 import {
   attachSdkErrorMetadata,
@@ -27,6 +29,7 @@ import {
   type LanguageModelDataPart,
   type LanguageModelMessage,
   type LanguageModelPort,
+  type LanguageModelReference,
   type LanguageModelTextPart,
   type LanguageModelToolCallPart,
   type LanguageModelToolResultPart,
@@ -44,7 +47,6 @@ import { toVscodeLmTools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 
 // Third-party imports
-import type { ModelConfig } from 'llm-zoo';
 
 type VscodeLmUsage = undefined;
 
@@ -208,6 +210,26 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     return requireLanguageModelPort();
   }
 
+  /**
+   * The exact editor model reference requests must use. Under canonical
+   * model identity (#9635) the config belongs to the base model, so the
+   * reference comes from the discovered Copilot route. The config-shaped
+   * reference only serves the deprecated static Copilot-provider registry
+   * entry; anything else means the route vanished between routing and
+   * dispatch, and sending the base provider's vendor/id into the VS Code
+   * language-model API would address a model it does not host.
+   */
+  private languageModelReference(): LanguageModelReference {
+    const routeReference = copilotRouteForModel(this.config.name)?.reference;
+    if (routeReference) return routeReference;
+    if (this.config.provider === ModelProvider.COPILOT) {
+      return { vendor: this.config.provider, id: this.config.fullName };
+    }
+    throw new AgentError(
+      `Copilot access to "${this.config.name}" is no longer available. Refresh the model list or choose another access route.`,
+    );
+  }
+
   protected override async createResponseImpl(
     options: CreateResponseOptions<LanguageModelMessage, LanguageModelPort>,
   ): Promise<CreateResponseResult<VscodeLmResponse, LanguageModelMessage>> {
@@ -216,14 +238,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         ? toVscodeLmTools(options.tools)
         : undefined;
     const signal = options.signal ?? new AbortController().signal;
-    // Under canonical model identity (#9635) the config belongs to the base
-    // model; the exact editor model reference lives on the discovered Copilot
-    // route. The config-shaped fallback only serves hosts that construct this
-    // handler for a Copilot-provider registry entry directly.
-    const model = copilotRouteForModel(this.config.name)?.reference ?? {
-      vendor: this.config.provider,
-      id: this.config.fullName,
-    };
+    const model = this.languageModelReference();
     const output = this.createOutputStream();
     const text: string[] = [];
     const toolCalls: LanguageModelToolCallPart[] = [];
@@ -517,10 +532,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       messages,
       options?.systemPrompt,
     );
-    const model = {
-      vendor: this.config.provider,
-      id: this.config.fullName,
-    };
+    const model = this.languageModelReference();
 
     try {
       const counts = await Promise.all([

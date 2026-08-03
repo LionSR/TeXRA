@@ -1,14 +1,16 @@
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
+import * as logger from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
 import { platform } from '@platform/platform';
-
 import type {
   LanguageModelAccessState,
   LanguageModelInfo,
   LanguageModelReference,
 } from '@platform/languageModel';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
 
 /**
  * Prefix of the retired synthetic Copilot picker ids (`copilot:<baseModel>`).
@@ -196,16 +198,18 @@ export function copilotRouteForModel(
 
 /**
  * Refresh and return the discovered Copilot routes keyed by canonical base
- * model id. Runtime discovery is an optional host capability: the host
- * adapter logs failures and consumers receive an empty catalogue instead of
- * stale entries.
+ * model id. Runtime discovery is an optional host capability: consumers
+ * receive an empty catalogue instead of stale entries when it fails.
  */
 export async function discoveredCopilotRoutes(): Promise<
   ReadonlyMap<string, CopilotModelRoute>
 > {
   try {
     await refreshRuntimeModelRegistry();
-  } catch {
+  } catch (error) {
+    logger.warn('model', 'Copilot route discovery failed', {
+      data: { error: toErrorMessage(error) },
+    });
     return new Map();
   }
   return catalogue.entries;

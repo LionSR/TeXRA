@@ -211,6 +211,11 @@ export class ModelsTab extends LitElement {
     const consentModel = models.find(
       (model) => model.access === 'consent-required',
     );
+    // An already-authorized route still needs an explicit opt-in: access
+    // alone never routes a canonical model through Copilot (#9635).
+    const optInModel = models.find(
+      (model) => model.access === 'allowed' && !model.preferred,
+    );
     const unavailableCount = models.filter(
       (model) => model.access === 'unavailable',
     ).length;
@@ -222,6 +227,24 @@ export class ModelsTab extends LitElement {
     } else {
       status = `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
     }
+
+    // The single route action: consent first, then opt-in for an
+    // already-authorized route the user has not chosen yet.
+    const actionModel = consentModel ?? optInModel;
+    const action = actionModel
+      ? renderLabeledActionButton({
+          icon: 'shield',
+          text: consentModel
+            ? 'Grant access'
+            : `Use Copilot for ${actionModel.label}`,
+          kind: 'primary',
+          appearance: consentModel ? 'filled' : 'outlined',
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
+              modelName: actionModel.name,
+            }),
+        })
+      : nothing;
 
     return html`
       <section id="copilot-access">
@@ -242,25 +265,7 @@ export class ModelsTab extends LitElement {
                 Access is managed by VS Code and GitHub Copilot.
               </span>
             </div>
-            <div class="settings-row-control">
-              ${
-                consentModel
-                  ? renderLabeledActionButton({
-                      icon: 'shield',
-                      text: 'Grant access',
-                      kind: 'primary',
-                      appearance: 'filled',
-                      onClick: () =>
-                        postMessage(
-                          SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-                          {
-                            modelName: consentModel.name,
-                          },
-                        ),
-                    })
-                  : nothing
-              }
-            </div>
+            <div class="settings-row-control">${action}</div>
           </div>
         </div>
         ${

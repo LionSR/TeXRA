@@ -199,6 +199,7 @@ describe('SettingsModelSelectionController', () => {
         name: 'sonnet46',
         label: MODEL_CONFIGS.sonnet46.label,
         access: 'consent-required',
+        preferred: false,
       },
     ]);
     // The route's base model keeps its own single row; no `copilot:` identity
