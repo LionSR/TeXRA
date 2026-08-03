@@ -244,7 +244,9 @@ describe('progress view stream-content projection', () => {
     // state while reset metadata awaits a canonical run config.
     state.resetStreamMetadataForRun(stream);
     state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
-    expect(state.getStreamMetadata(stream).agentCategory).toBeUndefined();
+    expect(
+      state.getStreamMetadata(stream).resolution.agentCategory,
+    ).toBeUndefined();
     state.updateStreamState(stream, (prev) => ({
       ...prev,
       conversationProgress: { toolCallCount: 3 },
