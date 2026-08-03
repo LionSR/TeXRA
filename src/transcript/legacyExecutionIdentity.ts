@@ -1,23 +1,66 @@
+/**
+ * The single legacy identity boundary (#9590 Stage 3). Every historical
+ * scan/decoder that maps between executions and persisted streams without
+ * registration provenance lives here: the sidecar directory scan
+ * (`scanPersistedStreamsForExecution`), the `#executionId` stream-name suffix
+ * match, and the suffix-derived ownership check that guards deletion and
+ * restart repair (`legacyExecutionIdFromStreamSuffix`). Production code
+ * outside this module never scans sidecars, decodes suffixes, or probes
+ * alternate roots — it resolves identity from registered execution metadata
+ * (`registeredStreamId`) or calls one of these entry points.
+ *
+ * Every legacy mechanism hit is logged at `warn` naming the mechanism, so
+ * real-world reliance on legacy resolution is countable from logs. Confirmed
+ * matches are additionally backfilled with
+ * `streamIdSource: LEGACY_RESOLUTION` on the execution record.
+ *
+ * Ambiguity is explicit: when several persisted roots or suffix look-alikes
+ * claim one execution, resolution reports the candidates and never selects
+ * one by enumeration or lexical order.
+ *
+ * Retirement (#9590 Stage 7, tracked in #9627): dated, no earlier than the
+ * 2026-11-01 legacy cohort — `streamData/` has no natural expiry, so a date
+ * is the only available gate — and gated on the usage evidence this module's
+ * warn log accumulates.
+ */
 import pMap from 'p-map';
+import { ZodError } from 'zod';
 
+import { createChannelTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { writeLegacyExecutionStreamId } from '@agent/storage/executionLifecycle';
 import {
   EXECUTION_STREAM_ID_SOURCE,
+  ExecutionIdSchema,
+  registeredStreamId,
   type ExecutionId,
+  type ExecutionMeta,
   type StreamTabId,
 } from '@shared/schemas';
+import { unique } from '@utils/core';
 
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 import type { StreamLogStore } from './StreamLogStore';
 
+const logger = createChannelTrace('LegacyIdentity');
+
 export interface PersistedStreamIdResolution {
   /** Canonical stream when registration or persisted evidence proves one. */
   readonly streamId?: StreamTabId;
-  /** Other persisted candidates to try when a historical primary is empty. */
-  readonly fallbackStreamIds?: readonly StreamTabId[];
+  /**
+   * Other persisted candidates to try when a historical primary is empty.
+   * Always stated: an empty list means "none exist by proof", so callers
+   * never re-scan for alternates.
+   */
+  readonly fallbackStreamIds: readonly StreamTabId[];
   /** Exact-execution sidecars eligible for overlap-gated archive merging. */
   readonly exactExecutionCandidateStreamIds?: readonly StreamTabId[];
+  /**
+   * Several streams carry this execution's `#executionId` name suffix with no
+   * metadata proving any of them canonical. Name resemblance is not
+   * ownership, so none is selected and none may be merged.
+   */
+  readonly suffixCandidateStreamIds?: readonly StreamTabId[];
   /** Proven child associations excluded from archive ownership and row reads. */
   readonly associatedStreamIds?: readonly StreamTabId[];
 }
@@ -110,28 +153,9 @@ function orderedFallbacks(
   });
 }
 
-/**
- * Find alternative persisted streams for the rare case where a historical
- * primary reconstructs no conversation. Current executions do not need this
- * scan unless their registered stream is unexpectedly empty.
- */
-export async function findPersistedStreamFallbacksForExecution(
-  executionId: ExecutionId,
-  primary: StreamTabId,
-  options: PersistedStreamIdResolverOptions = {},
-): Promise<StreamTabId[]> {
-  const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  const { persistedStreams, mergeCandidateMetaMatched, childMetaMatched } =
-    await scanPersistedStreamsForExecution(executionId, snapshotStore);
-  const excludedChildren = new Set(childMetaMatched);
-  const suffixMatched = findExecutionSuffixMatches(
-    [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
-    executionId,
-  ).filter((candidate) => !excludedChildren.has(candidate));
-  return orderedFallbacks(primary, [
-    ...mergeCandidateMetaMatched,
-    ...suffixMatched,
-  ]);
+/** Retirement evidence (#9590 Stage 7 / #9627): one countable line per hit. */
+function logLegacyHit(mechanism: string, detail: string): void {
+  logger.warn(`Legacy identity resolution fired (${mechanism}): ${detail}`);
 }
 
 /**
@@ -146,7 +170,7 @@ export async function findPersistedStreamFallbacksForExecution(
  *
  * `null` means no persisted stream carries this execution. A resolution with
  * no `streamId` means persisted associations exist but prove no canonical
- * archive root; when unproven roots exist, they are exposed as exact-execution
+ * archive root; unproven roots are exposed as exact-execution or suffix
  * candidates. Callers must not substitute a candidate or proven child.
  * Callers that receive `null` and have a derivable stream id own that
  * compatibility substitution.
@@ -160,7 +184,7 @@ export async function resolvePersistedStreamIdForExecution(
     executionMeta?.streamId &&
     executionMeta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
   ) {
-    return { streamId: executionMeta.streamId };
+    return { streamId: executionMeta.streamId, fallbackStreamIds: [] };
   }
 
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
@@ -194,7 +218,14 @@ export async function resolvePersistedStreamIdForExecution(
       // run, but missing parent metadata does not prove which root owns the
       // archive. Data presence and lexical order are not canonical-ownership
       // evidence. When every match is a proven child there are no candidates.
+      logLegacyHit(
+        'sidecar meta scan',
+        mergeCandidateMetaMatched.length > 0
+          ? `execution ${executionId} is claimed by ${mergeCandidateMetaMatched.length} unproven roots; no canonical stream selected`
+          : `execution ${executionId} matches only proven child streams; no archive root`,
+      );
       return {
+        fallbackStreamIds: [],
         ...(mergeCandidateMetaMatched.length > 0
           ? {
               exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
@@ -208,13 +239,16 @@ export async function resolvePersistedStreamIdForExecution(
       [...persistedStreams, ...(options.streamLogStore?.keys() ?? [])],
       executionId,
     ).filter((candidate) => !excludedChildren.has(candidate));
-    const fallbackStreamIds = orderedFallbacks(streamId, [
-      ...mergeCandidateMetaMatched,
-      ...suffixMatched,
-    ]);
+    logLegacyHit(
+      'sidecar meta scan',
+      `execution ${executionId} resolved to stream ${streamId}`,
+    );
     return {
       streamId,
-      ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
+      fallbackStreamIds: orderedFallbacks(streamId, [
+        ...mergeCandidateMetaMatched,
+        ...suffixMatched,
+      ]),
       ...(mergeCandidateMetaMatched.length > 0
         ? {
             exactExecutionCandidateStreamIds: mergeCandidateMetaMatched,
@@ -224,30 +258,89 @@ export async function resolvePersistedStreamIdForExecution(
     };
   }
 
-  const matchedSidecars = findExecutionSuffixMatches(
-    persistedStreams,
-    executionId,
+  // No sidecar metadata claims this execution; the only remaining legacy
+  // evidence is the `#executionId` name suffix, checked across persisted
+  // sidecars and transcript logs as one candidate set. One distinct match
+  // resolves; several are reported as explicit ambiguity — never chosen
+  // among by enumeration order.
+  const suffixMatched = unique([
+    ...findExecutionSuffixMatches(persistedStreams, executionId),
+    ...(options.streamLogStore
+      ? findExecutionSuffixMatches(options.streamLogStore.keys(), executionId)
+      : []),
+  ]);
+  if (suffixMatched.length === 0) return null;
+  if (suffixMatched.length > 1) {
+    logLegacyHit(
+      'stream-name suffix',
+      `execution ${executionId} matches ${suffixMatched.length} streams by name suffix; no canonical stream selected`,
+    );
+    return {
+      fallbackStreamIds: [],
+      suffixCandidateStreamIds: suffixMatched,
+    };
+  }
+  logLegacyHit(
+    'stream-name suffix',
+    `execution ${executionId} resolved to stream ${suffixMatched[0]}`,
   );
-  const matchedSidecar = matchedSidecars[0];
-  if (matchedSidecar) {
-    const fallbackStreamIds = orderedFallbacks(matchedSidecar, matchedSidecars);
-    return {
-      streamId: matchedSidecar,
-      ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
-    };
-  }
+  return { streamId: suffixMatched[0], fallbackStreamIds: [] };
+}
 
-  const matchedLogs = options.streamLogStore
-    ? findExecutionSuffixMatches(options.streamLogStore.keys(), executionId)
-    : [];
-  const matchedLog = matchedLogs[0];
-  if (matchedLog) {
-    const fallbackStreamIds = orderedFallbacks(matchedLog, matchedLogs);
-    return {
-      streamId: matchedLog,
-      ...(fallbackStreamIds.length > 0 ? { fallbackStreamIds } : {}),
-    };
-  }
+/** Recover the conventional execution suffix from a persisted stream id. */
+function executionIdFromStream(stream: StreamTabId): ExecutionId | undefined {
+  const separator = stream.lastIndexOf('#');
+  const candidate = separator >= 0 ? stream.slice(separator + 1) : stream;
+  const parsed = ExecutionIdSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
+}
 
-  return null;
+/**
+ * Legacy ownership boundary (#9590 A2): a `#executionId` stream-name suffix is
+ * a formatting hint, not authority over an execution directory. The derived id
+ * is admitted only when registered execution metadata does not contradict it —
+ * an execution whose birth registration names a different stream keeps its
+ * directory even when an unrelated stream resembles it by suffix. Records
+ * without registration provenance (pre-#9590 history, or a stream whose
+ * sidecar was lost) keep the suffix-derived answer.
+ *
+ * `malformedMeta` states the caller's stance on a present-but-unparseable
+ * record, which may well register another owner stream (the parse failure is
+ * logged at warn by the store):
+ * - `'reject'` — deletion admission: corruption blocks the execution
+ *   directory from being admitted, instead of reading as an absent legacy
+ *   record.
+ * - `'admit'` — restart repair: corruption cannot disprove the suffix, so
+ *   mapping here must not throw. A corrupt record surfaces downstream: an
+ *   in-flight repair candidate deliberately aborts the repair pass at its
+ *   own strict settlement read, before any mutation; a settled historical
+ *   stream is never consulted again, so its corruption stays inert.
+ */
+export async function legacyExecutionIdFromStreamSuffix(
+  stream: StreamTabId,
+  options: { readonly malformedMeta: 'reject' | 'admit' },
+): Promise<ExecutionId | undefined> {
+  const derived = executionIdFromStream(stream);
+  if (derived === undefined) return undefined;
+  const admit = (): ExecutionId => {
+    logLegacyHit(
+      'suffix ownership',
+      `stream ${stream} admitted execution ${derived} by name suffix`,
+    );
+    return derived;
+  };
+  let meta: ExecutionMeta | null;
+  try {
+    meta = await getExecutionStore(derived).readMetaStrict();
+  } catch (error) {
+    // Only a validation failure means "malformed record"; a storage read
+    // failure proves nothing about ownership and must propagate rather than
+    // silently admit (or silently withhold) an execution directory.
+    if (!(error instanceof ZodError)) throw error;
+    return options.malformedMeta === 'reject' ? undefined : admit();
+  }
+  const registered = registeredStreamId(meta);
+  return registered !== undefined && registered !== stream
+    ? undefined
+    : admit();
 }

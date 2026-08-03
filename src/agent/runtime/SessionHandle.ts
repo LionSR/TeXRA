@@ -35,7 +35,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
+import { legacyExecutionIdFromStreamSuffix } from '@transcript/legacyExecutionIdentity';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
