@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   ink@7.1.1: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
-  openai@6.46.0: 0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e
+  openai@7.3.0: b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9
 
 importers:
 
@@ -199,8 +199,8 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^6.46.0
-        version: 6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.1)(zod@4.4.3)
+        specifier: ^7.3.0
+        version: 7.3.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.1)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -539,8 +539,8 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
       openai:
-        specifier: ^6.46.0
-        version: 6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.1)(zod@4.4.3)
+        specifier: ^7.3.0
+        version: 7.3.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.1)(zod@4.4.3)
       p-defer:
         specifier: ^4.0.1
         version: 4.0.1
@@ -911,8 +911,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       openai:
-        specifier: ^6.46.0
-        version: 6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.1)(zod@4.4.3)
+        specifier: ^7.3.0
+        version: 7.3.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.1)(zod@4.4.3)
       p-map:
         specifier: ^7.0.6
         version: 7.0.6
@@ -5374,8 +5374,9 @@ packages:
     resolution: {integrity: sha512-YgBpdJHPyQ2UE5x+hlSXcnejzAvD0b22U2OuAP+8OnlJT+PjWPxtgmGqKKc+RgTM63U9gN0YzrYc71R2WT/hTA==}
     engines: {node: '>=18'}
 
-  openai@6.46.0:
-    resolution: {integrity: sha512-DFg6jEPT2RO+oAyXtddeUJU8zkGy1OQ1AjGzNIJUMQG03TTqvCpy9tBpQ+2VVVnvrl3E56F8GEin2JYtWpITtA==}
+  openai@7.3.0:
+    resolution: {integrity: sha512-FLnIAkDEP3grs+BSDpqxEWVR37yG97/hs95lajF8SnHuA5nqtssh0uJVXbPhODNEoZqar+nEd+fIeGJgwoLUmg==}
+    engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
       '@smithy/hash-node': '>=4.3.0 <5'
@@ -11264,7 +11265,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.1)(zod@4.4.3):
+  openai@7.3.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.1)(zod@4.4.3):
     optionalDependencies:
       ws: 8.21.1
       zod: 4.4.3

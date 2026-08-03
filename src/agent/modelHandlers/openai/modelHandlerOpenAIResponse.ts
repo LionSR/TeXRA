@@ -1532,9 +1532,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       ...baseParams,
       max_output_tokens: maxOutputTokens,
       store: this.storesResponsesServerSide,
-      // llm-zoo's Fast tier maps to the SDK's current priority wire value.
       ...(this.config.serviceTier === 'fast' && {
-        service_tier: 'priority',
+        service_tier: 'fast',
       }),
       ...(convertedTools?.length && {
         tool_choice: finalTool
