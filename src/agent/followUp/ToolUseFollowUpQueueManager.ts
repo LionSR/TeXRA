@@ -3,6 +3,10 @@ import { createChannelTrace } from '@agent/trace';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import {
+  createBoundedIdSet,
+  type BoundedIdSet,
+} from '@utils/core/boundedIdSet';
+import {
   FollowUpQueue,
   type DrainedFollowUpItem,
   type FollowUpQueueInput,
@@ -15,6 +19,14 @@ export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
   readonly queue: FollowUpQueue;
+  /**
+   * Delivery ids already admitted for this stream (#9531). In-memory,
+   * transport-level replay suppression only — NOT crash-safe exactly-once: a
+   * restart (or LRU eviction past the cap) forgets admitted ids, so a replay
+   * after that is admitted again. An outbox/idempotent parent inbox is
+   * deferred until crash/restart tests reproduce duplicate or lost insertion.
+   */
+  readonly admittedDeliveryIds: BoundedIdSet<string>;
   lifecycle: QueueLifecycle;
   generation: number;
   owner?: FollowUpConsumerLease;
@@ -43,6 +55,7 @@ export interface FollowUpRecoveryLease
 export type FollowUpSubmission =
   | { readonly kind: 'unavailable' }
   | { readonly kind: 'not_owned' }
+  | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued' }
   | { readonly kind: 'live' }
   | { readonly kind: 'live_flow' }
@@ -58,6 +71,7 @@ export type FollowUpSubmission =
  */
 export class ToolUseFollowUpQueue {
   static readonly TERMINAL_CAP = 500;
+  static readonly DELIVERY_ID_CAP = 1000;
   private readonly entries = new Map<StreamTabId, QueueEntry>();
   private readonly terminal = new LRUCache<StreamTabId, true>({
     max: ToolUseFollowUpQueue.TERMINAL_CAP,
@@ -132,6 +146,18 @@ export class ToolUseFollowUpQueue {
       }
       entry ??= this.createEntry(streamId);
       if (!entry.owner) entry.lifecycle = 'recoverable';
+    }
+
+    // Replay suppression is synchronous check-and-add: concurrent submissions
+    // of one delivery id admit at most once (#9531). Ids are minted by the
+    // child-run loop per accepted turn; identical text under a distinct id is
+    // a distinct delivery.
+    const deliveryId = followUp.deliveryId;
+    if (deliveryId !== undefined) {
+      if (entry.admittedDeliveryIds.has(deliveryId)) {
+        return { kind: 'duplicate' };
+      }
+      entry.admittedDeliveryIds.add(deliveryId);
     }
 
     entry.queue.enqueue(followUp);
@@ -241,6 +267,9 @@ export class ToolUseFollowUpQueue {
   private createEntry(streamId: StreamTabId): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
+      admittedDeliveryIds: createBoundedIdSet(
+        ToolUseFollowUpQueue.DELIVERY_ID_CAP,
+      ),
       lifecycle: 'recoverable',
       generation: 0,
     };

@@ -145,3 +145,101 @@ describe('ToolUseFollowUpQueue ownership', () => {
     });
   });
 });
+
+describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
+  it('suppresses a replayed delivery id instead of appending it again', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:replay');
+    queues.claimLive(id, 'flow');
+
+    const delivery = {
+      text: 'child result',
+      origin: 'subagent_result' as const,
+      deliveryId: 'exec-1:turn:1:delivery',
+    };
+    expect(queues.submit(id, delivery, 'live_owner')).toEqual({
+      kind: 'live_flow',
+    });
+    for (let replay = 0; replay < 100; replay++) {
+      expect(queues.submit(id, delivery, 'live_owner')).toEqual({
+        kind: 'duplicate',
+      });
+    }
+    expect(queues.getAll(id)).toEqual(['child result']);
+  });
+
+  it('keeps distinct delivery ids distinct even with identical text', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:distinct-deliveries');
+    queues.claimLive(id, 'flow');
+
+    const first = queues.submit(
+      id,
+      { text: 'same text', origin: 'subagent_result', deliveryId: 'd1' },
+      'live_owner',
+    );
+    const second = queues.submit(
+      id,
+      { text: 'same text', origin: 'subagent_result', deliveryId: 'd2' },
+      'live_owner',
+    );
+
+    expect(first).toEqual({ kind: 'live_flow' });
+    expect(second).toEqual({ kind: 'live_flow' });
+    expect(queues.getAll(id)).toEqual(['same text', 'same text']);
+  });
+
+  it('keeps suppressing a replayed id across a recoverable release', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:replay-across-release');
+    const child = queues.claimLive(id, 'child')!;
+    const delivery = {
+      text: 'child result',
+      origin: 'subagent_result' as const,
+      deliveryId: 'd1',
+    };
+    queues.submit(id, delivery, 'live_owner');
+    queues.release(child, 'recoverable');
+
+    expect(queues.submit(id, delivery, 'recoverable')).toEqual({
+      kind: 'duplicate',
+    });
+    expect(queues.getAll(id)).toEqual(['child result']);
+  });
+
+  it('admits concurrent submissions of one delivery id at most once', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:concurrent-replay');
+    queues.claimLive(id, 'flow');
+    const delivery = {
+      text: 'child result',
+      origin: 'subagent_result' as const,
+      deliveryId: 'd1',
+    };
+
+    const outcomes = [
+      queues.submit(id, delivery, 'live_owner'),
+      queues.submit(id, delivery, 'live_owner'),
+      queues.submit(id, delivery, 'live_owner'),
+    ];
+
+    expect(
+      outcomes.filter((outcome) => outcome.kind === 'live_flow'),
+    ).toHaveLength(1);
+    expect(
+      outcomes.filter((outcome) => outcome.kind === 'duplicate'),
+    ).toHaveLength(2);
+    expect(queues.getAll(id)).toEqual(['child result']);
+  });
+
+  it('never suppresses input that carries no delivery id', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:no-delivery-id');
+    queues.claimLive(id, 'flow');
+
+    queues.submit(id, { text: 'repeat me' }, 'live_owner');
+    queues.submit(id, { text: 'repeat me' }, 'live_owner');
+
+    expect(queues.getAll(id)).toEqual(['repeat me', 'repeat me']);
+  });
+});

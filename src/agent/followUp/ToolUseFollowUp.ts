@@ -22,6 +22,13 @@ export type SubmitFollowUpResult =
       reason: ToolUseFollowUpQueueReason;
       continuation: 'live' | 'recovering' | 'resumed' | 'resume_failed';
     }
+  | {
+      /**
+       * The admission boundary already accepted this exact delivery id
+       * (#9531): nothing was appended and no wake/resume was triggered.
+       */
+      status: 'duplicate';
+    }
   | { status: 'no_session'; streamStatus: string | undefined }
   | { status: 'dropped' };
 
@@ -125,6 +132,9 @@ export async function submitFollowUp(
       item,
       'live_owner',
     );
+    if (submission.kind === 'duplicate') {
+      return { status: 'duplicate' };
+    }
     if (submission.kind === 'live_flow') {
       if (options.mode === 'live_notification') {
         return {
@@ -165,6 +175,9 @@ export async function submitFollowUp(
     admission = 'existing_recoverable';
   }
   const submission = ownerSession.followUps.submit(streamId, item, admission);
+  if (submission.kind === 'duplicate') {
+    return { status: 'duplicate' };
+  }
   if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
     return { status: 'dropped' };
   }

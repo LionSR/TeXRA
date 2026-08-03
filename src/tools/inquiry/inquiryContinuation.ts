@@ -135,6 +135,9 @@ function mapSubmissionToInquiryOutcome(
   if (result.status === 'dropped' || result.status === 'no_session') {
     return 'archived';
   }
+  // Inquiry continuations carry no delivery id, so 'duplicate' is
+  // unreachable; it maps to 'queued' (already admitted) by construction.
+  if (result.status === 'duplicate') return 'queued';
   return result.continuation === 'resumed' ? 'resumed' : 'queued';
 }
 
