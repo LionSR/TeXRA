@@ -18,7 +18,7 @@ import {
   WORKBENCH_KIND_META,
   type WorkbenchPlacement,
   type WorkbenchTab,
-} from '../desktopTaskShell.js';
+} from '../shared/desktopTaskShell.js';
 
 export interface TaskSidebarModel {
   readonly files: Node;

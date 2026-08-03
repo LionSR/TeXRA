@@ -83,8 +83,8 @@ import {
   DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
   type DesktopLayoutPanel,
-} from '../desktopShellMessages';
-import { DesktopSetLogMessageSchema } from '../desktopLogMessages';
+} from '../shared/desktopShellMessages';
+import { DesktopSetLogMessageSchema } from '../shared/desktopLogMessages';
 import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
@@ -92,20 +92,20 @@ import {
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandId,
-} from '../desktopCommandSurface';
+} from '../shared/desktopCommandSurface';
 import {
   DESKTOP_ONBOARDING_COMMANDS,
   DesktopOnboardingSetStateMessageSchema,
-} from '../desktopOnboardingMessages';
+} from '../shared/desktopOnboardingMessages';
 import {
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,
-} from '../desktopDiffMessages';
+} from '../shared/desktopDiffMessages';
 import {
   DesktopShowPdfMessageSchema,
   DesktopClosePdfMessageSchema,
-} from '../desktopPdfMessages';
-import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
+} from '../shared/desktopPdfMessages';
+import { DesktopShowPromptMessageSchema } from '../shared/desktopPromptMessages';
 import {
   createDesktopCommandPalette,
   type CommandPaletteController,
@@ -146,7 +146,7 @@ import {
   type WorkbenchKind,
   type WorkbenchPlacement,
   type WorkbenchTab,
-} from '../desktopTaskShell';
+} from '../shared/desktopTaskShell';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopBrowserStateMessageSchema,
@@ -161,7 +161,7 @@ import {
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
   type DesktopEnvironmentSummary,
-} from '../desktopWorkspaceMessages';
+} from '../shared/desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createReviewPane } from './reviewPane';

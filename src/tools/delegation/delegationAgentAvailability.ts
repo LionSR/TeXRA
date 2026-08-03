@@ -26,7 +26,7 @@ import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
-import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
+import { replaceDelegationDescriptionBlock } from './delegationDescriptionBlock';
 
 /** Matches the "Available agents:" header plus its contiguous (non-blank) list
  * lines, stopping at the first blank line or end of string. Anchored to a line

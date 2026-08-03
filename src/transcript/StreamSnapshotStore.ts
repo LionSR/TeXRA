@@ -1579,7 +1579,7 @@ export class StreamSnapshotStore {
   /**
    * Execution id recorded in a stream sidecar's `meta.json`, without seeding
    * memory or reading the stream's other sidecar files. Callers that scan
-   * every persisted stream (the `executionStreamResolver` meta-match, bulk
+   * every persisted stream (the `legacyExecutionIdentity` meta-match, bulk
    * admin sweeps in `SessionStores`) only ever need this one field, so this
    * reads just `meta.json` rather than the full 6-file `readStreamData()`.
    */
@@ -2264,9 +2264,15 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * One-time backfill for streams with an executionId but no description in
-   * meta.json: read it from ExecutionMeta and persist so future loads skip the
-   * extra I/O.
+   * One-time legacy convergence toward the description authority (#9590 A4):
+   * `ExecutionMeta.description` is authoritative and the sidecar `description`
+   * is a display-only mirror, so projection runs meta → mirror only, and only
+   * when the mirror is absent. A present mirror value is never overwritten —
+   * disagreement is not reconciled by writing either side; meta simply stays
+   * the authority and the mirror stays display data — and nothing anywhere
+   * writes `ExecutionMeta.description` from the mirror. Persisting the filled
+   * mirror lets future loads skip the extra I/O. Stage 6 (#9590) stops this
+   * duplicate projection for current records.
    */
   private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
     for (const [streamId, record] of [...this.records]) {

@@ -35,17 +35,17 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import {
-  persistChildRunReport,
-  persistChildRunResultMeta,
-} from '@tools/childRunDelivery';
-import {
-  buildSubagentFailureResultMeta,
-  formatSubagentError,
-} from '@tools/subagentResults';
 import { generateExecutionId, KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
+import {
+  buildSubagentFailureResultMeta,
+  formatSubagentError,
+} from './subagentResults';
+import {
+  persistChildRunReport,
+  persistChildRunResultMeta,
+} from './childRunDelivery';
 
 // Local file imports
 import {

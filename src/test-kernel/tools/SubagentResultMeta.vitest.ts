@@ -7,7 +7,7 @@ import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   buildSubagentFailureResultMeta,
   buildSubagentResultMeta,
-} from '@tools/subagentResults';
+} from '@tools/delegation/subagentResults';
 
 describe('subagent result metadata', () => {
   it('builds a schema-valid manifest from the canonical final result', () => {

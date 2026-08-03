@@ -21,10 +21,10 @@ interface TestSourceModules {
   '@platform/defaults/jsonConfigProvider': typeof import('@platform/defaults/jsonConfigProvider');
   '@platform/defaults/jsonStore': typeof import('@platform/defaults/jsonStore');
   '@platform/defaults/nodeHost': typeof import('@platform/defaults/nodeHost');
-  '@desktop/desktopCommandSurface': typeof import('@desktop/desktopCommandSurface');
-  '@desktop/desktopDiffMessages': typeof import('@desktop/desktopDiffMessages');
-  '@desktop/desktopOnboardingMessages': typeof import('@desktop/desktopOnboardingMessages');
-  '@desktop/desktopPdfMessages': typeof import('@desktop/desktopPdfMessages');
+  '@desktop/shared/desktopCommandSurface': typeof import('@desktop/shared/desktopCommandSurface');
+  '@desktop/shared/desktopDiffMessages': typeof import('@desktop/shared/desktopDiffMessages');
+  '@desktop/shared/desktopOnboardingMessages': typeof import('@desktop/shared/desktopOnboardingMessages');
+  '@desktop/shared/desktopPdfMessages': typeof import('@desktop/shared/desktopPdfMessages');
   '@desktop/main/desktopAgentExecution': typeof import('@desktop/main/desktopAgentExecution');
   '@desktop/main/desktopCrashReporting': typeof import('@desktop/main/desktopCrashReporting');
   '@desktop/main/desktopDiffHost': typeof import('@desktop/main/desktopDiffHost');

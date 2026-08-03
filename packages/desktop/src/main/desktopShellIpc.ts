@@ -12,8 +12,8 @@ import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
   type DesktopWorkbenchKind,
-} from '../desktopShellMessages.js';
-import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
+} from '../shared/desktopShellMessages.js';
+import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
 import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
@@ -27,7 +27,7 @@ import {
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
   type DesktopCommandActions,
-} from '../desktopCommandSurface.js';
+} from '../shared/desktopCommandSurface.js';
 
 export interface DesktopShellActionFactoryOptions {
   getCustomAgentDirectory(): Promise<string>;

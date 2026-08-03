@@ -58,8 +58,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
-import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
-import { DelegateAgentTool } from '@tools/DelegationTools';
+import { deliverChildRunFollowUp } from '@tools/delegation/childRunDelivery';
+import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { executeSubagent } from '@tools/delegation/subagentExecution';
 import { readCompletedRunConversation, StreamLogStore } from '@transcript';

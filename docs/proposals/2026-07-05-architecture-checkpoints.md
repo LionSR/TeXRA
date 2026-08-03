@@ -203,10 +203,10 @@ Foundation Checkpoint C (#6980) is absorbed by this pass and should close when
   window's status view through its backend state
   (`src/controllers/progressView/backend/ProgressViewState.ts:343`).
 - **Child-stream activation ordering is no longer active evidence:** #6993
-  fixed the ordering. Child streams now attach session trace/projector
-  subscribers before activation (`src/tools/childStream.ts:83`) and assert that
-  before emitting `setActiveStream` / `setTaskState`
-  (`src/tools/childStream.ts:98`).
+  fixed the ordering. Child streams now attach the session trace and assert that run subscribers
+  are present before activation (`src/tools/delegation/childStream.ts:98-115`),
+  then track the handle before emitting `setActiveStream`
+  (`src/tools/delegation/childStream.ts:143-175`).
 - **Stage 3a remains scoped to the remaining registry/process-output bus facts:**
   child parent/status facts are still emitted from
   `src/agent/runtime/executionRegistry.ts:203` and `:678`; process output still

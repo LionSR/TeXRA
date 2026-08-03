@@ -23,7 +23,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import {
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
   type DesktopEnvironmentSummary,
-} from '../desktopWorkspaceMessages.js';
+} from '../shared/desktopWorkspaceMessages.js';
 
 /**
  * Maximum number of commits the renderer will display in the launcher banner.

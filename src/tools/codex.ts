@@ -54,7 +54,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
-import { type ChildStream } from './childStream';
+import { type ChildStream } from './delegation/childStream';
 import { CodexThreads } from './agentCliSessionStores';
 import {
   launchAgentCliSession,
@@ -65,7 +65,7 @@ import {
 import {
   formatChildRunDelivery,
   formatChildRunError,
-} from './deliveryEnvelope';
+} from './delegation/deliveryEnvelope';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,

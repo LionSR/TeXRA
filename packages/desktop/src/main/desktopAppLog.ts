@@ -18,7 +18,7 @@ import {
 
 import { redactSecrets, type LogRedactionOptions } from '@logger/redaction';
 
-import type { DesktopLogSnapshot } from '../desktopLogMessages.js';
+import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 
 const LOG_FILE_NAME = 'texra-desktop.log';
 const MAX_LOG_BYTES = 5 * 1024 * 1024;

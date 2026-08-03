@@ -50,9 +50,12 @@ import {
   persistChildRunReport,
   persistChildRunResultMeta,
   persistChildRunTurnState,
-} from '@tools/childRunDelivery';
-import { formatSubagentProgress } from '@tools/subagentResults';
-import type { ChildStream, ChildStreamOutcome } from '@tools/childStream';
+} from '@tools/delegation/childRunDelivery';
+import { formatSubagentProgress } from '@tools/delegation/subagentResults';
+import type {
+  ChildStream,
+  ChildStreamOutcome,
+} from '@tools/delegation/childStream';
 import { formatDuration } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

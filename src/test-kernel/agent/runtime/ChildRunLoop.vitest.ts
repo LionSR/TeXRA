@@ -49,7 +49,7 @@ vi.mock('@agent/runtime/executionOwnership', () => ({
   releaseExecutionLeaseAfterArtifacts: vi.fn(async () => {}),
 }));
 
-vi.mock('@tools/childRunDelivery', () => ({
+vi.mock('@tools/delegation/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
   persistChildRunTurnState: mocks.persistChildRunTurnState,
@@ -78,11 +78,11 @@ import {
 } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
-import { createChildStream } from '@tools/childStream';
 import {
   ClaudeAgentSessions,
   CodexThreads,
 } from '@tools/agentCliSessionStores';
+import { createChildStream } from '@tools/delegation/childStream';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
 let session: SessionHandle;

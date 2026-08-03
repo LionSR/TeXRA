@@ -33,21 +33,21 @@ import {
   type ToolUseAgentProposal,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
-import {
-  formatFollowUpInstruction,
-  formatSubagentError,
-} from '@tools/subagentResults';
-import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { deliverChildRunFollowUp } from './childRunDelivery';
+import {
+  formatFollowUpInstruction,
+  formatSubagentError,
+} from './subagentResults';
 
 // Local file imports
 import {
   proposeAndExecute,
   requireVisibleAgent,
   selectAvailableDelegationModel,
-} from './delegation/proposalFlow';
+} from './proposalFlow';
 import {
   memoriesField,
   workingDirectoryField,
@@ -55,10 +55,10 @@ import {
   rejectOversizedBibAttachments,
   WorkflowAgentInputSchema,
   type WorkflowAgentInput,
-} from './delegation/inputFields';
-import { assertWorkflowFilesExist } from './delegation/workflowFileValidation';
+} from './inputFields';
+import { assertWorkflowFilesExist } from './workflowFileValidation';
 
-export { rejectOversizedBibAttachments } from './delegation/inputFields';
+export { rejectOversizedBibAttachments } from './inputFields';
 export type { WorkflowAgentInput };
 
 const LOG_CHANNEL = 'delegation';

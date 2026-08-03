@@ -5,7 +5,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest';
 import type {
   DesktopCommandActions,
   DesktopCommandId,
-} from '@desktop/desktopCommandSurface';
+} from '@desktop/shared/desktopCommandSurface';
 
 // Local imports - command catalog and shared schemas
 import {
@@ -73,7 +73,7 @@ describe('desktop command surface', () => {
       DESKTOP_COMMAND_IDS,
       DESKTOP_LOCAL_COMMANDS,
       getDesktopCommandMenuEntries,
-    } = await loadSourceModule('@desktop/desktopCommandSurface');
+    } = await loadSourceModule('@desktop/shared/desktopCommandSurface');
     const entries = getDesktopCommandMenuEntries('darwin');
 
     expect(entries.map((entry) => entry.id)).toEqual(DESKTOP_COMMAND_IDS);
@@ -184,7 +184,7 @@ describe('desktop command surface', () => {
     '%s dispatches to actions.%s',
     async (id, action, args) => {
       const { dispatchDesktopCommand } = await loadSourceModule(
-        '@desktop/desktopCommandSurface',
+        '@desktop/shared/desktopCommandSurface',
       );
       const actions = makeDesktopActions();
 
@@ -195,7 +195,7 @@ describe('desktop command surface', () => {
 
   it('offers no menu entry for VS Code-only commands', async () => {
     const { getDesktopCommandMenuEntries } = await loadSourceModule(
-      '@desktop/desktopCommandSurface',
+      '@desktop/shared/desktopCommandSurface',
     );
     const ids = getDesktopCommandMenuEntries().map((entry) => entry.id);
 
@@ -209,7 +209,7 @@ describe('desktop command surface', () => {
 
   it('wires menu clicks to the catalog-backed dispatcher', async () => {
     const { buildDesktopMenuTemplate } = await loadSourceModule(
-      '@desktop/desktopCommandSurface',
+      '@desktop/shared/desktopCommandSurface',
     );
     const actions = makeDesktopActions();
     const menu = buildDesktopMenuTemplate(actions, 'darwin');
