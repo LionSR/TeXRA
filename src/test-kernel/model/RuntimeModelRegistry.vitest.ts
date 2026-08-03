@@ -243,6 +243,67 @@ describe('runtime model registry', () => {
     expect(port.sendRequest).not.toHaveBeenCalled();
   });
 
+  it('retries when access invalidation supersedes a forced allowed probe', async () => {
+    const port = await installModels(SONNET);
+    await refreshRuntimeModelRegistry();
+
+    let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    const forced = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseForced = resolve;
+    });
+    vi.mocked(port.selectModels)
+      .mockReturnValueOnce(forced)
+      .mockResolvedValueOnce([{ ...SONNET, access: 'unavailable' }]);
+
+    const request = requestRuntimeModelAccess('sonnet46');
+    invalidateRuntimeModelRegistry();
+    releaseForced([SONNET]);
+
+    await expect(request).resolves.toBe('unavailable');
+    expect(port.selectModels).toHaveBeenCalledTimes(3);
+    expect(port.sendRequest).not.toHaveBeenCalled();
+    expect(copilotRouteForModel('sonnet46')?.access).toBe('unavailable');
+  });
+
+  it('fails closed when repeated invalidation supersedes the bounded retry', async () => {
+    const port = await installModels(SONNET);
+    await refreshRuntimeModelRegistry();
+
+    let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    let releaseRetry: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    let markRetryStarted: () => void = () => undefined;
+    const forced = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseForced = resolve;
+    });
+    const retry = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseRetry = resolve;
+    });
+    const retryStarted = new Promise<void>((resolve) => {
+      markRetryStarted = resolve;
+    });
+    vi.mocked(port.selectModels)
+      .mockReturnValueOnce(forced)
+      .mockImplementationOnce(() => {
+        markRetryStarted();
+        return retry;
+      });
+
+    const request = requestRuntimeModelAccess('sonnet46');
+    invalidateRuntimeModelRegistry();
+    releaseForced([SONNET]);
+    await retryStarted;
+    invalidateRuntimeModelRegistry();
+    releaseRetry([SONNET]);
+
+    await expect(request).resolves.toBe('unavailable');
+    expect(port.selectModels).toHaveBeenCalledTimes(3);
+    expect(port.sendRequest).not.toHaveBeenCalled();
+    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+  });
+
   it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
     let releaseOrdinary: (models: readonly LanguageModelInfo[]) => void = () =>
       undefined;

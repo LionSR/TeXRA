@@ -17,6 +17,7 @@ import type {
  */
 export const COPILOT_MODEL_PREFIX = 'copilot:';
 const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
+const MODEL_ACCESS_DISCOVERY_ATTEMPTS = 2;
 
 /**
  * The Copilot access route for one canonical base model: the exact editor
@@ -56,7 +57,7 @@ interface RuntimeModelCatalogue {
   /** Whether {@link entries} reflect a discovery that is still current. */
   readonly discovered: boolean;
   /** The in-flight discovery, if one is running. */
-  readonly pending?: Promise<void>;
+  readonly pending?: Promise<RefreshRuntimeModelRegistryResult>;
   /** Whether the in-flight discovery explicitly bypasses a fresh cache. */
   readonly pendingForceDiscovery?: boolean;
 }
@@ -136,10 +137,12 @@ export interface RefreshRuntimeModelRegistryOptions {
   forceDiscovery?: boolean;
 }
 
+export type RefreshRuntimeModelRegistryResult = 'current' | 'superseded';
+
 /** Refresh editor-supplied routes after the native model/access cache changes. */
 export async function refreshRuntimeModelRegistry(
   options: RefreshRuntimeModelRegistryOptions = {},
-): Promise<void> {
+): Promise<RefreshRuntimeModelRegistryResult> {
   if (options.forceDiscovery) {
     // Overlapping user actions share one forced probe. A normal probe that
     // started earlier is superseded because its access snapshot may predate
@@ -149,17 +152,18 @@ export async function refreshRuntimeModelRegistry(
     }
     invalidateRuntimeModelRegistry();
   }
-  if (catalogue.discovered) return;
+  if (catalogue.discovered) return 'current';
   if (catalogue.pending) return catalogue.pending;
 
   // Both outcomes below replace the catalogue wholesale, which is also what
   // clears `pending`; a result whose generation has moved on was superseded by
   // an invalidation and is dropped instead of committed.
   const { generation, entries: previousEntries } = catalogue;
-  const request = (async () => {
+  const request = (async (): Promise<RefreshRuntimeModelRegistryResult> => {
     const entries = await discoverCopilotRoutes();
-    if (catalogue.generation !== generation) return;
+    if (catalogue.generation !== generation) return 'superseded';
     catalogue = { generation, entries, discovered: true };
+    return 'current';
   })();
   catalogue = {
     ...catalogue,
@@ -167,7 +171,7 @@ export async function refreshRuntimeModelRegistry(
     pendingForceDiscovery: options.forceDiscovery === true,
   };
   try {
-    await request;
+    return await request;
   } catch (error) {
     if (catalogue.generation === generation) {
       catalogue = {
@@ -285,7 +289,18 @@ export type RuntimeModelAccessRequestResult =
 export async function requestRuntimeModelAccess(
   model: string,
 ): Promise<RuntimeModelAccessRequestResult> {
-  await refreshRuntimeModelRegistry({ forceDiscovery: true });
+  let refreshResult: RefreshRuntimeModelRegistryResult = 'superseded';
+  for (
+    let attempt = 0;
+    attempt < MODEL_ACCESS_DISCOVERY_ATTEMPTS && refreshResult === 'superseded';
+    attempt += 1
+  ) {
+    refreshResult = await refreshRuntimeModelRegistry({ forceDiscovery: true });
+  }
+  // Repeated native invalidations must fail closed rather than authorize from
+  // the retained last-known catalogue.
+  if (refreshResult === 'superseded') return 'unavailable';
+
   const route = catalogue.entries.get(model);
   if (!route) return 'unavailable';
   if (route.access === 'allowed') return 'already-allowed';

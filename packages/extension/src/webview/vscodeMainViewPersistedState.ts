@@ -1,5 +1,7 @@
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared schemas
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
