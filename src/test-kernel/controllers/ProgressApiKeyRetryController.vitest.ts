@@ -423,9 +423,17 @@ describe('ProgressApiKeyRetryController', () => {
   });
 
   it('suppresses the Copilot route preference only during the fallback launch', async () => {
-    await installPlatform({
-      globalState: { 'texra.copilotRouteModels': ['sonnet46'] },
+    const { FakeStateStore } = await import('@test/support/FakePlatform');
+    const store = new FakeStateStore({
+      'texra.copilotRouteModels': ['sonnet46'],
     });
+    const persistedWrites: string[] = [];
+    const originalUpdate = store.update.bind(store);
+    store.update = async (key: string, value: unknown) => {
+      persistedWrites.push(key);
+      return originalUpdate(key, value);
+    };
+    await installPlatform({}, { globalState: store });
     const harness = createHarness();
 
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
@@ -440,8 +448,9 @@ describe('ProgressApiKeyRetryController', () => {
     );
 
     expect(started).toBe(true);
-    // The preference itself is the user's standing choice; the launched run
-    // keeps the direct handler it was built with.
+    // The suppression is launch-scoped and process-local: the persisted
+    // preference is never written, so a crash mid-launch cannot drop it.
+    expect(persistedWrites).toEqual([]);
     expect(prefersCopilotRoute('sonnet46')).toBe(true);
   });
 });

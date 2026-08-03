@@ -1,9 +1,6 @@
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
-import {
-  prefersCopilotRoute,
-  setCopilotRoutePreference,
-} from '@model/copilotRouting';
+import { withCopilotRouteSuppressed } from '@model/copilotRouting';
 import type { ExhaustionReason, StreamTabId } from '@shared/schemas';
 
 export interface ProgressApiKeyRetryRequest {
@@ -169,24 +166,17 @@ export class ProgressApiKeyRetryController {
     // The user chose "use own API key" for this retry: suppress the Copilot
     // route preference for the launch so handler construction cannot route
     // the same canonical model straight back through Copilot (#9635). The
-    // preference is restored right after the start attempt — the launched
-    // run keeps the direct handler it was built with and persists that
-    // compatibility key for resume.
+    // override is process-local and launch-scoped — the persisted
+    // preference is never written, so a crash mid-launch cannot drop it.
     const fallbackModel = request.model;
-    const suppressCopilotRoute = Boolean(
-      fallbackModel && prefersCopilotRoute(fallbackModel),
-    );
-    if (suppressCopilotRoute && fallbackModel) {
-      await setCopilotRoutePreference(fallbackModel, false);
-    }
+    const startWithSuppression = fallbackModel
+      ? () => withCopilotRouteSuppressed(fallbackModel, start)
+      : start;
     let started = false;
     try {
-      started = await start();
+      started = await startWithSuppression();
       return started;
     } finally {
-      if (suppressCopilotRoute && fallbackModel) {
-        await setCopilotRoutePreference(fallbackModel, true);
-      }
       if (!started) await this.restoreOwnApiKeyRouting(before, prepared);
     }
   }
