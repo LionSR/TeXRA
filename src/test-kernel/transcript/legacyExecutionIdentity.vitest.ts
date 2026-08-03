@@ -214,6 +214,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     snapshotWriter.setRunConfig(secondStream, runConfig('bash'), executionId);
     snapshotWriter.setTodos(secondStream, [TODO]);
     await snapshotWriter.flush();
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     const resolved = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
@@ -222,6 +227,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
       fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [firstStream, secondStream],
     });
+    // Skip-backfill-on-ambiguity (#9590 Stage 4): a resolution that reports
+    // candidates never stamps a LEGACY_RESOLUTION identity on the record.
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
   });
 
   it('does not treat a stream log as canonical-ownership evidence', async () => {
@@ -237,6 +247,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     snapshotWriter.setRunConfig(logStream, runConfig('bash'), executionId);
     snapshotWriter.setTodos(workPlanStream, [TODO]);
     await snapshotWriter.flush();
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     const logStore = await StreamLogStore.open();
     await appendLogEntry(logStore, logStream);
@@ -302,6 +317,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     writer.setTodos(first, [TODO]);
     writer.setTodos(second, [TODO]);
     await writer.flush();
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
 
     await expect(
       resolvePersistedStreamIdForExecution(executionId, {
@@ -311,6 +331,10 @@ describe('resolvePersistedStreamIdForExecution', () => {
       fallbackStreamIds: [],
       suffixCandidateStreamIds: [first, second],
     });
+    // Suffix ambiguity never backfills a persisted identity (#9590 Stage 4).
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
   });
 
   it('reports a sidecar/log suffix disagreement as explicit ambiguity', async () => {
@@ -346,5 +370,32 @@ describe('resolvePersistedStreamIdForExecution', () => {
         streamLogStore: logs,
       }),
     ).resolves.toEqual({ streamId, fallbackStreamIds: [] });
+  });
+
+  it('never persists identity from a display-materialized transcript stream (#8226, #9590 Stage 4)', async () => {
+    const executionId = 'abcccc' as ExecutionId;
+    const orphanStream = 'progress@display#abcccc' as StreamTabId;
+    // The #8226 class: a display event materializes a transcript stream via
+    // `StreamLogStore.ensureStream` with no sidecar and no execution record.
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(orphanStream);
+    // Seed a stamp-able record: the backfill write no-ops on absent metadata,
+    // so without this a wrongful stamp attempt would be invisible below.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
+
+    // The suffix arm may still surface the orphan for compatibility display
+    // reads, but resemblance is not proof: no LEGACY_RESOLUTION identity is
+    // ever backfilled onto the execution record from it.
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+        streamLogStore: logs,
+      }),
+    ).resolves.toEqual({ streamId: orphanStream, fallbackStreamIds: [] });
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
   });
 });

@@ -220,6 +220,15 @@ export async function resolvePersistedStreamIdForExecution(
     const associatedStreamIds = childMetaMatched.filter(
       (candidate) => candidate !== streamId,
     );
+    // Persisted identity backfill (#9590 Stage 4): stamp
+    // `streamIdSource: LEGACY_RESOLUTION` only when the mapping is uniquely
+    // provable — exactly one persisted sidecar claims this execution. Any
+    // multi-match resolution stays unstamped even when it still names an
+    // archive root for reading, and the suffix branches below never backfill
+    // at all: name resemblance (including a display-materialized transcript
+    // stream that merely carries the `#executionId` suffix, the #8226 class)
+    // is reported, never persisted as identity. The write itself is
+    // best-effort by contract and never throws.
     if (metaMatched.length === 1 && streamId) {
       await writeLegacyExecutionStreamId(executionId, streamId);
     }
