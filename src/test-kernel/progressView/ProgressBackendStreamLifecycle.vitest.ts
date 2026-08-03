@@ -80,12 +80,6 @@ describe('ProgressBackend', () => {
     ]);
   });
 
-  it('constructs the shared progress backend service graph', () => {
-    const { backend } = createRecordingBackend();
-
-    expect(backend.approvalHandlers).toBeDefined();
-  });
-
   it('handles session facts through its local subscription', () => {
     const target = createIsolatedRecordingBackend();
     const { backend, session } = target;

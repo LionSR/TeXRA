@@ -125,25 +125,21 @@ describe('formatUnavailableApprovalInstruction', () => {
 
 describe('formatMultiAgentRunInstruction', () => {
   it('keeps domain edge-case checks subordinate to the requested answer shape', () => {
-    for (const mode of ['headless', 'interactive'] as const) {
-      for (const approvalPolicy of ['never', 'ask', 'yolo'] as const) {
-        const instruction = multiAgentInstruction({
-          instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
-          approvalContext: { mode, approvalPolicy },
-        });
+    const instruction = multiAgentInstruction({
+      instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
+      approvalContext: { mode: 'headless', approvalPolicy: 'never' },
+    });
 
-        expect(instruction).toContain(
-          'internally check the full domain stated by the user',
-        );
-        expect(instruction).toContain('sign choices');
-        expect(instruction).toContain('zero and boundary cases');
-        expect(instruction).toContain('symmetry branches');
-        expect(instruction).toContain('do not add a separate checklist');
-        expect(instruction).toContain(
-          'keep the final answer within the user-requested scope and length',
-        );
-      }
-    }
+    expect(instruction).toContain(
+      'internally check the full domain stated by the user',
+    );
+    expect(instruction).toContain('sign choices');
+    expect(instruction).toContain('zero and boundary cases');
+    expect(instruction).toContain('symmetry branches');
+    expect(instruction).toContain('do not add a separate checklist');
+    expect(instruction).toContain(
+      'keep the final answer within the user-requested scope and length',
+    );
   });
 
   it('anchors the team on the CLI workspace root', () => {

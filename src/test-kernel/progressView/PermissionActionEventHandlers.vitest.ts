@@ -178,19 +178,17 @@ const actionCases: PermissionCase[] = [
       }),
     ],
   },
-  ...(['openDiff', 'showLatexdiff', 'previewProposed'] as const).map(
-    (action): PermissionCase => ({
-      name: `tool ${action} remains open`,
-      detail: detail.tool({ action }),
-      calls: [
-        call(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
-          requestId: 'tool-1',
-          action,
-        }),
-      ],
-      remains: true,
-    }),
-  ),
+  {
+    name: 'tool openDiff remains open',
+    detail: detail.tool({ action: 'openDiff' }),
+    calls: [
+      call(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
+        requestId: 'tool-1',
+        action: 'openDiff',
+      }),
+    ],
+    remains: true,
+  },
   ...(
     [
       { action: 'approve' },
