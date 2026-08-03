@@ -358,6 +358,18 @@ Git worktree support: resolved from the active workspace at runtime.`,
         throw new Error(
           `No continuation owner is available for '${handle.agentName}'.`,
         );
+      case 'duplicate':
+        // resumeAgent instructions carry no delivery id, so the admission
+        // boundary never flags them; reachable only if a future caller adds
+        // one — in which case the instruction was already admitted once.
+        return {
+          status: 'executed',
+          summary: `Follow-up already delivered to '${handle.agentName}'`,
+          output: [
+            `The identical follow-up was already delivered to '${handle.agentName}'.`,
+            `Execution ID: ${executionId}`,
+          ].join('\n'),
+        };
     }
   }
 }

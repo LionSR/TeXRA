@@ -36,6 +36,13 @@ const SubagentResultMetaSchema = z.strictObject({
   parentExecutionId: ExecutionIdSchema.optional(),
   wallTimeMs: z.number().nonnegative(),
   result: AgentFinalResultSchema,
+  /**
+   * Logical turn this envelope belongs to (#9531, introduced 2026-08-03).
+   * Absent on records persisted before turn identity existed; absence simply
+   * means "predates turn attribution", so the field stays optional rather
+   * than prefaulted to an invented token.
+   */
+  turnToken: z.string().optional(),
 });
 
 /** Canonical persisted result record. */

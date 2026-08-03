@@ -15,6 +15,7 @@ import {
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type ChildRecord,
+  type ExecutionKVStore,
   type TodoEntry,
   listExecutions,
   resolveExecutionWorkspaceFilePath,
@@ -179,6 +180,36 @@ function getRunningTodos(
   return handle instanceof AgentExecutionHandle
     ? session.snapshots.getWorkPlan(handle.childStreamId).todos
     : [];
+}
+
+/**
+ * One-line attribution note for /report and /result when a newer turn was
+ * accepted but never persisted a result (#9531): without it, the single
+ * latest-value slots would silently present the previous turn as current.
+ * Reads "still running" while the execution is live and "was interrupted"
+ * once it has terminalized. Returns null when the slots reflect the latest
+ * accepted turn (or the execution has no turn identity at all).
+ */
+async function turnAttributionNote(
+  store: ExecutionKVStore,
+): Promise<string | null> {
+  const [turnState, meta] = await Promise.all([
+    store.readTurnState(),
+    store.readMeta(),
+  ]);
+  const active = turnState?.activeTurn;
+  if (!active || active.token === turnState?.lastCompletedTurn?.token) {
+    return null;
+  }
+  const completed = turnState?.lastCompletedTurn?.token;
+  const fate =
+    meta?.outcome === undefined
+      ? `turn ${active.token} is still running`
+      : `turn ${active.token} was interrupted before producing a result`;
+  const showing = completed
+    ? `showing the latest completed turn (${completed}).`
+    : 'no turn has completed yet.';
+  return `[Note: ${fate}; ${showing}]`;
 }
 
 // ============================================================================
@@ -780,13 +811,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   private async showReport(executionId: ExecutionId): Promise<ToolResult> {
-    const report = await getExecutionStore(executionId).readReport();
+    const store = getExecutionStore(executionId);
+    const [report, note] = await Promise.all([
+      store.readReport(),
+      turnAttributionNote(store),
+    ]);
     if (!report) {
       return executed(
         `No report found for execution ${executionId}. Reports are persisted when subagents or background processes complete.`,
       );
     }
-    return executed(report);
+    return executed(note ? `${note}\n\n${report}` : report);
   }
 
   /**
@@ -794,13 +829,18 @@ Delegated subagent and workflow results are delivered automatically as follow-up
    * later stage without parsing the prose report.
    */
   private async showResultMeta(executionId: ExecutionId): Promise<ToolResult> {
-    const resultMeta = await getExecutionStore(executionId).readResultMeta();
+    const store = getExecutionStore(executionId);
+    const [resultMeta, note] = await Promise.all([
+      store.readResultMeta(),
+      turnAttributionNote(store),
+    ]);
     if (!resultMeta) {
       return executed(
         `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
       );
     }
-    return executed(JSON.stringify(unwrapResultMeta(resultMeta), null, 2));
+    const json = JSON.stringify(unwrapResultMeta(resultMeta), null, 2);
+    return executed(note ? `${note}\n\n${json}` : json);
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {
