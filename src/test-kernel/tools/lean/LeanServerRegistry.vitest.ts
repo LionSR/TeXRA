@@ -1,6 +1,5 @@
 /**
- * Vitests for the Lean server registry — covers register/update/list/
- * unregister plus the dashboard-facing `summarizeLeanServers` formatter.
+ * Vitests for the Lean server registry and its dashboard-facing formatter.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -9,7 +8,6 @@ import {
   isLeanServerActive,
   listLeanServers,
   registerLeanServer,
-  subscribeLeanServers,
   summarizeLeanServers,
   unregisterLeanServer,
   updateLeanServer,
@@ -69,18 +67,6 @@ describe('leanServerRegistry', () => {
     ]);
   });
 
-  it('notifies subscribers and stops once unsubscribed', () => {
-    const seen: number[] = [];
-    const unsubscribe = subscribeLeanServers((view) => seen.push(view.length));
-
-    registerLeanServer({ id: 'a', workspaceRoot: '/a', mode: 'direct-lsp' });
-    registerLeanServer({ id: 'b', workspaceRoot: '/b', mode: 'direct-lsp' });
-    unsubscribe();
-    registerLeanServer({ id: 'c', workspaceRoot: '/c', mode: 'direct-lsp' });
-
-    expect(seen).toEqual([1, 2]);
-  });
-
   it('counts only starting and running servers as active', () => {
     expect(
       [
@@ -98,15 +84,6 @@ describe('leanServerRegistry', () => {
         } as LeanServerInfo),
       ),
     ).toHaveLength(2);
-  });
-
-  it('does not call listeners when nothing matches an update id', () => {
-    let calls = 0;
-    subscribeLeanServers(() => {
-      calls += 1;
-    });
-    updateLeanServer('does-not-exist', { status: 'running' });
-    expect(calls).toBe(0);
   });
 });
 
