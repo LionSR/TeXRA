@@ -839,8 +839,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         `No structured result recorded for ${executionId} yet. It is written when the execution completes.`,
       );
     }
-    const json = JSON.stringify(unwrapResultMeta(resultMeta), null, 2);
-    return executed(note ? `${note}\n\n${json}` : json);
+    // The note rides INSIDE the JSON: /result is the machine-readable
+    // chaining endpoint, so prefixed prose would break JSON.parse
+    // consumers precisely in the interrupted-turn case it describes.
+    const payload = note
+      ? { turnAttribution: note, ...unwrapResultMeta(resultMeta) }
+      : unwrapResultMeta(resultMeta);
+    return executed(JSON.stringify(payload, null, 2));
   }
 
   private async showChildren(executionId: ExecutionId): Promise<ToolResult> {

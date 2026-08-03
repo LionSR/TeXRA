@@ -757,6 +757,10 @@ describe('native subagent production delivery path', () => {
       path: `/executions/${executionId}/result`,
     });
     expect(resultView.status).toBe('executed');
-    expect(resultView.output).toContain('interrupted');
+    // /result is the machine-readable chaining endpoint: the attribution
+    // rides inside the JSON, never as prefixed prose.
+    const parsed = JSON.parse(resultView.output);
+    expect(parsed.turnAttribution).toContain('interrupted');
+    expect(parsed.response).toBe('Result A.');
   }, 30_000);
 });
