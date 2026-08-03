@@ -21,7 +21,6 @@ import {
   PersistedFlowStateError,
   flowKey,
   readPersistedFlowRecord,
-  stampFlowRecordSchemaVersion,
 } from '@agent/node/persistedFlow';
 import {
   AgentCategory,
@@ -479,10 +478,7 @@ export async function runToolUseFlow<C = unknown>(
       };
       if (!isDeepStrictEqual(flowRecord.shared, resumedShared)) {
         flowRecord.shared = resumedShared;
-        await kv.write(
-          flowKey(executionId),
-          stampFlowRecordSchemaVersion(flowRecord),
-        );
+        await kv.write(flowKey(executionId), flowRecord);
       }
     } else if (flowRecord) {
       const migrationResult = migrateSharedState(flowRecord.shared);
@@ -525,10 +521,7 @@ export async function runToolUseFlow<C = unknown>(
           logger.debug('Normalized persisted tool-use shared state');
         }
         flowRecord.shared = migratedData;
-        await kv.write(
-          flowKey(executionId),
-          stampFlowRecordSchemaVersion(flowRecord),
-        );
+        await kv.write(flowKey(executionId), flowRecord);
       }
     }
     // Cleanup may delete a terminal flow record only after absence was

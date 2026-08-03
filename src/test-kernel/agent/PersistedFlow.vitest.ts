@@ -72,7 +72,6 @@ describe('PersistedFlow', () => {
     await store.write(flowKey(executionId), {
       schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       flowName: 'texra',
-      params: {},
       shared: { count: 0, continue: false },
       createdAt: new Date().toISOString(),
       cursor: { nextNodeId: 'start/again', lastAction: 'again' },
@@ -87,37 +86,6 @@ describe('PersistedFlow', () => {
       shared: { count: 1, continue: false },
       cursor: { nextNodeId: null, lastAction: 'complete' },
       nodes: [{ action: 'complete', nodeId: 'start/again' }],
-    });
-  });
-
-  it('migrates legacy node-path records to cursor replay on the next step', async () => {
-    const executionId = 'abc128' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    const first = new ContinueOnceNode();
-    const second = new CompleteNode();
-    first.on('again', second);
-    const flow = new PersistedFlow(first, store, executionId);
-
-    await store.write(flowKey(executionId), {
-      schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
-      flowName: 'texra',
-      params: {},
-      shared: { count: 1, continue: false },
-      createdAt: new Date().toISOString(),
-      nodes: [{ action: 'again' }],
-    } satisfies FlowRecord);
-
-    await flow.run({ count: 999, continue: true });
-
-    await expect(
-      store.read<FlowRecord>(flowKey(executionId)),
-    ).resolves.toMatchObject({
-      shared: { count: 2, continue: false },
-      cursor: { nextNodeId: null, lastAction: 'complete' },
-      nodes: [
-        { action: 'again' },
-        { action: 'complete', nodeId: 'start/again' },
-      ],
     });
   });
 

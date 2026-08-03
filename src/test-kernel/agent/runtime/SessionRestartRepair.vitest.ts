@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
-import { flowKey } from '@agent/node/persistedFlow';
+import { FLOW_RECORD_SCHEMA_VERSION, flowKey } from '@agent/node/persistedFlow';
 import {
   acquireFreshExecutionLease,
   completeOwnedExecutionLease,
@@ -32,9 +32,11 @@ setupPlatform({ workspacePath: '/workspace/session-restart-repair' });
 const executionId = 'abc123' as ExecutionId;
 const streamId = `crashed#${executionId}` as StreamTabId;
 const validFlowRecord = {
+  schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
   flowName: 'texra',
   shared: { messages: [] },
   createdAt: '2026-07-26T00:00:00.000Z',
+  cursor: { nextNodeId: 'start' },
   nodes: [],
 };
 

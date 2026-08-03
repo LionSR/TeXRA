@@ -62,7 +62,7 @@ import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { flowKey } from '@agent/node/persistedFlow';
+import { FLOW_RECORD_SCHEMA_VERSION, flowKey } from '@agent/node/persistedFlow';
 import {
   EXECUTION_STREAM_ID_SOURCE,
   LOG_LEVELS,
@@ -431,10 +431,11 @@ describe('completedRunArchive facade', () => {
       },
     });
     await getExecutionStore(executionId).write(flowKey(executionId), {
+      schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
       flowName: 'texra',
-      params: {},
       shared: persistedResumeState.shared,
       createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: 'start' },
       nodes: [],
     });
 

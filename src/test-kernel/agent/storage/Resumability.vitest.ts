@@ -24,10 +24,11 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const BASE_FLOW_RECORD: FlowRecord = {
+  schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
   flowName: 'texra',
-  params: {},
   shared: { messages: [] },
   createdAt: '2026-07-05T00:00:00.000Z',
+  cursor: { nextNodeId: 'start' },
   nodes: [],
 };
 
@@ -198,28 +199,6 @@ describe('deriveResumability', () => {
       cause: RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
       flowRecord: BASE_FLOW_RECORD,
     });
-  });
-
-  it('accepts an unstamped legacy envelope and preserves extra fields', async () => {
-    const executionId = 'legacy-extra-flow-envelope' as ExecutionId;
-    const legacyRecord = {
-      ...BASE_FLOW_RECORD,
-      legacyOwner: { host: 'extension' },
-    };
-    await getExecutionStore(executionId).write(
-      flowKey(executionId),
-      legacyRecord,
-    );
-
-    const decision = await deriveResumability(executionId);
-
-    expect(decision).toMatchObject({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-    });
-    if (!decision.resumable) return;
-    expect(decision.flowRecord).toEqual(legacyRecord);
-    expect(Object.hasOwn(decision.flowRecord, 'schemaVersion')).toBe(false);
   });
 
   it('reports missing flow records as not resumable', async () => {

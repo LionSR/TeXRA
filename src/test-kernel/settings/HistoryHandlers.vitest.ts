@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RESUMABILITY_CAUSE } from '@agent/storage';
+import { FLOW_RECORD_SCHEMA_VERSION } from '@agent/node/persistedFlow';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import { AgentCategory } from '@shared/schemas/agent';
 import { HISTORY_RUN_STATUS } from '@shared/schemas/historyViewMessages';
@@ -118,7 +119,14 @@ describe('settings history handlers', () => {
     mocks.deriveResumability.mockResolvedValue({
       resumable: true,
       cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
-      flowRecord: { flowName: 'tooluse', params: {}, shared: {}, nodes: [] },
+      flowRecord: {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
+        flowName: 'texra',
+        shared: {},
+        createdAt: '2026-08-03T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
+        nodes: [],
+      },
       outcome: RUN_OUTCOME.CANCELLED,
     });
 

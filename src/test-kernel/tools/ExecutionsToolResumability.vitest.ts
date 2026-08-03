@@ -4,16 +4,21 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
-import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import {
+  FLOW_RECORD_SCHEMA_VERSION,
+  flowKey,
+  type FlowRecord,
+} from '@agent/node/persistedFlow';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 const BASE_FLOW_RECORD: FlowRecord = {
+  schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
   flowName: 'texra',
-  params: {},
   shared: { messages: [] },
   createdAt: '2026-07-05T00:00:00.000Z',
+  cursor: { nextNodeId: 'start' },
   nodes: [],
 };
 

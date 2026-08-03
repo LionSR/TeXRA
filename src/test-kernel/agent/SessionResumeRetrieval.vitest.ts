@@ -95,10 +95,11 @@ async function writeFlowRecord(
   overrides: Record<string, unknown> = {},
 ): Promise<void> {
   await getExecutionStore(executionId).write(flowKey(executionId), {
+    schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
     flowName: 'texra',
-    params: {},
     shared,
     createdAt: new Date().toISOString(),
+    cursor: { nextNodeId: 'start' },
     nodes: [],
     ...overrides,
   });
@@ -1100,6 +1101,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       name: 'invalid shared state',
       reason: 'invalid-shared',
       stored: {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
         flowName: 'texra',
         shared: {
           messages: [],
@@ -1107,6 +1109,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
           stateSlices: null,
         },
         createdAt: '2026-01-01T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       },
     },
@@ -1114,8 +1117,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       name: 'missing shared state',
       reason: 'missing-shared',
       stored: {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
         flowName: 'texra',
         createdAt: '2026-01-01T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       },
     },
@@ -1128,9 +1133,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       name: 'valid shared state without nodes',
       reason: 'unsupported-record',
       stored: {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
         flowName: 'texra',
         shared: VALID_TOOL_USE_SHARED,
         createdAt: '2026-01-01T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
       },
     },
     {
@@ -1141,6 +1148,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         flowName: 'texra',
         shared: VALID_TOOL_USE_SHARED,
         createdAt: '2026-01-01T00:00:00.000Z',
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       },
     },
@@ -1239,14 +1247,15 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const readSpy = vi.spyOn(store, 'read').mockImplementationOnce(async () => {
       flowContext?.interrupt();
       return {
+        schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
         flowName: 'texra',
-        params: {},
         shared: {
           messages: [],
           shouldSkipCycle: true,
           stateSlices: snapshot.shared.stateSlices,
         },
         createdAt: new Date().toISOString(),
+        cursor: { nextNodeId: 'start' },
         nodes: [],
       };
     });

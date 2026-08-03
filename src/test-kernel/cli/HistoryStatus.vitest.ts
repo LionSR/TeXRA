@@ -11,7 +11,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { flowKey } from '@agent/node/persistedFlow';
+import { FLOW_RECORD_SCHEMA_VERSION, flowKey } from '@agent/node/persistedFlow';
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
   formatCliHistoryDetailsText,
@@ -145,10 +145,10 @@ describe('CLI history status formatting', () => {
     });
     await releaseOwnedExecutionLease(id);
     await getExecutionStore(id).write(flowKey(id), {
-      flowName: 'test',
-      params: {},
-      shared: null,
+      schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
+      flowName: 'texra',
       createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: 'start' },
       nodes: [],
     });
 
@@ -170,14 +170,15 @@ describe('CLI history status formatting', () => {
     });
     await releaseOwnedExecutionLease(id);
     await getExecutionStore(id).write(flowKey(id), {
-      flowName: 'test',
-      params: {},
+      schemaVersion: FLOW_RECORD_SCHEMA_VERSION,
+      flowName: 'texra',
       shared: {
         currentRound: 1,
         totalRounds: 2,
         conversation: [],
       },
       createdAt: new Date().toISOString(),
+      cursor: { nextNodeId: 'start' },
       nodes: [],
     });
 
