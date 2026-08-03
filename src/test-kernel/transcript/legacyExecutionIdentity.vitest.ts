@@ -88,6 +88,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
 
     expect(resolved).toEqual({
       streamId,
+      fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [streamId],
     });
   });
@@ -146,7 +147,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
 
-    expect(resolved).toEqual({ streamId });
+    expect(resolved).toEqual({ streamId, fallbackStreamIds: [] });
     await expect(
       getExecutionStore(executionId).readMeta(),
     ).resolves.toMatchObject({
@@ -172,6 +173,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
     expect(resolved).toEqual({
       streamId,
+      fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [streamId],
     });
     await expect(
@@ -194,6 +196,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
       }),
     ).resolves.toEqual({
+      fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [streamId, resumedStream],
     });
   });
@@ -216,6 +219,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       snapshotStore: new StreamSnapshotStore(),
     });
     expect(resolved).toEqual({
+      fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [firstStream, secondStream],
     });
   });
@@ -242,6 +246,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamLogStore: logStore,
     });
     expect(resolved).toEqual({
+      fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [workPlanStream, logStream],
     });
     expect(
@@ -266,6 +271,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
       }),
     ).resolves.toEqual({
+      fallbackStreamIds: [],
       associatedStreamIds: [firstChild, secondChild],
     });
   });
@@ -285,10 +291,10 @@ describe('resolvePersistedStreamIdForExecution', () => {
       resolvePersistedStreamIdForExecution(executionId, {
         snapshotStore: new StreamSnapshotStore(),
       }),
-    ).resolves.toEqual({ streamId });
+    ).resolves.toEqual({ streamId, fallbackStreamIds: [] });
   });
 
-  it('preserves the legacy streamData suffix fallback', async () => {
+  it('reports several suffix-only sidecars as explicit ambiguity instead of choosing by order (#9590)', async () => {
     const executionId = 'abc999' as ExecutionId;
     const first = 'a@model#abc999' as StreamTabId;
     const second = 'z@model#abc999' as StreamTabId;
@@ -302,8 +308,29 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
       }),
     ).resolves.toEqual({
-      streamId: first,
-      fallbackStreamIds: [second],
+      fallbackStreamIds: [],
+      suffixCandidateStreamIds: [first, second],
+    });
+  });
+
+  it('reports a sidecar/log suffix disagreement as explicit ambiguity', async () => {
+    const executionId = 'abcbbb' as ExecutionId;
+    const sidecarStream = 'a@model#abcbbb' as StreamTabId;
+    const logStream = 'z@model#abcbbb' as StreamTabId;
+    const writer = new StreamSnapshotStore();
+    writer.setTodos(sidecarStream, [TODO]);
+    await writer.flush();
+    const logs = await StreamLogStore.open();
+    await appendLogEntry(logs, logStream);
+
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+        streamLogStore: logs,
+      }),
+    ).resolves.toEqual({
+      fallbackStreamIds: [],
+      suffixCandidateStreamIds: [sidecarStream, logStream],
     });
   });
 
@@ -318,6 +345,6 @@ describe('resolvePersistedStreamIdForExecution', () => {
         snapshotStore: new StreamSnapshotStore(),
         streamLogStore: logs,
       }),
-    ).resolves.toEqual({ streamId });
+    ).resolves.toEqual({ streamId, fallbackStreamIds: [] });
   });
 });

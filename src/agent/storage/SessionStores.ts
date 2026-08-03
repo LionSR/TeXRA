@@ -7,11 +7,11 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
-import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { legacyExecutionIdFromStreamSuffix } from '@transcript/legacyExecutionIdentity';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
