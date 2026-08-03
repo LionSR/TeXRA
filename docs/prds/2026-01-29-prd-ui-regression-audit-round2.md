@@ -272,7 +272,7 @@ for verification.
 - **Type:** UI regression
 - **Impact:** Low (visual)
 - **Status:** ✅ **FIXED** - Changed from `--vscode-errorForeground` (red) to `--vscode-icon-foreground` with hover effect
-- **Location:** `src/webview/frontend/styles/fileSelectStyles.ts:168-176`
+- **Location:** `packages/extension/src/webview/frontend/fileSelectStyles.ts:168-176`
 - **Commit:** `61fd61638`
 
 ### NEW-7) UPDATE\_\*\_FILES schema missing files field (CRITICAL) ✅ FIXED

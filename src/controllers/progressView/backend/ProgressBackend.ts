@@ -18,7 +18,7 @@ import {
   type GetProgressStreamControls,
   type ProgressRunFactEvent,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
-import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
+import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,

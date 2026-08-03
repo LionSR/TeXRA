@@ -2,7 +2,7 @@
  * Main view styles for MainApp component.
  *
  * These styles apply to MainApp's Shadow DOM template content.
- * Shared component styles are in styles/fileSelectStyles.ts.
+ * Shared component styles are in fileSelectStyles.ts.
  */
 
 // Third-party imports
