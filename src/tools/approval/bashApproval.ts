@@ -20,6 +20,10 @@ import {
   type BashPermission,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  decideTexraApproval,
+  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+} from '@shared/approvalPolicy';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
@@ -93,12 +97,23 @@ export async function requestBashApproval(
   const context = tryUseRunContext();
   const session = getRunContextSession(context) ?? defaultSession();
   const streamId = request.streamId ?? getRunContextStreamId(context);
+  const isStreamBypassed = Boolean(
+    streamId && session.approvals.bash.bypass.isBypassed(streamId),
+  );
+  const decision = decideTexraApproval({
+    policy: session.approvalPolicy,
+    promptRequired: approvalsEnabled,
+    scopedBypass: isStreamBypassed,
+    canPresent: context?.approvalPromptsUnavailable !== true,
+  });
 
-  if (
-    !approvalsEnabled ||
-    (streamId && session.approvals.bash.bypass.isBypassed(streamId))
-  ) {
-    return { action: 'approve' };
+  if (decision === 'allow') return { action: 'approve' };
+  if (decision === 'deny') {
+    context?.onApprovalPolicyDenial?.();
+    return {
+      action: 'reject',
+      feedback: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+    };
   }
 
   requireInteractions('bash approval', context);

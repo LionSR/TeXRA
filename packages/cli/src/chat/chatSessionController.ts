@@ -19,7 +19,10 @@ import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedTo
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { approvalPromptsUnavailable } from '@cli/runtime/approval/approvalPolicy';
+import {
+  approvalPromptsUnavailable,
+  markApprovalDenied,
+} from '@cli/runtime/approval/approvalPolicy';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -373,6 +376,7 @@ export function createChatSessionController(
             registerExecution: true,
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
+            onApprovalPolicyDenial: () => markApprovalDenied(sessionContext),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             onStreamResolved: (resolvedStreamId) => {
               // Each chat round mints a fresh root StreamTabId (new
@@ -507,6 +511,7 @@ export function createChatSessionController(
         .then(() =>
           resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
+            onApprovalPolicyDenial: () => markApprovalDenied(sessionContext),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
               ...followUp,
@@ -629,6 +634,8 @@ export function createChatSessionController(
                   session: runtimeSession,
                   recovery: claimedRecovery,
                   approvalPromptsUnavailable: approvalsUnavailable,
+                  onApprovalPolicyDenial: () =>
+                    markApprovalDenied(sessionContext),
                   runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                   extraFollowUps: options.extraFollowUps,
                   onFollowUpQueueReady: (lease) => {

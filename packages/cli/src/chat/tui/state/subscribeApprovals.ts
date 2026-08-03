@@ -4,10 +4,9 @@
 // user). When the modal resolves, the interaction promise resolves with the
 // same host-facing result shape.
 //
-// Policy is honored *before* the modal is shown — `immediateDecision` runs
-// first so `--approval-policy yolo` auto-approves without a modal, and
-// `never` auto-rejects with `denyMessage(...)`. Only `ask` (or interactive
-// non-print) reaches the queue.
+// Bash and edit policy is honored at the shared tool boundary before this
+// presentation adapter is called. Plans, proposals, retries, and human-input
+// requests retain their focused CLI decisions here.
 //
 // Tool-edit is part of this port because it returns a typed
 // Promise<ToolEditApprovalResult>, not a fire-and-forget event.
@@ -141,14 +140,11 @@ export function createTuiHostInteractions(
   return {
     emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
-      let decision: ApprovalDecision | undefined = immediateDecision(context);
-      if (!decision) {
-        decision = await enqueueTuiApproval({
-          kind: 'toolEdit',
-          payload: request,
-        });
-        markIfRejected(context, decision);
-      }
+      const decision = await decidePresentedApproval(
+        context,
+        'toolEdit',
+        request,
+      );
       if (
         decision.accepted &&
         decision.bypass === 'toolEdit' &&
@@ -246,13 +242,10 @@ function prepareRetryClient(
 
 // Retry carries its own policy lookup (`showRetryRequest`) and owns a queue
 // reservation, so it does not enter through this path.
-async function decideWithPolicy<
-  K extends 'bash' | 'planApproval' | 'proposal',
+async function decidePresentedApproval<
+  K extends 'bash' | 'toolEdit' | 'planApproval' | 'proposal',
   P,
 >(context: CliContext, kind: K, payload: P): Promise<ApprovalDecision> {
-  const policy = immediateDecision(context);
-  if (policy) return policy;
-
   try {
     const queuePayload = { kind, payload } as Extract<
       ApprovalPayload,
@@ -271,12 +264,21 @@ async function decideWithPolicy<
   }
 }
 
+async function decideWithPolicy<K extends 'planApproval' | 'proposal', P>(
+  context: CliContext,
+  kind: K,
+  payload: P,
+): Promise<ApprovalDecision> {
+  const policy = immediateDecision(context);
+  return policy ?? decidePresentedApproval(context, kind, payload);
+}
+
 async function requestBashInteraction(
   request: HostBashApprovalRequest,
   context: CliContext,
 ): Promise<BashSettlement> {
   const payload = prepareBashApprovalPrompt(request);
-  const decision = await decideWithPolicy(context, 'bash', payload);
+  const decision = await decidePresentedApproval(context, 'bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }

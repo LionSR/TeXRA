@@ -31,6 +31,7 @@ export interface RunAgentOptions extends Pick<
   | 'enforceCategory'
   | 'stopAfterCycle'
   | 'approvalPromptsUnavailable'
+  | 'onApprovalPolicyDenial'
   | 'runtimeUnavailableTools'
   | 'tools'
   | 'session'

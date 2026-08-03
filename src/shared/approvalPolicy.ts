@@ -4,6 +4,8 @@ export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
 export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
 export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
 export const TEXRA_APPROVAL_POLICY_DEFAULT: TexraApprovalPolicy = 'ask';
+export const TEXRA_APPROVAL_POLICY_DENIED_MESSAGE =
+  'Denied by TeXRA approval policy.';
 
 const TEXRA_APPROVAL_POLICY_COPY = {
   ask: {

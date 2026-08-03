@@ -17,7 +17,10 @@ import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { approvalPromptsUnavailable } from './approval/approvalPolicy';
+import {
+  approvalPromptsUnavailable,
+  markApprovalDenied,
+} from './approval/approvalPolicy';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { finalizeCliExecution } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
@@ -278,6 +281,7 @@ export async function executeCliRequest(
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
+        onApprovalPolicyDenial: () => markApprovalDenied(runContext),
         runtimeUnavailableTools: [
           ...CLI_UNAVAILABLE_TOOLS,
           ...(options.runtimeUnavailableTools ?? []),
