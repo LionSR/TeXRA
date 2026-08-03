@@ -29,6 +29,7 @@ import {
   DEFAULT_POLLING_BACKOFF_CONFIG,
   PollingSourceBase,
   type BasePollSubscriptionState,
+  type EtagCache,
 } from './PollingSourceBase';
 import { emitGitHubSubscriptionChanged } from './subscriptionEventEmitter';
 import {
@@ -57,7 +58,7 @@ interface SubscriptionState extends BasePollSubscriptionState {
   initialized: boolean;
   state: 'open' | 'closed' | undefined;
   comments: DedupedResource<GhIssueComment>;
-  etags: { issue?: string; comments?: string };
+  etags: EtagCache<'issue' | 'comments'>;
 }
 
 function createInitialState(issue: IssueKey): SubscriptionState {

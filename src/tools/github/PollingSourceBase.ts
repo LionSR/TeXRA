@@ -40,6 +40,15 @@ export interface BasePollSubscriptionState {
   skipPollUntilMs: number;
 }
 
+/**
+ * Per-endpoint ETag cache: one optional ETag per conditional-GET endpoint a
+ * poller hits, keyed by a poller-supplied literal-string union (e.g.
+ * `'pr' | 'issueComments' | 'reviewComments' | 'reviews'`). A key is absent
+ * until that endpoint's first 200 response. Only the shape is shared — each
+ * source owns its own key set and when its keys are set or cleared.
+ */
+export type EtagCache<K extends string> = Partial<Record<K, string>>;
+
 export interface PollingSourceConfig {
   /** Display name used in the logger and exception messages. */
   name: string;

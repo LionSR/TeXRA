@@ -61,6 +61,7 @@ import {
   DEFAULT_POLLING_BACKOFF_CONFIG,
   PollingSourceBase,
   type BasePollSubscriptionState,
+  type EtagCache,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -172,12 +173,7 @@ export interface PRSubscriptionState extends BasePollSubscriptionState {
   merged: boolean;
   /** Last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
   mergeableState: string | undefined;
-  etags: {
-    pr?: string;
-    issueComments?: string;
-    reviewComments?: string;
-    reviews?: string;
-  };
+  etags: EtagCache<'pr' | 'issueComments' | 'reviewComments' | 'reviews'>;
 }
 
 /** Per-head-SHA state; reset wholesale whenever the head SHA changes. */
