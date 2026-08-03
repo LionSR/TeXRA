@@ -2,7 +2,7 @@ import {
   formatCliModelAccessRoute,
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
@@ -36,7 +36,7 @@ export interface CliSessionStatusInput {
   readonly commandName?: string;
   readonly cwd?: string;
   readonly processCwd?: string;
-  readonly approvalPolicy?: CliApprovalPolicy;
+  readonly approvalPolicy?: TexraApprovalPolicy;
 }
 
 export function formatCliStatusLabel(

@@ -10,8 +10,8 @@ import {
   type CliLogoutTarget,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ApiProvider } from '@model/apiProviders';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -256,8 +256,8 @@ function formSelectionHandler<T>({
 export function registerBuiltinSlashCommands(options?: {
   onAgentSelect?: SelectHandler<string>;
   canSelectAgent?: () => boolean;
-  getApprovalPolicy?: () => CliApprovalPolicy;
-  onApprovalPolicySelect?: SelectHandler<CliApprovalPolicy>;
+  getApprovalPolicy?: () => TexraApprovalPolicy;
+  onApprovalPolicySelect?: SelectHandler<TexraApprovalPolicy>;
   onModelSelect?: SelectHandler<string>;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -358,7 +358,7 @@ export function registerBuiltinSlashCommands(options?: {
       <ApprovalPolicyForm
         availableRows={props.availableRows}
         currentPolicy={current}
-        onSelect={formSelectionHandler<CliApprovalPolicy>({
+        onSelect={formSelectionHandler<TexraApprovalPolicy>({
           action: (value) => options?.onApprovalPolicySelect?.(value),
           onDone: props.onDone,
           completion: 'beforeAction',

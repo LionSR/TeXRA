@@ -15,9 +15,6 @@
 export const CLI_OUTPUT_FORMATS = ['text', 'json', 'ndjson'] as const;
 export type CliOutputFormat = (typeof CLI_OUTPUT_FORMATS)[number];
 
-export const CLI_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
-export type CliApprovalPolicy = (typeof CLI_APPROVAL_POLICIES)[number];
-
 /**
  * Top-level CLI setting keys (without the `texra.` prefix). Used to derive
  * the canonical "known CLI keys" set for unknown-key warnings.

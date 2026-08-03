@@ -3,15 +3,17 @@ import path from 'node:path';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import {
+  TEXRA_APPROVAL_POLICIES,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import {
-  CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
-  type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
 import { CLI_API_MODE_INPUTS, parseCliApiMode } from './apiAccessMode';
@@ -35,7 +37,7 @@ export interface CliContext {
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
-  readonly approvalPolicy: CliApprovalPolicy;
+  readonly approvalPolicy: TexraApprovalPolicy;
   readonly helperModel?: string;
   /** Absent until the invocation or initialized platform selects a mode. */
   readonly apiMode?: ApiAccessMode;
@@ -259,7 +261,7 @@ export interface CliGlobalArgs {
   readonly quiet?: boolean;
   readonly cwd?: string;
   readonly outputFormat?: CliOutputFormat;
-  readonly approvalPolicy?: CliApprovalPolicy;
+  readonly approvalPolicy?: TexraApprovalPolicy;
   readonly apiMode?: string;
   /** `--no-color`: force-disable ANSI color on every stream. */
   readonly noColor?: boolean;
@@ -426,7 +428,7 @@ export async function buildCliContext(
     ),
     approvalPolicy: pickEnum(
       approvalPolicyCandidates,
-      CLI_APPROVAL_POLICIES,
+      TEXRA_APPROVAL_POLICIES,
       // Interactive sessions default to prompting. `--no-input` forces
       // headless mode and intentionally ignores env/config approval defaults;
       // only an explicit CLI flag should opt that invocation into yolo.

@@ -3,7 +3,6 @@
 
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
@@ -21,6 +20,7 @@ import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
 } from '@model/providerCapabilities';
+import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { GoalStore } from '@tools/goal';
 
 import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
@@ -73,7 +73,7 @@ export async function showCliSessionStatus(
         kimiCodeActive,
         usageRoute: slice?.usage?.usageRoute,
       }),
-      approval: formatCliApprovalPolicy(context.getApprovalPolicy()),
+      approval: formatTexraApprovalPolicy(context.getApprovalPolicy()),
       approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       substate: slice?.substate,

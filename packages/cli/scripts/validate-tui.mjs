@@ -1862,7 +1862,7 @@ const SCENARIOS = [
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: [
-      'approval: ask before privileged actions',
+      'approval: Control Bash and edit prompts independently.',
       'auto-approvals: commands',
       'AUTO-BASH',
     ],
