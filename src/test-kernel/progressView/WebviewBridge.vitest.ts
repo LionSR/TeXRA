@@ -12,6 +12,11 @@ import {
   STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
+import {
+  appendTranscriptEntry,
+  appendTranscriptText,
+  updateTranscriptEntry,
+} from '@test/support/storeTestDrivers';
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
 
 function logEntry(
@@ -67,7 +72,11 @@ describe('WebviewBridge', () => {
     );
 
     bridge.syncStream(activeStream);
-    store.append(activeStream, logEntry('active-1', 'active log', 100));
+    appendTranscriptEntry(
+      store,
+      activeStream,
+      logEntry('active-1', 'active log', 100),
+    );
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledWith({
@@ -92,7 +101,7 @@ describe('WebviewBridge', () => {
       new WebviewBridge(store, sendMessage, () => activeStream),
     );
 
-    store.append(activeStream, {
+    appendTranscriptEntry(store, activeStream, {
       id: 'running-group',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       level: LOG_LEVELS.INFO,
@@ -133,7 +142,8 @@ describe('WebviewBridge', () => {
       new WebviewBridge(store, sendMessage, () => activeStream),
     );
 
-    store.append(
+    appendTranscriptEntry(
+      store,
       'inactive' as StreamTabId,
       logEntry('inactive-1', 'inactive log', 100),
     );
@@ -151,7 +161,8 @@ describe('WebviewBridge', () => {
       new WebviewBridge(store, sendMessage, () => activeStream),
     );
 
-    store.append(
+    appendTranscriptEntry(
+      store,
       'inactive' as StreamTabId,
       logEntry('inactive-1', 'inactive log', 100),
     );
@@ -182,9 +193,9 @@ describe('WebviewBridge', () => {
       new WebviewBridge(store, sendMessage, () => activeStream),
     );
 
-    store.append(activeStream, logEntry('active-1', '', 100));
-    store.appendText(activeStream, 'active-1', 'hello ');
-    store.appendText(activeStream, 'active-1', 'world');
+    appendTranscriptEntry(store, activeStream, logEntry('active-1', '', 100));
+    appendTranscriptText(store, activeStream, 'active-1', 'hello ');
+    appendTranscriptText(store, activeStream, 'active-1', 'world');
 
     bridge.syncStream(activeStream);
     await vi.advanceTimersByTimeAsync(20);
@@ -216,17 +227,27 @@ describe('WebviewBridge', () => {
     );
 
     bridge.syncStream(activeStream);
-    store.append(activeStream, logEntry('active-1', 'active log', 100));
+    appendTranscriptEntry(
+      store,
+      activeStream,
+      logEntry('active-1', 'active log', 100),
+    );
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
-    store.update(activeStream, 'active-1', { text: 'edited log' });
+    updateTranscriptEntry(store, activeStream, 'active-1', {
+      text: 'edited log',
+    });
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
 
-    store.append(activeStream, logEntry('active-2', 'retry trigger', 200));
+    appendTranscriptEntry(
+      store,
+      activeStream,
+      logEntry('active-2', 'retry trigger', 200),
+    );
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenLastCalledWith({
@@ -261,12 +282,18 @@ describe('WebviewBridge', () => {
     );
 
     bridge.syncStream(activeStream);
-    store.append(activeStream, logEntry('active-1', 'active log', 100));
+    appendTranscriptEntry(
+      store,
+      activeStream,
+      logEntry('active-1', 'active log', 100),
+    );
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
-    store.update(activeStream, 'active-1', { text: 'edited while sending' });
+    updateTranscriptEntry(store, activeStream, 'active-1', {
+      text: 'edited while sending',
+    });
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
@@ -302,8 +329,8 @@ describe('WebviewBridge', () => {
     );
 
     bridge.syncStream(activeStream);
-    store.append(activeStream, logEntry('active-1', '', 100));
-    store.appendText(activeStream, 'active-1', 'hello');
+    appendTranscriptEntry(store, activeStream, logEntry('active-1', '', 100));
+    appendTranscriptText(store, activeStream, 'active-1', 'hello');
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
@@ -320,7 +347,7 @@ describe('WebviewBridge', () => {
       textDeltas: [],
     });
 
-    store.appendText(activeStream, 'active-1', ' world');
+    appendTranscriptText(store, activeStream, 'active-1', ' world');
     await vi.advanceTimersByTimeAsync(20);
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
@@ -351,11 +378,11 @@ describe('WebviewBridge', () => {
     const chunk = 'x'.repeat(1024);
 
     bridge.syncStream(activeStream);
-    store.append(activeStream, logEntry('active-1', '', 100));
+    appendTranscriptEntry(store, activeStream, logEntry('active-1', '', 100));
     await vi.advanceTimersByTimeAsync(20);
 
     for (let i = 0; i < 40; i++) {
-      store.appendText(activeStream, 'active-1', chunk);
+      appendTranscriptText(store, activeStream, 'active-1', chunk);
       await vi.advanceTimersByTimeAsync(20);
     }
 

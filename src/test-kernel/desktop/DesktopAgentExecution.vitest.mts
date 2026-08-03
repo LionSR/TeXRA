@@ -53,6 +53,10 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
+import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
 } from '@tools/approval';
@@ -115,16 +119,19 @@ type TestableBridge = Bridge & {
   deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
   streamLogs: {
-    append(
+    acquireWriter(
       streamId: StreamTabId,
-      entry: {
+      ownerKey: string,
+    ): {
+      append(entry: {
         id: string;
         type: string;
         level: string;
         timestamp: number;
         text: string;
-      },
-    ): unknown;
+      }): unknown;
+      close(): void;
+    };
     requestEviction(streamId: StreamTabId): void;
     reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
@@ -579,7 +586,7 @@ function appendRunningGroup(
   store: StreamLogStore,
   streamId: StreamTabId,
 ): void {
-  store.append(streamId, {
+  appendTranscriptEntry(store, streamId, {
     id: `${streamId}-running-group`,
     type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
     level: LOG_LEVELS.INFO,
@@ -1127,8 +1134,8 @@ describe('DesktopProgressBridge', () => {
       },
       configureProgressSnapshotStore: (store) => {
         const config = workflowConfig();
-        store.setRunConfig(waitingStream, config, 'abc123');
-        store.setRunConfig(crashedStream, config, 'def456');
+        snapshotFacts(store).setRunConfig(waitingStream, config, 'abc123');
+        snapshotFacts(store).setRunConfig(crashedStream, config, 'def456');
       },
       detectWaitingStreams,
     });
@@ -1172,7 +1179,11 @@ describe('DesktopProgressBridge', () => {
       first.streamLogs as unknown as StreamLogStore,
       orphanedStream,
     );
-    firstSnapshots.setRunConfig(waitingStream, runConfig, executionId);
+    snapshotFacts(firstSnapshots).setRunConfig(
+      waitingStream,
+      runConfig,
+      executionId,
+    );
     const { getExecutionStore } = await import('@agent/storage');
     await getExecutionStore(executionId).writeConfig(runConfig);
     await firstSnapshots.flush();
@@ -1245,7 +1256,11 @@ describe('DesktopProgressBridge', () => {
         appendRunningGroup(store, mappedStream);
       },
       configureProgressSnapshotStore: (store) => {
-        store.setRunConfig(mappedStream, workflowConfig(), executionId);
+        snapshotFacts(store).setRunConfig(
+          mappedStream,
+          workflowConfig(),
+          executionId,
+        );
       },
       detectWaitingStreams,
     });
@@ -1417,7 +1432,11 @@ describe('DesktopProgressBridge', () => {
       canonicalStreamIds: [streamId],
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
-        store.setRunConfig(streamId, workflowConfig(), executionId);
+        snapshotFacts(store).setRunConfig(
+          streamId,
+          workflowConfig(),
+          executionId,
+        );
       },
       detectWaitingStreams,
     });
@@ -1616,7 +1635,7 @@ describe('DesktopProgressBridge', () => {
         [`executions/${executionId}/config`, runConfig],
       ]),
       configureProgressSnapshotStore: (store) => {
-        store.setRunConfig(streamId, runConfig, executionId);
+        snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
       },
     });
 
@@ -1687,13 +1706,15 @@ describe('DesktopProgressBridge', () => {
       agentCategory: AgentCategory.Workflow,
     });
     await bridge.streamLogs.ensureLoaded('first');
-    bridge.streamLogs.append('first', {
+    const firstWriter = bridge.streamLogs.acquireWriter('first', 'test-writer');
+    firstWriter.append({
       id: 'first-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: 1_500,
       text: 'first stream log',
     });
+    firstWriter.close();
     await settleProgressEvents();
     messages.length = 0;
 
@@ -2133,8 +2154,8 @@ describe('DesktopProgressBridge', () => {
       ]),
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
-        store.setRunConfig(streamId, runConfig, executionId);
-        store.setDescription(streamId, 'Persisted workflow');
+        snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
+        snapshotFacts(store).setDescription(streamId, 'Persisted workflow');
       },
     });
 
@@ -2480,13 +2501,18 @@ describe('DesktopProgressBridge', () => {
     const kvStoreBacking = new Map<string, unknown>();
     const bridge = await createBridge([], { kvStoreBacking });
 
-    bridge.streamLogs.append(streamId, {
+    const shutdownWriter = bridge.streamLogs.acquireWriter(
+      streamId,
+      'test-writer',
+    );
+    shutdownWriter.append({
       id: 'shutdown-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: 1_000,
       text: 'persist me before quit',
     });
+    shutdownWriter.close();
 
     await bridgeSession(bridge).flushArtifacts();
     bridge.streamLogs.requestEviction(streamId);
@@ -2550,7 +2576,7 @@ describe('DesktopProgressBridge', () => {
       const disposeResumeHandler = processResumeOwner.attach({
         session: processSession,
       });
-      progressSnapshotStore.setRunConfig(
+      snapshotFacts(progressSnapshotStore).setRunConfig(
         streamId,
         AgentConfigSchema.parse({
           ...workflowConfig(),
@@ -2712,7 +2738,7 @@ describe('DesktopProgressBridge', () => {
           goalEnabled: false,
         });
       const messagesB: unknown[] = [];
-      owner.processSession.transcripts.append(streamId, {
+      appendTranscriptEntry(owner.processSession.transcripts, streamId, {
         id: 'during-reopen',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
         level: LOG_LEVELS.INFO,
@@ -3354,7 +3380,7 @@ describe('DesktopProgressBridge', () => {
         executionId: 'ec00f7' as ExecutionId,
       });
       owner.processSession.transcripts.ensureStream(childStreamId);
-      owner.progressSnapshotStore.setDescription(
+      snapshotFacts(owner.progressSnapshotStore).setDescription(
         childStreamId,
         'Transient bash child',
       );
@@ -3923,7 +3949,7 @@ describe('DesktopProgressBridge', () => {
         owner.processSession.executions.trackAgentExecution(childHandle, {
           status: STREAM_PHASE.RUNNING,
         });
-        owner.processSession.transcripts.append(childStreamId, {
+        appendTranscriptEntry(owner.processSession.transcripts, childStreamId, {
           id: 'headless-log',
           type: STREAM_LOG_ENTRY_TYPES.LOG,
           level: LOG_LEVELS.INFO,

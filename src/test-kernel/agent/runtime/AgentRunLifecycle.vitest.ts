@@ -34,6 +34,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
+  MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -55,6 +56,7 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
+import { withTranscriptWriter } from '@test/support/storeTestDrivers';
 import { StorageFS } from '@utils/files';
 
 // Local file imports
@@ -821,10 +823,6 @@ describe('runFlowWithLifecycle', () => {
       ctx.runScope.session.followUps,
       'terminalize',
     );
-    const transcriptsUpdate = vi.spyOn(
-      ctx.runScope.session.transcripts,
-      'update',
-    );
     storageMocks.finalizeExecution.mockClear();
 
     try {
@@ -843,6 +841,25 @@ describe('runFlowWithLifecycle', () => {
       const traceEmit = vi.spyOn(noopTrace, 'emit');
 
       const waitingHandle = takeWaitingHandle(executionId);
+
+      // Seed the open run-group row this suspension's parked teardown must
+      // close — production writes it via the transcript recorder's
+      // stage.start handler (the fake runner skips the recorder).
+      const parentStageId = ctx.parentStage.id;
+      if (!parentStageId) {
+        throw new Error('The fixture parent stage must carry an id.');
+      }
+      withTranscriptWriter(defaultSession().transcripts, streamId, (writer) =>
+        writer.appendSettled({
+          id: parentStageId,
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: 'info',
+          timestamp: Date.now(),
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'run',
+          data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+        }),
+      );
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // preserves the follow-up queue for WAITING — it does not dispose the
@@ -886,10 +903,11 @@ describe('runFlowWithLifecycle', () => {
       // WAITING branch's own finally), so the stage's GROUP_END entry is
       // written directly to the transcript store instead of through the
       // now-inert `ctx.parentStage.end()`.
-      expect(transcriptsUpdate).toHaveBeenCalledWith(
-        streamId,
-        expect.any(String),
+      expect(
+        defaultSession().transcripts.get(streamId)?.toJSON() ?? [],
+      ).toContainEqual(
         expect.objectContaining({
+          id: parentStageId,
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
           data: expect.objectContaining({
             status: RUN_OUTCOME.CANCELLED,
@@ -908,8 +926,6 @@ describe('runFlowWithLifecycle', () => {
       'lifecycle-waiting-cleanup-lease-loss',
     );
     const transcripts = ctx.runScope.session.transcripts;
-    const transcriptsUpdate = vi.spyOn(transcripts, 'update');
-    transcriptsUpdate.mockClear();
     storageMocks.finalizeExecution.mockClear();
     const originalLoadAndAcquireWriter =
       transcripts.loadAndAcquireWriter.bind(transcripts);
@@ -938,13 +954,45 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       const waitingHandle = takeWaitingHandle(executionId);
 
+      // Seed the open run-group row so a wrongly-run close would be visible
+      // as a GROUP_END settle on this exact row (mirrors the kill test).
+      const parentStageId = ctx.parentStage.id;
+      if (!parentStageId) {
+        throw new Error('The fixture parent stage must carry an id.');
+      }
+      withTranscriptWriter(transcripts, streamId, (writer) =>
+        writer.appendSettled({
+          id: parentStageId,
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: 'info',
+          timestamp: Date.now(),
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'run',
+          data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+        }),
+      );
+
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await writerLoadStarted;
       waitingHandle.markExecutionLeaseLost();
       releaseWriterLoad();
       await waitingHandle.result;
 
-      expect(transcriptsUpdate).not.toHaveBeenCalled();
+      // The waiting group must stay open: the seeded row is still the
+      // running GROUP_START, and no run GROUP_END row exists.
+      const rows = transcripts.get(streamId)?.toJSON() ?? [];
+      expect(rows).toContainEqual(
+        expect.objectContaining({
+          id: parentStageId,
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+        }),
+      );
+      expect(rows).not.toContainEqual(
+        expect.objectContaining({
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+          data: expect.objectContaining({ kind: 'run' }),
+        }),
+      );
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
     } finally {
       releaseWriterLoad();

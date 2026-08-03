@@ -714,11 +714,20 @@ export class StreamLogStore {
     }
   }
 
-  append(streamId: StreamTabId, entry: StreamLogAppendInput): StreamLogEntry {
+  // -- Transcript mutation -------------------------------------------------
+  // Row mutation is writer-only (#9590 Stage 5): every mutator below is
+  // private and reachable solely through the `TranscriptWriter` closures
+  // minted by `acquireWriter`/`loadAndAcquireWriter`, so one logical
+  // execution holds mutation authority per stream.
+
+  private append(
+    streamId: StreamTabId,
+    entry: StreamLogAppendInput,
+  ): StreamLogEntry {
     return this.appendEntry(streamId, entry, false);
   }
 
-  appendSettled(
+  private appendSettled(
     streamId: StreamTabId,
     entry: StreamLogAppendInput,
   ): StreamLogEntry {
@@ -771,7 +780,7 @@ export class StreamLogStore {
     return updated;
   }
 
-  update(
+  private update(
     streamId: StreamTabId,
     id: string,
     patch: StreamLogUpdatePatch,
@@ -779,7 +788,7 @@ export class StreamLogStore {
     return this.mutateEntry(streamId, (log) => log.update(id, patch));
   }
 
-  settle(
+  private settle(
     streamId: StreamTabId,
     id: string,
     patch: StreamLogUpdatePatch,
@@ -787,7 +796,7 @@ export class StreamLogStore {
     return this.mutateEntry(streamId, (log) => log.settle(id, patch));
   }
 
-  appendText(
+  private appendText(
     streamId: StreamTabId,
     id: string,
     appendText: string,
@@ -994,7 +1003,11 @@ export class StreamLogStore {
     }
   }
 
-  save(): Promise<void> {
+  /**
+   * Debounced internal persistence trigger; every mutator schedules it.
+   * External durability is `flush()`, which drains, retries, and throws.
+   */
+  private save(): Promise<void> {
     this.assertWritableStore('save transcripts');
     if (this.mode.kind === 'ephemeral' || this.dirtyIds.size === 0) {
       return Promise.resolve();
