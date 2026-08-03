@@ -49,7 +49,7 @@ export function parseTexraApprovalPolicy(
   return parsed.success ? parsed.data : undefined;
 }
 
-export type TexraApprovalPolicyDecision = 'allow' | 'deny' | 'present';
+type TexraApprovalPolicyDecision = 'allow' | 'deny' | 'present';
 
 /** Decide one Bash or tool-edit permission from request-time policy facts. */
 export function decideTexraApproval(input: {
