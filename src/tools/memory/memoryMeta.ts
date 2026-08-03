@@ -15,7 +15,10 @@ import { parseYamlWith } from '@common/parsing/safeParseYaml';
  * Attribution metadata schema. Source of truth for the {@link MemoryFileMeta}
  * type; also validates the YAML frontmatter parsed back off disk so a
  * hand-edited or malformed block degrades to "no metadata" rather than
- * throwing. `modifiedAt` defaults to now for legacy blocks that predate it.
+ * throwing. `modifiedAt` is required: every TeXRA writer (the retired
+ * sidecar and the inline-frontmatter writer) has always emitted it, so a
+ * block without it is not TeXRA-produced metadata and stays ordinary
+ * content (#9648).
  */
 const MemoryFileMetaSchema = z.object({
   /** Agent name that last modified this file. */
@@ -23,7 +26,7 @@ const MemoryFileMetaSchema = z.object({
   /** Execution ID of the run that last modified this file. */
   executionId: z.string().optional(),
   /** ISO 8601 timestamp of last modification. */
-  modifiedAt: z.string().prefault(() => new Date().toISOString()),
+  modifiedAt: z.string(),
   /**
    * Whether this memory is pinned as a core long-term insight. A parsed
    * `false` is treated the same as absent everywhere it is read, and
