@@ -238,7 +238,7 @@ export function workflowScriptDeliverySummary(xml: string): string | undefined {
       : []),
     ...fileLines,
     `  script: ${summary.scriptPath}`,
-    `  rerun: edit the script, then call delegate_workflow_script with scriptPath`,
+    `  rerun: edit the script, then call delegate_multi_agents with scriptPath`,
   ].join('\n');
 }
 

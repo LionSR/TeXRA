@@ -1276,7 +1276,7 @@ function seedWorkflowTimeline(): void {
       executionId,
       agentName: 'repositoryAudit',
       childStreamId,
-      toolName: 'delegate_workflow_script',
+      toolName: 'delegate_multi_agents',
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
@@ -1389,7 +1389,7 @@ function seedRunningWorkflow(): void {
       executionId,
       agentName: 'live-workflow-validation',
       childStreamId,
-      toolName: 'delegate_workflow_script',
+      toolName: 'delegate_multi_agents',
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);

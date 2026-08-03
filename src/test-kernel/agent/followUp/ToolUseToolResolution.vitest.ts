@@ -165,7 +165,7 @@ describe('tool-use tool resolution', () => {
       const registry = getDefaultToolRegistry();
 
       const { tools } = await resolveAgentTools({
-        tools: toolDefs(['bash', 'delegate_workflow_script']),
+        tools: toolDefs(['bash', 'delegate_multi_agents']),
         registry,
         logger,
         toolInjections,

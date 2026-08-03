@@ -81,8 +81,8 @@ describe('engineer agent prompt', () => {
   });
 
   it('can run deterministic workflow scripts when globally enabled', () => {
-    expect(agent.settings.tools).toContain('delegate_workflow_script');
-    expect(systemPrompt).not.toContain('delegate_workflow_script');
+    expect(agent.settings.tools).toContain('delegate_multi_agents');
+    expect(systemPrompt).not.toContain('delegate_multi_agents');
   });
 
   it('grounds its delegation targets in the live Available agents roster', () => {
@@ -123,10 +123,8 @@ describe('Lean orchestrator agent prompt', () => {
   );
 
   it('can run deterministic workflow scripts when globally enabled', () => {
-    expect(agent.settings.tools).toContain('delegate_workflow_script');
-    expect(agent.prompts.systemPrompt).not.toContain(
-      'delegate_workflow_script',
-    );
+    expect(agent.settings.tools).toContain('delegate_multi_agents');
+    expect(agent.prompts.systemPrompt).not.toContain('delegate_multi_agents');
   });
 });
 

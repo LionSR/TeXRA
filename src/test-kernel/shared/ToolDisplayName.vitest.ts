@@ -27,7 +27,9 @@ describe('displayToolName', () => {
   });
 
   it('applies friendly labels after stripping the namespace', () => {
-    expect(displayToolName('delegate_workflow_script')).toBe('Workflow script');
+    expect(displayToolName('delegate_multi_agents')).toBe(
+      'Multi-agent workflow',
+    );
     expect(displayToolName('codex:codex_turn')).toBe('Codex Turn');
   });
 

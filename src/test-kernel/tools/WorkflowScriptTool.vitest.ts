@@ -198,12 +198,12 @@ beforeEach(async () => {
 
 describe('WorkflowScriptTool', () => {
   it('is registered and classified without becoming a proposal tool', () => {
-    expect(getDefaultToolRegistry().has('delegate_workflow_script')).toBe(true);
-    expect(DELEGATION_TOOLS.has('delegate_workflow_script')).toBe(true);
-    expect(DELEGATION_AVAILABILITY_CATEGORY.delegate_workflow_script).toBe(
+    expect(getDefaultToolRegistry().has('delegate_multi_agents')).toBe(true);
+    expect(DELEGATION_TOOLS.has('delegate_multi_agents')).toBe(true);
+    expect(DELEGATION_AVAILABILITY_CATEGORY.delegate_multi_agents).toBe(
       'workflow',
     );
-    expect(DELEGATION_TOOL_CATEGORY.delegate_workflow_script).toBeUndefined();
+    expect(DELEGATION_TOOL_CATEGORY.delegate_multi_agents).toBeUndefined();
   });
 
   it('owns a detached run completion rejection without delivering a second error', async () => {
