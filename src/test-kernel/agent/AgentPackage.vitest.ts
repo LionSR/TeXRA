@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 // Local imports - types
 import type { Platform } from '@platform/platform';
@@ -122,11 +122,11 @@ describe('agent package run lifecycle', () => {
     );
   });
 
-  it('exports the canonical pending interaction kind for cancellation selectors', () => {
-    const kind: PendingInteractionKind = 'planApproval';
-    const selector: HostInteractionCancelSelector = { kind };
-
-    expect(selector.kind).toBe(kind);
+  it('exports cancellation selector types from the package entry point', () => {
+    expectTypeOf<{
+      kind: 'planApproval';
+    }>().toMatchTypeOf<HostInteractionCancelSelector>();
+    expectTypeOf<'planApproval'>().toMatchTypeOf<PendingInteractionKind>();
   });
 
   it('initializes standard runtime features once for concurrent first runs', async () => {
