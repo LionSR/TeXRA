@@ -50,7 +50,6 @@ export type CliOrchestrationAction =
   | { readonly kind: 'browse-teams' }
   | { readonly kind: 'browse-accounts' }
   | { readonly kind: 'configure-settings' }
-  | { readonly kind: 'set-agent-skills'; readonly enabled: boolean }
   | {
       readonly kind: 'account';
       readonly provider: CliAccountProvider;
@@ -87,7 +86,6 @@ export interface BuildCliOrchestrationItemsInput {
   readonly includeMultiAgentLoginHint?: boolean;
   readonly modelAccess?: CliModelAccessStatus;
   readonly account?: CliAccountStatus;
-  readonly agentSkillsEnabled?: boolean;
   readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;
 }
 
@@ -191,18 +189,6 @@ export function buildCliOrchestrationItems(
       value: { kind: 'browse-accounts' },
       label: 'Account',
       description: accountSummary(input.account),
-    });
-  }
-  if (input.agentSkillsEnabled !== undefined) {
-    items.push({
-      value: {
-        kind: 'set-agent-skills',
-        enabled: !input.agentSkillsEnabled,
-      },
-      label: 'Agent skills',
-      description: input.agentSkillsEnabled
-        ? 'On · TeXRA and imported skills available to tool-use agents'
-        : 'Off · tool-use agents receive no skills',
     });
   }
   items.push({
