@@ -285,6 +285,16 @@ interface StreamRecord {
    */
   runDescriptor: RunDescriptor | undefined;
   runConfig: AgentConfig | undefined;
+  /**
+   * Display description projected from the authority,
+   * `ExecutionMeta.description` (#9590 A4): set by the live
+   * `updateStreamDescription` session event (whose emitters persist to
+   * ExecutionMeta first) or by load-time hydration from ExecutionMeta.
+   * In-memory only — never written to the stream sidecar; the persisted
+   * `meta.description` sidecar field is a legacy mirror that current records
+   * no longer write (#9590 Stage 6).
+   */
+  description: string | undefined;
 
   // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
   // the first mutation so an accumulate/merge can't overwrite unloaded disk
@@ -357,6 +367,7 @@ export class StreamSnapshotStore {
     meta: undefined,
     runDescriptor: undefined,
     runConfig: undefined,
+    description: undefined,
     seeded: false,
     seedChain: undefined,
     seedRefreshGeneration: 0,
@@ -1464,8 +1475,11 @@ export class StreamSnapshotStore {
 
   private writeMeta(stream: StreamTabId, next: StreamTabMeta): void {
     // Persist every explicitly-set field (`!== undefined`, not falsy) so
-    // on-disk and in-memory never diverge
-    // — e.g. clearing a description to "" must round-trip, not silently vanish.
+    // on-disk and in-memory never diverge. `description` is never patched for
+    // current records anymore (#9590 Stage 6: the authority is
+    // `ExecutionMeta.description`); its spread below only round-trips a value
+    // a LEGACY sidecar already carried, so rewriting an unrelated meta field
+    // cannot destroy legacy display data before its Stage 7 retirement.
     const file: StreamTabMeta = {
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       ...(next.runDescriptor !== undefined && {
@@ -1555,8 +1569,14 @@ export class StreamSnapshotStore {
     this.queueMetaPatch(child, { parentStreamId: parent ?? undefined });
   }
 
+  /**
+   * Record the display description in memory only (#9590 Stage 6). The
+   * authority is `ExecutionMeta.description` (A4), which the event's emitters
+   * persist before emitting — this store never writes a sidecar description
+   * copy for current records.
+   */
   private setDescription(stream: StreamTabId, description: string): void {
-    this.queueMetaPatch(stream, { description });
+    this.getOrCreateRecord(stream).description = description;
   }
 
   getRunDescriptor(stream: StreamTabId): RunDescriptor | undefined {
@@ -1629,8 +1649,17 @@ export class StreamSnapshotStore {
     return this.records.get(stream)?.meta?.parentStreamId;
   }
 
+  /**
+   * The stream's display description. Current records serve the value
+   * projected from `ExecutionMeta.description` (the authority, #9590 A4) —
+   * live event or load-time hydration. The persisted sidecar `description`
+   * is read only as the legacy compatibility fallback for records whose
+   * execution metadata carries no description (pre-registration records,
+   * desktop legacy imports; retired with the sidecar field in Stage 7).
+   */
   getDescription(stream: StreamTabId): string | undefined {
-    return this.records.get(stream)?.meta?.description;
+    const record = this.records.get(stream);
+    return record?.description ?? record?.meta?.description;
   }
 
   /** Read-only view of stream→executionId for waiting-stream detection. */
@@ -1966,7 +1995,7 @@ export class StreamSnapshotStore {
     this.evictStreamsExcept(new Set(streamIds));
     await this.seedStreams(streamIds);
     this.hasAuthoritativeStreamSet = true;
-    await this.backfillDescriptionsFromExecutionMeta();
+    await this.hydrateDescriptionsFromExecutionMeta();
   }
 
   /**
@@ -1977,7 +2006,7 @@ export class StreamSnapshotStore {
    */
   async preload(streamIds: readonly StreamTabId[]): Promise<void> {
     await this.seedStreams(streamIds);
-    await this.backfillDescriptionsFromExecutionMeta();
+    await this.hydrateDescriptionsFromExecutionMeta();
   }
 
   private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {
@@ -2151,6 +2180,10 @@ export class StreamSnapshotStore {
     if (!meta || record.runDescriptor?.executionId !== executionId) {
       record.runDescriptor = undefined;
       record.runConfig = undefined;
+      // The display description belongs to the execution it was projected
+      // from (#9590 Stage 6); when identity changes hands, drop it with the
+      // pair — hydration re-reads the named execution's ExecutionMeta.
+      record.description = undefined;
     }
     if (meta) {
       const pendingLiveWrite = metaOverlay !== undefined;
@@ -2269,31 +2302,28 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * One-time legacy convergence toward the description authority (#9590 A4):
-   * `ExecutionMeta.description` is authoritative and the sidecar `description`
-   * is a display-only mirror, so projection runs meta → mirror only, and only
-   * when the mirror is absent. A present mirror value is never overwritten —
-   * disagreement is not reconciled by writing either side; meta simply stays
-   * the authority and the mirror stays display data — and nothing anywhere
-   * writes `ExecutionMeta.description` from the mirror. Persisting the filled
-   * mirror lets future loads skip the extra I/O. Stage 6 (#9590) stops this
-   * duplicate projection for current records.
+   * Hydrate in-memory display descriptions from the authority,
+   * `ExecutionMeta.description` (#9590 A4/Stage 6). Read-only projection:
+   * nothing is persisted in either direction — the sidecar `description`
+   * mirror is no longer written for current records, and nothing anywhere
+   * writes `ExecutionMeta.description` from the mirror. A record whose
+   * execution metadata is absent or carries no description keeps serving the
+   * persisted sidecar value through {@link getDescription}'s legacy fallback.
    */
-  private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
+  private async hydrateDescriptionsFromExecutionMeta(): Promise<void> {
     for (const [streamId, record] of [...this.records]) {
-      const meta = record.meta;
-      const executionId = meta?.runDescriptor?.executionId;
-      if (!executionId || meta.description) continue;
+      const executionId = record.meta?.runDescriptor?.executionId;
+      if (!executionId) continue;
       try {
         const execMeta = await getExecutionStore(executionId).readMeta();
         if (execMeta?.description) {
           this.setDescription(streamId, execMeta.description);
         }
       } catch (err) {
-        // Best-effort; a missing/corrupt execution store just skips backfill.
+        // Best-effort; a missing/corrupt execution store just skips hydration.
         logger.debug(
           CHANNEL,
-          `Skipping description backfill for stream ${streamId}`,
+          `Skipping description hydration for stream ${streamId}`,
           { data: err },
         );
       }

@@ -61,6 +61,7 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 
 vi.mock('@tools/delegation/childStream', () => ({
   createRehydratedChildStream: mocks.createRehydratedChildStream,
+  childStreamDescription: (raw: string) => raw,
   getChildStreamId: (executionId: string, prefix: string) =>
     `${prefix}#${executionId}`,
 }));
@@ -336,6 +337,7 @@ describe('WorkflowScriptTool', () => {
       {
         streamId: `workflow-script#${runExecutionId}`,
         parentExecutionId: executionId,
+        description: 'tests the workflow script tool',
       },
     );
     expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
@@ -434,6 +436,7 @@ describe('WorkflowScriptTool', () => {
       {
         streamId: `workflow-script#${runExecutionIdFor('edited-tool-test')}`,
         parentExecutionId: executionId,
+        description: 'tests the workflow script tool',
       },
     );
   });
@@ -618,6 +621,7 @@ describe('WorkflowScriptTool', () => {
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
         parentExecutionId: executionId,
+        description: 'tests the workflow script tool',
       },
     );
   });
@@ -661,6 +665,7 @@ describe('WorkflowScriptTool', () => {
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
         parentExecutionId: executionId,
+        description: 'tests the workflow script tool',
       },
     );
   });
@@ -722,6 +727,7 @@ describe('WorkflowScriptTool', () => {
       {
         streamId: `workflow-script#${runExecutionIdFor('resume')}`,
         parentExecutionId: executionId,
+        description: 'tests the workflow script tool',
       },
     );
   });

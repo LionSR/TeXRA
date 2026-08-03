@@ -297,6 +297,12 @@ describe('StreamSnapshotStore', () => {
     };
 
     await getExecutionStore(executionId).writeConfig(runConfig);
+    // Emitter contract for `updateStreamDescription` (#9590 A4/Stage 6): the
+    // authority write to `ExecutionMeta.description` lands before the event.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'session-search / kimi26T',
+    });
 
     events.emit({
       scope: 'run',
@@ -429,7 +435,13 @@ describe('StreamSnapshotStore', () => {
     expect(snap.runUsage[RUN]).not.toHaveProperty('reasoningTokens');
     expect(snap.runUsage[RUN]).not.toHaveProperty('toolUseTokens');
     expect(snap.executionId).toBe(executionId);
-    expect(snap.description).toBe('session-search / kimi26T');
+    // The live event updated the writer's display value in memory only.
+    expect(writer.getDescription(STREAM)).toBe('session-search / kimi26T');
+    // A fresh load serves the description from ExecutionMeta (the authority);
+    // the snapshot's `description` is the legacy sidecar mirror, which current
+    // records no longer write (#9590 Stage 6).
+    expect(reader.getDescription(STREAM)).toBe('session-search / kimi26T');
+    expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
     expect(reader.getRunConfig(STREAM)).toEqual(runConfig);
     expect(reader.getRunDescriptor(STREAM)).toMatchObject({
@@ -895,35 +907,45 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
     expect(store.getDescription(STREAM)).toBeUndefined();
 
-    snapshotFacts(store).setDescription(STREAM, 'Updated session');
-    await store.flush();
-
-    const raw = await readStreamFile(STREAM, 'meta.json');
-    expect(raw).toMatchObject({
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-      description: 'Updated session',
-    });
-  });
-
-  it('preserves legacy meta taskState when unrelated meta patches are written', async () => {
-    await installPlatform();
-    const taskState = toolUseTaskState('legacy-search');
-    await writeMetaFile(STREAM, {
-      taskState,
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-    snapshotFacts(store).setDescription(STREAM, 'Prior session');
+    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
     await store.flush();
 
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       schemaVersion?: unknown;
+      parentStreamId?: unknown;
+      description?: unknown;
+    };
+    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
+    expect(raw.parentStreamId).toBe(OTHER_STREAM);
+    // The rejected file's fields do not leak into the fresh current record.
+    expect(raw.description).toBeUndefined();
+  });
+
+  it('preserves legacy meta taskState and description when unrelated meta patches are written', async () => {
+    await installPlatform();
+    const taskState = toolUseTaskState('legacy-search');
+    await writeMetaFile(STREAM, {
+      taskState,
+      description: 'Prior session',
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
+    await store.flush();
+
+    // Rewriting an unrelated meta field round-trips the LEGACY description
+    // (#9590 Stage 6: never patched for current records, never destroyed for
+    // legacy sidecars before their Stage 7 retirement).
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
+      schemaVersion?: unknown;
       taskState?: unknown;
+      parentStreamId?: unknown;
       description?: unknown;
     };
     expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
     expect(raw.taskState).toEqual(taskState);
+    expect(raw.parentStreamId).toBe(OTHER_STREAM);
     expect(raw.description).toBe('Prior session');
   });
 
@@ -974,7 +996,7 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
-  it('backfills an absent description mirror from ExecutionMeta and is a no-op once present (#9590 Stage 4)', async () => {
+  it('serves a current record description from ExecutionMeta without writing a sidecar mirror (#9590 Stage 6)', async () => {
     await installPlatform();
     const executionId = 'aa22cc33' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(toolUseConfig());
@@ -984,33 +1006,32 @@ describe('StreamSnapshotStore', () => {
     });
     await writeMetaFile(STREAM, { executionId });
 
+    // Every load hydrates the display value from the authority and never
+    // projects a sidecar description copy — pinned at the persistence
+    // boundary: no sidecar meta write may be issued.
     const store = new StreamSnapshotStore();
+    const kvWrites = vi.spyOn(KVStore.prototype, 'write');
     await store.load([STREAM]);
     expect(store.getDescription(STREAM)).toBe('Meta authority label');
     await store.flush();
-
-    // Reconciliation is idempotent: with the mirror present, a second load
-    // runs no projection at all and both sides keep their values. Pinned at
-    // the persistence boundary: no sidecar meta write may be issued.
-    const reloaded = new StreamSnapshotStore();
-    const kvWrites = vi.spyOn(KVStore.prototype, 'write');
-    await reloaded.load([STREAM]);
-    expect(reloaded.getDescription(STREAM)).toBe('Meta authority label');
-    await reloaded.flush();
     expect(kvWrites).not.toHaveBeenCalledWith(
       STREAM_DATA_KEYS.META,
       expect.anything(),
     );
     kvWrites.mockRestore();
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
+      description?: unknown;
+    };
+    expect(raw.description).toBeUndefined();
     expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
       'Meta authority label',
     );
   });
 
-  it('reconciles description disagreement with one winner and never writes meta from the mirror (#9590 A4)', async () => {
+  it('resolves description disagreement to ExecutionMeta and never writes either side (#9590 A4)', async () => {
     await installPlatform();
-    // Both sides present and disagreeing: meta stays the authority, the
-    // mirror stays display data, and neither side is rewritten.
+    // Both sides present and disagreeing: the display serves the authority
+    // (ExecutionMeta) and neither persisted side is rewritten.
     const described = 'aa33dd44' as ExecutionId;
     await getExecutionStore(described).writeConfig(toolUseConfig());
     await getExecutionStore(described).writeMeta({
@@ -1023,7 +1044,8 @@ describe('StreamSnapshotStore', () => {
     });
 
     // Mirror-only: the authoritative side is absent and must stay absent —
-    // the display mirror is never a backfill source for ExecutionMeta.
+    // the display mirror is never a backfill source for ExecutionMeta, and it
+    // keeps serving reads as the legacy compatibility fallback.
     const undescribed = 'aa44ee55' as ExecutionId;
     await getExecutionStore(undescribed).writeConfig(toolUseConfig());
     await getExecutionStore(undescribed).writeMeta({
@@ -1038,14 +1060,74 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM, OTHER_STREAM]);
     await store.flush();
 
-    expect(store.getDescription(STREAM)).toBe('Stale mirror label');
+    expect(store.getDescription(STREAM)).toBe('Meta authority label');
     expect((await getExecutionStore(described).readMeta())?.description).toBe(
       'Meta authority label',
     );
+    // The stale legacy mirror stays on disk untouched until Stage 7 retires it.
+    expect(
+      ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
+        .description,
+    ).toBe('Stale mirror label');
     expect(store.getDescription(OTHER_STREAM)).toBe('Mirror-only label');
     expect(
       (await getExecutionStore(undescribed).readMeta())?.description,
     ).toBeUndefined();
+  });
+
+  it("round-trips a current record's description through ExecutionMeta only (#9590 Stage 6)", async () => {
+    await installPlatform();
+    const events = new SessionEventHub();
+    const store = new StreamSnapshotStore();
+    const detach = store.attachSessionEvents(events);
+    const executionId = 'aa55ff66' as ExecutionId;
+    const runConfig = toolUseConfig();
+    await getExecutionStore(executionId).writeConfig(runConfig);
+
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'run.start',
+        descriptor: buildRunDescriptor({
+          streamId: STREAM,
+          executionId,
+          agent: 'search',
+          category: AgentCategory.ToolUse,
+          kind: 'agent',
+        }),
+      },
+    });
+    // Emitter contract (#9590 A4): the authority write to
+    // `ExecutionMeta.description` lands before the display event is emitted.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Current label',
+    });
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: { streamId: STREAM, description: 'Current label' },
+      },
+    });
+    expect(store.getDescription(STREAM)).toBe('Current label');
+    detach();
+    await store.flush();
+
+    // Persistence boundary: the sidecar meta carries the descriptor reverse
+    // edge but no description copy — the sidecar write stopped in Stage 6.
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
+      runDescriptor?: { executionId?: unknown };
+      description?: unknown;
+    };
+    expect(raw.runDescriptor).toMatchObject({ executionId });
+    expect(raw.description).toBeUndefined();
+
+    // A fresh store reads the description back via descriptor → ExecutionMeta.
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getDescription(STREAM)).toBe('Current label');
   });
 
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
