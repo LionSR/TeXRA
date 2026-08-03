@@ -6,11 +6,8 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { canLaunchTeam } from '@common/teams/TeamPlan';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
-import { readAgentSkillsEnabled } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
-import { updateConfig } from '@utils/config/configUtils';
 
 import {
   firstRunSetupAgentOverride,
@@ -196,7 +193,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
       includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
       modelAccess: launcherModelAccess,
       account: accountStatus,
-      agentSkillsEnabled: readAgentSkillsEnabled(platform().config),
       presetLaunchBlockReason,
     });
     // Load the model registry up front so the launcher can offer a model pick
@@ -338,13 +334,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
           colorEnabled: context.stdoutColorEnabled,
           onError: writeErrorStderr,
         });
-        continue launcher;
-      }
-      case 'set-agent-skills': {
-        await updateConfig(AGENT_SKILLS_CONFIG_KEY, action.enabled);
-        writeTextStdout(
-          action.enabled ? 'Agent skills enabled.' : 'Agent skills disabled.',
-        );
         continue launcher;
       }
       case 'account': {
