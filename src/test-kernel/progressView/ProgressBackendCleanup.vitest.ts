@@ -28,6 +28,7 @@ import {
   executionLeasePath,
   writeForeignLease,
 } from '@test/support/executionLeaseFixtures';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { GoalStore } from '@tools/goal';
 import { streamDataDir, StreamSnapshotStore } from '@transcript';
 import {
@@ -53,7 +54,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,
@@ -86,7 +87,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,
@@ -121,7 +122,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,
@@ -151,7 +152,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,
@@ -178,7 +179,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,
@@ -267,7 +268,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,
@@ -305,17 +306,17 @@ describe('ProgressBackend', () => {
     backend.state.streamLogs.ensureStream(failedStream);
     backend.state.streamLogs.ensureStream(incompleteStream);
     backend.state.streamLogs.ensureStream(deletedStream);
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       failedStream,
       toolUseConfig('search', 'deepseekproT'),
       failedExecution,
     );
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       incompleteStream,
       toolUseConfig('search', 'deepseekproT'),
       incompleteExecution,
     );
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       deletedStream,
       toolUseConfig('search', 'deepseekproT'),
       deletedExecution,
@@ -354,7 +355,7 @@ describe('ProgressBackend', () => {
     const executionId = 'b69660' as ExecutionId;
     const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(stream);
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
@@ -386,12 +387,12 @@ describe('ProgressBackend', () => {
     const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(failedStream);
     backend.state.streamLogs.ensureStream(deletedStream);
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       failedStream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       deletedStream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
@@ -494,7 +495,7 @@ describe('ProgressBackend', () => {
     try {
       const seed = new StreamSnapshotStore();
       await seed.load([orphanStream]);
-      seed.setRunConfig(
+      snapshotFacts(seed).setRunConfig(
         orphanStream,
         toolUseConfig('search', 'deepseekproT'),
         orphanExecution,
@@ -534,7 +535,7 @@ describe('ProgressBackend', () => {
     const executionId = 'c69660' as ExecutionId;
     const seed = new StreamSnapshotStore();
     await seed.load([]);
-    seed.setRunConfig(
+    snapshotFacts(seed).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
@@ -566,7 +567,7 @@ describe('ProgressBackend', () => {
     const stream = 'tool@deepseek#c69661' as StreamTabId;
     const executionId = 'c69661' as ExecutionId;
     const { backend, session } = createIsolatedRecordingBackend();
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
@@ -613,12 +614,12 @@ describe('ProgressBackend', () => {
     const sweptExecution = 'e6966e' as ExecutionId;
     const seed = new StreamSnapshotStore();
     await seed.load([failingStream, sweptStream]);
-    seed.setRunConfig(
+    snapshotFacts(seed).setRunConfig(
       failingStream,
       toolUseConfig('search', 'deepseekproT'),
       failingExecution,
     );
-    seed.setRunConfig(
+    snapshotFacts(seed).setRunConfig(
       sweptStream,
       toolUseConfig('search', 'deepseekproT'),
       sweptExecution,
@@ -672,12 +673,12 @@ describe('ProgressBackend', () => {
     const sweptExecution = 'a6966a' as ExecutionId;
     const seed = new StreamSnapshotStore();
     await seed.load([failingStream, sweptStream]);
-    seed.setRunConfig(
+    snapshotFacts(seed).setRunConfig(
       failingStream,
       toolUseConfig('search', 'deepseekproT'),
       failingExecution,
     );
-    seed.setRunConfig(
+    snapshotFacts(seed).setRunConfig(
       sweptStream,
       toolUseConfig('search', 'deepseekproT'),
       sweptExecution,
@@ -731,7 +732,7 @@ describe('ProgressBackend', () => {
 
     try {
       first.backend.state.streamLogs.ensureStream(stream);
-      first.backend.state.snapshots.setRunConfig(
+      snapshotFacts(first.backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         executionId,

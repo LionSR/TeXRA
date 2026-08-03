@@ -800,8 +800,9 @@ function makeAssistantToolPreambleEntries(): ConversationEntry[] {
 
 function seedLiveToolOnlyTranscript(): void {
   const store = defaultSession().transcripts;
+  const writer = store.acquireWriter(STREAM_ID, 'tui-harness');
   const timestamp = Date.now();
-  store.append(STREAM_ID, {
+  writer.append({
     id: 'live-tool-user',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -809,7 +810,7 @@ function seedLiveToolOnlyTranscript(): void {
     messageType: MESSAGE_TYPES.USER_MESSAGE,
     text: 'what is this repo about',
   });
-  store.append(STREAM_ID, {
+  writer.append({
     id: 'live-tool-empty-assistant',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -827,7 +828,7 @@ function seedLiveToolOnlyTranscript(): void {
   for (const [index, [toolName, input, summary]] of tools
     .slice(0, LIVE_TOOL_COUNT)
     .entries()) {
-    store.append(STREAM_ID, {
+    writer.append({
       id: `live-tool-${toolName}-${index}`,
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -843,6 +844,7 @@ function seedLiveToolOnlyTranscript(): void {
       },
     });
   }
+  writer.close();
   syncStreamLog(STREAM_ID);
 }
 
@@ -878,6 +880,7 @@ function makeRejectedBashToolEntries(): ConversationEntry[] {
 
 function seedSubagentFollowupTranscript(): void {
   const store = defaultSession().transcripts;
+  const writer = store.acquireWriter(STREAM_ID, 'tui-harness');
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="round" current="2" total="3" />',
@@ -894,7 +897,7 @@ function seedSubagentFollowupTranscript(): void {
     ].join('\n'),
   ];
   for (const [index, text] of followups.entries()) {
-    store.append(STREAM_ID, {
+    writer.append({
       id: `harness-subagent-followup-${index}`,
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -903,6 +906,7 @@ function seedSubagentFollowupTranscript(): void {
       text: `<orchestrator-followup>${text}</orchestrator-followup>`,
     });
   }
+  writer.close();
   syncStreamLog(STREAM_ID);
 }
 

@@ -41,6 +41,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 
 const STREAM = 'stream:concurrent-waiting-repair' as StreamTabId;
 const EXECUTION = 'babcde' as ExecutionId;
@@ -52,7 +53,7 @@ describe('texra.sendFollowUp waiting repair admission', () => {
     registerFollowUpCommand({ subscriptions: [] } as never);
 
     const session = defaultSession();
-    session.snapshots.setRunDescriptor(
+    snapshotFacts(session.snapshots).setRunDescriptor(
       buildRunDescriptor({
         streamId: STREAM,
         executionId: EXECUTION,

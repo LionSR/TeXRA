@@ -34,6 +34,10 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
+import {
   createIsolatedRecordingBackend,
   createRecordingBackend,
   emitActiveStream,
@@ -425,7 +429,7 @@ describe('ProgressBackend', () => {
       streamId: secondStream,
       description: 'second window run',
     });
-    first.backend.state.streamLogs.append(firstStream, {
+    appendTranscriptEntry(first.backend.state.streamLogs, firstStream, {
       id: 'first-window-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -433,7 +437,7 @@ describe('ProgressBackend', () => {
       messageType: MESSAGE_TYPES.DEFAULT,
       text: 'first transcript entry',
     });
-    second.backend.state.streamLogs.append(secondStream, {
+    appendTranscriptEntry(second.backend.state.streamLogs, secondStream, {
       id: 'second-window-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -908,7 +912,7 @@ describe('ProgressBackend', () => {
     // Simulate persistence receiving run.config before progress state sees
     // the RUNNING transition. The transition boundary must refresh the
     // durable category before replacing stale execution state.
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
       'abc123' as ExecutionId,
@@ -985,7 +989,7 @@ describe('ProgressBackend', () => {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
       backend.state.switchActiveStream(stream);
-      backend.state.snapshots.setRunConfig(
+      snapshotFacts(backend.state.snapshots).setRunConfig(
         stream,
         toolUseConfig('search', 'deepseekproT'),
         'abc123' as ExecutionId,
@@ -1081,7 +1085,7 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.Workflow,
       isRemote: true,
     });
-    backend.state.snapshots.setRunConfig(
+    snapshotFacts(backend.state.snapshots).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
@@ -1187,7 +1191,7 @@ describe('ProgressBackend', () => {
       backend.state.getStreamMetadata(stream).creationTimestamp;
     expect(provisional).toBeGreaterThanOrEqual(before);
 
-    backend.state.streamLogs.append(stream, {
+    appendTranscriptEntry(backend.state.streamLogs, stream, {
       id: 'first-entry',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
@@ -1209,7 +1213,7 @@ describe('ProgressBackend', () => {
     const stream = 'evicted-timestamp-stream' as StreamTabId;
 
     backend.state.streamLogs.ensureStream(stream);
-    backend.state.streamLogs.append(stream, {
+    appendTranscriptEntry(backend.state.streamLogs, stream, {
       id: 'first-entry',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,

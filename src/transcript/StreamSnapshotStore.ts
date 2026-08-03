@@ -622,7 +622,12 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Mutators
+  // Mutators — event projection targets (#9590 Stage 5)
+  //
+  // Every mutator below is private: durable display facts enter this store
+  // only through `attachSessionEvents`, so the session event plane is the
+  // single mutation authority. Tests exercise them by emitting the
+  // corresponding session/run facts on an attached `SessionEventHub`.
   // ==========================================================================
 
   /**
@@ -745,7 +750,7 @@ export class StreamSnapshotStore {
     };
   }
 
-  addOutputFiles(
+  private addOutputFiles(
     stream: StreamTabId,
     filesByRound: RoundIndexed<OutputFileInfo>,
   ): void {
@@ -772,7 +777,7 @@ export class StreamSnapshotStore {
     );
   }
 
-  updateMissingOutputs(
+  private updateMissingOutputs(
     stream: StreamTabId,
     filesByRound: RoundIndexed<string>,
   ): void {
@@ -799,7 +804,7 @@ export class StreamSnapshotStore {
     );
   }
 
-  updateCompileFailures(
+  private updateCompileFailures(
     stream: StreamTabId,
     filesByRound: RoundIndexed<CompileFailure>,
   ): void {
@@ -833,7 +838,7 @@ export class StreamSnapshotStore {
    * Accumulate usage per run. Returns the accumulated value for the run so
    * callers can forward it to the UI.
    */
-  addUsage(
+  private addUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
     usage: TokenUsageStats,
@@ -946,7 +951,7 @@ export class StreamSnapshotStore {
    * directory `listPersistedStreams()` would then report for a stream that
    * was never actually tracking missing outputs (or was just deleted).
    */
-  clearMissingOutputs(stream: StreamTabId): void {
+  private clearMissingOutputs(stream: StreamTabId): void {
     let existed = false;
     this.mutateWithOverlay(
       stream,
@@ -969,7 +974,7 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
-  evict(stream: StreamTabId): void {
+  private evict(stream: StreamTabId): void {
     this.records.evict(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (!key.startsWith(`${stream}::`)) continue;
@@ -1419,7 +1424,7 @@ export class StreamSnapshotStore {
     ]);
   }
 
-  setTodos(stream: StreamTabId, todos: TodoItem[]): void {
+  private setTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.mutate(stream, () => {
       const record = this.getOrCreateRecord(stream);
       record.workPlan = { ...record.workPlan, todos };
@@ -1427,7 +1432,7 @@ export class StreamSnapshotStore {
     });
   }
 
-  setPlan(stream: StreamTabId, plan: Plan | null): void {
+  private setPlan(stream: StreamTabId, plan: Plan | null): void {
     this.mutate(stream, () => {
       const record = this.getOrCreateRecord(stream);
       record.workPlan = {
@@ -1498,7 +1503,7 @@ export class StreamSnapshotStore {
    * meta.json write (callers that have both should pass both so meta isn't
    * written twice).
    */
-  setRunConfig(
+  private setRunConfig(
     stream: StreamTabId,
     config: AgentConfig,
     executionId?: ExecutionId,
@@ -1526,7 +1531,7 @@ export class StreamSnapshotStore {
    * facts may change model or instruction, but cannot rename or recategorize
    * the stream.
    */
-  setRunDescriptor(descriptor: RunDescriptor): void {
+  private setRunDescriptor(descriptor: RunDescriptor): void {
     const stream = descriptor.streamId;
     const record = this.getOrCreateRecord(stream);
     // The config of the run this stream just left is not this run's config;
@@ -1543,14 +1548,14 @@ export class StreamSnapshotStore {
     });
   }
 
-  setParentStream(
+  private setParentStream(
     child: StreamTabId,
     parent: StreamTabId | null | undefined,
   ): void {
     this.queueMetaPatch(child, { parentStreamId: parent ?? undefined });
   }
 
-  setDescription(stream: StreamTabId, description: string): void {
+  private setDescription(stream: StreamTabId, description: string): void {
     this.queueMetaPatch(stream, { description });
   }
 

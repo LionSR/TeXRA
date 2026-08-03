@@ -12,6 +12,7 @@ import {
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 
 const resumabilityMocks = vi.hoisted(() => ({
   deriveResumability: vi.fn(),
@@ -58,7 +59,7 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
   let executionId: ExecutionId;
 
   function ownStream(owner: ExecutionId): void {
-    session.snapshots.setRunDescriptor(
+    snapshotFacts(session.snapshots).setRunDescriptor(
       buildRunDescriptor({
         streamId,
         executionId: owner,
@@ -255,7 +256,8 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
 
     const repair = session.repairWaitingIfResumable(streamId);
     session.status.clearStream(streamId);
-    session.snapshots.evict(streamId);
+    // Public residency reset - the per-stream evict is store-internal.
+    session.snapshots.evictAll();
     deferred.resolve();
 
     await expect(repair).resolves.toBe(false);
