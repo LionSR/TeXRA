@@ -14,6 +14,7 @@ import {
   CORE_SETTING_PATHS,
   EXTENSION_ONLY_CORE_SETTING_CONSUMERS,
 } from '@shared/schemas/coreSettings';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import {
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -21,6 +22,7 @@ import {
   DEFAULT_GIT_MARK_COMMITS,
   DEFAULT_GIT_WORKTREE_SUPPORT,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
+  SETTINGS_VIEW_CORE_SETTINGS,
   STATE_SETTINGS,
   STATE_SETTING_KEYS,
   settingEnumChoices,
@@ -62,6 +64,12 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'workspaceState',
   'globalState',
 ]);
+
+/** Every catalog row across both tiers: state-backed plus settings-view core. */
+const ALL_CATALOG_ENTRIES: readonly StateSettingEntry[] = [
+  ...STATE_SETTINGS,
+  ...SETTINGS_VIEW_CORE_SETTINGS,
+];
 
 const CLI_RUNTIME_COMMAND_PATTERN =
   /^texra\s+(?:chat|run|agents run|multi-agent run|orchestrate)\b/;
@@ -138,7 +146,7 @@ describe('state settings catalog', () => {
   });
 
   it('every CLI-host entry names an existing consumer file', () => {
-    for (const entry of STATE_SETTINGS) {
+    for (const entry of ALL_CATALOG_ENTRIES) {
       if (!entry.hosts.includes('cli')) {
         continue;
       }
@@ -154,7 +162,7 @@ describe('state settings catalog', () => {
   });
 
   it('every CLI-host entry documents a runtime-reachability path', () => {
-    for (const entry of STATE_SETTINGS) {
+    for (const entry of ALL_CATALOG_ENTRIES) {
       if (!entry.hosts.includes('cli')) {
         assert.equal(
           entry.cliRuntimeReachability,
@@ -379,6 +387,8 @@ describe('state settings catalog', () => {
     //    providerConfig/ProxyConfigResolver during CLI model dispatch.
     //  - the Kimi Code prefer switch is read by ModelFactory when dispatching
     //    dual-backend Kimi models in CLI runs.
+    //  - agent skills is read by buildUserVars (userVars) when assembling
+    //    tool-use agent prompts, skipping skill discovery when disabled.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `hosts`.
@@ -411,6 +421,7 @@ describe('state settings catalog', () => {
         GlobalStateKey.GLM_USE_CHINA,
         GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
+        AGENT_SKILLS_CONFIG_KEY,
       ].sort(),
     );
   });
