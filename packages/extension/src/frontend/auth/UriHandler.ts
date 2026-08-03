@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isAuthCallbackPath } from '@auth/core/authCallback';
+import { isAuthCallbackPath } from '@auth/authCallback';
 
 /**
  * URI handler for OAuth callbacks.

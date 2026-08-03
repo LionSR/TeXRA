@@ -13,7 +13,7 @@ import {
 } from '../events';
 
 // Local imports - progress view contexts
-import { archivedContext } from '../contexts/streamContexts';
+import { archivedContext } from '../streamContexts';
 
 // Local imports - progress view component types
 import type { PermissionState } from '../permissionState';

@@ -21,7 +21,7 @@ import {
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import type { AuthCallbackUriParts } from '@auth/core/authCallback';
+import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';

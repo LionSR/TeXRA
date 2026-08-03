@@ -37,7 +37,7 @@ import {
   type StreamByIdMap,
   type StreamContextValue,
   type StreamLogContextValue,
-} from '../contexts/streamContexts';
+} from '../streamContexts';
 import type { PermissionState } from '../permissionState';
 
 // Side-effect imports - body components rendered below.

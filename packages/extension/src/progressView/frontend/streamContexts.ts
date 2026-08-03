@@ -18,10 +18,10 @@ import type {
   TaskGroup,
 } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import type { FollowupOptionsState, StreamState } from '../store';
+import type { FollowupOptionsState, StreamState } from './store';
 
 // Local imports - progress view components
-import type { PermissionState } from '../permissionState';
+import type { PermissionState } from './permissionState';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
