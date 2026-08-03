@@ -874,25 +874,22 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('forces the current meta schema version over stale cached meta', async () => {
+  it('rejects unsupported meta schemas before writing a current record', async () => {
     await installPlatform();
-    const store = new StreamSnapshotStore();
-    await store.load([]);
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: 0,
+      description: 'Unsupported stale session',
+    });
 
-    // Every field lives on one record keyed by stream id, so priming a stale
-    // in-memory meta means seeding just the `meta` field of that record.
-    const internals = store as unknown as {
-      records: Map<
-        StreamTabId,
-        { meta?: { schemaVersion: number; description?: string } }
-      >;
-    };
-    internals.records.set(STREAM, { meta: { schemaVersion: 0 } });
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getDescription(STREAM)).toBeUndefined();
 
     store.setDescription(STREAM, 'Updated session');
     await store.flush();
 
-    expect(internals.records.get(STREAM)?.meta).toMatchObject({
+    const raw = await readStreamFile(STREAM, 'meta.json');
+    expect(raw).toMatchObject({
       schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
       description: 'Updated session',
     });

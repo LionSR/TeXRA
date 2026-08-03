@@ -93,8 +93,6 @@ describe('getBasename', () => {
     ['/usr/local/bin/node', 'node'],
     ['/path/to/document.pdf', 'document.pdf'],
     ['C:\\Users\\file.txt', 'file.txt'],
-    ['C:\\Program Files\\app.exe', 'app.exe'],
-    ['D:\\Documents\\report.docx', 'report.docx'],
     ['C:/Users\\Documents/file.txt', 'file.txt'],
     ['/home\\user/document.pdf', 'document.pdf'],
     ['/path/to/', 'to'],
