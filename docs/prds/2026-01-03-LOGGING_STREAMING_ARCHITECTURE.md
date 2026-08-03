@@ -257,7 +257,7 @@ ProgressEventHandler.handleSetActiveStream()
 - `src/progressView/managers/WebviewUpdater.ts` - Webview messaging
 - `src/progressView/managers/StreamTabsManager.ts` - Stream state
 - `src/progressView/managers/TaskGroupManager.ts` - Task group state
-- `src/progressView/state/ProgressViewState.ts` - Combined state
+- `src/controllers/progressView/backend/ProgressViewState.ts` - Combined state
 
 ### Runtime
 
