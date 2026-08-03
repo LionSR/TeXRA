@@ -27,11 +27,14 @@ const TEXRA_APPROVAL_POLICY_COPY = {
 
 const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = ['ask', 'never', 'yolo'] as const;
 
-export const TEXRA_APPROVAL_POLICY_OPTIONS =
-  TEXRA_APPROVAL_POLICY_DISPLAY_ORDER.map((value) => ({
-    value,
-    ...TEXRA_APPROVAL_POLICY_COPY[value],
-  }));
+export const TEXRA_APPROVAL_POLICY_OPTIONS = Object.freeze(
+  TEXRA_APPROVAL_POLICY_DISPLAY_ORDER.map((value) =>
+    Object.freeze({
+      value,
+      ...TEXRA_APPROVAL_POLICY_COPY[value],
+    }),
+  ),
+);
 
 export function formatTexraApprovalPolicy(policy: TexraApprovalPolicy): string {
   return TEXRA_APPROVAL_POLICY_COPY[policy].description;
