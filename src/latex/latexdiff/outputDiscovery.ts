@@ -8,16 +8,20 @@
 import * as path from 'node:path';
 
 // Local imports
-import { listExecutions, type ExecutionListingEntry } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import {
+  getExecutionStore,
+  listExecutions,
+  type ExecutionListingEntry,
+} from '@agent/storage';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type {
-  ExecutionId,
-  FileLocation,
-  OutputFileInfo,
-  RoundIndexed,
+import {
+  registeredStreamId,
+  type ExecutionId,
+  type FileLocation,
+  type OutputFileInfo,
+  type RoundIndexed,
 } from '@shared/schemas';
 import {
   WORKFLOW_OUTPUT_BASENAME,
@@ -237,14 +241,18 @@ export async function discoverLatestExecutionOutputs(query: {
 
     const snapshots = new StreamSnapshotStore();
     for (const candidate of candidates) {
-      const streamId = getStreamTabId(
-        candidate.agentConfig.agent,
-        candidate.agentConfig.model,
-        { executionId: candidate.id },
+      // The execution's registered stream identity addresses its snapshot
+      // directly; identity is never rebuilt from agent/model configuration
+      // (#9590 A1). Legacy records without registration provenance go
+      // straight to the run-directory scan below.
+      const streamId = registeredStreamId(
+        await getExecutionStore(candidate.id).readMeta(),
       );
-      const rounds = await snapshots.readOutputFiles(streamId);
-      if (rounds && Object.keys(rounds).length > 0) {
-        return { executionId: candidate.id, rounds };
+      if (streamId !== undefined) {
+        const rounds = await snapshots.readOutputFiles(streamId);
+        if (rounds && Object.keys(rounds).length > 0) {
+          return { executionId: candidate.id, rounds };
+        }
       }
       // Stream-tab snapshots are a progress-view artifact that headless
       // `texra run` executions never persist. Fall back to scanning the matched
