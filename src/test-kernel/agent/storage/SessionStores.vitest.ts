@@ -5,9 +5,17 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { SessionStores, type DeleteExecutionOptions } from '@agent/storage';
+import {
+  getExecutionStore,
+  SessionStores,
+  type DeleteExecutionOptions,
+} from '@agent/storage';
 import * as logUtils from '@logger/logUtils';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  EXECUTION_STREAM_ID_SOURCE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { releaseStreamResources } from '@tools/approval';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -122,6 +130,170 @@ describe('SessionStores deletion coordination', () => {
       expect(result.active).toEqual(new Set([retained]));
       expect(result.failed).toEqual(new Set());
       expect(releases).toEqual([deleted]);
+    } finally {
+      session.dispose();
+    }
+  });
+});
+
+describe('SessionStores deletion admission (#9590 A2)', () => {
+  function deletionSpy() {
+    return vi.fn(
+      async (executionId: ExecutionId, options?: DeleteExecutionOptions) => {
+        await options?.beforeDelete?.();
+        return { status: 'deleted' as const, executionId };
+      },
+    );
+  }
+
+  it('never lets suffix resemblance authorize deleting an execution registered to another stream', async () => {
+    const session = createTestSession();
+    const executionId = 'abc777' as ExecutionId;
+    const ownerStream = `owner@model#${executionId}` as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: ownerStream,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+    });
+    // Carries the execution's id as a name suffix but has no sidecar
+    // ownership: a formatting hint, not deletion authority.
+    const impostor = `rogue@model#${executionId}` as StreamTabId;
+    session.transcripts.ensureStream(impostor);
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      await expect(stores.deleteStream(impostor)).resolves.toBe('deleted');
+      expect(deleteExecution).not.toHaveBeenCalled();
+      await expect(
+        getExecutionStore(executionId).readMeta(),
+      ).resolves.toMatchObject({ streamId: ownerStream });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('fails closed when the suffix-named execution has malformed metadata', async () => {
+    const session = createTestSession();
+    const executionId = 'abc999' as ExecutionId;
+    // Malformed present metadata may well register another owner stream; it
+    // must not be treated like an absent legacy record.
+    await getExecutionStore(executionId).write('meta', { timestamp: 42 });
+    const stream = `corrupt@model#${executionId}` as StreamTabId;
+    session.transcripts.ensureStream(stream);
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+      expect(deleteExecution).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      session.dispose();
+    }
+  });
+
+  it('propagates metadata storage failures instead of deciding ownership', async () => {
+    const session = createTestSession();
+    const executionId = 'abc111' as ExecutionId;
+    const stream = `flaky@model#${executionId}` as StreamTabId;
+    session.transcripts.ensureStream(stream);
+    const readMetaStrict = vi
+      .spyOn(getExecutionStore(executionId), 'readMetaStrict')
+      .mockRejectedValue(new Error('storage read failed'));
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      await expect(stores.deleteStream(stream)).rejects.toThrow(
+        'storage read failed',
+      );
+      expect(deleteExecution).not.toHaveBeenCalled();
+      expect(session.transcripts.has(stream)).toBe(true);
+    } finally {
+      readMetaStrict.mockRestore();
+      session.dispose();
+    }
+  });
+
+  it('retains only the unreadable stream during bulk deletion, deleting the rest', async () => {
+    const session = createTestSession();
+    const flakyExecutionId = 'abc222' as ExecutionId;
+    const goodExecutionId = 'abc333' as ExecutionId;
+    const flakyStream = `flaky@model#${flakyExecutionId}` as StreamTabId;
+    const goodStream = `good@model#${goodExecutionId}` as StreamTabId;
+    session.transcripts.ensureStream(flakyStream);
+    session.transcripts.ensureStream(goodStream);
+    await getExecutionStore(goodExecutionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    const readMetaStrict = vi
+      .spyOn(getExecutionStore(flakyExecutionId), 'readMetaStrict')
+      .mockRejectedValue(new Error('storage read failed'));
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      const result = await stores.deleteAll();
+
+      expect(result.failed).toEqual(new Set([flakyStream]));
+      expect(deleteExecution).toHaveBeenCalledWith(
+        goodExecutionId,
+        expect.anything(),
+      );
+      expect(deleteExecution).not.toHaveBeenCalledWith(
+        flakyExecutionId,
+        expect.anything(),
+      );
+      expect(session.transcripts.has(flakyStream)).toBe(true);
+      expect(session.transcripts.has(goodStream)).toBe(false);
+    } finally {
+      readMetaStrict.mockRestore();
+      warn.mockRestore();
+      session.dispose();
+    }
+  });
+
+  it('keeps the suffix boundary for legacy records without registration provenance', async () => {
+    const session = createTestSession();
+    const executionId = 'abc888' as ExecutionId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    const stream = `legacy@model#${executionId}` as StreamTabId;
+    session.transcripts.ensureStream(stream);
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
+      expect(deleteExecution).toHaveBeenCalledWith(
+        executionId,
+        expect.anything(),
+      );
     } finally {
       session.dispose();
     }

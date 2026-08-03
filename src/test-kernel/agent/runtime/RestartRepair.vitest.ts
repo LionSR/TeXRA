@@ -238,33 +238,6 @@ describe('repairRestartedStreams', () => {
     }
   });
 
-  it('derives the lease identity when restart metadata has no execution mapping', async () => {
-    const executionId = 'a8644a' as ExecutionId;
-    const streamId = `tool@model#${executionId}` as StreamTabId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
-    const runWithInactiveExecutionLease = vi.fn(async () => ({
-      status: 'active' as const,
-      heartbeatAt: 123,
-    }));
-    const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
-
-    await repairRestartedStreams({
-      streamStatus,
-      waitingStreams: new Set(),
-      executionIds: new Map(),
-      closeRunningGroups,
-      runWithInactiveExecutionLease,
-    });
-
-    expect(runWithInactiveExecutionLease).toHaveBeenCalledWith(
-      executionId,
-      expect.any(Function),
-    );
-    expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-    expect(closeRunningGroups).not.toHaveBeenCalled();
-  });
-
   it('repairs resumable running streams to WAITING with neutral group closure', async () => {
     const streamId = 'stream-waiting' as StreamTabId;
     const executionId = 'execution-waiting' as ExecutionId;
@@ -719,32 +692,5 @@ describe('repairRestartedStreams', () => {
       },
     });
     expect(result.terminalStatusUpdated).toEqual([executionId]);
-  });
-
-  it('terminalizes a suffix-derived execution without a snapshot mapping', async () => {
-    const executionId = 'de1a1ed8644' as ExecutionId;
-    const streamId = `assistant#${executionId}` as StreamTabId;
-    const store = getExecutionStore(executionId);
-    await store.writeMeta({ timestamp: '2026-07-16T00:00:00.000Z' });
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
-
-    try {
-      const result = await repairRestartedStreams({
-        streamStatus,
-        waitingStreams: new Set(),
-        executionIds: new Map(),
-        repairStreams: [streamId],
-        closeRunningGroups: async () => [],
-      });
-
-      await expect(store.readMeta()).resolves.toMatchObject({
-        terminalStatus: EXECUTION_STATUS.ERROR,
-        outcome: RUN_OUTCOME.FAILED,
-      });
-      expect(result.terminalStatusUpdated).toEqual([executionId]);
-    } finally {
-      await store.clear();
-    }
   });
 });

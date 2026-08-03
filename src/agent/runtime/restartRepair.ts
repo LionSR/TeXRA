@@ -7,7 +7,6 @@ import {
   EXECUTION_LEASE_STALE_MS,
   runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
 } from '@agent/storage/executionLease';
-import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { deriveResumability } from '@agent/storage/resumability';
 import type {
@@ -259,8 +258,10 @@ export async function repairRestartedStreams(
     options.repairStreams,
   )) {
     if (options.signal?.aborted) break;
-    const executionId =
-      options.executionIds.get(streamId) ?? executionIdFromStream(streamId);
+    // `executionIds` is the caller-owned identity channel: SessionHandle
+    // populates it from snapshot sidecars plus the explicit legacy suffix
+    // boundary. No second suffix decode happens here (#9590 A2).
+    const executionId = options.executionIds.get(streamId);
     let repairStarted = false;
     try {
       const repair = async () => {

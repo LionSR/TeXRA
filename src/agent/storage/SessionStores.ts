@@ -7,7 +7,7 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
 } from '@agent/storage/executionListing';
-import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
 import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -277,13 +277,20 @@ export class SessionStores {
     );
   }
 
-  /** Persisted run-descriptor id, falling back to the stream-name id. */
+  /**
+   * Persisted run-descriptor id (the stream→execution reverse edge), falling
+   * back to the suffix-derived legacy boundary. Suffix resemblance alone never
+   * admits an execution directory into deletion: the boundary rejects a
+   * derived id whose registered metadata names a different stream (#9590 A2).
+   */
   private async persistedOrDerivedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
       (await this.snapshots.readPersistedExecutionId(stream)) ??
-      executionIdFromStream(stream)
+      (await legacyExecutionIdFromStreamSuffix(stream, {
+        malformedMeta: 'reject',
+      }))
     );
   }
 
@@ -328,19 +335,41 @@ export class SessionStores {
     const canonicalStreams = new Set(this.streamLogs.keys());
     const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
+    const failed = new Set<StreamTabId>();
+    const retainUnreadable = (stream: StreamTabId, error: unknown): void => {
+      // Per-stream isolation: one unreadable ownership record retains that
+      // stream instead of failing the whole bulk deletion before it starts.
+      logger.warn(
+        CHANNEL,
+        `Stream ${stream} was retained because its execution ownership could not be read: ${toErrorMessage(error)}`,
+        { data: error },
+      );
+      failed.add(stream);
+    };
     for (const stream of snapshotStreams) {
-      const executionId = await this.persistedOrDerivedExecutionId(stream);
-      if (executionId) executionIdsByStream.set(stream, executionId);
+      try {
+        const executionId = await this.persistedOrDerivedExecutionId(stream);
+        if (executionId) executionIdsByStream.set(stream, executionId);
+      } catch (error) {
+        retainUnreadable(stream, error);
+      }
     }
     for (const stream of streamIds) {
-      if (executionIdsByStream.has(stream)) continue;
-      const derived = executionIdFromStream(stream);
-      if (derived) executionIdsByStream.set(stream, derived);
+      if (failed.has(stream) || executionIdsByStream.has(stream)) continue;
+      try {
+        const derived = await legacyExecutionIdFromStreamSuffix(stream, {
+          malformedMeta: 'reject',
+        });
+        if (derived) executionIdsByStream.set(stream, derived);
+      } catch (error) {
+        retainUnreadable(stream, error);
+      }
     }
 
     const streamsByExecution = new Map<ExecutionId, StreamTabId[]>();
     const streamsWithoutExecution: StreamTabId[] = [];
     for (const stream of streamIds) {
+      if (failed.has(stream)) continue;
       const executionId = executionIdsByStream.get(stream);
       if (!executionId) {
         streamsWithoutExecution.push(stream);
@@ -351,7 +380,6 @@ export class SessionStores {
       streamsByExecution.set(executionId, streams);
     }
     const active = new Set<StreamTabId>();
-    const failed = new Set<StreamTabId>();
     await Promise.all(
       streamsWithoutExecution.map(async (stream) => {
         try {

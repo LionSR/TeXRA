@@ -42,6 +42,7 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runAgent } from '@agent/runtime/runAgent';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 const EXECUTION_ID = 'run-agent-owner' as ExecutionId;
@@ -82,7 +83,23 @@ describe('runAgent execution ownership', () => {
     );
 
     expect(mocks.registerExecution).toHaveBeenCalledOnce();
+    // #9590 obligation 1: registration carries the birth stream identity and
+    // completes before the run — so before any transcript/snapshot fact.
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      EXECUTION_ID,
+      CONFIG,
+      CONFIG.agent,
+      expect.objectContaining({
+        streamId: getStreamTabId(CONFIG.agent, CONFIG.model, {
+          executionId: EXECUTION_ID,
+        }),
+      }),
+    );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
+    expect(
+      mocks.registerExecution.mock.invocationCallOrder[0] ??
+        Number.POSITIVE_INFINITY,
+    ).toBeLessThan(mocks.executeAgent.mock.invocationCallOrder[0] ?? 0);
     expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
     );

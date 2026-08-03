@@ -10,13 +10,19 @@
  * a generic failure.
  */
 import { getExecutionStore } from '@agent/storage';
-import { getStreamTabId } from '@agent/runtime/streamTab';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  registeredStreamId,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
-import { resolvePersistedStreamIdForExecution } from './executionStreamResolver';
+import {
+  resolvePersistedStreamIdForExecution,
+  type PersistedStreamIdResolution,
+} from './executionStreamResolver';
 import type { TraceDocument } from './traceDocumentSchema';
 
 export type AssembleTraceResult =
@@ -49,10 +55,17 @@ export async function assembleTrace(
   // One call-scoped snapshot store serves both the resolver's sidecar scan and
   // the snapshot read, so the two share its per-stream KV handles.
   const snapshotStore = new StreamSnapshotStore();
-  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
-    snapshotStore,
-    streamLogStore,
-  });
+  // A registration-proven record carries its stream identity directly; only
+  // legacy records (no registration provenance) enter the compatibility
+  // resolver and its sidecar/suffix scans (#9590 A1).
+  const registered = registeredStreamId(meta);
+  const resolved: PersistedStreamIdResolution | null =
+    registered !== undefined
+      ? { streamId: registered }
+      : await resolvePersistedStreamIdForExecution(executionId, {
+          snapshotStore,
+          streamLogStore,
+        });
   if (resolved && !resolved.streamId) {
     const candidateStreamIds = resolved.exactExecutionCandidateStreamIds ?? [];
     return candidateStreamIds.length > 0
@@ -60,10 +73,8 @@ export async function assembleTrace(
       : { status: 'streamLogs_missing' };
   }
   if (!config) return { status: 'config_missing' };
-  const fallbackStreamId = getStreamTabId(config.agent, config.model, {
-    executionId,
-  });
-  const streamId = resolved?.streamId ?? fallbackStreamId;
+  const streamId = resolved?.streamId;
+  if (!streamId) return { status: 'streamLogs_missing' };
 
   const [, snapshot] = await Promise.all([
     streamLogStore.ensureLoaded(streamId),
