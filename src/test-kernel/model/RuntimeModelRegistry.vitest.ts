@@ -122,6 +122,7 @@ describe('runtime model registry', () => {
     expect(copilotRouteForModel('sonnet46')).toEqual({
       access: 'allowed',
       reference: { vendor: 'copilot', id: SONNET.id },
+      maxInputTokens: SONNET.maxInputTokens,
     });
     // No synthetic picker identity is materialized for the route.
     expect(copilotRouteForModel('copilot:sonnet46')).toBeUndefined();

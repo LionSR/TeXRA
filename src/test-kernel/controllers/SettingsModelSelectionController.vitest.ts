@@ -187,6 +187,7 @@ describe('SettingsModelSelectionController', () => {
             {
               access: 'consent-required',
               reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+              maxInputTokens: 200_000,
             },
           ],
         ]),

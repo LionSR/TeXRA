@@ -1,5 +1,7 @@
-// Local imports
+// Third-party imports
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
+
+// Local imports
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type {
@@ -45,8 +47,6 @@ import { getMimeType } from '@utils/files';
 import { ModelHandler } from '../ModelHandler';
 import { toVscodeLmTools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
-
-// Third-party imports
 
 type VscodeLmUsage = undefined;
 

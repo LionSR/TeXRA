@@ -1,6 +1,5 @@
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
-import * as logger from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
 import { platform } from '@platform/platform';
@@ -9,8 +8,6 @@ import type {
   LanguageModelInfo,
   LanguageModelReference,
 } from '@platform/languageModel';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
 
 /**
  * Prefix of the retired synthetic Copilot picker ids (`copilot:<baseModel>`).
@@ -29,6 +26,12 @@ const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
 export interface CopilotModelRoute {
   readonly access: LanguageModelAccessState;
   readonly reference: LanguageModelReference;
+  /**
+   * Editor-reported input-token ceiling for the discovered model. Carried so
+   * the routed handler caps context at what the route actually serves, not
+   * the base provider's window.
+   */
+  readonly maxInputTokens: number;
 }
 
 export interface RuntimeModelDirectFallback {
@@ -112,6 +115,7 @@ async function discoverCopilotRoutes(): Promise<
         vendor: info.vendor,
         id: info.id,
       },
+      maxInputTokens: info.maxInputTokens,
     });
   }
   return entries;
@@ -198,18 +202,16 @@ export function copilotRouteForModel(
 
 /**
  * Refresh and return the discovered Copilot routes keyed by canonical base
- * model id. Runtime discovery is an optional host capability: consumers
- * receive an empty catalogue instead of stale entries when it fails.
+ * model id. Runtime discovery is an optional host capability: the host
+ * adapter logs port-level discovery failures (see `createLanguageModelPort`),
+ * and consumers receive an empty catalogue instead of stale entries.
  */
 export async function discoveredCopilotRoutes(): Promise<
   ReadonlyMap<string, CopilotModelRoute>
 > {
   try {
     await refreshRuntimeModelRegistry();
-  } catch (error) {
-    logger.warn('model', 'Copilot route discovery failed', {
-      data: { error: toErrorMessage(error) },
-    });
+  } catch {
     return new Map();
   }
   return catalogue.entries;

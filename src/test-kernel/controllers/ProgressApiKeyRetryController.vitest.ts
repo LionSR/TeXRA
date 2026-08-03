@@ -2,11 +2,13 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import type { ApiProvider } from '@model/apiProviders';
+import { prefersCopilotRoute } from '@model/copilotRouting';
+import { installPlatform } from '@test/support/setupPlatform';
 
 const PROVIDERS = [
   'openai',
@@ -418,5 +420,28 @@ describe('ProgressApiKeyRetryController', () => {
     assert.equal(started, true);
     assert.deepEqual(harness.includedAccessValues, [false]);
     assert.equal(harness.invalidations, 1);
+  });
+
+  it('suppresses the Copilot route preference only during the fallback launch', async () => {
+    await installPlatform({
+      globalState: { 'texra.copilotRouteModels': ['sonnet46'] },
+    });
+    const harness = createHarness();
+
+    expect(prefersCopilotRoute('sonnet46')).toBe(true);
+    const started = await harness.controller.runCopilotFallbackWithRouting(
+      { model: 'sonnet46', exhaustionReason: 'copilot-subscription' },
+      async () => {
+        // Handler construction during launch must not see the preference,
+        // or the retry would dispatch through Copilot again (#9635).
+        expect(prefersCopilotRoute('sonnet46')).toBe(false);
+        return true;
+      },
+    );
+
+    expect(started).toBe(true);
+    // The preference itself is the user's standing choice; the launched run
+    // keeps the direct handler it was built with.
+    expect(prefersCopilotRoute('sonnet46')).toBe(true);
   });
 });

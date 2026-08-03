@@ -72,12 +72,14 @@ export class ToolUsePrepareNode<C> extends Node<
         rebuiltPrompts.systemPrompt,
         rebuiltPrompts.instructionSuffix,
       );
+      const workspaceState = AgentWorkspaceState.fromSnapshot(
+        resumeShared.stateSlices.workspaceSnapshot,
+      );
       return {
         messages: resumeShared.messages,
         runState: resumeShared.stateSlices.runStateSnapshot,
-        workspaceState: AgentWorkspaceState.fromSnapshot(
-          resumeShared.stateSlices.workspaceSnapshot,
-        ),
+        workspaceState,
+        cycleStartLastResponse: workspaceState.assembly.lastResponse,
         userChannels: {
           input: Object.freeze({
             ...resumeShared.stateSlices.userChannels.input,
@@ -139,6 +141,7 @@ export class ToolUsePrepareNode<C> extends Node<
       messages,
       runState,
       workspaceState,
+      cycleStartLastResponse: workspaceState.assembly.lastResponse,
       userChannels: userVarChannels,
       shouldSkipCycle: false,
       systemPrompt: systemMessage,

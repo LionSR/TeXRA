@@ -57,3 +57,24 @@ export function shouldRouteModelThroughCopilot(model: string): boolean {
     copilotRouteForModel(model)?.access === 'allowed'
   );
 }
+
+/**
+ * Why a Copilot-preferred model cannot be served through Copilot right now,
+ * or undefined when it can. The preference is a hard route choice (#9635):
+ * handler routing reports this reason and never falls through to a provider
+ * key, OpenRouter, or a subscription the user did not choose for this model.
+ */
+export function copilotRouteUnavailableReason(
+  model: string,
+): string | undefined {
+  if (!prefersCopilotRoute(model)) return undefined;
+  if (shouldRouteModelThroughCopilot(model)) return undefined;
+  switch (copilotRouteForModel(model)?.access) {
+    case 'consent-required':
+      return `Copilot access to "${model}" needs your consent in VS Code. Grant it from Settings → Models, or clear the Copilot route preference.`;
+    case 'unavailable':
+      return `Copilot access to "${model}" is temporarily unavailable in VS Code.`;
+    default:
+      return `VS Code does not currently offer "${model}" through Copilot.`;
+  }
+}
