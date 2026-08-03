@@ -52,7 +52,7 @@ function createSummaryKv(): KVStore {
 type StreamLogListener = (streamId: StreamTabId) => void;
 
 // No per-field `.catch()`: this schema covers the crash-recovery flags
-// (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowTask`)
+// (`hasRunningGroup`, `hasRunningStreamingText`, `hasNonterminalWorkflowCall`)
 // that `hasSomethingRunning()` gates orphan recovery on. A `.catch()` here
 // would silently turn a malformed field into `undefined` (recovery skipped)
 // instead of failing the whole `safeParse`, which routes through the
@@ -62,8 +62,7 @@ const StreamLogSummarySchema = z.object({
   lastTimestamp: z.number().finite().optional(),
   hasRunningGroup: z.boolean().optional(),
   hasRunningStreamingText: z.boolean().optional(),
-  // Legacy persisted key retained for existing summary sidecars.
-  hasNonterminalWorkflowTask: z.boolean().optional(),
+  hasNonterminalWorkflowCall: z.boolean().optional(),
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
 
@@ -177,7 +176,7 @@ function toSummary(source: SummarySource): StreamLogSummary {
     hasRunningGroup: source.hasRunningGroup,
     hasRunningStreamingText: source.hasRunningStreamingText,
     ...(source.hasNonterminalWorkflowCall
-      ? { hasNonterminalWorkflowTask: true }
+      ? { hasNonterminalWorkflowCall: true }
       : {}),
   };
 }
@@ -236,7 +235,7 @@ function hasSomethingRunning(summary: StreamLogSummary | undefined): boolean {
   return (
     summary?.hasRunningGroup === true ||
     summary?.hasRunningStreamingText === true ||
-    summary?.hasNonterminalWorkflowTask === true
+    summary?.hasNonterminalWorkflowCall === true
   );
 }
 
@@ -1101,9 +1100,9 @@ export class StreamLogStore {
       existing.hasRunningGroup = logInstance.hasRunningGroup;
       existing.hasRunningStreamingText = logInstance.hasRunningStreamingText;
       if (logInstance.hasNonterminalWorkflowCall) {
-        existing.hasNonterminalWorkflowTask = true;
+        existing.hasNonterminalWorkflowCall = true;
       } else {
-        delete existing.hasNonterminalWorkflowTask;
+        delete existing.hasNonterminalWorkflowCall;
       }
     } else {
       this.summaries.set(streamId, toSummary(logInstance));

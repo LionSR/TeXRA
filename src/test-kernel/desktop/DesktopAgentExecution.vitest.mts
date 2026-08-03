@@ -30,6 +30,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
+  buildRunDescriptor,
   type ExecutionId,
   type OutputFileInfo,
   type StorageKey,
@@ -2037,7 +2038,13 @@ describe('DesktopProgressBridge', () => {
     const kvRead = vi.fn(async (key: string) =>
       key === 'meta'
         ? {
-            executionId,
+            runDescriptor: buildRunDescriptor({
+              streamId: 'stream-1',
+              executionId,
+              agent: runConfig.agent,
+              category: runConfig.agentCategory,
+              kind: 'agent',
+            }),
             // Legacy sidecar shape: the retired TaskState wrapper, still read
             // by the snapshot store's disk-read shim.
             taskState: {
@@ -2366,7 +2373,8 @@ describe('DesktopProgressBridge', () => {
         state: expect.objectContaining({
           sessionType: 'workflow',
           model: 'gemini31p',
-          instruction: 'Check this draft.',
+          workflowInstruction: 'Check this draft.',
+          toolUseInstruction: '',
           inputFiles: ['main.tex', 'appendix.tex'],
           outputFiles: ['main.review.tex'],
         }),
