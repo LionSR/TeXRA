@@ -43,8 +43,8 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import * as codexPreference from '@model/codex/codexPreference';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -90,7 +90,7 @@ function createContext(
   session: TuiSession = createSession(),
   overrides: Partial<SlashCommandContext> = {},
 ): SlashCommandContext {
-  let approvalPolicy: CliApprovalPolicy = 'ask';
+  let approvalPolicy: TexraApprovalPolicy = 'ask';
   return {
     cliContext: createCliContext(),
     session,

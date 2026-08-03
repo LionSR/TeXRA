@@ -7,15 +7,17 @@ import { isFileNotFoundError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import {
+  TexraApprovalPolicySchema,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { isObject } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
-  CLI_APPROVAL_POLICIES,
   CLI_OUTPUT_FORMATS,
   CLI_SETTING_PATHS,
-  type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
 import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
@@ -29,7 +31,7 @@ interface CliCommandConfig {
 
 export interface CliConfigValues extends CliCommandConfig {
   readonly outputFormat?: CliOutputFormat;
-  readonly approvalPolicy?: CliApprovalPolicy;
+  readonly approvalPolicy?: TexraApprovalPolicy;
   readonly chat?: CliCommandConfig;
   readonly run?: CliCommandConfig;
 }
@@ -94,13 +96,12 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
   message: 'unknown model',
 });
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
-const ApprovalPolicySchema = z.enum(CLI_APPROVAL_POLICIES);
 
 const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
   ['outputFormat', OutputFormatSchema],
-  ['approvalPolicy', ApprovalPolicySchema],
+  ['approvalPolicy', TexraApprovalPolicySchema],
 ];
 
 const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
@@ -213,7 +214,11 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
     agent: pickValue(record, 'agent', NonEmptyStringSchema),
     model: pickValue(record, 'model', ModelSchema),
     outputFormat: pickValue(record, 'outputFormat', OutputFormatSchema),
-    approvalPolicy: pickValue(record, 'approvalPolicy', ApprovalPolicySchema),
+    approvalPolicy: pickValue(
+      record,
+      'approvalPolicy',
+      TexraApprovalPolicySchema,
+    ),
     chat: chat ? pickCommandConfig(chat) : undefined,
     run: run ? pickCommandConfig(run) : undefined,
   };
