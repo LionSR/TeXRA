@@ -112,6 +112,11 @@ const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
     message:
       'Agent core must not import model handler implementations; move provider-neutral contracts to @agent/types or a core helper.',
   },
+  {
+    group: ['@tools', '@tools/**'],
+    message:
+      'Agent core must not depend on tool implementations; src/tools consumes agent/core, not the reverse — move shared logic to agent/core or @shared.',
+  },
   ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
 ];
 
