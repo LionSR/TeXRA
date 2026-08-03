@@ -37,7 +37,11 @@ import { errorResult } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveExecutionId } from '@utils/core/idHash';
-import { createRehydratedChildStream, getChildStreamId } from './childStream';
+import {
+  childStreamDescription,
+  createRehydratedChildStream,
+  getChildStreamId,
+} from './childStream';
 
 // Local file imports
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
@@ -367,6 +371,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       await registerExecution(runExecutionId, runConfig, meta.name, {
         streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
         parentExecutionId: runScope.executionId,
+        description: childStreamDescription(meta.description),
       });
     } catch (error) {
       // A relaunch whose prior run is still in flight shares this deterministic

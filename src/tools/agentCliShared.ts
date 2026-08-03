@@ -37,6 +37,7 @@ import { generateExecutionId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
+  childStreamDescription,
   createChildStream,
   getChildStreamId,
   type ChildStream,
@@ -196,6 +197,7 @@ export async function launchAgentCliSession(
     await registerExecution(executionId, params.config, params.agentName, {
       streamId: childStreamId,
       parentExecutionId: params.parentExecutionId,
+      description: childStreamDescription(params.description),
     });
   } catch {
     throw new ToolError(params.registerFailedMessage);

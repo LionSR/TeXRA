@@ -118,7 +118,12 @@ describe('CLI transcript session policy', () => {
     );
     const orphan = 'orphaned-cli-stream' as StreamTabId;
     const writer = new StreamSnapshotStore();
-    snapshotFacts(writer).setDescription(orphan, 'orphaned sidecar');
+    // Materialize a persisted sidecar via a durable current field;
+    // descriptions are memory-only for current records (#9590 Stage 6).
+    snapshotFacts(writer).setParentStream(
+      orphan,
+      'orphan-parent' as StreamTabId,
+    );
     await writer.flush();
     await expect(writer.listPersistedStreams()).resolves.toEqual([orphan]);
 

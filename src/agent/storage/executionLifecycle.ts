@@ -112,9 +112,17 @@ export async function registerExecution(
     readonly streamId: StreamTabId;
     readonly parentExecutionId?: ExecutionId;
     readonly category?: string;
+    /**
+     * Display description persisted on `ExecutionMeta.description` — the one
+     * description authority (#9590 A4). Child-stream launchers pass the
+     * delegated task label here so it is durable at birth; the later
+     * `updateStreamDescription` session event is display-only and no longer
+     * writes a sidecar copy (#9590 Stage 6).
+     */
+    readonly description?: string;
   },
 ): Promise<void> {
-  const { streamId, parentExecutionId, category } = options;
+  const { streamId, parentExecutionId, category, description } = options;
   await acquireFreshExecutionLease(executionId);
   const runWithOwnership = captureOwnedExecutionLease(executionId);
   await runWithOwnership(async () => {
@@ -127,6 +135,7 @@ export async function registerExecution(
         streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
         parentExecutionId,
         ...(category ? { category } : {}),
+        ...(description ? { description } : {}),
       };
       const persistedConfig = normalizeWriterCategory(
         pinExecutionWorkingDirectory(config),

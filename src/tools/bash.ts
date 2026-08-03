@@ -54,6 +54,7 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/define';
 import {
+  childStreamDescription,
   createChildStream,
   getChildStreamId,
   type ChildStream,
@@ -415,6 +416,7 @@ export class BashTool extends defineTool({
       streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
       parentExecutionId,
       category: 'process',
+      description: childStreamDescription(command),
     });
     const runWithOwnership = captureOwnedExecutionLease(executionId);
 
