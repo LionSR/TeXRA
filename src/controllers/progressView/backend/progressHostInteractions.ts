@@ -22,13 +22,13 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import type {
-  ToolEditApprovalRequest,
-  ToolEditApprovalResult,
-} from '@platform/interfaces';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
+import type {
+  ToolEditApprovalRequest,
+  ToolEditApprovalResult,
+} from '@tools/approval/toolEditApproval';
 
 import {
   cancelApprovalRequestHandlers,
