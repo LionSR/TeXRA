@@ -111,6 +111,8 @@ export async function buildProfileMessage(
     if (serverSideKeyService.getUseIncludedModelAccess()) {
       await serverSideKeyService.canUseServerSideKeys();
     }
+    // Usage belongs to the account, not to the active routing mode.
+    await serverSideKeyService.refreshSpendingStatus();
     // Read AFTER priming, so a quota-exhaustion auto-switch (included -> personal,
     // flipped inside canUseServerSideKeys) is reflected in apiAccessMode /
     // quotaAutoSwitched rather than reporting the pre-switch mode.
