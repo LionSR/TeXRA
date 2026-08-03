@@ -21,7 +21,6 @@ import type {
   CreateResponseResult,
   ExtractResponseResult,
   DeepSeekToolCall,
-  ModelCredentialSelection,
   OpenAIToolCall,
 } from '@agent/types/ModelHandlerContracts';
 import {
@@ -69,11 +68,11 @@ import {
 import {
   extractOpenAIPartialTail,
   extractReasoningDelta as extractReasoningDeltaFromChunk,
-  logOpenAICompatibleClientConfig,
 } from './openAIChatHelpers';
 import { toOpenAITools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 import { ModelHandler } from '../ModelHandler';
+import { OpenAIClientModelHandler } from './OpenAIClientModelHandler';
 import {
   BaseReasoningStreamAggregator,
   type StreamingAggregator,
@@ -169,11 +168,10 @@ function classifyOpenAIResponse(responseObject: any): OpenAIClassifiedResponse {
  */
 export class ModelHandlerOpenAI<
   TCall extends OpenAIToolCall | DeepSeekToolCall = OpenAIToolCall,
-> extends ModelHandler<
+> extends OpenAIClientModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   TCall,
-  OpenAI,
   ChatCompletion,
   ChatCompletionContentPart
 > {
@@ -237,46 +235,6 @@ export class ModelHandlerOpenAI<
         content: summary,
       }),
     );
-  }
-
-  /**
-   * Creates a new OpenAI client using the stored credentials.
-   * Handles API key retrieval, base URL resolution, and logging.
-   */
-  protected async createOpenAIClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    const credential = await this.resolveClientCredential(selection);
-    // there is a time out parameter that can be set; default is 10 minutes
-    const client = new OpenAI({
-      apiKey: credential.apiKey,
-      baseURL: credential.baseUrl,
-      fetch: this.longRunningModelFetch,
-      maxRetries: 0,
-    });
-    logOpenAICompatibleClientConfig(
-      this.logger,
-      this.config,
-      client.baseURL,
-      credential.route,
-      this.shouldUseServerSideKeys(),
-    );
-    return this.rememberClientCredentialRoute(
-      client,
-      credential.route,
-      credential.apiKey,
-    );
-  }
-
-  /** Returns OpenAI client with configured API key. */
-  async getClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    return this.createOpenAIClient(selection);
-  }
-
-  override getRetryEndpoint(client: OpenAI): string {
-    return client.baseURL;
   }
 
   /**

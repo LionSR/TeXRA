@@ -76,6 +76,7 @@ import {
 import { renderEmptyState } from '@shared/wa/emptyState';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DesktopOpenWorkbenchMessageSchema,
@@ -1187,9 +1188,7 @@ function rerenderShell(): void {
 }
 
 function toBootstrapErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'TeXRA could not finish starting up.';
+  return extractErrorMessage(error) ?? 'TeXRA could not finish starting up.';
 }
 
 function renderBootstrapFallback(error: unknown): void {

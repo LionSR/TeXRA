@@ -12,11 +12,11 @@ import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
-// Local imports - shared schemas and types
-import type { LaunchTarget } from '@shared/schemas';
-
-// Local imports - shared styles
+// Local imports - shared schemas, styles, and commands
 import { designTokens } from '@shared/styles';
+import type { LaunchTarget } from '@shared/schemas';
+import { formatDesktopAccelerator } from '@shared/commands/accelerators';
+import { commandCatalogById } from '@shared/commands/catalog';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { selectStyles } from '@shared/styles/selectStyles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -350,15 +350,19 @@ export class InstructionPanel extends LitElement {
   }
 
   /**
-   * Keyboard-shortcut label shown in the Execute button. Matches the
-   * `texra.execute` keybinding declared in the extension's package.json
-   * (cmd+option+e on macOS, ctrl+alt+e elsewhere).
+   * Keyboard-shortcut label shown in the Execute button, derived from the
+   * `texra.execute` keybinding registered in the command catalog so the
+   * label can't drift from the actual binding.
    */
   private get executeShortcutLabel(): string {
     const isMac =
       typeof navigator !== 'undefined' &&
       /Mac|iPhone|iPod|iPad/.test(navigator.platform || '');
-    return isMac ? '⌘⌥E' : 'Ctrl+Alt+E';
+    const platform: NodeJS.Platform = isMac ? 'darwin' : 'linux';
+    const keybinding = commandCatalogById.get('texra.execute')?.keybinding;
+    const accelerator =
+      isMac && keybinding?.mac ? keybinding.mac : keybinding?.key;
+    return formatDesktopAccelerator(accelerator, platform) ?? 'Ctrl+Alt+E';
   }
 
   private handleAgentSettings(): void {

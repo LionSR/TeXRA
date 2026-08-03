@@ -24,7 +24,6 @@ import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
-  ModelCredentialSelection,
   OpenAIResponseToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
@@ -72,7 +71,6 @@ import {
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
 import { tagOpenAISdkError } from './openAISdkError';
-import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
 import {
   formatAttachmentSummary,
@@ -80,7 +78,7 @@ import {
   uploadAndRecordToolAttachments,
 } from '../utils/toolAttachmentUtils';
 import { toOpenAIResponseTools } from '../toolConversion';
-import { ModelHandler } from '../ModelHandler';
+import { OpenAIClientModelHandler } from './OpenAIClientModelHandler';
 import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
@@ -287,11 +285,10 @@ function mergeMissingStreamedOutputItems(
  * owns) must be used by a single agent execution at a time. Do not share
  * instances across concurrent invocations.
  */
-export class ModelHandlerOpenAIResponse extends ModelHandler<
+export class ModelHandlerOpenAIResponse extends OpenAIClientModelHandler<
   ResponseInputItem,
   ResponseUsage,
   OpenAIResponseToolCall,
-  OpenAI,
   Response,
   ResponseInputContent
 > {
@@ -1112,42 +1109,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // a same-turn retry, resend this turn's stale compactedMessages, and
     // silently drop everything appended since (tool outputs, new user turns).
     this.compactionResult = undefined;
-  }
-
-  /** Creates a configured OpenAI client instance. */
-  protected async createOpenAIClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    const credential = await this.resolveClientCredential(selection);
-    const client = new OpenAI({
-      apiKey: credential.apiKey,
-      baseURL: credential.baseUrl,
-      fetch: this.longRunningModelFetch,
-      maxRetries: 0,
-    });
-    logOpenAICompatibleClientConfig(
-      this.logger,
-      this.config,
-      client.baseURL,
-      credential.route,
-      this.shouldUseServerSideKeys(),
-    );
-    return this.rememberClientCredentialRoute(
-      client,
-      credential.route,
-      credential.apiKey,
-    );
-  }
-
-  /** Returns OpenAI client with configured API key. */
-  async getClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<OpenAI> {
-    return this.createOpenAIClient(selection);
-  }
-
-  override getRetryEndpoint(client: OpenAI): string {
-    return client.baseURL;
   }
 
   /** Reset conversation bookkeeping when starting a new session. */

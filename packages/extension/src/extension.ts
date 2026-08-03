@@ -100,7 +100,7 @@ import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -478,9 +478,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }
   } catch (error) {
-    const initError =
-      error instanceof Error ? error : new Error(toErrorMessage(error));
-    SupabaseClient.setInitError(initError);
+    SupabaseClient.setInitError(ensureError(error));
     logger.error(
       'extension',
       `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,

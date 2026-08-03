@@ -14,6 +14,8 @@ import {
   type LanguageModelReference,
   type LanguageModelResponsePart,
 } from '@platform/languageModel';
+import { isObject } from '@utils/core';
+import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 function translateLanguageModelError(
   error: unknown,
@@ -31,10 +33,7 @@ function translateLanguageModelError(
     );
   }
 
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error
-      ? (error as { code?: unknown }).code
-      : undefined;
+  const code = isObject(error) && 'code' in error ? error.code : undefined;
   switch (code) {
     case 'NoPermissions':
       return new LanguageModelPortError(
@@ -57,9 +56,7 @@ function translateLanguageModelError(
     default:
       return new LanguageModelPortError(
         LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN,
-        error instanceof Error && error.message
-          ? error.message
-          : `Language model${model} request failed.`,
+        extractErrorMessage(error) ?? `Language model${model} request failed.`,
         { cause: error },
       );
   }
