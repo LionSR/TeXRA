@@ -137,7 +137,11 @@ function sdkErrorKind(error: LanguageModelPortError): SdkErrorKind {
       return 'not_found';
     case LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED:
       return 'rate_limit';
+    case LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE:
+    case LANGUAGE_MODEL_PORT_ERROR_CODE.UNKNOWN:
+      return 'api_error';
     default:
+      error.code satisfies never;
       return 'api_error';
   }
 }
