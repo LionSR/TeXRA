@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { StreamTabId } from '@shared/schemas';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 
 const tempDirs: string[] = [];
 
@@ -117,7 +118,7 @@ describe('CLI transcript session policy', () => {
     );
     const orphan = 'orphaned-cli-stream' as StreamTabId;
     const writer = new StreamSnapshotStore();
-    writer.setDescription(orphan, 'orphaned sidecar');
+    snapshotFacts(writer).setDescription(orphan, 'orphaned sidecar');
     await writer.flush();
     await expect(writer.listPersistedStreams()).resolves.toEqual([orphan]);
 

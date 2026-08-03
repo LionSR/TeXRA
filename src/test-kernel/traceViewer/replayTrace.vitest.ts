@@ -22,6 +22,10 @@ import {
   cleanupTempDirs,
   createTempDirPlatform,
 } from '@test/support/tempDirPlatform';
+import {
+  appendTranscriptEntry,
+  updateTranscriptEntry,
+} from '@test/support/storeTestDrivers';
 import type { TraceDocument } from '@transcript';
 import { assembleTrace, StreamLogStore } from '@transcript';
 // Relative import: `packages/trace-viewer` is a separate workspace package
@@ -134,7 +138,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       executionId,
     });
     const store = await StreamLogStore.open();
-    store.append(streamId, {
+    appendTranscriptEntry(store, streamId, {
       id: 'terminal-stage',
       type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
       level: LOG_LEVELS.INFO,
@@ -143,7 +147,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       text: 'Legacy run',
       data: { status: 'running' },
     });
-    store.update(streamId, 'terminal-stage', {
+    updateTranscriptEntry(store, streamId, 'terminal-stage', {
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: { status: 'error', endTime: 200 },
     });

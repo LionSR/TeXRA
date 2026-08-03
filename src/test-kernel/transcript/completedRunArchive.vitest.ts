@@ -80,6 +80,10 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   readCompletedRunConversation,
@@ -116,9 +120,13 @@ async function seedStreams(
 ): Promise<StreamSnapshotStore> {
   const snapshots = new StreamSnapshotStore();
   for (const { streamId, agent = 'orchestrator', parent, todos } of seeds) {
-    snapshots.setRunConfig(streamId, runConfig(agent), executionId);
-    if (parent) snapshots.setParentStream(streamId, parent);
-    if (todos) snapshots.setTodos(streamId, todos);
+    snapshotFacts(snapshots).setRunConfig(
+      streamId,
+      runConfig(agent),
+      executionId,
+    );
+    if (parent) snapshotFacts(snapshots).setParentStream(streamId, parent);
+    if (todos) snapshotFacts(snapshots).setTodos(streamId, todos);
   }
   await snapshots.flush();
   return snapshots;
@@ -183,20 +191,23 @@ async function writeSidecarFixture(
 
   const logs = await StreamLogStore.open();
   logs.ensureStream(streamId);
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.USER_MESSAGE, {
       text: 'Fix the lemma.',
       data: { attachments: ['image'] },
     }),
   );
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.THINKING, {
       text: 'Consider the boundary terms.',
     }),
   );
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.WEB_SEARCH, {
       data: {
@@ -207,7 +218,8 @@ async function writeSidecarFixture(
       },
     }),
   );
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.WEB_FETCH, {
       data: {
@@ -220,7 +232,8 @@ async function writeSidecarFixture(
       },
     }),
   );
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.TOOL_USE, {
       data: {
@@ -233,14 +246,16 @@ async function writeSidecarFixture(
   );
   // Diagnostic row: deliberately skipped by the mapper (never lived in the
   // legacy conversation.json projection either).
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.STATISTICS, {
       text: 'Usage - input: 10, output: 5',
       data: { inputTokens: 10, outputTokens: 5 },
     }),
   );
-  logs.append(
+  appendTranscriptEntry(
+    logs,
     streamId,
     logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
       text: 'Done - the lemma is fixed.',
@@ -644,7 +659,8 @@ describe('completedRunArchive facade', () => {
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       streamId,
       logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Resuming...' }),
     );
@@ -686,7 +702,8 @@ describe('completedRunArchive facade', () => {
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       streamId,
       logRow(MESSAGE_TYPES.TOOL_USE, {
         data: {
@@ -697,7 +714,8 @@ describe('completedRunArchive facade', () => {
         },
       }),
     );
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       streamId,
       logRow(MESSAGE_TYPES.TOOL_USE, {
         data: {
@@ -767,16 +785,19 @@ describe('completedRunArchive facade', () => {
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(emptyStream);
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       emptyStream,
       logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Working...' }),
     );
     logs.ensureStream(fullStream);
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       fullStream,
       logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Real question' }),
     );
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       fullStream,
       logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Real answer' }),
     );
@@ -971,13 +992,13 @@ describe('completedRunArchive facade', () => {
     });
 
     const logs = await StreamLogStore.open();
-    logs.append(firstRoot, firstQuestion);
-    logs.append(firstRoot, firstAnswer);
+    appendTranscriptEntry(logs, firstRoot, firstQuestion);
+    appendTranscriptEntry(logs, firstRoot, firstAnswer);
     // The resumed sidecar copied the last settled row before appending turn 2.
-    logs.append(secondRoot, firstAnswer);
-    logs.append(secondRoot, secondQuestion);
-    logs.append(secondRoot, secondAnswer);
-    logs.append(child, childMessage);
+    appendTranscriptEntry(logs, secondRoot, firstAnswer);
+    appendTranscriptEntry(logs, secondRoot, secondQuestion);
+    appendTranscriptEntry(logs, secondRoot, secondAnswer);
+    appendTranscriptEntry(logs, child, childMessage);
     await logs.flush();
 
     const result = await readCompletedRunConversation(executionId);
@@ -1028,9 +1049,9 @@ describe('completedRunArchive facade', () => {
       timestamp: 1000,
     };
     const logs = await StreamLogStore.open();
-    logs.append(firstRoot, copiedQuestion);
-    logs.append(resumedRoot, copiedQuestion);
-    logs.append(resumedRoot, answer);
+    appendTranscriptEntry(logs, firstRoot, copiedQuestion);
+    appendTranscriptEntry(logs, resumedRoot, copiedQuestion);
+    appendTranscriptEntry(logs, resumedRoot, answer);
     await logs.flush();
 
     await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
@@ -1643,7 +1664,8 @@ describe('completedRunArchive facade', () => {
     await seedStreams(executionId, [{ streamId: root }]);
 
     const logs = await StreamLogStore.open();
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       root,
       logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
     );
@@ -1673,15 +1695,18 @@ describe('completedRunArchive facade', () => {
     ]);
 
     const logs = await StreamLogStore.open();
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       root,
       logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
     );
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       child,
       logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Child-only prompt' }),
     );
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       child,
       logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Child-only answer' }),
     );
@@ -1730,11 +1755,13 @@ describe('completedRunArchive facade', () => {
     ]);
 
     const logs = await StreamLogStore.open();
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       streamId,
       logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Delegated question' }),
     );
-    logs.append(
+    appendTranscriptEntry(
+      logs,
       streamId,
       logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Delegated answer' }),
     );

@@ -12,6 +12,7 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
+import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import {
   StreamLogStore,
   STREAM_LOGS_DIR,
@@ -73,8 +74,8 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     const store = await StreamLogStore.open();
 
     const streamId = 'reviewer@opus#e1';
-    store.append(streamId, entry('a', 'first'));
-    store.append(streamId, entry('b', 'second'));
+    appendTranscriptEntry(store, streamId, entry('a', 'first'));
+    appendTranscriptEntry(store, streamId, entry('b', 'second'));
 
     // The SAVE_DEBOUNCE_MS (300ms) timer has not fired in this synchronous
     // window, so nothing is on disk yet — this is exactly the tail the exit
@@ -96,7 +97,7 @@ describe('CLI StreamLog persistence (flush on exit is load-bearing)', () => {
     const store = StreamLogStore.ephemeral('test');
 
     // Ephemeral mode is deliberate and inspectable; it never reaches storage.
-    store.append('main@opus#e2', entry('x', 'headless'));
+    appendTranscriptEntry(store, 'main@opus#e2', entry('x', 'headless'));
     await store.flush();
 
     expect(storage.writes.size).toBe(0);

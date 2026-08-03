@@ -29,6 +29,7 @@ import {
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { StorageFS } from '@utils/files';
@@ -113,7 +114,7 @@ async function writeSidecarTodos(
 ): Promise<StreamTabId> {
   const streamId = `codex#${executionId}` as StreamTabId;
   const snapshots = new StreamSnapshotStore();
-  snapshots.setTodos(streamId, todos);
+  snapshotFacts(snapshots).setTodos(streamId, todos);
   await snapshots.flush();
   await StorageFS.write(
     path.join(streamDataDir(streamId), 'meta.json'),
@@ -276,7 +277,7 @@ describe('ExecutionsTool', () => {
         seedStreamStatusForTest(session.status, childStreamId, {
           phase: STREAM_PHASE.RUNNING,
         });
-        session.snapshots.setTodos(childStreamId, [
+        snapshotFacts(session.snapshots).setTodos(childStreamId, [
           {
             content: 'Read live snapshot state',
             status: 'in_progress',

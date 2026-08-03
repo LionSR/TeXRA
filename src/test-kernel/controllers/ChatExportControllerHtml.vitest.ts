@@ -22,6 +22,10 @@ import {
 } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 
@@ -87,7 +91,7 @@ async function persistTranscriptEntry(
   model: string,
 ): Promise<void> {
   const store = await StreamLogStore.open();
-  store.append(getStreamTabId(agent, model, { executionId }), {
+  appendTranscriptEntry(store, getStreamTabId(agent, model, { executionId }), {
     id: 'entry-1',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -142,8 +146,8 @@ describe('ChatExportController.exportAsHtml', () => {
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
     const snapshots = new StreamSnapshotStore();
-    snapshots.setRunConfig(first, executionConfig, executionId);
-    snapshots.setRunConfig(second, executionConfig, executionId);
+    snapshotFacts(snapshots).setRunConfig(first, executionConfig, executionId);
+    snapshotFacts(snapshots).setRunConfig(second, executionConfig, executionId);
     await snapshots.flush();
 
     const outcome = await controller.exportAsHtml(executionId, templatePath);
@@ -163,8 +167,12 @@ describe('ChatExportController.exportAsHtml', () => {
       `bash@tool#${executionId}`,
       `codex@tool#${executionId}`,
     ] as StreamTabId[]) {
-      snapshots.setRunConfig(streamId, executionConfig, executionId);
-      snapshots.setParentStream(streamId, parent);
+      snapshotFacts(snapshots).setRunConfig(
+        streamId,
+        executionConfig,
+        executionId,
+      );
+      snapshotFacts(snapshots).setParentStream(streamId, parent);
     }
     await snapshots.flush();
 

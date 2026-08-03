@@ -28,6 +28,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 
 const todo: TodoItem = {
   content: 'Hydrate work-plan state',
@@ -121,10 +122,10 @@ describe('progress view stream-content projection', () => {
   it('projects the tool-use snapshot and active state', async () => {
     const { state, messages, bridge, handler } = await createSyncHarness();
 
-    state.snapshots.addUsage(stream, runId, usage);
-    state.snapshots.setTodos(stream, [todo]);
-    state.snapshots.setPlan(stream, plan);
-    state.snapshots.setParentStream(stream, parentStream);
+    snapshotFacts(state.snapshots).addUsage(stream, runId, usage);
+    snapshotFacts(state.snapshots).setTodos(stream, [todo]);
+    snapshotFacts(state.snapshots).setPlan(stream, plan);
+    snapshotFacts(state.snapshots).setParentStream(stream, parentStream);
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.ToolUse,
     });
@@ -206,10 +207,14 @@ describe('progress view stream-content projection', () => {
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
     });
-    state.snapshots.addOutputFiles(stream, { 1: [outputFile] });
-    state.snapshots.updateMissingOutputs(stream, { 1: ['paper.pdf'] });
-    state.snapshots.updateCompileFailures(stream, { 1: [compileFailure] });
-    state.snapshots.addUsage(stream, runId, usage);
+    snapshotFacts(state.snapshots).addOutputFiles(stream, { 1: [outputFile] });
+    snapshotFacts(state.snapshots).updateMissingOutputs(stream, {
+      1: ['paper.pdf'],
+    });
+    snapshotFacts(state.snapshots).updateCompileFailures(stream, {
+      1: [compileFailure],
+    });
+    snapshotFacts(state.snapshots).addUsage(stream, runId, usage);
 
     handler.syncStreamContent(stream);
 
