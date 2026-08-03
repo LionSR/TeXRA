@@ -28,10 +28,10 @@ import {
 } from '@cli/runtime/history';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import {
-  planCliMultiAgentPresetRun,
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
+import { planTeamRun } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 
 function historyEntry(
@@ -108,7 +108,7 @@ function presetPlan(
     readonly toolUseAgents?: readonly AgentEntry[];
   } = {},
 ): CliMultiAgentPresetRunPlan {
-  return planCliMultiAgentPresetRun(preset(overrides), {
+  return planTeamRun(preset(overrides), {
     workflowAgents: agents.workflowAgents ?? [],
     toolUseAgents: agents.toolUseAgents ?? [],
   });

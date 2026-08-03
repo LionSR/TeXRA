@@ -2,16 +2,12 @@ import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   availableTeamMemberCount,
-  canLaunchTeam,
   findTeamPreset,
-  planTeamRun,
-  planTeamRuns,
   teamAvailability,
   teamLaunchBlockReason,
   teamPlanHasGaps,
   teamPlanStatus,
   teamPresets,
-  teamTexraHostedMissingNames,
   type TeamAgentAvailability,
   type TeamAvailability,
   type TeamPreset,
@@ -70,7 +66,7 @@ export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
   const customRaw = platform().workspaceState.get<unknown>(
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
   );
-  return cliMultiAgentPresets(customRaw);
+  return teamPresets(customRaw);
 }
 
 /** Resolve the current display name for a persisted team identity. */
@@ -78,17 +74,13 @@ export function readCliMultiAgentPresetName(
   presetId: string | undefined,
 ): string | undefined {
   if (!presetId) return undefined;
-  return findCliMultiAgentPreset(readCliMultiAgentPresets(), presetId)?.name;
+  return findTeamPreset(readCliMultiAgentPresets(), presetId)?.name;
 }
-
-export const cliMultiAgentPresets = teamPresets;
-export const findCliMultiAgentPreset = findTeamPreset;
-export const planCliMultiAgentPresets = planTeamRuns<AgentEntry>;
 
 function cliMultiAgentPresetAvailabilityParts(
   plan: CliMultiAgentPresetRunPlan,
 ): string[] {
-  const availability = cliMultiAgentPresetAvailability(plan);
+  const availability = teamAvailability(plan);
   const parts = [
     formatCliMultiAgentPresetAvailabilityPart(
       'workflow',
@@ -172,17 +164,12 @@ export function cliMultiAgentPresetNdjsonRecords(
   }));
 }
 
-export const cliMultiAgentPlanHasGaps = teamPlanHasGaps;
-export const cliMultiAgentTexraHostedMissingNames = teamTexraHostedMissingNames;
-export const cliMultiAgentPresetTeamLaunchBlockReason = teamLaunchBlockReason;
-export const cliMultiAgentPresetCanLaunchTeam = canLaunchTeam<AgentEntry>;
-
 export function formatCliMultiAgentTeamLaunchBlockMessage(
   plan: CliMultiAgentPresetRunPlan,
   options: CliMultiAgentTeamLaunchBlockMessageOptions = {},
 ): string {
   const preset = options.requestedPreset ?? plan.preset.id;
-  const reason = cliMultiAgentPresetTeamLaunchBlockReason(plan);
+  const reason = teamLaunchBlockReason(plan);
   if (!reason) {
     throw new Error(
       `Cannot format team launch block for launchable multi-agent preset "${plan.preset.id}".`,
@@ -225,12 +212,12 @@ export function formatCliMultiAgentPresetRunWarnings(
 export function formatCliMultiAgentPresetLauncherSummary(
   plan: CliMultiAgentPresetRunPlan,
 ): string {
-  const availability = cliMultiAgentPresetAvailability(plan);
+  const availability = teamAvailability(plan);
   const status =
     availability.status === 'available' ? 'ready' : availability.status;
   const details = formatPresetAvailabilityForLauncher(
     availability,
-    cliMultiAgentPresetTeamLaunchBlockReason(plan),
+    teamLaunchBlockReason(plan),
   );
 
   return [status, details].filter((part): part is string => !!part).join('; ');
@@ -240,7 +227,7 @@ export function formatCliMultiAgentPresetLauncherHints(
   plan: CliMultiAgentPresetRunPlan,
   options: CliMultiAgentPresetFormatOptions = {},
 ): readonly string[] {
-  const availability = cliMultiAgentPresetAvailability(plan);
+  const availability = teamAvailability(plan);
   return [
     availability.status !== 'available'
       ? MULTI_AGENT_LAUNCHER_SHOW_HINT
@@ -251,14 +238,12 @@ export function formatCliMultiAgentPresetLauncherHints(
   ].filter(filterNotNullish);
 }
 
-export const cliMultiAgentPresetAvailability = teamAvailability;
-
 export function cliMultiAgentPresetListRecord(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPresetListRecord {
   return {
     ...plan.preset,
-    availability: cliMultiAgentPresetAvailability(plan),
+    availability: teamAvailability(plan),
   };
 }
 
@@ -267,8 +252,6 @@ export function cliMultiAgentPresetListRecords(
 ): CliMultiAgentPresetListRecord[] {
   return plans.map(cliMultiAgentPresetListRecord);
 }
-
-export const planCliMultiAgentPresetRun = planTeamRun<AgentEntry>;
 
 function formatPresetAvailabilityForLauncher(
   availability: CliMultiAgentPresetAvailability,
@@ -350,6 +333,6 @@ function cliMultiAgentPresetShouldIncludeLoginHint(
   return (
     (options.includeLoginHint ?? true) &&
     plan.preset.source === 'built-in' &&
-    cliMultiAgentPlanHasGaps(plan)
+    teamPlanHasGaps(plan)
   );
 }
