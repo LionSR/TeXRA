@@ -11,6 +11,7 @@ import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+import { installPlatform } from '@test/support/setupPlatform';
 
 const NO_COPILOT_ROUTES = async (): Promise<
   ReadonlyMap<string, CopilotModelRoute>
@@ -212,5 +213,26 @@ describe('SettingsModelSelectionController', () => {
       ),
     ).toEqual([]);
     expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
+  });
+
+  it('surfaces a persisted preference whose route is no longer discovered', async () => {
+    // #9659: the routing layer treats a persisted preference as a hard route
+    // choice, so the settings UI must expose its undo even when VS Code has
+    // stopped offering the model through Copilot.
+    await installPlatform({
+      globalState: { 'texra.copilotRouteModels': ['sonnet46'] },
+    });
+    const controller = createController();
+
+    const { copilotModels } = await controller.buildSelectionData();
+
+    expect(copilotModels).toEqual([
+      {
+        name: 'sonnet46',
+        label: MODEL_CONFIGS.sonnet46.label,
+        access: 'unavailable',
+        preferred: true,
+      },
+    ]);
   });
 });

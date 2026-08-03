@@ -90,11 +90,35 @@ describe('Copilot model access settings', () => {
     ]);
   });
 
-  it('hides the opt-in once the route is preferred', async () => {
+  it('offers an undo once the route is preferred', async () => {
     const tab = await renderModelsTab([{ ...allowedRoute, preferred: true }]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
-    expect(section?.textContent).toContain('1 Copilot model is ready');
-    expect(section?.querySelector('wa-button')).toBeNull();
+    expect(section?.textContent).toContain('GPT-5.5 runs through Copilot.');
+    const button = section?.querySelector<HTMLElement>('wa-button');
+    expect(button?.textContent).toContain('Stop using Copilot for GPT-5.5');
+
+    button?.click();
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'gpt55' }],
+    ]);
+  });
+
+  it('offers the undo, not consent, when a preferred route loses access', async () => {
+    const tab = await renderModelsTab([{ ...consentRoute, preferred: true }]);
+
+    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    expect(section?.textContent).toContain(
+      'Claude Sonnet 4.6 is set to use Copilot but is waiting for consent.',
+    );
+    const button = section?.querySelector<HTMLElement>('wa-button');
+    expect(button?.textContent).toContain(
+      'Stop using Copilot for Claude Sonnet 4.6',
+    );
+
+    button?.click();
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'sonnet46' }],
+    ]);
   });
 });

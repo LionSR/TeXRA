@@ -308,6 +308,7 @@ export const SETTINGS_VIEW_CMD = {
   SET_MODEL_REASONING_LEVEL: 'setModelReasoningLevel',
   SET_PREFER_SHORT_MODEL_NAMES: 'setPreferShortModelNames',
   REQUEST_MODEL_ACCESS: 'requestModelAccess',
+  CLEAR_COPILOT_ROUTE: 'clearCopilotRoute',
   // Agent selection commands
   OPEN_AGENT_YAML: 'openAgentYaml',
   SET_AGENT_ENABLED: 'setAgentEnabled',
