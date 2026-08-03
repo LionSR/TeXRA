@@ -15,7 +15,7 @@ it('keeps canonical delegation tool names registered', () => {
 it('contains the canonical delegation tool names', () => {
   expect([...DELEGATION_TOOLS]).toEqual([
     'delegate_workflow',
-    'delegate_workflow_script',
+    'delegate_multi_agents',
     'delegate_agent',
   ]);
 });

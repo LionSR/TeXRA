@@ -4,7 +4,7 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 
@@ -125,7 +125,7 @@ function createDefaultTools() {
     codex: new CodexTool(),
     [CLAUDE_AGENT_NAME]: new ClaudeAgentTool(),
     delegate_workflow: new WorkflowAgentTool(),
-    [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: new WorkflowScriptTool(),
+    [DELEGATE_MULTI_AGENTS_TOOL_NAME]: new WorkflowScriptTool(),
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),

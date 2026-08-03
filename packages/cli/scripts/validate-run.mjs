@@ -982,7 +982,7 @@ description: Exercise workflow-script dispatch from the headless CLI.
 settings:
   agentCategory: toolUse
   tools:
-    - delegate_workflow_script
+    - delegate_multi_agents
 
 prompts:
   systemPrompt: |
