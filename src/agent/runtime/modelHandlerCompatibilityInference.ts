@@ -6,8 +6,8 @@ import {
   type ProviderMessage,
 } from '@agent/types/ProviderMessage';
 import {
+  COPILOT_MODEL_PREFIX,
   getRuntimeModelConfig,
-  isRuntimeModel,
 } from '@model/runtimeModelRegistry';
 import { isObject } from '@utils/core';
 import {
@@ -31,7 +31,12 @@ export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
   _messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
-  if (isRuntimeModel(model)) return 'ModelHandlerVscodeLm';
+  // Compatibility reader for transcripts persisted while Copilot models were
+  // synthetic `copilot:<baseModel>` ids (#9635, introduced 2026-08-03; retire
+  // three months after ship, target 2026-11-03). Those sessions ran through
+  // ModelHandlerVscodeLm by construction; new sessions persist their explicit
+  // compatibility key and never reach this inference.
+  if (model.startsWith(COPILOT_MODEL_PREFIX)) return 'ModelHandlerVscodeLm';
 
   const modelConfig = getRuntimeModelConfig(model);
 

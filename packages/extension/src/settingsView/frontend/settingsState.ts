@@ -42,6 +42,7 @@ import {
   type PRSubscriptionEntry,
   type ToolDashboardItem,
   type ChatGptAuthStatus,
+  type CopilotRouteInfo,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
 import {
@@ -131,6 +132,7 @@ export const modelSelectionItems = trackedSignal<ModelSelectionItem[]>(
 );
 export const helperModel = trackedSignal(() => DEFAULT_HELPER_MODEL);
 export const preferShortModelNames = trackedSignal(() => false);
+export const copilotRouteInfos = trackedSignal<CopilotRouteInfo[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Agent selection state
