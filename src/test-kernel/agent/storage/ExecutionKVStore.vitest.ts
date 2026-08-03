@@ -56,17 +56,12 @@ function expectParseWarning(
 // (e.g. `src/tools/executions/executionKvFiles.ts`) recognize it without
 // re-deriving their own copy.
 describe('isReservedKvKeyName', () => {
-  it.each([
-    'meta',
-    'config',
-    'report',
-    'todos',
-    'conversation',
-    'workspace-files',
-    'result-meta',
-  ])('recognizes the reserved single-value key %s', (key) => {
-    expect(isReservedKvKeyName(key)).toBe(true);
-  });
+  it.each(['meta', 'config', 'report', 'workspace-files', 'result-meta'])(
+    'recognizes the reserved single-value key %s',
+    (key) => {
+      expect(isReservedKvKeyName(key)).toBe(true);
+    },
+  );
 
   it('recognizes any child- prefixed key', () => {
     expect(isReservedKvKeyName('child-abc123')).toBe(true);
@@ -291,38 +286,6 @@ describe('ExecutionKVStore meta read shims', () => {
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
   });
 
-  it('reads legacy conversation wrappers as provider messages', async () => {
-    const id = 'legacy-conversation-wrapper' as ExecutionId;
-    const message = { role: 'user', content: 'Resume this.' };
-
-    await getExecutionStore(id).write('conversation', { messages: [message] });
-    await expect(getExecutionStore(id).readConversation()).resolves.toEqual([
-      message,
-    ]);
-
-    await getExecutionStore(id).write('conversation', {
-      conversation: [message],
-    });
-    await expect(getExecutionStore(id).readConversation()).resolves.toEqual([
-      message,
-    ]);
-  });
-
-  it('warns when conversation storage is malformed instead of silently dropping it', async () => {
-    const id = 'bad-conversation-wrapper' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('conversation', { messages: ['text'] });
-
-    await expect(getExecutionStore(id).readConversation()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} conversation.json as provider messages`,
-      ),
-    );
-  });
-
   it('warns when execution meta is malformed instead of silently dropping it', async () => {
     const id = 'bad-meta' as ExecutionId;
     const warnSpy = mockWarn();
@@ -362,24 +325,6 @@ describe('ExecutionKVStore loud typed reads', () => {
 
     await expect(getExecutionStore(id).readConfig()).resolves.toBeNull();
     expectParseWarning(warnSpy, id, 'config.json');
-  });
-
-  it('warns when todos are malformed instead of silently defaulting to []', async () => {
-    const id = 'bad-todos' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await getExecutionStore(id).write('todos', { not: 'an array' });
-
-    await expect(getExecutionStore(id).readTodos()).resolves.toEqual([]);
-    expectParseWarning(warnSpy, id, 'todos.json');
-  });
-
-  it('stays quiet for genuinely missing todos (missing != corrupt)', async () => {
-    const id = 'no-todos' as ExecutionId;
-    const warnSpy = mockWarn();
-
-    await expect(getExecutionStore(id).readTodos()).resolves.toEqual([]);
-    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('warns when workspace files are malformed instead of silently defaulting to []', async () => {

@@ -13,7 +13,6 @@ import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
   CompileFailureSchema,
-  ExecutionIdSchema,
   OutputFileInfoSchema,
   parsePersistedRoundIndexed,
   parseUsageData,
@@ -89,22 +88,7 @@ export async function readMeta(
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
   const parsed = StreamTabMetaSchema.safeParse(raw);
-  if (!parsed.success) return undefined;
-  // Normalize the execution identity at this single disk-read entry so every
-  // downstream consumer reads ONE field and they cannot disagree.
-  // `runDescriptor.executionId` is canonical and wins; the top-level field is
-  // the legacy mirror (written before descriptors existed, and still
-  // dual-written so older builds sharing `~/.texra` keep reading it). A
-  // malformed or legacy value with no descriptor to correct it degrades to
-  // absent (taskState/description still survive), so the strict
-  // ExecutionIdSchema in assembleSnapshot can never throw on resume.
-  const meta = parsed.data;
-  const canonical = meta.runDescriptor?.executionId ?? meta.executionId;
-  const executionId =
-    canonical !== undefined && ExecutionIdSchema.safeParse(canonical).success
-      ? canonical
-      : undefined;
-  return executionId === meta.executionId ? meta : { ...meta, executionId };
+  return parsed.success ? parsed.data : undefined;
 }
 
 /**
@@ -189,7 +173,7 @@ export function assembleSnapshot(
       missingOutputsByRound: data.missingOutputs,
       compileFailuresByRound: data.compileFailures,
       runUsage: mapToRecord(data.usage),
-      executionId: data.meta?.executionId,
+      executionId: data.meta?.runDescriptor?.executionId,
       parentStreamId: data.meta?.parentStreamId,
       description: data.meta?.description,
     });

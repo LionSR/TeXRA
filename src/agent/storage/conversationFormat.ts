@@ -1,6 +1,6 @@
 /**
  * Shared formatters for rendering a stored execution conversation
- * (`ExecutionKVStore.readConversation()`) as text.
+ * from archived stream data as text.
  *
  * A stored conversation is `unknown[]` — whichever model handler produced it
  * (Anthropic, OpenAI, Google, OpenRouter, VS Code LM) writes its own

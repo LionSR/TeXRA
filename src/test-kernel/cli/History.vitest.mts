@@ -49,7 +49,6 @@ vi.mock('@agent/storage', async () => {
     getExecutionStore: vi.fn((executionId: ExecutionId) =>
       createFakeKv(executionId, {
         readConfig: mocks.readConfig,
-        readConversation: mocks.readConversation,
         readWorkspaceFiles: mocks.readWorkspaceFiles,
         readMeta: mocks.readMeta,
         readResultMeta: mocks.readResultMeta,
@@ -79,6 +78,14 @@ vi.mock('@transcript', async () => {
   return {
     ...actual,
     assembleTrace: mocks.assembleTrace,
+    readCompletedRunConversation: vi.fn(async (...args: unknown[]) => {
+      const conversation = await mocks.readConversation();
+      return conversation === null
+        ? actual.readCompletedRunConversation(
+            ...(args as Parameters<typeof actual.readCompletedRunConversation>),
+          )
+        : { conversation, source: 'streamLog' };
+    }),
   };
 });
 

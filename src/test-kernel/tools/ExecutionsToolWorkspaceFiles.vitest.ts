@@ -39,7 +39,6 @@ const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   readMeta: vi.fn(),
   readChildren: vi.fn(),
-  readTodos: vi.fn(),
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
   readWorkspaceFiles: vi.fn(),
@@ -55,7 +54,6 @@ vi.mock('@agent/storage', async () => {
       readConfig: mocks.readConfig,
       readMeta: mocks.readMeta,
       readChildren: mocks.readChildren,
-      readTodos: mocks.readTodos,
       readReport: mocks.readReport,
       readResultMeta: mocks.readResultMeta,
       readWorkspaceFiles: mocks.readWorkspaceFiles,
@@ -144,7 +142,6 @@ describe('ExecutionsTool', () => {
     mocks.listExecutions.mockResolvedValue([]);
     mocks.readMeta.mockResolvedValue(null);
     mocks.readChildren.mockResolvedValue([]);
-    mocks.readTodos.mockResolvedValue([]);
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
@@ -307,7 +304,6 @@ describe('ExecutionsTool', () => {
 
         expect(summary.output).toContain('Read live snapshot state');
         expect(todos.output).toContain('Read live snapshot state');
-        expect(mocks.readTodos).not.toHaveBeenCalled();
       } finally {
         session.dispose();
       }
@@ -406,7 +402,7 @@ describe('ExecutionsTool', () => {
     expect(JSON.parse(result.output ?? '')).toEqual(record);
   });
 
-  it('reads completed summary todos from stream sidecars before legacy KV todos', async () => {
+  it('reads completed summary todos from stream sidecars', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
       await writeSidecarTodos(executionId, [
@@ -417,33 +413,11 @@ describe('ExecutionsTool', () => {
         },
       ]);
       mockCompletedExecution();
-      mocks.readTodos.mockResolvedValue([
-        { content: 'Read the old KV todo', status: 'pending' },
-      ]);
-
       const result = await new ExecutionsTool().call({
         path: `/executions/${executionId}`,
       });
 
       expect(result.output).toContain('Read the sidecar work plan');
-      expect(result.output).not.toContain('Read the old KV todo');
-      expect(mocks.readTodos).not.toHaveBeenCalled();
-    });
-  });
-
-  it('falls back to legacy KV todos when completed summary sidecars are absent', async () => {
-    await withTempStorage(async () => {
-      mockCompletedExecution();
-      mocks.readTodos.mockResolvedValue([
-        { content: 'Read the old KV todo', status: 'pending' },
-      ]);
-
-      const result = await new ExecutionsTool().call({
-        path: '/executions/abc123',
-      });
-
-      expect(result.output).toContain('Read the old KV todo');
-      expect(mocks.readTodos).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -459,17 +433,11 @@ describe('ExecutionsTool', () => {
           activeForm: 'Reading the sidecar work plan',
         },
       ]);
-      mocks.readTodos.mockResolvedValue([
-        { content: 'Read the old KV todo', status: 'pending' },
-      ]);
-
       const result = await new ExecutionsTool().call({
         path: `/executions/${executionId}/todos`,
       });
 
       expect(result.output).toContain('Read the sidecar work plan');
-      expect(result.output).not.toContain('Read the old KV todo');
-      expect(mocks.readTodos).not.toHaveBeenCalled();
     });
   });
 
@@ -526,8 +494,6 @@ describe('ExecutionsTool', () => {
       const kvFiles = [
         'meta.json',
         'config.json',
-        'conversation.json',
-        'todos.json',
         'report.json',
         'workspace-files.json',
         'result-meta.json',
@@ -540,6 +506,10 @@ describe('ExecutionsTool', () => {
       for (const name of kvFiles) {
         await StorageFS.write(path.join(runDir, name), '{}');
       }
+      const retiredKvFiles = ['conversation.json', 'todos.json'];
+      for (const name of retiredKvFiles) {
+        await StorageFS.write(path.join(runDir, name), '{}');
+      }
       await StorageFS.write(path.join(runDir, 'output.tex'), 'generated');
 
       const result = await new ExecutionsTool().call({
@@ -547,6 +517,9 @@ describe('ExecutionsTool', () => {
       });
 
       expect(result.output).toContain('output.tex');
+      for (const name of retiredKvFiles) {
+        expect(result.output).toContain(name);
+      }
       for (const name of kvFiles) {
         expect(result.output).not.toContain(name);
       }

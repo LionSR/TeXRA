@@ -168,18 +168,7 @@ const CanonicalOutputXmlSummarySchema = z.strictObject({
   sourceLocation: FileLocationSchema.nullable().prefault(null),
 });
 
-/**
- * Records written before the `documents` field was dropped carry a second copy
- * of the text already in `tagContents`. Nothing ever read it, so the legacy arm
- * strips the key and every other unrecognized key still fails the strict shape.
- */
-export const OutputXmlSummarySchema = z.union([
-  CanonicalOutputXmlSummarySchema,
-  z
-    .looseObject({ documents: z.array(z.string()) })
-    .transform(({ documents: _legacyDocuments, ...rest }) => rest)
-    .pipe(CanonicalOutputXmlSummarySchema),
-]);
+export const OutputXmlSummarySchema = CanonicalOutputXmlSummarySchema;
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
 export const RoundOutputSchema = z.strictObject({
