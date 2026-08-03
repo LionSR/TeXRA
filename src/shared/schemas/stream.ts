@@ -118,6 +118,21 @@ export const ExecutionMetaSchema = ConsistentExecutionMetaSchema.transform(
 );
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
+/**
+ * The execution's birth-registered stream identity (#9590 A1). Only
+ * registration provenance is authoritative: a `LEGACY_RESOLUTION` value is a
+ * replaceable read cache, and readers holding one must keep using the
+ * compatibility resolver.
+ */
+export function registeredStreamId(
+  meta: Pick<ExecutionMeta, 'streamId' | 'streamIdSource'> | null | undefined,
+): z.infer<typeof StreamTabIdSchema> | undefined {
+  return meta?.streamId !== undefined &&
+    meta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
+    ? meta.streamId
+    : undefined;
+}
+
 export const STREAM_PHASE = {
   RUNNING: STREAM_STATUS.RUNNING,
   WAITING: STREAM_STATUS.WAITING,

@@ -35,7 +35,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { legacyExecutionIdFromStreamSuffix } from '@agent/storage/executionIdFromStream';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
@@ -562,19 +562,35 @@ export class SessionHandle {
     }
     const snapshotExecutionIds = this.snapshots.getExecutionIdMap();
     const executionIds = new Map(snapshotExecutionIds);
+    const unresolvedStreams = new Set<StreamTabId>();
     for (const streamId of this.transcripts.keys()) {
       if (executionIds.has(streamId)) continue;
-      const derived = executionIdFromStream(streamId);
-      if (derived) executionIds.set(streamId, derived);
+      try {
+        const derived = await legacyExecutionIdFromStreamSuffix(streamId, {
+          malformedMeta: 'admit',
+        });
+        if (derived) executionIds.set(streamId, derived);
+      } catch (error) {
+        // A transient storage failure proves nothing about this stream. Leave
+        // it out of this pass — repairing it unmapped would skip its lease
+        // guard — instead of aborting repair for every other stream.
+        unresolvedStreams.add(streamId);
+        logger.warn(
+          `Skipped restart repair for stream ${streamId}: its execution identity could not be read`,
+          { data: error },
+        );
+      }
     }
     let waitingStreams: Set<StreamTabId>;
     let repairStreams: Set<StreamTabId>;
     try {
       waitingStreams = await detectWaitingStreams(executionIds);
-      repairStreams = new Set([
-        ...this.transcripts.getUnfinishedStreamIds(),
-        ...waitingStreams,
-      ]);
+      repairStreams = new Set(
+        [
+          ...this.transcripts.getUnfinishedStreamIds(),
+          ...waitingStreams,
+        ].filter((streamId) => !unresolvedStreams.has(streamId)),
+      );
     } catch (error) {
       logger.warn('Failed to detect resumable streams during restart repair', {
         data: error,
@@ -583,7 +599,11 @@ export class SessionHandle {
       repairStreams = new Set(
         this.transcripts
           .getUnfinishedStreamIds()
-          .filter((streamId) => !snapshotExecutionIds.has(streamId)),
+          .filter(
+            (streamId) =>
+              !snapshotExecutionIds.has(streamId) &&
+              !unresolvedStreams.has(streamId),
+          ),
       );
     }
     if (

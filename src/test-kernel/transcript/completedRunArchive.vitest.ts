@@ -586,6 +586,47 @@ describe('completedRunArchive facade', () => {
     });
   });
 
+  it('reads a registered execution without sidecar or suffix scans, even when its transcript is empty (#9590 A1)', async () => {
+    const executionId = 'abc907abc907' as ExecutionId;
+    const streamId = 'orchestrator@deepseekproT#abc907abc907' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-07T00:00:00.000Z',
+      terminalStatus: 'completed',
+      streamId,
+      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+    });
+    // A decoy stream that a suffix scan would match; registration must make
+    // it unreachable, and an empty registered transcript must not trigger the
+    // alternate-root fallback scan.
+    await persistRows(
+      executionId,
+      new Map([
+        [
+          `other@model#${executionId}` as StreamTabId,
+          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'decoy row' })],
+        ],
+      ]),
+    );
+
+    const scan = vi.spyOn(
+      StreamSnapshotStore.prototype,
+      'listPersistedStreams',
+    );
+    const association = vi.spyOn(
+      StreamSnapshotStore.prototype,
+      'readPersistedStreamAssociation',
+    );
+
+    const conversationResult = await readCompletedRunConversation(executionId);
+    expect(conversationResult).toEqual({ conversation: null, source: 'none' });
+
+    const todosResult = await readCompletedRunTodos(executionId);
+    expect(todosResult).toEqual({ todos: [], source: 'none' });
+
+    expect(scan).not.toHaveBeenCalled();
+    expect(association).not.toHaveBeenCalled();
+  });
+
   it('reads a sidecar conversation', async () => {
     const executionId = 'ddd444ddd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;

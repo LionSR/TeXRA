@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
+import { registerExecution } from '@agent/storage/executionLifecycle';
+import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentConfigSchema,
@@ -60,7 +62,41 @@ describe('assembleTrace', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await cleanupTempDirs(tempDirs);
+  });
+
+  it('resolves a registered execution from its metadata without any sidecar scan (#9590 A1)', async () => {
+    const executionId = 'abc900abc900' as ExecutionId;
+    const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
+    // Registered under a stream the config would NOT derive: proves the read
+    // comes from execution metadata, not from agent/model reconstruction.
+    const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
+    await registerExecution(executionId, executionConfig, 'review', {
+      streamId: registeredId,
+    });
+    await releaseOwnedExecutionLease(executionId);
+    await appendLogEntry(
+      registeredId as ReturnType<typeof getStreamTabId>,
+      'registered row',
+    );
+
+    const scan = vi.spyOn(
+      StreamSnapshotStore.prototype,
+      'listPersistedStreams',
+    );
+    const association = vi.spyOn(
+      StreamSnapshotStore.prototype,
+      'readPersistedStreamAssociation',
+    );
+
+    const result = await assembleTrace(executionId);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.trace.streamId).toBe(registeredId);
+    expect(scan).not.toHaveBeenCalled();
+    expect(association).not.toHaveBeenCalled();
   });
 
   it('assembles a full trace document, deriving streamId from agent/model/executionId', async () => {
