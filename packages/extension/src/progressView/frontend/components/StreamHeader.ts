@@ -46,7 +46,7 @@ import {
   TOOLBAR_BUTTONS,
   type ProgressToolbarButton,
 } from '../constants';
-import { archivedContext } from '../contexts/streamContexts';
+import { archivedContext } from '../streamContexts';
 import { ProgressEvents } from '../events';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {

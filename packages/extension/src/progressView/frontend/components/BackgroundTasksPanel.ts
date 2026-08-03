@@ -55,7 +55,7 @@ import {
   streamByIdContext,
   type PhaseStageMap,
   type StreamByIdMap,
-} from '../contexts/streamContexts';
+} from '../streamContexts';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';

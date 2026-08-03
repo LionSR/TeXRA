@@ -2,7 +2,7 @@ import type { StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
-import type { ProgressViewState } from './state/ProgressViewState';
+import type { ProgressViewState } from './ProgressViewState';
 
 /** The state a single tab info is built from. */
 export type StreamInfoSource = Pick<ProgressViewState, 'getStreamMetadata'>;

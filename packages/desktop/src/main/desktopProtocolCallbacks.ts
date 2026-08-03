@@ -1,4 +1,4 @@
-import { isAuthCallbackPath } from '@auth/core/authCallback';
+import { isAuthCallbackPath } from '@auth/authCallback';
 import { tryParseUrl } from '@utils/core';
 import {
   isDesktopProtocolUrl,

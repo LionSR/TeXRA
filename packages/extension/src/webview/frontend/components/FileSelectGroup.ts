@@ -27,8 +27,8 @@ import { SESSION_DEFAULTS } from '../sessionDefaults';
 import {
   fileStateContext,
   type FileStateContextValue,
-} from '../contexts/mainViewContexts';
-import { fileSelectStyles } from '../styles/fileSelectStyles';
+} from '../mainViewContexts';
+import { fileSelectStyles } from '../fileSelectStyles';
 import { DEFAULT_CHECKBOX_VALUES } from '../store';
 
 @customElement('file-select-group')

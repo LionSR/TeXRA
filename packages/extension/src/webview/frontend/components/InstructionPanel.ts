@@ -38,10 +38,7 @@ import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { handleImagePaste } from '../pasteHandler';
 import { SESSION_TYPES, type SessionType } from '../constants';
-import {
-  sessionContext,
-  type SessionContextValue,
-} from '../contexts/mainViewContexts';
+import { sessionContext, type SessionContextValue } from '../mainViewContexts';
 import { instructionPanelStyles } from './InstructionPanel.styles';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';

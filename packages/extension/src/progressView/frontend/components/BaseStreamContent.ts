@@ -16,7 +16,7 @@ import {
   permissionsContext,
   streamStateContext,
   type StreamContextValue,
-} from '../contexts/streamContexts';
+} from '../streamContexts';
 
 // Local imports - types
 import type { PermissionState } from '../permissionState';

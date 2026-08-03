@@ -30,7 +30,7 @@ import {
   archivedContext,
   followUpEventSinkContext,
   type FollowUpEventSink,
-} from '../contexts/streamContexts';
+} from '../streamContexts';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
 import {
