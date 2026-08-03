@@ -195,7 +195,7 @@ const GIT_WORKTREE_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "delegate a task to a subagent"',
   through:
-    'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/tools/DelegationTools.ts',
+    'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/tools/delegation/DelegationTools.ts',
 } satisfies CliRuntimeReachability;
 const WORKFLOW_COMPILE_RUNTIME_REACHABILITY = {
   command:

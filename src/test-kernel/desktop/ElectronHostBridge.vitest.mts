@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
-} from '@desktop/hostBridgeChannels';
+} from '@desktop/shared/hostBridgeChannels';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { createModuleMocks } from '@test/support/moduleMocks';
 

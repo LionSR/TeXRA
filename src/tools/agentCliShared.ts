@@ -40,7 +40,7 @@ import {
   createChildStream,
   getChildStreamId,
   type ChildStream,
-} from './childStream';
+} from './delegation/childStream';
 import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,

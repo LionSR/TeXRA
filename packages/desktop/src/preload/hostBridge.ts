@@ -6,7 +6,7 @@ import {
 import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
-} from '../hostBridgeChannels.js';
+} from '../shared/hostBridgeChannels.js';
 
 export interface ElectronHostBridgeInstallOptions {
   exposeInMainWorld(name: string, api: HostBridgeApi): void;

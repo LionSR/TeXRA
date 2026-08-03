@@ -54,11 +54,11 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { onAbort, unique } from '@utils/core';
 import {
   buildSubagentFailureResultMeta,
   formatSubagentError,
-} from '@tools/subagentResults';
-import { onAbort, unique } from '@utils/core';
+} from './subagentResults';
 
 import {
   buildSubagentResult,

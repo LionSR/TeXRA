@@ -9,7 +9,7 @@ import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
-import type { DesktopShowDiffMessage } from '../desktopDiffMessages';
+import type { DesktopShowDiffMessage } from '../shared/desktopDiffMessages';
 import './reviewPane.css';
 
 interface DiffViewElement extends HTMLElement {

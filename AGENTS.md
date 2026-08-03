@@ -468,7 +468,7 @@ The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`,
 descendant of upstream PocketFlow and does **not** implement the upstream
 `BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, or the
 `params`/`setParams` channel; do not write code against them. State slices that
-travel through the flows are described in `docs/pocketflow/state_architecture.md`.
+travel through the flows are described in `docs/architecture/pocketflow-state.md`.
 
 **Webviews and UI**
 

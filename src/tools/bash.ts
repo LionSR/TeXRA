@@ -35,13 +35,13 @@ import {
 } from '@shared/toolUse';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
+import { deliverChildRunFollowUp } from '@tools/delegation/childRunDelivery';
 import {
   formatBashDelivery,
   formatBashError,
   type BashDeliveryStreamExcerpt,
-} from '@tools/subagentResults';
+} from '@tools/delegation/subagentResults';
 import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
@@ -57,7 +57,7 @@ import {
   createChildStream,
   getChildStreamId,
   type ChildStream,
-} from './childStream';
+} from './delegation/childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;

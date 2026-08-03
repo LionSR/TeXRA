@@ -5,7 +5,7 @@ import { loadSourceModule } from './loadSourceModule.mjs';
 describe('DesktopShowPdfMessageSchema', () => {
   it('round-trips a complete payload', async () => {
     const { DesktopShowPdfMessageSchema } = await loadSourceModule(
-      '@desktop/desktopPdfMessages',
+      '@desktop/shared/desktopPdfMessages',
     );
     const parsed = DesktopShowPdfMessageSchema.parse({
       command: 'desktop:showPdf',
@@ -18,7 +18,7 @@ describe('DesktopShowPdfMessageSchema', () => {
 
   it('rejects empty pdfPath', async () => {
     const { DesktopShowPdfMessageSchema } = await loadSourceModule(
-      '@desktop/desktopPdfMessages',
+      '@desktop/shared/desktopPdfMessages',
     );
     const result = DesktopShowPdfMessageSchema.safeParse({
       command: 'desktop:showPdf',
@@ -33,7 +33,7 @@ describe('isSafeAbsolutePdfPath', () => {
   let isSafeAbsolutePdfPath: (path: string) => boolean;
   beforeAll(async () => {
     ({ isSafeAbsolutePdfPath } = await loadSourceModule(
-      '@desktop/desktopPdfMessages',
+      '@desktop/shared/desktopPdfMessages',
     ));
   });
 

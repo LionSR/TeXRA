@@ -7,7 +7,7 @@ import {
 import {
   DESKTOP_LOG_COMMANDS,
   type DesktopLogSnapshot,
-} from '../desktopLogMessages.js';
+} from '../shared/desktopLogMessages.js';
 
 export interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;

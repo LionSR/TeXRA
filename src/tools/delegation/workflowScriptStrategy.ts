@@ -32,12 +32,12 @@ import type { ExecutionId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
+import { truncateSummary } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatChildRunDelivery,
   formatChildRunError,
-} from '@tools/deliveryEnvelope';
-import { truncateSummary } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+} from './deliveryEnvelope';
 
 // Local file imports
 import {

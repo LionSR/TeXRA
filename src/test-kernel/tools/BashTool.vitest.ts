@@ -51,7 +51,7 @@ import {
 } from '@test/support/streamStatusTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
-import * as subagentResults from '@tools/subagentResults';
+import * as subagentResults from '@tools/delegation/subagentResults';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';

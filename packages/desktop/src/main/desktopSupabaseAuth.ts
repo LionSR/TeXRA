@@ -25,7 +25,7 @@ import type { AuthCallbackUriParts } from '@auth/authCallback';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { TEXRA_PROTOCOL } from '../desktopProtocol.js';
+import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
 import type {
   DesktopProtocolCallback,
   DesktopProtocolCallbackRouter,
