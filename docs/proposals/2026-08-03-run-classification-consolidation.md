@@ -2,7 +2,7 @@
 
 Status: proposed
 Date: 2026-08-03
-Revision: 6 (Part II: lifecycle state, stream ids, legacy retirement, derived data, roster)
+Revision: 7 (single-shot implementation; no staged merges)
 
 TeXRA classifies "what kind of thing is running" in six places, and represents
 "X is a child of Y" in twenty-six. Most are false at some write site, derived
@@ -61,7 +61,7 @@ paths and is contractually forbidden from retiring itself; round artifacts
 accumulated in four places and usage deltas in five; and 39
 `workflow*`/`toolUse*` field-pair declarations re-shaping one durable value.
 Part II applies the same rulings — one authority, migrate at the entrance,
-delete the middle layers — as PRs 10–15.
+delete the middle layers — as steps 10–15.
 
 ## Problem
 
@@ -342,7 +342,7 @@ not a second truth; its comment says so after this work.
 checkpoint identity, deliberate and load-bearing (the double-launch guard at
 `WorkflowScriptTool.ts:378-393` depends on it). The in-band vs async
 delegation split (`subagentExecution.ts:125`) — different durability
-contracts, not duplication; only their *birth preamble* is unified (PR 6).
+contracts, not duplication; only their *birth preamble* is unified (step 6).
 
 **Reduced to one.** The parent edge travels on **one** webview message:
 `StreamTabInfo.parentStreamId`. `UPDATE_PARENT_STREAM` (`outbound.ts:95-98`)
@@ -404,8 +404,7 @@ Both ends of the CLI wire ship in one binary; the recut is atomic. Headless
 
 ## Removals
 
-Deletions ship in the same PR as their replacement's adoption — no re-export
-shims, no orphaned exports (`npm run check:dead-code-ratchet`). Stage labels
+All steps land in one change — no re-export shims, no orphaned exports (`npm run check:dead-code-ratchet`). Stage labels
 map onto the executable plan below.
 
 ### Shared schemas and types
@@ -438,7 +437,7 @@ map onto the executable plan below.
 | `ExecutionHandle.category` sourced from descriptor    | `ExecutionHandle.ts:159-161`                    | sourced from config (consumers: `waitCoordination.ts:43-50`, `summaryFormat.ts:46,118`, `ExecutionHandle.ts:211`) | 4   |
 | `replayTrace` kind re-derivation via `isProcessAgent` | `replayTrace.ts:159`                            | `trace.meta.identity`; one confined agent-fallback for old exports                                             | 5   |
 
-### CLI reconstructions (ephemeral, deleted atomically in PR 3)
+### CLI reconstructions (ephemeral, deleted atomically in step 3)
 
 `StreamSlice.category` (`cliState.ts:188-191`); `isFullLogChildStream`
 (`subscribeStreamLog.ts:138-142`, consumers `:184,758-760`); workflow-root
@@ -456,9 +455,9 @@ model suppression (`SubagentList.tsx:176-180`); the two-hop category walk
 `runningCategory ?? getStreamCategory(streamId) ?? Workflow`
 (`ProgressFactApplier.ts:756-757`); remaining `?? AgentCategory.Workflow`
 sites (grep at implementation). Absent ≠ Workflow: absent renders as pending.
-All PR 2.
+All step 2.
 
-### Orchestration lineage (PR 6)
+### Orchestration lineage (step 6)
 
 | Removed                                                                       | Location                                                                              | Replaced by                                              |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -474,7 +473,7 @@ All PR 2.
 | desktop hand-built `child.activity` re-emission                               | `desktopAgentExecution.ts:443-450`                                                    | a registry re-seed method (one author for the fact)      |
 | phase-label string as roster↔task join key                                    | `SubagentList.tsx:661-716` join semantics                                             | join on `childStreamId`; `workflowPhase` display-only    |
 
-### Delegation gating (PR 7)
+### Delegation gating (step 7)
 
 | Removed                                             | Location                          | Replaced by                                                                                                                                 |
 | --------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -492,7 +491,7 @@ both blocks are appended as trailing paragraphs today
 honest two-row map for the two proposal-bearing tools, and webview bundles
 import it (`proposalInput.ts:84-91`, `toolFormatters.ts:203-211`).
 
-### Honest run records (PR 8)
+### Honest run records (step 8)
 
 The fabricated `config.json` stops lying. What non-agent readers actually
 consume, per the audit: `agent` (name), `instruction` (command/script label),
@@ -509,9 +508,8 @@ classification reader keyed on it (PRs 2–5), the record becomes a union:
 Old non-agent rows parse as the agent arm (they are `AgentConfig`s) — a
 breakable cohort, readable either way. The trace document's `config` becomes
 the union; old exported agent traces are the agent arm by construction.
-Readers keyed by cohort switch on `identity.kind`, which PRs 2–5 already
-established. Resume/rerun/restore affordances are gated on
-`identity.kind === 'agent'` (fixes live defect 3, done earlier in PR 2).
+Readers keyed by cohort switch on `identity.kind`, which steps 2–5 establish. Resume/rerun/restore affordances are gated on
+`identity.kind === 'agent'` (fixes live defect 3, step 2).
 
 ## Result, stated honestly
 
@@ -531,15 +529,29 @@ duplicate lineage predicates/authorization checks, two redundant wire
 messages, one fabricated gating row, and the fabricated config fields.
 Per-PR element deltas are counted against the tree at implementation time.
 
-## Executable plan
+## Implementation plan — one shot
 
-Fifteen PRs — Part I is PRs 1–9 below; Part II (PRs 10–15) is specified in
-its own section. Every PR builds, type-checks (`npm run typecheck` — builds alone do
-not), passes `npm test` and `npm run check:dead-code-ratchet`, and is
-independently revertable. Each lists Add / Delete / Tests / grep-able
-Acceptance; the deletes are the point.
+**One change, one branch, no staged merges.** Staged delivery is itself a
+compatibility generator: every intermediate PR that must stay green forces
+bridge code — a `buildRunDescriptor` still deriving v1 fields, sequencing
+arguments about which writer dies first, a migration walker visiting the
+store three times. Those transitional shapes exist only to keep intermediate
+merges green, which is precisely the layering this proposal removes. Landing
+everything at once means the tree goes from the current state directly to the
+final state, and the only compatibility artifacts that **ever exist** are the
+two entrance migrations. In particular, the three migration generations of
+the staged plan collapse into **one walker, one pass**: `identity`,
+`outcome`, and the resolved `streamId` are stamped together.
 
-### PR 1 — `RunIdentity` exists; launch sites speak it
+The steps below are the build-and-review checklist **inside the single
+change** — implementation order and review grouping, not merge stages. The
+whole change ships when the full acceptance battery passes: `npm run
+typecheck` plus the trace-viewer tsc, `npm test`, `npm run
+check:dead-code-ratchet` with smaller baselines, every grep gate listed per
+step, and headless output parity per the `texra-cli` skill. Each step lists
+Add / Delete / Tests / grep-able gates; the deletes are the point.
+
+### Step 1 — `RunIdentity` exists; launch sites speak it
 
 _Ephemeral._ **Add:** `runIdentity.ts`; `CreateChildStreamOptions.run:
 RunIdentity` (bash → `{kind:'process', tool:'bash'}`; WorkflowScriptTool →
@@ -551,7 +563,7 @@ independent `RunKind` enum.
 **Tests:** `runIdentityName`; the three launch-site emissions.
 **Acceptance:** `rg -c 'streamCategory' src/` → 0.
 
-### PR 2 — Lit stack (extension + desktop) reads identity
+### Step 2 — Lit stack (extension + desktop) reads identity
 
 _Ephemeral._ **Add:** `ProgressFactApplier` consumes `run.start` identity at
 stream birth; `StreamTabInfo.identity` (struct verbatim, display fields
@@ -568,7 +580,7 @@ process and workflow-script streams; a non-agent stream shows no
 resume/rerun/restore affordance.
 **Acceptance:** `rg -c 'isProcessAgent|\?\? AgentCategory.Workflow' src/controllers/` → 0.
 
-### PR 3 — CLI recut, atomic
+### Step 3 — CLI recut, atomic
 
 _Ephemeral. Delivers the TUI workflow-display and workflow-script fixes._
 **Add:** `projectCliRunFact` projects `run.start` identity;
@@ -579,7 +591,7 @@ _Ephemeral. Delivers the TUI workflow-display and workflow-script fixes._
 stream; headless parity per the `texra-cli` skill.
 **Acceptance:** `rg -c 'isFullLogChildStream' packages/cli/` → 0.
 
-### PR 4 — the durable authority + one-shot migration
+### Step 4 — the durable authority + one-shot migration
 
 **Add:** `ExecutionMeta.identity` **required**; `migrateExecutionStore()`
 (store-generation marker, atomic per-file stamp, agent name from adjacent
@@ -597,7 +609,7 @@ and resume identical; parentless synthetic-config row does not poison
 **Acceptance:** `rg -c 'normalizeWriterCategory|runtimeCategory|resolveExecutionDisplayCategory' src/` → 0.
 Fixes live defect 2.
 
-### PR 5 — the descriptor dies; trace reads embedded meta
+### Step 5 — the descriptor dies; trace reads embedded meta
 
 **Add:** stream sidecar FK (`StreamTabMeta.executionId`, split
 `STREAM_TAB_META_SCHEMA_VERSION` from the descriptor version first —
@@ -614,7 +626,7 @@ trace-viewer tsc (not covered by root typecheck).
 **Acceptance:** `rg -c 'isProcessAgent|buildRunDescriptor' .` → 0 (production
 tree). Subsumes live defect 1.
 
-### PR 6 — orchestration lineage dedup
+### Step 6 — orchestration lineage dedup
 
 _Ephemeral + in-memory._ **Add:** `handle.isOwnedBy(callerStreamId)`; one
 stream-id derivation function; a registry re-seed method for presentation
@@ -622,7 +634,7 @@ attach; roster rows carry `identity` (+ `childStreamId` always); roster↔task
 join on `childStreamId`; unify the child-birth preamble (id mint +
 `registerExecution` + stream-id derivation) into one function used by the
 async, in-band, agent-CLI, and script paths — loop semantics untouched.
-**Delete:** the PR 6 table above — 4 `isChildExecution` copies, 4 ownership
+**Delete:** the step 6 table above — 4 `isChildExecution` copies, 4 ownership
 checks, 2 redundant parent wire messages, the second stream-id formula, the
 static delivery fallback, the naming split, 3 `isSubagent` spellings, the
 agent-CLI registry lineage copies + duplicated authorization, the
@@ -634,7 +646,7 @@ renders by `identity.kind`; join-by-childStreamId fixture.
 **Acceptance:** `rg -c 'parentStreamId !== .*childStreamId|childStreamId !== .*parentStreamId' src/ | grep -v ExecutionHandle` → 0;
 `rg -c "kind: 'process'" src/shared/schemas/streamState.ts` → 0.
 
-### PR 7 — delegation gating without the fabricated row
+### Step 7 — delegation gating without the fabricated row
 
 **Add:** roster declaration on `ToolDefinition` (looseObject field), set by
 each delegation tool; `annotateDelegationTool` reads it; anchors added to
@@ -645,7 +657,7 @@ intended.
 bi-categorical script runner keeps both roster namespaces.
 **Acceptance:** `rg -c 'DELEGATION_AVAILABILITY_CATEGORY' src/` → 0.
 
-### PR 8 — honest run records
+### Step 8 — honest run records
 
 **Add:** `RunRecord` union (agent arm = `AgentConfigSchema` unchanged;
 non-agent arm = `{name, instruction, workingDirectory, model?}`); store-level
@@ -659,7 +671,7 @@ resolution on the non-agent arm.
 **Acceptance:** `rg -c "agentCategory: AgentCategory" src/tools/` → 0 outside
 delegation launch of real agents.
 
-### PR 9 — ratchet and close-out
+### Step 9 — Part I gate sweep
 
 Shrink `config/ratchets/knip-baseline.json` (never widen); no new `@agent/*`
 deep-import specifier in any host; update `src/agent/core/README.md` and this
@@ -674,7 +686,7 @@ the entrance (one-shot, quarantined), no read-path branches, no recomputation
 of what an authority already holds. Each axis gets its ruling, its removals,
 and its PR.
 
-### Axis S — lifecycle state (PRs 10–11)
+### Axis S — lifecycle state (steps 10–11)
 
 **Findings.** 19 distinct state vocabularies; the persisted terminal fact is
 *two* fields (`ExecutionMeta.terminalStatus`, an untyped string, plus
@@ -700,8 +712,7 @@ for terminal state (owned solely by `ExecutionMeta.outcome`).
 the exporter keeps projecting via `runOutcomeToExecutionStatus` at that one
 boundary). Everything else is a display projection computed in one place.
 
-**PR 10 — one terminal field.** The one-shot migration (extending PR 4's
-walker, second store generation) stamps `outcome` on every row that has only
+**Step 10 — one terminal field.** The one-shot migration (the same single walker) stamps `outcome` on every row that has only
 `terminalStatus` (unmappable strings → `failed`, matching today's
 non-resumable treatment); after it, `outcome` is required on terminal rows
 and **`terminalStatus` is no longer written or read** — `writeTerminalStatus`
@@ -716,7 +727,7 @@ parity before/after.
 *Acceptance:* `rg -c 'terminalStatus' src/ packages/` → only the export
 projection and the migration module.
 
-**PR 11 — one projection per display decision.** One shared
+**Step 11 — one projection per display decision.** One shared
 `resolveHistoryRunStatus` over `{resumable, outcome}` used by both hosts
 (the CLI's parallel string-typed variant deleted); the phase→outcome
 authority inversion at `AgentRunLifecycle.ts:183-189` replaced by an explicit
@@ -727,7 +738,7 @@ carry a typed `StreamPhase`; use `isTerminalOutcomePhase`); the retired
 7-value `StreamStatus` confined to the trace-viewer read boundary.
 *Acceptance:* `rg -c 'resolveCliHistoryStatus|isChildExecutionErrorStatus' packages/cli/` → 0.
 
-### Axis T — opaque stream ids, and retiring the legacy resolver (PR 12)
+### Axis T — opaque stream ids, and retiring the legacy resolver (step 12)
 
 **Findings.** The `@model` segment of
 `${cleanAgent}@${model}#${executionId}` has **zero production consumers** —
@@ -747,8 +758,7 @@ authoritative.
 
 **Ruling.** A stream id is an **opaque handle**, minted once as
 `${name}#${executionId}` — no model segment, no parsing, ever. The
-execution→stream mapping is resolved **once, at the entrance**: the PR 4/10
-migration walker runs the existing resolver per unresolved row, stamps a
+execution→stream mapping is resolved **once, at the entrance**: the one migration walker runs the existing resolver per unresolved row, stamps a
 unique match as the authoritative `streamId`, and leaves genuinely ambiguous
 rows unresolved (exactly what the resolver reports today, computed once
 instead of per read).
@@ -759,7 +769,7 @@ lines), the `streamIdSource` enum and `registeredStreamId` contract;
 shim (breakable sidecar cohort); the sidecar `description` mirrors and
 `hydrateDescriptionsFromExecutionMeta`'s per-stream meta read on every load
 (#9627, folded in); the `legacyRuns: 'taskRuns'` directory probe (one-shot
-rename). By this PR the last stream-id parsers are already gone (PRs 2/3/5),
+rename). In the final tree the last stream-id parsers are gone (steps 2/3/5),
 so the format change is safe for new runs and old ids stay opaque strings.
 *Kept, permanent by nature:* the filename-era workflow-output grammar
 (`workflowOutput.ts:57-106`) — it parses **user files on the user's disk**,
@@ -770,7 +780,7 @@ unresolved with the same user-visible result; trace assembly and
 *Acceptance:* `rg -c 'legacyExecutionIdentity|streamIdSource|LEGACY_RESOLUTION' src/` → 0;
 launches without a model succeed for non-agent runs.
 
-### Axis U — derived data: one accumulator per fact (PR 13)
+### Axis U — derived data: one accumulator per fact (step 13)
 
 **Findings.** Round artifacts (`outputFiles`/`missingOutputs`/
 `compileFailures`) are accumulated in **four** places (the
@@ -806,7 +816,7 @@ beside the text.
 *Acceptance:* `rg -c 'mergeArtifactSnapshot|streamArtifactRevision' packages/cli/` → 0;
 `rg -c 'listExecutionEditedFiles' src/` → only the finalize-time site.
 
-### Axis R — the roster pair collapse (PR 14)
+### Axis R — the roster pair collapse (step 14)
 
 **Findings.** 39 `workflow*`/`toolUse*` field-pair declarations across four
 packages (7 roster-key pairs, 8 roster-list pairs, 11 record-keyed
@@ -829,10 +839,12 @@ parity per category; settings/main-view round-trip.
 *Acceptance:* `rg -c 'workflowAgentKeys|toolUseAgentKeys|workflowAgents|toolUseAgents' src/ packages/`
 → the memento migration module and prompt-var builder only.
 
-### PR 15 — Part II ratchet and close-out
+### Step 15 — final gate battery
 
-Same as PR 9, run after Part II: shrink baselines (never widen), confirm no
-new `@agent/*` deep-import specifiers, update this proposal's status.
+Run the full acceptance battery: all grep gates from every step, both
+typechecks, tests, ratchets with shrunk baselines (never widen), no new
+`@agent/*` deep-import specifiers, headless parity, and this proposal's
+status updated.
 
 ## Separated work
 
@@ -858,17 +870,17 @@ re-roots every checkpoint and defeats the double-launch guard
   resolution (`legacyExecutionIdentity.ts`) — breakable cohorts; agent-run
   sidecars carry descriptors whose `executionId` field *is* the FK, so they
   hydrate unchanged.
-- **The birth-preamble unification (PR 6) must not touch loop semantics.**
+- **The birth-preamble unification (step 6) must not touch loop semantics.**
   The in-band path's durability ledger (`stableSubagentAttempt.ts`) and the
   async path's follow-up queue are contracts, not duplication; only the
   register/stream-id/strategy-params preamble is shared.
 - **`RunRecord` union and external consumers.** The NDJSON `setTaskState`
   projection of `run.config` (`sessionProgressSubscription.ts:86-94`) is an
   external contract; the non-agent arm must project without inventing the
-  deleted fields. Checked in PR 8's parity test.
+  deleted fields. Checked in the parity test.
 - **Deleting `normalizeWriterCategory` rests on one traced consumer**
   (`chatDefaults.loadHistoryDefaults`). Grep for other readers of
-  `config.agentCategory` on non-agent executions before PR 4; keep the
+  `config.agentCategory` on non-agent executions before landing; keep the
   parentless-row fixture.
 - **Disk-scale numbers remain unmeasured** (rev 1's 142-of-478). The
   migration's dry-run count supplies the real figure before anything depends
