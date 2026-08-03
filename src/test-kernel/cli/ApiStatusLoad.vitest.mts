@@ -218,6 +218,113 @@ describe('loadCliApiStatusLines', () => {
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    {
+      name: 'off and signed out',
+      preference: 'off',
+      signedIn: false,
+      expected: ['Fallback: Personal API keys'],
+    },
+    {
+      name: 'off and signed in',
+      preference: 'off',
+      signedIn: true,
+      expected: [
+        'ChatGPT: not preferred · signed in as chatgpt@example.com',
+        'Fallback: Personal API keys',
+      ],
+    },
+    {
+      name: 'on and signed out',
+      preference: 'on',
+      signedIn: false,
+      expected: [
+        'ChatGPT: preferred · sign in required',
+        'Fallback: Personal API keys',
+      ],
+    },
+    {
+      name: 'on and signed in',
+      preference: 'on',
+      signedIn: true,
+      expected: [
+        'ChatGPT: preferred · signed in as chatgpt@example.com',
+        'Fallback: Personal API keys',
+      ],
+    },
+  ] as const)(
+    'renders the ChatGPT route when available: $name',
+    async ({ expected, preference, signedIn }) => {
+      mocks.readCliModelAccessStatus.mockResolvedValue({
+        apiFallback: 'personal',
+        preferences: { chatGpt: preference, kimiCode: 'off' },
+        chatGptSignedIn: signedIn,
+        chatGptAccountLabel: signedIn ? 'chatgpt@example.com' : undefined,
+        kimiCodeKeySet: false,
+      });
+
+      await expect(
+        loadCliAccountStatusLines({
+          apiMode: 'personal',
+          includeApiDetails: true,
+        }),
+      ).resolves.toEqual(expected);
+    },
+  );
+
+  it.each([
+    {
+      name: 'off without a key',
+      preference: 'off',
+      keySet: false,
+      expected: ['Fallback: Personal API keys'],
+    },
+    {
+      name: 'off with a key',
+      preference: 'off',
+      keySet: true,
+      expected: [
+        'Kimi Code: not preferred · key configured',
+        'Fallback: Personal API keys',
+      ],
+    },
+    {
+      name: 'on without a key',
+      preference: 'on',
+      keySet: false,
+      expected: [
+        'Kimi Code: preferred · key required',
+        'Fallback: Personal API keys',
+      ],
+    },
+    {
+      name: 'on with a key',
+      preference: 'on',
+      keySet: true,
+      expected: [
+        'Kimi Code: preferred · key configured',
+        'Fallback: Personal API keys',
+      ],
+    },
+  ] as const)(
+    'renders the Kimi Code route when available: $name',
+    async ({ expected, keySet, preference }) => {
+      mocks.readCliModelAccessStatus.mockResolvedValue({
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', kimiCode: preference },
+        chatGptSignedIn: false,
+        kimiCodeKeySet: keySet,
+      });
+
+      await expect(
+        loadCliAccountStatusLines({
+          apiMode: 'personal',
+          includeApiDetails: true,
+        }),
+      ).resolves.toEqual(expected);
+    },
+  );
+
   it('keeps signed-out personal-only status truthful', async () => {
     setPersonalKeys('deepseek');
 
@@ -226,14 +333,10 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lineFor(lines, 'ChatGPT')).toContain('not preferred · signed out');
-    expect(lineFor(lines, 'Kimi Code')).toContain(
-      'not preferred · key not configured',
-    );
-    expect(lineFor(lines, 'Fallback')).toBe('Fallback: Personal API keys');
-    expect(lineFor(lines, 'Other personal keys')).toBe(
+    expect(lines).toEqual([
+      'Fallback: Personal API keys',
       'Other personal keys: DeepSeek',
-    );
+    ]);
     expect(lines.join('\n')).not.toContain('TeXRA');
   });
 
@@ -250,12 +353,7 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lineFor(lines, 'Fallback')).toBe(
-      'Fallback: Included TeXRA access · signed out',
-    );
-    expect(lines.some((line) => line.startsWith('Other personal keys:'))).toBe(
-      false,
-    );
+    expect(lines).toEqual(['Fallback: Included TeXRA access · signed out']);
     expect(mocks.fetchRelayUsageSummary).not.toHaveBeenCalled();
   });
 
@@ -280,15 +378,9 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lineFor(lines, 'Fallback')).toBe(
+    expect(lines).toEqual([
       'Fallback: Included TeXRA access · signed in as included@example.com · Researcher · included usage this month: 10.0% used, 90.0% remaining',
-    );
-    expect(
-      lines.filter((line) => line.includes('included@example.com')),
-    ).toHaveLength(1);
-    expect(lines.some((line) => line.startsWith('Other personal keys:'))).toBe(
-      false,
-    );
+    ]);
   });
 
   it('owns the CI relay-token limitation on the included fallback', async () => {
@@ -356,9 +448,7 @@ describe('loadCliApiStatusLines', () => {
       includeApiDetails: true,
     });
 
-    expect(lines.some((line) => /personal keys: (none)?$/i.test(line))).toBe(
-      false,
-    );
+    expect(lines).toEqual(['Fallback: Personal API keys']);
   });
 
   it('preserves a profile note exactly once', async () => {
