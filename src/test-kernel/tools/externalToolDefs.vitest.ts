@@ -32,7 +32,7 @@ describe('external tool definitions', () => {
 
     assert.ok(workflowScript, 'Workflow script tool definition should exist');
     assert.strictEqual(workflowScript.toggleable, true);
-    assert.deepStrictEqual(workflowScript.tools, ['delegate_workflow_script']);
+    assert.deepStrictEqual(workflowScript.tools, ['delegate_multi_agents']);
     assert.strictEqual(await workflowScript.check(), true);
   });
 

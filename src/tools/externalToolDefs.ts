@@ -17,7 +17,7 @@ import { z } from 'zod';
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import { platform } from '@platform/platform';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
@@ -454,13 +454,13 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
   },
   {
     id: 'workflow-script',
-    tools: [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME],
+    tools: [DELEGATE_MULTI_AGENTS_TOOL_NAME],
     name: 'Workflow Script',
     category: 'workflow',
     description:
       'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it — this switch is an additional kill switch on top of that per-agent opt-in.',
     configNotes:
-      'No local install required. Turning this off removes delegate_workflow_script from every agent tool list, even agents whose configuration names it explicitly.',
+      'No local install required. Turning this off removes delegate_multi_agents from every agent tool list, even agents whose configuration names it explicitly.',
     toggleable: true,
     check: async () => true,
   },
