@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
+import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
 import type { StreamTabId } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 

@@ -49,7 +49,7 @@ import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
 import { logStyles } from '../styles/logStyles';
 
 // Local imports - progress view utils
-import { playCompletionSound } from '../utils/audioNotification';
+import { playCompletionSound } from '../audioNotification';
 
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';

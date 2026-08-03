@@ -5,7 +5,7 @@ import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { AgentCategory, getCleanAgentName } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import type { ProgressStreamMetadata } from './state/ProgressViewState';
+import type { ProgressStreamMetadata } from './ProgressViewState';
 
 export interface StreamTabInfoInputs {
   streamId: string;

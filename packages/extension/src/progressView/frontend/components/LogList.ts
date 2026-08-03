@@ -44,7 +44,7 @@ import {
   EMPTY_LOG_CONTEXT,
   streamLogContext,
   type StreamLogContextValue,
-} from '../contexts/streamContexts';
+} from '../streamContexts';
 
 // Local imports - progress view styles
 import { logStyles } from '../styles/logStyles';

@@ -8,7 +8,7 @@ import {
   EMPTY_STREAM_CONTEXT,
   streamStateContext,
   type StreamContextValue,
-} from '../contexts/streamContexts';
+} from '../streamContexts';
 import { conversationContentStyles } from './ConversationContent.styles';
 import { renderStreamHeader } from './streamHeaderView';
 
