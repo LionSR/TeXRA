@@ -243,6 +243,7 @@ function makeInit(
 ): ChatSessionControllerInit {
   return {
     session: makeSession(),
+    runtimeSession: mocks.defaultSession(),
     getSessionContext: () => makeSessionContext(),
     disposers: [],
     followUpQueue: new PQueue({ concurrency: 1 }),
