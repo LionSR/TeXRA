@@ -14,9 +14,9 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 The Dashboard groups the current controls by subject:
 
-- **Account & usage** — sign-in status, included usage, and telemetry.
-- **Models** — access mode, provider keys, ChatGPT subscription, model
-  visibility, and reliability.
+- **Account & usage** — sign-in status, included usage, ChatGPT subscription,
+  and telemetry.
+- **Models** — access mode, provider keys, model visibility, and reliability.
 - **Agents and teams** — available agents, active teams, and orchestration.
 - **Tools and integrations** — tool availability, permissions, skills, and
   connected coding agents.
@@ -67,8 +67,9 @@ them at the intended project or user scope.
 ## Model access and credentials
 
 The **Models** view is the single home for model access, provider API keys,
-ChatGPT subscription access, provider behavior, model visibility, and retry
-settings. Included-usage data remains visible whenever the signed-in account
+provider behavior, model visibility, and retry settings. Account connections
+that stand in for a provider key — Researcher Access and the ChatGPT
+subscription — live in **Account & usage**. Included-usage data remains visible whenever the signed-in account
 has usage data, regardless of the currently selected access mode.
 
 Saved provider keys currently use each host's secure credential mechanism. They
