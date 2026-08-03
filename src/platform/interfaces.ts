@@ -243,49 +243,6 @@ export const NO_TOOL_AVAILABILITY_HOST: ToolAvailabilityHost = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
-// Tool-edit approval
-// ---------------------------------------------------------------------------
-
-/**
- * Tool-edit approval request / result shapes.
- *
- * Hosts receive these through `SessionHandle.interactions`, not through the
- * process-wide Platform object. `@tools/approval/toolEditApproval` re-exports
- * these types for existing approval call sites.
- */
-
-/** Platform-level contract for a tool-edit approval request. */
-export interface ToolEditApprovalRequest {
-  readonly path: string;
-  readonly originalContent: string;
-  readonly proposedContent: string;
-  readonly sourceTool: string;
-  readonly streamId?: string | null;
-}
-
-/**
- * Platform-level contract for a tool-edit approval result. `appliedContent`
- * is required on acceptance — every host implementation always supplies the
- * content the user actually approved, so this is a type-level guarantee
- * rather than a convention callers must null-check.
- */
-export type ToolEditApprovalResult =
-  | {
-      readonly accepted: true;
-      readonly appliedContent: string;
-      readonly userPatch?: string;
-      readonly lineChanges?: {
-        readonly added: number;
-        readonly removed: number;
-      };
-      readonly startLine?: number;
-    }
-  | {
-      readonly accepted: false;
-      readonly userMessage?: string;
-    };
-
-// ---------------------------------------------------------------------------
 // Tool notifications
 // ---------------------------------------------------------------------------
 
