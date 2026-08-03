@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { MAX_TIER } from '@auth/config';
 import {
@@ -8,12 +8,13 @@ import {
   type SettingsModelSelectionState,
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
+import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
-const NO_RUNTIME_MODELS = async (): Promise<
-  readonly (readonly [string, ModelConfig])[]
-> => [];
+const NO_COPILOT_ROUTES = async (): Promise<
+  ReadonlyMap<string, CopilotModelRoute>
+> => new Map();
 
 // Stub the injected availability resolver so the controller stays decoupled
 // from the global platform / server-side key service in unit tests.
@@ -68,7 +69,7 @@ function createController(
   return new SettingsModelSelectionController({
     state: createState(),
     resolveModelOptions,
-    getRuntimeModelEntries: NO_RUNTIME_MODELS,
+    getCopilotRoutes: NO_COPILOT_ROUTES,
     ...overrides,
   });
 }
@@ -177,51 +178,39 @@ describe('SettingsModelSelectionController', () => {
     );
   });
 
-  it('includes discovered Copilot models without exposing static Copilot entries', async () => {
-    const runtimeConfig = {
-      name: 'copilot:sonnet46',
-      label: 'Copilot · Claude Sonnet 4.6',
-      provider: 'copilot',
-      contextWindow: 160_000,
-      inputPrice: 0,
-      outputPrice: 0,
-      deprecated: false,
-      retired: false,
-      capabilities: {},
-    } as ModelConfig;
+  it('surfaces discovered Copilot routes as route status, never as picker rows', async () => {
     const controller = createController({
-      getRuntimeModelEntries: async () => [
-        ['copilot:sonnet46', runtimeConfig] as const,
-      ],
-      resolveModelOptions: async (models) =>
-        models.map((model) => ({
-          value: model,
-          label: model === 'copilot:sonnet46' ? runtimeConfig.label : model,
-          provider: model === 'copilot:sonnet46' ? 'copilot' : 'openai',
-          availability:
-            model === 'copilot:sonnet46'
-              ? 'copilot-consent-required'
-              : 'provider-key',
-          availabilityLabel:
-            model === 'copilot:sonnet46'
-              ? 'Copilot consent required'
-              : 'API key set',
-          requiresKey: false,
-          disabled: model === 'copilot:sonnet46',
-        })),
+      getCopilotRoutes: async () =>
+        new Map<string, CopilotModelRoute>([
+          [
+            'sonnet46',
+            {
+              access: 'consent-required',
+              reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+              maxInputTokens: 200_000,
+            },
+          ],
+        ]),
     });
 
-    const { models } = await controller.buildSelectionData();
+    const { models, copilotModels } = await controller.buildSelectionData();
 
-    expect(models).toContainEqual(
-      expect.objectContaining({
-        name: 'copilot:sonnet46',
-        provider: 'copilot',
-        availability: 'copilot-consent-required',
-      }),
-    );
-    expect(models.filter((model) => model.provider === 'copilot')).toHaveLength(
-      1,
-    );
+    expect(copilotModels).toEqual([
+      {
+        name: 'sonnet46',
+        label: MODEL_CONFIGS.sonnet46.label,
+        access: 'consent-required',
+        preferred: false,
+      },
+    ]);
+    // The route's base model keeps its own single row; no `copilot:` identity
+    // and no Copilot-provider row ever enters the picker.
+    expect(
+      models.filter(
+        (model) =>
+          model.name.startsWith('copilot:') || model.provider === 'copilot',
+      ),
+    ).toEqual([]);
+    expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
   });
 });
