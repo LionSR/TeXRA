@@ -1,3 +1,5 @@
+import { ZodError } from 'zod';
+
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import {
   ExecutionIdSchema,
@@ -44,7 +46,11 @@ export async function legacyExecutionIdFromStreamSuffix(
   let meta: ExecutionMeta | null;
   try {
     meta = await getExecutionStore(derived).readMetaStrict();
-  } catch {
+  } catch (error) {
+    // Only a validation failure means "malformed record"; a storage read
+    // failure proves nothing about ownership and must propagate rather than
+    // silently admit (or silently withhold) an execution directory.
+    if (!(error instanceof ZodError)) throw error;
     return options.malformedMeta === 'reject' ? undefined : derived;
   }
   const registered = registeredStreamId(meta);

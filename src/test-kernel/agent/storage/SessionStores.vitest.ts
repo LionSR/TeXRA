@@ -201,6 +201,33 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     }
   });
 
+  it('propagates metadata storage failures instead of deciding ownership', async () => {
+    const session = createTestSession();
+    const executionId = 'abc111' as ExecutionId;
+    const stream = `flaky@model#${executionId}` as StreamTabId;
+    session.transcripts.ensureStream(stream);
+    const readMetaStrict = vi
+      .spyOn(getExecutionStore(executionId), 'readMetaStrict')
+      .mockRejectedValue(new Error('storage read failed'));
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      await expect(stores.deleteStream(stream)).rejects.toThrow(
+        'storage read failed',
+      );
+      expect(deleteExecution).not.toHaveBeenCalled();
+      expect(session.transcripts.has(stream)).toBe(true);
+    } finally {
+      readMetaStrict.mockRestore();
+      session.dispose();
+    }
+  });
+
   it('keeps the suffix boundary for legacy records without registration provenance', async () => {
     const session = createTestSession();
     const executionId = 'abc888' as ExecutionId;
