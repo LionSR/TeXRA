@@ -669,21 +669,18 @@ describe('SupabaseSession', () => {
       assert.equal(coordinator.getLastRefreshFailure(), 'invalid');
     });
 
-    it(
-      'classifies custom refresh HTTP 503 as transient',
-      async () => {
-        const { coordinator } = createCoordinator({
-          initialSession: expiredCustomSession(),
-          fetch: async () =>
-            new Response(JSON.stringify({ error: 'try again later' }), {
-              status: 503,
-            }),
-        });
+    it('classifies custom refresh HTTP 503 as transient', async () => {
+      const { coordinator } = createCoordinator({
+        initialSession: expiredCustomSession(),
+        fetch: async () =>
+          new Response(JSON.stringify({ error: 'try again later' }), {
+            status: 503,
+          }),
+      });
 
-        assert.equal(await coordinator.ensureFreshToken(), null);
-        assert.equal(coordinator.getLastRefreshFailure(), 'transient');
-      },
-    );
+      assert.equal(await coordinator.ensureFreshToken(), null);
+      assert.equal(coordinator.getLastRefreshFailure(), 'transient');
+    });
 
     it('preserves upstream abort signals when adding a timeout', async () => {
       const upstream = new AbortController();

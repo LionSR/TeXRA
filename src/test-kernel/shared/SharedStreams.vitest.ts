@@ -247,9 +247,9 @@ describe('stream status display labels', () => {
       }),
     ).toBe('waiting for you');
     // Unset (or false) isChildStream keeps the root's plain "idle" wording.
-    expect(formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cli' })).toBe(
-      'idle',
-    );
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cli' }),
+    ).toBe('idle');
     expect(
       formatStreamStatusLabel(STREAM_PHASE.WAITING, {
         style: 'cli',
