@@ -17,6 +17,18 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 // never re-seeded.
 
 /**
+ * Renamed tool group IDs, keyed by the ID that may still sit in a persisted
+ * `DISABLED_TOOLS` array. Reads map the old ID onto the current one so a
+ * rename can't silently re-enable a group that seeding — or the user — had
+ * switched off; profiles are never re-seeded, so the stale entry is the only
+ * record of that choice. `setToolEnabled` writes the mapped set back, so a
+ * profile migrates the first time any tool is toggled.
+ */
+const RENAMED_TOOL_IDS: ReadonlyMap<string, string> = new Map([
+  ['workflow-script', 'multi-agent-workflow'],
+]);
+
+/**
  * Get the set of tool group IDs disabled by the user.
  *
  * Omitting `store` reads the ambient platform global state; hosts that own an
@@ -31,7 +43,7 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 export function getDisabledToolIds(store?: StateStore): ReadonlySet<string> {
   const resolved = store ?? tryGlobalState();
   const raw = resolved?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
-  return new Set(raw);
+  return new Set(raw.map((id) => RENAMED_TOOL_IDS.get(id) ?? id));
 }
 
 /** Toggle a tool group's enabled/disabled state. */
