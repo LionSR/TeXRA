@@ -48,6 +48,10 @@ const outputPathProbeDefaults: OutputPathProbeDependencies = {
   dirname: path.dirname,
 };
 
+function isAlreadyExistsError(error: unknown): boolean {
+  return (error as { readonly code?: string })?.code === 'EEXIST';
+}
+
 function parentFileUsageError(
   target: string,
   flagLabel: OutputFlag,
@@ -85,7 +89,7 @@ async function probeOutputPath(
   try {
     await mkdir(requiredDirectory, { recursive: true });
   } catch (error: unknown) {
-    if (isNotADirectoryError(error)) {
+    if (isNotADirectoryError(error) || isAlreadyExistsError(error)) {
       throw parentFileUsageError(target, flagLabel);
     }
     if (isFileNotFoundError(error)) {
