@@ -255,7 +255,8 @@ export const mainViewStyles: CSSResult = css`
 
   /* A real loading surface prevents the blank pane that previously appeared
      while the host derived onboarding state. Its geometry mirrors the finished
-     welcome + composer layout, so the transition does not jump. */
+     welcome + composer layout, so the transition does not jump. Shapes are
+     wa-skeleton; we only size them and retint the sheen to our surfaces. */
   .launcher-loading {
     display: grid;
     place-items: center;
@@ -271,29 +272,23 @@ export const mainViewStyles: CSSResult = css`
     width: min(620px, 100%);
   }
 
-  .launcher-loading-mark,
-  .launcher-loading-line,
-  .launcher-loading-composer,
-  .launcher-loading-controls span {
-    background: linear-gradient(
-      100deg,
-      var(--wa-color-surface-lowered) 20%,
-      var(--wa-color-surface-raised) 45%,
-      var(--wa-color-surface-lowered) 70%
-    );
-    background-size: 240% 100%;
-    animation: launcher-loading-shimmer 1.4s ease-in-out infinite;
+  .launcher-loading-canvas wa-skeleton {
+    --color: var(--wa-color-surface-lowered);
+    --sheen-color: var(--wa-color-surface-raised);
+    min-height: 0;
+  }
+
+  .launcher-loading-canvas wa-skeleton::part(indicator) {
+    animation-duration: 1.4s;
   }
 
   .launcher-loading-mark {
     width: 42px;
     height: 42px;
-    border-radius: var(--wa-border-radius-l);
   }
 
-  .launcher-loading-line {
-    height: 12px;
-    border-radius: var(--wa-border-radius-pill);
+  .launcher-loading-mark::part(indicator) {
+    border-radius: var(--wa-border-radius-l);
   }
 
   .launcher-loading-title {
@@ -304,6 +299,7 @@ export const mainViewStyles: CSSResult = css`
 
   .launcher-loading-copy {
     width: min(420px, 82%);
+    height: 12px;
   }
 
   .launcher-loading-composer {
@@ -316,10 +312,17 @@ export const mainViewStyles: CSSResult = css`
     margin-top: clamp(32px, 8vh, 72px);
     padding: var(--wa-space-s);
     border-radius: 26px;
+    background: var(--wa-color-surface-lowered);
+  }
+
+  .launcher-loading-composer wa-skeleton {
+    --color: var(--wa-color-surface-raised);
+    --sheen-color: var(--wa-color-surface-default);
   }
 
   .launcher-loading-prompt {
     width: 72%;
+    height: 12px;
   }
 
   .launcher-loading-controls {
@@ -327,16 +330,18 @@ export const mainViewStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  .launcher-loading-controls span {
+  .launcher-loading-controls wa-skeleton {
     width: 72px;
     height: 28px;
-    border-radius: var(--wa-border-radius-pill);
   }
 
-  .launcher-loading-controls span:last-child {
+  .launcher-loading-controls wa-skeleton:last-child {
     width: 34px;
     height: 34px;
     margin-left: auto;
+  }
+
+  .launcher-loading-controls wa-skeleton:last-child::part(indicator) {
     border-radius: var(--wa-border-radius-circle);
   }
 
@@ -347,15 +352,6 @@ export const mainViewStyles: CSSResult = css`
 
   .desktop-launcher-loading .launcher-loading {
     flex: 1;
-  }
-
-  @keyframes launcher-loading-shimmer {
-    from {
-      background-position: 100% 0;
-    }
-    to {
-      background-position: -100% 0;
-    }
   }
 
   @media (max-width: 640px) {
@@ -379,10 +375,7 @@ export const mainViewStyles: CSSResult = css`
       transition: none;
     }
 
-    .launcher-loading-mark,
-    .launcher-loading-line,
-    .launcher-loading-composer,
-    .launcher-loading-controls span {
+    .launcher-loading-canvas wa-skeleton::part(indicator) {
       animation: none;
     }
   }

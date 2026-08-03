@@ -100,6 +100,13 @@ const SCROLLABLE_DETAILS = selectorGroup(
   ITEM_NAMES.filter((n) => n !== 'workflow-proposal'),
   '__details',
 );
+/* Only the question-style panels render a quoted request-context block. */
+const CONTEXTS = selectorGroup(
+  ITEM_NAMES.filter(
+    (n) => n === 'user-question-request' || n === 'external-inquiry-request',
+  ),
+  '__context',
+);
 
 /** Per-type accent rules: item left-border plus matching header icon color. */
 const ACCENT_RULES = unsafeCSS(
@@ -159,6 +166,15 @@ export const requestPanelSharedStyles: CSSResult = css`
     gap: ${sp.medium};
     min-width: 0;
     max-width: 100%;
+  }
+
+  :is(${CONTEXTS}) {
+    font-size: var(--font-size-sm);
+    color: var(--wa-color-text-quiet);
+    padding: ${sp.small} ${sp.medium};
+    background: var(--wa-color-surface-lowered);
+    border-radius: var(--border-radius-small);
+    line-height: var(--line-height-normal);
   }
 
   :is(${ITEMS}) {

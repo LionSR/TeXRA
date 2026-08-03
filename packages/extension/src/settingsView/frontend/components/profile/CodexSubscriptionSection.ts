@@ -12,13 +12,15 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { ChatGptAuthStatus } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 // Local imports - shared schemas
@@ -38,19 +40,6 @@ export class CodexSubscriptionSection extends LitElement {
     css`
       :host {
         display: block;
-      }
-
-      .keyless-source__limit {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--wa-space-xs);
-        margin: 0 0 var(--wa-space-xs);
-        opacity: 0.85;
-        font-size: var(--font-size-sm);
-      }
-      .keyless-source__limit wa-icon {
-        flex: 0 0 auto;
-        margin-top: var(--wa-space-3xs);
       }
     `,
   ];
@@ -74,6 +63,7 @@ export class CodexSubscriptionSection extends LitElement {
           title: 'ChatGPT subscription',
           description:
             'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
+          icon: 'circle-user',
           actions: html`<wa-tag variant="neutral" size="s"
             >Experimental</wa-tag
           >`,
@@ -86,22 +76,13 @@ export class CodexSubscriptionSection extends LitElement {
           </span>
         </p>
         <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                Prefer ChatGPT subscription
-              </span>
-              <span class="settings-row-help">
-                Route eligible Codex models through your subscription.
-              </span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label="Prefer ChatGPT subscription"
-              ?checked=${preferSubscription}
-              @change=${this.handlePreferSubscriptionChange}
-            ></wa-switch>
-          </div>
+          ${renderSettingsToggleRow({
+            label: 'Prefer ChatGPT subscription',
+            description:
+              'Route eligible Codex models through your subscription.',
+            checked: preferSubscription,
+            onChange: this.handlePreferSubscriptionChange,
+          })}
           <div class="settings-row">
             <div class="settings-row-text">
               <span class="settings-row-label">
@@ -130,7 +111,7 @@ export class CodexSubscriptionSection extends LitElement {
                         postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT),
                     })
                   : renderLabeledActionButton({
-                      icon: 'comments',
+                      icon: 'right-to-bracket',
                       text: 'Sign in with ChatGPT',
                       kind: 'primary',
                       appearance: 'filled',

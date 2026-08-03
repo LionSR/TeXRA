@@ -14,7 +14,10 @@ import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -28,7 +31,6 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 // Side-effect imports - register WA button, icon, and switch components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Side-effect: register tool card component
@@ -37,6 +39,7 @@ import '../components/tools/ToolCard';
 /** Per-category display metadata. */
 interface CategoryMeta {
   readonly label: string;
+  readonly description: string;
   readonly icon: TeXRAIconName;
 }
 
@@ -47,17 +50,53 @@ interface CategoryMeta {
  * is a compile error.
  */
 const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
-  file: { label: 'File & Shell', icon: 'copy' },
-  latex: { label: 'LaTeX', icon: 'file-code' },
-  academic: { label: 'Academic Research', icon: 'graduation-cap' },
-  web: { label: 'Web', icon: 'globe' },
-  computation: { label: 'Computation', icon: 'cube' },
-  lean: { label: 'Lean 4', icon: 'flask' },
-  workflow: { label: 'Memory & Workflow', icon: 'diagram-project' },
-  system: { label: 'System Dependencies', icon: 'gear' },
+  file: {
+    label: 'File & Shell',
+    description: 'Read, edit, search, and run commands in the workspace.',
+    icon: 'copy',
+  },
+  latex: {
+    label: 'LaTeX',
+    description: 'Compile, diff, and format LaTeX documents.',
+    icon: 'file-code',
+  },
+  academic: {
+    label: 'Academic Research',
+    description: 'Search papers and manage academic references.',
+    icon: 'graduation-cap',
+  },
+  web: {
+    label: 'Web',
+    description: 'Search the web and fetch page content.',
+    icon: 'globe',
+  },
+  computation: {
+    label: 'Computation',
+    description: 'Evaluate math and run computations.',
+    icon: 'cube',
+  },
+  lean: {
+    label: 'Lean 4',
+    description: 'Work with the Lean 4 proof assistant.',
+    icon: 'flask',
+  },
+  workflow: {
+    label: 'Memory & Workflow',
+    description: 'Remember context and track work across sessions.',
+    icon: 'diagram-project',
+  },
+  system: {
+    label: 'System Dependencies',
+    description: 'External runtimes that other tools depend on.',
+    icon: 'gear',
+  },
   // ai-agents lives on its own tab (AIAgentsTab); keep the meta entry so the
   // Record stays exhaustive and the type checker enforces it.
-  'ai-agents': { label: 'Integrations', icon: 'robot' },
+  'ai-agents': {
+    label: 'Integrations',
+    description: 'Coding agents and external integrations.',
+    icon: 'robot',
+  },
 };
 
 /** Canonical category display order. The 'ai-agents' category is rendered by
@@ -100,18 +139,8 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--wa-space-xs);
       }
 
-      .category-section {
-        margin-bottom: var(--wa-space-s);
-      }
-
       .setting-block {
         margin-bottom: var(--wa-space-2xs);
-      }
-
-      .setting-description {
-        margin: var(--wa-space-3xs) 0 0 0;
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
       }
 
       .tool-path-setting {
@@ -159,37 +188,27 @@ export class ToolsTab extends LitElement {
   private renderToggleSection(opts: {
     icon: TeXRAIconName;
     title: string;
-    label: string;
     description: string;
+    label: string;
+    help: string;
     checked: boolean;
     onChange: (event: Event) => void;
   }): TemplateResult {
     return html`
       <div class="category-section">
-        ${renderSettingsSectionHeading({ icon: opts.icon, title: opts.title })}
-        <div class="settings-section">${this.renderToggleRow(opts)}</div>
-      </div>
-    `;
-  }
-
-  private renderToggleRow(opts: {
-    label: string;
-    description: string;
-    checked: boolean;
-    onChange: (event: Event) => void;
-  }): TemplateResult {
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
+        ${renderSettingsSectionHeading({
+          icon: opts.icon,
+          title: opts.title,
+          description: opts.description,
+        })}
+        <div class="settings-section">
+          ${renderSettingsToggleRow({
+            label: opts.label,
+            description: opts.help,
+            checked: opts.checked,
+            onChange: opts.onChange,
+          })}
         </div>
-        <wa-switch
-          class="settings-row-control"
-          aria-label=${opts.label}
-          ?checked=${opts.checked}
-          @change=${opts.onChange}
-        ></wa-switch>
       </div>
     `;
   }
@@ -200,15 +219,16 @@ export class ToolsTab extends LitElement {
         ${renderSettingsSectionHeading({
           icon: 'shield',
           title: 'Approval & safety',
+          description: 'Choose when agents pause for approval before acting.',
         })}
         <div class="settings-section">
-          ${this.renderToggleRow({
+          ${renderSettingsToggleRow({
             label: 'Approve workspace edits',
             description: 'Review a diff before an agent changes files.',
             checked: this.editApprovalEnabled,
             onChange: this.handleEditApprovalToggle,
           })}
-          ${this.renderToggleRow({
+          ${renderSettingsToggleRow({
             label: 'Approve shell commands',
             description: 'Pause before an agent runs a shell command.',
             checked: this.bashApprovalEnabled,
@@ -223,8 +243,9 @@ export class ToolsTab extends LitElement {
     return this.renderToggleSection({
       icon: 'robot',
       title: 'Agent skills',
+      description: 'Extend tool-use agents with reusable skill packages.',
       label: 'Make skills available to tool-use agents',
-      description: 'Includes built-in TeXRA skills and imported skills.',
+      help: 'Includes built-in TeXRA skills and imported skills.',
       checked: this.agentSkillsEnabled,
       onChange: this.handleAgentSkillsToggle,
     });
@@ -272,6 +293,7 @@ export class ToolsTab extends LitElement {
         ${renderSettingsSectionHeading({
           icon: meta.icon,
           title: `${meta.label} (${items.length})`,
+          description: meta.description,
         })}
         ${repeat(
           items,
@@ -285,16 +307,13 @@ export class ToolsTab extends LitElement {
                         slot="details"
                         class="setting-block tool-path-setting"
                       >
-                        <wa-switch
-                          ?checked=${this.toolPathProtectionEnabled}
-                          @change=${this.handleToolPathProtectionToggle}
-                        >
-                          Restrict tool paths to the working directory
-                        </wa-switch>
-                        <p class="setting-description">
-                          When disabled, file, search, diagnostics, and PDF
-                          tools may use arbitrary filesystem paths.
-                        </p>
+                        ${renderSettingsToggleRow({
+                          label: 'Restrict tool paths to the working directory',
+                          description:
+                            'When disabled, file, search, diagnostics, and PDF tools may use arbitrary filesystem paths.',
+                          checked: this.toolPathProtectionEnabled,
+                          onChange: this.handleToolPathProtectionToggle,
+                        })}
                       </div>
                     `
                   : nothing
@@ -310,7 +329,7 @@ export class ToolsTab extends LitElement {
     if (!this.loaded) {
       return html`
         <div class="tools-container tab-content-container">
-          ${renderLoadingState('Loading tool information...')}
+          ${renderLoadingState('Loading tool information…')}
         </div>
       `;
     }

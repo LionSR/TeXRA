@@ -19,7 +19,7 @@ import {
   useLitComponentTestDom,
 } from './litComponentTestUtils';
 
-type ModelsTabElement = HTMLElement & {
+type SubscriptionsTabElement = HTMLElement & {
   copilotModels: CopilotRouteInfo[];
   updateComplete: Promise<boolean>;
 };
@@ -40,23 +40,25 @@ const allowedRoute: CopilotRouteInfo = {
   preferred: false,
 };
 
-function renderModelsTab(
+function renderSubscriptionsTab(
   copilotModels: CopilotRouteInfo[],
-): Promise<ModelsTabElement> {
-  return mountComponent<ModelsTabElement>('models-tab', {
+): Promise<SubscriptionsTabElement> {
+  return mountComponent<SubscriptionsTabElement>('subscriptions-tab', {
     copilotModels,
   });
 }
 
 describe('Copilot model access settings', () => {
-  useLitComponentTestDom(() => import('@settingsView/frontend/tabs/ModelsTab'));
+  useLitComponentTestDom(
+    () => import('@settingsView/frontend/tabs/SubscriptionsTab'),
+  );
 
   beforeEach(() => {
     mocks.postMessage.mockClear();
   });
 
   it('shows a keyless consent action only when VS Code discovers Copilot models', async () => {
-    const tab = await renderModelsTab([consentRoute]);
+    const tab = await renderSubscriptionsTab([consentRoute]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('Copilot in VS Code');
@@ -71,13 +73,13 @@ describe('Copilot model access settings', () => {
   });
 
   it('omits the Copilot section when the host discovers no models', async () => {
-    const tab = await renderModelsTab([]);
+    const tab = await renderSubscriptionsTab([]);
 
     expect(tab.shadowRoot?.querySelector('#copilot-access')).toBeNull();
   });
 
   it('offers an explicit opt-in for an already-authorized route', async () => {
-    const tab = await renderModelsTab([allowedRoute]);
+    const tab = await renderSubscriptionsTab([allowedRoute]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('1 Copilot model is ready');
@@ -91,7 +93,9 @@ describe('Copilot model access settings', () => {
   });
 
   it('offers an undo once the route is preferred', async () => {
-    const tab = await renderModelsTab([{ ...allowedRoute, preferred: true }]);
+    const tab = await renderSubscriptionsTab([
+      { ...allowedRoute, preferred: true },
+    ]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('Copilot route selected.');
@@ -105,7 +109,7 @@ describe('Copilot model access settings', () => {
   });
 
   it('keeps other route actions reachable while one route is preferred', async () => {
-    const tab = await renderModelsTab([
+    const tab = await renderSubscriptionsTab([
       { ...allowedRoute, preferred: true },
       consentRoute,
     ]);
@@ -141,7 +145,9 @@ describe('Copilot model access settings', () => {
   });
 
   it('describes a preferred route that is waiting for consent', async () => {
-    const tab = await renderModelsTab([{ ...consentRoute, preferred: true }]);
+    const tab = await renderSubscriptionsTab([
+      { ...consentRoute, preferred: true },
+    ]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain(
@@ -164,7 +170,7 @@ describe('Copilot model access settings', () => {
   });
 
   it('keeps an unavailable preferred route removable', async () => {
-    const tab = await renderModelsTab([
+    const tab = await renderSubscriptionsTab([
       { ...allowedRoute, access: 'unavailable', preferred: true },
     ]);
 

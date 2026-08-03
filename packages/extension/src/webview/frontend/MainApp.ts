@@ -4,6 +4,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
+import '@awesome.me/webawesome/dist/components/skeleton/skeleton.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -276,7 +277,7 @@ export class MainApp extends MainAppBase {
     });
   };
 
-  /** Launcher/Progress tabs plus header actions (hidden on the desktop host). */
+  /** New/Sessions tabs plus header actions (hidden on the desktop host). */
   private renderViewHeader(): TemplateResult | typeof nothing {
     if (this.isDesktopHost) return nothing;
     return renderViewHeader({
@@ -286,7 +287,7 @@ export class MainApp extends MainAppBase {
       onTabShow: this.onViewTabShow,
       secondaryAction: {
         id: 'popOutProgressButton',
-        label: 'Open progress sessions in editor',
+        label: 'Open sessions in editor',
         icon: 'picture-in-picture',
         onClick: this.onPopOutProgress,
       },
@@ -310,15 +311,27 @@ export class MainApp extends MainAppBase {
             aria-label="Loading launcher"
           >
             <div class="launcher-loading-canvas" aria-hidden="true">
-              <div class="launcher-loading-mark"></div>
-              <div class="launcher-loading-line launcher-loading-title"></div>
-              <div class="launcher-loading-line launcher-loading-copy"></div>
+              <wa-skeleton
+                effect="sheen"
+                class="launcher-loading-mark"
+              ></wa-skeleton>
+              <wa-skeleton
+                effect="sheen"
+                class="launcher-loading-title"
+              ></wa-skeleton>
+              <wa-skeleton
+                effect="sheen"
+                class="launcher-loading-copy"
+              ></wa-skeleton>
               <div class="launcher-loading-composer">
-                <div
-                  class="launcher-loading-line launcher-loading-prompt"
-                ></div>
+                <wa-skeleton
+                  effect="sheen"
+                  class="launcher-loading-prompt"
+                ></wa-skeleton>
                 <div class="launcher-loading-controls">
-                  <span></span><span></span><span></span>
+                  <wa-skeleton effect="sheen"></wa-skeleton>
+                  <wa-skeleton effect="sheen"></wa-skeleton>
+                  <wa-skeleton effect="sheen"></wa-skeleton>
                 </div>
               </div>
             </div>

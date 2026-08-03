@@ -5,15 +5,6 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@shared/styles';
 
 export const externalInquiryPanelStyles: CSSResult = css`
-  .external-inquiry-request__context {
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
-    padding: ${sp.small} ${sp.medium};
-    background: var(--wa-color-surface-lowered);
-    border-radius: var(--border-radius-small);
-    line-height: var(--line-height-normal);
-  }
-
   .external-inquiry-request__question {
     background: var(--wa-color-surface-lowered);
     border: var(--border-thin) solid var(--wa-color-surface-border);

@@ -97,13 +97,9 @@ describe('tools-tab availability summary', () => {
     const element = await mount([tool('file-ops', 'available')], {
       toolPathProtectionEnabled: false,
     });
-    const protectionSwitch = [
-      ...(element.shadowRoot?.querySelectorAll('wa-switch') ?? []),
-    ].find((candidate) =>
-      candidate.textContent?.includes(
-        'Restrict tool paths to the working directory',
-      ),
-    ) as (HTMLElement & { checked?: boolean }) | undefined;
+    const protectionSwitch = element.shadowRoot?.querySelector<
+      HTMLElement & { checked?: boolean }
+    >('wa-switch[aria-label="Restrict tool paths to the working directory"]');
 
     expect(protectionSwitch).toBeDefined();
     expect(protectionSwitch?.checked).toBe(false);

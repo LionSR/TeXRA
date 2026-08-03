@@ -14,10 +14,11 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 The Dashboard groups the current controls by subject:
 
-- **Account & usage** — sign-in status, included usage, ChatGPT subscription,
-  and telemetry.
-- **Models** — access mode, provider keys, model visibility, and reliability.
-- **Agents and teams** — available agents, active teams, and orchestration.
+- **Account & usage** — sign-in status, included usage, telemetry, and
+  subscription access (ChatGPT, Kimi Code, and Copilot).
+- **Models** — access mode, provider keys, and model visibility.
+- **Agents and teams** — available agents, active teams, orchestration, and
+  session reliability.
 - **Tools and integrations** — tool availability, permissions, skills, and
   connected coding agents.
 - **Workspace** — Git behavior and LaTeX processing.
