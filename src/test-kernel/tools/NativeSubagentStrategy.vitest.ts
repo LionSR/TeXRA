@@ -54,7 +54,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
-vi.mock('@tools/childRunDelivery', () => ({
+vi.mock('@tools/delegation/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,

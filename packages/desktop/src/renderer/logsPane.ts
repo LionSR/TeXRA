@@ -6,11 +6,11 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
-import { DESKTOP_LOCAL_COMMANDS } from '../desktopCommandSurface';
+import { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,
   type DesktopSetLogMessage,
-} from '../desktopLogMessages';
+} from '../shared/desktopLogMessages';
 
 export type DesktopLogLevel =
   'debug' | 'error' | 'info' | 'log' | 'warn' | 'unknown';

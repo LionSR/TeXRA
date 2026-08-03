@@ -208,7 +208,7 @@ redacted.
 ## 3. Proposed subagent split points
 
 **TeXRA already has a first-class subagent subsystem.** `delegate_agent` /
-`delegate_workflow` (`src/tools/DelegationTools.ts`) route to `executeSubagent`
+`delegate_workflow` (`src/tools/delegation/DelegationTools.ts`) route to `executeSubagent`
 (`src/tools/delegation/subagentExecution.ts:114`). Each child gets its own
 `AgentLaunchContext`, `streamId`, trace, and run lifecycle; recorded lineage via
 `registerExecution(…, parentExecutionId, depth+1)` (`subagentExecution.ts:167`);

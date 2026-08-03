@@ -15,7 +15,7 @@ import {
 import {
   formatSubagentError,
   formatSubagentProgress,
-} from '@tools/subagentResults';
+} from '@tools/delegation/subagentResults';
 
 describe('tool status formatting', () => {
   it('formats execution todos with the shared status display', () => {

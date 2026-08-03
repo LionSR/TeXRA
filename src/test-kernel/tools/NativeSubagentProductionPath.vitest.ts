@@ -57,7 +57,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
-import { DelegateAgentTool } from '@tools/DelegationTools';
+import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentExecution';
 import { readCompletedRunConversation, StreamLogStore } from '@transcript';
 

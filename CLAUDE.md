@@ -146,7 +146,7 @@ lower-level `executeAgent` only when you already own the `executionId` (subagent
 dispatch, resume paths). Resume a persisted tool-use session via
 `resumeToolUseFromResumeData`, not `runAgent`. PocketFlow conventions and the
 services/shared-store split: AGENTS.md "Patterns across the codebase"
-(PocketFlow architecture) and `docs/pocketflow/state_architecture.md`.
+(PocketFlow architecture) and `docs/architecture/pocketflow-state.md`.
 
 **The flow engine is local, not upstream PocketFlow.** `src/agent/node/index.ts`
 (~250 lines, built on `p-retry`) is the only definition of `BaseNode`, `Node`,

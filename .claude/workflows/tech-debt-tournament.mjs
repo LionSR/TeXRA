@@ -68,7 +68,6 @@ const ALL_AREAS = [
     name: 'extension-host',
     paths: [
       'packages/extension/src/commands/',
-      'packages/extension/src/MainViewProvider.ts',
       'packages/extension/src/commands.ts',
       'packages/extension/src/extension.ts',
     ],

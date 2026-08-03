@@ -25,7 +25,7 @@ import {
   createChildStream,
   createRehydratedChildStream,
   type ChildStream,
-} from '@tools/childStream';
+} from '@tools/delegation/childStream';
 
 // Local file imports
 import {

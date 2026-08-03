@@ -1,7 +1,7 @@
 import {
   isSafeAbsolutePdfPath,
   type DesktopShowPdfMessage,
-} from '../desktopPdfMessages';
+} from '../shared/desktopPdfMessages';
 import { createOverlayDialog } from './overlayDialog';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 

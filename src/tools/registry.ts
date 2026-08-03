@@ -50,7 +50,10 @@ import {
   LeanInspectTool,
   LeanLoogleTool,
 } from './lean';
-import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
+import {
+  WorkflowAgentTool,
+  DelegateAgentTool,
+} from './delegation/DelegationTools';
 import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';

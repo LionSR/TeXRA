@@ -7,7 +7,7 @@ import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index/BundledAgentDirector
 import {
   getWorkspacePathInput,
   type WorkspacePathOptions,
-} from '@desktop/workspacePath.js';
+} from '@desktop/shared/workspacePath.js';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 

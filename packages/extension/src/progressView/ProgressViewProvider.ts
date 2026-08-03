@@ -41,7 +41,7 @@ import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { createExtensionHostInteractions } from './extensionHostInteractions';
 import { attachProgressBackendAppSignals } from './progressBackendAppSignals';
 
-import type { MainViewProvider } from '../MainViewProvider';
+import type { MainViewProvider } from '../webview/MainViewProvider';
 
 export type ProgressStreamRevealResult = 'revealed' | 'missing';
 

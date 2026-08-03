@@ -99,15 +99,15 @@ The CLI attaches its TUI fact subscription while constructing the run host
 (`packages/cli/src/chat/chatSessionController.ts:235-266`), before `executeAgent` starts
 (`chatSessionController.ts:281-302`). Both the general launch path and direct child-stream path assert this
 ordering (`src/agent/runtime/AgentLaunchContext.ts:349-350`;
-`src/tools/childStream.ts:105`).
+`src/tools/delegation/childStream.ts:115`).
 
 This is the outer ordering guarantee. The new map must consume the existing hub; it must not add a second queue,
 replay layer, or asynchronous reducer whose subscription can miss the initial roster.
 
 ### 2. Attachment and status can precede both relationship facts
 
-Direct child streams emit `setActiveStream` before creating and tracking the execution handle
-(`src/tools/childStream.ts:110-120`, `:147-159`). Tracking with an initial status publishes that status before
+Direct child streams create and track the execution handle with its initial status before emitting
+`setActiveStream` (`src/tools/delegation/childStream.ts:143-175`). Tracking with an initial status publishes that status before
 the handle is put into the active roster (`src/agent/runtime/executionRegistry.ts:248-260`).
 
 Native launches admit the opposite local order between status and attachment: stream reservation publishes
@@ -178,12 +178,12 @@ parent is likewise incompatible and must not replace the new parent's active mem
 ### 7. Explicit removal follows completion and must dominate late facts
 
 Auto-close finalizes the run, disposes its trace, and only then emits `removeStream`
-(`src/tools/childStream.ts:203-276`). Current removal deletes the child slice, scrubs all parent lists, clears
+(`src/tools/delegation/childStream.ts:267-339`). Current removal deletes the child slice, scrubs all parent lists, clears
 focus, and removes topology edges (`packages/cli/src/chat/tui/state/cliState.ts:574-605`).
 
 The new owner must make removal final for that stream identity within the TUI session. A late roster, edge,
 attachment, or status from the completed activation must not recreate a selectable child. Current direct-child
-ids include the unique execution id (`src/tools/childStream.ts:81-87`); a later activation must use a distinct
+ids include the unique execution id (`src/tools/delegation/childStream.ts:82-87`); a later activation must use a distinct
 `StreamTabId`. Supporting same-id reuse would require an activation generation in the event contract and is out
 of scope because late old facts and fresh pre-attachment status facts are otherwise indistinguishable.
 

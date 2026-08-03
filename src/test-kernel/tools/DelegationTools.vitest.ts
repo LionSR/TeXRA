@@ -29,7 +29,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
   submitFollowUp: mocks.submitFollowUp,
 }));
 
-vi.mock('@tools/childRunDelivery', () => ({
+vi.mock('@tools/delegation/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
@@ -41,7 +41,7 @@ import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import {
   DelegateAgentTool,
   rejectOversizedBibAttachments,
-} from '@tools/DelegationTools';
+} from '@tools/delegation/DelegationTools';
 import { WorkspaceFS } from '@utils/files';
 
 function stat(size: number): FileStat {

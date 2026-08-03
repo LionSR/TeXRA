@@ -20,7 +20,7 @@ import {
   WorkflowAgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
+import { DESKTOP_SHELL_COMMANDS } from '@desktop/shared/desktopShellMessages';
 import type { AgentResumePort } from '@platform/interfaces';
 import {
   AgentCategory,

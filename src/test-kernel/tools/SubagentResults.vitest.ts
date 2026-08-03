@@ -7,13 +7,13 @@ import { RUN_OUTCOME } from '@shared/schemas';
 import {
   formatChildRunDelivery,
   formatChildRunError,
-} from '@tools/deliveryEnvelope';
+} from '@tools/delegation/deliveryEnvelope';
 import {
   formatBashDelivery,
   formatBashError,
   formatSubagentDelivery,
   formatSubagentError,
-} from '@tools/subagentResults';
+} from '@tools/delegation/subagentResults';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 function toolUseResult(

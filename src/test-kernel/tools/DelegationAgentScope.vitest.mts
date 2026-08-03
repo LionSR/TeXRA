@@ -48,7 +48,7 @@ vi.mock('@agent/index/agentRegistry', () => {
 });
 
 const { getDelegationAgent, getDelegationAgentForScope, getDelegationAgents } =
-  await import('@tools/delegationAgentAvailability');
+  await import('@tools/delegation/delegationAgentAvailability');
 
 describe('execution-scoped delegation agents', () => {
   beforeEach(() => {
