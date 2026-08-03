@@ -82,7 +82,7 @@ So the async conversion is a **new strategy**, not new runtime:
   `registerExecution` + `startChildRunLoop`, return "Launched (async)") and
   the run body (now inside the strategy's `launch`).
 
-Reused unchanged: `startChildRunLoop`, `childRunDelivery.ts` (persist report /
+Reused unchanged: `startChildRunLoop`, `src/tools/delegation/childRunDelivery.ts` (persist report /
 enqueue / wake), the `executions` tool (kill / wait / subscribe / report /
 result), and `runPersistedWorkflowScriptWithProgress` itself (with its
 `trace`/`onActivity` re-pointed at the run's own stream instead of the parent

@@ -192,7 +192,7 @@ here.
   (`ResponseCycleFlow.ts:24,223`), `IToolUseSession` importing `@agent/followUp`
   (`IToolUseSession.ts:4`), and `CommonCycleTypes` importing
   `@agent/index/agentRegistry`
-  (`:6`) and `@tools/subagentResults` (`:19`). All host-agnostic (no `vscode`,
+  (`:6`) and `@tools/delegation/subagentResults` (`:19`). All host-agnostic (no `vscode`,
   no `packages/*`) and **pre-acknowledged** by the core README as the
   canonical-collaborator pattern, not a defect — recorded as accepted debt that a
   future `@agent/core` package boundary would need to resolve, not a fresh finding.
