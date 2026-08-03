@@ -4,7 +4,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   parseAuthCallbackCode,
   type AuthCallbackUriParts,
-} from './core/authCallback';
+} from './authCallback';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import {
   parseStoredSupabaseSession,

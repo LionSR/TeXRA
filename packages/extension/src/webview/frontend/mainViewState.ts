@@ -48,7 +48,7 @@ import {
   sessionContext,
   type FileStateContextValue,
   type SessionContextValue,
-} from './contexts/mainViewContexts';
+} from './mainViewContexts';
 import {
   DEFAULT_CHECKBOX_VALUES,
   DEFAULT_FILE_OPTIONS,

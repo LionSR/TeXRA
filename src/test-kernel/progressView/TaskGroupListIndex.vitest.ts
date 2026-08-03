@@ -27,7 +27,7 @@ const audio = vi.hoisted(() => ({
   playCompletionSound: vi.fn(),
 }));
 
-vi.mock('@progressView/frontend/utils/audioNotification', () => audio);
+vi.mock('@progressView/frontend/audioNotification', () => audio);
 
 type TaskGroupListInternals = HTMLElement & {
   groups: TaskGroup[];

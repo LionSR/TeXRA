@@ -4,7 +4,7 @@ import type {
   ActiveStreamId,
   ProgressViewState,
   StreamBadgeSnapshot,
-} from '@controllers/progressView/backend/state/ProgressViewState';
+} from '@controllers/progressView/backend/ProgressViewState';
 import {
   buildStreamInfo,
   buildStreamInfos,
