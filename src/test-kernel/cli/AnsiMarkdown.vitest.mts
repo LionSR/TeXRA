@@ -61,6 +61,12 @@ describe('renderAnsiMarkdown', () => {
     expect(out).not.toContain('&gt;');
   });
 
+  it('keeps bare domains linkified', () => {
+    expect(
+      renderAnsiMarkdown('Visit example.com', { colorEnabled: false }),
+    ).toContain('Visit [example.com]');
+  });
+
   it('renders common HTML formatting without leaking tags', () => {
     const out = renderAnsiMarkdown(
       [

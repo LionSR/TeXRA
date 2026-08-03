@@ -6,11 +6,7 @@
 // `markdownTexmathPlugin`) so non-math hosts — the CLI TUI in particular —
 // don't pull `markdown-it-texmath` into their bundle.
 
-// `@types/markdown-it@14`'s entry-point `.d.mts` re-exports only `default` and
-// a few helpers, dropping the `MarkdownIt` instance interface. Importing from
-// the lib entry directly recovers the typed instance so consumers can access
-// `.renderer`, `.options`, `.use(...)` without falling back to `any`.
-import MarkdownIt from 'markdown-it/lib/index.mjs';
+import MarkdownIt from 'markdown-it';
 
 /** Instance type for the markdown-it renderer (`new MarkdownIt(...)`). */
 export type MarkdownItInstance = InstanceType<typeof MarkdownIt>;
@@ -43,6 +39,7 @@ export function createMarkdownRenderer(
     html: false,
     highlight: config.highlight,
   });
+  md.linkify.set({ fuzzyLink: true, urlAuth: true });
   if (config.usePlugin) md = config.usePlugin(md);
   config.configure?.(md);
   return md;
