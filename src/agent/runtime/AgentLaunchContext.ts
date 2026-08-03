@@ -38,6 +38,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
+import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   STREAM_PHASE,
@@ -104,6 +105,8 @@ export interface AgentLaunchInput {
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
+  copilotRouteOverride?: CopilotRouteOverride;
 }
 
 const STATUS_MESSAGES: Record<string, string> = {
@@ -305,6 +308,7 @@ async function assembleAgentLaunchContext(
           modelConfig,
           setting.agentCategory,
           session.responseTextProcessing,
+          input.copilotRouteOverride,
         ),
   );
   const modelCell = new ModelCell(modelHandler, config.model);

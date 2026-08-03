@@ -11,7 +11,6 @@ import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
-import { installPlatform } from '@test/support/setupPlatform';
 
 const NO_COPILOT_ROUTES = async (): Promise<
   ReadonlyMap<string, CopilotModelRoute>
@@ -71,6 +70,7 @@ function createController(
     state: createState(),
     resolveModelOptions,
     getCopilotRoutes: NO_COPILOT_ROUTES,
+    getPreferredCopilotRouteModels: () => [],
     ...overrides,
   });
 }
@@ -179,6 +179,58 @@ describe('SettingsModelSelectionController', () => {
     );
   });
 
+  it('keeps a preferred undiscovered Copilot route visible for opt-out', async () => {
+    const controller = createController({
+      getPreferredCopilotRouteModels: () => ['sonnet46'],
+    });
+
+    expect((await controller.buildSelectionData()).copilotModels).toEqual([
+      {
+        name: 'sonnet46',
+        label: MODEL_CONFIGS.sonnet46.label,
+        access: 'unavailable',
+        preferred: true,
+      },
+    ]);
+  });
+
+  it('does not expose reasoning controls for a preferred VS Code route', async () => {
+    const controller = createController({
+      getPreferredCopilotRouteModels: () => ['sonnet46'],
+      getCopilotRoutes: async () =>
+        new Map<string, CopilotModelRoute>([
+          [
+            'sonnet46',
+            {
+              access: 'allowed',
+              reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+              effectiveConfig: {
+                ...MODEL_CONFIGS.sonnet46,
+                capabilities: {
+                  ...MODEL_CONFIGS.sonnet46.capabilities,
+                  supportsReasoningEffort: false,
+                  maxReasoningEffort: undefined,
+                  supportedReasoningEfforts: undefined,
+                },
+                contextWindow: 200_000,
+                inputPrice: 0,
+                outputPrice: 0,
+              },
+            },
+          ],
+        ]),
+    });
+
+    const sonnet = (await controller.buildSelectionData()).models.find(
+      (model) => model.name === 'sonnet46',
+    );
+    expect(MODEL_CONFIGS.sonnet46.capabilities.supportsReasoningEffort).toBe(
+      true,
+    );
+    expect(sonnet).not.toHaveProperty('supportsReasoningLevel');
+    expect(sonnet).not.toHaveProperty('reasoningLevel');
+  });
+
   it('surfaces discovered Copilot routes as route status, never as picker rows', async () => {
     const controller = createController({
       getCopilotRoutes: async () =>
@@ -188,7 +240,12 @@ describe('SettingsModelSelectionController', () => {
             {
               access: 'consent-required',
               reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
-              maxInputTokens: 200_000,
+              effectiveConfig: {
+                ...MODEL_CONFIGS.sonnet46,
+                contextWindow: 200_000,
+                inputPrice: 0,
+                outputPrice: 0,
+              },
             },
           ],
         ]),
@@ -213,26 +270,5 @@ describe('SettingsModelSelectionController', () => {
       ),
     ).toEqual([]);
     expect(models.filter((model) => model.name === 'sonnet46')).toHaveLength(1);
-  });
-
-  it('surfaces a persisted preference whose route is no longer discovered', async () => {
-    // #9659: the routing layer treats a persisted preference as a hard route
-    // choice, so the settings UI must expose its undo even when VS Code has
-    // stopped offering the model through Copilot.
-    await installPlatform({
-      globalState: { 'texra.copilotRouteModels': ['sonnet46'] },
-    });
-    const controller = createController();
-
-    const { copilotModels } = await controller.buildSelectionData();
-
-    expect(copilotModels).toEqual([
-      {
-        name: 'sonnet46',
-        label: MODEL_CONFIGS.sonnet46.label,
-        access: 'unavailable',
-        preferred: true,
-      },
-    ]);
   });
 });

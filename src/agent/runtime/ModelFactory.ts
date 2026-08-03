@@ -19,6 +19,7 @@ import { apiKeyExists } from '@model/apiProviders';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
+  type CopilotRouteOverride,
 } from '@model/copilotRouting';
 import { includedModelAccess } from '@model/includedModelAccess';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
@@ -35,7 +36,6 @@ import {
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
-import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
@@ -265,6 +265,7 @@ export function modelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
   useOpenRouter = getUseOpenRouter(),
   preferShortModelNames = getPreferShortModelNames(),
+  copilotRouteOverride?: CopilotRouteOverride,
 ): ModelHandlerCompatibilityKey | undefined {
   if (shouldUseInternalValidationModelHandler()) {
     return 'ModelHandlerValidation';
@@ -276,7 +277,10 @@ export function modelHandlerCompatibilityKey(
   // OpenRouter preference below. A preference is a hard route choice: when
   // the editor cannot serve it right now, report the route state instead of
   // silently consuming a provider key or subscription (#9635).
-  if (prefersCopilotRoute(originalConfig.name)) {
+  if (
+    copilotRouteOverride !== 'direct' &&
+    prefersCopilotRoute(originalConfig.name)
+  ) {
     const unavailableReason = copilotRouteUnavailableReason(
       originalConfig.name,
     );
@@ -421,6 +425,7 @@ export async function createModelHandler(
   originalConfig: ModelConfig,
   agentCategory?: AgentCategory,
   responseTextProcessing?: ResponseTextProcessing,
+  copilotRouteOverride?: CopilotRouteOverride,
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
@@ -431,6 +436,7 @@ export async function createModelHandler(
     // pass false so the key predicate routes on the same resolved config
     // instead of re-resolving it.
     false,
+    copilotRouteOverride,
   );
   if (compatibilityKey === 'ModelHandlerOpenRouterNative') {
     assertGoogleInteractionsRoutable(config);
@@ -640,9 +646,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       // route is zero-cost per call — apply both to the config the handler
       // validates and accounts against.
       const route = copilotRouteForModel(config.name);
-      const routedConfig = route
-        ? { ...config, ...zeroCostAccessOverrides(route.maxInputTokens) }
-        : config;
+      const routedConfig = route?.effectiveConfig ?? config;
       const { ModelHandlerVscodeLm } =
         await import('@agent/modelHandlers/vscodelm/modelHandlerVscodeLm');
       return finalizeModelHandler(
