@@ -2,6 +2,7 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { platform } from '@platform/platform';
 import type {
   LanguageModelAccessState,
@@ -26,12 +27,8 @@ const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
 export interface CopilotModelRoute {
   readonly access: LanguageModelAccessState;
   readonly reference: LanguageModelReference;
-  /**
-   * Editor-reported input-token ceiling for the discovered model. Carried so
-   * the routed handler caps context at what the route actually serves, not
-   * the base provider's window.
-   */
-  readonly maxInputTokens: number;
+  /** Base config with the editor's context ceiling and subscription pricing. */
+  readonly effectiveConfig: ModelConfig;
 }
 
 export interface RuntimeModelDirectFallback {
@@ -115,7 +112,18 @@ async function discoverCopilotRoutes(): Promise<
         vendor: info.vendor,
         id: info.id,
       },
-      maxInputTokens: info.maxInputTokens,
+      effectiveConfig: {
+        ...MODEL_CONFIGS[baseModel],
+        ...zeroCostAccessOverrides(info.maxInputTokens),
+        capabilities: {
+          ...MODEL_CONFIGS[baseModel].capabilities,
+          // VS Code's LM route chooses the model's own reasoning behavior and
+          // exposes no per-request effort control.
+          supportsReasoningEffort: false,
+          maxReasoningEffort: undefined,
+          supportedReasoningEfforts: undefined,
+        },
+      },
     });
   }
   return entries;

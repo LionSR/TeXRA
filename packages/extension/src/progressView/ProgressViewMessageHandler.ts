@@ -752,13 +752,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           chatGptSubscriptionEligible: fallback.chatGptSubscriptionEligible,
           viaRelay: data.viaRelay,
         },
-        async () => {
+        async (copilotRouteOverride) => {
           if (!this.interactions.isRetryPending(data.stream, data.requestId)) {
             return false;
           }
-          return this.executeValidatedUntilStarted({
-            config: { ...config, model: fallback.model },
-          });
+          return this.executeValidatedUntilStarted(
+            { config: { ...config, model: fallback.model } },
+            { copilotRouteOverride },
+          );
         },
       );
     if (!started) return;
@@ -846,6 +847,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   /** Validate a request and acknowledge it once the runtime owns a run handle. */
   private async executeValidatedUntilStarted(
     request: ExecutionRequest,
+    options: { copilotRouteOverride?: 'direct' } = {},
   ): Promise<boolean> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
@@ -859,6 +861,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       void this.runViewCommand<boolean>('texra.execute', [
         {
           ...validation.request,
+          ...options,
           onRun: () => resolve(true),
         },
       ]).then(

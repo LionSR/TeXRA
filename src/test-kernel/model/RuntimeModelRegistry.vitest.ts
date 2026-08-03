@@ -119,11 +119,21 @@ describe('runtime model registry', () => {
     await refreshRuntimeModelRegistry();
 
     expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
-    expect(copilotRouteForModel('sonnet46')).toEqual({
-      access: 'allowed',
-      reference: { vendor: 'copilot', id: SONNET.id },
-      maxInputTokens: SONNET.maxInputTokens,
-    });
+    expect(copilotRouteForModel('sonnet46')).toEqual(
+      expect.objectContaining({
+        access: 'allowed',
+        reference: { vendor: 'copilot', id: SONNET.id },
+        effectiveConfig: expect.objectContaining({
+          name: 'sonnet46',
+          contextWindow: SONNET.maxInputTokens,
+          inputPrice: 0,
+          outputPrice: 0,
+          capabilities: expect.objectContaining({
+            supportsReasoningEffort: false,
+          }),
+        }),
+      }),
+    );
     // No synthetic picker identity is materialized for the route.
     expect(copilotRouteForModel('copilot:sonnet46')).toBeUndefined();
     expect(getRuntimeModelConfig('sonnet46')?.label).not.toContain('Copilot');
@@ -350,6 +360,8 @@ describe('Copilot route in model pickers', () => {
         availability: 'copilot-access',
         availabilityLabel: 'Copilot subscription',
         routeLabel: 'Via Copilot',
+        context: '160K',
+        cost: '$0.000/$0.000',
         disabled: false,
         requiresKey: false,
       }),

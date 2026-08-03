@@ -71,6 +71,7 @@ function createController(
     state: createState(),
     resolveModelOptions,
     getCopilotRoutes: NO_COPILOT_ROUTES,
+    getPreferredCopilotRouteModels: () => [],
     ...overrides,
   });
 }
@@ -179,6 +180,58 @@ describe('SettingsModelSelectionController', () => {
     );
   });
 
+  it('keeps a preferred undiscovered Copilot route visible for opt-out', async () => {
+    const controller = createController({
+      getPreferredCopilotRouteModels: () => ['sonnet46'],
+    });
+
+    expect((await controller.buildSelectionData()).copilotModels).toEqual([
+      {
+        name: 'sonnet46',
+        label: MODEL_CONFIGS.sonnet46.label,
+        access: 'unavailable',
+        preferred: true,
+      },
+    ]);
+  });
+
+  it('does not expose reasoning controls for a preferred VS Code route', async () => {
+    const controller = createController({
+      getPreferredCopilotRouteModels: () => ['sonnet46'],
+      getCopilotRoutes: async () =>
+        new Map<string, CopilotModelRoute>([
+          [
+            'sonnet46',
+            {
+              access: 'allowed',
+              reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+              effectiveConfig: {
+                ...MODEL_CONFIGS.sonnet46,
+                capabilities: {
+                  ...MODEL_CONFIGS.sonnet46.capabilities,
+                  supportsReasoningEffort: false,
+                  maxReasoningEffort: undefined,
+                  supportedReasoningEfforts: undefined,
+                },
+                contextWindow: 200_000,
+                inputPrice: 0,
+                outputPrice: 0,
+              },
+            },
+          ],
+        ]),
+    });
+
+    const sonnet = (await controller.buildSelectionData()).models.find(
+      (model) => model.name === 'sonnet46',
+    );
+    expect(MODEL_CONFIGS.sonnet46.capabilities.supportsReasoningEffort).toBe(
+      true,
+    );
+    expect(sonnet).not.toHaveProperty('supportsReasoningLevel');
+    expect(sonnet).not.toHaveProperty('reasoningLevel');
+  });
+
   it('surfaces discovered Copilot routes as route status, never as picker rows', async () => {
     const controller = createController({
       getCopilotRoutes: async () =>
@@ -188,7 +241,12 @@ describe('SettingsModelSelectionController', () => {
             {
               access: 'consent-required',
               reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
-              maxInputTokens: 200_000,
+              effectiveConfig: {
+                ...MODEL_CONFIGS.sonnet46,
+                contextWindow: 200_000,
+                inputPrice: 0,
+                outputPrice: 0,
+              },
             },
           ],
         ]),

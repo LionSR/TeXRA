@@ -185,6 +185,15 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
+  it('normalizes a legacy Copilot model id during mount-time restore', async () => {
+    seedWebviewState({ ...PERSISTED_SEED, model: 'copilot:sonnet46' });
+
+    const element = await mountMainApp();
+
+    expect(contextsOf(element).session.model).toBe('sonnet46');
+    expect(storageWrites).toHaveLength(0);
+  });
+
   it('restores persisted state on mount through the canonical state applicator', async () => {
     const element = await mountMainApp();
     const { fileState, session } = contextsOf(element);
@@ -276,6 +285,20 @@ describe('MainApp persistence and restore characterization', () => {
       launchTarget: 'agent',
       selectedTeamId: 'physicist',
     });
+  });
+
+  it('normalizes a legacy Copilot model id during backend restore', async () => {
+    const element = await mountMainApp();
+    storageWrites.length = 0;
+
+    dispatchHostMessage({
+      command: COMMON_COMMANDS.STATE_RESTORE,
+      state: restoreState({ model: 'copilot:sonnet46' }),
+    });
+    await element.updateComplete;
+
+    expect(contextsOf(element).session.model).toBe('sonnet46');
+    expect(lastPersistedBlob().model).toBe('sonnet46');
   });
 
   it('applies a backend-pushed restore with exactly one storage write and forced output reset', async () => {

@@ -595,6 +595,10 @@ async function buildModelOptionData(
   const config = effectiveKimiCodeConfig(rawConfig, ctx);
 
   const availability = await resolveModelAvailability(model, config, ctx);
+  const copilotConfig =
+    availability.kind === 'copilot-access'
+      ? copilotRouteForModel(model)?.effectiveConfig
+      : undefined;
   const optionConfig = availability.providerCapabilities
     ? {
         ...config,
@@ -602,7 +606,7 @@ async function buildModelOptionData(
         inputPrice: availability.providerCapabilities.inputPrice,
         outputPrice: availability.providerCapabilities.outputPrice,
       }
-    : config;
+    : (copilotConfig ?? config);
   let routeLabel: string | undefined;
   if (availability.kind === 'copilot-access') {
     // The row's identity stays the base model; the badge names the route.
