@@ -9,18 +9,25 @@
 > [`2026-07-27-agent-npm-package-step3.md`](./2026-07-27-agent-npm-package-step3.md)).
 > Its job is to confirm whether those conclusions still hold and flag what has
 > since landed or remains open — nothing here overrides a maintainer ruling.
+>
+> **Amended same-day**, after tracing the fourth tracked delta (TD-2a) down to
+> its actual runtime behavior at the maintainer's request for concrete
+> follow-through: executing it would regress the SDK surface it was meant to
+> improve. §7 retires it with the evidence; no code changes were made.
 
 ## Verdict
 
-**Well-aligned. No structural refactor is warranted, and none is proposed
-here.** The four areas the task names — agent core, model handler, logger, and
-the package surface — are already converged on the Claude-Agent-SDK shape by
-deliberate, documented work, and the guardrails that hold them there (the
+**Well-aligned. No structural refactor is warranted, and none was made.** The
+four areas the task names — agent core, model handler, logger, and the package
+surface — are already converged on the Claude-Agent-SDK shape by deliberate,
+documented work, and the guardrails that hold them there (the
 `config/ratchets/` baselines and the free-zone import fence) are *tightening*,
-not slipping. The one thing this re-check adds over the July docs is evidence:
-two of the four tracked "finish-the-endgame" deltas have since landed, the host
-boundary has measurably shrunk, and exactly one small, already-ruled cleanup
-remains open on the core interaction quartet.
+not slipping. This re-check adds evidence over the July docs: two of the four
+tracked "finish-the-endgame" deltas have since landed cleanly, the host
+boundary has measurably shrunk, and the fourth (TD-2a) turns out to already be
+the correct shipped design rather than residue — retired in §7 rather than
+executed, since executing it would have broken the npm package's tested
+minimal-host contract for zero runtime benefit.
 
 This matches the standing conclusion of the `-05-30 → -07-26` chain: the open
 work is *deciding* the product line and shipping the package, not untangling
@@ -131,29 +138,69 @@ warned the host boundary was eroding. Re-measured:
 | Host `@agent/*` deep-import width (ext/cli/desktop) | 49 / 35 / 27, growing ~2.5/wk | **39 / 32 / 25** — shrunk; ratchet-frozen at current |
 | TD-2(b) phantom `RuntimeInteractionEventPayloads` arms | 6 to relocate | **landed** — symbol absent repo-wide |
 | TD-2(c) `runFact.` string-prefix protocol (dated v0.41) | retire on schedule | **landed** — absent under `src/agent` |
-| TD-2(a) `HostInteractions` request methods optional | 7/7 `?`, 6 runtime-hard-required | **still open** — `HostInteractions.ts:299–325` all `?` |
+| TD-2(a) `HostInteractions` request methods optional | 7/7 `?`, 6 runtime-hard-required | **retired, not executed** — optionality is the tested minimal-host contract the npm package depends on; see §7 |
 | TD-2(d) status dual-rail | complete atomically | trace `status` arm still present (`trace/events.ts:153`); not independently confirmed here |
 
-## 7. The only open cleanup, and why not to do it piecemeal now
+## 7. TD-2(a) re-investigated and retired (not executed — executing it would regress the SDK surface)
 
-**TD-2(a): make the six runtime-hard-required `HostInteractions` request methods
-non-optional.** Today all seven are `?`-optional with `Promise|void` returns
-(`src/agent/runtime/HostInteractions.ts:299–325`) while six are required at
-runtime — the type is looser than the contract. The plan is explicit that this
-conversion **rides A2's −300..−450 legacy-fallback deletion**, i.e. it is
-coupled to a larger deletion and should land with it, not as an isolated
-signature flip. Doing it alone would touch the core interaction contract for
-cosmetic gain and risk widening churn ahead of the deletion it depends on.
+The prior section of this doc (and the north-star plan before it) treated
+TD-2(a) — making the request methods on `HostInteractions` non-optional — as
+blocked only on A2's fallback deletion landing. A2 has since landed in full
+(verified at HEAD: `platform().toolEditApproval`, `RunContext
+.toolEditApprovalHandler`, and every `create{Desktop,Cli}ToolEditApprovalPort`
+factory are gone repo-wide). That unblocks TD-2(a) mechanically — but a deeper
+trace of the runtime shows **executing it now would be a regression, not a
+cleanup**, for reasons the July docs didn't have in front of them:
 
-**Recommendation:** leave TD-2(a) to land with A2 as designed; take no
-autonomous action on the interaction quartet. Everything else in the four
-audited areas is already at target.
+- **All 6 non-`openExternalInquiry` request methods already resolve through
+  `SessionHostInteractions.enqueue()`** (`HostInteractions.ts:594–618`), whose
+  `dispatch()` (`:686–715`) treats a missing method on the attached host
+  exactly like a normal decline: `if (!result) { …; pending.settle(pending
+  .cancellationResult()); return; }` — no crash, no thrown error, a typed
+  cancellation/deny result. `openExternalInquiry` is the deliberate exception,
+  bypassing the queue to throw loud when unattached (comment at
+  `HostInteractions.ts:525–528`).
+- **This is a tested, documented contract, not an accident.** `warnParked`'s
+  own message says it outright: *"A headless embedder must attach at least
+  `{ cancel: () => {} }`, or blocking requests never settle."*
+  `SessionInteractions.vitest.ts:606` (`'settles against the documented
+  minimal `{ cancel }` host'`) asserts exactly this: a bare `{ cancel: vi.fn()
+  }` host makes `requestPlanApproval` resolve `{ action: 'reject' }`, not
+  throw. Every other request method degrades the same way.
+- **The npm package depends on this contract to exist at all.**
+  `packages/agent/src/index.ts:234–238` attaches `{ cancel, requestRetry }` —
+  2 of 7 methods — and works today only because the other 5 gracefully
+  decline. Making them required would force this file to add stub
+  implementations for interactions it structurally can never reach (`runAgent`
+  already throws upfront for any `requiresApproval: true` tool — verified this
+  covers `UserQuestionTool`, `ExternalInquiryTool`, and `PlanTool` too, not
+  only tool-edit/bash/proposal), producing dead ceremony code in exactly the
+  package this whole effort exists to keep minimal.
+- **The blast radius elsewhere is real and value-free.** A parallel sweep
+  found `src/test-kernel/agent/progressTestUtils.ts`'s shared
+  `createRecordingHost()` fixture missing 2 of 7 methods, plus **~25
+  independent `src/test-kernel/**` files** that pass narrow 1–2-method inline
+  `HostInteractions` literals by design (each exercises one interaction route
+  in isolation). Required methods would force stub implementations into all
+  of them for a signature change none of their tests exercise — pure test
+  churn, the "add abstraction for hypothetical future requirements" pattern
+  this codebase's own conventions rule out.
+
+**Verdict: retire TD-2(a).** The "optional-with-graceful-decline" shape is not
+residue from the dead legacy fallback A2 removed — it is the *replacement*
+design, already shipped, tested, and load-bearing for the npm package's
+minimal-host contract. Converting it to required would trade a working
+progressive-capability host model for a rigid one, for no runtime benefit
+`enqueue()` doesn't already provide. No code change made in this area.
 
 ## 8. Bottom line
 
-Agent core, model handler, logger, and the package surface are aligned with the
-Agent-SDK direction and actively converging — the boundary shrank, two tracked
-deltas landed, and the guardrails are holding. There is no unnecessary
-abstraction to remove and no subagent boundary to newly design; the residual
-work is packaging/legal decisions already captured elsewhere, plus one
-deletion-coupled cleanup (TD-2a) best left to its planned landing.
+Agent core, model handler, logger, and the package surface are aligned with
+the Agent-SDK direction and actively converging — the boundary shrank, two
+tracked deltas (b, c) landed cleanly, and the guardrails are holding. The
+fourth tracked delta, TD-2(a), turns out on inspection to already be the
+correct end state as shipped — not a residue to clean up — and this doc
+retires it with evidence so it stops being re-proposed. There is no
+unnecessary abstraction to remove and no subagent boundary to newly design in
+any of the four audited areas; the only work still open belongs to the
+packaging/legal track captured elsewhere.
