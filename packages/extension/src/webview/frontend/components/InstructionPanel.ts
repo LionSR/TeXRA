@@ -41,7 +41,7 @@ import { SESSION_TYPES, type SessionType } from '../constants';
 import {
   sessionContext,
   type SessionContextValue,
-} from '../contexts/mainViewContexts';
+} from '../mainViewContexts';
 import { instructionPanelStyles } from './InstructionPanel.styles';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';

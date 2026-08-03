@@ -12,7 +12,7 @@ import {
   ProgressViewState,
   type ActiveStreamId,
   type StreamExecutionState,
-} from '@controllers/progressView/backend/state/ProgressViewState';
+} from '@controllers/progressView/backend/ProgressViewState';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
   STREAM_PHASE,

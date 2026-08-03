@@ -41,7 +41,7 @@ import {
   type PhaseStageMap,
   type StreamContextValue,
   type StreamLogContextValue,
-} from './contexts/streamContexts';
+} from './streamContexts';
 import type { PermissionState } from './permissionState';
 
 // ---------------------------------------------------------------------------

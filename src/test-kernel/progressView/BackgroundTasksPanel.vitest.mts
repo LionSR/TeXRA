@@ -6,7 +6,7 @@ import type { BackgroundTasksPanel } from '@progressView/frontend/components/Bac
 import type {
   inquiryThreadsContext as InquiryThreadsContext,
   phaseStagesContext as PhaseStagesContext,
-} from '@progressView/frontend/contexts/streamContexts';
+} from '@progressView/frontend/streamContexts';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local file imports
@@ -36,7 +36,7 @@ describe('background-tasks-panel', () => {
   useLitComponentTestDom(async () => {
     ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
     ({ inquiryThreadsContext, phaseStagesContext } =
-      await import('@progressView/frontend/contexts/streamContexts'));
+      await import('@progressView/frontend/streamContexts'));
     await import('@progressView/frontend/components/BackgroundTasksPanel');
   });
 
