@@ -1,12 +1,14 @@
 import type { AgentEntry } from '@agent/index';
+import {
+  canLaunchTeam,
+  teamTexraHostedMissingNames,
+} from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
-  cliMultiAgentPresetCanLaunchTeam,
-  cliMultiAgentTexraHostedMissingNames,
   formatCliMultiAgentPresetLauncherHints,
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
@@ -346,10 +348,10 @@ export function buildCliTeamItems(
       ),
     disabled:
       launchBlockedDescription !== undefined ||
-      (!cliMultiAgentPresetCanLaunchTeam(plan) &&
+      (!canLaunchTeam(plan) &&
         !(
           options.remoteAgentCatalogAvailable === false &&
-          cliMultiAgentTexraHostedMissingNames(plan).length > 0
+          teamTexraHostedMissingNames(plan).length > 0
         )),
     footerHints: formatCliMultiAgentPresetLauncherHints(plan, {
       includeLoginHint: options.includeLoginHint,

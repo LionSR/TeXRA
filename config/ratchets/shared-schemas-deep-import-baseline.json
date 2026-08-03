@@ -388,7 +388,6 @@
       "src/agent/core/tools/ToolTypes.ts (type-only)",
       "src/agent/modelHandlers/anthropic/anthropicTools.ts (type-only)",
       "src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts (type-only)",
-      "src/agent/modelHandlers/google/GoogleModelHandlerBase.ts (type-only)",
       "src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts (type-only)",
       "src/agent/modelHandlers/ModelHandler.ts (type-only)",
       "src/agent/modelHandlers/modelHandlerValidation.ts (type-only)",
@@ -741,8 +740,7 @@
     "@shared/schemas/toolConfig": [
       "src/agent/core/definition/AgentConfig.ts",
       "src/controllers/mainView/MainViewExecutionController.ts",
-      "src/latex/LatexMediaManager.ts",
-      "src/shared/wa/extractFlagBadges.ts (type-only)"
+      "src/latex/LatexMediaManager.ts"
     ],
     "@shared/schemas/usage": [
       "packages/extension/src/frontend/statusBar/StatusBarUsageTracker.ts (type-only)",

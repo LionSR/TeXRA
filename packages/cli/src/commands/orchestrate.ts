@@ -3,6 +3,7 @@ import { defineCommand, showUsage } from 'citty';
 import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { canLaunchTeam } from '@common/teams/TeamPlan';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
@@ -29,7 +30,6 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
 import {
-  cliMultiAgentPresetCanLaunchTeam,
   formatCliMultiAgentTeamLaunchBlockMessage,
   readCliMultiAgentPresets,
 } from '../runtime/multiAgentPresets';
@@ -301,7 +301,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
           continue launcher;
         }
         const plan = preflight.value;
-        if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
+        if (!canLaunchTeam(plan)) {
           writeTextStderr(
             formatCliMultiAgentTeamLaunchBlockMessage(plan, {
               requestedPreset: action.preset,

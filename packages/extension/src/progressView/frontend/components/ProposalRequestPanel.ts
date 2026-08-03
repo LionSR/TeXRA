@@ -43,7 +43,6 @@ import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
@@ -249,9 +248,20 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   private renderExtractFlags(
     data: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const badges = renderWorkflowExtractFlagBadges(data.toolConfig);
-    if (badges === nothing) return nothing;
-    return html`<div class="workflow-proposal__extract-flags">${badges}</div>`;
+    const flags: string[] = [];
+    if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
+    if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
+    if (flags.length === 0) return nothing;
+    return html`<div class="workflow-proposal__extract-flags">
+      ${repeat(
+        flags,
+        (flag) => flag,
+        (flag) =>
+          html`<wa-badge variant="neutral" appearance="filled"
+            >${waIcon('image')} ${flag}</wa-badge
+          >`,
+      )}
+    </div>`;
   }
 
   private renderProposalFileList(
