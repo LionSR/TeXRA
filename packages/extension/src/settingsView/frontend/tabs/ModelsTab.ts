@@ -208,8 +208,13 @@ export class ModelsTab extends LitElement {
     const readyCount = models.filter(
       (model) => model.access === 'allowed',
     ).length;
+    // A chosen route needs an explicit undo (#9659): clearing the
+    // preference returns the canonical model to direct-provider routing.
+    // The undo wins the single action slot even when the route is stuck
+    // (consent-required/unavailable) — it is the only way out of that state.
+    const preferredModel = models.find((model) => model.preferred);
     const consentModel = models.find(
-      (model) => model.access === 'consent-required',
+      (model) => model.access === 'consent-required' && !model.preferred,
     );
     // An already-authorized route still needs an explicit opt-in: access
     // alone never routes a canonical model through Copilot (#9635).
@@ -220,7 +225,15 @@ export class ModelsTab extends LitElement {
       (model) => model.access === 'unavailable',
     ).length;
     let status: string;
-    if (consentModel) {
+    if (preferredModel) {
+      if (preferredModel.access === 'allowed') {
+        status = `${preferredModel.label} runs through Copilot.`;
+      } else if (preferredModel.access === 'consent-required') {
+        status = `${preferredModel.label} is set to use Copilot but is waiting for consent.`;
+      } else {
+        status = `${preferredModel.label} is set to use Copilot but is currently unavailable.`;
+      }
+    } else if (consentModel) {
       status = 'VS Code is ready to ask for your consent.';
     } else if (readyCount > 0) {
       status = `${readyCount} ${pluralize(readyCount, 'Copilot model is', 'Copilot models are')} ready.`;
@@ -228,21 +241,27 @@ export class ModelsTab extends LitElement {
       status = `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
     }
 
-    // The single route action: consent first, then opt-in for an
-    // already-authorized route the user has not chosen yet.
-    const actionModel = consentModel ?? optInModel;
+    // The single route action: undo for a chosen route first, then consent,
+    // then opt-in for an already-authorized route not chosen yet.
+    const actionModel = preferredModel ?? consentModel ?? optInModel;
+    let actionText = '';
+    let actionCommand: string = SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS;
+    if (preferredModel) {
+      actionText = `Stop using Copilot for ${preferredModel.label}`;
+      actionCommand = SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE;
+    } else if (consentModel) {
+      actionText = 'Grant access';
+    } else if (optInModel) {
+      actionText = `Use Copilot for ${optInModel.label}`;
+    }
     const action = actionModel
       ? renderLabeledActionButton({
           icon: 'shield',
-          text: consentModel
-            ? 'Grant access'
-            : `Use Copilot for ${actionModel.label}`,
+          text: actionText,
           kind: 'primary',
           appearance: consentModel ? 'filled' : 'outlined',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
-              modelName: actionModel.name,
-            }),
+            postMessage(actionCommand, { modelName: actionModel.name }),
         })
       : nothing;
 
