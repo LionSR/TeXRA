@@ -322,9 +322,6 @@ importers:
       '@types/jsdom':
         specifier: ^28.0.3
         version: 28.0.3
-      '@types/markdown-it':
-        specifier: ^14.1.2
-        version: 14.1.2
       '@types/mime-types':
         specifier: ^3.0.1
         version: 3.0.1
@@ -660,9 +657,6 @@ importers:
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
-      '@types/markdown-it':
-        specifier: ^14.1.2
-        version: 14.1.2
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
@@ -2901,15 +2895,6 @@ packages:
 
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
-
-  '@types/linkify-it@5.0.0':
-    resolution: {integrity: sha512-sVDA58zAw4eWAffKOaQH5/5j3XeayukzDk+ewSsnv3p4yJEZHCCzMDiZM8e0OUrRvmpGZ85jf4yDHkHsgBNr9Q==}
-
-  '@types/markdown-it@14.1.2':
-    resolution: {integrity: sha512-promo4eFwuiW+TfGxhi+0x3czqTYJkG8qB17ZUJiVF10Xm7NLVRSLUsfRTU/6h1e24VvRnXCx+hG7li58lkzog==}
-
-  '@types/mdurl@2.0.0':
-    resolution: {integrity: sha512-RGdgjQUZba5p6QEFAVx2OGb8rQDL/cPRG7GiedRzMcJ1tYnUANBncjbSB1NRGwbvjcPeikRABz2nshyPk1bhWg==}
 
   '@types/mime-types@3.0.1':
     resolution: {integrity: sha512-xRMsfuQbnRq1Ef+C+RKaENOxXX87Ygl38W1vDfPHRku02TgQr+Qd8iivLtAMcR0KF5/29xlnFihkTlbqFrGOVQ==}
@@ -8605,15 +8590,6 @@ snapshots:
   '@types/keyv@3.1.4':
     dependencies:
       '@types/node': 22.19.17
-
-  '@types/linkify-it@5.0.0': {}
-
-  '@types/markdown-it@14.1.2':
-    dependencies:
-      '@types/linkify-it': 5.0.0
-      '@types/mdurl': 2.0.0
-
-  '@types/mdurl@2.0.0': {}
 
   '@types/mime-types@3.0.1': {}
 
