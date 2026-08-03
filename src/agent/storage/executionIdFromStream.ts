@@ -32,10 +32,17 @@ function executionIdFromStream(stream: StreamTabId): ExecutionId | undefined {
  * - `'reject'` — deletion admission: corruption blocks the execution
  *   directory from being admitted, instead of reading as an absent legacy
  *   record.
- * - `'admit'` — restart repair: corruption cannot disprove the suffix, and
- *   the repair path's own strict settlement read fails loudly on the corrupt
- *   record before any repair mutation, while settled historical corruption
- *   must not abort the whole pass.
+ * - `'admit'` — restart repair: corruption cannot disprove the suffix, so
+ *   mapping here must not throw. A corrupt record surfaces downstream: an
+ *   in-flight repair candidate deliberately aborts the repair pass at its
+ *   own strict settlement read, before any mutation; a settled historical
+ *   stream is never consulted again, so its corruption stays inert.
+ *
+ * Introduced 2026-08-03 (#9590 Stage 2). Retirement: #9590 Stage 3 folds this
+ * boundary into the single discriminated legacy reader; the suffix arm is
+ * deleted at the issue's dated retirement decision (`streamData/` has no
+ * natural expiry, so a date — no earlier than the 2026-11-01 legacy cohort —
+ * is the only available gate).
  */
 export async function legacyExecutionIdFromStreamSuffix(
   stream: StreamTabId,

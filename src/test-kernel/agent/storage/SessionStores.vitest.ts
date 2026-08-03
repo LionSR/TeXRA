@@ -138,10 +138,12 @@ describe('SessionStores deletion coordination', () => {
 
 describe('SessionStores deletion admission (#9590 A2)', () => {
   function deletionSpy() {
-    return vi.fn(async (executionId: ExecutionId) => ({
-      status: 'deleted' as const,
-      executionId,
-    }));
+    return vi.fn(
+      async (executionId: ExecutionId, options?: DeleteExecutionOptions) => {
+        await options?.beforeDelete?.();
+        return { status: 'deleted' as const, executionId };
+      },
+    );
   }
 
   it('never lets suffix resemblance authorize deleting an execution registered to another stream', async () => {
@@ -224,6 +226,49 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
       expect(session.transcripts.has(stream)).toBe(true);
     } finally {
       readMetaStrict.mockRestore();
+      session.dispose();
+    }
+  });
+
+  it('retains only the unreadable stream during bulk deletion, deleting the rest', async () => {
+    const session = createTestSession();
+    const flakyExecutionId = 'abc222' as ExecutionId;
+    const goodExecutionId = 'abc333' as ExecutionId;
+    const flakyStream = `flaky@model#${flakyExecutionId}` as StreamTabId;
+    const goodStream = `good@model#${goodExecutionId}` as StreamTabId;
+    session.transcripts.ensureStream(flakyStream);
+    session.transcripts.ensureStream(goodStream);
+    await getExecutionStore(goodExecutionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    const readMetaStrict = vi
+      .spyOn(getExecutionStore(flakyExecutionId), 'readMetaStrict')
+      .mockRejectedValue(new Error('storage read failed'));
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const deleteExecution = deletionSpy();
+    const stores = new SessionStores({
+      streamLogs: session.transcripts,
+      snapshots: new StreamSnapshotStore(),
+      deleteExecution,
+    });
+
+    try {
+      const result = await stores.deleteAll();
+
+      expect(result.failed).toEqual(new Set([flakyStream]));
+      expect(deleteExecution).toHaveBeenCalledWith(
+        goodExecutionId,
+        expect.anything(),
+      );
+      expect(deleteExecution).not.toHaveBeenCalledWith(
+        flakyExecutionId,
+        expect.anything(),
+      );
+      expect(session.transcripts.has(flakyStream)).toBe(true);
+      expect(session.transcripts.has(goodStream)).toBe(false);
+    } finally {
+      readMetaStrict.mockRestore();
+      warn.mockRestore();
       session.dispose();
     }
   });
