@@ -453,9 +453,9 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     }),
   },
   {
-    id: 'workflow-script',
+    id: 'multi-agent-workflow',
     tools: [DELEGATE_MULTI_AGENTS_TOOL_NAME],
-    name: 'Workflow Script',
+    name: 'Multi-Agent Workflow',
     category: 'workflow',
     description:
       'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it — this switch is an additional kill switch on top of that per-agent opt-in.',

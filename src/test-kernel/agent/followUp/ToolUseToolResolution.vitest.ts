@@ -159,7 +159,9 @@ describe('tool-use tool resolution', () => {
 
   it('drops the workflow script tool when its dashboard switch is disabled', async () => {
     await installPlatform({
-      globalState: { [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script'] },
+      globalState: {
+        [GlobalStateKey.DISABLED_TOOLS]: ['multi-agent-workflow'],
+      },
     });
     try {
       const registry = getDefaultToolRegistry();
