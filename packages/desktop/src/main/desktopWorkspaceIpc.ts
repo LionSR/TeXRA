@@ -30,7 +30,7 @@ import {
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
   type DesktopBrowserBounds,
   type DesktopEnvironmentSummary,
-} from '../desktopWorkspaceMessages.js';
+} from '../shared/desktopWorkspaceMessages.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,

@@ -66,7 +66,7 @@ import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../desktopWorkspaceMessages.js';
+import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -120,7 +120,7 @@ import {
 import {
   buildDesktopMenuTemplate,
   DESKTOP_DOCS_URL,
-} from '../desktopCommandSurface.js';
+} from '../shared/desktopCommandSurface.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
@@ -130,7 +130,7 @@ import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
   withWorkspacePathArg,
-} from '../workspacePath.js';
+} from '../shared/workspacePath.js';
 import type {
   DesktopAgentExecutionOptions,
   DesktopProgressBridge,

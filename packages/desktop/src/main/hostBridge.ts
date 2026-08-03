@@ -7,7 +7,7 @@ import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
 import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
-} from '../hostBridgeChannels.js';
+} from '../shared/hostBridgeChannels.js';
 
 export interface DesktopHostBridgeOptions {
   onRendererMessage?: (message: unknown, window: BrowserWindow) => void;

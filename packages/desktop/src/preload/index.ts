@@ -4,7 +4,7 @@ import { installElectronHostBridge } from './hostBridge.js';
 import {
   hasResolvedWorkspacePath,
   parseWorkspacePathFromArgv,
-} from '../workspacePath.js';
+} from '../shared/workspacePath.js';
 
 const rendererWindow = globalThis as typeof globalThis & {
   addEventListener?: (

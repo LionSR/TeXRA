@@ -22,7 +22,7 @@ import {
 } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { DelegateAgentTool } from '@tools/DelegationTools';
+import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   executeStableSubagentInBand,
   SubagentDurabilityError,

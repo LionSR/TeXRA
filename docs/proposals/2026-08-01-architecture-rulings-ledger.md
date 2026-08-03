@@ -27,7 +27,7 @@ one projection, and its own contract comment records why the two values are not
 redundant: a durable `completed` is **never** projected, because the result
 envelope's producer may already have downgraded a nominally completed flow that
 reported an application-level error. That downgrade is
-`buildSubagentFailureResultMeta` (`src/tools/subagentResults.ts`), called from
+`buildSubagentFailureResultMeta` (`src/tools/delegation/subagentResults.ts:553`), called from
 both delegation strategies (`nativeSubagentStrategy.ts`,
 `inBandSubagentExecution.ts`) and pinned by `SubagentResultMeta.vitest.ts`. So
 `result.outcome` carries a producer-side subagent-failure downgrade that

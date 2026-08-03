@@ -4,7 +4,7 @@ import {
   DESKTOP_PROMPT_COMMANDS,
   DesktopSettlePromptMessageSchema,
   type DesktopShowPromptMessage,
-} from '../desktopPromptMessages.js';
+} from '../shared/desktopPromptMessages.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,

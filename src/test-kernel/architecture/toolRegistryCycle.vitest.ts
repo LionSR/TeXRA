@@ -39,7 +39,7 @@ const TOOL_REGISTRY = 'src/tools/registry.ts';
  * list rather than growing it.
  */
 const AGENT_LAUNCHING_TOOLS = [
-  'src/tools/DelegationTools.ts',
+  'src/tools/delegation/DelegationTools.ts',
   'src/tools/delegation/WorkflowScriptTool.ts',
 ] as const;
 

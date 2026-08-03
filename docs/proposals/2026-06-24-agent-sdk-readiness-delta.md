@@ -9,7 +9,7 @@ since the sixteenth ledger pass, and re-confirms the standing verdict.
 **Scope re-audited:** `src/agent/core/` + `implementations/flows/`,
 `src/agent/modelHandlers/`, `src/logger/` + `src/agent/trace/` + `src/eventBus/`,
 `src/platform/`, and the agent/team/subagent surface
-(`packages/extension/resources/{agents,tool_use_agents}/`, `src/tools/DelegationTools.ts`).
+(`packages/extension/resources/{agents,tool_use_agents}/`, `src/tools/delegation/DelegationTools.ts`).
 
 **Method:** four independent fan-out audits (core flows, model handlers,
 logger/platform, subagent boundaries), each run _without_ sight of the existing

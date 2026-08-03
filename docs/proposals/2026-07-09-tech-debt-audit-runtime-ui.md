@@ -63,7 +63,7 @@ net-deletions first.
 
 _(Consolidates facts-plane `RC1` and host-wiring `HW1` — one gap, two readers.)_
 
-**Pins.** `src/tools/childStream.ts:265-271` emits `removeStream` on `autoClose`;
+**Pins.** `src/tools/delegation/childStream.ts:331-338` emits `removeStream` on `autoClose`;
 `src/tools/bash.ts:450,466` pass `{autoClose:true}` on every background completion
 (`:475` prints `Stream tab: ${childStreamId}` — the child is a real rail tab).
 `src/shared/progressView/backend/events/ProgressFactApplier.ts:197-198` is `case
@@ -461,9 +461,9 @@ readers.)_
 `applyToState` (invoked only from `wrapRuntimeHost`'s `emit` wrapper, `:374-393`,
 non-presentation host events). No host emits `removeStream`
 (`rg "\.emit\(\s*['\"]removeStream"` over src/ + packages/cli = 0). The sole
-producer is `childStream.ts:267` via `emitRuntimeEvent` (a **session fact**;
-`emitRuntimeEvent.ts:28` routes only to `session.events`, never `host.emit`). The
-live TUI applier is the session-fact case at `:417-418`.
+producer is `src/tools/delegation/childStream.ts:331-338`, which emits a
+**session fact** directly through `session.events`, never `host.emit`. The live TUI
+applier is the session-fact case at `:417-418`.
 
 **Mechanism.** The migration moved `removeStream` from a host emit to a session
 fact but left the old emit-wrap arm; nothing emits it onto the TUI-wrapped host,

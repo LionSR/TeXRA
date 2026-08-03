@@ -19,7 +19,7 @@ import {
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
-} from '../desktopCommandSurface';
+} from '../shared/desktopCommandSurface';
 import { getRendererPlatform } from './rendererPlatform';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';

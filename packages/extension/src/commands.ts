@@ -19,7 +19,7 @@ import { registerAgentReviewCommands } from '@commands/review/agentReviewCommand
 
 // Local imports - components
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
-import { MainViewProvider } from './MainViewProvider';
+import { MainViewProvider } from './webview/MainViewProvider';
 
 export function registerCommands(
   context: vscode.ExtensionContext,

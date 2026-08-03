@@ -222,7 +222,7 @@ describe('assembleTrace', () => {
 
   it('resolves a child stream by executionId suffix when its id does not match the derived agent@model#executionId format', async () => {
     // Background child streams (bash/codex/claude subagents, see
-    // @tools/childStream.createChildStream) use a tool-specific
+    // @tools/delegation/childStream.createChildStream) use a tool-specific
     // "${streamPrefix}#executionId" id, not getStreamTabId's
     // "agent@model#executionId" — the config's own agent/model would derive
     // the wrong id entirely for these.

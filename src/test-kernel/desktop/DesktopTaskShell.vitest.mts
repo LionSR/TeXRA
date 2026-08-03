@@ -37,7 +37,7 @@ import {
   type DesktopTaskShellState,
   type OpenWorkbenchTabRequest,
   type WorkbenchPlacement,
-} from '@desktop/desktopTaskShell';
+} from '@desktop/shared/desktopTaskShell';
 
 function open(
   state: DesktopTaskShellState,

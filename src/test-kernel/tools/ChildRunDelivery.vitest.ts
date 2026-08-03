@@ -24,7 +24,7 @@ import {
   deliverChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
-} from '@tools/childRunDelivery';
+} from '@tools/delegation/childRunDelivery';
 
 describe('child run delivery', () => {
   beforeEach(() => vi.clearAllMocks());

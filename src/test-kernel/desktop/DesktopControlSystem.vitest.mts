@@ -132,7 +132,9 @@ describe('desktop control system', () => {
   it('renders the startup team chooser inline with an explicit saved opt-out', () => {
     const panel = read('packages/desktop/src/renderer/desktopOnboarding.ts');
     const renderer = read('packages/desktop/src/renderer/main.ts');
-    const messages = read('packages/desktop/src/desktopOnboardingMessages.ts');
+    const messages = read(
+      'packages/desktop/src/shared/desktopOnboardingMessages.ts',
+    );
 
     expect(panel).toContain('class="desktop-startup-panel"');
     expect(panel).toContain('<wa-card');
@@ -232,7 +234,7 @@ describe('desktop control system', () => {
       'packages/desktop/src/main/desktopBrowserViews.ts',
     );
     const commandSurface = read(
-      'packages/desktop/src/desktopCommandSurface.ts',
+      'packages/desktop/src/shared/desktopCommandSurface.ts',
     );
     const electronMain = read('packages/desktop/src/main/index.ts');
     const preload = read('packages/desktop/src/preload/index.ts');
@@ -273,7 +275,9 @@ describe('desktop control system', () => {
     const workspaceIpc = read(
       'packages/desktop/src/main/desktopWorkspaceIpc.ts',
     );
-    const messages = read('packages/desktop/src/desktopWorkspaceMessages.ts');
+    const messages = read(
+      'packages/desktop/src/shared/desktopWorkspaceMessages.ts',
+    );
 
     // The renderer's veto is the only gate on dirtiness.
     expect(renderer).toMatch(

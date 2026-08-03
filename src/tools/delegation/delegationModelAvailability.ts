@@ -1,8 +1,8 @@
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { decideRunModel } from '@model/runModelDecision';
 import { isModelOptionAvailable, type ModelOptionData } from '@shared/schemas';
-import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 import { unique } from '@utils/core';
+import { replaceDelegationDescriptionBlock } from './delegationDescriptionBlock';
 
 const AVAILABLE_MODELS_LINE = /^Available models:.*$/m;
 
