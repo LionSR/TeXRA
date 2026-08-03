@@ -183,6 +183,7 @@ export async function executeCliRequest(
   // Transcript persistence is a launch prerequisite for every headless run.
   // This executes before runtime-host construction and before runAgent.
   const { session } = await initializeHeadlessTranscriptSession();
+  session.setApprovalPolicy(runContext.approvalPolicy);
   const presentationHost = createCliRuntimeHost(runContext);
   const renderWorkflowPlainProgress =
     runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
