@@ -36,9 +36,13 @@ describe('probeOutputPath', () => {
     },
   ];
 
-  it.each(windowsCases)(
-    'uses native mkdir after Windows-shaped ENOENT for a $label output path',
-    async ({ target, outputParent }) => {
+  const windowsBlockedCases = windowsCases.flatMap((testCase) =>
+    ['ENOTDIR', 'EEXIST'].map((mkdirCode) => ({ ...testCase, mkdirCode })),
+  );
+
+  it.each(windowsBlockedCases)(
+    'maps native $mkdirCode after Windows-shaped ENOENT for a $label output path',
+    async ({ target, outputParent, mkdirCode }) => {
       const mkdirVisited: string[] = [];
       await expect(
         probeOutputPathForTests(target, '--output', {
@@ -48,7 +52,7 @@ describe('probeOutputPath', () => {
           },
           mkdir: async (candidate) => {
             mkdirVisited.push(candidate);
-            throw errno('ENOTDIR');
+            throw errno(mkdirCode);
           },
         }),
       ).rejects.toThrow(
