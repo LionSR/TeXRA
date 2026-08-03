@@ -2125,7 +2125,7 @@ function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
     approvalPolicy: policy,
   });
   appendHarnessAssistantTranscript(
-    `Approval mode set to ${formatTexraApprovalPolicy(policy)}`,
+    `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
   );
 }
 

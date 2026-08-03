@@ -28,6 +28,6 @@ export function applyCliApprovalPolicySelection(
 
   context.setApprovalPolicy(policy);
   appendLocalAssistantTranscript(
-    `Approval mode set to ${formatTexraApprovalPolicy(policy)}`,
+    `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
   );
 }

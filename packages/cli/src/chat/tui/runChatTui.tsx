@@ -567,7 +567,7 @@ export async function runChat(
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
       appendLocalAssistantTranscript(
-        `Approval mode set to ${formatTexraApprovalPolicy(policy)}`,
+        `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
       );
     },
     canSelectModel: canSelectCurrentModel,
