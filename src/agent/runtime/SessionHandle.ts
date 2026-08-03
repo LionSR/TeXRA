@@ -38,6 +38,10 @@ import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { deriveResumability } from '@agent/storage/resumability';
 import { platform } from '@platform/platform';
+import {
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import {
   isInFlightPhase,
@@ -169,6 +173,7 @@ export class SessionHandle {
   readonly interactions: SessionHostInteractions;
   /** Session-owned approval queues, pending registries, and bypass state. */
   readonly approvals: SessionApprovals;
+  private texraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
   /** Coordinates recovery probes for model routes shared by parallel runs. */
   readonly modelRetries: ModelRetryGate;
   /** Host policy for provider-output cleanup and continuation joining. */
@@ -258,6 +263,15 @@ export class SessionHandle {
       // becoming unhandled before the host reaches that boundary.
       void startupRepair.catch(() => undefined);
     }
+  }
+
+  /** Live host-neutral approval policy for executable requests. */
+  get approvalPolicy(): TexraApprovalPolicy {
+    return this.texraApprovalPolicy;
+  }
+
+  setApprovalPolicy(policy: TexraApprovalPolicy): void {
+    this.texraApprovalPolicy = policy;
   }
 
   /**

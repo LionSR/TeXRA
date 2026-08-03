@@ -4,7 +4,10 @@
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import {
   AgentCategory,
   type CompileFailure,
@@ -457,7 +460,7 @@ export function setStreamStatusInCliState({
 // sessionSlice
 // ---------------------------------------------------------------------------
 
-// Session-identity slice: the agent/model/cwd/approval snapshot for the
+// Session-identity slice: the agent/model/cwd/approval display snapshot for the
 // current CLI session. One signal, no cross-stream concerns.
 
 const EMPTY_SESSION_META: SessionMeta = {
@@ -467,13 +470,13 @@ const EMPTY_SESSION_META: SessionMeta = {
   modelSource: 'builtin-default',
   cwd: '',
   apiMode: 'personal',
-  approvalPolicy: 'ask',
+  approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   canDelegate: false,
   transcriptMode: 'persistent',
   version: '',
 };
 
-/** Agent/model/cwd/approval snapshot for the current CLI session. */
+/** Reactive display snapshot for the current CLI session. */
 export const sessionMeta = signal<SessionMeta>(EMPTY_SESSION_META);
 
 export function patchSessionMeta(patch: Partial<SessionMeta>): void {

@@ -13,7 +13,6 @@ import PQueue from 'p-queue';
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpResult,
   submitFollowUp,
@@ -268,6 +267,8 @@ export async function runChat(
           showPersistentWarning: writeTextStderr,
         },
   );
+  const runtimeSession = transcriptLifecycle.session;
+  runtimeSession.setApprovalPolicy(context.approvalPolicy);
   // First-run gate (interactive only; headless already rejected above). A
   // credential-less user signs in or saves a key here; the apiMode + model
   // resolution below then see the freshly-set credentials in the same process.
@@ -333,12 +334,8 @@ export async function runChat(
   const model = modelSelection.model;
   const version = await readCliVersion();
 
-  // `sessionMeta` is the only store for the live approval policy: the status
-  // bar, the runtime context handed to each run, and `/approval` all read the
-  // same signal, so a mid-session change cannot be visible in one surface and
-  // stale in another.
   const getApprovalPolicy = (): TexraApprovalPolicy =>
-    sessionMetaSignal.get().approvalPolicy;
+    runtimeSession.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
     apiMode: sessionMetaSignal.get().apiMode,
@@ -349,6 +346,7 @@ export async function runChat(
     quietLogs: true,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
+    runtimeSession.setApprovalPolicy(policy);
     patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
@@ -380,7 +378,7 @@ export async function runChat(
     modelSource: defaults.modelSource,
     cwd: context.cwd,
     apiMode,
-    approvalPolicy: context.approvalPolicy,
+    approvalPolicy: runtimeSession.approvalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
     teamName: initialResume
@@ -419,14 +417,6 @@ export async function runChat(
     stdin: process.stdin,
     stdout: process.stdout,
   });
-
-  // The TUI owns exactly one runtime session for its whole lifetime; resolve it
-  // once here so every path below propagates that owner instead of re-resolving
-  // the process default. Per-stream sidecar data (todos, plan, usage, output
-  // files) is persisted by the session's own snapshot store, so a `texra resume`
-  // restores the full display — the same streamData/{id}/* files the
-  // extension/desktop read.
-  const runtimeSession = defaultSession();
 
   const disposers: Array<() => void> = [];
   // Crash safety: if the process dies outside the orderly teardown below
@@ -504,6 +494,7 @@ export async function runChat(
   // state transition flows through one of the controller's narrow commands.
   const chatController: ChatSessionController = createChatSessionController({
     session,
+    runtimeSession,
     getSessionContext: currentSessionContext,
     disposers,
     followUpQueue,

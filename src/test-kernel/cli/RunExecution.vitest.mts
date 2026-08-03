@@ -300,10 +300,12 @@ describe('executeCliRequest', () => {
 
   it('keeps yolo runs approval-available for agent execution', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const { defaultSession } = await import('@agent/runtime/SessionHandle');
     const request = baseRequest();
 
     await executeCliRequest(request, cliContext({ approvalPolicy: 'yolo' }));
 
+    expect(defaultSession().approvalPolicy).toBe('yolo');
     expect(mocks.runAgent).toHaveBeenCalledWith(
       request,
       expect.objectContaining({
