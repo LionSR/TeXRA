@@ -26,7 +26,7 @@ import {
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   assertWritable,
@@ -181,9 +181,9 @@ function withScriptReference(
  * new installs start with the switch off.
  */
 export class WorkflowScriptTool extends defineTool({
-  name: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  name: DELEGATE_MULTI_AGENTS_TOOL_NAME,
   slow: true,
-  description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this only when the complete fan-out, pipeline, and join structure is known before execution and should resume safely after interruption. Keep using delegate_agent one call at a time when a later decision depends on reviewing an earlier result.
+  description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before execution and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
 
 Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
@@ -233,7 +233,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const contexts = getCurrentToolContexts();
     if (contexts?.runContext?.kind !== 'launch') {
       throw new Error(
-        'delegate_workflow_script requires an active launched agent session.',
+        'delegate_multi_agents requires an active launched agent session.',
       );
     }
     const { runContext: parent, callContext } = contexts;
@@ -428,7 +428,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             agentName: meta.name,
             description: meta.description,
             config: runConfig,
-            toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+            toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
           },
         );
         runChildStreamId = childStream.childStreamId;

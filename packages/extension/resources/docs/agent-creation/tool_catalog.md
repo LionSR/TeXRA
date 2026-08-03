@@ -58,7 +58,7 @@ recommended groups at the bottom are a good starting point.
 - `delegate_workflow` — delegate to a workflow agent for whole-document
   operations. Pass `agent`, `model`, `instruction`, `inputFiles`. Returns
   asynchronously via the follow-up queue.
-- `delegate_workflow_script` — advanced opt-in tool for a durable sequence of
+- `delegate_multi_agents` — advanced opt-in tool for a durable sequence of
   workflow-agent calls with predetermined branching and fan-out. Pass a default
   `agent` and exactly one of the complete `script` source or an existing
   `scriptPath`. Submitted source is saved as an
@@ -126,7 +126,7 @@ zotero_export`
 **Orchestrator agent:**
 `bash, read_file, write_file, glob, grep, delegate_workflow,
 delegate_agent, executions, accept_run_files, todo_write`, optionally
-`delegate_workflow_script` for pipelines with a predetermined fan-out/join
+`delegate_multi_agents` for pipelines with a predetermined fan-out/join
 structure (off by default — see above).
 
 **Computation agent:**

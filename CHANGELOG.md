@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+#### Breaking Changes
+
+- **The multi-agent orchestration tool is now `delegate_multi_agents`** —
+  the tool formerly named `delegate_workflow_script` has been renamed with
+  no compatibility alias. Custom agent YAML files that list
+  `delegate_workflow_script` in their tool list must use the new name.
+
 ## [0.40.0] - 2026-08-02
 
 ### CLI

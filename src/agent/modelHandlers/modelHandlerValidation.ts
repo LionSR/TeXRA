@@ -163,9 +163,9 @@ export class ModelHandlerValidation extends ModelHandler<
             mathematicalValidationOutput(options.messages),
           ),
         ];
-      } else if (!hasToolResult && toolNames.has('delegate_workflow_script')) {
+      } else if (!hasToolResult && toolNames.has('delegate_multi_agents')) {
         toolCalls = [
-          validationToolCall('delegate_workflow_script', {
+          validationToolCall('delegate_multi_agents', {
             agent: 'correct',
             script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
           }),

@@ -13,7 +13,7 @@ settings:
     # and disabled by default; enable in Dashboard → Tools ("Workflow
     # Script"). When disabled by the user, resolveAgentTools() strips this
     # from the model's tool list, same as github_subscription below.
-    - delegate_workflow_script
+    - delegate_multi_agents
     - todo_write
     - plan
     - read_file
