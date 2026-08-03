@@ -954,14 +954,40 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       const waitingHandle = takeWaitingHandle(executionId);
 
+      // Seed the open run-group row so a wrongly-run close would be visible
+      // as a GROUP_END settle on this exact row (mirrors the kill test).
+      const parentStageId = ctx.parentStage.id;
+      if (!parentStageId) {
+        throw new Error('The fixture parent stage must carry an id.');
+      }
+      withTranscriptWriter(transcripts, streamId, (writer) =>
+        writer.appendSettled({
+          id: parentStageId,
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+          level: 'info',
+          timestamp: Date.now(),
+          messageType: MESSAGE_TYPES.DEFAULT,
+          text: 'run',
+          data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+        }),
+      );
+
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await writerLoadStarted;
       waitingHandle.markExecutionLeaseLost();
       releaseWriterLoad();
       await waitingHandle.result;
 
-      // The waiting group must stay open: no run GROUP_END row may exist.
-      expect(transcripts.get(streamId)?.toJSON() ?? []).not.toContainEqual(
+      // The waiting group must stay open: the seeded row is still the
+      // running GROUP_START, and no run GROUP_END row exists.
+      const rows = transcripts.get(streamId)?.toJSON() ?? [];
+      expect(rows).toContainEqual(
+        expect.objectContaining({
+          id: parentStageId,
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+        }),
+      );
+      expect(rows).not.toContainEqual(
         expect.objectContaining({
           type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
           data: expect.objectContaining({ kind: 'run' }),

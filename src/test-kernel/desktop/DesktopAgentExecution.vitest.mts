@@ -119,16 +119,19 @@ type TestableBridge = Bridge & {
   deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
   streamLogs: {
-    append(
+    acquireWriter(
       streamId: StreamTabId,
-      entry: {
+      ownerKey: string,
+    ): {
+      append(entry: {
         id: string;
         type: string;
         level: string;
         timestamp: number;
         text: string;
-      },
-    ): unknown;
+      }): unknown;
+      close(): void;
+    };
     requestEviction(streamId: StreamTabId): void;
     reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
@@ -1703,13 +1706,15 @@ describe('DesktopProgressBridge', () => {
       agentCategory: AgentCategory.Workflow,
     });
     await bridge.streamLogs.ensureLoaded('first');
-    bridge.streamLogs.append('first', {
+    const firstWriter = bridge.streamLogs.acquireWriter('first', 'test-writer');
+    firstWriter.append({
       id: 'first-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: 1_500,
       text: 'first stream log',
     });
+    firstWriter.close();
     await settleProgressEvents();
     messages.length = 0;
 
@@ -2496,13 +2501,18 @@ describe('DesktopProgressBridge', () => {
     const kvStoreBacking = new Map<string, unknown>();
     const bridge = await createBridge([], { kvStoreBacking });
 
-    bridge.streamLogs.append(streamId, {
+    const shutdownWriter = bridge.streamLogs.acquireWriter(
+      streamId,
+      'test-writer',
+    );
+    shutdownWriter.append({
       id: 'shutdown-log',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: 1_000,
       text: 'persist me before quit',
     });
+    shutdownWriter.close();
 
     await bridgeSession(bridge).flushArtifacts();
     bridge.streamLogs.requestEviction(streamId);

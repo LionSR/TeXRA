@@ -39,10 +39,11 @@ function isPublicMethod(
 ): member is ts.MethodDeclaration {
   if (!ts.isMethodDeclaration(member)) return false;
   const modifiers = ts.getModifiers(member) ?? [];
+  // `protected` counts as public: neither store is subclassed, so a
+  // `protected` mutator would stay exactly as reachable as a public one
+  // while silently escaping a private-only count.
   return !modifiers.some(
-    (modifier) =>
-      modifier.kind === ts.SyntaxKind.PrivateKeyword ||
-      modifier.kind === ts.SyntaxKind.ProtectedKeyword,
+    (modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword,
   );
 }
 
