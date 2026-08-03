@@ -57,6 +57,15 @@ export function prefersCopilotRoute(model: string): boolean {
   return copilotRouteModels().includes(model);
 }
 
+/**
+ * The persisted per-model preferences, unfiltered by launch suppression.
+ * Settings UI needs the raw list so a preferred model the editor no longer
+ * discovers still surfaces its undo (#9659).
+ */
+export function preferredCopilotRouteModels(): readonly string[] {
+  return copilotRouteModels();
+}
+
 /** Persist (or clear) the Copilot route preference for one base model. */
 export async function setCopilotRoutePreference(
   model: string,

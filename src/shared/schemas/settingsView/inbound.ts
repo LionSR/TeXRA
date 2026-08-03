@@ -125,6 +125,11 @@ const RequestModelAccessMessageSchema = z.object({
   modelName: z.string().min(1),
 });
 
+const ClearCopilotRouteMessageSchema = z.object({
+  command: z.literal(CMD.CLEAR_COPILOT_ROUTE),
+  modelName: z.string().min(1),
+});
+
 // Agent selection inbound messages
 const OpenAgentYamlMessageSchema = z.object({
   command: z.literal(CMD.OPEN_AGENT_YAML),
@@ -364,6 +369,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetModelReasoningLevelMessageSchema,
     SetPreferShortModelNamesMessageSchema,
     RequestModelAccessMessageSchema,
+    ClearCopilotRouteMessageSchema,
     // Agent selection messages
     OpenAgentYamlMessageSchema,
     SetAgentEnabledMessageSchema,

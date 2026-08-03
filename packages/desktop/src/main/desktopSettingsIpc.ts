@@ -403,6 +403,7 @@ export function createDesktopSettingsIpc(
     setPreferShortModelNames: (message) =>
       settingsHost.setPreferShortModelNames(message.enabled),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
+    clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     ...options.agentSettingsController.handlers,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
