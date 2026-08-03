@@ -6,7 +6,10 @@ import {
   LEVEL_TO_EFFORT,
 } from '@agent/modelHandlers/support/reasoningEffort';
 import { FREE_TIER, MAX_TIER } from '@auth/config';
-import { prefersCopilotRoute } from '@model/copilotRouting';
+import {
+  preferredCopilotRouteModels,
+  prefersCopilotRoute,
+} from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
   discoveredCopilotRoutes,
@@ -106,12 +109,25 @@ export class SettingsModelSelectionController {
       this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
     )();
     const configs = new Map(staticModelConfigEntries());
-    return [...routes].map(([name, route]) => ({
+    const infos: CopilotRouteInfo[] = [...routes].map(([name, route]) => ({
       name,
       label: configs.get(name)?.label ?? name,
       access: route.access,
       preferred: prefersCopilotRoute(name),
     }));
+    // A preferred model the editor no longer discovers still needs its undo
+    // surface (#9659): the routing layer treats the persisted preference as
+    // a hard route choice, so without a row the user could never clear it.
+    for (const name of preferredCopilotRouteModels()) {
+      if (routes.has(name)) continue;
+      infos.push({
+        name,
+        label: configs.get(name)?.label ?? name,
+        access: 'unavailable',
+        preferred: true,
+      });
+    }
+    return infos;
   }
 
   async setModelEnabled(input: {
