@@ -215,7 +215,7 @@ describe('buildUserVars with missing configured files', () => {
           '/workspace/present.tex': 'present input',
           '/workspace/context.tex': 'present context',
           '/workspace/.texra/storage/memories/present.md':
-            '---\nmodifiedBy: user\n---\nRemember this convention.',
+            '---\nmodifiedBy: user\nmodifiedAt: 2026-06-20T14:30:45.123Z\n---\nRemember this convention.',
         },
       }),
     );
