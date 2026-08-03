@@ -12,7 +12,7 @@ import type { SessionContextValue, TeamOptionData } from '@shared/schemas';
 
 // Local imports - component type and context
 import type { InstructionPanel } from '@webview/frontend/components/InstructionPanel';
-import type { sessionContext } from '@webview/frontend/contexts/mainViewContexts';
+import type { sessionContext } from '@webview/frontend/mainViewContexts';
 import type { ContextProvider } from '@lit/context';
 
 // @lit/context's request/provider event classes capture the global `Event`
@@ -36,7 +36,7 @@ const sessionProviders = new WeakMap<
 export async function loadInstructionPanelModules(): Promise<void> {
   ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
   ({ sessionContext: mainViewSessionContext } =
-    await import('@webview/frontend/contexts/mainViewContexts'));
+    await import('@webview/frontend/mainViewContexts'));
   await import('@webview/frontend/components/InstructionPanel');
 }
 

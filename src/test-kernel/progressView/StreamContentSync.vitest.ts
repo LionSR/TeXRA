@@ -11,7 +11,7 @@ import {
   ProgressFactApplier,
   type GetProgressStreamControls,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
-import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
+import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
 import type {

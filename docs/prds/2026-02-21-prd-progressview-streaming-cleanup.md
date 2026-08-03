@@ -159,7 +159,7 @@ interface StreamExecutionState {
 
 **Files changed:**
 
-- `src/progressView/state/ProgressViewState.ts` — new type, rename methods
+- `src/controllers/progressView/backend/ProgressViewState.ts` — new type, rename methods
 - `src/progressView/events/ProgressEventHandler.ts` — update method calls
 - `src/progressView/managers/WebviewUpdater.ts` — update `sendStreamMetadata` to use new type
 

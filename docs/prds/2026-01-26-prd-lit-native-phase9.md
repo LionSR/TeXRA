@@ -708,7 +708,7 @@ These patterns exist in shared utilities and are lower priority since they're he
 **Files Modified:**
 
 - `src/shared/schemas/mainViewMessages.ts` - Removed HTML option fields
-- `src/webview/frontend/contexts/mainViewContexts.ts` - Removed HTML option state
+- `packages/extension/src/webview/frontend/mainViewContexts.ts` - Removed HTML option state
 - `src/webview/frontend/MainApp.ts` - Simplified option handling
 - `src/webview/frontend/components/InstructionPanel.ts` - Lit templates only
 - `src/webview/frontend/components/FileSelectGroup.ts` - Lit templates only
