@@ -8,11 +8,12 @@ settings:
     - delegate_agent
     - executions
     - accept_run_files
-    # Workflow script — advanced delegation for a pipeline whose fan-out and
-    # join structure is known in advance (see the tool description). Opt-in
-    # and disabled by default; enable in Dashboard → Tools ("Workflow
-    # Script"). When disabled by the user, resolveAgentTools() strips this
-    # from the model's tool list, same as github_subscription below.
+    # Multi-agent workflow — advanced delegation for a pipeline whose fan-out
+    # and join structure is known in advance (see the tool description).
+    # Opt-in and disabled by default; enable in Dashboard → Tools
+    # ("Multi-Agent Workflow"). When disabled by the user, resolveAgentTools()
+    # strips this from the model's tool list, same as github_subscription
+    # below.
     - delegate_multi_agents
     - todo_write
     - plan

@@ -188,6 +188,18 @@ export class ServerSideKeyService {
     return this.tierService.getSpendingStatusError();
   }
 
+  /**
+   * Refresh the relay spend snapshot without touching the access decision.
+   * canUseServerSideKeys() cannot serve this: in personal mode it clears the
+   * tier cache and returns early. Shares TierService's authenticated cache
+   * slot, so it costs nothing next to a primed included-access check.
+   */
+  async refreshSpendingStatus(): Promise<void> {
+    const authToken = await SupabaseClient.getRelayAccessToken();
+    if (!authToken) return;
+    await this.tierService.getConfig(authToken);
+  }
+
   async setUseIncludedModelAccess(
     value: boolean,
     cacheOptions: ClearServerSideKeyCachesOptions = {},

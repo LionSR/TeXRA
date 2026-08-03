@@ -358,6 +358,7 @@ export class SettingsApp extends SettingsAppBase {
             .spendingStatusError=${spendingStatusError.get()}
             .quotaAutoSwitched=${quotaAutoSwitched.get()}
             .telemetryEnabled=${telemetryEnabled.get()}
+            .chatgptAuth=${chatgptAuth.get()}
             @manage-provider-keys=${this.handleManageProviderKeys}
           ></account-tab>
         `;
@@ -367,7 +368,6 @@ export class SettingsApp extends SettingsAppBase {
             .authenticated=${authenticated.get()}
             .apiAccessMode=${apiAccessMode.get()}
             .providerKeyStatuses=${providerKeyStatuses.get()}
-            .chatgptAuth=${chatgptAuth.get()}
             .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
             .copilotModels=${copilotRouteInfos.get()}
