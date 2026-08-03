@@ -16,6 +16,10 @@ import {
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { apiKeyExists } from '@model/apiProviders';
+import {
+  copilotRouteUnavailableReason,
+  prefersCopilotRoute,
+} from '@model/copilotRouting';
 import { includedModelAccess } from '@model/includedModelAccess';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
 import {
@@ -30,6 +34,8 @@ import {
   shouldRouteModelThroughOpenRouter,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
+import { copilotRouteForModel } from '@model/runtimeModelRegistry';
+import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
@@ -264,8 +270,19 @@ export function modelHandlerCompatibilityKey(
     return 'ModelHandlerValidation';
   }
 
-  // Editor-supplied models cannot be proxied through OpenRouter. This route
-  // must win before the global OpenRouter preference below.
+  // Editor-supplied models cannot be proxied through OpenRouter. Both Copilot
+  // routes — the per-model route preference on a canonical base model, and a
+  // config whose provider is Copilot itself — must win before the global
+  // OpenRouter preference below. A preference is a hard route choice: when
+  // the editor cannot serve it right now, report the route state instead of
+  // silently consuming a provider key or subscription (#9635).
+  if (prefersCopilotRoute(originalConfig.name)) {
+    const unavailableReason = copilotRouteUnavailableReason(
+      originalConfig.name,
+    );
+    if (unavailableReason) throw new AgentError(unavailableReason);
+    return 'ModelHandlerVscodeLm';
+  }
   if (originalConfig.provider === ModelProvider.COPILOT) {
     return 'ModelHandlerVscodeLm';
   }
@@ -480,10 +497,13 @@ async function createModelHandlerForResolvedCompatibilityKey(
   // async, key-neutral override of the Responses path: these are OpenAI
   // Responses-shaped models the user has opted to drive through their
   // subscription instead of an API key. Gated on the key not being the
-  // validation override so the package-validation gate still wins.
+  // validation override so the package-validation gate still wins, and not
+  // being the Copilot route: a "Via Copilot" row must not silently dispatch
+  // through ChatGPT (#9635).
   const codexSubscriptionEligible =
     options.allowCodexSubscriptionOverride &&
     compatibilityKey !== 'ModelHandlerValidation' &&
+    compatibilityKey !== 'ModelHandlerVscodeLm' &&
     resolveCodexSubscriptionCapabilitiesForAgentCategory(
       config,
       useOpenRouter,
@@ -609,6 +629,25 @@ async function createModelHandlerForResolvedCompatibilityKey(
           responseTextProcessing,
         ),
         'ModelHandlerOpenRouterNative',
+      );
+    }
+
+    case 'ModelHandlerVscodeLm': {
+      // Explicit case: under canonical model identity (#9635) the config's
+      // provider is the base model's own provider, so the default branch's
+      // provider route table can no longer reach this handler. A discovered
+      // route carries the editor's own context ceiling, and the subscription
+      // route is zero-cost per call — apply both to the config the handler
+      // validates and accounts against.
+      const route = copilotRouteForModel(config.name);
+      const routedConfig = route
+        ? { ...config, ...zeroCostAccessOverrides(route.maxInputTokens) }
+        : config;
+      const { ModelHandlerVscodeLm } =
+        await import('@agent/modelHandlers/vscodelm/modelHandlerVscodeLm');
+      return finalizeModelHandler(
+        new ModelHandlerVscodeLm(routedConfig, responseTextProcessing),
+        'ModelHandlerVscodeLm',
       );
     }
 

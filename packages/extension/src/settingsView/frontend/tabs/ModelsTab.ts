@@ -23,6 +23,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 // Local imports - shared schemas
 import type {
   ChatGptAuthStatus,
+  CopilotRouteInfo,
   ModelSelectionItem,
   NumberSetting,
   ProviderKeyStatus,
@@ -73,6 +74,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
+  @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
   @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
@@ -200,19 +202,22 @@ export class ModelsTab extends LitElement {
   }
 
   private renderCopilotSection(): TemplateResult | typeof nothing {
-    const models = this.modelSelectionItems.filter(
-      (model) => model.provider === 'copilot',
-    );
+    const models = this.copilotModels;
     if (models.length === 0) return nothing;
 
     const readyCount = models.filter(
-      (model) => model.availability === 'copilot-access',
+      (model) => model.access === 'allowed',
     ).length;
     const consentModel = models.find(
-      (model) => model.availability === 'copilot-consent-required',
+      (model) => model.access === 'consent-required',
+    );
+    // An already-authorized route still needs an explicit opt-in: access
+    // alone never routes a canonical model through Copilot (#9635).
+    const optInModel = models.find(
+      (model) => model.access === 'allowed' && !model.preferred,
     );
     const unavailableCount = models.filter(
-      (model) => model.availability === 'copilot-unavailable',
+      (model) => model.access === 'unavailable',
     ).length;
     let status: string;
     if (consentModel) {
@@ -222,6 +227,24 @@ export class ModelsTab extends LitElement {
     } else {
       status = `${unavailableCount} ${pluralize(unavailableCount, 'Copilot model is', 'Copilot models are')} unavailable.`;
     }
+
+    // The single route action: consent first, then opt-in for an
+    // already-authorized route the user has not chosen yet.
+    const actionModel = consentModel ?? optInModel;
+    const action = actionModel
+      ? renderLabeledActionButton({
+          icon: 'shield',
+          text: consentModel
+            ? 'Grant access'
+            : `Use Copilot for ${actionModel.label}`,
+          kind: 'primary',
+          appearance: consentModel ? 'filled' : 'outlined',
+          onClick: () =>
+            postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
+              modelName: actionModel.name,
+            }),
+        })
+      : nothing;
 
     return html`
       <section id="copilot-access">
@@ -242,25 +265,7 @@ export class ModelsTab extends LitElement {
                 Access is managed by VS Code and GitHub Copilot.
               </span>
             </div>
-            <div class="settings-row-control">
-              ${
-                consentModel
-                  ? renderLabeledActionButton({
-                      icon: 'shield',
-                      text: 'Grant access',
-                      kind: 'primary',
-                      appearance: 'filled',
-                      onClick: () =>
-                        postMessage(
-                          SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-                          {
-                            modelName: consentModel.name,
-                          },
-                        ),
-                    })
-                  : nothing
-              }
-            </div>
+            <div class="settings-row-control">${action}</div>
           </div>
         </div>
         ${

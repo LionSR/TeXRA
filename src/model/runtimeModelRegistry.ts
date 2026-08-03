@@ -1,29 +1,37 @@
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  MODEL_CONFIGS,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
 import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
-import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { platform } from '@platform/platform';
-
 import type {
   LanguageModelAccessState,
   LanguageModelInfo,
   LanguageModelReference,
 } from '@platform/languageModel';
 
-const COPILOT_MODEL_PREFIX = 'copilot:';
+/**
+ * Prefix of the retired synthetic Copilot picker ids (`copilot:<baseModel>`).
+ * Kept for the dated compatibility readers that normalize persisted state
+ * written before #9635 (retire target 2026-11-03).
+ */
+export const COPILOT_MODEL_PREFIX = 'copilot:';
 const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
 
-interface RuntimeModelEntry {
-  readonly config: ModelConfig;
+/**
+ * The Copilot access route for one canonical base model: the exact editor
+ * model reference requests must use, plus the access state the editor last
+ * reported. Keyed by base model id in the catalogue — Copilot is a transport
+ * for the logical model, never a separate model identity (#9635).
+ */
+export interface CopilotModelRoute {
   readonly access: LanguageModelAccessState;
   readonly reference: LanguageModelReference;
-  readonly directModel?: string;
+  /**
+   * Editor-reported input-token ceiling for the discovered model. Carried so
+   * the routed handler caps context at what the route actually serves, not
+   * the base provider's window.
+   */
+  readonly maxInputTokens: number;
 }
 
 export interface RuntimeModelDirectFallback {
@@ -44,10 +52,10 @@ interface RuntimeModelCatalogue {
   /** Bumped by every invalidation; a discovery commits only into its own. */
   readonly generation: number;
   /**
-   * Last-known discovered entries. Retained across invalidation so synchronous
+   * Last-known discovered routes. Retained across invalidation so synchronous
    * readers keep answering while the next discovery runs.
    */
-  readonly entries: ReadonlyMap<string, RuntimeModelEntry>;
+  readonly entries: ReadonlyMap<string, CopilotModelRoute>;
   /** Whether {@link entries} reflect a discovery that is still current. */
   readonly discovered: boolean;
   /** The in-flight discovery, if one is running. */
@@ -66,9 +74,7 @@ function modelRouteNames(config: ModelConfig): readonly string[] {
   );
 }
 
-function matchingBaseModel(
-  info: LanguageModelInfo,
-): readonly [string, ModelConfig] | undefined {
+function matchingBaseModel(info: LanguageModelInfo): string | undefined {
   const nativeNames = new Set(
     [info.id, info.family].map((name) => name.trim().toLowerCase()),
   );
@@ -87,74 +93,35 @@ function matchingBaseModel(
         Number(right.capabilities.supportsReasoning);
       return byReasoning || left.name.localeCompare(right.name);
     })
-    .at(0);
+    .at(0)?.[0];
 }
 
-function runtimeModelId(baseModel: string): string {
-  return `${COPILOT_MODEL_PREFIX}${baseModel}`;
-}
-
-function runtimeConfig(
-  id: string,
-  base: ModelConfig,
-  info: LanguageModelInfo,
-): ModelConfig {
-  return {
-    ...base,
-    name: id,
-    label: `Copilot · ${info.name || base.label}`,
-    fullName: info.id,
-    shortName: info.id,
-    provider: ModelProvider.COPILOT,
-    ...zeroCostAccessOverrides(info.maxInputTokens),
-    openRouterOnly: false,
-    openrouterFullName: undefined,
-    vscodeLMFullName: info.id,
-    copilotFullName: info.id,
-    codexSubscription: false,
-    deprecated: false,
-    retired: false,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsFunctionCalling: base.capabilities.supportsFunctionCalling,
-      supportsReasoning: base.capabilities.supportsReasoning,
-      supportsTokenCounting: true,
-      supportsVision: base.capabilities.supportsVision,
-      supportsSystemPrompt: false,
-    },
-  };
-}
-
-async function discoverCopilotModels(): Promise<
-  Map<string, RuntimeModelEntry>
+async function discoverCopilotRoutes(): Promise<
+  Map<string, CopilotModelRoute>
 > {
   const languageModel = platform().languageModel;
   if (!languageModel.isAvailable()) return new Map();
 
   const discovered = await languageModel.selectModels({ vendor: 'copilot' });
-  const entries = new Map<string, RuntimeModelEntry>();
+  const entries = new Map<string, CopilotModelRoute>();
   for (const info of discovered.toSorted((left, right) =>
     right.version.localeCompare(left.version),
   )) {
-    const match = matchingBaseModel(info);
-    if (!match) continue;
-    const [baseModel, baseConfig] = match;
-    const id = runtimeModelId(baseModel);
-    if (entries.has(id)) continue;
-    entries.set(id, {
-      config: runtimeConfig(id, baseConfig, info),
+    const baseModel = matchingBaseModel(info);
+    if (!baseModel || entries.has(baseModel)) continue;
+    entries.set(baseModel, {
       access: info.access,
       reference: {
         vendor: info.vendor,
         id: info.id,
       },
-      directModel: baseModel,
+      maxInputTokens: info.maxInputTokens,
     });
   }
   return entries;
 }
 
-/** Refresh editor-supplied models after the native model/access cache changes. */
+/** Refresh editor-supplied routes after the native model/access cache changes. */
 export async function refreshRuntimeModelRegistry(): Promise<void> {
   if (catalogue.discovered) return;
   if (catalogue.pending) return catalogue.pending;
@@ -164,7 +131,7 @@ export async function refreshRuntimeModelRegistry(): Promise<void> {
   // an invalidation and is dropped instead of committed.
   const { generation } = catalogue;
   const request = (async () => {
-    const entries = await discoverCopilotModels();
+    const entries = await discoverCopilotRoutes();
     if (catalogue.generation !== generation) return;
     catalogue = { generation, entries, discovered: true };
   })();
@@ -179,7 +146,7 @@ export async function refreshRuntimeModelRegistry(): Promise<void> {
   }
 }
 
-/** Mark discovery stale while retaining last-known configs for sync readers. */
+/** Mark discovery stale while retaining last-known routes for sync readers. */
 export function invalidateRuntimeModelRegistry(): void {
   catalogue = {
     generation: catalogue.generation + 1,
@@ -188,9 +155,22 @@ export function invalidateRuntimeModelRegistry(): void {
   };
 }
 
-/** Resolve a static or editor-discovered model config by its persisted id. */
+/**
+ * Compatibility reader for persisted `copilot:<baseModel>` ids written while
+ * Copilot models were synthetic picker identities. Introduced 2026-08-03 with
+ * #9635; retirement: remove three months after the route-based identity
+ * ships (target 2026-11-03), together with the `modelListRefresh` sweep that
+ * rewrites persisted `copilot:*` selections.
+ */
+export function normalizePersistedCopilotModelId(model: string): string {
+  return model.startsWith(COPILOT_MODEL_PREFIX)
+    ? model.slice(COPILOT_MODEL_PREFIX.length)
+    : model;
+}
+
+/** Resolve a static model config by its persisted id. */
 export function getRuntimeModelConfig(model: string): ModelConfig | undefined {
-  return catalogue.entries.get(model)?.config ?? MODEL_CONFIGS[model];
+  return MODEL_CONFIGS[normalizePersistedCopilotModelId(model)];
 }
 
 /** All static model entries owned by TeXRA and llm-zoo. */
@@ -201,47 +181,49 @@ export function staticModelConfigEntries(): readonly (readonly [
   return Object.entries(MODEL_CONFIGS);
 }
 
-function discoveredModelConfigEntries(): readonly (readonly [
-  string,
-  ModelConfig,
-])[] {
-  return [...catalogue.entries].map(
-    ([id, entry]) => [id, entry.config] as const,
-  );
-}
-
-/** Resolve a model after ensuring native discovery has run in this host. */
+/**
+ * Resolve a persisted model id to its static config after ensuring native
+ * discovery has run in this host, so a Copilot route preference decided from
+ * the result routes on a fresh catalogue.
+ */
 export async function resolveRuntimeModelConfig(
   model: string,
 ): Promise<ModelConfig | undefined> {
-  const staticConfig = MODEL_CONFIGS[model];
-  if (staticConfig) return staticConfig;
-
-  await refreshRuntimeModelRegistry();
-  return catalogue.entries.get(model)?.config;
+  await discoveredCopilotRoutes();
+  return getRuntimeModelConfig(model);
 }
 
-/** Available editor-supplied model ids appended to ordinary visible models. */
-export function availableRuntimeModelIds(): readonly string[] {
-  return [...catalogue.entries]
-    .filter(([, entry]) => entry.access === 'allowed')
-    .map(([id]) => id);
-}
-
-/** Access state reported by the editor for a discovered runtime model. */
-export function runtimeModelAccess(
+/** The Copilot route discovered for a canonical base model id, if any. */
+export function copilotRouteForModel(
   model: string,
-): LanguageModelAccessState | undefined {
-  return catalogue.entries.get(model)?.access;
+): CopilotModelRoute | undefined {
+  return catalogue.entries.get(model);
 }
 
-/** Direct-key model represented by an editor-supplied subscription model. */
+/**
+ * Refresh and return the discovered Copilot routes keyed by canonical base
+ * model id. Runtime discovery is an optional host capability: the host
+ * adapter logs port-level discovery failures (see `createLanguageModelPort`),
+ * and consumers receive an empty catalogue instead of stale entries.
+ */
+export async function discoveredCopilotRoutes(): Promise<
+  ReadonlyMap<string, CopilotModelRoute>
+> {
+  try {
+    await refreshRuntimeModelRegistry();
+  } catch {
+    return new Map();
+  }
+  return catalogue.entries;
+}
+
+/** Direct-key route for a model the editor was serving through Copilot. */
 export function getRuntimeModelDirectFallback(
   model: string,
   useOpenRouter: boolean,
 ): RuntimeModelDirectFallback | undefined {
-  const directModel = catalogue.entries.get(model)?.directModel;
-  if (!directModel) return undefined;
+  // Retry panels persisted before #9635 can still carry a `copilot:` id.
+  const directModel = normalizePersistedCopilotModelId(model);
   const config = MODEL_CONFIGS[directModel];
   if (!config) return undefined;
   const provider = resolveModelApiKeyProvider(config, useOpenRouter);
@@ -265,14 +247,14 @@ export async function requestRuntimeModelAccess(
   model: string,
 ): Promise<RuntimeModelAccessRequestResult> {
   await refreshRuntimeModelRegistry();
-  const entry = catalogue.entries.get(model);
-  if (!entry) return 'unavailable';
-  if (entry.access === 'allowed') return 'already-allowed';
-  if (entry.access === 'unavailable') return 'unavailable';
+  const route = catalogue.entries.get(model);
+  if (!route) return 'unavailable';
+  if (route.access === 'allowed') return 'already-allowed';
+  if (route.access === 'unavailable') return 'unavailable';
 
   const signal = AbortSignal.timeout(MODEL_ACCESS_REQUEST_TIMEOUT_MS);
   for await (const _part of platform().languageModel.sendRequest(
-    entry.reference,
+    route.reference,
     [
       {
         role: 'user',
@@ -291,31 +273,4 @@ export async function requestRuntimeModelAccess(
     // editor present its native consent prompt after the user clicks Grant.
   }
   return 'requested';
-}
-
-/** Whether an id belongs to the currently discovered editor model catalog. */
-export function isRuntimeModel(model: string): boolean {
-  return catalogue.entries.has(model);
-}
-
-/** Static and discovered entries for consumers that enumerate the registry. */
-export function runtimeModelConfigEntries(): readonly (readonly [
-  string,
-  ModelConfig,
-])[] {
-  return [...staticModelConfigEntries(), ...discoveredModelConfigEntries()];
-}
-
-/** Refresh and return only the editor-discovered model catalogue. */
-export async function discoveredRuntimeModelConfigEntries(): Promise<
-  readonly (readonly [string, ModelConfig])[]
-> {
-  try {
-    await refreshRuntimeModelRegistry();
-  } catch {
-    // Runtime discovery is an optional host capability. The host adapter logs
-    // failures; consumers receive an empty catalogue instead of stale entries.
-    return [];
-  }
-  return discoveredModelConfigEntries();
 }
