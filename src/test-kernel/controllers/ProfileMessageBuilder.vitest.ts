@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@agent/index', () => ({
   getAgentsBySource: vi.fn(() => []),
@@ -9,6 +9,20 @@ vi.mock('@agent/index', () => ({
 
 vi.mock('@utils/config/providerConfig', () => ({
   getGlobalStreaming: () => true,
+}));
+
+const serverSideKeyService = {
+  getUseIncludedModelAccess: vi.fn(() => false),
+  canUseServerSideKeys: vi.fn(async () => false),
+  refreshSpendingStatus: vi.fn(async () => {}),
+  getAccessExpirationDate: vi.fn(() => null),
+  wasQuotaAutoSwitched: vi.fn(() => false),
+  getSpendingStatus: vi.fn(() => null as unknown),
+  getSpendingStatusError: vi.fn(() => null as unknown),
+};
+
+vi.mock('@auth/serverKeys', () => ({
+  getServerSideKeyService: () => serverSideKeyService,
 }));
 
 // Local imports
@@ -84,5 +98,49 @@ describe('ProfileMessageBuilder session problems', () => {
       sessionProblem: 'expired',
       user: { email: 'researcher@example.com' },
     });
+  });
+});
+
+describe('ProfileMessageBuilder included-access usage', () => {
+  beforeEach(() => {
+    serverSideKeyService.getUseIncludedModelAccess.mockReturnValue(false);
+    serverSideKeyService.getSpendingStatus.mockReturnValue(null);
+    serverSideKeyService.refreshSpendingStatus.mockClear();
+    serverSideKeyService.canUseServerSideKeys.mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reports usage in personal mode, where the access check never primes it', async () => {
+    stubStoredSession('authenticated', true);
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Ultra');
+    const spend = { currentSpend: 12, limit: 100, remaining: 88 };
+    serverSideKeyService.getSpendingStatus.mockReturnValue(spend);
+
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: async () => [],
+    });
+
+    expect(serverSideKeyService.canUseServerSideKeys).not.toHaveBeenCalled();
+    expect(serverSideKeyService.refreshSpendingStatus).toHaveBeenCalledOnce();
+    expect(message).toMatchObject({
+      apiAccessMode: 'personal',
+      spendingStatus: spend,
+    });
+  });
+
+  it('refreshes usage in included mode too', async () => {
+    stubStoredSession('authenticated', true);
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('Ultra');
+    serverSideKeyService.getUseIncludedModelAccess.mockReturnValue(true);
+
+    await buildProfileMessage({ getProviderKeyStatuses: async () => [] });
+
+    expect(serverSideKeyService.canUseServerSideKeys).toHaveBeenCalledOnce();
+    expect(serverSideKeyService.refreshSpendingStatus).toHaveBeenCalledOnce();
   });
 });

@@ -163,6 +163,6 @@ describe('stream-tab expand chevron', () => {
       tab?.shadowRoot
         ?.querySelector('wa-tooltip[for="stream-tab-kind"]')
         ?.textContent?.trim(),
-    ).toBe('Workflow Script');
+    ).toBe('Multi-Agent Workflow');
   });
 });

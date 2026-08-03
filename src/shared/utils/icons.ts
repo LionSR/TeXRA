@@ -96,7 +96,7 @@ export const AGENT_DECORATORS = {
     toolUse: { icon: 'screwdriver-wrench', label: 'Tool Use' },
   },
   streamKinds: {
-    workflowScript: { icon: 'list-ul', label: 'Workflow Script' },
+    workflowScript: { icon: 'list-ul', label: 'Multi-Agent Workflow' },
   },
 } as const;
 
