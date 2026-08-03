@@ -29,30 +29,82 @@ function joinCwdRelative(target: string, cwd: string): string {
   return path.isAbsolute(target) ? target : path.join(cwd, target);
 }
 
+type OutputPathStats = Pick<Awaited<ReturnType<typeof fs.stat>>, 'isDirectory'>;
+
+type OutputFlag = '--output' | '--output-dir';
+
+interface OutputPathProbeDependencies {
+  readonly stat: (target: string) => Promise<OutputPathStats>;
+  readonly mkdir: (
+    target: string,
+    options: { readonly recursive: true },
+  ) => Promise<string | undefined>;
+  readonly dirname: (target: string) => string;
+}
+
+const outputPathProbeDefaults: OutputPathProbeDependencies = {
+  stat: fs.stat,
+  mkdir: fs.mkdir,
+  dirname: path.dirname,
+};
+
+function isAlreadyExistsError(error: unknown): boolean {
+  return (error as { readonly code?: string })?.code === 'EEXIST';
+}
+
+function parentFileUsageError(
+  target: string,
+  flagLabel: OutputFlag,
+): CliUsageError {
+  return new CliUsageError(
+    flagLabel === '--output-dir'
+      ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+      : `--output: a parent path component is a file: ${target}`,
+  );
+}
+
 /**
- * Stat `target` for the output-path guards. Returns `null` when the path
- * doesn't exist yet (the workflow will create it). `ENOTDIR` (a parent path
- * component is a file) is surfaced as a Usage error here so callers don't
- * have to repeat it. Other stat errors propagate with their real cause.
+ * Probe `target` and materialize the directory that the eventual output write
+ * requires. Using the same recursive mkdir operation as the writer avoids
+ * platform-specific ancestor traversal: it handles missing depth, Windows
+ * ENOENT-through-file behavior, and symlink resolution natively.
  */
 async function probeOutputPath(
   target: string,
-  flagLabel: '--output' | '--output-dir',
-): Promise<Awaited<ReturnType<typeof fs.stat>> | null> {
+  flagLabel: OutputFlag,
+  dependencies: OutputPathProbeDependencies = outputPathProbeDefaults,
+): Promise<OutputPathStats | null> {
+  const { stat, mkdir, dirname } = dependencies;
   try {
-    return await fs.stat(target);
+    return await stat(target);
   } catch (error: unknown) {
-    if (isFileNotFoundError(error)) return null;
     if (isNotADirectoryError(error)) {
+      throw parentFileUsageError(target, flagLabel);
+    }
+    if (!isFileNotFoundError(error)) throw error;
+  }
+
+  const requiredDirectory =
+    flagLabel === '--output-dir' ? target : dirname(target);
+  try {
+    await mkdir(requiredDirectory, { recursive: true });
+  } catch (error: unknown) {
+    if (isNotADirectoryError(error) || isAlreadyExistsError(error)) {
+      throw parentFileUsageError(target, flagLabel);
+    }
+    if (isFileNotFoundError(error)) {
       throw new CliUsageError(
         flagLabel === '--output-dir'
-          ? `--output-dir is not a directory (a parent path component is a file): ${target}`
-          : `--output: a parent path component is a file: ${target}`,
+          ? `--output-dir cannot be created: ${target}`
+          : `--output parent directory cannot be created: ${target}`,
       );
     }
     throw error;
   }
+  return null;
 }
+
+export { probeOutputPath as probeOutputPathForTests };
 
 /** `--output-dir <path>` must point at a directory (or not exist yet). */
 export async function assertOutputDirAvailable(
