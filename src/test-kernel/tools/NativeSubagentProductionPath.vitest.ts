@@ -219,6 +219,11 @@ async function launchWaitingChild(options: {
   readonly executionId: ExecutionId;
   readonly parentContext: ReturnType<typeof createRunContext>;
   readonly runAsParentOwner: ReturnType<typeof captureOwnedExecutionLease>;
+  readonly observedFollowUps: Array<{
+    readonly model: string;
+    readonly messages: readonly unknown[];
+    readonly text: string;
+  }>;
 }> {
   const observedFollowUps: Array<{
     readonly model: string;
@@ -288,7 +293,12 @@ async function launchWaitingChild(options: {
   expect(launch.status).toBe('executed');
   const executionId = childExecutionId(launch.output);
   childId = executionId;
-  return { executionId, parentContext, runAsParentOwner };
+  return {
+    executionId,
+    parentContext,
+    runAsParentOwner,
+    observedFollowUps,
+  };
 }
 
 describe('native subagent production delivery path', () => {
@@ -325,71 +335,8 @@ describe('native subagent production delivery path', () => {
       { text: 'Parent received result B.' },
     ];
     const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-    const observedFollowUps: Array<{
-      readonly model: string;
-      readonly messages: readonly unknown[];
-      readonly text: string;
-    }> = [];
-    modelFactoryMocks.createModelHandler.mockImplementation(
-      async (modelConfig: { name: string }) =>
-        taggedScriptedHandler(
-          modelConfig.name,
-          modelConfig.name === CHILD_MODEL ? childTurns : parentTurns,
-          observedFollowUps,
-        ),
-    );
-
-    const parentConfig = AgentConfigSchema.parse({
-      agent: PARENT_AGENT,
-      agentSource: 'inline',
-      agentCategory: AgentCategory.ToolUse,
-      model: PARENT_MODEL,
-      instruction: 'Coordinate the child proof review.',
-      workingDirectory: process.cwd(),
-    });
-    await registerExecution(PARENT_EXECUTION_ID, parentConfig, PARENT_AGENT, {
-      streamId: PARENT_STREAM_ID,
-      parentExecutionId: OUTER_EXECUTION_ID,
-    });
-    await expect(
-      executeAgent(parentConfig, PARENT_EXECUTION_ID, {
-        session,
-        allowWaitingResult: true,
-        isSubagent: true,
-        parentStreamId: OUTER_STREAM_ID,
-      }),
-    ).resolves.toMatchObject({
-      outcome: STREAM_PHASE.WAITING,
-      response: 'Parent ready.',
-    });
-
-    const parentContext = createRunContext({
-      streamId: PARENT_STREAM_ID,
-      executionId: PARENT_EXECUTION_ID,
-      modelCell: new ModelCell({} as never, PARENT_MODEL),
-      session,
-    });
-    const runAsParentOwner = captureOwnedExecutionLease(PARENT_EXECUTION_ID);
-    const launch = await runAsParentOwner(() =>
-      withRunContext(parentContext, () =>
-        executeSubagent(
-          {
-            agent: CHILD_AGENT,
-            agentSource: 'inline',
-            agentCategory: AgentCategory.ToolUse,
-            model: CHILD_MODEL,
-            instruction: 'Prove the first assertion.',
-            memories: [],
-            workingDirectory: process.cwd(),
-          },
-          CHILD_AGENT,
-          PARENT_STREAM_ID,
-        ),
-      ),
-    );
-    expect(launch.status).toBe('executed');
-    const executionId = childExecutionId(launch.output);
-    childId = executionId;
+    const { executionId, parentContext, runAsParentOwner, observedFollowUps } =
+      await launchWaitingChild({ parentTurns, childTurns });
 
     await waitForPersistedResult(executionId, 'Result A.');
     await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
@@ -475,71 +422,8 @@ describe('native subagent production delivery path', () => {
     // Turn 2 is answerless: the scripted transport ends the turn with no text,
     // so the resumed cycle completes without adding an assistant message.
     const childTurns = [{ text: 'Result A.' }, { text: '' }];
-    const observedFollowUps: Array<{
-      readonly model: string;
-      readonly messages: readonly unknown[];
-      readonly text: string;
-    }> = [];
-    modelFactoryMocks.createModelHandler.mockImplementation(
-      async (modelConfig: { name: string }) =>
-        taggedScriptedHandler(
-          modelConfig.name,
-          modelConfig.name === CHILD_MODEL ? childTurns : parentTurns,
-          observedFollowUps,
-        ),
-    );
-
-    const parentConfig = AgentConfigSchema.parse({
-      agent: PARENT_AGENT,
-      agentSource: 'inline',
-      agentCategory: AgentCategory.ToolUse,
-      model: PARENT_MODEL,
-      instruction: 'Coordinate the child proof review.',
-      workingDirectory: process.cwd(),
-    });
-    await registerExecution(PARENT_EXECUTION_ID, parentConfig, PARENT_AGENT, {
-      streamId: PARENT_STREAM_ID,
-      parentExecutionId: OUTER_EXECUTION_ID,
-    });
-    await expect(
-      executeAgent(parentConfig, PARENT_EXECUTION_ID, {
-        session,
-        allowWaitingResult: true,
-        isSubagent: true,
-        parentStreamId: OUTER_STREAM_ID,
-      }),
-    ).resolves.toMatchObject({
-      outcome: STREAM_PHASE.WAITING,
-      response: 'Parent ready.',
-    });
-
-    const parentContext = createRunContext({
-      streamId: PARENT_STREAM_ID,
-      executionId: PARENT_EXECUTION_ID,
-      modelCell: new ModelCell({} as never, PARENT_MODEL),
-      session,
-    });
-    const runAsParentOwner = captureOwnedExecutionLease(PARENT_EXECUTION_ID);
-    const launch = await runAsParentOwner(() =>
-      withRunContext(parentContext, () =>
-        executeSubagent(
-          {
-            agent: CHILD_AGENT,
-            agentSource: 'inline',
-            agentCategory: AgentCategory.ToolUse,
-            model: CHILD_MODEL,
-            instruction: 'Prove the first assertion.',
-            memories: [],
-            workingDirectory: process.cwd(),
-          },
-          CHILD_AGENT,
-          PARENT_STREAM_ID,
-        ),
-      ),
-    );
-    expect(launch.status).toBe('executed');
-    const executionId = childExecutionId(launch.output);
-    childId = executionId;
+    const { executionId, parentContext, runAsParentOwner } =
+      await launchWaitingChild({ parentTurns, childTurns });
 
     await waitForPersistedResult(executionId, 'Result A.');
     await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
