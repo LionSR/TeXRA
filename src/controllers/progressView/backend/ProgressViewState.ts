@@ -68,16 +68,41 @@ type ProgressStreamRunDetails =
       workingDirectory?: string;
     };
 
+/**
+ * `agentCategory` and `run` are only ever assembled together, atomically, in
+ * `buildSnapshotMetadataPatch` from one `RunConfig` — `run` never appears
+ * without `agentCategory`. `agentCategory` alone (the first variant) is a
+ * live hint `ProgressFactApplier.handleSetActiveStream` can set before that
+ * config resolves, so the pairing is one-directional, not symmetric.
+ */
+type ProgressStreamRunResolution =
+  | { run?: undefined; agentCategory?: AgentCategory }
+  | { run: ProgressStreamRunDetails; agentCategory: AgentCategory };
+
 /** Canonical current metadata used by every progress-view stream consumer. */
 export interface ProgressStreamMetadata {
-  agentCategory?: AgentCategory;
+  resolution: ProgressStreamRunResolution;
   isRemote?: boolean;
   creationTimestamp: number;
   executionId?: ExecutionId;
   parentStreamId?: StreamTabId;
   description?: string;
-  run?: ProgressStreamRunDetails;
 }
+
+/**
+ * External patch input for {@link ProgressViewState.updateStreamMetadata}.
+ * `run` is intentionally absent: it's only ever assembled internally by
+ * `buildSnapshotMetadataPatch` from a resolved `RunConfig`, never patched in
+ * directly by a caller.
+ */
+type ProgressStreamMetadataPatch = Partial<
+  Pick<
+    ProgressStreamMetadata,
+    'isRemote' | 'executionId' | 'parentStreamId' | 'description'
+  >
+> & {
+  agentCategory?: AgentCategory;
+};
 
 /**
  * The stored slice of {@link ProgressStreamMetadata}. `creationTimestamp` is
@@ -270,7 +295,7 @@ export class ProgressViewState {
     let state = this._sessionState.get(stream);
     if (!state) {
       state = {
-        metadata: {},
+        metadata: { resolution: {} },
         provisionalCreationTimestamp:
           this.streamLogs.getFirstTimestamp(stream) ?? Date.now(),
       };
@@ -322,24 +347,24 @@ export class ProgressViewState {
         category: config.agentCategory,
         kind: isProcessAgent(config.agent) ? 'process' : 'agent',
       };
-      patch.agentCategory = identity.category;
       const workingDirectory = config.workingDirectory ?? undefined;
+      let run: ProgressStreamRunDetails;
       if (identity.kind === 'workflowScript') {
-        patch.run = {
+        run = {
           kind: 'workflowScript',
           workflowName: identity.agent,
           instruction: config.instruction,
           workingDirectory,
         };
       } else if (identity.kind === 'process') {
-        patch.run = {
+        run = {
           kind: 'process',
           agent: identity.agent,
           instruction: config.instruction,
           workingDirectory,
         };
       } else {
-        patch.run = {
+        run = {
           kind: 'agent',
           agent: identity.agent,
           inputFile: config.inputFiles?.at(0),
@@ -348,6 +373,8 @@ export class ProgressViewState {
           workingDirectory,
         };
       }
+      // Set together, atomically — see ProgressStreamRunResolution's doc.
+      patch.resolution = { agentCategory: identity.category, run };
     }
 
     patch.executionId =
@@ -377,10 +404,20 @@ export class ProgressViewState {
    */
   updateStreamMetadata(
     stream: StreamTabId,
-    patch: Partial<StoredStreamMetadata>,
+    patch: ProgressStreamMetadataPatch,
   ): void {
     const state = this.getOrCreateSession(stream);
-    const merged = this.applyMetadataPatch(state.metadata, patch);
+    const { agentCategory, ...rest } = patch;
+    const storedPatch: Partial<StoredStreamMetadata> = { ...rest };
+    if (agentCategory !== undefined) {
+      // Preserve `run` if already resolved — only `agentCategory` is being
+      // patched here; `run` is only ever assembled by buildSnapshotMetadataPatch.
+      storedPatch.resolution = {
+        ...state.metadata.resolution,
+        agentCategory,
+      } as ProgressStreamRunResolution;
+    }
+    const merged = this.applyMetadataPatch(state.metadata, storedPatch);
     state.metadata = this.applySnapshotMetadata(stream, merged);
   }
 
@@ -393,7 +430,7 @@ export class ProgressViewState {
   /** Start a run from durable metadata, dropping this session's live-only data. */
   resetStreamMetadataForRun(stream: StreamTabId): void {
     const state = this.getOrCreateSession(stream);
-    state.metadata = this.applySnapshotMetadata(stream, {});
+    state.metadata = this.applySnapshotMetadata(stream, { resolution: {} });
   }
 
   /**

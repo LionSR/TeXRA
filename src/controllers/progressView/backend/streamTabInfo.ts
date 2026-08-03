@@ -27,9 +27,9 @@ export interface StreamTabInfoInputs {
  */
 export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, metadata } = inputs;
-  const { run } = metadata;
+  const { run, agentCategory } = metadata.resolution;
 
-  const category = metadata.agentCategory ?? AgentCategory.Workflow;
+  const category = agentCategory ?? AgentCategory.Workflow;
 
   // `run` is undefined until the stream's RunConfig snapshot resolves (see
   // `applySnapshotMetadata`); fall back to parsing the agent name out of the

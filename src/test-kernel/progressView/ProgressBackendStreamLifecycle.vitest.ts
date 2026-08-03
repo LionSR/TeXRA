@@ -108,7 +108,9 @@ describe('ProgressBackend', () => {
       toolUseConfig('search', 'deepseekproT'),
     );
 
-    expect(backend.state.getStreamMetadata(streamId).run).toMatchObject({
+    expect(
+      backend.state.getStreamMetadata(streamId).resolution.run,
+    ).toMatchObject({
       kind: 'agent',
       agent: 'search',
       model: 'deepseekproT',

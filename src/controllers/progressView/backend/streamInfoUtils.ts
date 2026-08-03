@@ -17,7 +17,7 @@ export function buildStreamInfo(
   id: string,
 ): StreamTabInfo {
   const metadata = state.getStreamMetadata(id);
-  const workingDirectory = metadata.run?.workingDirectory;
+  const workingDirectory = metadata.resolution.run?.workingDirectory;
   let worktreeInfo;
   if (workingDirectory) {
     worktreeInfo = peekWorktreeInfo(workingDirectory);

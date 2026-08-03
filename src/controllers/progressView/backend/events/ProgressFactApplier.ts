@@ -791,7 +791,7 @@ export class ProgressFactApplier {
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
-    return this.state.getStreamMetadata(streamId).agentCategory;
+    return this.state.getStreamMetadata(streamId).resolution.agentCategory;
   }
 
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {

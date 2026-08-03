@@ -1097,14 +1097,16 @@ describe('ProgressBackend', () => {
     });
 
     expect(backend.state.getStreamMetadata(stream)).toMatchObject({
-      agentCategory: AgentCategory.ToolUse,
       isRemote: true,
       executionId,
-      run: expect.objectContaining({
-        kind: 'agent',
-        agent: 'search',
-        model: 'deepseekproT',
-      }),
+      resolution: {
+        agentCategory: AgentCategory.ToolUse,
+        run: expect.objectContaining({
+          kind: 'agent',
+          agent: 'search',
+          model: 'deepseekproT',
+        }),
+      },
     });
 
     const infos = buildStreamInfos(backend.state);
@@ -1158,7 +1160,7 @@ describe('ProgressBackend', () => {
     );
 
     await vi.waitFor(() =>
-      expect(backend.state.getStreamMetadata(stream).run).toEqual({
+      expect(backend.state.getStreamMetadata(stream).resolution.run).toEqual({
         kind: 'workflowScript',
         workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
         instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",

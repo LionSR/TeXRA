@@ -42,7 +42,7 @@ describe('buildStreamTabInfo', () => {
     const info = buildStreamTabInfo({
       streamId: 'bash@tool#exec:child-stream',
       metadata: {
-        agentCategory: AgentCategory.ToolUse,
+        resolution: { agentCategory: AgentCategory.ToolUse },
         creationTimestamp: 1,
       },
     });
@@ -56,8 +56,10 @@ describe('buildStreamTabInfo', () => {
     const info = buildStreamTabInfo({
       streamId: 'search@deepseek#exec',
       metadata: {
-        run: { kind: 'agent', agent: 'search', model: '', instruction: '' },
-        agentCategory: AgentCategory.ToolUse,
+        resolution: {
+          run: { kind: 'agent', agent: 'search', model: '', instruction: '' },
+          agentCategory: AgentCategory.ToolUse,
+        },
         isRemote: true,
         creationTimestamp: 1,
       },
