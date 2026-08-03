@@ -1,6 +1,9 @@
 import { structuredPatch } from 'diff';
 
-import type { HostUserQuestionRequest } from '@agent/runtime/HostInteractions';
+import type {
+  HostBashApprovalRequest,
+  HostUserQuestionRequest,
+} from '@agent/runtime/HostInteractions';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
@@ -148,6 +151,13 @@ export function formatRetryRequestMessage(payload: RetryPermission): string {
     return [message, CLI_PERSONAL_API_RETRY_HINT].join('\n');
   }
   return message;
+}
+
+export function formatBashApprovalSummary(
+  request: HostBashApprovalRequest,
+): string {
+  const cwd = request.cwd ? `Directory: ${request.cwd}\n` : '';
+  return `Command requested:\n${cwd}${request.command}`;
 }
 
 function formatDiffRange(start: number, lineCount: number): string {

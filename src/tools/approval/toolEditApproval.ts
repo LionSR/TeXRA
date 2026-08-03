@@ -10,6 +10,10 @@ import {
 } from '@agent/runtime/RunContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import {
+  decideTexraApproval,
+  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+} from '@shared/approvalPolicy';
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
@@ -242,15 +246,27 @@ export async function requestToolEditApproval(
       : { ...request, streamId: contextStreamId };
 
   const streamId = preparedRequest.streamId ?? undefined;
-  const isStreamBypassed =
-    streamId && session.approvals.toolEdit.bypass.isBypassed(streamId);
+  const isStreamBypassed = Boolean(
+    streamId && session.approvals.toolEdit.bypass.isBypassed(streamId),
+  );
   const acceptProposedAsIs = (): ToolEditApprovalResult =>
     finalizeApprovalResult(
       { accepted: true, appliedContent: preparedRequest.proposedContent },
       preparedRequest,
     );
-  if (!approvalsEnabled || isStreamBypassed) {
-    return acceptProposedAsIs();
+  const decision = decideTexraApproval({
+    policy: session.approvalPolicy,
+    promptRequired: approvalsEnabled,
+    scopedBypass: isStreamBypassed,
+    canPresent: context?.approvalPromptsUnavailable !== true,
+  });
+  if (decision === 'allow') return acceptProposedAsIs();
+  if (decision === 'deny') {
+    context?.onApprovalPolicyDenial?.();
+    return {
+      accepted: false,
+      userMessage: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+    };
   }
 
   return session.approvals.toolEdit.enqueue(streamId ?? undefined, {

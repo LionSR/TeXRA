@@ -1,6 +1,5 @@
 import type {
   AgentProposalPermission,
-  BashPermission,
   PlanApprovalPermission,
   RetryPermission,
 } from '@shared/schemas';
@@ -16,11 +15,6 @@ export function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
   payload: CliDecisionApprovalPayloads[K],
 ): string {
   switch (event) {
-    case 'showBashPermission': {
-      const data = payload as BashPermission;
-      const cwd = data.cwd ? `Directory: ${data.cwd}\n` : '';
-      return `Command requested:\n${cwd}${data.command}`;
-    }
     case 'showPlanApproval': {
       const data = payload as PlanApprovalPermission;
       return `Plan approval requested:\n${JSON.stringify(data.plan, null, 2)}`;

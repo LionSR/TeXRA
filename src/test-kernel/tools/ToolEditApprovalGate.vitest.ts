@@ -33,6 +33,7 @@ let testApprovalHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
 let detachHostInteractions = (): void => {};
+let policyDenials = 0;
 
 async function installPlatform(
   config: Record<string, unknown> = {},
@@ -66,6 +67,8 @@ function stubWorkspaceFile(options: { exists: boolean; content: string }) {
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
+    defaultSession().setApprovalPolicy('ask');
+    policyDenials = 0;
     cleanupAllApprovals();
   });
 
@@ -158,6 +161,37 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(handlerCalled, false);
     assert.strictEqual(write.mock.lastCall?.[1], 'new content');
     assert.strictEqual(result.output, 'written');
+  });
+
+  it('lets never override a disabled approval setting', async () => {
+    await installPlatform({ 'texra.toolUse.requireEditApproval': false });
+    defaultSession().setApprovalPolicy('never');
+
+    const tool = new WriteFileTool();
+    let handlerCalled = false;
+    const write = stubWorkspaceFile({ exists: false, content: '' });
+    testApprovalHandler = async (request) => {
+      handlerCalled = true;
+      return { accepted: true, appliedContent: request.proposedContent };
+    };
+
+    const result = await withRunContext(
+      createRunContext({
+        onApprovalPolicyDenial: () => {
+          policyDenials += 1;
+        },
+      }),
+      () => tool.call({ path: 'denied.txt', content: 'blocked' }),
+    );
+
+    assert.strictEqual(handlerCalled, false);
+    assert.strictEqual(write.mock.calls.length, 0);
+    assert.strictEqual(result.status, 'error');
+    assert.strictEqual(
+      result.userInstruction,
+      'Denied by TeXRA approval policy.',
+    );
+    assert.strictEqual(policyDenials, 1);
   });
 
   it('session bypass auto-approves pending requests', async () => {

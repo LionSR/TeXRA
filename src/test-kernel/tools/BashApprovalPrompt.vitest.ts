@@ -70,6 +70,44 @@ describe('prepareBashApprovalPrompt', () => {
 });
 
 describe('requestBashApproval queueing', () => {
+  it('lets never override a stream bypass at the shared boundary', async () => {
+    const session = createTestSession();
+    const streamId = sid('s:bash-policy-denial');
+    let policyDenials = 0;
+    let prompts = 0;
+    session.setApprovalPolicy('never');
+    setBashApprovalSessionBypass(streamId, true, { silent: true, session });
+    session.useHostInteractions({
+      requestBashApproval: async () => {
+        prompts += 1;
+        return { action: 'approve' };
+      },
+      cancel: () => undefined,
+    });
+
+    try {
+      const result = await withRunContext(
+        createRunContext({
+          streamId,
+          session,
+          onApprovalPolicyDenial: () => {
+            policyDenials += 1;
+          },
+        }),
+        () => requestBashApproval({ command: 'echo denied' }),
+      );
+
+      expect(result).toEqual({
+        action: 'reject',
+        feedback: 'Denied by TeXRA approval policy.',
+      });
+      expect(policyDenials).toBe(1);
+      expect(prompts).toBe(0);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('auto-approves a queued request once the stream is bypassed while it waits', async () => {
     const session = createTestSession();
     const streamId = sid('s:bash-queued-bypass');
