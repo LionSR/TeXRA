@@ -2,7 +2,7 @@
 
 Status: proposed
 Date: 2026-08-03
-Revision: 8 (red-teamed: write-required/read-optional, idempotent entrance stamping)
+Revision: 9 (Part III: one language across hosts — one view-model, one subscription)
 
 TeXRA classifies "what kind of thing is running" in six places, and represents
 "X is a child of Y" in twenty-six. Most are false at some write site, derived
@@ -88,6 +88,16 @@ Five load-bearing claims were refuted and the core mechanism was redesigned:
 - The full findings and the per-step amendments are in "Red-team findings
   and amendments" below; refuted claims are corrected inline where they
   appeared.
+
+Revision 9 adds **Part III**: a two-sided audit of the last dual system —
+the CLI versus the extension+desktop stack. Four subscribers attach to the
+same `SessionEventHub` with the same dispatch idiom and four independent
+handler tables; two full state engines maintain ~20 field-for-field paired
+facts under different names and shapes; and the command layer (history,
+resume, launch, roster, defaults, output) is reimplemented in
+`packages/cli/src/runtime/` with eleven behavioral divergences. Part III is
+the "one language" ruling: one session view-model, one subscription, one
+command layer — hosts keep only rendering and input policy.
 
 ## Problem
 
@@ -1023,6 +1033,93 @@ boundary** (`SessionStores.ts:286-293,351,360`) — deleting it would orphan
 `executions/` directories of pre-descriptor streams forever. `streamIdSource`
 survives as stamp provenance. The step-14 grep excludes `agentPresets.ts`'s
 migration.
+
+## Part III — one language across hosts (steps 16–18)
+
+**Findings.** Extension and desktop already speak one language (the shared
+`ProgressBackend` → Lit stack). The CLI is a full parallel dialect:
+
+- **Four hub subscribers, four dispatch tables** (`ProgressBackend.ts:433`,
+  `subscribeRuntimeHost.ts:299-304`, `runProgressRenderer.ts:159`,
+  `sessionProgressSubscription.ts:196`), each an `as`-narrowed table with an
+  `assertNever` tail — and the round/phase stage `index`/`total` guard is
+  cloned **byte-for-byte in all four**.
+- **Two state engines with ~20 paired fields** under different names/shapes
+  (`outputFilesByRound` ↔ `files`; one discriminated `stage` slot ↔ two
+  fields; nested `bypass` ↔ three flat booleans; category stored in three
+  places on the Lit side). The child-roster tombstone cap is even a
+  value-copy with a comment admitting it mirrors the other engine's constant
+  "as a value, not an import" (`childExecutions.ts:74`).
+- **The sharing asymmetry proves the thesis**: display formatters
+  (`streamStatusDisplay`, `formatWorkflowCallLine`, `taskGroupProjection`,
+  `normalizeToolUseData`) are already consumed by all three hosts; every
+  *derivation* module (`childActivityReducer`, `streamMetadata`,
+  `buildStreamTabInfo`, `streamOrdering`) is shared only inside the Lit
+  stack — the CLI re-derives status mirrors, roster reconciliation, parent
+  topology, tombstoning, artifact merges, phase grouping, transcript role
+  classification, labels, and an `subagentExecutionLabels` map that exists
+  under the same name with independent implementations on both sides.
+- **The command layer diverges behaviorally, eleven ways**: two
+  history-status projections over different source fields; a CLI-only
+  second resumability gate; the workspace-file fallback on one side only;
+  `runtimeCategory` honored on one side only; a second CLI resume entry
+  (`resolveCliResume`, `sessionResume.ts:34-58`) bypassing
+  `resolveAndResumeStream` with its own five-way outcome vocabulary;
+  workflow resume supported by ext/desktop but rejected by the CLI; CLI
+  stream-id re-derivation vs snapshot read; launcher validation ordering;
+  the chat-defaults history tier re-implementing a filtered listing;
+  `AgentRosterForm.tsx:21-25` bypassing `AgentRosterController.allPresets()`
+  (custom presets visible in settings, invisible in the TUI — a live lead
+  for the separated roster bug); and the CLI not calling
+  `selectAutoOpenFinalOutput`.
+- **Fact-coverage deltas are silent UX divergence**: `followUpSent` (Lit
+  no-op, TUI refresh), `goalPaused` (Lit no-op, TUI transcript row),
+  `goalStateChanged` and `inquiryThreadUpdated` (Lit handled, TUI ignored).
+
+**Ruling.** One host-neutral **session view-model** — the Lit backend's
+fact-applier/state store generalized into `src/controllers/session/` — is
+the single consumer of the hub and the single owner of derived session
+state (streams, roster, parent topology, artifacts, usage, todos/plan,
+status, one discriminated `stage` slot). Hosts are renderers over it:
+the `WebviewUpdater` projects it over postMessage exactly as today; the Ink
+TUI reads it through a signals adapter; the headless renderer and the
+frozen NDJSON vocabulary are boundary projections of the same store. No
+projection layers between hosts and the model — the model's types *are*
+the language, `StreamTabInfo.identity`-style, per Part I.
+
+**Step 16 — one view-model, one subscription.** Generalize
+`ProgressViewState` + `ProgressFactApplier` into the session view-model
+(no `vscode`, no postMessage — they already comply); adopt the canonical
+field shapes (single `stage` slot from the CLI; three-kind info and
+per-round maps as named in Part I). The TUI consumes it.
+*Delete:* the CLI's parallel derivations — `setStreamStatusInCliState`
+mirror, `applySubagentRoster` + `ParentProvenance` reconciliation +
+tombstone value-copy, `mergeArtifactSnapshot` + revision guard (the store
+is the accumulator per Axis U), the full-rebuild task-group driver, the
+duplicate `subagentExecutionLabels`, the duplicated phase grouping, three
+of the four dispatch tables and all four stage-guard clones.
+*Keep (host-genuine):* Ink layout, keyboard/interaction policy,
+`<Static>` settlement ordering, terminal capabilities, ANSI repaint, VS
+Code placement/theme, postMessage batching.
+*Tests:* TUI snapshots unchanged; headless byte-parity (frozen NDJSON);
+the fact-coverage delta table reconciled deliberately — each of
+`followUpSent`/`goalPaused`/`goalStateChanged`/`inquiryThreadUpdated` gets
+one decided behavior, same on every host.
+*Gate:* `rg -c 'TUI_RUN_FACT_HANDLERS|applySubagentRoster|mergeArtifactSnapshot' packages/cli/` → 0.
+
+**Step 17 — one command layer.** One history service (listing, details,
+status via the one shared projection from step 11, delete + goal cleanup,
+export-outcome mapping) with host ports only for surface verbs (toast vs
+stdout vs renderer); `resolveCliResume` deleted — `texra resume` funnels
+through `resolveAndResumeStream`, which gives the CLI workflow resume for
+free; launcher validation unified in `executionRequests` (input-file rule
+and toolConfig normalization included); `AgentRosterForm` consumes
+`AgentRosterController.allPresets()`; the chat-defaults history tier reads
+the shared listing; the CLI adopts `selectAutoOpenFinalOutput`.
+*Gate:* `rg -c 'resolveCliResume|resolveCliHistoryStatus|userStartedCliHistoryEntries' packages/cli/` → 0.
+
+**Step 18 — Part III gate sweep.** Ratchets shrink; no new `@agent/*`
+specifiers; the NDJSON byte-parity suite passes against the unified stack.
 
 ## Separated work
 
