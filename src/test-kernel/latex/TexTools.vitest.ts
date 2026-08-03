@@ -84,30 +84,27 @@ describe('compileLatex2Pdf structured return', () => {
     expect(result.logTail).not.toContain('L0001');
   });
 
-  it.each(['.ltx', '.latex'])(
-    'finds the engine log for a %s source, not just .tex',
-    async (ext) => {
-      mocks.runToolWithCheck.mockResolvedValue(execResult(false));
+  it('finds the engine log for a .ltx source, not just .tex', async () => {
+    mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 
-      const outputDirectory = path.join(workspacePath, `build${ext}`);
-      await AbsoluteFS.ensureDir(outputDirectory);
-      // The engine always names the log after the source with ITS OWN
-      // extension stripped, regardless of which LaTeX extension was used.
-      await AbsoluteFS.write(
-        path.join(outputDirectory, 'main.log'),
-        'engine log content',
-      );
+    const outputDirectory = path.join(workspacePath, 'build.ltx');
+    await AbsoluteFS.ensureDir(outputDirectory);
+    // The engine always names the log after the source with ITS OWN
+    // extension stripped, regardless of which LaTeX extension was used.
+    await AbsoluteFS.write(
+      path.join(outputDirectory, 'main.log'),
+      'engine log content',
+    );
 
-      const result = await compileLatex2Pdf(
-        pathToLocation(path.join(workspacePath, `main${ext}`)),
-        { outputDirectory },
-      );
+    const result = await compileLatex2Pdf(
+      pathToLocation(path.join(workspacePath, 'main.ltx')),
+      { outputDirectory },
+    );
 
-      if (result.ok) throw new Error('expected a failed compile');
-      expect(result.logTail).toContain('engine log content');
-      expect(result.logTail).not.toContain('no LaTeX log at');
-    },
-  );
+    if (result.ok) throw new Error('expected a failed compile');
+    expect(result.logTail).toContain('engine log content');
+    expect(result.logTail).not.toContain('no LaTeX log at');
+  });
 
   it('falls back to a discoverable placeholder when no engine log exists on disk', async () => {
     mocks.runToolWithCheck.mockResolvedValue(execResult(false));

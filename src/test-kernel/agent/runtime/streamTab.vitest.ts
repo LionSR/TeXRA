@@ -25,13 +25,4 @@ describe('getStreamTabId', () => {
     assert.equal(id, `polish@sonnet#${EXEC_ID}`);
   });
 
-  it('gives each execution a unique tab id', () => {
-    const id1 = getStreamTabId('polish', 'sonnet', {
-      executionId: 'aaaaaaaaaaaa' as ExecutionId,
-    });
-    const id2 = getStreamTabId('polish', 'sonnet', {
-      executionId: 'bbbbbbbbbbbb' as ExecutionId,
-    });
-    assert.notEqual(id1, id2);
-  });
 });

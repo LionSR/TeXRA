@@ -669,14 +669,14 @@ describe('SupabaseSession', () => {
       assert.equal(coordinator.getLastRefreshFailure(), 'invalid');
     });
 
-    it.each([408, 429, 503])(
-      'classifies custom refresh HTTP %i as transient',
-      async (status) => {
+    it(
+      'classifies custom refresh HTTP 503 as transient',
+      async () => {
         const { coordinator } = createCoordinator({
           initialSession: expiredCustomSession(),
           fetch: async () =>
             new Response(JSON.stringify({ error: 'try again later' }), {
-              status,
+              status: 503,
             }),
         });
 

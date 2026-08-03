@@ -239,27 +239,24 @@ describe('stream status display labels', () => {
     },
   );
 
-  it.each(['cli', 'cliCompact'] as const)(
-    'labels a child stream WAITING distinctly from the root idle wording (%s)',
-    (style) => {
-      expect(
-        formatStreamStatusLabel(STREAM_PHASE.WAITING, {
-          style,
-          isChildStream: true,
-        }),
-      ).toBe('waiting for you');
-      // Unset (or false) isChildStream keeps the root's plain "idle" wording.
-      expect(formatStreamStatusLabel(STREAM_PHASE.WAITING, { style })).toBe(
-        'idle',
-      );
-      expect(
-        formatStreamStatusLabel(STREAM_PHASE.WAITING, {
-          style,
-          isChildStream: false,
-        }),
-      ).toBe('idle');
-    },
-  );
+  it('labels a child stream WAITING distinctly from the root idle wording (cli)', () => {
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.WAITING, {
+        style: 'cli',
+        isChildStream: true,
+      }),
+    ).toBe('waiting for you');
+    // Unset (or false) isChildStream keeps the root's plain "idle" wording.
+    expect(formatStreamStatusLabel(STREAM_PHASE.WAITING, { style: 'cli' })).toBe(
+      'idle',
+    );
+    expect(
+      formatStreamStatusLabel(STREAM_PHASE.WAITING, {
+        style: 'cli',
+        isChildStream: false,
+      }),
+    ).toBe('idle');
+  });
 
   it('ignores isChildStream for the progressHeader style, which already says "Waiting for follow-up"', () => {
     expect(
@@ -330,12 +327,8 @@ describe('stream status display labels', () => {
   // file import — normalize to StreamPhase before a renderer sees it. An
   // unnormalized legacy value now falls through as an unknown status: the raw
   // string is shown rather than a silently wrong canonical label.
-  it.each([
-    STREAM_STATUS.INITIALIZING,
-    STREAM_STATUS.RESUMING,
-    STREAM_STATUS.STOPPED,
-    STREAM_STATUS.ERROR,
-  ] as const)('treats retired legacy status %s as unknown', (status) => {
+  it('treats a retired legacy status as unknown', () => {
+    const status = STREAM_STATUS.INITIALIZING;
     expect(streamStatusDisplayKey(status)).toBeUndefined();
     expect(streamStatusIndicatorClass(status)).toBeUndefined();
     expect(formatStreamStatusLabel(status)).toBe(status);

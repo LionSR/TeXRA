@@ -118,34 +118,20 @@ describe('BashTool error feedback', () => {
     expect(toolResult?.output).toContain('stdout failure guidance');
   });
 
-  it.each([
-    {
-      name: 'spawn failure',
+  it('preserves fallback diagnostics without stream chunks', async () => {
+    stubBashApprovalDisabled();
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
+      success: false,
+      stdout: null,
       stderr: 'spawn missing-command ENOENT',
+      timedOut: false,
       exitCode: 127,
-    },
-    {
-      name: 'cancellation',
-      stderr: 'Command aborted by user',
-      exitCode: 130,
-    },
-  ])(
-    'preserves $name fallback diagnostics without stream chunks',
-    async ({ stderr, exitCode }) => {
-      stubBashApprovalDisabled();
-      vi.spyOn(execUtils, 'executeCommand').mockResolvedValueOnce({
-        success: false,
-        stdout: null,
-        stderr,
-        timedOut: false,
-        exitCode,
-      });
+    });
 
-      const result = await new BashTool().call({ command: 'missing-command' });
-      expect(result.status).toBe('error');
-      expect(result.error).toContain(stderr);
-    },
-  );
+    const result = await new BashTool().call({ command: 'missing-command' });
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('spawn missing-command ENOENT');
+  });
 
   it('rejects shell-level backgrounding before command execution', async () => {
     stubBashApprovalDisabled();

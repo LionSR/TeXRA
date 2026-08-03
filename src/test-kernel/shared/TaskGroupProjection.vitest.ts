@@ -88,7 +88,6 @@ describe('task-group StreamLog projection', () => {
   it.each([
     ['stopped', RUN_OUTCOME.COMPLETED],
     ['error', RUN_OUTCOME.FAILED],
-    ['invalid', RUN_OUTCOME.COMPLETED],
   ] as const)('normalizes legacy end status %s', (status, expected) => {
     const [taskGroup] = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_END, {

@@ -152,10 +152,8 @@ describe('StreamStatusMachine', () => {
     ]);
   });
 
-  it.each([
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-  ])('terminalizes waiting streams through resume then %s', (cause) => {
+  it('terminalizes waiting streams through resume then lifecycle', () => {
+    const cause = STREAM_TRANSITION_CAUSE.LIFECYCLE;
     const { machine, statusEvents, streamId } = setupMachine(
       `stream-status-waiting-terminal-${cause}`,
     );

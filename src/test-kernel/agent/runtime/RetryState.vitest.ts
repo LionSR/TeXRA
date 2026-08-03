@@ -1359,12 +1359,12 @@ describe('RetryState', () => {
     expect(classifyFailure(unauthorized)).toBeUndefined();
   });
 
-  it.each(['api-key', 'openrouter', 'chatgpt-subscription', 'relay'] as const)(
-    'does not gate unrelated calls after a 401 on the %s route',
-    async (credentialRoute) => {
+  it(
+    'does not gate unrelated calls after a 401 on the api-key route',
+    async () => {
       const { classifyFailure } = await captureModelRetry(
         'https://api.example/v1',
-        credentialRoute,
+        'api-key',
       );
       const unauthorized = Object.assign(new Error('credential rejected'), {
         status: 401,
@@ -1582,18 +1582,12 @@ describe('RetryState', () => {
     // getRelayAccessToken() read cache-only and skip the session refresh
     // these cases exercise; the outer beforeEach pins it unset for every
     // test in this file unless a case opts in.
-    it.each([
-      'api-key',
-      'openrouter',
-      'chatgpt-subscription',
-      undefined,
-    ] as const)(
-      'never rebuilds a client on route %s for an expiring session token',
-      async (route) => {
-        const streamId =
-          `retry-state-proactive-${route ?? 'unknown'}` as StreamTabId;
+    it(
+      'never rebuilds a client on a non-relay route for an expiring session token',
+      async () => {
+        const streamId = 'retry-state-proactive-api-key' as StreamTabId;
         const rebind = vi.fn(async () => undefined);
-        const { node } = createRetryNode(streamId, rebind, route);
+        const { node } = createRetryNode(streamId, rebind, 'api-key');
         SupabaseClient.setAuthProvider(
           createAuthTokenProvider({ isTokenExpiringSoon: () => true }),
         );

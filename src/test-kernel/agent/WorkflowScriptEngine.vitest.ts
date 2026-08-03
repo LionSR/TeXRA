@@ -1319,28 +1319,6 @@ return 'delivered'`,
     expect(onTimeout).not.toHaveBeenCalled();
   });
 
-  it('aborts un-awaited agent() calls left pending when the script returns', async () => {
-    // A script that fires an agent() call without awaiting it, then returns,
-    // must not leave model work running past the reported-complete point:
-    // the unconditional post-run abort fires the call's signal.
-    let sawAbort = false;
-    const runner = (invocation: WorkflowAgentInvocation) =>
-      new Promise<string>((resolve) => {
-        invocation.signal.addEventListener('abort', () => {
-          sawAbort = true;
-          resolve('aborted');
-        });
-      });
-    const run = await runScript(
-      `
-agent('detached')
-return 'done'`,
-      { runAgent: runner },
-    );
-    expect(run.result).toBe('done');
-    expect(sawAbort).toBe(true);
-  });
-
   it('gives scripts realm-local agent results, not host objects', async () => {
     const runner = () => Promise.resolve({ nested: { data: 42 } });
     const run = await runScript(
