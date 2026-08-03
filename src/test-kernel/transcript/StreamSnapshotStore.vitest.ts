@@ -297,6 +297,12 @@ describe('StreamSnapshotStore', () => {
     };
 
     await getExecutionStore(executionId).writeConfig(runConfig);
+    // Emitter contract for `updateStreamDescription` (#9590 A4/Stage 6): the
+    // authority write to `ExecutionMeta.description` lands before the event.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'session-search / kimi26T',
+    });
 
     events.emit({
       scope: 'run',
@@ -429,7 +435,13 @@ describe('StreamSnapshotStore', () => {
     expect(snap.runUsage[RUN]).not.toHaveProperty('reasoningTokens');
     expect(snap.runUsage[RUN]).not.toHaveProperty('toolUseTokens');
     expect(snap.executionId).toBe(executionId);
-    expect(snap.description).toBe('session-search / kimi26T');
+    // The live event updated the writer's display value in memory only.
+    expect(writer.getDescription(STREAM)).toBe('session-search / kimi26T');
+    // A fresh load serves the description from ExecutionMeta (the authority);
+    // the snapshot's `description` is the legacy sidecar mirror, which current
+    // records no longer write (#9590 Stage 6).
+    expect(reader.getDescription(STREAM)).toBe('session-search / kimi26T');
+    expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
     expect(reader.getRunConfig(STREAM)).toEqual(runConfig);
     expect(reader.getRunDescriptor(STREAM)).toMatchObject({
@@ -895,35 +907,45 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
     expect(store.getDescription(STREAM)).toBeUndefined();
 
-    snapshotFacts(store).setDescription(STREAM, 'Updated session');
-    await store.flush();
-
-    const raw = await readStreamFile(STREAM, 'meta.json');
-    expect(raw).toMatchObject({
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-      description: 'Updated session',
-    });
-  });
-
-  it('preserves legacy meta taskState when unrelated meta patches are written', async () => {
-    await installPlatform();
-    const taskState = toolUseTaskState('legacy-search');
-    await writeMetaFile(STREAM, {
-      taskState,
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-    snapshotFacts(store).setDescription(STREAM, 'Prior session');
+    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
     await store.flush();
 
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       schemaVersion?: unknown;
+      parentStreamId?: unknown;
+      description?: unknown;
+    };
+    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
+    expect(raw.parentStreamId).toBe(OTHER_STREAM);
+    // The rejected file's fields do not leak into the fresh current record.
+    expect(raw.description).toBeUndefined();
+  });
+
+  it('preserves legacy meta taskState and description when unrelated meta patches are written', async () => {
+    await installPlatform();
+    const taskState = toolUseTaskState('legacy-search');
+    await writeMetaFile(STREAM, {
+      taskState,
+      description: 'Prior session',
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
+    await store.flush();
+
+    // Rewriting an unrelated meta field round-trips the LEGACY description
+    // (#9590 Stage 6: never patched for current records, never destroyed for
+    // legacy sidecars before their Stage 7 retirement).
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
+      schemaVersion?: unknown;
       taskState?: unknown;
+      parentStreamId?: unknown;
       description?: unknown;
     };
     expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
     expect(raw.taskState).toEqual(taskState);
+    expect(raw.parentStreamId).toBe(OTHER_STREAM);
     expect(raw.description).toBe('Prior session');
   });
 
@@ -974,7 +996,7 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
-  it('backfills an absent description mirror from ExecutionMeta and is a no-op once present (#9590 Stage 4)', async () => {
+  it('serves a current record description from ExecutionMeta without writing a sidecar mirror (#9590 Stage 6)', async () => {
     await installPlatform();
     const executionId = 'aa22cc33' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(toolUseConfig());
@@ -984,33 +1006,287 @@ describe('StreamSnapshotStore', () => {
     });
     await writeMetaFile(STREAM, { executionId });
 
+    // Every load hydrates the display value from the authority and never
+    // projects a sidecar description copy — pinned at the persistence
+    // boundary: no sidecar meta write may be issued.
     const store = new StreamSnapshotStore();
+    const kvWrites = vi.spyOn(KVStore.prototype, 'write');
     await store.load([STREAM]);
     expect(store.getDescription(STREAM)).toBe('Meta authority label');
     await store.flush();
-
-    // Reconciliation is idempotent: with the mirror present, a second load
-    // runs no projection at all and both sides keep their values. Pinned at
-    // the persistence boundary: no sidecar meta write may be issued.
-    const reloaded = new StreamSnapshotStore();
-    const kvWrites = vi.spyOn(KVStore.prototype, 'write');
-    await reloaded.load([STREAM]);
-    expect(reloaded.getDescription(STREAM)).toBe('Meta authority label');
-    await reloaded.flush();
     expect(kvWrites).not.toHaveBeenCalledWith(
       STREAM_DATA_KEYS.META,
       expect.anything(),
     );
     kvWrites.mockRestore();
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
+      description?: unknown;
+    };
+    expect(raw.description).toBeUndefined();
     expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
       'Meta authority label',
     );
   });
 
-  it('reconciles description disagreement with one winner and never writes meta from the mirror (#9590 A4)', async () => {
+  it('does not resurrect a stream evicted during description hydration', async () => {
     await installPlatform();
-    // Both sides present and disagreeing: meta stays the authority, the
-    // mirror stays display data, and neither side is rewritten.
+    const executionId = 'bb33dd44' as ExecutionId;
+    const executionStore = getExecutionStore(executionId);
+    await executionStore.writeConfig(toolUseConfig());
+    await executionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Late authority label',
+    });
+    await writeMetaFile(STREAM, { executionId });
+    const persistedMeta = await executionStore.readMeta();
+    const readStarted = pDefer<void>();
+    const deferredRead = pDefer<typeof persistedMeta>();
+    vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+      readStarted.resolve();
+      return deferredRead.promise;
+    });
+
+    const store = new StreamSnapshotStore();
+    const loading = store.load([STREAM]);
+    await readStarted.promise;
+    await store.deleteStream(STREAM);
+    deferredRead.resolve(persistedMeta);
+    await loading;
+
+    expect(store.getDescription(STREAM)).toBeUndefined();
+    await expect(store.listPersistedStreams()).resolves.not.toContain(STREAM);
+  });
+
+  it('does not apply an authority read across an execution handoff', async () => {
+    await installPlatform();
+    const oldExecutionId = 'ee66aa77' as ExecutionId;
+    const newExecutionId = 'ff77bb88' as ExecutionId;
+    const oldExecutionStore = getExecutionStore(oldExecutionId);
+    await oldExecutionStore.writeConfig(toolUseConfig('old-search'));
+    await oldExecutionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Old authority label',
+    });
+    await writeMetaFile(STREAM, { executionId: oldExecutionId });
+    const oldMeta = await oldExecutionStore.readMeta();
+    const readStarted = pDefer<void>();
+    const deferredRead = pDefer<typeof oldMeta>();
+    vi.spyOn(oldExecutionStore, 'readMeta').mockImplementation(() => {
+      readStarted.resolve();
+      return deferredRead.promise;
+    });
+
+    const store = new StreamSnapshotStore();
+    const facts = snapshotFacts(store);
+    const loading = store.load([STREAM]);
+    await readStarted.promise;
+    const newDescriptor = buildRunDescriptor({
+      streamId: STREAM,
+      executionId: newExecutionId,
+      agent: 'new-search',
+      category: AgentCategory.ToolUse,
+      kind: 'agent',
+    });
+    facts.setRunDescriptor(newDescriptor);
+    deferredRead.resolve(oldMeta);
+    await loading;
+
+    expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
+    expect(store.getDescription(STREAM)).toBeUndefined();
+  });
+
+  it('does not overwrite a live description that lands during hydration', async () => {
+    await installPlatform();
+    const executionId = 'aa77cc88' as ExecutionId;
+    const executionStore = getExecutionStore(executionId);
+    await executionStore.writeConfig(toolUseConfig());
+    await executionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Captured authority label',
+    });
+    await writeMetaFile(STREAM, { executionId });
+    const capturedMeta = await executionStore.readMeta();
+    const readStarted = pDefer<void>();
+    const deferredRead = pDefer<typeof capturedMeta>();
+    vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+      readStarted.resolve();
+      return deferredRead.promise;
+    });
+
+    const store = new StreamSnapshotStore();
+    const facts = snapshotFacts(store);
+    const loading = store.load([STREAM]);
+    await readStarted.promise;
+    facts.setDescription(STREAM, 'New live label');
+    deferredRead.resolve(capturedMeta);
+    await loading;
+
+    expect(store.getDescription(STREAM)).toBe('New live label');
+  });
+
+  it('hydrates a current no-mirror description during first lazy seed', async () => {
+    await installPlatform();
+    const executionId = 'bb88dd99' as ExecutionId;
+    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Lazy authority label',
+    });
+    await writeMetaFile(STREAM, { executionId });
+
+    const store = new StreamSnapshotStore();
+    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
+    await store.flush();
+
+    expect(store.getDescription(STREAM)).toBe('Lazy authority label');
+    expect(
+      ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
+        .description,
+    ).toBeUndefined();
+  });
+
+  it('does not expose a prior execution mirror after a handoff', async () => {
+    await installPlatform();
+    const oldExecutionId = 'cc99ee00' as ExecutionId;
+    const newExecutionId = 'dd00ff11' as ExecutionId;
+    await getExecutionStore(oldExecutionId).writeConfig(
+      toolUseConfig('old-search'),
+    );
+    await getExecutionStore(newExecutionId).writeConfig(
+      toolUseConfig('new-search'),
+    );
+    await getExecutionStore(newExecutionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
+    await writeMetaFile(STREAM, {
+      executionId: oldExecutionId,
+      description: 'Old mirror label',
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getDescription(STREAM)).toBe('Old mirror label');
+
+    await writeMetaFile(STREAM, {
+      executionId: newExecutionId,
+      description: 'Old mirror label',
+    });
+    await store.load([STREAM]);
+
+    expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
+    expect(store.getDescription(STREAM)).toBeUndefined();
+    expect(
+      ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
+        .description,
+    ).toBe('Old mirror label');
+  });
+
+  it('hydrates independent execution descriptions concurrently', async () => {
+    await installPlatform();
+    const firstExecutionId = 'cc44ee55' as ExecutionId;
+    const secondExecutionId = 'dd55ff66' as ExecutionId;
+    const firstExecutionStore = getExecutionStore(firstExecutionId);
+    const secondExecutionStore = getExecutionStore(secondExecutionId);
+    await firstExecutionStore.writeConfig(toolUseConfig());
+    await secondExecutionStore.writeConfig(toolUseConfig());
+    await firstExecutionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'First authority label',
+    });
+    await secondExecutionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Second authority label',
+    });
+    await writeMetaFile(STREAM, { executionId: firstExecutionId });
+    await writeMetaFile(OTHER_STREAM, { executionId: secondExecutionId });
+    const firstMeta = await firstExecutionStore.readMeta();
+    const secondMeta = await secondExecutionStore.readMeta();
+    const firstRead = pDefer<typeof firstMeta>();
+    const secondRead = pDefer<typeof secondMeta>();
+    const firstReadSpy = vi
+      .spyOn(firstExecutionStore, 'readMeta')
+      .mockReturnValue(firstRead.promise);
+    const secondReadSpy = vi
+      .spyOn(secondExecutionStore, 'readMeta')
+      .mockReturnValue(secondRead.promise);
+
+    const store = new StreamSnapshotStore();
+    const loading = store.load([STREAM, OTHER_STREAM]);
+    await vi.waitFor(() => {
+      expect(firstReadSpy).toHaveBeenCalledOnce();
+      expect(secondReadSpy).toHaveBeenCalledOnce();
+    });
+    firstRead.resolve(firstMeta);
+    secondRead.resolve(secondMeta);
+    await loading;
+
+    expect(store.getDescription(STREAM)).toBe('First authority label');
+    expect(store.getDescription(OTHER_STREAM)).toBe('Second authority label');
+  });
+
+  it('bounds concurrent description reads to the seed I/O cap', async () => {
+    await installPlatform();
+    const streamIds = Array.from(
+      { length: 9 },
+      (_, index) => `bounded-stream-${index}` as StreamTabId,
+    );
+    const executionIds = Array.from(
+      { length: 9 },
+      (_, index) => `b0ded00${index}` as ExecutionId,
+    );
+    const executionStores = executionIds.map((executionId) =>
+      getExecutionStore(executionId),
+    );
+    for (const [index, executionStore] of executionStores.entries()) {
+      await executionStore.writeConfig(toolUseConfig());
+      await executionStore.writeMeta({
+        timestamp: new Date(0).toISOString(),
+        description: `Authority label ${index}`,
+      });
+      await writeMetaFile(streamIds[index]!, {
+        executionId: executionIds[index],
+      });
+    }
+    const metas = await Promise.all(
+      executionStores.map((executionStore) => executionStore.readMeta()),
+    );
+    const reads = metas.map((meta) => pDefer<typeof meta>());
+    let activeReads = 0;
+    let maximumActiveReads = 0;
+    let startedReads = 0;
+    for (const [index, executionStore] of executionStores.entries()) {
+      vi.spyOn(executionStore, 'readMeta').mockImplementation(async () => {
+        activeReads++;
+        startedReads++;
+        maximumActiveReads = Math.max(maximumActiveReads, activeReads);
+        const meta = await reads[index]!.promise;
+        activeReads--;
+        return meta;
+      });
+    }
+
+    const store = new StreamSnapshotStore();
+    const loading = store.load(streamIds);
+    await vi.waitFor(() => expect(startedReads).toBe(8));
+    expect(activeReads).toBe(8);
+    expect(maximumActiveReads).toBe(8);
+
+    reads[0]!.resolve(metas[0]);
+    await vi.waitFor(() => expect(startedReads).toBe(9));
+    expect(maximumActiveReads).toBe(8);
+    for (const [index, read] of reads.entries()) {
+      if (index !== 0) read.resolve(metas[index]);
+    }
+    await loading;
+
+    expect(maximumActiveReads).toBe(8);
+    expect(store.getDescription(streamIds[8]!)).toBe('Authority label 8');
+  });
+
+  it('resolves description disagreement to ExecutionMeta and never writes either side (#9590 A4)', async () => {
+    await installPlatform();
+    // Both sides present and disagreeing: the display serves the authority
+    // (ExecutionMeta) and neither persisted side is rewritten.
     const described = 'aa33dd44' as ExecutionId;
     await getExecutionStore(described).writeConfig(toolUseConfig());
     await getExecutionStore(described).writeMeta({
@@ -1023,7 +1299,8 @@ describe('StreamSnapshotStore', () => {
     });
 
     // Mirror-only: the authoritative side is absent and must stay absent —
-    // the display mirror is never a backfill source for ExecutionMeta.
+    // the display mirror is never a backfill source for ExecutionMeta, and it
+    // keeps serving reads as the legacy compatibility fallback.
     const undescribed = 'aa44ee55' as ExecutionId;
     await getExecutionStore(undescribed).writeConfig(toolUseConfig());
     await getExecutionStore(undescribed).writeMeta({
@@ -1038,14 +1315,87 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM, OTHER_STREAM]);
     await store.flush();
 
-    expect(store.getDescription(STREAM)).toBe('Stale mirror label');
+    expect(store.getDescription(STREAM)).toBe('Meta authority label');
     expect((await getExecutionStore(described).readMeta())?.description).toBe(
       'Meta authority label',
     );
+    // The stale legacy mirror stays on disk untouched until Stage 7 retires it.
+    expect(
+      ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
+        .description,
+    ).toBe('Stale mirror label');
     expect(store.getDescription(OTHER_STREAM)).toBe('Mirror-only label');
     expect(
       (await getExecutionStore(undescribed).readMeta())?.description,
     ).toBeUndefined();
+  });
+
+  it("round-trips a current record's description through ExecutionMeta only (#9590 Stage 6)", async () => {
+    await installPlatform();
+    const events = new SessionEventHub();
+    const store = new StreamSnapshotStore();
+    const detach = store.attachSessionEvents(events);
+    const executionId = 'aa55ff66' as ExecutionId;
+    const runConfig = toolUseConfig();
+    await getExecutionStore(executionId).writeConfig(runConfig);
+
+    events.emit({
+      scope: 'run',
+      streamId: STREAM,
+      event: {
+        type: 'run.start',
+        descriptor: buildRunDescriptor({
+          streamId: STREAM,
+          executionId,
+          agent: 'search',
+          category: AgentCategory.ToolUse,
+          kind: 'agent',
+        }),
+      },
+    });
+    // Emitter contract (#9590 A4): the authority write to
+    // `ExecutionMeta.description` lands before the display event is emitted.
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Current label',
+    });
+    events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: { streamId: STREAM, description: 'Current label' },
+      },
+    });
+    expect(store.getDescription(STREAM)).toBe('Current label');
+    detach();
+    await store.flush();
+
+    // Persistence boundary: the sidecar meta carries the descriptor reverse
+    // edge but no description copy — the sidecar write stopped in Stage 6.
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
+      runDescriptor?: { executionId?: unknown };
+      description?: unknown;
+    };
+    expect(raw.runDescriptor).toMatchObject({ executionId });
+    expect(raw.description).toBeUndefined();
+
+    // A fresh store reads the description back via descriptor → ExecutionMeta.
+    const reloaded = new StreamSnapshotStore();
+    await reloaded.load([STREAM]);
+    expect(reloaded.getDescription(STREAM)).toBe('Current label');
+
+    // The label is execution-scoped: a live run.start handing the stream to a
+    // new execution synchronously drops the previous run's description.
+    snapshotFacts(reloaded).setRunDescriptor(
+      buildRunDescriptor({
+        streamId: STREAM,
+        executionId: 'bb77bb88' as ExecutionId,
+        agent: 'search',
+        category: AgentCategory.ToolUse,
+        kind: 'agent',
+      }),
+    );
+    expect(reloaded.getDescription(STREAM)).toBeUndefined();
   });
 
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
