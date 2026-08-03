@@ -187,11 +187,12 @@ export class TaskRunFileService {
     await AbsoluteFS.write(absolutePath, content);
   }
 
-  /** Append text to an existing file at an absolute path. */
+  /** Append text to a file at an absolute path, creating parent directories first. */
   public async appendFile(
     absolutePath: string,
     content: string,
   ): Promise<void> {
+    await AbsoluteFS.ensureDir(path.dirname(absolutePath));
     await AbsoluteFS.appendFile(absolutePath, content);
   }
 
