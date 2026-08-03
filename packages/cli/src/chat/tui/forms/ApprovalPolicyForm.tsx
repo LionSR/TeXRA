@@ -15,7 +15,7 @@ export interface ApprovalPolicyFormProps {
   readonly onCancel: () => void;
 }
 
-export const APPROVAL_POLICY_ITEMS =
+const APPROVAL_POLICY_ITEMS =
   TEXRA_APPROVAL_POLICY_OPTIONS satisfies ReadonlyArray<
     SelectItem<TexraApprovalPolicy>
   >;
