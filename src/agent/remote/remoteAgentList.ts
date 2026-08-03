@@ -37,7 +37,7 @@ interface RemoteAgentListRow {
   description?: string | null;
   visibility?: string[] | null;
   tools?: string[] | null;
-  agent_category?: string | null;
+  agent_category: string;
 }
 
 const RemoteAgentListQueryErrorSchema = z.object({

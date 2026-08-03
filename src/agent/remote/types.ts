@@ -11,8 +11,8 @@ import { AgentNameSchema } from '@shared/schemas/agent';
  * Remote agent list item from DB. Description is cached; YAML is source of truth.
  *
  * Note: Uses `agentCategory` (DB column name) instead of canonical `category`
- * from AgentMetadataBaseSchema. The transform normalizes nullish → Workflow.
- * See also: AgentMetadataBaseSchema in @shared/schemas/agent for the canonical fields.
+ * from AgentMetadataBaseSchema. See also: AgentMetadataBaseSchema in
+ * @shared/schemas/agent for the canonical fields.
  */
 export const RemoteAgentListItemSchema = z.object({
   id: z.string(),
@@ -21,11 +21,7 @@ export const RemoteAgentListItemSchema = z.object({
   visibility: z.array(z.string()).nullish(),
   /** Cached tool names from YAML. Available when DB column is populated. */
   tools: z.array(z.string()).nullish(),
-  /** Defaults to Workflow for backward compatibility with existing DB rows. */
-  agentCategory: z
-    .enum(AgentCategory)
-    .nullish()
-    .transform((val) => val ?? AgentCategory.Workflow),
+  agentCategory: z.enum(AgentCategory),
 });
 
 export type RemoteAgentListItem = z.infer<typeof RemoteAgentListItemSchema>;
