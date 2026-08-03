@@ -9,7 +9,7 @@ import '@shared/wa';
 // create a <progress-app> element — the same pattern packages/desktop/src/
 // renderer/main.ts already uses to run these components outside VS Code.
 import '@progressView/frontend';
-import type { ArchivableElement } from '@progressView/frontend/contexts/streamContexts';
+import type { ArchivableElement } from '@progressView/frontend/streamContexts';
 import {
   handleFileAction,
   handlePermissionAction,

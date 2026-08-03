@@ -7,7 +7,7 @@ import {
   getAuthCallbackBasePath,
   isAuthCallbackPath,
   parseAuthCallbackCode,
-} from '@auth/core/authCallback';
+} from '@auth/authCallback';
 
 describe('authCallback', () => {
   it('recognizes desktop and web callback paths', () => {

@@ -622,7 +622,7 @@ All event consumers listen to new names:
 - Helps detect silent data corruption without breaking the robust recovery pattern
 - Locations:
   - `src/shared/schemas/storage.ts:12` (StorageRecordSchema)
-  - `src/progressView/state/ProgressViewState.ts:52-55` (ProgressViewPrefsSchema)
+  - `src/controllers/progressView/backend/ProgressViewState.ts:52-55` (ProgressViewPrefsSchema)
 
 ### R9: Legacy data migration verification
 

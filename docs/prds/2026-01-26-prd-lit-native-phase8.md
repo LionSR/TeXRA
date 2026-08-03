@@ -240,7 +240,7 @@ export const sessionContext = createContext<SessionInfo>('session');
 
 **Implementation Details:**
 
-Location: `src/webview/frontend/contexts/mainViewContexts.ts`
+Location: `packages/extension/src/webview/frontend/mainViewContexts.ts`
 
 ```typescript
 // FileStateContextValue includes all file selection state
@@ -658,7 +658,7 @@ private get messages(): LogMessageData[] {
 **Completed:**
 
 - FileStateContext implemented with `@lit/context`:
-  - Context defined in `src/webview/frontend/contexts/mainViewContexts.ts`
+  - Context defined in `packages/extension/src/webview/frontend/mainViewContexts.ts`
   - MainApp provides context via `@provide({ context: fileStateContext })`
   - FileSelectGroup, OutputFilesSection consume via `@consume()`
   - Eliminates prop drilling for file selection state
@@ -676,7 +676,7 @@ private get messages(): LogMessageData[] {
 - `src/progressView/frontend/styles/toolUseStyles.ts`
 - `src/progressView/frontend/styles/markdownStyles.ts`
 - `src/progressView/frontend/styles/logStyles.ts`
-- `src/webview/frontend/contexts/mainViewContexts.ts`
+- `packages/extension/src/webview/frontend/mainViewContexts.ts`
 
 **Remaining:**
 
