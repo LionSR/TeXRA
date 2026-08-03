@@ -19,6 +19,7 @@ import {
   takeTail,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
+import { copilotRouteForModel } from '@model/runtimeModelRegistry';
 import { platform } from '@platform/platform';
 import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
@@ -215,7 +216,11 @@ export class ModelHandlerVscodeLm extends ModelHandler<
         ? toVscodeLmTools(options.tools)
         : undefined;
     const signal = options.signal ?? new AbortController().signal;
-    const model = {
+    // Under canonical model identity (#9635) the config belongs to the base
+    // model; the exact editor model reference lives on the discovered Copilot
+    // route. The config-shaped fallback only serves hosts that construct this
+    // handler for a Copilot-provider registry entry directly.
+    const model = copilotRouteForModel(this.config.name)?.reference ?? {
       vendor: this.config.provider,
       id: this.config.fullName,
     };

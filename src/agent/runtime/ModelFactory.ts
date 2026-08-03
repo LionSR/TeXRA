@@ -16,6 +16,7 @@ import {
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { apiKeyExists } from '@model/apiProviders';
+import { shouldRouteModelThroughCopilot } from '@model/copilotRouting';
 import { includedModelAccess } from '@model/includedModelAccess';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
 import {
@@ -264,8 +265,13 @@ export function modelHandlerCompatibilityKey(
     return 'ModelHandlerValidation';
   }
 
-  // Editor-supplied models cannot be proxied through OpenRouter. This route
-  // must win before the global OpenRouter preference below.
+  // Editor-supplied models cannot be proxied through OpenRouter. Both Copilot
+  // routes — the per-model route preference on a canonical base model, and a
+  // config whose provider is Copilot itself — must win before the global
+  // OpenRouter preference below.
+  if (shouldRouteModelThroughCopilot(originalConfig.name)) {
+    return 'ModelHandlerVscodeLm';
+  }
   if (originalConfig.provider === ModelProvider.COPILOT) {
     return 'ModelHandlerVscodeLm';
   }
@@ -609,6 +615,18 @@ async function createModelHandlerForResolvedCompatibilityKey(
           responseTextProcessing,
         ),
         'ModelHandlerOpenRouterNative',
+      );
+    }
+
+    case 'ModelHandlerVscodeLm': {
+      // Explicit case: under canonical model identity (#9635) the config's
+      // provider is the base model's own provider, so the default branch's
+      // provider route table can no longer reach this handler.
+      const { ModelHandlerVscodeLm } =
+        await import('@agent/modelHandlers/vscodelm/modelHandlerVscodeLm');
+      return finalizeModelHandler(
+        new ModelHandlerVscodeLm(config, responseTextProcessing),
+        'ModelHandlerVscodeLm',
       );
     }
 

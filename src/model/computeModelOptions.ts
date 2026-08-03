@@ -43,13 +43,12 @@ import {
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
+import { prefersCopilotRoute } from './copilotRouting';
 import {
-  availableRuntimeModelIds,
-  discoveredRuntimeModelConfigEntries,
+  discoveredCopilotRoutes,
   getRuntimeModelConfig,
-  isRuntimeModel,
-  runtimeModelAccess,
-  runtimeModelConfigEntries,
+  copilotRouteForModel,
+  staticModelConfigEntries,
 } from './runtimeModelRegistry';
 import type { ProviderCapabilityProfile } from './providerCapabilities';
 import type { ModelConfig } from 'llm-zoo';
@@ -379,14 +378,16 @@ async function resolveModelAvailability(
     return availabilityStatus('retired');
   }
 
-  if (isRuntimeModel(model)) {
-    switch (runtimeModelAccess(model)) {
+  // An explicit Copilot route preference reports the discovered route's own
+  // state — consent and temporary unavailability are route states on the one
+  // canonical model row, never a reason to fall back to another transport.
+  if (prefersCopilotRoute(model)) {
+    switch (copilotRouteForModel(model)?.access) {
       case 'allowed':
         return availabilityStatus('copilot-access');
       case 'consent-required':
         return availabilityStatus('copilot-consent-required');
-      case 'unavailable':
-      case undefined:
+      default:
         return availabilityStatus('copilot-unavailable');
     }
   }
@@ -551,7 +552,7 @@ export async function getModelUnavailableReason(
   access?: ModelOptionsAccess,
   options: ModelOptionsComputationOptions = {},
 ): Promise<string | null> {
-  await discoveredRuntimeModelConfigEntries();
+  await discoveredCopilotRoutes();
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) return `Model "${model}" is not recognized.`;
 
@@ -603,7 +604,10 @@ async function buildModelOptionData(
       }
     : config;
   let routeLabel: string | undefined;
-  if (
+  if (availability.kind === 'copilot-access') {
+    // The row's identity stays the base model; the badge names the route.
+    routeLabel = 'Via Copilot';
+  } else if (
     isKimiSubscriptionEligible(rawConfig) &&
     !isKimiCodeExclusiveModel(rawConfig)
   ) {
@@ -705,7 +709,7 @@ async function computeModelOptionsDataUncached(
   access: ModelOptionsAccess,
   useApiKeyCache: boolean,
 ): Promise<ModelOptionData[]> {
-  await discoveredRuntimeModelConfigEntries();
+  await discoveredCopilotRoutes();
   const availabilityCtx = await buildAvailabilityContext(
     access,
     useApiKeyCache,
@@ -723,10 +727,10 @@ function visibleModelsForAccess(
   configuredModels: readonly string[],
   context: ModelAvailabilityContext,
 ): readonly string[] {
-  const models = new Set([...configuredModels, ...availableRuntimeModelIds()]);
+  const models = new Set(configuredModels);
   if (!context.codexSignedIn) return [...models];
 
-  for (const [model, config] of runtimeModelConfigEntries()) {
+  for (const [model, config] of staticModelConfigEntries()) {
     if (
       !config.retired &&
       !config.deprecated &&

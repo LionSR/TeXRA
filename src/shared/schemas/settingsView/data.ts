@@ -231,6 +231,18 @@ const ModelSelectionItemSchema = z.object({
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 
+/**
+ * One discovered Copilot access route, keyed by the canonical base model id
+ * (#9635). The Models tab Copilot section renders route status from this list
+ * — routes are transports for base models, never picker rows of their own.
+ */
+const CopilotRouteInfoSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  access: z.enum(['allowed', 'consent-required', 'unavailable']),
+});
+export type CopilotRouteInfo = z.infer<typeof CopilotRouteInfoSchema>;
+
 /** Outbound: backend → frontend model selection data */
 const UpdateModelSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
@@ -238,6 +250,8 @@ const UpdateModelSelectionMessageSchema = z.object({
   helperModel: z.string(),
   /** Whether the user prefers short (unpinned) model names. */
   preferShortModelNames: z.boolean(),
+  /** Discovered Copilot routes and their editor-reported access state. */
+  copilotModels: z.array(CopilotRouteInfoSchema),
 });
 export type UpdateModelSelectionMessage = z.infer<
   typeof UpdateModelSelectionMessageSchema

@@ -8,8 +8,9 @@ import {
 import { FREE_TIER, MAX_TIER } from '@auth/config';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
-  discoveredRuntimeModelConfigEntries,
+  discoveredCopilotRoutes,
   staticModelConfigEntries,
+  type CopilotModelRoute,
 } from '@model/runtimeModelRegistry';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { isGpt5ModelName } from '@model/modelNames';
@@ -22,6 +23,7 @@ import {
 } from '@shared/constants/providers';
 import {
   ReasoningLevelSchema,
+  type CopilotRouteInfo,
   type ModelSelectionItem,
   type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
@@ -43,9 +45,7 @@ export interface SettingsModelSelectionControllerDeps {
   modelSources?: readonly string[];
   useIncludedAccess?: () => boolean;
   getUserTier?: () => string | undefined;
-  getRuntimeModelEntries?: () => Promise<
-    readonly (readonly [string, ModelConfig])[]
-  >;
+  getCopilotRoutes?: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
   /**
    * Resolve availability-decorated options for the given models. Injected as a
    * port so the controller stays unit-testable; production wiring uses the
@@ -60,6 +60,7 @@ export interface SettingsModelSelectionData {
   models: ModelSelectionItem[];
   helperModel: string;
   preferShortModelNames: boolean;
+  copilotModels: CopilotRouteInfo[];
 }
 
 const EFFORT_TO_LEVEL = new Map<ReasoningEffort, ReasoningLevel>(
@@ -90,7 +91,25 @@ export class SettingsModelSelectionController {
       helperModel: this.getEffectiveHelperModel(visibleModels),
       preferShortModelNames:
         this.deps.state.getPreferShortModelNames() ?? false,
+      copilotModels: await this.buildCopilotRouteInfos(),
     };
+  }
+
+  /**
+   * Route status for the Models tab Copilot section: every discovered Copilot
+   * route with its editor-reported access state, labelled by the base model it
+   * serves. Routes are not picker rows; they describe transports.
+   */
+  private async buildCopilotRouteInfos(): Promise<CopilotRouteInfo[]> {
+    const routes = await (
+      this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
+    )();
+    const configs = new Map(staticModelConfigEntries());
+    return [...routes].map(([name, route]) => ({
+      name,
+      label: configs.get(name)?.label ?? name,
+      access: route.access,
+    }));
   }
 
   async setModelEnabled(input: {
@@ -149,23 +168,14 @@ export class SettingsModelSelectionController {
     // Resolve availability (relay/included, personal-key, quota) once for the
     // models this host shows, via the same shared computation the CLI picker
     // uses. Passing an explicit list keeps the picker's view authoritative and
-    // avoids re-deriving availability at render time.
-    const runtimeEntries = await (
-      this.deps.getRuntimeModelEntries ?? discoveredRuntimeModelConfigEntries
-    )();
-    const staticEntries = staticModelConfigEntries();
-    const configs = new Map<string, ModelConfig>([
-      ...staticEntries,
-      ...runtimeEntries,
-    ]);
-    const candidates = [
-      ...staticEntries.filter(
-        ([, config]) => config.provider !== ModelProvider.COPILOT,
-      ),
-      ...runtimeEntries,
-    ]
-      .filter(([, config]) =>
-        this.modelSources.has(resolveModelSource(config) ?? config.provider),
+    // avoids re-deriving availability at render time. Copilot routes are not
+    // candidates: they are transports for the canonical base models (#9635).
+    const configs = new Map<string, ModelConfig>(staticModelConfigEntries());
+    const candidates = staticModelConfigEntries()
+      .filter(
+        ([, config]) =>
+          config.provider !== ModelProvider.COPILOT &&
+          this.modelSources.has(resolveModelSource(config) ?? config.provider),
       )
       .map(([name]) => name);
     const resolveModelOptions =

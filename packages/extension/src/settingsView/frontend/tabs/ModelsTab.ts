@@ -23,6 +23,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 // Local imports - shared schemas
 import type {
   ChatGptAuthStatus,
+  CopilotRouteInfo,
   ModelSelectionItem,
   NumberSetting,
   ProviderKeyStatus,
@@ -73,6 +74,7 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
+  @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
   @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
@@ -200,19 +202,17 @@ export class ModelsTab extends LitElement {
   }
 
   private renderCopilotSection(): TemplateResult | typeof nothing {
-    const models = this.modelSelectionItems.filter(
-      (model) => model.provider === 'copilot',
-    );
+    const models = this.copilotModels;
     if (models.length === 0) return nothing;
 
     const readyCount = models.filter(
-      (model) => model.availability === 'copilot-access',
+      (model) => model.access === 'allowed',
     ).length;
     const consentModel = models.find(
-      (model) => model.availability === 'copilot-consent-required',
+      (model) => model.access === 'consent-required',
     );
     const unavailableCount = models.filter(
-      (model) => model.availability === 'copilot-unavailable',
+      (model) => model.access === 'unavailable',
     ).length;
     let status: string;
     if (consentModel) {

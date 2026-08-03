@@ -2,8 +2,8 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
-import { describe, expect, it, vi } from 'vitest';
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
@@ -18,6 +18,10 @@ import {
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
 import {
+  invalidateRuntimeModelRegistry,
+  refreshRuntimeModelRegistry,
+} from '@model/runtimeModelRegistry';
+import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   LanguageModelPortError,
   type LanguageModelMessage,
@@ -27,6 +31,7 @@ import {
 } from '@platform/languageModel';
 import { isCredentialExhausted, type FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 
 function modelConfig(
   supportsFunctionCalling = true,
@@ -526,5 +531,54 @@ describe('ModelHandlerVscodeLm port errors', () => {
       });
       expect(isCredentialExhausted(formatted)).toBe(true);
     });
+  });
+});
+
+describe('ModelHandlerVscodeLm canonical route reference', () => {
+  afterEach(() => {
+    invalidateRuntimeModelRegistry();
+  });
+
+  it('sends requests to the exact discovered editor model reference', async () => {
+    invalidateRuntimeModelRegistry();
+    await installPlatform(
+      {},
+      {
+        languageModel: {
+          ...fakePort(),
+          selectModels: async () => [
+            {
+              id: 'claude-sonnet-4.6',
+              name: 'Claude Sonnet 4.6',
+              family: 'claude-sonnet-4.6',
+              vendor: 'copilot',
+              version: '2026-07',
+              maxInputTokens: 160_000,
+              access: 'allowed' as const,
+            },
+          ],
+        },
+      },
+    );
+    await refreshRuntimeModelRegistry();
+
+    // #9635: the handler receives the canonical base model config; the exact
+    // editor reference comes from the discovered Copilot route, not from an
+    // overloaded config.fullName.
+    const handler = new ModelHandlerVscodeLm(MODEL_CONFIGS.sonnet46);
+    const port = fakePort([{ kind: 'text', text: 'answer' }]);
+
+    await handler.createResponse({
+      client: port,
+      messages: [],
+      temperature: 0,
+    });
+
+    expect(port.sendRequest).toHaveBeenCalledWith(
+      { vendor: 'copilot', id: 'claude-sonnet-4.6' },
+      expect.any(Array),
+      expect.any(Object),
+      expect.any(AbortSignal),
+    );
   });
 });

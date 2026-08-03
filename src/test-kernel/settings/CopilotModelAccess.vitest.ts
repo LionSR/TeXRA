@@ -11,7 +11,7 @@ vi.mock('@shared/hostBridge', () => ({
 
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ModelSelectionItem } from '@shared/schemas/settingsViewMessages';
+import type { CopilotRouteInfo } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - test utilities
 import {
@@ -20,28 +20,23 @@ import {
 } from './litComponentTestUtils';
 
 type ModelsTabElement = HTMLElement & {
-  modelSelectionItems: ModelSelectionItem[];
+  copilotModels: CopilotRouteInfo[];
   updateComplete: Promise<boolean>;
 };
 
-const copilotModel: ModelSelectionItem = {
-  name: 'copilot:sonnet46',
-  label: 'Copilot · Claude Sonnet 4.6',
-  provider: 'copilot',
-  enabled: false,
-  deprecated: false,
-  supportsReasoningLevel: false,
-  availability: 'copilot-consent-required',
-  availabilityLabel: 'Copilot consent required',
-  disabled: true,
-  requiresKey: false,
+// Copilot routes are keyed by the canonical base model id (#9635); the
+// section renders route status, never picker rows of its own.
+const consentRoute: CopilotRouteInfo = {
+  name: 'sonnet46',
+  label: 'Claude Sonnet 4.6',
+  access: 'consent-required',
 };
 
 function renderModelsTab(
-  modelSelectionItems: ModelSelectionItem[],
+  copilotModels: CopilotRouteInfo[],
 ): Promise<ModelsTabElement> {
   return mountComponent<ModelsTabElement>('models-tab', {
-    modelSelectionItems,
+    copilotModels,
   });
 }
 
@@ -53,7 +48,7 @@ describe('Copilot model access settings', () => {
   });
 
   it('shows a keyless consent action only when VS Code discovers Copilot models', async () => {
-    const tab = await renderModelsTab([copilotModel]);
+    const tab = await renderModelsTab([consentRoute]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('Copilot in VS Code');
@@ -63,10 +58,7 @@ describe('Copilot model access settings', () => {
 
     section?.querySelector<HTMLElement>('wa-button')?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
-      [
-        SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-        { modelName: 'copilot:sonnet46' },
-      ],
+      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
     ]);
   });
 

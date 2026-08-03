@@ -67,7 +67,10 @@ import { createExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import {
+  migrateCopilotModelRouteSelections,
+  refreshModelListStateIfNeeded,
+} from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
@@ -369,6 +372,7 @@ export async function activate(context: vscode.ExtensionContext) {
       try {
         const { added, currentVersion, previousVersion, removed, skipped } =
           await refreshModelListStateIfNeeded(globalSM);
+        await migrateCopilotModelRouteSelections(globalSM);
         if (!skipped) {
           logger.info(
             'extension',

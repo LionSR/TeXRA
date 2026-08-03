@@ -69,6 +69,7 @@ import {
   codexApprovalPolicy,
   codexReasoningEffort,
   codexSandboxMode,
+  copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
   customPresets,
@@ -369,6 +370,7 @@ export class SettingsApp extends SettingsAppBase {
             .chatgptAuth=${chatgptAuth.get()}
             .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
+            .copilotModels=${copilotRouteInfos.get()}
             .reliabilitySettings=${reliabilitySettings.get()}
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}

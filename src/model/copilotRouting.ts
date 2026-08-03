@@ -1,0 +1,59 @@
+/**
+ * Copilot routing: per-model preference for serving a canonical base model
+ * through the editor's GitHub Copilot language-model access instead of a
+ * provider key, OpenRouter, or a subscription.
+ *
+ * Mirrors the OpenRouter precedent (`openRouterRouting.ts`): the preference
+ * is persisted state, the discovered route lives in
+ * `runtimeModelRegistry`, and this module owns the single predicate both the
+ * availability computation and `ModelFactory` consult, so picker and request
+ * construction can never drift on which transport a model uses.
+ */
+
+import { platform } from '@platform/platform';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
+import { copilotRouteForModel } from './runtimeModelRegistry';
+
+function copilotRouteModels(): readonly string[] {
+  return (
+    platform().globalState.get<readonly string[]>(
+      GlobalStateKey.COPILOT_ROUTE_MODELS,
+      [],
+    ) ?? []
+  );
+}
+
+/** Whether the user prefers the Copilot route for this canonical base model. */
+export function prefersCopilotRoute(model: string): boolean {
+  return copilotRouteModels().includes(model);
+}
+
+/** Persist (or clear) the Copilot route preference for one base model. */
+export async function setCopilotRoutePreference(
+  model: string,
+  preferred: boolean,
+): Promise<void> {
+  const current = copilotRouteModels();
+  const next = preferred
+    ? [...new Set([...current, model])]
+    : current.filter((entry) => entry !== model);
+  await platform().globalState.update(
+    GlobalStateKey.COPILOT_ROUTE_MODELS,
+    next,
+  );
+}
+
+/**
+ * Whether a request for this model should be served through Copilot. The
+ * preference alone is not enough: the editor must currently offer the model
+ * with access granted. When the route cannot serve a preferred model, the
+ * availability layer reports the route state (consent required / unavailable)
+ * instead of silently switching transports.
+ */
+export function shouldRouteModelThroughCopilot(model: string): boolean {
+  return (
+    prefersCopilotRoute(model) &&
+    copilotRouteForModel(model)?.access === 'allowed'
+  );
+}
