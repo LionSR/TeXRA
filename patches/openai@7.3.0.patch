@@ -83,7 +83,7 @@ index f3dee49f0da1d063824a00f1228d773862d34e49..76a3d515aac046165fef4ab36aae1327
 @@ -11,6 +11,11 @@ type ResponseKeepAliveEvent = {
    sequence_number: number;
  };
-
+ 
 +type ResponseMetadataEvent = {
 +  type: 'response.metadata';
 +  [key: string]: unknown;
