@@ -2,7 +2,7 @@
 
 Status: proposed
 Date: 2026-08-03
-Revision: 3 (compatibility classes, responsibility rulings, removal inventory)
+Revision: 4 (choke-point compatibility, executable PR plan)
 
 TeXRA classifies "what kind of thing is running" in six places. Three of them
 are false at most of their write sites, one is an untyped persisted string, and
@@ -44,6 +44,27 @@ runtime behavior rather than chrome. It changes four things:
   rather than implied. Deleted elements leave no re-export shims.
 - **Stages are reordered ephemeral-first.** All fully breakable work (both UI
   stacks) lands before any persisted byte changes.
+
+Revision 4 sharpens two things revision 3 got structurally wrong, and replaces
+the stage sketch with an executable PR-by-PR plan:
+
+- **Compatibility is confined to one choke point, not spread across readers.**
+  "Readers treat `identity == null` as legacy" (revision 3) means every reader
+  branches — compatibility leaking into code structure, which is exactly the
+  long-term maintenance cost to refuse. The rule is now: the disk schema keeps
+  `identity` optional, the in-memory type has it **required**, and one function
+  at the store boundary derives it for pre-identity rows. No consumer above the
+  store ever sees an identity-less row. Compatibility is a data problem solved
+  at the edge; the moment it shapes downstream code it is in the wrong place.
+- **The "provisional category hint" is withdrawn.** A field whose contract is
+  "don't trust me" is bad structure. Because `normalizeWriterCategory` is
+  deleted (PR 4) before the descriptor is recut (PR 5), `config.json`'s
+  category has a single writer by then, and a descriptor copy written at birth
+  from that same config is correct by construction — a plain denormalization
+  with one writer, not a hint. It gets a real name and no apology.
+- **The CLI needs no new event.** `run.start` already emits the full descriptor
+  on the trace wire (`childStream.ts:135` `emit({type: 'run.start', descriptor})`);
+  the CLI simply never projects it. The TUI fix is wiring, not vocabulary.
 
 ## Problem
 
@@ -209,8 +230,9 @@ carried one, defended by a sequencing argument. The behavior audit (next
 section) removes the need: category's authority chain is `setting → config`,
 already enforced at launch, and no runtime behavior legitimately reads a
 category copy from anywhere else. The one display-timing consumer that wants
-category before the config snapshot resolves is served by a provisional hint on
-the descriptor wrapper (below), explicitly non-behavioral.
+category before the config snapshot resolves is served by a display-only
+denormalized copy on the descriptor wrapper (below), single-writer and
+correct by construction.
 
 `RunDescriptor` becomes the wrapper, and `RunConfigReferenceSchema` collapses to
 a derived path helper (`runConfigPath(executionId)`), since it had three
@@ -229,15 +251,32 @@ derivation:
 | `streamData/{id}/meta.json` descriptor | Display is keyed by stream id and renders before the run config snapshot resolves; the window is documented at `streamTabInfo.ts:34-38` and today filled by parsing the stream ID. The authority is keyed by execution id and not reachable there. | Constructed by `buildRunDescriptor` from the same `RunIdentity` value passed to `registerExecution`, at one call site (`childStream.ts:128`). Never independently authored. |
 | `trace.json` `identity`                | An exported trace is a standalone artifact with no access to `~/.texra`.                                                                                                                                                                      | Written by the exporter, read from `ExecutionMeta` at export time. Optional in the schema; old exports lack it (see Compatibility).                                        |
 
-The descriptor may additionally carry a **provisional category hint** for the
-pre-config render window. Its consumers are display-only: the tab label/model
-line, and the webview's `StreamState` arm selection
-(`streamLifecycleSlice.ts:108` → `createStreamState`), which self-corrects when
-the resolved config disagrees (`streamStateMerge.ts:40-45` resets on kind
-change). The hint is named as a hint, never read by runtime code, and never
-written to `ExecutionMeta`. If implementation shows the window can render on
-`{kind, name}` alone with category filled at config resolution, the hint is
-dropped — that outcome is preferred, not resisted.
+The recut descriptor is:
+
+```ts
+const RunDescriptorSchema = z.strictObject({
+  schemaVersion: z.literal(2),
+  streamId: StreamTabIdSchema,
+  executionId: ExecutionIdSchema,
+  identity: RunIdentitySchema,
+  /** Birth-time copy of config.agentCategory; present iff kind === 'agent'.
+   *  Single-writer: valid only because normalizeWriterCategory is deleted
+   *  before this shape exists (PR 4 < PR 5). Display-only by contract. */
+  agentCategory: AgentCategorySchema.optional(),
+});
+```
+
+`agentCategory` here is not a hint and not provisional: it is a denormalized
+copy written once at birth from the same `config.agentCategory` that
+`registerExecution` persists, and by the time this shape exists that config
+field has exactly one writer (PR 4 deletes `normalizeWriterCategory` first).
+Its consumers are display-only — the pre-config tab render
+(`streamTabInfo.ts:34-38` documents the window) and the webview's
+`StreamState` arm selection (`streamLifecycleSlice.ts:108`), which self-corrects
+on kind change (`streamStateMerge.ts:40-45`). Runtime code reads category from
+config, never from the descriptor — that rule is what PR 4's
+`ExecutionHandle.category` re-sourcing establishes and what review enforces
+thereafter.
 
 ## Responsibilities
 
@@ -284,7 +323,7 @@ compatibility machinery.** Both UI stacks consume the same validated
    (`summaryFormat.ts:46`), and the `attachToolFlow` guard
    (`ExecutionHandle.ts:211`). The descriptor exists for the render window;
    behavior reading it inverts the ownership. The handle's category is
-   re-sourced from the config (Stage B).
+   re-sourced from the config (PR 4).
 2. **Write-time mutation serving a UI default.** `normalizeWriterCategory`
    (`src/agent/storage/executionLifecycle.ts:50-63`, applied at `:140-143`)
    rewrites persisted `config.json` bytes — and no-ops when
@@ -298,7 +337,7 @@ compatibility machinery.** Both UI stacks consume the same validated
    `packages/cli/src/runtime/runExecution.ts:115-120`: a category mismatch
    marks the run ERROR **and deletes the flow record**, permanently killing
    resumability. The strongest argument in the tree for validating identity at
-   birth rather than reconciling it later. Stage B adds a fixture test pinning
+   birth rather than reconciling it later. PR 4 adds a fixture test pinning
    this path.
 
 ## Host projections
@@ -336,22 +375,37 @@ checked per the `texra-cli` skill.
 
 ## Compatibility
 
-Zero dated readers. One permanent obligation, served by a read path that
-already exists.
+Zero dated readers. One permanent obligation, served at one choke point.
 
-**`ExecutionMeta.identity` is required at write, optional at read.** A pure
-schema-transform legacy arm (revision 2's mechanism) cannot work anyway:
-`ExecutionMeta` does not carry an agent name (`stream.ts:77-96`), so a
-`category → identity` transform cannot synthesize the agent arm. The join
-already happens at the established normalization boundary —
-`executionListing.ts:142-158` builds `ExecutionListingEntry.kind` from
-`meta.category` plus config presence — and at the resume boundary, which reads
-the config regardless (`SessionResumeRetrieval.ts:111`). So readers treat
-`identity == null` as "pre-identity row, resolve from config": literally
-today's code path, kept **permanently for agent rows** (the protected class)
-and allowed to degrade for process and workflow-script rows (breakable class).
-No `workflow-script#` stream-id sniffing is built; that recovery would only
-serve a breakable cohort.
+**Disk optional, memory required, one derivation function.** The persisted
+`ExecutionMeta` schema keeps `identity` optional — old agent rows must parse
+forever. The in-memory type has `identity` **required**. The two are bridged by
+a single function at the store boundary:
+
+```ts
+/** The only place in the tree allowed to see an identity-less row. */
+function resolveRunIdentity(
+  meta: PersistedExecutionMeta,
+  config: AgentConfig | null,
+): RunIdentity {
+  if (meta.identity) return meta.identity;
+  // Pre-identity row. Agent rows (the protected cohort) resolve exactly;
+  // process/script rows (breakable) degrade to their historical reading.
+  if (meta.category === 'process') return { kind: 'process', tool: config?.agent ?? 'bash' };
+  return { kind: 'agent', agent: config?.agent ?? 'unknown' };
+}
+```
+
+A pure schema-transform legacy arm (revision 2's mechanism) cannot do this:
+`ExecutionMeta` does not carry an agent name (`stream.ts:77-96`), so the
+derivation needs the config join, which the store already performs at the
+listing boundary (`executionListing.ts:142-158`) and the resume boundary
+(`SessionResumeRetrieval.ts:111`). The choke point lives where that join
+already happens. **No consumer above the store branches on identity presence,
+ever** — that is the structural payoff: compatibility exists as five lines at
+one edge, not as a shape every reader must remember. No `workflow-script#`
+stream-id sniffing is built; that recovery would only serve a breakable
+cohort, which degrades to `agent` exactly as it reads today.
 
 This permanence also covers the trace boundary for free:
 `TraceDocumentSchema.meta` embeds `ExecutionMetaSchema`
@@ -374,17 +428,18 @@ some dropping.
 
 Additions are only half the proposal; the deletions are the point. Every row
 lists the element, where it lives, what replaces it, and the stage that deletes
-it. Deletions ship in the same PR as their replacement's adoption — no
-re-export shims, no orphaned exports (`npm run check:dead-code-ratchet`
-enforces the latter).
+it. Stage labels map onto the executable plan: **A = PRs 1–3** (ephemeral),
+**B = PR 4** (durable authority), **C = PR 5** (descriptor + trace). Deletions
+ship in the same PR as their replacement's adoption — no re-export shims, no
+orphaned exports (`npm run check:dead-code-ratchet` enforces the latter).
 
 ### Shared schemas and types
 
 | Removed                                                       | Location                          | Replaced by                                                            | Stage |
 | ------------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------- | ----- |
-| `CreateChildStreamOptions.streamCategory` + `runKind` pair    | `childStream.ts:27`               | single `run: RunIdentity` field; the three launch sites pass the truth | A     |
+| `CreateChildStreamOptions.streamCategory`, `.runKind`, `.agentName`, `.toolName` (four overlapping identity fields) | `childStream.ts:27-34` | single `run: RunIdentity` field; the three launch sites pass the truth | A     |
 | `RunKind` as an independent enum declaration                  | `runDescriptor.ts:8-9`            | `RunIdentity['kind']` derived type                                     | A     |
-| `RunDescriptor.agent` + `.category` (fabricated for 2 kinds)  | `runDescriptor.ts:21-22`          | `RunDescriptor.identity` (+ optional display hint, see Target model)   | C     |
+| `RunDescriptor.agent` + `.category` (fabricated for 2 kinds)  | `runDescriptor.ts:21-22`          | `RunDescriptor.identity` + display-only `agentCategory` copy (see Target model)   | C     |
 | `RunConfigReferenceSchema` (3 persisted fields, 1 value)      | `runDescriptor.ts:11-15`          | `runConfigPath(executionId)` helper                                    | C     |
 | `ExecutionMeta.category` untyped string                       | `stream.ts:86`                    | `ExecutionMeta.identity: RunIdentitySchema.optional()` (required at write) | B     |
 | `StreamMetadataSchema.kind` (category misnamed `kind`)        | `streamState.ts:143`              | renamed/retyped on the recut wire shape                                | A     |
@@ -434,7 +489,7 @@ enforces the latter).
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELEGATION_AVAILABILITY_CATEGORY` fabricated row          | Its consumer `annotateDelegationTool` (`agentToolResolution.ts:223`) writes the model-facing tool description from it; removal requires giving `delegate_multi_agents` its own annotation path — that is roster-track work. |
 | Fabricated `config.json` per non-agent run                 | `bash.ts:409-413`, `codexConfig.ts:97`, `claudeAgentConfig.ts:248`. This design makes them non-authoritative but does not remove them; removing them is the "config.json as kind-union" axis, out of scope. |
-| `ActiveChildInfo.kind` `{subagent, process}`               | `streamState.ts:62-71` — no `workflowScript` member; a script child's kind still leaks via `workflowPhase`. Follow-up on the same axis after Stage A proves the identity fact.            |
+| `ActiveChildInfo.kind` `{subagent, process}`               | `streamState.ts:62-71` — no `workflowScript` member; a script child's kind still leaks via `workflowPhase`. Follow-up on the same axis after PRs 1-3 prove the identity fact.            |
 
 ## Result, stated honestly
 
@@ -453,40 +508,190 @@ silent Workflow defaults, and nine CLI render-time reconstructions go with it.
 Per-stage element deltas are counted against the tree at implementation time,
 not projected here.
 
-## Build order
+## Executable plan
 
-**Stage A — ephemeral only. No persisted bytes change.** Add
-`runIdentity.ts`. Thread `RunIdentity` in-memory from the three launch sites
-through the progress facts (`run.start` gains the identity fact). Recut both UI
-stacks atomically: the Lit shapes (`StreamTabInfo`, `StreamMetadata`,
-`SYNC_STREAM_CONTENT`, `ProgressStreamRunDetails` → `identity`), which fixes
-desktop simultaneously; then the CLI (`StreamSlice.identity`, delete the nine
-reconstructions). Delete the UI-side name-parsers and silent defaults. This
-stage delivers the TUI workflow-agent display and workflow-script rendering
-fixes first, with zero persistence risk. Check headless output parity per the
-`texra-cli` skill. Import from `@shared/schemas/runIdentity`, never a new
-`@agent/*` specifier (host-agent deep-import ratchet).
+Six PRs. Every PR builds, type-checks (`npm run typecheck` — builds alone do
+not), passes `npm test` and `npm run check:dead-code-ratchet`, and is
+independently revertable. Deletions ship in the same PR as their replacement's
+adoption. Each PR lists **Add**, **Delete**, **Tests**, and a grep-able
+**Acceptance** line; the deletes are the point.
 
-**Stage B — durable, under the one protected obligation. Touches
-`executions/*/meta.json` and `config.json` readers.** `registerExecution`
-requires `identity` at all six call sites; `ExecutionMeta.identity` is written
-inside the lease; readers treat absence as pre-identity-agent-row via the
-existing listing/config join, permanently. Delete `normalizeWriterCategory`,
-`runtimeCategory`, the `meta.category` string, `resolveExecutionDisplayCategory`,
-and the `handle.toolName` slot. Re-source `ExecutionHandle.category` from
-config. Filter `loadHistoryDefaults`/`isUserVisibleExecution` on
-`identity.kind`. Fixture tests: an identity-less agent row keeps listing and
-resuming; a parentless synthetic-config row (residual `normalizeWriterCategory`
-exposure via `chatDefaults`) keeps correct defaults; the
-`runExecution.ts:115-120` destructive path. Fixes live defect 2.
+### PR 1 — `RunIdentity` exists and the launch sites speak it
 
-**Stage C — descriptor and trace.** Bump `RUN_DESCRIPTOR_SCHEMA_VERSION` to 2
-(split `STREAM_TAB_META_SCHEMA_VERSION` first, keeping it at 1 —
-`streamData.ts:38-40` shares it today). `RunDescriptor` carries `identity`; no
-legacy arm — v1 rows rebuild via `descriptorFromConfig`. Delete
-`RunConfigReferenceSchema`. Exporter writes `TraceDocument.identity`; replay
-prefers it with the permanent config-derived fallback. Run the trace-viewer
-tsc, which the root typecheck does not cover. Subsumes live defect 1.
+_Ephemeral. No persisted bytes, no wire shapes, no UI change._
+
+**Add**
+- `src/shared/schemas/runIdentity.ts`: `RunIdentitySchema`, `RunIdentity`,
+  `RunKind = RunIdentity['kind']`, `runIdentityName()`.
+- `CreateChildStreamOptions.run: RunIdentity` (`childStream.ts`). The three
+  launch sites pass the truth: `bash.ts` → `{kind:'process', tool:'bash'}`;
+  `WorkflowScriptTool.ts` → `{kind:'workflowScript', workflowName: meta.name}`;
+  agent-CLI/subagent paths → `{kind:'agent', agent, tool?}`.
+- `buildRunDescriptor` takes `identity` and derives the v1 persisted fields
+  from it (`agent: runIdentityName(identity)`, `kind: identity.kind`) so the
+  on-disk shape is untouched in this PR.
+
+**Delete**
+- `CreateChildStreamOptions.streamCategory`, `.runKind`, `.agentName`, and
+  `.toolName` (`childStream.ts:27-34`) — four overlapping identity fields
+  collapse into `run`. The icon selection `toolName` served moves to a
+  projection of `identity`.
+- `RunKind` as an independent enum declaration (`runDescriptor.ts:8`) — the
+  type re-exports the derived form.
+
+**Tests** — unit: `runIdentityName` over all arms; the three launch sites emit
+the expected identity on `run.start`.
+
+**Acceptance** — `rg -c 'streamCategory' src/` → 0.
+
+### PR 2 — extension + desktop UI reads identity
+
+_Ephemeral. Recuts the Lit stack; desktop comes along for free._
+
+**Add**
+- `ProgressFactApplier` consumes the `run.start` descriptor's identity so
+  `ProgressStreamMetadata.identity` is set at stream birth, before any config
+  snapshot resolves.
+- `StreamTabInfo` recut: per-arm payloads; `agentCategory` only on the `agent`
+  arm (`stream.ts:280` base requirement removed).
+- Explicit category naming on the recut `StreamMetadata` / `SYNC_STREAM_CONTENT`
+  fields (the `kind`-carries-category trap, `streamState.ts:143`,
+  `progressView/outbound.ts:314,325`).
+
+**Delete**
+- `ProgressStreamRunDetails` (`ProgressViewState.ts:49-69`) → replaced by
+  `identity` on `ProgressStreamMetadata`.
+- The `streamId.split('@')[0]` name-parse fallback and the `isProcessAgent`
+  call in `buildStreamTabInfo` (`streamTabInfo.ts:38-49`).
+- `metadata.agentCategory ?? AgentCategory.Workflow` (`streamTabInfo.ts:32`)
+  and `runningCategory ?? getStreamCategory(streamId) ?? Workflow`
+  (`ProgressFactApplier.ts:756-757`) — absent renders as pending, never as
+  Workflow.
+- `isProcessAgent` call at `ProgressViewState.ts:320-323`.
+
+**Tests** — existing `src/test-kernel/progressView/*` suites recut; a fixture
+asserting a process stream and a workflow-script stream classify correctly at
+first render, before config resolution.
+
+**Acceptance** — `rg -c 'isProcessAgent' src/controllers/` → 0;
+`rg -c '\?\? AgentCategory.Workflow' src/controllers/` → 0.
+
+### PR 3 — CLI recut, atomic
+
+_Ephemeral. Both ends of this wire ship in one binary. This PR delivers the
+TUI workflow-display and workflow-script fixes._
+
+**Add**
+- `projectCliRunFact` projects `run.start`'s identity
+  (`sessionProgressSubscription.ts:74-83`); `TUI_RUN_FACT_HANDLERS` gains the
+  handler (`subscribeRuntimeHost.ts:144`); `StreamSlice.identity: RunIdentity`.
+
+**Delete** (all nine reconstructions, one PR)
+- `StreamSlice.category` (`cliState.ts:188-191`).
+- `isFullLogChildStream` and its four-prefix regex
+  (`subscribeStreamLog.ts:138-142`; consumers `:184`, `:758-760` switch to
+  `identity.kind`).
+- Workflow-root detection via category + entry roles (`App.tsx:310-313`) and
+  its byte-duplicate (`panes/SubagentList.tsx:728-732`) →
+  `identity.kind === 'workflowScript'`.
+- `toolName === DELEGATE_MULTI_AGENTS_TOOL_NAME`
+  (`StaticConversationTranscript.tsx:104-108`).
+- `session.toolName !== 'bash'` model suppression
+  (`panes/SubagentList.tsx:176-180`) → `identity.kind !== 'process'`.
+- Two-hop AgentCategory walk (`appInteractionPolicy.ts:286-288`) → one-hop
+  `parent.identity.kind`.
+- `category === ToolUse` resume-hint filter (`resumeHint.ts:151`) → identity
+  predicate.
+- `SetActiveStreamPayload.agentCategory` (`progressEvents.ts:29-31`) — both
+  stacks now read identity; the payload field has no consumer left.
+
+**Tests** — TUI snapshot tests for a workflow-script child pane and a process
+stream; headless `texra run` / `--print` parity per the `texra-cli` skill.
+
+**Acceptance** — `rg -c 'StreamSlice.*category|isFullLogChildStream' packages/cli/` → 0.
+
+### PR 4 — the durable authority
+
+_Touches `executions/*/meta.json` writers and `config.json` readers. The one
+protected obligation lives here, at one choke point._
+
+**Add**
+- `ExecutionMeta.identity: RunIdentitySchema.optional()` on the persisted
+  schema; **required** on the in-memory type; `resolveRunIdentity(meta, config)`
+  as the single derivation point at the store boundary (see Compatibility).
+- `registerExecution` requires `identity` at all six call sites
+  (`agentCliShared.ts:197`, `subagentExecution.ts:165`,
+  `WorkflowScriptTool.ts:371`, `inBandSubagentExecution.ts:446`, `bash.ts:415`,
+  `runAgent.ts:102`), written inside the fresh-lease scope.
+
+**Delete**
+- `ExecutionMeta.category` writes (the untyped string, `stream.ts:86` — the
+  field remains readable on old rows via the optional persisted schema, but no
+  writer remains).
+- `normalizeWriterCategory` (`executionLifecycle.ts:50-63`) and its
+  application at `:140-143` — `loadHistoryDefaults` (`chatDefaults.ts:108-114`)
+  and `isUserVisibleExecution` (`executionListing.ts:76-81`) filter on
+  `identity.kind` instead.
+- `runtimeCategory` (`executionListing.ts:146,157` and readers
+  `executionFormatters.ts:32,43-44`, `history.ts:508`) — the demotion it hides
+  no longer happens.
+- The `meta.category === 'process'` sniff (`executionListing.ts:149`) →
+  `identity.kind`.
+- `resolveExecutionDisplayCategory` (`executionFormatters.ts:13-20`).
+- `handle.toolName` mutable slot; `ExecutionHandle.category` re-sourced from
+  config (behavioral consumers `waitCoordination.ts:43-50`,
+  `summaryFormat.ts:46,118`, `ExecutionHandle.ts:211` now read the config's
+  category, per the Responsibilities ruling).
+- `getAvailablePaths` category-string switch (`executionFormatters.ts:50-72`)
+  → keyed on `identity.kind` + config category.
+
+**Tests** — fixtures: an identity-less agent row (pre-migration bytes) lists,
+formats, and resumes identically; an identity-less `category:'process'` row
+degrades to its historical reading; a parentless synthetic-config run does not
+poison `loadHistoryDefaults`; the `runExecution.ts:115-120` destructive path is
+pinned.
+
+**Acceptance** — `rg -c 'normalizeWriterCategory|runtimeCategory|resolveExecutionDisplayCategory' src/` → 0;
+`rg -c "category: '(process|toolUse|workflow)'" src/agent/storage/` → 0 outside
+the legacy read fixture. Fixes live defect 2.
+
+### PR 5 — descriptor v2 and trace
+
+_Touches `streamData/*/meta.json` (breakable-durable) and the trace exporter._
+
+**Add**
+- Split `STREAM_TAB_META_SCHEMA_VERSION` from `RUN_DESCRIPTOR_SCHEMA_VERSION`
+  (`streamData.ts:38-40` shares it today), keep the former at 1, bump the
+  latter to 2 with the recut shape (`identity` + display-only `agentCategory`,
+  see Target model). No legacy arm: v1 rows fail parse and rebuild via
+  `descriptorFromConfig` (`StreamSnapshotStore.ts:232-241`).
+- `TraceDocument.identity` (optional), written by the exporter from
+  `ExecutionMeta`; `replayTrace` prefers it.
+
+**Delete**
+- `RunDescriptor.agent` + `.category` as fabricated required fields
+  (`runDescriptor.ts:21-22`).
+- `RunConfigReferenceSchema` (`runDescriptor.ts:11-15`) → `runConfigPath()`.
+- `replayTrace.ts:159`'s `isProcessAgent` re-derivation → `trace.identity`
+  with the config-derived fallback for old exports.
+- `agentKind.ts` / `isProcessAgent` entirely — this PR removes the last
+  consumer.
+
+**Tests** — descriptor v1 → rebuild fixture; old exported trace (no
+`identity`) replays; new trace round-trips. Run the trace-viewer tsc, which
+the root typecheck does not cover.
+
+**Acceptance** — `rg -c 'isProcessAgent' .` → 0 (production tree); subsumes
+live defect 1.
+
+### PR 6 — ratchet and docs
+
+Shrink `config/ratchets/knip-baseline.json` entries freed by the deletions
+(never widen); confirm no new `@agent/*` deep-import specifier entered any
+host (host-agent-import ratchet); update `src/agent/core/README.md` and this
+proposal's status. **Acceptance** — all ratchet checks pass with smaller
+baselines; `rg -c 'AgentCategory' packages/cli/src/chat/tui/` reports only
+`StreamState`-arm usages.
 
 ## Separated work
 
@@ -517,20 +722,21 @@ track too (see Deferred removals).
 
 ## Risks and open questions
 
-- **The provisional category hint must stay display-only.** The failure mode
-  this proposal just corrected — behavior reading a display copy
-  (`ExecutionHandle.category`) — will recur if the hint leaks into runtime
-  code. Guard: the hint lives only on the descriptor wrapper, is named as a
-  hint, and its reader set is checked at Stage C review.
+- **The descriptor's `agentCategory` copy must stay display-only.** The
+  failure mode this proposal corrects — behavior reading a display copy
+  (`ExecutionHandle.category`) — will recur if a new runtime reader adopts the
+  descriptor copy. Guard: the PR-4-before-PR-5 ordering makes the copy
+  correct by construction (single config writer), and its reader set is
+  checked at PR 5 review; any behavioral reader is a review-blocking defect.
 - **Deleting `normalizeWriterCategory` rests on one traced consumer.**
   `chatDefaults.loadHistoryDefaults` filters `isUserVisibleExecution` before
   reading `agentConfig.agentCategory`. Residual exposure is a parentless
   synthetic-config run. Grep for other readers of `config.agentCategory` on
-  non-agent executions before Stage B, and keep the parentless-row fixture.
+  non-agent executions before PR 4, and keep the parentless-row fixture.
 - **Historical workflow-script executions read as `agent` forever.** Accepted:
   that cohort is breakable, and it is today's behavior. No stream-id sniffing
   is built to heal it.
-- **`descriptorFromConfig` rebuild quality.** After the Stage C version bump,
+- **`descriptorFromConfig` rebuild quality.** After the PR 5 version bump,
   all v1 descriptors rebuild from config; a fabricated config yields a
   fabricated-looking label for old process/script rows. Accepted for breakable
   cohorts; agent rows rebuild faithfully because their configs are real.
