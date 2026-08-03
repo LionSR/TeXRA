@@ -58,9 +58,9 @@ import {
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
+import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { deliverChildRunFollowUp } from '@tools/delegation/childRunDelivery';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { executeSubagent } from '@tools/delegation/subagentExecution';
 import { readCompletedRunConversation, StreamLogStore } from '@transcript';
 
@@ -759,6 +759,7 @@ describe('native subagent production delivery path', () => {
     expect(resultView.status).toBe('executed');
     // /result is the machine-readable chaining endpoint: the attribution
     // rides inside the JSON, never as prefixed prose.
+    if (!resultView.output) throw new Error('expected /result output');
     const parsed = JSON.parse(resultView.output);
     expect(parsed.turnAttribution).toContain('interrupted');
     expect(parsed.response).toBe('Result A.');
