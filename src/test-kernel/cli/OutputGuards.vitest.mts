@@ -1,6 +1,6 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +8,7 @@ import { CliUsageError } from '@cli/runtime/cliContext';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  probeOutputPathForTests,
 } from '@cli/runtime/workflowOutput';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
@@ -15,6 +16,157 @@ const tempDirs: string[] = [];
 
 afterEach(async () => {
   await cleanupTempDirs(tempDirs);
+});
+
+function errno(code: string, message = code): NodeJS.ErrnoException {
+  return Object.assign(new Error(message), { code });
+}
+
+describe('probeOutputPath', () => {
+  const windowsCases = [
+    {
+      label: 'drive',
+      target: String.raw`C:\workspace\blocked\missing\output.tex`,
+      outputParent: String.raw`C:\workspace\blocked\missing`,
+    },
+    {
+      label: 'UNC',
+      target: String.raw`\\server\share\blocked\missing\output.tex`,
+      outputParent: String.raw`\\server\share\blocked\missing`,
+    },
+  ];
+
+  const windowsBlockedCases = windowsCases.flatMap((testCase) =>
+    ['ENOTDIR', 'EEXIST'].map((mkdirCode) => ({ ...testCase, mkdirCode })),
+  );
+
+  it.each(windowsBlockedCases)(
+    'maps native $mkdirCode after Windows-shaped ENOENT for a $label output path',
+    async ({ target, outputParent, mkdirCode }) => {
+      const mkdirVisited: string[] = [];
+      await expect(
+        probeOutputPathForTests(target, '--output', {
+          dirname: win32.dirname,
+          stat: async () => {
+            throw errno('ENOENT');
+          },
+          mkdir: async (candidate) => {
+            mkdirVisited.push(candidate);
+            throw errno(mkdirCode);
+          },
+        }),
+      ).rejects.toThrow(
+        `--output: a parent path component is a file: ${target}`,
+      );
+      expect(mkdirVisited).toEqual([outputParent]);
+    },
+  );
+
+  it('materializes the complete --output-dir path after ENOENT', async () => {
+    const target = String.raw`C:\workspace\missing\output`;
+    const mkdirVisited: string[] = [];
+    await expect(
+      probeOutputPathForTests(target, '--output-dir', {
+        dirname: win32.dirname,
+        stat: async () => {
+          throw errno('ENOENT');
+        },
+        mkdir: async (candidate) => {
+          mkdirVisited.push(candidate);
+          return candidate;
+        },
+      }),
+    ).resolves.toBeNull();
+    expect(mkdirVisited).toEqual([target]);
+  });
+
+  it.each([
+    {
+      flagLabel: '--output' as const,
+      expectedDirectory: '/missing',
+      expectedMessage:
+        '--output parent directory cannot be created: /missing/output.tex',
+    },
+    {
+      flagLabel: '--output-dir' as const,
+      expectedDirectory: '/missing/output.tex',
+      expectedMessage: '--output-dir cannot be created: /missing/output.tex',
+    },
+  ])(
+    'reports mkdir ENOENT before execution for $flagLabel',
+    async ({ flagLabel, expectedDirectory, expectedMessage }) => {
+      const mkdirVisited: string[] = [];
+      await expect(
+        probeOutputPathForTests('/missing/output.tex', flagLabel, {
+          dirname: win32.dirname,
+          stat: async () => {
+            throw errno('ENOENT');
+          },
+          mkdir: async (candidate) => {
+            mkdirVisited.push(candidate);
+            throw errno('ENOENT');
+          },
+        }),
+      ).rejects.toThrow(expectedMessage);
+      expect(mkdirVisited).toEqual([expectedDirectory]);
+    },
+  );
+
+  it('preserves unexpected mkdir failures', async () => {
+    const denied = errno('EACCES', 'denied');
+    await expect(
+      probeOutputPathForTests('/missing/output.tex', '--output', {
+        dirname: win32.dirname,
+        stat: async () => {
+          throw errno('ENOENT');
+        },
+        mkdir: async () => {
+          throw denied;
+        },
+      }),
+    ).rejects.toBe(denied);
+  });
+});
+
+describe('dangling output symlinks', () => {
+  it('keeps a dangling --output symlink writable and rejects a dangling --output-dir before execution', async (context) => {
+    const root = await makeTempDir('texra-cli-dangling-output-', tempDirs);
+    const fileReferent = join(root, 'absent.tex');
+    const fileLink = join(root, 'file-link.tex');
+    const directoryReferent = join(root, 'absent-directory');
+    const directoryLink = join(root, 'directory-link');
+    try {
+      await symlink(fileReferent, fileLink, 'file');
+      await symlink(
+        directoryReferent,
+        directoryLink,
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    } catch (error: unknown) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? error.code
+          : undefined;
+      if (
+        typeof code === 'string' &&
+        ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)
+      ) {
+        context.skip();
+        return;
+      }
+      throw error;
+    }
+
+    await expect(
+      assertOutputFileAvailable(fileLink, root),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertOutputDirAvailable(directoryLink, root),
+    ).rejects.toBeInstanceOf(CliUsageError);
+    await expect(stat(directoryReferent)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
 });
 
 describe('assertOutputDirAvailable', () => {
@@ -33,12 +185,13 @@ describe('assertOutputDirAvailable', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('accepts a path that does not exist yet (mkdir -p happens later)', async () => {
+  it('creates and accepts a path that does not exist yet', async () => {
     const root = await makeTempDir('texra-cli-outdir-', tempDirs);
     const target = join(root, 'no-such-yet');
     await expect(
       assertOutputDirAvailable(target, root),
     ).resolves.toBeUndefined();
+    expect((await stat(target)).isDirectory()).toBe(true);
   });
 
   it('rejects a --output-dir that points at a file', async () => {
