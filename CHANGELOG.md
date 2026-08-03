@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file.
 - **Retired Claude model selections now use the current default** — saved
   Opus 4.7 or 4.8 selections are no longer translated to Opus 5.
 
+#### Bug Fixes
+
+- **CLI approval modes now govern Bash commands and file edits consistently** —
+  `never` denies them even when a prompt setting or stream bypass would allow
+  them, while automatic approval permits them without opening a prompt.
+
 ## [0.40.0] - 2026-08-02
 
 ### CLI

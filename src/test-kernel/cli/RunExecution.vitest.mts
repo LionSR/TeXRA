@@ -663,21 +663,24 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
-  it('maps a classified run failure to ApprovalDenied when the run denied approval', async () => {
+  it('maps a completed run to ApprovalDenied after a shared policy denial', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
-    const { markApprovalDenied } =
-      await import('@cli/runtime/approval/approvalPolicy');
+    const { runOutcomeExitCode } = await import('@cli/runtime/terminalStatus');
     const request = baseRequest();
     const context = cliContext();
-    markApprovalDenied(context);
-    mocks.runAgent.mockRejectedValueOnce(new AgentError('approval denied'));
-
-    const result = await executeCliRequest(request, context);
-
-    expect(result).toEqual({
-      ok: false,
-      exitCode: CliExitCode.ApprovalDenied,
+    mocks.runAgent.mockImplementationOnce(async (_request, options) => {
+      options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
+        operation(),
+      );
+      options.onApprovalPolicyDenial?.();
+      return COMPLETED_RUN;
     });
+
+    await executeCliRequest(request, context);
+
+    expect(runOutcomeExitCode('completed', context)).toBe(
+      CliExitCode.ApprovalDenied,
+    );
   });
 
   it('closes the runtime host when sidecar flush fails', async () => {

@@ -46,13 +46,12 @@ export function runOutcomeExitCode(
   outcome: RunOutcome | typeof STREAM_PHASE.WAITING,
   context: CliContext,
 ): CliExitCode {
-  if (outcome === RUN_OUTCOME.FAILED) {
-    return hasCliApprovalDenied(context)
-      ? CliExitCode.ApprovalDenied
-      : CliExitCode.AgentError;
-  }
   if (outcome === RUN_OUTCOME.CANCELLED) {
     return CliExitCode.Interrupted;
+  }
+  if (hasCliApprovalDenied(context)) return CliExitCode.ApprovalDenied;
+  if (outcome === RUN_OUTCOME.FAILED) {
+    return CliExitCode.AgentError;
   }
   return CliExitCode.Success;
 }

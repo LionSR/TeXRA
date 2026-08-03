@@ -345,6 +345,7 @@ export function createWorkflowScriptAgentRunner(
             session: runScope.session,
             signal: invocation.signal,
             approvalPromptsUnavailable: parent.approvalPromptsUnavailable,
+            onApprovalPolicyDenial: parent.onApprovalPolicyDenial,
             runtimeUnavailableTools: parent.runtimeUnavailableTools,
             // The engine settles the owning phase onto the call options before
             // handing them here (declared task phase, else the phase active at

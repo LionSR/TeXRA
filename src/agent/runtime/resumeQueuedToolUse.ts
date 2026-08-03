@@ -139,6 +139,7 @@ export async function resumeQueuedToolUseFromResumeData(
       session: options.session,
       tools: options.tools,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      onApprovalPolicyDenial: options.onApprovalPolicyDenial,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       parentStreamId: options.parentStreamId ?? resume.parentStreamId,
       workflowPhase: options.workflowPhase,
