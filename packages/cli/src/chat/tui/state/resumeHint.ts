@@ -7,7 +7,7 @@
 
 import { quote } from 'shell-quote';
 
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   AgentCategory,
   sumUsageStats,
@@ -44,7 +44,7 @@ export interface ResumeCommandOptions {
   readonly cwd?: string;
   /** Ambient shell cwd where the printed command will be copy-pasted. */
   readonly processCwd?: string;
-  readonly approvalPolicy?: CliApprovalPolicy;
+  readonly approvalPolicy?: TexraApprovalPolicy;
 }
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';

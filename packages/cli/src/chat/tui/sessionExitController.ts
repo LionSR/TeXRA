@@ -23,13 +23,13 @@ import {
   runCliPlatformShutdownSequence,
 } from '@cli/runtime/initPlatform';
 import { writeTextStdout } from '@cli/runtime/logSinks';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   cleanupTerminalModes,
   restoreTuiInputModes,
   supportsTerminalJobControl,
 } from '@cli/tui/terminalCleanup';
 import { tryPlatform } from '@platform/platform';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { assertNever } from '@utils/core';
 
 import {
@@ -80,7 +80,7 @@ interface SessionExitControllerContext {
   /** Follow-up delivery queue drained before a graceful exit returns. */
   readonly followUpQueue: PQueue;
   /** Reads the live approval policy for the resume hint. */
-  readonly getApprovalPolicy: () => CliApprovalPolicy;
+  readonly getApprovalPolicy: () => TexraApprovalPolicy;
   /** Materialize buffered trace chunks + drain debounced StreamLog writes. */
   readonly flushArtifacts: () => Promise<void>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
