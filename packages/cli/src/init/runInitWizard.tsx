@@ -10,9 +10,11 @@ import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import {
-  CLI_APPROVAL_POLICIES,
+  TEXRA_APPROVAL_POLICY_OPTIONS,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+import {
   CLI_OUTPUT_FORMATS,
-  type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
@@ -33,25 +35,6 @@ export interface InitWizardResult {
   readonly answers: InitAnswers;
   readonly gitignore: boolean;
 }
-
-const APPROVAL_DESCRIPTIONS: Record<CliApprovalPolicy, string> = {
-  never: 'deny every privileged action (no prompt)',
-  ask: 'confirm before privileged actions (recommended)',
-  yolo: 'auto-approve every action',
-};
-
-// Display order, derived from the canonical list so a newly added policy can't
-// be silently dropped — the rank table is a Record over the union, so omitting
-// a policy is a compile error. `ask` first highlights the recommended,
-// runtime-default policy instead of the deny-all `never`.
-const APPROVAL_POLICY_RANK: Record<CliApprovalPolicy, number> = {
-  ask: 0,
-  never: 1,
-  yolo: 2,
-};
-const APPROVAL_POLICY_ORDER: readonly CliApprovalPolicy[] = [
-  ...CLI_APPROVAL_POLICIES,
-].sort((a, b) => APPROVAL_POLICY_RANK[a] - APPROVAL_POLICY_RANK[b]);
 
 const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   text: 'human-readable text (default)',
@@ -80,7 +63,7 @@ const STEP_TITLES: Record<Step, string> = {
 interface Draft {
   agent?: string;
   model?: string;
-  approvalPolicy?: CliApprovalPolicy;
+  approvalPolicy?: TexraApprovalPolicy;
   outputFormat?: CliOutputFormat;
   gitignore?: boolean;
 }
@@ -224,11 +207,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       picker = (
         <Select
           key={step}
-          items={APPROVAL_POLICY_ORDER.map((policy) => ({
-            value: policy,
-            label: policy,
-            description: APPROVAL_DESCRIPTIONS[policy],
-          }))}
+          items={TEXRA_APPROVAL_POLICY_OPTIONS}
           onSelect={(approvalPolicy) => commit({ approvalPolicy })}
           onCancel={cancel}
         />

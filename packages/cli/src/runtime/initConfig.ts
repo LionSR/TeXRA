@@ -12,16 +12,14 @@ import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 
-import type {
-  CliApprovalPolicy,
-  CliOutputFormat,
-} from '../schemas/cliSettings';
+import type { CliOutputFormat } from '../schemas/cliSettings';
 
 export interface InitAnswers {
   readonly agent: string;
   readonly model: string;
-  readonly approvalPolicy: CliApprovalPolicy;
+  readonly approvalPolicy: TexraApprovalPolicy;
   readonly outputFormat: CliOutputFormat;
 }
 
@@ -29,7 +27,7 @@ export interface InitAnswers {
 export interface InitConfigShape {
   readonly 'texra.model': string;
   readonly 'texra.outputFormat': CliOutputFormat;
-  readonly 'texra.approvalPolicy': CliApprovalPolicy;
+  readonly 'texra.approvalPolicy': TexraApprovalPolicy;
   readonly 'texra.chat': { readonly agent: string; readonly model: string };
 }
 

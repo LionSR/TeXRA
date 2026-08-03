@@ -2,6 +2,7 @@ import PQueue from 'p-queue';
 
 import type { UserQuestionSettlement } from '@agent/runtime/HostInteractions';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
+import { decideTexraApproval } from '@shared/approvalPolicy';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -105,16 +106,24 @@ export function appendCliApiSwitchHint(
 }
 
 export function approvalPromptAllowed(context: CliContext): boolean {
-  return context.approvalPolicy === 'ask' && context.mode === 'interactive';
+  return cliExecutableApprovalDecision(context) === 'present';
 }
 
 export function approvalPromptsUnavailable(
   context: ApprovalInstructionContext,
 ): boolean {
-  return (
-    context.approvalPolicy === 'never' ||
-    (context.mode === 'headless' && context.approvalPolicy === 'ask')
-  );
+  return cliExecutableApprovalDecision(context) === 'deny';
+}
+
+/** CLI host requests arrive only after shared settings and scoped bypasses
+ *  have kept the action gated, so both request facts are true/false here. */
+function cliExecutableApprovalDecision(context: ApprovalInstructionContext) {
+  return decideTexraApproval({
+    policy: context.approvalPolicy,
+    promptRequired: true,
+    scopedBypass: false,
+    canPresent: context.mode === 'interactive',
+  });
 }
 
 function enqueueCliPrompt<T>(
@@ -192,8 +201,9 @@ export function queueCliApprovalQuestion(
 export function immediateDecision(
   context: CliContext,
 ): ApprovalDecision | undefined {
-  if (context.approvalPolicy === 'yolo') return { accepted: true };
-  if (approvalPromptAllowed(context)) return undefined;
+  const decision = cliExecutableApprovalDecision(context);
+  if (decision === 'allow') return { accepted: true };
+  if (decision === 'present') return undefined;
   markApprovalDenied(context);
   return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
 }

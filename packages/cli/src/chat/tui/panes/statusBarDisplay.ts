@@ -1,7 +1,6 @@
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
   shortCliModelAccessRoute,
   type CliModelAccessRoute,
@@ -16,6 +15,7 @@ import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveProviderCapabilities } from '@model/providerCapabilities';
+import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   spendingQuotaRemainingPercent,
   spendingQuotaState,
@@ -103,7 +103,7 @@ export interface StatusBarDisplayInput {
   readonly relayQuota?: SpendingStatus;
   /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
   readonly transcriptMode?: 'persistent' | 'ephemeral';
-  readonly approvalPolicy?: CliApprovalPolicy;
+  readonly approvalPolicy?: TexraApprovalPolicy;
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
@@ -769,7 +769,7 @@ function rootActiveSegment(
 }
 
 function approvalPolicySegment(
-  policy: CliApprovalPolicy | undefined,
+  policy: TexraApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
   switch (policy) {
     case undefined:

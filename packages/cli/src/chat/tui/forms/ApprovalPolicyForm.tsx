@@ -1,35 +1,24 @@
 import { Text } from 'ink';
 
-import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
-import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-
 import type { SelectItem } from '@cli/tui/ui/Select';
+import {
+  TEXRA_APPROVAL_POLICY_OPTIONS,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
+
 import { ListForm } from './_shared/ListForm';
 
 export interface ApprovalPolicyFormProps {
-  readonly currentPolicy: CliApprovalPolicy;
+  readonly currentPolicy: TexraApprovalPolicy;
   readonly availableRows?: number;
-  readonly onSelect: (value: CliApprovalPolicy) => void;
+  readonly onSelect: (value: TexraApprovalPolicy) => void;
   readonly onCancel: () => void;
 }
 
-export const APPROVAL_POLICY_ITEMS = [
-  {
-    value: 'ask',
-    label: 'Ask',
-    description: formatCliApprovalPolicy('ask'),
-  },
-  {
-    value: 'never',
-    label: 'Never',
-    description: formatCliApprovalPolicy('never'),
-  },
-  {
-    value: 'yolo',
-    label: 'Auto-approve',
-    description: formatCliApprovalPolicy('yolo'),
-  },
-] as const satisfies ReadonlyArray<SelectItem<CliApprovalPolicy>>;
+const APPROVAL_POLICY_ITEMS =
+  TEXRA_APPROVAL_POLICY_OPTIONS satisfies ReadonlyArray<
+    SelectItem<TexraApprovalPolicy>
+  >;
 
 export function ApprovalPolicyForm(
   props: ApprovalPolicyFormProps,
