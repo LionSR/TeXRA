@@ -153,9 +153,19 @@ function orderedFallbacks(
   });
 }
 
-/** Retirement evidence (#9590 Stage 7 / #9627): one countable line per hit. */
-function logLegacyHit(mechanism: string, detail: string): void {
-  logger.warn(`Legacy identity resolution fired (${mechanism}): ${detail}`);
+/**
+ * Retirement evidence (#9590 Stage 7 / #9627): one line per hit, with the
+ * mechanism and identifiers as structured `data` so reliance is
+ * machine-countable per mechanism/execution, not regexed out of prose.
+ */
+function logLegacyHit(
+  mechanism: 'sidecar meta scan' | 'stream-name suffix' | 'suffix ownership',
+  detail: string,
+  data: Record<string, unknown>,
+): void {
+  logger.warn(`Legacy identity resolution fired (${mechanism}): ${detail}`, {
+    data: { mechanism, ...data },
+  });
 }
 
 /**
@@ -223,6 +233,11 @@ export async function resolvePersistedStreamIdForExecution(
         mergeCandidateMetaMatched.length > 0
           ? `execution ${executionId} is claimed by ${mergeCandidateMetaMatched.length} unproven roots; no canonical stream selected`
           : `execution ${executionId} matches only proven child streams; no archive root`,
+        {
+          executionId,
+          candidateStreamIds: mergeCandidateMetaMatched,
+          associatedStreamIds,
+        },
       );
       return {
         fallbackStreamIds: [],
@@ -242,6 +257,7 @@ export async function resolvePersistedStreamIdForExecution(
     logLegacyHit(
       'sidecar meta scan',
       `execution ${executionId} resolved to stream ${streamId}`,
+      { executionId, streamId },
     );
     return {
       streamId,
@@ -274,6 +290,7 @@ export async function resolvePersistedStreamIdForExecution(
     logLegacyHit(
       'stream-name suffix',
       `execution ${executionId} matches ${suffixMatched.length} streams by name suffix; no canonical stream selected`,
+      { executionId, candidateStreamIds: suffixMatched },
     );
     return {
       fallbackStreamIds: [],
@@ -283,6 +300,7 @@ export async function resolvePersistedStreamIdForExecution(
   logLegacyHit(
     'stream-name suffix',
     `execution ${executionId} resolved to stream ${suffixMatched[0]}`,
+    { executionId, streamId: suffixMatched[0] },
   );
   return { streamId: suffixMatched[0], fallbackStreamIds: [] };
 }
@@ -326,6 +344,7 @@ export async function legacyExecutionIdFromStreamSuffix(
     logLegacyHit(
       'suffix ownership',
       `stream ${stream} admitted execution ${derived} by name suffix`,
+      { executionId: derived, streamId: stream },
     );
     return derived;
   };
