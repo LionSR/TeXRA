@@ -9,7 +9,9 @@
 //
 // Host-agnostic, VS Code-free.
 
-import type { ResultMeta } from '@agent/storage';
+import PQueue from 'p-queue';
+
+import type { ChildTurnRef, ChildTurnState, ResultMeta } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
@@ -47,6 +49,7 @@ import {
   deliverChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
+  persistChildRunTurnState,
 } from '@tools/delegation/childRunDelivery';
 import { formatSubagentProgress } from '@tools/delegation/subagentResults';
 import type {
@@ -382,6 +385,39 @@ async function persistResultMetaBestEffort(
 }
 
 /**
+ * Mint the logical identity of one accepted child turn (#9531): a stable turn
+ * token plus the delivery id the turn's single parent delivery is admitted
+ * under. Deterministic per execution and turn index — execution-owned, no
+ * global registry — so a producer replaying the same logical delivery always
+ * presents the same id, and distinct turns can never share one.
+ */
+function mintChildTurnRef(
+  executionId: ExecutionId,
+  turnIndex: number,
+): ChildTurnRef {
+  const token = `${executionId}:turn:${turnIndex}`;
+  return { token, deliveryId: `${token}:delivery` };
+}
+
+/**
+ * Persist turn attribution for the report/result slots, swallowing storage
+ * errors. Best-effort: a failure degrades /report//result turn labeling, not
+ * the delivered result.
+ */
+async function persistTurnStateBestEffort(
+  executionId: ExecutionId,
+  state: ChildTurnState,
+  logger: AgentTrace,
+): Promise<void> {
+  const result = await persistChildRunTurnState(executionId, state);
+  if (result.kind === 'failed') {
+    logger.warn(`Failed to persist turn state for ${executionId}`, {
+      data: result.err,
+    });
+  }
+}
+
+/**
  * Where this turn's output goes. A strategy without `resolveDeliveryTarget`
  * (agent-CLI) always delivers to the run's static parent. A strategy that HAS
  * one (native) may return `undefined` — meaning the child was detached from its
@@ -425,10 +461,13 @@ async function deliverTurn<TTurn>(params: {
   parentStreamId: StreamTabId;
   logger: AgentTrace;
   turn: TTurn | null;
+  turnRef: ChildTurnRef;
   err: unknown;
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
+  /** Serializes turn-state writes against the acceptance write (#9531). */
+  turnStateWrites: PQueue;
 }): Promise<PendingChildDelivery | undefined> {
   const {
     strategy,
@@ -436,6 +475,7 @@ async function deliverTurn<TTurn>(params: {
     parentStreamId,
     logger,
     turn,
+    turnRef,
     err,
     wallTimeMs,
     isError,
@@ -452,9 +492,27 @@ async function deliverTurn<TTurn>(params: {
     isError,
     wallTimeMs,
   );
+  // Attribute the envelope to this turn so /result can tell which turn the
+  // latest-value slot reflects (#9531).
+  const stampedMeta =
+    resultMeta?.producer === 'subagent'
+      ? { ...resultMeta, turnToken: turnRef.token }
+      : resultMeta;
 
   await persistReportBestEffort(executionId, msg, logger);
-  await persistResultMetaBestEffort(executionId, resultMeta, logger);
+  await persistResultMetaBestEffort(executionId, stampedMeta, logger);
+  // The turn's result slots now hold this turn: record it as the latest
+  // completed turn, clearing the active marker written at acceptance. The
+  // store does not serialize per-key writes, so this must queue behind the
+  // acceptance write — otherwise a late acceptance write can overwrite this
+  // newer completion record (Cursor Bugbot on PR #9664).
+  await params.turnStateWrites.add(() =>
+    persistTurnStateBestEffort(
+      executionId,
+      { lastCompletedTurn: turnRef },
+      logger,
+    ),
+  );
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
@@ -469,7 +527,11 @@ async function deliverTurn<TTurn>(params: {
   if (prepareParentDelivery?.() === false) return undefined;
   return {
     targetStreamId,
-    followUp: { text: msg, origin: 'subagent_result' },
+    followUp: {
+      text: msg,
+      origin: 'subagent_result',
+      deliveryId: turnRef.deliveryId,
+    },
   };
 }
 
@@ -642,8 +704,32 @@ export function startChildRunLoop<TTurn>(
   const run = async (): Promise<void> => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
+    // Turn identity (#9531): each accepted turn mints a stable token/delivery
+    // id and records itself active before running; the latest completed turn
+    // is carried forward so an interrupted turn never overwrites it.
+    let turnIndex = 0;
+    let lastCompletedTurn: ChildTurnRef | undefined;
+    // KVStore does not serialize per-key writes: queue turn-state writes so
+    // the fire-and-forget acceptance write cannot land after the completion
+    // record deliverTurn writes for the same turn.
+    const turnStateWrites = new PQueue({ concurrency: 1 });
     try {
       while (!loop.isInterrupted()) {
+        turnIndex += 1;
+        const turnRef = mintChildTurnRef(executionId, turnIndex);
+        // Acceptance creates the pending-turn record: until this turn's
+        // result is persisted, /report and /result keep attributing the
+        // latest-value slots to the last completed turn. Fire-and-forget —
+        // the first turn must still reach strategy.launch synchronously; the
+        // queue (not the store) guarantees it lands before the completion
+        // record deliverTurn writes later.
+        void turnStateWrites.add(() =>
+          persistTurnStateBestEffort(
+            executionId,
+            { activeTurn: turnRef, lastCompletedTurn },
+            logger,
+          ),
+        );
         const startedAt = Date.now();
         const abortController = loop.startTurn();
         const attempt = await attemptTurn(
@@ -674,9 +760,11 @@ export function startChildRunLoop<TTurn>(
           parentStreamId,
           logger,
           turn,
+          turnRef,
           err,
           wallTimeMs,
           isError: turnFailed,
+          turnStateWrites,
           prepareParentDelivery: () => {
             if (loop.isInterrupted()) {
               releaseSessionOwnershipOnce();
@@ -690,6 +778,7 @@ export function startChildRunLoop<TTurn>(
             return true;
           },
         });
+        lastCompletedTurn = turnRef;
 
         if (turnFailed) {
           sawTurnFailure = true;

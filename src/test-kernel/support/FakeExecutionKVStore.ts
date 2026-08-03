@@ -32,12 +32,14 @@ export function createFakeKv(
     readWorkspaceFiles: async () => [],
     readChildren: async () => [],
     readResultMeta: async () => null,
+    readTurnState: async () => null,
     writeMeta: async () => {},
     writeConfig: async () => {},
     writeReport: async () => {},
     writeWorkspaceFiles: async () => {},
     writeChild: async () => {},
     writeResultMeta: async () => {},
+    writeTurnState: async () => {},
     ...overrides,
   };
 }

@@ -18,6 +18,12 @@ export interface FollowUpQueueInput {
   /** Media file paths (e.g. pasted images) attached to this user follow-up. */
   readonly mediaFiles?: readonly string[];
   readonly origin?: VisibleFollowUpQueueItemOrigin;
+  /**
+   * Stable logical identity of one child-run result delivery (#9531). The
+   * admission boundary suppresses replays of an id it already admitted;
+   * inputs without one are never suppressed.
+   */
+  readonly deliveryId?: string;
 }
 
 interface FollowUpQueueItem {
@@ -26,6 +32,7 @@ interface FollowUpQueueItem {
   readonly origin: FollowUpQueueItemOrigin;
   /** Media file paths (e.g. pasted images) attached to this user follow-up. */
   readonly mediaFiles?: readonly string[];
+  readonly deliveryId?: string;
 }
 
 /** A queued follow-up surfaced in a drained batch; same shape as the stored item. */
@@ -82,6 +89,7 @@ export class FollowUpQueue {
       displayText: value.displayText,
       origin: value.origin ?? 'user',
       mediaFiles: value.mediaFiles,
+      deliveryId: value.deliveryId,
     };
   }
 
