@@ -4,10 +4,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - shared constants and types
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
-import type {
-  FileStateContextValue,
-  MainViewPersistedState,
-  SessionContextValue,
+import {
+  MainViewPersistedStateSchema,
+  type FileStateContextValue,
+  type MainViewPersistedState,
+  type SessionContextValue,
 } from '@shared/schemas';
 
 // Local imports - component type (type-only: the module loads inside the DOM harness)
@@ -185,7 +186,16 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
-  it('normalizes a legacy Copilot model id during mount-time restore', async () => {
+  it('keeps the shared persisted-state schema current-only', () => {
+    expect(
+      MainViewPersistedStateSchema.parse({
+        ...PERSISTED_SEED,
+        model: 'copilot:sonnet46',
+      }).model,
+    ).toBe('copilot:sonnet46');
+  });
+
+  it('normalizes a legacy Copilot model id during VS Code mount-time restore', async () => {
     seedWebviewState({ ...PERSISTED_SEED, model: 'copilot:sonnet46' });
 
     const element = await mountMainApp();
@@ -287,7 +297,7 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
-  it('normalizes a legacy Copilot model id during backend restore', async () => {
+  it('normalizes a legacy Copilot model id during VS Code backend restore', async () => {
     const element = await mountMainApp();
     storageWrites.length = 0;
 

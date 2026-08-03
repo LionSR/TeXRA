@@ -94,7 +94,7 @@ describe('Copilot model access settings', () => {
     const tab = await renderModelsTab([{ ...allowedRoute, preferred: true }]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
-    expect(section?.textContent).toContain('GPT-5.5 runs through Copilot.');
+    expect(section?.textContent).toContain('Copilot route selected.');
     const button = section?.querySelector<HTMLElement>('wa-button');
     expect(button?.textContent).toContain('Stop using Copilot');
 
@@ -156,8 +156,10 @@ describe('Copilot model access settings', () => {
     ]);
     expect(section?.querySelector('.copilot-route-controls')).not.toBeNull();
     buttons[0]?.click();
+    buttons[1]?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
       [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
+      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'sonnet46' }],
     ]);
   });
 

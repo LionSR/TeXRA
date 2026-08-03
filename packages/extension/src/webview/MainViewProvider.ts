@@ -30,7 +30,6 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { agentKeyOf } from '@shared/schemas/agent';
 import {
   readOnboardingFlags,
@@ -42,6 +41,7 @@ import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 
 // Local file imports
 import { MainViewMessageHandler } from './MainViewMessageHandler';
+import { VscodeMainViewPersistedStateSchema } from './vscodeMainViewPersistedState';
 import type { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 
 export class MainViewProvider
@@ -324,7 +324,9 @@ export class MainViewProvider
       pendingData;
       pendingData = consumePendingState()
     ) {
-      const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
+      const parsed = VscodeMainViewPersistedStateSchema.safeParse(
+        pendingData.state,
+      );
       if (!parsed.success) {
         console.warn('Invalid pending state restore payload', parsed.error);
         continue;

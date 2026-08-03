@@ -166,19 +166,7 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   openedFiles: z.array(z.string()).nullish(),
 });
 
-/**
- * Compatibility reader for main-view snapshots written with synthetic
- * `copilot:<baseModel>` picker ids before #9635. Introduced 2026-08-03;
- * retire after 2026-11-03 with the other Copilot identity readers.
- */
-export const MainViewPersistedStateSchema = z.preprocess((input) => {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return input;
-  }
-  const model = 'model' in input ? input.model : undefined;
-  if (typeof model !== 'string' || !model.startsWith('copilot:')) return input;
-  return { ...input, model: model.slice('copilot:'.length) };
-}, MainViewPersistedStateBaseSchema);
+export const MainViewPersistedStateSchema = MainViewPersistedStateBaseSchema;
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;
