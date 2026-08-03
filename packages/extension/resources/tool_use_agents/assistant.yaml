@@ -51,6 +51,9 @@ settings:
     # Delegation — TeXRA agents and external AI agents
     - delegate_agent
     - delegate_workflow
+    # Advanced deterministic delegation. The global Multi-Agent Workflow
+    # switch is an additional kill switch and is disabled by default.
+    - delegate_multi_agents
     - executions
     - accept_run_files
     - codex
