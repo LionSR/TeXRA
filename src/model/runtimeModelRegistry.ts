@@ -57,6 +57,8 @@ interface RuntimeModelCatalogue {
   readonly discovered: boolean;
   /** The in-flight discovery, if one is running. */
   readonly pending?: Promise<void>;
+  /** Whether the in-flight discovery explicitly bypasses a fresh cache. */
+  readonly pendingForceDiscovery?: boolean;
 }
 
 let catalogue: RuntimeModelCatalogue = {
@@ -129,26 +131,52 @@ async function discoverCopilotRoutes(): Promise<
   return entries;
 }
 
+export interface RefreshRuntimeModelRegistryOptions {
+  /** Re-query the adapter even when the current catalogue is marked fresh. */
+  forceDiscovery?: boolean;
+}
+
 /** Refresh editor-supplied routes after the native model/access cache changes. */
-export async function refreshRuntimeModelRegistry(): Promise<void> {
+export async function refreshRuntimeModelRegistry(
+  options: RefreshRuntimeModelRegistryOptions = {},
+): Promise<void> {
+  if (options.forceDiscovery) {
+    // Overlapping user actions share one forced probe. A normal probe that
+    // started earlier is superseded because its access snapshot may predate
+    // the action that must authorize persistence.
+    if (catalogue.pendingForceDiscovery && catalogue.pending) {
+      return catalogue.pending;
+    }
+    invalidateRuntimeModelRegistry();
+  }
   if (catalogue.discovered) return;
   if (catalogue.pending) return catalogue.pending;
 
   // Both outcomes below replace the catalogue wholesale, which is also what
   // clears `pending`; a result whose generation has moved on was superseded by
   // an invalidation and is dropped instead of committed.
-  const { generation } = catalogue;
+  const { generation, entries: previousEntries } = catalogue;
   const request = (async () => {
     const entries = await discoverCopilotRoutes();
     if (catalogue.generation !== generation) return;
     catalogue = { generation, entries, discovered: true };
   })();
-  catalogue = { ...catalogue, pending: request };
+  catalogue = {
+    ...catalogue,
+    pending: request,
+    pendingForceDiscovery: options.forceDiscovery === true,
+  };
   try {
     await request;
   } catch (error) {
     if (catalogue.generation === generation) {
-      catalogue = { generation, entries: new Map(), discovered: false };
+      catalogue = {
+        generation,
+        // A user-initiated revalidation must not blank useful last-known
+        // presentation merely because the fresh adapter probe failed.
+        entries: options.forceDiscovery ? previousEntries : new Map(),
+        discovered: false,
+      };
     }
     throw error;
   }
@@ -254,7 +282,7 @@ export type RuntimeModelAccessRequestResult =
 export async function requestRuntimeModelAccess(
   model: string,
 ): Promise<RuntimeModelAccessRequestResult> {
-  await refreshRuntimeModelRegistry();
+  await refreshRuntimeModelRegistry({ forceDiscovery: true });
   const route = catalogue.entries.get(model);
   if (!route) return 'unavailable';
   if (route.access === 'allowed') return 'already-allowed';

@@ -204,6 +204,77 @@ describe('runtime model registry', () => {
     expect(unavailablePort.sendRequest).not.toHaveBeenCalled();
   });
 
+  it('re-discovers stale allowed access before entering the native consent flow', async () => {
+    let models: readonly LanguageModelInfo[] = [SONNET];
+    const port = {
+      ...languageModelPort([]),
+      selectModels: vi.fn(async () => models),
+    };
+    await installPlatform({}, { languageModel: port });
+    await refreshRuntimeModelRegistry();
+    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+
+    models = [{ ...SONNET, access: 'consent-required' }];
+
+    await expect(requestRuntimeModelAccess('sonnet46')).resolves.toBe(
+      'requested',
+    );
+    expect(port.selectModels).toHaveBeenCalledTimes(2);
+    expect(port.sendRequest).toHaveBeenCalledOnce();
+  });
+
+  it('re-discovers stale allowed access before reporting unavailable', async () => {
+    let models: readonly LanguageModelInfo[] = [SONNET];
+    const port = {
+      ...languageModelPort([]),
+      selectModels: vi.fn(async () => models),
+    };
+    await installPlatform({}, { languageModel: port });
+    await refreshRuntimeModelRegistry();
+    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+
+    models = [{ ...SONNET, access: 'unavailable' }];
+
+    await expect(requestRuntimeModelAccess('sonnet46')).resolves.toBe(
+      'unavailable',
+    );
+    expect(port.selectModels).toHaveBeenCalledTimes(2);
+    expect(port.sendRequest).not.toHaveBeenCalled();
+  });
+
+  it('coalesces overlapping user-initiated fresh discoveries', async () => {
+    const port = await installModels(SONNET);
+    await refreshRuntimeModelRegistry();
+
+    let releaseDiscovery: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    const deferred = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseDiscovery = resolve;
+    });
+    vi.mocked(port.selectModels).mockReturnValueOnce(deferred);
+
+    const first = requestRuntimeModelAccess('sonnet46');
+    const second = requestRuntimeModelAccess('sonnet46');
+    releaseDiscovery([{ ...SONNET, access: 'unavailable' }]);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      'unavailable',
+      'unavailable',
+    ]);
+    expect(port.selectModels).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains last-known routes when user-initiated discovery fails', async () => {
+    const port = await installModels(SONNET);
+    await refreshRuntimeModelRegistry();
+    const error = new Error('fresh discovery failed');
+    vi.mocked(port.selectModels).mockRejectedValueOnce(error);
+
+    await expect(requestRuntimeModelAccess('sonnet46')).rejects.toBe(error);
+
+    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+  });
+
   it('reports the direct fallback for a base model and a legacy copilot id', async () => {
     await installModels(SONNET, GPT_56);
     await refreshRuntimeModelRegistry();
