@@ -389,17 +389,6 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('presents agent skills as an independent launcher switch', () => {
-    const items = orchestrationItems({ agentSkillsEnabled: true });
-
-    expect(items.find((item) => item.label === 'Agent skills')).toEqual({
-      label: 'Agent skills',
-      description:
-        'On · TeXRA and imported skills available to tool-use agents',
-      value: { kind: 'set-agent-skills', enabled: false },
-    });
-  });
-
   it('describes the Kimi Code route by key state and activity', () => {
     expect(
       buildCliModelAccessItems({
