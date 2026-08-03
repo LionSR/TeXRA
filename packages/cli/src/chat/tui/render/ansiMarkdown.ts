@@ -12,7 +12,7 @@
 import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
 import { LRUCache } from 'lru-cache';
-import Token from 'markdown-it/lib/token.mjs';
+import MarkdownIt, { type RendererRule, type Token } from 'markdown-it';
 import pico from 'picocolors';
 
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
@@ -27,8 +27,6 @@ import {
 } from '@shared/markdown/createMarkdownRenderer';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 import { textDisplayWidth } from './terminalText';
-
-import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
@@ -182,11 +180,13 @@ function configureAnsi(
   const quotePrefix = (): string =>
     quoteDepth > 0 ? style.dim('│ '.repeat(quoteDepth)) : '';
 
-  const startsAtQuoteOpen = (tokens: Parameters<RenderRule>[0], idx: number) =>
-    tokens[idx - 1]?.type === 'blockquote_open';
+  const startsAtQuoteOpen = (
+    tokens: Parameters<RendererRule>[0],
+    idx: number,
+  ) => tokens[idx - 1]?.type === 'blockquote_open';
 
   const quoteBlockStart = (
-    tokens: Parameters<RenderRule>[0],
+    tokens: Parameters<RendererRule>[0],
     idx: number,
   ): string => {
     if (quoteDepth === 0 || startsAtQuoteOpen(tokens, idx)) return '';
@@ -194,7 +194,7 @@ function configureAnsi(
   };
 
   const withQuoteGutter = (
-    tokens: Parameters<RenderRule>[0],
+    tokens: Parameters<RendererRule>[0],
     idx: number,
     body: string,
   ): string => {
@@ -364,7 +364,11 @@ function configureAnsi(
             break;
           case 'th_open':
           case 'td_open': {
-            if (inHeader) aligns[col] = columnAlign(token.attrGet('style'));
+            const style = token.attrGet('style');
+            if (inHeader)
+              aligns[col] = columnAlign(
+                typeof style === 'string' ? style : null,
+              );
             col++;
             break;
           }
@@ -378,7 +382,7 @@ function configureAnsi(
             break;
         }
       }
-      const tableToken = new Token('ansi_table', '', 0);
+      const tableToken = new MarkdownIt.Token('ansi_table', '', 0);
       tableToken.content = renderAnsiTable(head, rows, aligns, width, style);
       collapsed.push(tableToken);
       i = j; // land on table_close; the loop's i++ skips it
