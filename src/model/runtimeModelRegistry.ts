@@ -172,9 +172,10 @@ export async function refreshRuntimeModelRegistry(
     if (catalogue.generation === generation) {
       catalogue = {
         generation,
-        // A user-initiated revalidation must not blank useful last-known
-        // presentation merely because the fresh adapter probe failed.
-        entries: options.forceDiscovery ? previousEntries : new Map(),
+        // Discovery failure marks last-known presentation stale but does not
+        // blank it. Authorization callers still receive the thrown error and
+        // therefore cannot act on these retained entries.
+        entries: previousEntries,
         discovered: false,
       };
     }
@@ -240,7 +241,9 @@ export function copilotRouteForModel(
  * Refresh and return the discovered Copilot routes keyed by canonical base
  * model id. Runtime discovery is an optional host capability: the host
  * adapter logs port-level discovery failures (see `createLanguageModelPort`),
- * and consumers receive an empty catalogue instead of stale entries.
+ * and presentation consumers retain the last-known catalogue while it is
+ * stale. Authorization never uses this fallback: access requests force a new
+ * probe and propagate its failure.
  */
 export async function discoveredCopilotRoutes(): Promise<
   ReadonlyMap<string, CopilotModelRoute>
@@ -248,7 +251,7 @@ export async function discoveredCopilotRoutes(): Promise<
   try {
     await refreshRuntimeModelRegistry();
   } catch {
-    return new Map();
+    return catalogue.entries;
   }
   return catalogue.entries;
 }

@@ -7,6 +7,7 @@ import {
   type ModelOptionsAccess,
 } from '@model/computeModelOptions';
 import {
+  preferredCopilotRouteModels,
   shouldRouteModelThroughCopilot,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
@@ -242,6 +243,43 @@ describe('runtime model registry', () => {
     expect(port.sendRequest).not.toHaveBeenCalled();
   });
 
+  it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
+    let releaseOrdinary: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
+      undefined;
+    const ordinary = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseOrdinary = resolve;
+    });
+    const forced = new Promise<readonly LanguageModelInfo[]>((resolve) => {
+      releaseForced = resolve;
+    });
+    const port = {
+      ...languageModelPort([]),
+      selectModels: vi
+        .fn<() => Promise<readonly LanguageModelInfo[]>>()
+        .mockReturnValueOnce(ordinary)
+        .mockReturnValueOnce(forced),
+    };
+    await installPlatform({}, { languageModel: port });
+
+    const staleOrdinaryRefresh = refreshRuntimeModelRegistry();
+    const forcedRequest = requestRuntimeModelAccess('sonnet46');
+    releaseForced([{ ...SONNET, access: 'unavailable' }]);
+    await expect(forcedRequest).resolves.toBe('unavailable');
+
+    // Resolve stale allowed data last: the superseded generation must not
+    // overwrite the forced result that authorized the opt-in outcome.
+    releaseOrdinary([SONNET]);
+    await staleOrdinaryRefresh;
+
+    expect((await discoveredCopilotRoutes()).get('sonnet46')?.access).toBe(
+      'unavailable',
+    );
+    expect(port.sendRequest).not.toHaveBeenCalled();
+    expect(port.selectModels).toHaveBeenCalledTimes(2);
+  });
+
   it('coalesces overlapping user-initiated fresh discoveries', async () => {
     const port = await installModels(SONNET);
     await refreshRuntimeModelRegistry();
@@ -264,15 +302,28 @@ describe('runtime model registry', () => {
     expect(port.selectModels).toHaveBeenCalledTimes(2);
   });
 
-  it('retains last-known routes when user-initiated discovery fails', async () => {
-    const port = await installModels(SONNET);
-    await refreshRuntimeModelRegistry();
+  it('keeps a visible non-preferred route after failed opt-in revalidation', async () => {
     const error = new Error('fresh discovery failed');
-    vi.mocked(port.selectModels).mockRejectedValueOnce(error);
+    let discoveryFails = false;
+    const port = {
+      ...languageModelPort([]),
+      selectModels: vi.fn(async () => {
+        if (discoveryFails) throw error;
+        return [SONNET];
+      }),
+    };
+    await installPlatform({}, { languageModel: port });
+    await refreshRuntimeModelRegistry();
+    discoveryFails = true;
 
     await expect(requestRuntimeModelAccess('sonnet46')).rejects.toBe(error);
 
-    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+    // Settings reads through the public asynchronous boundary. Its retry also
+    // fails, but the previously visible route remains available for display.
+    const visibleRoutes = await discoveredCopilotRoutes();
+    expect(visibleRoutes.get('sonnet46')?.access).toBe('allowed');
+    expect(preferredCopilotRouteModels()).toEqual([]);
+    expect(port.selectModels).toHaveBeenCalledTimes(3);
   });
 
   it('reports the direct fallback for a base model and a legacy copilot id', async () => {
@@ -383,14 +434,16 @@ describe('runtime model registry', () => {
     await expect(resolveRuntimeModelConfig('gpt55')).resolves.toBeDefined();
   });
 
-  it('returns an empty route catalogue when native discovery fails', async () => {
+  it('returns the last-known route catalogue when rediscovery fails', async () => {
     await installModels(SONNET);
     await refreshRuntimeModelRegistry();
 
     invalidateRuntimeModelRegistry();
     await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
-    await expect(discoveredCopilotRoutes()).resolves.toEqual(new Map());
+    expect((await discoveredCopilotRoutes()).get('sonnet46')?.access).toBe(
+      'allowed',
+    );
   });
 });
 
