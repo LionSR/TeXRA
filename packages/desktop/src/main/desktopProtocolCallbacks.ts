@@ -10,7 +10,6 @@ export interface DesktopProtocolCallback {
   rawUrl: string;
   path: string;
   query: string;
-  fragment: string;
 }
 
 interface DesktopProtocolCallbackSubscription {
@@ -82,7 +81,6 @@ export function parseDesktopProtocolCallback(
     rawUrl,
     path,
     query: url.search.length > 0 ? url.search.slice(1) : '',
-    fragment: url.hash.length > 0 ? url.hash.slice(1) : '',
   };
 }
 
