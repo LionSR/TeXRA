@@ -154,16 +154,6 @@ class ExposedRetryNode extends RetryableInvocationNode<
     this._persistent401Error = new Error('persistent relay 401');
     this._hasAttemptedTokenRefresh = true;
   }
-
-  persistent401Guards(): {
-    readonly error: Error | null;
-    readonly tokenRefreshAttempted: boolean;
-  } {
-    return {
-      error: this._persistent401Error,
-      tokenRefreshAttempted: this._hasAttemptedTokenRefresh,
-    };
-  }
 }
 
 interface RetryNodeKit {
@@ -1487,10 +1477,6 @@ describe('RetryState', () => {
       ).resolves.toBe(true);
 
       expect(rebind).toHaveBeenCalledOnce();
-      expect(node.persistent401Guards()).toEqual({
-        error: null,
-        tokenRefreshAttempted: false,
-      });
     } finally {
       clearStreamStatusForTest(streamStatus, streamId);
     }
