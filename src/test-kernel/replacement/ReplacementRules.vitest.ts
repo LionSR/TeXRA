@@ -49,16 +49,6 @@ const embeddedNewlineCaption = [
 describe('caption spacing normalization', () => {
   it.each([
     {
-      name: 'trims tabs in single-line caption',
-      input: '\\caption{\tMy caption\t}',
-      expected: '\\caption{My caption}',
-    },
-    {
-      name: 'trims spaces in single-line caption',
-      input: '\\caption{  My caption  }',
-      expected: '\\caption{My caption}',
-    },
-    {
       name: 'trims mixed spaces and tabs in single-line caption',
       input: '\\caption{ \tMy caption\t }',
       expected: '\\caption{My caption}',

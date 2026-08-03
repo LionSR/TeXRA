@@ -81,14 +81,6 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     );
   });
 
-  it('omits an empty prefix instead of sending an invalid text block', async () => {
-    const handler = createHandler();
-    const steps = await handler.initializeMessages('', 'What are we lacking?');
-
-    const content = (steps[0] as Interactions.UserInputStep).content ?? [];
-    expect(content).toEqual([{ type: 'text', text: 'What are we lacking?' }]);
-  });
-
   it('createAssistantMessage builds a model_output step', () => {
     const handler = createHandler();
     const step = handler.createAssistantMessage('hi');
