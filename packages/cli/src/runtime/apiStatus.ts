@@ -251,10 +251,25 @@ export async function loadCliDetailedAccountStatusLines(options: {
           }
         : { kind: 'personal' as const },
   };
-  const lines = [
-    `ChatGPT: ${routes.chatGpt.preferred ? 'preferred' : 'not preferred'} · ${routes.chatGpt.account}`,
-    `Kimi Code: ${routes.kimiCode.preferred ? 'preferred' : 'not preferred'} · ${routes.kimiCode.credential}`,
-  ];
+  const lines: string[] = [];
+  if (routes.chatGpt.preferred || access.chatGptSignedIn) {
+    const account =
+      routes.chatGpt.preferred && !access.chatGptSignedIn
+        ? 'sign in required'
+        : routes.chatGpt.account;
+    lines.push(
+      `ChatGPT: ${routes.chatGpt.preferred ? 'preferred' : 'not preferred'} · ${account}`,
+    );
+  }
+  if (routes.kimiCode.preferred || access.kimiCodeKeySet === true) {
+    const credential =
+      routes.kimiCode.preferred && access.kimiCodeKeySet !== true
+        ? 'key required'
+        : routes.kimiCode.credential;
+    lines.push(
+      `Kimi Code: ${routes.kimiCode.preferred ? 'preferred' : 'not preferred'} · ${credential}`,
+    );
+  }
   if (routes.fallback.kind === 'included') {
     lines.push(
       [
