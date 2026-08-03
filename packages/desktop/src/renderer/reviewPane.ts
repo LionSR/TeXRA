@@ -32,15 +32,6 @@ export interface ReviewPaneController {
   setTheme(theme: DesktopThemeKind): void;
 }
 
-function reviewPath(payload: DesktopShowDiffMessage): string {
-  return (
-    payload.displayPath ??
-    payload.proposedPath ??
-    payload.originalPath ??
-    payload.title
-  );
-}
-
 export function createReviewPane(): ReviewPaneController {
   const element = document.createElement('section');
   element.className = 'desktop-review-pane';
@@ -216,7 +207,7 @@ export function createReviewPane(): ReviewPaneController {
       rerender();
     },
     open(payload) {
-      const path = reviewPath(payload);
+      const path = payload.displayPath;
       const entry = { ...payload, key: path, path };
       entries.set(path, entry);
       select(entry);
