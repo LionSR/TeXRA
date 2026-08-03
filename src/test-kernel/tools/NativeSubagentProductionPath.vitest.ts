@@ -372,4 +372,143 @@ describe('native subagent production delivery path', () => {
     expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
     expect(parentTurns).toHaveLength(0);
   }, 30_000);
+
+  it('does not redeliver turn 1 when the resumed turn produces no new assistant message', async () => {
+    const parentTurns = [
+      { text: 'Parent ready.' },
+      { text: 'Parent received result A.' },
+      { text: 'Parent closed out an empty second turn.' },
+    ];
+    // Turn 2 is answerless: the scripted transport ends the turn with no text,
+    // so the resumed cycle completes without adding an assistant message.
+    const childTurns = [{ text: 'Result A.' }, { text: '' }];
+    const observedFollowUps: Array<{
+      readonly model: string;
+      readonly messages: readonly unknown[];
+      readonly text: string;
+    }> = [];
+    modelFactoryMocks.createModelHandler.mockImplementation(
+      async (modelConfig: { name: string }) =>
+        taggedScriptedHandler(
+          modelConfig.name,
+          modelConfig.name === CHILD_MODEL ? childTurns : parentTurns,
+          observedFollowUps,
+        ),
+    );
+
+    const parentConfig = AgentConfigSchema.parse({
+      agent: PARENT_AGENT,
+      agentSource: 'inline',
+      agentCategory: AgentCategory.ToolUse,
+      model: PARENT_MODEL,
+      instruction: 'Coordinate the child proof review.',
+      workingDirectory: process.cwd(),
+    });
+    await registerExecution(PARENT_EXECUTION_ID, parentConfig, PARENT_AGENT, {
+      streamId: PARENT_STREAM_ID,
+      parentExecutionId: OUTER_EXECUTION_ID,
+    });
+    await expect(
+      executeAgent(parentConfig, PARENT_EXECUTION_ID, {
+        session,
+        allowWaitingResult: true,
+        isSubagent: true,
+        parentStreamId: OUTER_STREAM_ID,
+      }),
+    ).resolves.toMatchObject({
+      outcome: STREAM_PHASE.WAITING,
+      response: 'Parent ready.',
+    });
+
+    const parentContext = createRunContext({
+      streamId: PARENT_STREAM_ID,
+      executionId: PARENT_EXECUTION_ID,
+      modelCell: new ModelCell({} as never, PARENT_MODEL),
+      session,
+    });
+    const runAsParentOwner = captureOwnedExecutionLease(PARENT_EXECUTION_ID);
+    const launch = await runAsParentOwner(() =>
+      withRunContext(parentContext, () =>
+        executeSubagent(
+          {
+            agent: CHILD_AGENT,
+            agentSource: 'inline',
+            agentCategory: AgentCategory.ToolUse,
+            model: CHILD_MODEL,
+            instruction: 'Prove the first assertion.',
+            memories: [],
+            workingDirectory: process.cwd(),
+          },
+          CHILD_AGENT,
+          PARENT_STREAM_ID,
+        ),
+      ),
+    );
+    expect(launch.status).toBe('executed');
+    const executionId = childExecutionId(launch.output);
+    childId = executionId;
+
+    await waitForPersistedResult(executionId, 'Result A.');
+    await vi.waitFor(() => expect(completedResumes).toHaveLength(1), {
+      timeout: 10_000,
+    });
+
+    const resumed = await runAsParentOwner(() =>
+      withRunContext(parentContext, () =>
+        new DelegateAgentTool().call({
+          agent: null,
+          model: null,
+          instruction: 'Now prove the second assertion.',
+          memories: [],
+          working_directory: null,
+          execution_id: executionId,
+        }),
+      ),
+    );
+    expect(resumed.status).toBe('executed');
+    expect(resumed.summary).toContain('Follow-up queued');
+
+    // The answerless turn still delivers: its report/result overwrite turn 1's
+    // with an explicitly empty response rather than replaying 'Result A.' — and
+    // the parent is resumed a second time to consume that empty delivery.
+    await vi.waitFor(
+      async () => {
+        await expect(
+          getExecutionStore(executionId).readResultMeta(),
+        ).resolves.toMatchObject({
+          result: { response: '' },
+        });
+        const report = await getExecutionStore(executionId).readReport();
+        expect(report).not.toContain('Result A.');
+        expect(report).not.toContain('<response>');
+      },
+      { timeout: 10_000 },
+    );
+    await vi.waitFor(() => expect(completedResumes).toHaveLength(2), {
+      timeout: 10_000,
+    });
+
+    await session.transcripts.flush();
+    const archivedChild = await readCompletedRunConversation(executionId);
+    // Turn 2 added the user instruction but no new assistant row.
+    expect(archivedChild.conversation).toEqual([
+      expect.objectContaining({ role: 'user' }),
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Result A.' }],
+      },
+      expect.objectContaining({
+        role: 'user',
+        content: expect.stringContaining('second assertion'),
+      }),
+    ]);
+
+    const archivedParent =
+      await readCompletedRunConversation(PARENT_EXECUTION_ID);
+    const parentText = JSON.stringify(archivedParent.conversation);
+    expect(parentText.match(/Result A\./g)).toHaveLength(1);
+    expect(resumedStreams).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(completedResumes).toEqual([PARENT_STREAM_ID, PARENT_STREAM_ID]);
+    expect(parentTurns).toHaveLength(0);
+  }, 30_000);
 });
