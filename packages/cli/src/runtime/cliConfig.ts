@@ -22,18 +22,6 @@ import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
 
 export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekproT';
 
-interface CliCommandConfig {
-  readonly agent?: string;
-  readonly model?: string;
-}
-
-export interface CliConfigValues extends CliCommandConfig {
-  readonly outputFormat?: CliOutputFormat;
-  readonly approvalPolicy?: CliApprovalPolicy;
-  readonly chat?: CliCommandConfig;
-  readonly run?: CliCommandConfig;
-}
-
 export interface LoadedCliConfig {
   readonly path?: string;
   readonly values: CliConfigValues;
@@ -96,23 +84,53 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 const ApprovalPolicySchema = z.enum(CLI_APPROVAL_POLICIES);
 
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-  ['outputFormat', OutputFormatSchema],
-  ['approvalPolicy', ApprovalPolicySchema],
-];
+/**
+ * Declarative schema for a per-command (`chat`/`run`) config section. This is
+ * the single source of truth for the set of fields walked for
+ * unknown/invalid-key warnings (via `.shape`, see COMMAND_KEYS below) — there
+ * is no separate hand-maintained field list to drift out of sync with
+ * `CliConfigValues`.
+ */
+const CliCommandConfigSchema = z.strictObject({
+  agent: NonEmptyStringSchema.optional(),
+  model: ModelSchema.optional(),
+});
 
-const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
-  ['agent', NonEmptyStringSchema],
-  ['model', ModelSchema],
-];
-const COMMAND_SECTIONS = ['chat', 'run'] as const;
+/**
+ * Declarative schema for the CLI's own `.texra/config.json` fields. Same
+ * single-source-of-truth relationship to `CliConfigValues` and to the field
+ * walk below as `CliCommandConfigSchema` above.
+ */
+const CliConfigSchema = z.strictObject({
+  agent: NonEmptyStringSchema.optional(),
+  model: ModelSchema.optional(),
+  outputFormat: OutputFormatSchema.optional(),
+  approvalPolicy: ApprovalPolicySchema.optional(),
+  chat: CliCommandConfigSchema.optional(),
+  run: CliCommandConfigSchema.optional(),
+});
+export type CliConfigValues = z.infer<typeof CliConfigSchema>;
+
+// Scalar top-level fields, i.e. everything except the nested chat/run
+// sections — derived from CliConfigSchema rather than re-declared, so a new
+// scalar field only needs to be added once, above.
+const CLI_SCALAR_FIELD_SHAPE = CliConfigSchema.omit({
+  chat: true,
+  run: true,
+}).shape;
+
+// The two known command sections. Kept as a literal tuple (there is no
+// programmatic way to pull "the nested-object keys" out of a ZodObject
+// shape), but `satisfies` ties it back to CliConfigValues so a rename in the
+// schema above is a compile error here instead of a silent drift.
+const COMMAND_SECTIONS = ['chat', 'run'] as const satisfies ReadonlyArray<
+  keyof CliConfigValues
+>;
 
 const TOP_LEVEL_KEYS = new Set<string>(
   CLI_SETTING_PATHS.map(canonicalConfigKey),
 );
-const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
+const COMMAND_KEYS = new Set(Object.keys(CliCommandConfigSchema.shape));
 
 function isKnownConfigKey(key: string): boolean {
   return TOP_LEVEL_KEYS.has(key) || KNOWN_TEXRA_KEYS.has(key);
@@ -157,7 +175,9 @@ function collectValidationWarnings(
   const warnings: string[] = [];
   warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
 
-  for (const [key, schema] of TOP_LEVEL_FIELD_SCHEMAS) {
+  // Validate top-level scalar fields, driven by CliConfigSchema's own shape —
+  // see CLI_SCALAR_FIELD_SHAPE.
+  for (const [key, schema] of Object.entries(CLI_SCALAR_FIELD_SHAPE)) {
     const storedKey = canonicalConfigKey(key);
     warnInvalidField(warnings, filePath, record, storedKey, schema);
   }
@@ -172,22 +192,36 @@ function collectValidationWarnings(
     }
     const prefix = `${sectionKey}.`;
     warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
-    for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
+    for (const [key, schema] of Object.entries(CliCommandConfigSchema.shape)) {
       warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
     }
   }
   return warnings;
 }
 
+/**
+ * Validate a single field with its own schema, warning-and-dropping (never
+ * `.catch()`-ing) on failure: an invalid field must not silently fall back to
+ * a default, since the loud warning above is what tells the user their config
+ * value was ignored.
+ */
 function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
-  return schema.optional().catch(undefined).parse(value);
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
-function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
-  return {
-    agent: parseOptional(NonEmptyStringSchema, record.agent),
-    model: parseOptional(ModelSchema, record.model),
-  };
+/** Pick and validate every field of `shape` present (as a bare key) in `record`. */
+function pickShapeValues(
+  record: Record<string, unknown>,
+  shape: Record<string, z.ZodType>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, schema] of Object.entries(shape)) {
+    if (Object.hasOwn(record, key)) {
+      result[key] = parseOptional(schema, record[key]);
+    }
+  }
+  return result;
 }
 
 function pickValue<T>(
@@ -207,16 +241,17 @@ function pickRecord(
 }
 
 function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
-  const chat = pickRecord(record, 'chat');
-  const run = pickRecord(record, 'run');
-  return {
-    agent: pickValue(record, 'agent', NonEmptyStringSchema),
-    model: pickValue(record, 'model', ModelSchema),
-    outputFormat: pickValue(record, 'outputFormat', OutputFormatSchema),
-    approvalPolicy: pickValue(record, 'approvalPolicy', ApprovalPolicySchema),
-    chat: chat ? pickCommandConfig(chat) : undefined,
-    run: run ? pickCommandConfig(run) : undefined,
-  };
+  const values: Record<string, unknown> = {};
+  for (const [key, schema] of Object.entries(CLI_SCALAR_FIELD_SHAPE)) {
+    values[key] = pickValue(record, key, schema);
+  }
+  for (const section of COMMAND_SECTIONS) {
+    const sectionRecord = pickRecord(record, section);
+    values[section] = sectionRecord
+      ? pickShapeValues(sectionRecord, CliCommandConfigSchema.shape)
+      : undefined;
+  }
+  return values as CliConfigValues;
 }
 
 export function parseCliConfigValues(value: unknown): CliConfigValues {
