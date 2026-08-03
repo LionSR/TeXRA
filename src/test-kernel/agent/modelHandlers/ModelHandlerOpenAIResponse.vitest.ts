@@ -419,7 +419,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(reasoning?.effort, 'medium');
   });
 
-  it('requests priority processing for the gpt56fast registry entry', async () => {
+  it('requests fast-tier processing for the gpt56fast registry entry', async () => {
     assert.equal(MODEL_CONFIGS.gpt56fast.serviceTier, 'fast');
     const handler = createHandler(MODEL_CONFIGS.gpt56fast);
     const { client, requests } = createCapturingClient('resp-fast-tier');
@@ -431,7 +431,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     });
 
     assert.equal(requests[0]?.model, 'gpt-5.6-sol');
-    assert.equal(requests[0]?.service_tier, 'priority');
+    assert.equal(requests[0]?.service_tier, 'fast');
   });
 
   it('sends max effort when the model declares max as its native ceiling', async () => {
