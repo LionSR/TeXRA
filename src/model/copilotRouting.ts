@@ -15,6 +15,9 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { copilotRouteForModel } from './runtimeModelRegistry';
 
+/** One-launch override for a deliberate direct-key retry. */
+export type CopilotRouteOverride = 'direct';
+
 function copilotRouteModels(): readonly string[] {
   return (
     platform().globalState.get<readonly string[]>(
@@ -25,45 +28,17 @@ function copilotRouteModels(): readonly string[] {
 }
 
 /**
- * Process-local, launch-scoped routing override (#9635): a direct-key
- * fallback retry must not re-enter Copilot for the same model, but the
- * user's persisted preference must survive a host crash or reload
- * mid-launch — so the override lives in memory only and never writes
- * global state. Mutated exclusively through
- * {@link withCopilotRouteSuppressed}; empty between launches.
+ * Persisted canonical model ids whose Copilot route the user prefers. Settings
+ * needs the raw list so a model the editor no longer discovers still surfaces
+ * its undo (#9659).
  */
-const launchSuppressedModels = new Set<string>();
-
-/**
- * Run `launch` with the Copilot route preference for `model` suppressed.
- * The persisted preference is never touched; a crash mid-launch leaves
- * the user's standing choice intact.
- */
-export async function withCopilotRouteSuppressed<T>(
-  model: string,
-  launch: () => Promise<T>,
-): Promise<T> {
-  launchSuppressedModels.add(model);
-  try {
-    return await launch();
-  } finally {
-    launchSuppressedModels.delete(model);
-  }
+export function preferredCopilotRouteModels(): readonly string[] {
+  return [...copilotRouteModels()];
 }
 
 /** Whether the user prefers the Copilot route for this canonical base model. */
 export function prefersCopilotRoute(model: string): boolean {
-  if (launchSuppressedModels.has(model)) return false;
   return copilotRouteModels().includes(model);
-}
-
-/**
- * The persisted per-model preferences, unfiltered by launch suppression.
- * Settings UI needs the raw list so a preferred model the editor no longer
- * discovers still surfaces its undo (#9659).
- */
-export function preferredCopilotRouteModels(): readonly string[] {
-  return copilotRouteModels();
 }
 
 /** Persist (or clear) the Copilot route preference for one base model. */

@@ -27,10 +27,7 @@ import { type ZodError } from 'zod';
 
 // Local imports - shared state and schemas
 import { hostBridge } from '@shared/hostBridge';
-import {
-  MainViewPersistedStateSchema,
-  type MainViewPersistedState,
-} from '@shared/schemas';
+import type { MainViewPersistedState } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import {
   createWebviewStorage,
@@ -40,6 +37,7 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { createFlushableDebounce } from '@utils/core';
 
 // Local imports - main view
+import { VscodeMainViewPersistedStateSchema } from '../vscodeMainViewPersistedState';
 import { SESSION_TYPES } from './constants';
 import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
@@ -70,7 +68,7 @@ const webviewStorage = createWebviewStorage(hostBridge);
 const stateManager = new PersistedState(
   webviewStorage,
   'mainViewState',
-  MainViewPersistedStateSchema,
+  VscodeMainViewPersistedStateSchema,
 );
 
 /**
@@ -186,8 +184,8 @@ const watcher = new Signal.subtle.Watcher(() => {
 });
 
 export function restorePersistedState(): void {
-  // State is parsed through MainViewPersistedStateSchema which provides all defaults.
-  // No manual fallbacks needed - schema handles missing/invalid values.
+  // The extension-local schema provides defaults and reads the retired VS Code
+  // Copilot picker identity. No manual fallbacks are needed.
   const state = stateManager.getState();
   applyState(state);
   // Arm the writer on what the mount produced, not on what storage held: the
@@ -227,7 +225,7 @@ export function handleRestoreState(
     return false;
   }
 
-  const parsed = MainViewPersistedStateSchema.safeParse(message.state);
+  const parsed = VscodeMainViewPersistedStateSchema.safeParse(message.state);
   if (!parsed.success) {
     onSchemaError('[MainApp] State restore validation failed.', parsed.error);
     return false;

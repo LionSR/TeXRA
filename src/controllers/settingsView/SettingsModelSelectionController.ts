@@ -6,10 +6,7 @@ import {
   LEVEL_TO_EFFORT,
 } from '@agent/modelHandlers/support/reasoningEffort';
 import { FREE_TIER, MAX_TIER } from '@auth/config';
-import {
-  preferredCopilotRouteModels,
-  prefersCopilotRoute,
-} from '@model/copilotRouting';
+import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import {
   discoveredCopilotRoutes,
@@ -50,6 +47,7 @@ export interface SettingsModelSelectionControllerDeps {
   useIncludedAccess?: () => boolean;
   getUserTier?: () => string | undefined;
   getCopilotRoutes?: () => Promise<ReadonlyMap<string, CopilotModelRoute>>;
+  getPreferredCopilotRouteModels?: () => readonly string[];
   /**
    * Resolve availability-decorated options for the given models. Injected as a
    * port so the controller stays unit-testable; production wiring uses the
@@ -90,44 +88,41 @@ export class SettingsModelSelectionController {
 
   async buildSelectionData(): Promise<SettingsModelSelectionData> {
     const visibleModels = this.getVisibleModels();
+    const routes = await (
+      this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
+    )();
+    const preferredModels = new Set(
+      (
+        this.deps.getPreferredCopilotRouteModels ?? preferredCopilotRouteModels
+      )(),
+    );
     return {
-      models: await this.buildSelectionItems(),
+      models: await this.buildSelectionItems(routes, preferredModels),
       helperModel: this.getEffectiveHelperModel(visibleModels),
       preferShortModelNames:
         this.deps.state.getPreferShortModelNames() ?? false,
-      copilotModels: await this.buildCopilotRouteInfos(),
+      copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
     };
   }
 
   /**
-   * Route status for the Models tab Copilot section: every discovered Copilot
-   * route with its editor-reported access state, labelled by the base model it
-   * serves. Routes are not picker rows; they describe transports.
+   * Route status for the Models tab Copilot section: every discovered route
+   * plus every persisted preference, labelled by the base model it serves.
+   * A preferred route absent from discovery remains visible as unavailable so
+   * the user can clear it. Routes are transports, never picker rows.
    */
-  private async buildCopilotRouteInfos(): Promise<CopilotRouteInfo[]> {
-    const routes = await (
-      this.deps.getCopilotRoutes ?? discoveredCopilotRoutes
-    )();
+  private buildCopilotRouteInfos(
+    routes: ReadonlyMap<string, CopilotModelRoute>,
+    preferredModels: ReadonlySet<string>,
+  ): CopilotRouteInfo[] {
     const configs = new Map(staticModelConfigEntries());
-    const infos: CopilotRouteInfo[] = [...routes].map(([name, route]) => ({
+    const names = new Set([...routes.keys(), ...preferredModels]);
+    return [...names].map((name) => ({
       name,
       label: configs.get(name)?.label ?? name,
-      access: route.access,
-      preferred: prefersCopilotRoute(name),
+      access: routes.get(name)?.access ?? 'unavailable',
+      preferred: preferredModels.has(name),
     }));
-    // A preferred model the editor no longer discovers still needs its undo
-    // surface (#9659): the routing layer treats the persisted preference as
-    // a hard route choice, so without a row the user could never clear it.
-    for (const name of preferredCopilotRouteModels()) {
-      if (routes.has(name)) continue;
-      infos.push({
-        name,
-        label: configs.get(name)?.label ?? name,
-        access: 'unavailable',
-        preferred: true,
-      });
-    }
-    return infos;
   }
 
   async setModelEnabled(input: {
@@ -178,7 +173,10 @@ export class SettingsModelSelectionController {
     await this.deps.state.setPreferShortModelNames(enabled);
   }
 
-  private async buildSelectionItems(): Promise<ModelSelectionItem[]> {
+  private async buildSelectionItems(
+    copilotRoutes: ReadonlyMap<string, CopilotModelRoute>,
+    preferredCopilotModels: ReadonlySet<string>,
+  ): Promise<ModelSelectionItem[]> {
     const enabledSet = new Set(this.getVisibleModels());
     const reasoningOverrides =
       this.deps.state.getReasoningLevelOverrides() ?? {};
@@ -224,7 +222,16 @@ export class SettingsModelSelectionController {
         disabled: option.disabled,
       };
 
-      this.addReasoningLevelData(item, config, reasoningOverrides[name]);
+      const copilotRoute = copilotRoutes.get(name);
+      const effectiveConfig =
+        preferredCopilotModels.has(name) && copilotRoute?.access === 'allowed'
+          ? copilotRoute.effectiveConfig
+          : config;
+      this.addReasoningLevelData(
+        item,
+        effectiveConfig,
+        reasoningOverrides[name],
+      );
       items.push(item);
     }
 

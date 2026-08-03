@@ -35,6 +35,7 @@ export interface RunAgentOptions extends Pick<
   | 'tools'
   | 'session'
   | 'modelHandlerCompatibilityKey'
+  | 'copilotRouteOverride'
   | 'onRun'
   | 'onStreamResolved'
   | 'onIdle'
