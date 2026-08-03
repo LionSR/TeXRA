@@ -8,7 +8,7 @@
  *   2. backend-pushed history-rerun/reset restore (`handleRestoreState`).
  *
  * Both paths apply state through `applyState`, which owns output-file reset
- * and legacy-instruction precedence. Behavior is pinned by
+ * and per-mode instruction restore. Behavior is pinned by
  * `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
  *
  * ## Single writer
@@ -45,7 +45,6 @@ import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
   checkboxValues$,
   commit$,
-  instruction$,
   latexdiffsVisible$,
   launchTarget$,
   model$,
