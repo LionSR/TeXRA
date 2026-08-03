@@ -112,8 +112,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       preferHelperModel: data.preferHelperModel === true,
       modelHandlerCompatibilityKey: data.modelHandlerCompatibilityKey,
       copilotRouteOverride: data.copilotRouteOverride as
-        | CopilotRouteOverride
-        | undefined,
+        CopilotRouteOverride | undefined,
       onRun: extractOnRun(input),
     },
   );

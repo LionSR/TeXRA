@@ -50,9 +50,7 @@ export function planToolTerminalAction(input: {
   if (!def) return { kind: 'none', reason: 'unknownTool' };
 
   const command =
-    input.commandKind === 'install'
-      ? def.install?.command
-      : def.auth?.command;
+    input.commandKind === 'install' ? def.install?.command : def.auth?.command;
   if (!command) return { kind: 'none', reason: 'missingCommand' };
 
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
