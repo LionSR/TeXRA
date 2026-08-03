@@ -1028,6 +1028,78 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
+  it('does not resurrect a stream evicted during description hydration', async () => {
+    await installPlatform();
+    const executionId = 'bb33dd44' as ExecutionId;
+    const executionStore = getExecutionStore(executionId);
+    await executionStore.writeConfig(toolUseConfig());
+    await executionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Late authority label',
+    });
+    await writeMetaFile(STREAM, { executionId });
+    const persistedMeta = await executionStore.readMeta();
+    const readStarted = pDefer<void>();
+    const deferredRead = pDefer<typeof persistedMeta>();
+    vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+      readStarted.resolve();
+      return deferredRead.promise;
+    });
+
+    const store = new StreamSnapshotStore();
+    const loading = store.load([STREAM]);
+    await readStarted.promise;
+    await store.deleteStream(STREAM);
+    deferredRead.resolve(persistedMeta);
+    await loading;
+
+    expect(store.getDescription(STREAM)).toBeUndefined();
+    await expect(store.listPersistedStreams()).resolves.not.toContain(STREAM);
+  });
+
+  it('hydrates independent execution descriptions concurrently', async () => {
+    await installPlatform();
+    const firstExecutionId = 'cc44ee55' as ExecutionId;
+    const secondExecutionId = 'dd55ff66' as ExecutionId;
+    const firstExecutionStore = getExecutionStore(firstExecutionId);
+    const secondExecutionStore = getExecutionStore(secondExecutionId);
+    await firstExecutionStore.writeConfig(toolUseConfig());
+    await secondExecutionStore.writeConfig(toolUseConfig());
+    await firstExecutionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'First authority label',
+    });
+    await secondExecutionStore.writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Second authority label',
+    });
+    await writeMetaFile(STREAM, { executionId: firstExecutionId });
+    await writeMetaFile(OTHER_STREAM, { executionId: secondExecutionId });
+    const firstMeta = await firstExecutionStore.readMeta();
+    const secondMeta = await secondExecutionStore.readMeta();
+    const firstRead = pDefer<typeof firstMeta>();
+    const secondRead = pDefer<typeof secondMeta>();
+    const firstReadSpy = vi
+      .spyOn(firstExecutionStore, 'readMeta')
+      .mockReturnValue(firstRead.promise);
+    const secondReadSpy = vi
+      .spyOn(secondExecutionStore, 'readMeta')
+      .mockReturnValue(secondRead.promise);
+
+    const store = new StreamSnapshotStore();
+    const loading = store.load([STREAM, OTHER_STREAM]);
+    await vi.waitFor(() => {
+      expect(firstReadSpy).toHaveBeenCalledOnce();
+      expect(secondReadSpy).toHaveBeenCalledOnce();
+    });
+    firstRead.resolve(firstMeta);
+    secondRead.resolve(secondMeta);
+    await loading;
+
+    expect(store.getDescription(STREAM)).toBe('First authority label');
+    expect(store.getDescription(OTHER_STREAM)).toBe('Second authority label');
+  });
+
   it('resolves description disagreement to ExecutionMeta and never writes either side (#9590 A4)', async () => {
     await installPlatform();
     // Both sides present and disagreeing: the display serves the authority

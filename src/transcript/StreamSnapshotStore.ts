@@ -2311,22 +2311,28 @@ export class StreamSnapshotStore {
    * persisted sidecar value through {@link getDescription}'s legacy fallback.
    */
   private async hydrateDescriptionsFromExecutionMeta(): Promise<void> {
-    for (const [streamId, record] of [...this.records]) {
-      const executionId = record.meta?.runDescriptor?.executionId;
-      if (!executionId) continue;
-      try {
-        const execMeta = await getExecutionStore(executionId).readMeta();
-        if (execMeta?.description) {
-          this.setDescription(streamId, execMeta.description);
+    await Promise.all(
+      [...this.records].map(async ([streamId, record]) => {
+        const executionId = record.meta?.runDescriptor?.executionId;
+        if (!executionId) return;
+        try {
+          const execMeta = await getExecutionStore(executionId).readMeta();
+          // The reads are independent, so run them concurrently. Revalidate
+          // the captured record after the await: re-resolving through
+          // `setDescription` would recreate a stream evicted in flight (#8226).
+          if (this.records.get(streamId) !== record) return;
+          if (execMeta?.description) {
+            record.description = execMeta.description;
+          }
+        } catch (err) {
+          // Best-effort; a missing/corrupt execution store just skips hydration.
+          logger.debug(
+            CHANNEL,
+            `Skipping description hydration for stream ${streamId}`,
+            { data: err },
+          );
         }
-      } catch (err) {
-        // Best-effort; a missing/corrupt execution store just skips hydration.
-        logger.debug(
-          CHANNEL,
-          `Skipping description hydration for stream ${streamId}`,
-          { data: err },
-        );
-      }
-    }
+      }),
+    );
   }
 }
