@@ -16,7 +16,7 @@ import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approval/approvalPolicy';
@@ -161,6 +161,9 @@ export interface ChatSessionControllerInit {
   /** Mutable session state the controller owns. */
   readonly session: TuiSession;
 
+  /** Runtime session that owns executions, storage, and interactions. */
+  readonly runtimeSession: SessionHandle;
+
   /** Build a {@link CliContext} keyed on the current model. */
   readonly getSessionContext: (model: string) => CliContext;
 
@@ -179,15 +182,12 @@ export function createChatSessionController(
 ): ChatSessionController {
   const {
     session,
+    runtimeSession,
     getSessionContext,
     disposers,
     followUpQueue,
     snapshotStore,
   } = init;
-  // The controller owns exactly one runtime session for its whole lifetime;
-  // resolve it once here so every path below propagates that owner instead of
-  // re-resolving the process default.
-  const runtimeSession = defaultSession();
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
 
