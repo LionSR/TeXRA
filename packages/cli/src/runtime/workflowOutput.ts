@@ -31,23 +31,26 @@ function joinCwdRelative(target: string, cwd: string): string {
 
 type OutputPathStats = Pick<Awaited<ReturnType<typeof fs.stat>>, 'isDirectory'>;
 
+type OutputFlag = '--output' | '--output-dir';
+
 interface OutputPathProbeDependencies {
   readonly stat: (target: string) => Promise<OutputPathStats>;
-  readonly lstat: (
+  readonly mkdir: (
     target: string,
-  ) => Promise<OutputPathStats & { isSymbolicLink(): boolean }>;
+    options: { readonly recursive: true },
+  ) => Promise<string | undefined>;
   readonly dirname: (target: string) => string;
 }
 
 const outputPathProbeDefaults: OutputPathProbeDependencies = {
   stat: fs.stat,
-  lstat: fs.lstat,
+  mkdir: fs.mkdir,
   dirname: path.dirname,
 };
 
 function parentFileUsageError(
   target: string,
-  flagLabel: '--output' | '--output-dir',
+  flagLabel: OutputFlag,
 ): CliUsageError {
   return new CliUsageError(
     flagLabel === '--output-dir'
@@ -56,89 +59,48 @@ function parentFileUsageError(
   );
 }
 
-function danglingSymlinkUsageError(
-  target: string,
-  candidate: string,
-  flagLabel: '--output' | '--output-dir',
-): CliUsageError {
-  if (candidate === target) {
-    return new CliUsageError(
-      `${flagLabel} is a dangling symbolic link: ${target}`,
-    );
-  }
-  return new CliUsageError(
-    flagLabel === '--output-dir'
-      ? `--output-dir cannot be created (a parent path component is a dangling symbolic link): ${target}`
-      : `--output: a parent path component is a dangling symbolic link: ${target}`,
-  );
-}
-
 /**
- * Stat `target` for the output-path guards. Returns `null` when the path
- * doesn't exist yet and its nearest existing ancestor is a directory. Some
- * platforms report a file ancestor as ENOENT rather than ENOTDIR, so missing
- * paths are checked upward. Other stat errors propagate with their real cause.
+ * Probe `target` and materialize the directory that the eventual output write
+ * requires. Using the same recursive mkdir operation as the writer avoids
+ * platform-specific ancestor traversal: it handles missing depth, Windows
+ * ENOENT-through-file behavior, and symlink resolution natively.
  */
 async function probeOutputPath(
   target: string,
-  flagLabel: '--output' | '--output-dir',
+  flagLabel: OutputFlag,
   dependencies: OutputPathProbeDependencies = outputPathProbeDefaults,
 ): Promise<OutputPathStats | null> {
-  const { stat, lstat, dirname } = dependencies;
-  let candidate = target;
-  while (true) {
-    let stats: OutputPathStats;
-    try {
-      stats = await stat(candidate);
-    } catch (error: unknown) {
-      if (isNotADirectoryError(error)) {
-        throw parentFileUsageError(target, flagLabel);
-      }
-      if (!isFileNotFoundError(error)) throw error;
-
-      try {
-        const linkStats = await lstat(candidate);
-        if (!linkStats.isSymbolicLink()) {
-          stats = linkStats;
-        } else {
-          try {
-            stats = await stat(candidate);
-          } catch (retryError: unknown) {
-            if (isFileNotFoundError(retryError)) {
-              throw danglingSymlinkUsageError(target, candidate, flagLabel);
-            }
-            throw retryError;
-          }
-        }
-      } catch (lstatError: unknown) {
-        if (lstatError instanceof CliUsageError) throw lstatError;
-        if (isNotADirectoryError(lstatError)) {
-          throw parentFileUsageError(target, flagLabel);
-        }
-        if (!isFileNotFoundError(lstatError)) throw lstatError;
-
-        const parent = dirname(candidate);
-        if (parent === candidate) throw lstatError;
-        candidate = parent;
-        continue;
-      }
-    }
-
-    if (candidate === target) return stats;
-    if (!stats.isDirectory()) {
+  const { stat, mkdir, dirname } = dependencies;
+  try {
+    return await stat(target);
+  } catch (error: unknown) {
+    if (isNotADirectoryError(error)) {
       throw parentFileUsageError(target, flagLabel);
     }
-    return null;
+    if (!isFileNotFoundError(error)) throw error;
   }
+
+  const requiredDirectory =
+    flagLabel === '--output-dir' ? target : dirname(target);
+  try {
+    await mkdir(requiredDirectory, { recursive: true });
+  } catch (error: unknown) {
+    if (isNotADirectoryError(error)) {
+      throw parentFileUsageError(target, flagLabel);
+    }
+    if (isFileNotFoundError(error)) {
+      throw new CliUsageError(
+        flagLabel === '--output-dir'
+          ? `--output-dir cannot be created: ${target}`
+          : `--output parent directory cannot be created: ${target}`,
+      );
+    }
+    throw error;
+  }
+  return null;
 }
 
-export async function probeOutputPathForTests(
-  target: string,
-  flagLabel: '--output' | '--output-dir',
-  dependencies: OutputPathProbeDependencies,
-): Promise<void> {
-  await probeOutputPath(target, flagLabel, dependencies);
-}
+export { probeOutputPath as probeOutputPathForTests };
 
 /** `--output-dir <path>` must point at a directory (or not exist yet). */
 export async function assertOutputDirAvailable(
