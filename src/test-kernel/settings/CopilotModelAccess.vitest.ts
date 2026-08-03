@@ -82,7 +82,7 @@ describe('Copilot model access settings', () => {
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('1 Copilot model is ready');
     const button = section?.querySelector<HTMLElement>('wa-button');
-    expect(button?.textContent).toContain('Use Copilot for GPT-5.5');
+    expect(button?.textContent).toContain('Use Copilot');
 
     button?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
@@ -96,7 +96,7 @@ describe('Copilot model access settings', () => {
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('GPT-5.5 runs through Copilot.');
     const button = section?.querySelector<HTMLElement>('wa-button');
-    expect(button?.textContent).toContain('Stop using Copilot for GPT-5.5');
+    expect(button?.textContent).toContain('Stop using Copilot');
 
     button?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
@@ -104,21 +104,74 @@ describe('Copilot model access settings', () => {
     ]);
   });
 
-  it('offers the undo, not consent, when a preferred route loses access', async () => {
+  it('keeps other route actions reachable while one route is preferred', async () => {
+    const tab = await renderModelsTab([
+      { ...allowedRoute, preferred: true },
+      consentRoute,
+    ]);
+
+    const buttons = [
+      ...(tab.shadowRoot?.querySelectorAll<HTMLElement>(
+        '#copilot-access wa-button',
+      ) ?? []),
+    ];
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+      'Stop using Copilot',
+      'Grant access',
+    ]);
+    const actionRows = [
+      ...(tab.shadowRoot?.querySelectorAll<HTMLElement>(
+        '#copilot-access .copilot-route-action',
+      ) ?? []),
+    ];
+    expect(actionRows).toHaveLength(2);
+    expect(actionRows[0]?.textContent).toContain('GPT-5.5');
+    expect(actionRows[1]?.textContent).toContain('Claude Sonnet 4.6');
+    expect(buttons[0]?.classList.contains('btn-secondary')).toBe(true);
+    expect(buttons[0]?.getAttribute('appearance')).toBe('outlined');
+    expect(buttons[1]?.classList.contains('btn-primary')).toBe(true);
+    expect(buttons[1]?.getAttribute('appearance')).toBe('filled');
+
+    buttons[0]?.click();
+    buttons[1]?.click();
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'gpt55' }],
+      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
+    ]);
+  });
+
+  it('describes a preferred route that is waiting for consent', async () => {
     const tab = await renderModelsTab([{ ...consentRoute, preferred: true }]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain(
-      'Claude Sonnet 4.6 is set to use Copilot but is waiting for consent.',
+      'Selected Copilot route is waiting for VS Code consent.',
     );
-    const button = section?.querySelector<HTMLElement>('wa-button');
-    expect(button?.textContent).toContain(
-      'Stop using Copilot for Claude Sonnet 4.6',
-    );
-
-    button?.click();
-    expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'sonnet46' }],
+    const buttons = [
+      ...(section?.querySelectorAll<HTMLElement>('wa-button') ?? []),
+    ];
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+      'Grant access',
+      'Stop using Copilot',
     ]);
+    expect(section?.querySelector('.copilot-route-controls')).not.toBeNull();
+    buttons[0]?.click();
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
+    ]);
+  });
+
+  it('keeps an unavailable preferred route removable', async () => {
+    const tab = await renderModelsTab([
+      { ...allowedRoute, access: 'unavailable', preferred: true },
+    ]);
+
+    const section = tab.shadowRoot?.querySelector('#copilot-access');
+    expect(section?.textContent).toContain(
+      '1 selected Copilot route needs attention.',
+    );
+    expect(section?.querySelector('wa-button')?.textContent).toContain(
+      'Stop using Copilot',
+    );
   });
 });
