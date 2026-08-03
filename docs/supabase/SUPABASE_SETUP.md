@@ -234,7 +234,7 @@ CREATE TABLE remote_agents (
   description TEXT,
   storage_path TEXT NOT NULL,
   visibility TEXT[] DEFAULT ARRAY['public'],
-  agent_category TEXT DEFAULT 'workflow' CHECK (agent_category IN ('workflow', 'toolUse')),
+  agent_category TEXT NOT NULL DEFAULT 'workflow' CHECK (agent_category IN ('workflow', 'toolUse')),
   tools TEXT[] DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
