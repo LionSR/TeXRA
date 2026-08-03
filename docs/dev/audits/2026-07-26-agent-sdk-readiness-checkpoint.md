@@ -178,7 +178,7 @@ coupling); neither is actionable in an unattended pass.
     exists" note for the workflow-script runner binding is now stale.**
     `createWorkflowScriptAgentRunner` (`workflowScriptAgentRunner.ts:123`) is the
     **live production** binding of the injected `WorkflowAgentRunner` port to
-    `executeStableSubagentInBand`, wired at `WorkflowScriptTool.ts:247`. This is
+    `executeStableSubagentInBand`, wired at `DelegateMultiAgentsTool.ts:247`. This is
     a factual correction to the earlier record, not new debt: the workflow-script
     engine is the natural first _programmatic_ SDK surface and it already returns
     journaled typed results. No action; recorded so the stale claim isn't carried
@@ -241,7 +241,7 @@ narrowing without a deliberate compatibility boundary for `Map` inputs.**
 - `MapToolRegistry` (`src/agent/core/tools/ToolTypes.ts:50-51`) still
   `Map | Record` with the `instanceof Map` branch.
 - `workflowScriptAgentRunner.ts:123` `createWorkflowScriptAgentRunner` confirmed
-  a **live production** binding (`WorkflowScriptTool.ts:247`), not a test fake.
+  a **live production** binding (`DelegateMultiAgentsTool.ts:247`), not a test fake.
 - Direct `executeAgent` census: three production call sites —
   `src/agent/runtime/runAgent.ts`,
   `src/tools/delegation/nativeSubagentStrategy.ts`, and the lazy import in

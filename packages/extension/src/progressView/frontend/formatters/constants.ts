@@ -180,7 +180,7 @@ export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
 
   // Workflow/delegation
   delegate_workflow: 'list-ul',
-  delegate_workflow_script: 'list-ul',
+  delegate_multi_agents: 'list-ul',
   delegate_agent: 'circle-user',
 
   // Execution history

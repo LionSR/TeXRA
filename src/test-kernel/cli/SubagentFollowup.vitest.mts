@@ -286,7 +286,7 @@ describe('summarizeSubagentFollowup', () => {
         '  paper_A.tex (+120 -80)',
         '  notes.txt',
         '  script: .texra/workflow-scripts/proofread-pipeline.mjs',
-        '  rerun: edit the script, then call delegate_workflow_script with scriptPath',
+        '  rerun: edit the script, then call delegate_multi_agents with scriptPath',
       ].join('\n'),
     );
   });

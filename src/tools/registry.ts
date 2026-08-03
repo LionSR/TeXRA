@@ -4,7 +4,7 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 
@@ -54,7 +54,7 @@ import {
   WorkflowAgentTool,
   DelegateAgentTool,
 } from './delegation/DelegationTools';
-import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
+import { DelegateMultiAgentsTool } from './delegation/DelegateMultiAgentsTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry';
@@ -125,7 +125,7 @@ function createDefaultTools() {
     codex: new CodexTool(),
     [CLAUDE_AGENT_NAME]: new ClaudeAgentTool(),
     delegate_workflow: new WorkflowAgentTool(),
-    [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: new WorkflowScriptTool(),
+    [DELEGATE_MULTI_AGENTS_TOOL_NAME]: new DelegateMultiAgentsTool(),
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
     accept_run_files: new AcceptRunFilesTool(),

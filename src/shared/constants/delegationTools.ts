@@ -1,11 +1,10 @@
 import { AgentCategory } from '../schemas/agent';
 
-export const DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME =
-  'delegate_workflow_script' as const;
+export const DELEGATE_MULTI_AGENTS_TOOL_NAME = 'delegate_multi_agents' as const;
 
 const CANONICAL_DELEGATION_TOOL_NAMES = [
   'delegate_workflow',
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
   'delegate_agent',
 ] as const;
 
@@ -39,7 +38,7 @@ export const DELEGATION_AVAILABILITY_CATEGORY: Readonly<
   Record<string, AgentCategory>
 > = {
   ...DELEGATION_TOOL_CATEGORY,
-  [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: AgentCategory.Workflow,
+  [DELEGATE_MULTI_AGENTS_TOOL_NAME]: AgentCategory.Workflow,
 };
 
 /** True when any of the given tool names is a delegation tool. */

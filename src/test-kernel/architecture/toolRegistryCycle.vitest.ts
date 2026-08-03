@@ -40,7 +40,7 @@ const TOOL_REGISTRY = 'src/tools/registry.ts';
  */
 const AGENT_LAUNCHING_TOOLS = [
   'src/tools/delegation/DelegationTools.ts',
-  'src/tools/delegation/WorkflowScriptTool.ts',
+  'src/tools/delegation/DelegateMultiAgentsTool.ts',
 ] as const;
 
 /** Domain subsystems no generic tool should have to install. */

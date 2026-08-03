@@ -1153,7 +1153,8 @@ describe('ProgressBackend', () => {
         agent: 'generic',
         model: 'gpt-5.6-sol',
         agentCategory: AgentCategory.Workflow,
-        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+        instruction:
+          "Multi-agent workflow 'repo-cleanup-readonly-pilot-2026-07-24'",
       }),
     );
 
@@ -1161,7 +1162,8 @@ describe('ProgressBackend', () => {
       expect(backend.state.getStreamMetadata(stream).run).toEqual({
         kind: 'workflowScript',
         workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+        instruction:
+          "Multi-agent workflow 'repo-cleanup-readonly-pilot-2026-07-24'",
       }),
     );
     const workflowInfos = buildStreamInfos(backend.state);

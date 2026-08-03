@@ -48,7 +48,7 @@ src/agent/runtime src/agent/storage` alone shows **11**:
 34 files total, including `src/tools/bash.ts`,
 `src/tools/agentCliShared.ts`, and the delegation tool call sites
 (`subagentExecution.ts`, `inBandSubagentExecution.ts`,
-`WorkflowScriptTool.ts`). This pass's fan-out readers opened only **one** of
+`DelegateMultiAgentsTool.ts`). This pass's fan-out readers opened only **one** of
 those 11 runtime/storage files fresh at `395e229`: `runAgent.ts`.
 `RunContext.ts` and `SessionHandle.ts` were also read fresh this pass, but
 as part of the general runtime review, not because `0dc0f8b` touched them —

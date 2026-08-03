@@ -15,7 +15,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -245,7 +245,7 @@ describe('child stream progress events', () => {
         agentName: 'draft-sections',
         description: 'Run a named child task',
         config,
-        toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+        toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
       }),
     );
     await withSessionEventRecording(() => firstRun.finalize());
@@ -264,7 +264,7 @@ describe('child stream progress events', () => {
         agentName: 'draft-sections',
         description: 'Resume the named child task',
         config,
-        toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+        toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
       },
     );
 
@@ -309,7 +309,7 @@ describe('child stream progress events', () => {
       agentName: 'retry-setup',
       description: 'Retry a failed child stream setup',
       config,
-      toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+      toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
     };
 
     try {
@@ -366,7 +366,7 @@ describe('child stream progress events', () => {
           agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
           description: 'Audit the repository without editing',
           config: workerConfig,
-          toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+          toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
         },
       );
 

@@ -30,7 +30,7 @@ import type {
 } from '@agent/runtime/workflowControlRegistry';
 import type { ExecutionId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -54,7 +54,7 @@ const RUN_LOG_MAX_LINE_LENGTH = 500;
 export function formatWorkflowScriptReference(scriptPath: string): string {
   return [
     `Script file: ${scriptPath}`,
-    `To revise and rerun it, edit that file and call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} with scriptPath: '${scriptPath}'.`,
+    `To revise and rerun it, edit that file and call ${DELEGATE_MULTI_AGENTS_TOOL_NAME} with scriptPath: '${scriptPath}'.`,
   ].join('\n');
 }
 
@@ -150,7 +150,7 @@ export function createWorkflowScriptStrategy(
   );
 
   return {
-    stageLabel: `Workflow script '${params.name}'`,
+    stageLabel: `Multi-agent workflow '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {

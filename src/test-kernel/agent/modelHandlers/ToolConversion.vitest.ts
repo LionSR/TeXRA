@@ -780,7 +780,7 @@ describe('toGoogleTools', () => {
       'arxiv_metadata',
       'crossref_search',
       'diagnostics',
-      'delegate_workflow_script',
+      'delegate_multi_agents',
     ]);
 
     expect(reviewTools).toHaveLength(17);
@@ -804,8 +804,8 @@ describe('toGoogleTools', () => {
     }
   });
 
-  it('converts the registered workflow script JSON args for both Google APIs', () => {
-    const [definition] = resolveToolDefinitions(['delegate_workflow_script']);
+  it('converts delegate_multi_agents JSON args for both Google APIs', () => {
+    const [definition] = resolveToolDefinitions(['delegate_multi_agents']);
     const interactionSchema = convertGoogleToolSchema(definition) as {
       properties: Record<string, Record<string, unknown>>;
     };

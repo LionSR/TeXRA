@@ -104,7 +104,7 @@ describe('createWorkflowScriptStrategy', () => {
     );
     expect(strategy.isTerminal({} as never)).toBe(true);
     expect(strategy.runTurn).toBeUndefined();
-    expect(strategy.stageLabel).toBe("Workflow script 'strategy-test'");
+    expect(strategy.stageLabel).toBe("Multi-agent workflow 'strategy-test'");
   });
 
   it('uses persist-only delivery when the headless caller owns the report', () => {

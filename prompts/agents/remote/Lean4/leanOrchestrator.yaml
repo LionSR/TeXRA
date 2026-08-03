@@ -7,9 +7,9 @@ settings:
     # Delegation
     - delegate_workflow
     - delegate_agent
-    # Advanced deterministic delegation. The global Workflow Script switch is
-    # an additional kill switch and is disabled by default.
-    - delegate_workflow_script
+    # Advanced deterministic delegation. The global Multi-Agent Workflow
+    # switch is an additional kill switch and is disabled by default.
+    - delegate_multi_agents
     - executions
     - accept_run_files
     # Project management

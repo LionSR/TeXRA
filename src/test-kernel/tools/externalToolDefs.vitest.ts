@@ -27,13 +27,17 @@ describe('external tool definitions', () => {
     ]);
   });
 
-  it('keeps the workflow script tool as a user-toggleable, always-available group', async () => {
-    const workflowScript = findExternalToolDef('workflow-script');
+  it('keeps multi-agent workflows user-toggleable and always available', async () => {
+    const multiAgentWorkflow = findExternalToolDef('workflow-script');
 
-    assert.ok(workflowScript, 'Workflow script tool definition should exist');
-    assert.strictEqual(workflowScript.toggleable, true);
-    assert.deepStrictEqual(workflowScript.tools, ['delegate_workflow_script']);
-    assert.strictEqual(await workflowScript.check(), true);
+    assert.ok(
+      multiAgentWorkflow,
+      'Multi-agent workflow tool definition should exist',
+    );
+    assert.strictEqual(multiAgentWorkflow.name, 'Multi-Agent Workflow');
+    assert.strictEqual(multiAgentWorkflow.toggleable, true);
+    assert.deepStrictEqual(multiAgentWorkflow.tools, ['delegate_multi_agents']);
+    assert.strictEqual(await multiAgentWorkflow.check(), true);
   });
 
   it('shows TeXRA CLI as a detected but inactive integration', () => {

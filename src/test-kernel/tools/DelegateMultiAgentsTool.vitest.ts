@@ -76,7 +76,7 @@ vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
-import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
+import { DelegateMultiAgentsTool } from '@tools/delegation/DelegateMultiAgentsTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
 const executionId = '7154scripttool' as ExecutionId;
@@ -151,7 +151,7 @@ async function callToolInput(
         trace: new TraceEmitter(),
         hooks: { recordSubagentCost: vi.fn() },
       },
-      () => new WorkflowScriptTool().call(input),
+      () => new DelegateMultiAgentsTool().call(input),
     ),
   );
 }
@@ -196,14 +196,14 @@ beforeEach(async () => {
   );
 });
 
-describe('WorkflowScriptTool', () => {
+describe('DelegateMultiAgentsTool', () => {
   it('is registered and classified without becoming a proposal tool', () => {
-    expect(getDefaultToolRegistry().has('delegate_workflow_script')).toBe(true);
-    expect(DELEGATION_TOOLS.has('delegate_workflow_script')).toBe(true);
-    expect(DELEGATION_AVAILABILITY_CATEGORY.delegate_workflow_script).toBe(
+    expect(getDefaultToolRegistry().has('delegate_multi_agents')).toBe(true);
+    expect(DELEGATION_TOOLS.has('delegate_multi_agents')).toBe(true);
+    expect(DELEGATION_AVAILABILITY_CATEGORY.delegate_multi_agents).toBe(
       'workflow',
     );
-    expect(DELEGATION_TOOL_CATEGORY.delegate_workflow_script).toBeUndefined();
+    expect(DELEGATION_TOOL_CATEGORY.delegate_multi_agents).toBeUndefined();
   });
 
   it('owns a detached run completion rejection without delivering a second error', async () => {
@@ -216,11 +216,11 @@ describe('WorkflowScriptTool', () => {
 
     expect(result).toMatchObject({
       status: 'executed',
-      summary: "Launched workflow script 'tool-test' (async)",
+      summary: "Launched multi-agent workflow 'tool-test' (async)",
     });
     await vi.waitFor(() => {
       expect(mocks.childLoggerError).toHaveBeenCalledWith(
-        "Workflow script 'tool-test' run loop failed after launch",
+        "Multi-agent workflow 'tool-test' run loop failed after launch",
         { data: lateFailure },
       );
     });
@@ -230,7 +230,7 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('declares the task-plan contract at the model-facing boundary', () => {
-    const definition = new WorkflowScriptTool().definition;
+    const definition = new DelegateMultiAgentsTool().definition;
     const description = definition.description;
     const providerSchema = convertToolSchema(definition);
     const providerProperties = providerSchema?.properties as
@@ -252,6 +252,12 @@ describe('WorkflowScriptTool', () => {
     );
     expect(providerProperties?.scriptPath?.description).toContain(
       'Provide exactly one of script or scriptPath',
+    );
+    expect(description).toContain(
+      'Use `delegate_multi_agents` only when the complete fan-out, pipeline, and join structure is known before execution and should resume safely after interruption.',
+    );
+    expect(description).toContain(
+      'Keep using `delegate_agent` one call at a time when a later decision depends on reviewing an earlier result.',
     );
     expect(description).toContain(
       'declare meta.tasks as { id, label, phase? } records',
@@ -294,7 +300,7 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('rejects invalid JSON arguments at the schema boundary', async () => {
-    const result = await new WorkflowScriptTool().call({
+    const result = await new DelegateMultiAgentsTool().call({
       agent: 'correct',
       script,
       scriptPath: null,
@@ -307,7 +313,7 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('requires a launched tool context', async () => {
-    const outside = await new WorkflowScriptTool().call({
+    const outside = await new DelegateMultiAgentsTool().call({
       agent: 'correct',
       script,
       scriptPath: null,
@@ -365,7 +371,7 @@ describe('WorkflowScriptTool', () => {
       agentName: 'tool-test',
     });
     expect(loopParams.strategy).toMatchObject({
-      stageLabel: "Workflow script 'tool-test'",
+      stageLabel: "Multi-agent workflow 'tool-test'",
       launch: expect.any(Function),
       isTerminal: expect.any(Function),
     });
@@ -377,7 +383,7 @@ describe('WorkflowScriptTool', () => {
 
     expect(result).toMatchObject({
       status: 'executed',
-      summary: "Launched workflow script 'tool-test' (async)",
+      summary: "Launched multi-agent workflow 'tool-test' (async)",
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     expect(result.output).toContain(
@@ -426,7 +432,7 @@ describe('WorkflowScriptTool', () => {
 
     expect(result).toMatchObject({
       status: 'executed',
-      summary: "Launched workflow script 'edited-tool-test' (async)",
+      summary: "Launched multi-agent workflow 'edited-tool-test' (async)",
     });
     expect(result.output).toContain(`Script file: ${scriptPath}`);
     expect(mocks.registerExecution).toHaveBeenCalledWith(
@@ -484,7 +490,7 @@ describe('WorkflowScriptTool', () => {
         scriptPath: '.texra/workflow-scripts/stale.mjs',
       },
     ]) {
-      const result = await new WorkflowScriptTool().call(input);
+      const result = await new DelegateMultiAgentsTool().call(input);
       expect(result).toMatchObject({
         status: 'error',
         diagnostics: { type: 'validation_error' },
@@ -531,7 +537,7 @@ describe('WorkflowScriptTool', () => {
     expect(loopParams.strategy.resolveDeliveryTarget).toBeUndefined();
     expect(result).toMatchObject({
       status: 'executed',
-      summary: "Completed workflow script 'tool-test'",
+      summary: "Completed multi-agent workflow 'tool-test'",
       output: expect.stringContaining(
         '<workflow-script-result>solved</workflow-script-result>',
       ),
@@ -555,7 +561,7 @@ describe('WorkflowScriptTool', () => {
 
     expect(result).toMatchObject({
       status: 'error',
-      summary: "Workflow script 'tool-test' failed",
+      summary: "Multi-agent workflow 'tool-test' failed",
       error: expect.stringContaining(
         '<workflow-script-error>broken</workflow-script-error>',
       ),
@@ -585,7 +591,7 @@ describe('WorkflowScriptTool', () => {
     expect(result).toMatchObject({
       status: 'error',
       error: expect.stringContaining(
-        "Workflow script 'interrupted-resume' completed without a persisted report.",
+        "Multi-agent workflow 'interrupted-resume' completed without a persisted report.",
       ),
     });
     expect(result.error).not.toContain('stale success from the prior attempt');
@@ -755,7 +761,7 @@ describe('WorkflowScriptTool', () => {
 
     expect(result).toMatchObject({
       status: 'executed',
-      summary: "Workflow script 'tool-test' is already running",
+      summary: "Multi-agent workflow 'tool-test' is already running",
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     // A relaunch over a live run never starts a second competing loop.

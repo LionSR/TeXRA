@@ -415,11 +415,11 @@
       "src/tools/comment/InlineCommentTool.ts",
       "src/tools/contextHelpers.ts",
       "src/tools/core/base.ts",
+      "src/tools/delegation/DelegateMultiAgentsTool.ts",
       "src/tools/delegation/DelegationTools.ts (type-only)",
       "src/tools/delegation/inputFields.ts (type-only)",
       "src/tools/delegation/proposalFlow.ts (type-only)",
       "src/tools/delegation/subagentExecution.ts (type-only)",
-      "src/tools/delegation/WorkflowScriptTool.ts",
       "src/tools/DiagnosticsTool.ts",
       "src/tools/EditTool.ts",
       "src/tools/ExecutionsTool.ts",
@@ -473,8 +473,8 @@
       "src/agent/workflowScript/persistence.ts",
       "src/agent/workflowScript/runWorkflowScript.ts",
       "src/agent/workflowScript/types.ts (type-only)",
-      "src/tools/delegation/workflowScriptStrategy.ts (type-only)",
-      "src/tools/delegation/WorkflowScriptTool.ts"
+      "src/tools/delegation/DelegateMultiAgentsTool.ts",
+      "src/tools/delegation/workflowScriptStrategy.ts (type-only)"
     ]
   },
   "gratuitous": {

@@ -276,7 +276,7 @@ consolidated result.
 2. **Canonical `AgentFinalResult` envelope after post-flow artifact work.**
    This is the fixed chaining contract for both workflow and tool-use agents;
    it requires no model-constrained JSON mechanism.
-3. **The engine as a `delegate_workflow_script` tool**: prototype engine
+3. **The engine as a `delegate_multi_agents` tool**: prototype engine
    (`src/agent/workflowScript/`) wired to the in-band execution path,
    ordinary `parentExecutionId` lineage, run-storage file binding, journal persistence,
    progress-event bridging onto the existing stream tree (extension board

@@ -37,7 +37,7 @@ import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
 import {
@@ -442,7 +442,7 @@ function buildWorkflowScriptSections(
     return [
       buildToolUseSection(
         'Input:',
-        wrapInPre('Workflow script input is unavailable.'),
+        wrapInPre('Multi-agent workflow input is unavailable.'),
       ),
     ];
   }
@@ -642,7 +642,7 @@ const TOOL_SECTION_BUILDERS: Array<{
     build: buildAcceptRunFilesSections,
   },
   {
-    match: (ctx) => ctx.toolName === DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+    match: (ctx) => ctx.toolName === DELEGATE_MULTI_AGENTS_TOOL_NAME,
     build: buildWorkflowScriptSections,
   },
   {

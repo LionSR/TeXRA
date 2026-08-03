@@ -463,7 +463,7 @@ describe('task-group-list status icon (#7993 step 3)', () => {
   });
 });
 
-// #8722 Phase 2b: a focused delegate_workflow_script run projects its phases
+// #8722 Phase 2b: a focused delegate_multi_agents run projects its phases
 // as `kind: 'phase'` groups with per-agent Running/Finished/Failed lines
 // beneath. The phase header and call cards are both derived from typed state;
 // the renderer does not parse status prefixes from prose.

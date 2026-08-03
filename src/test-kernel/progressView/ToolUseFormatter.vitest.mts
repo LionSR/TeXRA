@@ -82,7 +82,7 @@ const papers = await parallel(
 );
 return { papers, question: args.question };`;
     const message = toolUseMessage('workflow-script', {
-      toolName: 'delegate_workflow_script',
+      toolName: 'delegate_multi_agents',
       input: {
         agent: 'research',
         script,
@@ -99,7 +99,7 @@ return { papers, question: args.question };`;
       output: {
         status: 'executed',
         summary:
-          "Completed workflow script 'Literature synthesis' (2 agent calls)",
+          "Completed multi-agent workflow 'Literature synthesis' (2 agent calls)",
         output: JSON.stringify({ compared: 2 }),
       },
     });
@@ -142,7 +142,7 @@ return { papers, question: args.question };`;
 
   it('shows explicit null workflow-script arguments as JSON', () => {
     const message = toolUseMessage('workflow-script-null-args', {
-      toolName: 'delegate_workflow_script',
+      toolName: 'delegate_multi_agents',
       input: {
         agent: 'research',
         script: 'export const meta = { name: "One call" };\nreturn null;',

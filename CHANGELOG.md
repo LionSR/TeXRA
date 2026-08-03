@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.41.0] - Unreleased
+
+### Shared (all surfaces)
+
+#### Features
+
+- **Multi-agent workflows are available to the software-engineering and Lean
+  team leads** — after enabling **Multi-Agent Workflow** in the Tools panel,
+  these teams can run predetermined parallel and sequential agent pipelines
+  that resume safely after interruption.
+
+#### Breaking Changes
+
+- **Custom agent definitions use `delegate_multi_agents` for resumable
+  multi-agent workflows** — replace the former
+  `delegate_workflow_script` tool name in custom YAML files. The renamed tool
+  still runs predetermined fan-out, pipeline, and join structures as one
+  resumable operation.
+
 ## [0.40.0] - 2026-08-02
 
 ### CLI
@@ -64,10 +83,6 @@ All notable changes to this project will be documented in this file.
   TeXRA settings view.
 - **OpenAI Fast models use the priority service tier** — their requests now ask
   OpenAI for priority processing instead of the standard service tier.
-- **Workflow scripts are available to the software-engineering and Lean team
-  leads** — after enabling Workflow Script in the Tools panel, these teams can
-  run predetermined parallel and sequential agent pipelines that resume safely
-  after interruption.
 
 #### Breaking Changes
 

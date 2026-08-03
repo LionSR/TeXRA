@@ -12,7 +12,7 @@ Prereqs shipped: durable named checkpoints (#8666/#8651), CLI progress projectio
 ## Framing: this is a convergence, not a new mode
 
 The constraint is to make the system _simpler_. Detaching the run does that
-by **removing a dual system**: `delegate_workflow_script` is today the one
+by **removing a dual system**: `delegate_multi_agents` is today the one
 delegation tool that bypasses `startChildRunLoop` and delivers synchronously.
 Folding it into the existing async path means one delivery mechanism (the
 follow-up queue) for all three delegation tools, and lets us **delete** the
@@ -25,7 +25,7 @@ down.
 
 ## Problem
 
-`delegate_workflow_script` runs **synchronously inside the orchestrator's
+`delegate_multi_agents` runs **synchronously inside the orchestrator's
 tool-call turn**. The parent turn blocks for the whole run — up to the
 10-minute wall clock (`meta.timeoutMs`, capped at 60 min) — and the model
 gets exactly one thing back: the final tool result. While the run is in
@@ -71,12 +71,12 @@ So the async conversion is a **new strategy**, not new runtime:
 - **New** `createWorkflowScriptStrategy(params)` — a `ChildRunStrategy` shaped
   like `createNativeWorkflowStrategy`, whose `launch(ports)` calls
   `runPersistedWorkflowScriptWithProgress` (moved out of
-  `WorkflowScriptTool.execute`), uses `ports.recordCost` for the final total
+  `DelegateMultiAgentsTool.execute`), uses `ports.recordCost` for the final total
   and `ports.notify` for interim phase/log progress, `isTerminal: () => true`,
   no `runTurn`. `formatDelivery` → result + run log; `formatError` → error +
   run log + "resume with same meta.name" hint; `buildResultMeta` → the
   structured result envelope so `/executions/{id}/result` chaining works.
-- **Split** `WorkflowScriptTool.execute` into a launch half (mint/derive the
+- **Split** `DelegateMultiAgentsTool.execute` into a launch half (mint/derive the
   run executionId, capture `recordSubagentCost` +
   `approvalPromptsUnavailable`/`runtimeUnavailableTools` up front, call
   `registerExecution` + `startChildRunLoop`, return "Launched (async)") and
@@ -94,7 +94,7 @@ Resume (#8666) works today _because_ the checkpoint is anchored to the stable
 orchestrator executionId plus `meta.name`:
 `deriveWorkflowScriptCheckpointId({ name, defaultAgent, parentExecutionId })`
 where `parentExecutionId` is the orchestrator's execution
-(`WorkflowScriptTool.ts:127`), and the journal KV lives on
+(`DelegateMultiAgentsTool.ts:127`), and the journal KV lives on
 `getExecutionStore(orchestratorExecutionId)`.
 
 If a detached run minted a fresh random executionId
@@ -160,7 +160,7 @@ live retry can be a fast-follow.
 
 The #8672 CLI projection (`workflowScriptProgress.ts`) is built entirely
 around finding and patching the **owning tool row** (gated on
-`DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME`, keyed to `logId`). A detached run is its
+`DELEGATE_MULTI_AGENTS_TOOL_NAME`, keyed to `logId`). A detached run is its
 own stream, so its phase/log lines must instead route into a `StreamSlice`
 and render through the existing focused-child viewport — a different
 mechanism, not a config flip. The workflow's `agent()` children _already_
@@ -202,7 +202,7 @@ equivalent is a separate, larger UI effort.
    its in-flight child via the run signal — arguably more correct, but a
    capability change to decide deliberately.
 2. **Resume ergonomics.** With the run detached, who relaunches after a crash
-   or lease loss — the orchestrator re-issuing `delegate_workflow_script`, or
+   or lease loss — the orchestrator re-issuing `delegate_multi_agents`, or
    a resume-by-executionId path like `delegate_agent execution_id=`? The
    lease-lost watchdog (`childRunLoop.ts:510`) would now interrupt a detached
    run on ownership loss, a behavior the inline version never had.

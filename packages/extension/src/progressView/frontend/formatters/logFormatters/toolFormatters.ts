@@ -17,7 +17,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { LogMessageData } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 import {
-  DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -149,7 +149,7 @@ export function formatToolUseTemplate(
   if (
     outputText &&
     !isOutputInTitle &&
-    toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME &&
+    toolName !== DELEGATE_MULTI_AGENTS_TOOL_NAME &&
     !isMcpToolName(toolName) &&
     displayKind !== 'read' &&
     !isTrivialWriteOutput

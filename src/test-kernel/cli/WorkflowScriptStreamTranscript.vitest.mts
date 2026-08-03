@@ -1,4 +1,4 @@
-// A detached delegate_workflow_script run owns a child stream. Its phases and
+// A detached delegate_multi_agents run owns a child stream. Its phases and
 // typed task records render through the focused-child viewport, while the
 // workflow-specific header identifies the kind of child execution.
 
@@ -40,7 +40,7 @@ import {
   TOOL_USE_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.mts';
@@ -983,7 +983,7 @@ describe('CLI workflow-script child-stream transcript', () => {
               agentName: 'draft-sections',
               executionId: 'exec-1',
               kind: 'subagent' as const,
-              toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+              toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
             },
           },
         ],
@@ -992,7 +992,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     expect(staticItems.at(0)).toMatchObject({
       identityLine:
-        'workflow script: draft-sections · parent: main · model: deepseekT',
+        'multi-agent workflow: draft-sections · parent: main · model: deepseekT',
       kind: 'header',
     });
 
