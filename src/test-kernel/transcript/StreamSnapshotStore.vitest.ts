@@ -967,6 +967,74 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
+  it('backfills an absent description mirror from ExecutionMeta and is a no-op once present (#9590 Stage 4)', async () => {
+    await installPlatform();
+    const executionId = 'aa22cc33' as ExecutionId;
+    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Meta authority label',
+    });
+    await writeMetaFile(STREAM, { executionId });
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getDescription(STREAM)).toBe('Meta authority label');
+    await store.flush();
+
+    // Reconciliation is idempotent: with the mirror present, a second load
+    // runs no projection at all and both sides keep their values.
+    const reloaded = new StreamSnapshotStore();
+    const projected = vi.spyOn(reloaded, 'setDescription');
+    await reloaded.load([STREAM]);
+    expect(reloaded.getDescription(STREAM)).toBe('Meta authority label');
+    expect(projected).not.toHaveBeenCalled();
+    expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
+      'Meta authority label',
+    );
+  });
+
+  it('reconciles description disagreement with one winner and never writes meta from the mirror (#9590 A4)', async () => {
+    await installPlatform();
+    // Both sides present and disagreeing: meta stays the authority, the
+    // mirror stays display data, and neither side is rewritten.
+    const described = 'aa33dd44' as ExecutionId;
+    await getExecutionStore(described).writeConfig(toolUseConfig());
+    await getExecutionStore(described).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      description: 'Meta authority label',
+    });
+    await writeMetaFile(STREAM, {
+      executionId: described,
+      description: 'Stale mirror label',
+    });
+
+    // Mirror-only: the authoritative side is absent and must stay absent —
+    // the display mirror is never a backfill source for ExecutionMeta.
+    const undescribed = 'aa44ee55' as ExecutionId;
+    await getExecutionStore(undescribed).writeConfig(toolUseConfig());
+    await getExecutionStore(undescribed).writeMeta({
+      timestamp: new Date(0).toISOString(),
+    });
+    await writeMetaFile(OTHER_STREAM, {
+      executionId: undescribed,
+      description: 'Mirror-only label',
+    });
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM, OTHER_STREAM]);
+    await store.flush();
+
+    expect(store.getDescription(STREAM)).toBe('Stale mirror label');
+    expect((await getExecutionStore(described).readMeta())?.description).toBe(
+      'Meta authority label',
+    );
+    expect(store.getDescription(OTHER_STREAM)).toBe('Mirror-only label');
+    expect(
+      (await getExecutionStore(undescribed).readMeta())?.description,
+    ).toBeUndefined();
+  });
+
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
     await installPlatform();
     const oldExecutionId = 'abc123' as ExecutionId;
