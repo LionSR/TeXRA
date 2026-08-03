@@ -71,6 +71,7 @@ interface InBandSubagentExecutionBaseOptions {
   readonly parentStreamId: StreamTabId;
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
+  readonly onApprovalPolicyDenial?: () => void;
   readonly runtimeUnavailableTools?: readonly string[];
   readonly signal?: AbortSignal;
   readonly onStreamResolved?: (streamId: StreamTabId) => void;
@@ -487,6 +488,7 @@ async function executeInBand(
         startedAt,
         workingDirectory,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: options.onApprovalPolicyDenial,
         runtimeUnavailableTools: options.runtimeUnavailableTools,
         workflowPhase: options.workflowPhase,
         executionMode: 'single-cycle',

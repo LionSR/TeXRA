@@ -11,6 +11,7 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
 }));
 
 import { Node } from '@agent/node';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type {
   HostInteractions,
   HostRetryRequest,
@@ -27,6 +28,7 @@ import {
   humanInputDenialFeedback,
   immediateDecisionForApproval,
   isCliApiSwitchableRetry,
+  markApprovalDenied,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPolicy';
 import {
@@ -60,6 +62,7 @@ function useCliHostInteractions(
   hooks: CliApprovalPromptHooks = {},
 ): void {
   detachHostInteractions();
+  defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
   detachHostInteractions = defaultSession().useHostInteractions(
     createHeadlessCliHostInteractions(cliContext, hooks),
   );
@@ -181,6 +184,26 @@ describe('human input approval policy', () => {
       'Denied by CLI approval policy.',
     );
     expect(hasCliApprovalDenied(ctx)).toBe(true);
+  });
+
+  it('classifies a shared edit-policy denial as approval denied', async () => {
+    const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
+    useCliHostInteractions(ctx);
+
+    const result = await withRunContext(
+      createRunContext({
+        onApprovalPolicyDenial: () => markApprovalDenied(ctx),
+      }),
+      requestNewProofEdit,
+    );
+    expect(result).toMatchObject({ accepted: false });
+    expect(hasCliApprovalDenied(ctx)).toBe(true);
+    expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED, ctx)).toBe(
+      CliExitCode.ApprovalDenied,
+    );
+    expect(runOutcomeExitCode(RUN_OUTCOME.CANCELLED, ctx)).toBe(
+      CliExitCode.Interrupted,
+    );
   });
 });
 

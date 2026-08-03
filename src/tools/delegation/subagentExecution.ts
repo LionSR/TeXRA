@@ -131,6 +131,7 @@ export async function executeSubagent(
         parentStreamId: orchestratorStreamId,
         session: parentSession,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
         onStreamResolved: inheritChildStreamApprovals,
         onCost: recordCost,
@@ -180,6 +181,7 @@ export async function executeSubagent(
       startedAt,
       workingDirectory,
       approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+      onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
       runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
       onStreamResolved: inheritChildStreamApprovals,
     };

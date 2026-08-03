@@ -7,7 +7,6 @@ import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
   type AgentProposalPermission,
-  type BashPermission,
   type ExhaustionReason,
   type PlanApprovalPermission,
   type RetryPermission,
@@ -29,7 +28,6 @@ import { askCliQuestion } from '../logSinks';
  * the live `HostInteractions` requests already carry.
  */
 export interface CliDecisionApprovalPayloads {
-  showBashPermission: BashPermission;
   showPlanApproval: PlanApprovalPermission;
   showAgentProposal: AgentProposalPermission;
   showRetryRequest: RetryPermission;

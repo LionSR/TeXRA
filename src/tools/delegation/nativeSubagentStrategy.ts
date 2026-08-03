@@ -76,6 +76,7 @@ export interface NativeSubagentStrategyParams {
   readonly startedAt: number;
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
+  readonly onApprovalPolicyDenial?: () => void;
   readonly runtimeUnavailableTools?: readonly string[];
   readonly workflowPhase?: string;
   /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
@@ -226,6 +227,7 @@ export function createNativeSubagentStrategy(
           enforceCategory: params.agentCategoryExplicit,
           parentStreamId: params.orchestratorStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+          onApprovalPolicyDenial: params.onApprovalPolicyDenial,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
           workflowPhase: params.workflowPhase,
           onStreamResolved: params.onStreamResolved,
@@ -286,6 +288,7 @@ export function createNativeSubagentStrategy(
         return await resumeToolUseFromResumeData(resume, {
           session: params.parentSession,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+          onApprovalPolicyDenial: params.onApprovalPolicyDenial,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
           parentStreamId: params.orchestratorStreamId,
           // The loop's queue never admits synthetic goal continuations for

@@ -14,7 +14,6 @@ import type {
 import type { RetryPermission, UserQuestionAnswers } from '@shared/schemas';
 
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
-import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -31,15 +30,15 @@ import {
   askApproval,
   askUserQuestionDenial,
   approvalPromptAllowed,
-  immediateDecision,
   immediateDecisionForApproval,
   markApprovalDenied,
   queueCliApprovalQuestion,
 } from './approval/approvalPolicy';
 import {
-  formatUserQuestionPrompt,
+  formatBashApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
+  formatUserQuestionPrompt,
 } from './approval/approvalSummaries';
 import { summarizeApprovalEvent } from './approval/eventDispatch';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
@@ -65,9 +64,6 @@ async function decideToolEdit(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<ToolEditApprovalResult> {
-  const immediate = immediateDecision(context);
-  if (immediate) return toToolEditResult(immediate, request.proposedContent);
-
   const decision = await askApproval(
     context,
     formatToolEditApprovalSummary(request),
@@ -187,10 +183,9 @@ export function createHeadlessCliHostInteractions(
       return decideToolEdit(request, context, hooks);
     },
     async requestBashApproval(request) {
-      const decision = await decideApprovalEvent(
-        'showBashPermission',
-        prepareBashApprovalPrompt(request),
+      const decision = await askApproval(
         context,
+        formatBashApprovalSummary(request),
         hooks,
       );
       return toApprovalSettlement(decision);
