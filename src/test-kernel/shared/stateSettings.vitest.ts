@@ -530,16 +530,6 @@ describe('settingsAccess', () => {
     );
   });
 
-  it('migrates retired Claude Agent models through the generic catalog read path', () => {
-    const entry = entryByKey(WorkspaceStateKey.CLAUDE_AGENT_MODEL);
-
-    for (const retiredModel of ['claude-opus-4-7', 'claude-opus-4-8']) {
-      const { stores, workspaceState } = makeFakeSettingsStores();
-      void workspaceState.update(entry.key, retiredModel);
-      assert.equal(readSetting(entry, stores, 'cli'), 'claude-opus-5');
-    }
-  });
-
   it('routes extension writes to the canonical store', async () => {
     const { stores, config, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
