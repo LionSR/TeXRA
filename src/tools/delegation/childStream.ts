@@ -87,6 +87,17 @@ export function getChildStreamId(
   return `${streamPrefix}#${executionId}` as StreamTabId;
 }
 
+/**
+ * Normalize a child task's raw label to the ≤80-char display description.
+ * Single owner of that cap for both the durable authority write
+ * (`registerExecution`'s `description` → `ExecutionMeta.description`, #9590
+ * A4) and the display-only `updateStreamDescription` event below, so the
+ * persisted and live values can never drift.
+ */
+export function childStreamDescription(raw: string): string {
+  return truncateWithEllipsis(raw, 80);
+}
+
 /** Create a child stream tab and execution handle for a background child task. */
 export function createChildStream(
   executionId: ExecutionId,
@@ -128,7 +139,9 @@ export function createChildStream(
       executionId,
       config: options.config,
     });
-    const description = truncateWithEllipsis(options.description, 80);
+    // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
+    // written by `registerExecution` before this stream exists (#9590 Stage 6).
+    const description = childStreamDescription(options.description);
     session.events.emit({
       scope: 'session',
       event: {

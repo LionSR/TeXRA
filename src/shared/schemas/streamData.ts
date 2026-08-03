@@ -42,7 +42,14 @@ export const StreamTabMetaSchema = z.object({
   runDescriptor: PersistedRunDescriptorSchema.optional(),
   /** Legacy field — read-shimmed from pre-RunDescriptor snapshots only. */
   taskState: z.unknown().optional(),
-  /** AI-generated session description, mirrored from ExecutionMeta. */
+  /**
+   * Legacy field — read-only mirror of `ExecutionMeta.description` (#9590 A4).
+   * Current records stopped writing it in #9590 Stage 6; readers use
+   * ExecutionMeta and fall back to this field only for records whose execution
+   * metadata carries no description (pre-registration records, desktop legacy
+   * imports). Scheduled for deletion in #9590 Stage 7 / #9627 with the
+   * ≥ 2026-11-01 legacy-retirement cohort.
+   */
   description: z.string().optional(),
 });
 
