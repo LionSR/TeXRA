@@ -65,6 +65,7 @@ describe('user-message structured delivery', () => {
       durationMs: 724_000,
       files: [{ path: 'paper.tex', added: 12, removed: 8 }],
       scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+      errorCause: null,
     }).replaceAll('"', '&quot;');
     const text = [
       '<workflow-script-result id="abc">',

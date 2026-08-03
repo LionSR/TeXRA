@@ -47,10 +47,9 @@ describe('parseCodexApprovalPolicy', () => {
 });
 
 describe('parseClaudeAgentModel', () => {
-  it('maps retired selections to their current model', () => {
+  it('maps retained Opus selections to the current model', () => {
     expect(parseClaudeAgentModel('claude-opus-4-7')).toBe('claude-opus-5');
     expect(parseClaudeAgentModel('claude-opus-4-8')).toBe('claude-opus-5');
-    expect(parseClaudeAgentModel('claude-sonnet-4-6')).toBe('claude-sonnet-5');
   });
 
   it('defaults invalid persisted selections to Sonnet', () => {

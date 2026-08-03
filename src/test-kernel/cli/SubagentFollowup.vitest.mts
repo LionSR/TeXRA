@@ -269,6 +269,7 @@ describe('summarizeSubagentFollowup', () => {
         { path: 'notes.txt', added: null, removed: null },
       ],
       scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+      errorCause: null,
     }).replaceAll('"', '&quot;');
     const xml = [
       '<workflow-script-result id="abc">',
