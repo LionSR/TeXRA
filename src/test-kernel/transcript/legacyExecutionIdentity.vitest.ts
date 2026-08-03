@@ -222,6 +222,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
       fallbackStreamIds: [],
       exactExecutionCandidateStreamIds: [firstStream, secondStream],
     });
+    // Skip-backfill-on-ambiguity (#9590 Stage 4): a resolution that reports
+    // candidates never stamps a LEGACY_RESOLUTION identity on the record.
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
   });
 
   it('does not treat a stream log as canonical-ownership evidence', async () => {
@@ -311,6 +316,10 @@ describe('resolvePersistedStreamIdForExecution', () => {
       fallbackStreamIds: [],
       suffixCandidateStreamIds: [first, second],
     });
+    // Suffix ambiguity never backfills a persisted identity (#9590 Stage 4).
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
   });
 
   it('reports a sidecar/log suffix disagreement as explicit ambiguity', async () => {
@@ -346,5 +355,27 @@ describe('resolvePersistedStreamIdForExecution', () => {
         streamLogStore: logs,
       }),
     ).resolves.toEqual({ streamId, fallbackStreamIds: [] });
+  });
+
+  it('never persists identity from a display-materialized transcript stream (#8226, #9590 Stage 4)', async () => {
+    const executionId = 'abcccc' as ExecutionId;
+    const orphanStream = 'progress@display#abcccc' as StreamTabId;
+    // The #8226 class: a display event materializes a transcript stream via
+    // `StreamLogStore.ensureStream` with no sidecar and no execution record.
+    const logs = await StreamLogStore.open();
+    logs.ensureStream(orphanStream);
+
+    // The suffix arm may still surface the orphan for compatibility display
+    // reads, but resemblance is not proof: no LEGACY_RESOLUTION identity is
+    // ever backfilled onto the execution record from it.
+    await expect(
+      resolvePersistedStreamIdForExecution(executionId, {
+        snapshotStore: new StreamSnapshotStore(),
+        streamLogStore: logs,
+      }),
+    ).resolves.toEqual({ streamId: orphanStream, fallbackStreamIds: [] });
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
   });
 });
