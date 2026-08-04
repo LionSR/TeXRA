@@ -47,6 +47,7 @@ import {
   type PRSubscriptionEntry,
   type ToolDashboardItem,
   type ChatGptAuthStatus,
+  type GrokAuthStatus,
   type CopilotRouteInfo,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/schemas/settingsViewMessages';
@@ -76,6 +77,11 @@ export interface ProviderKeyModalTarget {
 }
 
 const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
+  signedIn: false,
+  preferSubscription: false,
+};
+
+const DEFAULT_GROK_AUTH: GrokAuthStatus = {
   signedIn: false,
   preferSubscription: false,
 };
@@ -216,6 +222,9 @@ export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
 );
 export const chatgptAuth = trackedSignal<ChatGptAuthStatus>(() => ({
   ...DEFAULT_CHATGPT_AUTH,
+}));
+export const grokAuth = trackedSignal<GrokAuthStatus>(() => ({
+  ...DEFAULT_GROK_AUTH,
 }));
 export const prSubscriptions = trackedSignal<readonly PRSubscriptionEntry[]>(
   () => [],

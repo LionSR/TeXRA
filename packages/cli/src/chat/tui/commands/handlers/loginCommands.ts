@@ -1,8 +1,10 @@
+import { xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import {
   refreshCodexPreferenceViews,
   setCliCodexSubscription,
 } from '@cli/chat/tui/state/codexSubscription';
+import { setCliXaiSubscription } from '@cli/chat/tui/state/xaiSubscription';
 import { sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   chatGptSignOutPreferenceMessage,
@@ -10,6 +12,12 @@ import {
   signInCliChatGpt,
   signOutCliChatGpt,
 } from '@cli/runtime/chatgptLogin';
+import {
+  grokSignOutPreferenceMessage,
+  shouldUseGrokDeviceCode,
+  signInCliGrok,
+  signOutCliGrok,
+} from '@cli/runtime/grokLogin';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
   githubSelectAccountWarning,
@@ -42,14 +50,20 @@ import { loadCliAccountStatusLines } from './statusAssembly';
 const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
   '       /login chatgpt [--no-browser] [--device]',
+  '       /login grok [--no-browser] [--device]',
 ].join('\n');
-const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | texra | all';
+const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
 
 export function loginStartMessage(args: CliLoginSlashArgs): string {
   if (args.target === 'chatgpt') {
     if (args.device) return 'Starting ChatGPT device-code sign-in.';
     if (args.noBrowser) return 'Starting ChatGPT sign-in.';
     return 'Opening browser for ChatGPT sign-in...';
+  }
+  if (args.target === 'grok') {
+    if (args.device) return 'Starting Grok device-code sign-in.';
+    if (args.noBrowser) return 'Starting Grok sign-in.';
+    return 'Opening browser for Grok sign-in...';
   }
   if (args.device) return 'Starting TeXRA device-code sign-in.';
   if (args.noBrowser) return `Starting TeXRA ${args.provider} sign-in.`;
@@ -72,6 +86,25 @@ async function loginToChatGptSubscription(
     update.effective
       ? `Signed in with ChatGPT as ${codexAccountLabel(session)} (Codex models enabled).`
       : `Signed in with ChatGPT as ${codexAccountLabel(session)} (Codex models remain disabled because a more specific setting overrides ${update.target} config).`,
+  );
+}
+
+async function loginToGrokSubscription(
+  args: Extract<CliLoginSlashArgs, { target: 'grok' }>,
+  output: SlashCommandOutput,
+  signal: AbortSignal,
+): Promise<void> {
+  const session = await signInCliGrok(args, {
+    writeProgress: (message) =>
+      output.writeProgress(message, { copyable: true }),
+    signal,
+  });
+  const update = await setCliXaiSubscription(true);
+
+  output.appendOutcome(
+    update.effective
+      ? `Signed in with Grok as ${xaiAccountLabel(session)} (xAI models enabled).`
+      : `Signed in with Grok as ${xaiAccountLabel(session)} (xAI models remain disabled because a more specific setting overrides ${update.target} config).`,
   );
 }
 
@@ -126,20 +159,34 @@ export function loginFromChat(
     }
 
     // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
-    // user's parsed flags before the ChatGPT path can auto-resolve `device`.
+    // user's parsed flags before subscription paths can auto-resolve `device`.
     if (hasLoginTransportConflict(args)) {
       output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
       return;
     }
 
-    const loginArgs =
-      args.target === 'chatgpt' && context
-        ? { ...args, device: shouldUseChatGptDeviceCode(context, args) }
-        : args;
+    let loginArgs = args;
+    if (context) {
+      if (args.target === 'chatgpt') {
+        loginArgs = {
+          ...args,
+          device: shouldUseChatGptDeviceCode(context, args),
+        };
+      } else if (args.target === 'grok') {
+        loginArgs = {
+          ...args,
+          device: shouldUseGrokDeviceCode(context, args),
+        };
+      }
+    }
     output.writeProgress(loginStartMessage(loginArgs));
 
     if (loginArgs.target === 'chatgpt') {
       await loginToChatGptSubscription(loginArgs, output, signal);
+      return;
+    }
+    if (loginArgs.target === 'grok') {
+      await loginToGrokSubscription(loginArgs, output, signal);
       return;
     }
     await loginToTexraIncludedAccess(loginArgs, output, signal);
@@ -177,6 +224,17 @@ export async function logoutFromChat(
       lines.push(chatGptSignOutPreferenceMessage(chatGptUpdate));
     } catch (error: unknown) {
       lines.push(`ChatGPT sign-out failed: ${toErrorMessage(error)}`);
+    }
+  }
+
+  if (target === 'grok' || target === 'all') {
+    try {
+      const grokUpdate = await signOutCliGrok();
+      refreshCodexPreferenceViews();
+      lines.push('Signed out of Grok.');
+      lines.push(grokSignOutPreferenceMessage(grokUpdate));
+    } catch (error: unknown) {
+      lines.push(`Grok sign-out failed: ${toErrorMessage(error)}`);
     }
   }
 

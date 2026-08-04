@@ -64,6 +64,7 @@ import {
   authenticated,
   bashApprovalEnabled,
   chatgptAuth,
+  grokAuth,
   claudeAgentEffort,
   claudeAgentModel,
   claudeAgentPermissionMode,
@@ -365,6 +366,7 @@ export class SettingsApp extends SettingsAppBase {
         return html`
           <subscriptions-tab
             .chatgptAuth=${chatgptAuth.get()}
+            .grokAuth=${grokAuth.get()}
             .copilotModels=${copilotRouteInfos.get()}
           ></subscriptions-tab>
         `;

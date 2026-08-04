@@ -30,12 +30,19 @@ interface CliChatGptLoginSlashArgs {
   readonly device: boolean;
 }
 
-export type CliLoginSlashArgs =
-  CliTexraLoginSlashArgs | CliChatGptLoginSlashArgs;
+interface CliGrokLoginSlashArgs {
+  readonly target: 'grok';
+  readonly noBrowser: boolean;
+  readonly device: boolean;
+}
 
-export type CliLogoutTarget = 'chatgpt' | 'texra' | 'all';
+export type CliLoginSlashArgs =
+  CliTexraLoginSlashArgs | CliChatGptLoginSlashArgs | CliGrokLoginSlashArgs;
+
+export type CliLogoutTarget = 'chatgpt' | 'grok' | 'texra' | 'all';
 
 const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
+const GROK_LOGIN_TARGETS = new Set(['grok', 'xai', 'supergrok']);
 
 export function parseCliLogoutTarget(
   input: string,
@@ -45,6 +52,10 @@ export function parseCliLogoutTarget(
     case 'codex':
     case 'subscription':
       return 'chatgpt';
+    case 'grok':
+    case 'xai':
+    case 'supergrok':
+      return 'grok';
     case 'texra':
     case 'researcher':
       return 'texra';
@@ -134,9 +145,12 @@ export function parseChatLoginSlashArgs(
   } else if (positionals[0] && CHATGPT_LOGIN_TARGETS.has(positionals[0])) {
     target = 'chatgpt';
     positionals.shift();
+  } else if (positionals[0] && GROK_LOGIN_TARGETS.has(positionals[0])) {
+    target = 'grok';
+    positionals.shift();
   }
 
-  if (target === 'chatgpt') {
+  if (target === 'chatgpt' || target === 'grok') {
     if (positionals.length > 0 || selectAccount || loginHint !== undefined) {
       return undefined;
     }

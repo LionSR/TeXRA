@@ -77,6 +77,9 @@ export const DEFAULT_CORE_SETTINGS = {
   chatgptCodex: {
     preferSubscription: false,
   },
+  xaiGrok: {
+    preferSubscription: false,
+  },
   maxImageDimension: 2000,
   bib: {
     defaultPath: '',
@@ -242,6 +245,14 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
+  xaiGrok: z
+    .strictObject({
+      preferSubscription: boolField(
+        DEFAULT_CORE_SETTINGS.xaiGrok.preferSubscription,
+        'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
+      ),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.xaiGrok),
   maxImageDimension: numberField(
     DEFAULT_CORE_SETTINGS.maxImageDimension,
     'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
@@ -442,6 +453,7 @@ export const CORE_SETTING_PATHS = [
   'model.gpt5ReasoningSummary',
   'model.retry.maxAttempts',
   'chatgptCodex.preferSubscription',
+  'xaiGrok.preferSubscription',
   'maxImageDimension',
   'bib.defaultPath',
   'bib.zoteroPort',
@@ -527,6 +539,11 @@ export const CLI_CORE_SETTING_CONSUMERS = {
   ],
   'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
   'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
+  'src/model/xai/xaiPreference.ts': ['xaiGrok.preferSubscription'],
+  'src/model/subscriptionPreference.ts': [
+    'chatgptCodex.preferSubscription',
+    'xaiGrok.preferSubscription',
+  ],
   'src/utils/media/img.ts': ['maxImageDimension'],
   'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
   'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],

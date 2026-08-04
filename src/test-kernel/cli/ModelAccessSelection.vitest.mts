@@ -18,12 +18,17 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
+  getXaiStatus: vi.fn(),
   isPreferCodexSubscription: vi.fn(),
   setPreferCodexSubscription: vi.fn(),
+  isPreferXaiSubscription: vi.fn(),
+  setPreferXaiSubscription: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   setCliApiMode: vi.fn(),
   shouldUseChatGptDeviceCode: vi.fn(),
   signInCliChatGpt: vi.fn(),
+  shouldUseGrokDeviceCode: vi.fn(),
+  signInCliGrok: vi.fn(),
   updateGlobalState: vi.fn(),
   apiKeyExists: vi.fn(),
   getPreferKimiCode: vi.fn(),
@@ -41,9 +46,20 @@ vi.mock('@auth/codex', () => ({
   getCodexStatus: mocks.getCodexStatus,
 }));
 
+vi.mock('@auth/xai', () => ({
+  getXaiStatus: mocks.getXaiStatus,
+  xaiAccountLabel: (account: { email?: string } | null | undefined) =>
+    account?.email ?? 'your Grok account',
+}));
+
 vi.mock('@model/codex/codexPreference', () => ({
   isPreferCodexSubscription: mocks.isPreferCodexSubscription,
   setPreferCodexSubscription: mocks.setPreferCodexSubscription,
+}));
+
+vi.mock('@model/xai/xaiPreference', () => ({
+  isPreferXaiSubscription: mocks.isPreferXaiSubscription,
+  setPreferXaiSubscription: mocks.setPreferXaiSubscription,
 }));
 
 vi.mock('@model/apiProviders', () => ({
@@ -75,10 +91,15 @@ vi.mock('@cli/runtime/chatgptLogin', () => ({
   signInCliChatGpt: mocks.signInCliChatGpt,
 }));
 
+vi.mock('@cli/runtime/grokLogin', () => ({
+  shouldUseGrokDeviceCode: mocks.shouldUseGrokDeviceCode,
+  signInCliGrok: mocks.signInCliGrok,
+}));
+
 const context = createTestCliContext({ apiMode: 'personal' });
 
 function subscriptionPreference(
-  provider: 'chatgpt' | 'kimi-code',
+  provider: 'chatgpt' | 'grok' | 'kimi-code',
   state: 'on' | 'off',
 ) {
   return { kind: 'subscription-preference', provider, state } as const;
@@ -87,8 +108,14 @@ function subscriptionPreference(
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
+  mocks.getXaiStatus.mockResolvedValue({ signedIn: false });
   mocks.isPreferCodexSubscription.mockReturnValue(false);
+  mocks.isPreferXaiSubscription.mockReturnValue(false);
   mocks.setPreferCodexSubscription.mockResolvedValue({
+    effective: false,
+    target: 'global',
+  });
+  mocks.setPreferXaiSubscription.mockResolvedValue({
     effective: false,
     target: 'global',
   });
@@ -97,6 +124,7 @@ beforeEach(() => {
     openRouterDisabled: false,
   }));
   mocks.shouldUseChatGptDeviceCode.mockReturnValue(false);
+  mocks.shouldUseGrokDeviceCode.mockReturnValue(false);
   mocks.apiKeyExists.mockResolvedValue(false);
   mocks.getPreferKimiCode.mockReturnValue(false);
   mocks.setPreferKimiCode.mockResolvedValue(undefined);
@@ -109,6 +137,12 @@ describe('CLI model access routes', () => {
     );
     expect(parseCliModelAccessSelection('subscription')).toEqual(
       subscriptionPreference('chatgpt', 'on'),
+    );
+    expect(parseCliModelAccessSelection('grok')).toEqual(
+      subscriptionPreference('grok', 'on'),
+    );
+    expect(parseCliModelAccessSelection('xai')).toEqual(
+      subscriptionPreference('grok', 'on'),
     );
     expect(parseCliModelAccessSelection('kimi')).toEqual(
       subscriptionPreference('kimi-code', 'on'),
@@ -251,18 +285,22 @@ describe('CLI model access routes', () => {
 
     await expect(readCliModelAccessStatus('included')).resolves.toEqual({
       apiFallback: 'included',
-      preferences: { chatGpt: 'on', kimiCode: 'off' },
+      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: true,
       chatGptAccountLabel: 'user@example.com',
+      grokSignedIn: false,
+      grokAccountLabel: undefined,
       kimiCodeKeySet: false,
     });
 
     mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
     await expect(readCliModelAccessStatus('included')).resolves.toEqual({
       apiFallback: 'included',
-      preferences: { chatGpt: 'on', kimiCode: 'off' },
+      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
       chatGptAccountLabel: undefined,
+      grokSignedIn: false,
+      grokAccountLabel: undefined,
       kimiCodeKeySet: false,
     });
   });
@@ -273,22 +311,24 @@ describe('CLI model access routes', () => {
 
     await expect(readCliModelAccessStatus('personal')).resolves.toEqual({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', kimiCode: 'on' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
       chatGptSignedIn: false,
       chatGptAccountLabel: undefined,
+      grokSignedIn: false,
+      grokAccountLabel: undefined,
       kimiCodeKeySet: true,
     });
 
     await expect(readCliModelAccessStatus('included')).resolves.toMatchObject({
       apiFallback: 'included',
-      preferences: { chatGpt: 'off', kimiCode: 'on' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
       kimiCodeKeySet: true,
     });
 
     mocks.apiKeyExists.mockResolvedValue(false);
     await expect(readCliModelAccessStatus('personal')).resolves.toMatchObject({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', kimiCode: 'on' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
       kimiCodeKeySet: false,
     });
   });
@@ -436,7 +476,7 @@ describe('CLI model access routes', () => {
     });
   });
 
-  it('represents both preferences as on and toggles each independently', async () => {
+  it('represents preferences independently and toggles each without side effects', async () => {
     mocks.getCodexStatus.mockResolvedValue({
       signedIn: true,
       email: 'user@example.com',
@@ -446,12 +486,26 @@ describe('CLI model access routes', () => {
     mocks.apiKeyExists.mockResolvedValue(true);
 
     const status = await readCliModelAccessStatus('personal');
-    expect(status.preferences).toEqual({ chatGpt: 'on', kimiCode: 'on' });
-    expect(
+    expect(status.preferences).toEqual({
+      chatGpt: 'on',
+      grok: 'off',
+      kimiCode: 'on',
+    });
+    const descriptions = Object.fromEntries(
       buildCliModelAccessItems({ kind: 'loaded', access: status })
-        .slice(0, 2)
-        .map((item) => item.description),
-    ).toEqual(['On · user@example.com', 'On · key configured']);
+        .filter((item) => item.value.kind === 'subscription-preference')
+        .map((item) => {
+          if (item.value.kind !== 'subscription-preference') {
+            throw new Error('expected subscription preference');
+          }
+          return [item.value.provider, item.description];
+        }),
+    );
+    expect(descriptions).toEqual({
+      chatgpt: 'On · user@example.com',
+      grok: 'Off · sign in required to enable',
+      'kimi-code': 'On · key configured',
+    });
 
     await updateCliModelAccess(
       context,
@@ -460,6 +514,7 @@ describe('CLI model access routes', () => {
     );
     expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+    expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     mocks.getCodexStatus.mockResolvedValue({
@@ -478,6 +533,7 @@ describe('CLI model access routes', () => {
     );
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);
     expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
+    expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
   });
 
   it('turns off a stale signed-out preference without signing in', async () => {
@@ -488,10 +544,14 @@ describe('CLI model access routes', () => {
     });
 
     const status = await readCliModelAccessStatus('personal');
-    const [selection] = buildCliModelAccessItems({
+    const selection = buildCliModelAccessItems({
       kind: 'loaded',
       access: status,
-    });
+    }).find(
+      (item) =>
+        item.value.kind === 'subscription-preference' &&
+        item.value.provider === 'chatgpt',
+    );
     expect(selection?.description).toBe('On · sign in required');
     if (!selection) throw new Error('Expected ChatGPT preference item');
     await updateCliModelAccess(context, selection.value, {
@@ -508,7 +568,11 @@ describe('CLI model access routes', () => {
     const selection = buildCliModelAccessItems({
       kind: 'loaded',
       access: status,
-    })[1];
+    }).find(
+      (item) =>
+        item.value.kind === 'subscription-preference' &&
+        item.value.provider === 'kimi-code',
+    );
     expect(selection?.description).toBe('On · key required');
     if (!selection) throw new Error('Expected Kimi preference item');
 
