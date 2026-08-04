@@ -41,6 +41,7 @@ import { settingsViewStyles } from './styles';
 // Side-effect: register tab components
 import './tabs/MemoryTab';
 import './tabs/AccountTab';
+import './tabs/SubscriptionsTab';
 import './tabs/GoalTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';
@@ -358,9 +359,15 @@ export class SettingsApp extends SettingsAppBase {
             .spendingStatusError=${spendingStatusError.get()}
             .quotaAutoSwitched=${quotaAutoSwitched.get()}
             .telemetryEnabled=${telemetryEnabled.get()}
-            .chatgptAuth=${chatgptAuth.get()}
             @manage-provider-keys=${this.handleManageProviderKeys}
           ></account-tab>
+        `;
+      case 'subscriptions':
+        return html`
+          <subscriptions-tab
+            .chatgptAuth=${chatgptAuth.get()}
+            .copilotModels=${copilotRouteInfos.get()}
+          ></subscriptions-tab>
         `;
       case 'models':
         return html`
@@ -370,8 +377,6 @@ export class SettingsApp extends SettingsAppBase {
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .globalStreamingDefault=${globalStreamingDefault.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
-            .copilotModels=${copilotRouteInfos.get()}
-            .reliabilitySettings=${reliabilitySettings.get()}
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}
             @provider-key-set=${this.handleSetProviderKey}
@@ -386,6 +391,7 @@ export class SettingsApp extends SettingsAppBase {
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .initialSubTab=${agentSubTab.get()}
             .userTier=${tier.get()}
+            .reliabilitySettings=${reliabilitySettings.get()}
             .unsupportedCommands=${unsupportedCommands.get()}
           ></agents-tab>
         `;

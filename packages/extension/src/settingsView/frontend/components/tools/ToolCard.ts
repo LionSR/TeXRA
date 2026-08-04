@@ -237,7 +237,7 @@ export class ToolCard extends LitElement {
     available: { icon: 'check', variant: 'success' },
     'not-found': {
       icon: 'triangle-exclamation',
-      variant: 'danger',
+      variant: 'neutral',
     },
     unknown: {
       icon: 'circle-question',

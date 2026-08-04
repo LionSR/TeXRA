@@ -59,7 +59,6 @@ export const conversationContentStyles: CSSResult = css`
 
   .conversation-epilogue {
     max-height: min(42%, 25rem);
-    padding-bottom: var(--wa-space-xs);
   }
 
   .conversation-log {

@@ -1,6 +1,9 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 
+// Web Awesome switch (side-effect import — the toggle row renders one)
+import '@awesome.me/webawesome/dist/components/switch/switch.js';
+
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
 import type { TeXRAIconName } from './iconNames';
@@ -46,5 +49,39 @@ export function renderSettingsSectionHeading(
           : nothing
       }
     </header>
+  `;
+}
+
+export interface SettingsToggleRowOptions {
+  readonly label: string;
+  readonly description: string;
+  readonly checked: boolean;
+  readonly disabled?: boolean;
+  readonly onChange: (event: Event) => void;
+}
+
+/**
+ * The one switch row shared by every Settings page: label/help on the left,
+ * the switch in the control slot. A switch is its own state indicator — do
+ * not add status icons beside it.
+ */
+export function renderSettingsToggleRow(
+  options: SettingsToggleRowOptions,
+): TemplateResult {
+  return html`
+    <div class="settings-row">
+      <div class="settings-row-text">
+        <span class="settings-row-label">${options.label}</span>
+        <span class="settings-row-help">${options.description}</span>
+      </div>
+      <div class="settings-row-control">
+        <wa-switch
+          aria-label=${options.label}
+          ?checked=${options.checked}
+          ?disabled=${options.disabled ?? false}
+          @change=${options.onChange}
+        ></wa-switch>
+      </div>
+    </div>
   `;
 }

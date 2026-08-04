@@ -26,7 +26,8 @@ import type { ContextStateData } from '../store';
 
 type UsageRouteBadge = {
   label: string;
-  title: string;
+  /** Tooltip text — omitted when the label already says everything. */
+  title?: string;
   subscription: boolean;
 };
 
@@ -59,13 +60,11 @@ function usageRouteBadge(
     case 'chatgpt-subscription':
       return {
         label: 'ChatGPT',
-        title: 'No charge; covered by your ChatGPT subscription',
         subscription: true,
       };
     case 'kimi-code-subscription':
       return {
         label: 'Kimi Code',
-        title: 'No charge; covered by your Kimi Code subscription',
         subscription: true,
       };
     case 'relay':
@@ -297,14 +296,23 @@ export class UsagePanel extends LitElement {
           id="usage-route-badge"
           class="run-summary__route run-summary__route--free"
           >Free · ${badge.label}</span
-        ><wa-tooltip for="usage-route-badge">${badge.title}</wa-tooltip>`;
+        >${this.renderRouteTooltip(badge)}`;
     }
 
     return html`${formatCostUsd(cost)} ·
       <span id="usage-route-badge" class="run-summary__route">
         ${badge.label}
       </span>
-      <wa-tooltip for="usage-route-badge">${badge.title}</wa-tooltip>`;
+      ${this.renderRouteTooltip(badge)}`;
+  }
+
+  private renderRouteTooltip(
+    badge: UsageRouteBadge,
+  ): TemplateResult | typeof nothing {
+    if (!badge.title) return nothing;
+    return html`<wa-tooltip for="usage-route-badge"
+      >${badge.title}</wa-tooltip
+    >`;
   }
 
   private renderContext(): TemplateResult | typeof nothing {

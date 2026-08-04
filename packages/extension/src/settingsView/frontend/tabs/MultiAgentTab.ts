@@ -10,14 +10,16 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -297,41 +299,14 @@ export class MultiAgentTab extends LitElement {
         </div>
         ${
           deletable
-            ? html`<wa-button
-                class="preset-delete-btn"
-                appearance="plain"
-                variant="neutral"
-                size="s"
-                @click=${(e: Event) => this.handleDeletePreset(e, preset)}
-                title="Delete team"
-                aria-label="Delete team"
-              >
-                ${waIcon('trash')}
-              </wa-button>`
+            ? renderIconActionButton({
+                icon: 'trash',
+                label: 'Delete team',
+                className: 'preset-delete-btn',
+                onClick: (e) => this.handleDeletePreset(e, preset),
+              })
             : nothing
         }
-      </div>
-    `;
-  }
-
-  private renderToggleRow(opts: {
-    label: string;
-    description: string;
-    checked: boolean;
-    onChange: (event: Event) => void;
-  }): TemplateResult {
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
-        </div>
-        <wa-switch
-          class="settings-row-control"
-          aria-label=${opts.label}
-          ?checked=${opts.checked}
-          @change=${opts.onChange}
-        ></wa-switch>
       </div>
     `;
   }
@@ -342,6 +317,7 @@ export class MultiAgentTab extends LitElement {
         ${renderSettingsSectionHeading({
           title: 'Available teams',
           description: 'Select a team to activate it.',
+          icon: 'users',
         })}
 
         <div class="preset-grid">
@@ -353,10 +329,11 @@ export class MultiAgentTab extends LitElement {
           title: 'Team coordination',
           description:
             "Control how the orchestrator works with the rest of the team. It can only use agents and models you've enabled.",
+          icon: 'diagram-project',
         })}
 
         <div class="settings-section">
-          ${this.renderToggleRow({
+          ${renderSettingsToggleRow({
             label: 'Let orchestrator stop agents early',
             description:
               'The orchestrator can cancel agents that are stuck or no longer needed. Turn this off if you want every agent to finish.',
@@ -367,7 +344,7 @@ export class MultiAgentTab extends LitElement {
                 e,
               ),
           })}
-          ${this.renderToggleRow({
+          ${renderSettingsToggleRow({
             label: 'Keep agents running after I stop the orchestrator',
             description:
               'Let agents that are already mid-task finish independently.',
@@ -378,7 +355,7 @@ export class MultiAgentTab extends LitElement {
                 e,
               ),
           })}
-          ${this.renderToggleRow({
+          ${renderSettingsToggleRow({
             label: 'Allow agents to work in git worktrees',
             description:
               'Delegated agents can use isolated worktrees, with every tool call rooted in that worktree.',

@@ -36,8 +36,7 @@ export const latexTabStyles: CSSResult = css`
     color: var(--color-status-ok);
   }
 
-  .dependency-icon.missing,
-  .setting-status-icon.not-set {
+  .dependency-icon.missing {
     color: var(--color-status-error);
   }
 

@@ -108,8 +108,6 @@ export const groupStyles = css`
     padding: 0;
   }
 
-  /* Note: .spin class and @keyframes spin are in @shared/styles/litStyles.ts */
-
   :is(.log-line, .banner-details)[data-group-id] {
     border-left: var(--border-medium) solid transparent;
   }
