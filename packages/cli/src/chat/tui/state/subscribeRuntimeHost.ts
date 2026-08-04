@@ -14,6 +14,10 @@ import {
   type UpdateQueuedFollowUpsPayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
+import {
+  streamStageFromStageStart,
+  type StreamStage,
+} from '@shared/streams/stage';
 import { assertNever } from '@utils/core';
 
 import {
@@ -23,7 +27,6 @@ import {
   patchStream,
   removeStream,
   registerCliStateResetHook,
-  type StreamStage,
 } from './cliState';
 import {
   applySubagentRoster,
@@ -199,25 +202,8 @@ const TUI_RUN_FACT_HANDLERS = {
       compileFailuresByRound: snapshots.getCompileFailures(event.streamId),
     })),
   'stage.start': (event, fallbackStreamId) => {
-    if (event.kind === 'phase') {
-      applyStage(fallbackStreamId, {
-        kind: 'phase',
-        label: event.label,
-        ...(event.index !== undefined ? { index: event.index } : {}),
-        ...(event.total !== undefined && event.total > 0
-          ? { total: event.total }
-          : {}),
-      });
-      return;
-    }
-    if (event.kind !== 'round') return;
-    applyStage(fallbackStreamId, {
-      kind: 'round',
-      index: event.index ?? 0,
-      ...(event.total !== undefined && event.total > 0
-        ? { total: event.total }
-        : {}),
-    });
+    const stage = streamStageFromStageStart(event);
+    if (stage) applyStage(fallbackStreamId, stage);
   },
   'child.activity': (event) =>
     applySubagentRoster(event.parentStreamId, event.items),

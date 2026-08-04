@@ -28,6 +28,7 @@ import {
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import type { StreamStage } from '@shared/streams/stage';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   applyChildStreamRemoval,
@@ -152,33 +153,6 @@ interface StreamFileMetadata {
   readonly media: readonly string[];
   readonly output: readonly string[];
 }
-
-/**
- * Current run/round/phase progress for one stream. A tool-use run advances
- * through numbered rounds; a workflow-script run advances through named
- * phases instead — never both — so this is one discriminated field rather
- * than two independently-optional ones (`roundStage` / `phaseStage`) that
- * every reader had to fall back between.
- */
-export type StreamStage =
-  | {
-      readonly kind: 'round';
-      /** Zero-based round/turn index. */
-      readonly index: number;
-      /** Planned total, when known. Workflow runs set this; tool-use turns
-       *  may not. */
-      readonly total?: number;
-    }
-  | {
-      readonly kind: 'phase';
-      /** Phase title, free-form text from the workflow script. */
-      readonly label: string;
-      /** Zero-based position in the declared phase list. Absent for a phase
-       *  the script opened dynamically, which has no declared position. */
-      readonly index?: number;
-      /** Number of declared phases, when known. */
-      readonly total?: number;
-    };
 
 export interface StreamSlice {
   readonly streamId: StreamTabId;

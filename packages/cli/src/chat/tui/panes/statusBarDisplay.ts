@@ -25,6 +25,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import type { StreamStage } from '@shared/streams/stage';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import {
@@ -44,7 +45,6 @@ import { formatResumeCommand } from '../state/resumeHint';
 import {
   type BypassState,
   type StreamSlice,
-  type StreamStage,
   type TransientNotice,
 } from '../state/cliState';
 import {
