@@ -16,8 +16,8 @@ const rows = [
   { id: 'fable5', label: 'Claude Fable 5', status: 'included access' },
   { id: 'opus5T', label: 'Opus 5 (Thinking)', status: 'included access' },
   {
-    id: 'sonnet46T',
-    label: 'Sonnet 4.6 (Thinking)',
+    id: 'sonnet5T',
+    label: 'Sonnet 5 (Thinking)',
     status: 'included access',
   },
   {

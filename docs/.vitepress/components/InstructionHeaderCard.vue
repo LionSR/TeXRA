@@ -83,7 +83,7 @@ const actions = [
             <wa-icon library="texra" name="robot"></wa-icon>
           </span>
           <div class="select">
-            <span class="s-val">sonnet46</span>
+            <span class="s-val">sonnet5</span>
             <wa-icon
               class="s-caret"
               library="texra"

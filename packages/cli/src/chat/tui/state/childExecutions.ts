@@ -68,7 +68,7 @@ const CHILD_STREAMS = signal<ChildStreamEntries>(new Map());
  * Memory bound on retained removal tombstones. A long chat session can remove
  * thousands of child streams; the oldest tombstone is dropped first and live
  * entries are never evicted. Mirrors the progress view's
- * `RETAINED_FINISHED_CHILDREN_CAP` (`ProgressFactApplier.ts`) as a value, not
+ * `RETAINED_FINISHED_CHILDREN_CAP` (`SessionFactApplier.ts`) as a value, not
  * an import: the two containers hold different records and the CLI must not
  * deep-import controller internals.
  */
@@ -272,7 +272,7 @@ function subagentEntryUnchanged(
  * edged-elsewhere, or promoted) child cannot resurrect active membership or
  * overwrite a newer parent's summary metadata.
  */
-export function applySubagentRoster(
+export function projectChildRoster(
   parentStreamId: StreamTabId,
   children: readonly ActiveChildInfo[],
 ): void {

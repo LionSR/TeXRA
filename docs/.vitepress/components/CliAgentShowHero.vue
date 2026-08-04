@@ -49,7 +49,7 @@ const details = [
         section."</span
       >
     </div>
-    <div class="cas-out">.texra/runs/e2c70a94b18f/r0/notes.tex</div>
+    <div class="cas-out">executions/e2c70a94b18f/r0/notes.tex</div>
   </TermWindow>
 </template>
 

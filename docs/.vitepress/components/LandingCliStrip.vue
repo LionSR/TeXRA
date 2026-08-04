@@ -26,7 +26,7 @@ const lines = [
         >{{ l.rest }}</span
       >
     </div>
-    <div class="lcs-out">.texra/runs/9f3a6c81d24e/r1/paper.tex</div>
+    <div class="lcs-out">executions/9f3a6c81d24e/r1/paper.tex</div>
   </TermWindow>
 </template>
 

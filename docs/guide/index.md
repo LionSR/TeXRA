@@ -24,7 +24,7 @@ work — with every change returned as a diff you approve.
 | ------------------------------------------ | ------------------------------------------------------------- |
 | Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)               |
 | Fix LaTeX errors and notation              | `correct` agent — see [Built-in Agents](./built-in-agents.md) |
-| Search literature, no fabricated citations | `search` — see [Research Tools](./research-tools.md)          |
+| Search literature, no fabricated citations | `assistant` — see [Research Tools](./research-tools.md)       |
 | Verify proofs and derivations              | `review` — see [Built-in Agents](./built-in-agents.md)        |
 | Formalize in Lean 4                        | [Lean 4 Proofs](./lean.md)                                    |
 | Build slides from a paper                  | `paper2slide` — see [Built-in Agents](./built-in-agents.md)   |
@@ -141,13 +141,12 @@ never leave your machine except to the provider endpoint.
 hosted models are proxied through TeXRA's service so we can manage
 provider credentials and quota on your behalf. Switch any run back
 to direct mode with `--api-mode personal` (CLI) or by adding your own
-key in the **Dashboard → Models** tab (VS Code extension).
+key in the **Dashboard → Providers & Models** tab (VS Code extension).
 
-API keys, whichever mode you use, are stored in your operating
-system's secure credential store — VS Code's built-in Secret Storage
-in the extension, the OS keychain (or a local config file) for the
-CLI. They can also be supplied via environment variables or a `.env`
-file in your project.
+API keys, whichever mode you use, stay on your machine — VS Code's
+built-in Secret Storage in the extension, an owner-only `secrets.json`
+under `~/.texra` for the CLI. They can also be supplied via environment
+variables or a `.env` file in your project (extension only).
 
 ## Support
 

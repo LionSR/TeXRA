@@ -111,13 +111,11 @@ function createProvider() {
   injected.state = {
     activeStream: undefined,
     streamLogs: { keys: () => [], get: () => undefined },
+    streamStatus: { getAllStreamStates: () => new Map() },
   };
   injected.backend = {
     approvalHandlers: {},
-    factApplier: {
-      getAllStreamStates: () => new Map(),
-      syncStreamContent: vi.fn(),
-    },
+    syncStreamContent: vi.fn(),
   };
   injected.webviewUpdater = {
     isAvailable: () => true,

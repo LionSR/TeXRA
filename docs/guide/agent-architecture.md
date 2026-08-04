@@ -39,7 +39,7 @@ These `.yaml` files have two main parts (and thankfully, YAML is usually less pr
     - `userPrefix`: Provides the main context, including your input file(s) (available via e.g., `{{ INPUT_CONTENT }}`) and the specific instruction you typed in the UI (available via `{{ INSTRUCTION }}`).
     - `userRequest`: Asks the LLM to perform the initial task (Round 0). Often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. You can also provide an **array** here: the first entry becomes the round 0 request, and any additional entries drive automatic reflection rounds (Round 1+). When a run consumes more rounds than entries you specify, the first reflection template is reused.
 
-_(Prompts use Jinja2 templating. For a detailed list of available variables like `{{ INPUT_CONTENT }}` and how to use them, see the [Custom Agents](./custom-agents.md) guide.)_
+_(Prompts use Nunjucks templating (Jinja2-style syntax). For a detailed list of available variables like `{{ INPUT_CONTENT }}` and how to use them, see the [Custom Agents](./custom-agents.md) guide.)_
 
 ::: tip Transparency & Customization
 The prompts described above (`systemPrompt`, `userPrefix`, etc.) represent TeXRA's structured approach to guiding the LLM. This structured, template-based system means the agent's behavior is transparent and highly customizable through the `.yaml` file, not a hidden black box.
@@ -98,7 +98,7 @@ Each round lands in its own folder under task storage:
 
 ### What Goes Into the Prompt
 
-TeXRA assembles a conversation from your agent's prompts and the content you selected in the UI. If you enabled **Attach TeX Count** or **Attach Diagnostics**, that information is included too. Figures and audio files are sent alongside the text for models that support them. The AI then reasons through the task and produces its output.
+TeXRA assembles a conversation from your agent's prompts and the content you selected in the UI. If you enabled **Attach TeX Count**, that information is included too. Figures and audio files are sent alongside the text for models that support them. The AI then reasons through the task and produces its output.
 
 **Reflection Rounds (Round 1+):**
 

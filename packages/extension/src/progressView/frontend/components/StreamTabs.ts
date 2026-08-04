@@ -93,7 +93,6 @@ function buildTooltip(
     `Status: ${statusLabel}`,
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
-    info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
     .join(' · ');
