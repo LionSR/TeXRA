@@ -92,8 +92,13 @@ export function createDesktopPromptOverlay(
     if (current) sendSettlement(current, null);
     current = message;
     if (shell.titleEl) shell.titleEl.textContent = message.title;
-    if (shell.subtitleEl) shell.subtitleEl.textContent = message.prompt;
+    // The prompt text moves from the sibling subtitle into the field's own
+    // label. As a subtitle it named nothing — wa-input puts its control inside
+    // a shadow root, so only WebAwesome's `label` produces a real <label for>.
+    // Kept in one place rather than two so the text is not read out twice.
+    if (shell.subtitleEl) shell.subtitleEl.textContent = '';
     input.type = message.password ? 'password' : 'text';
+    input.label = message.prompt;
     input.value = '';
     dialog.setAttribute('aria-label', message.title);
     dialog.open = true;

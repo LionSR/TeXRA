@@ -71,11 +71,13 @@ export class SearchBar extends LitElement {
         <wa-input
           class="search-input"
           type="search"
-          placeholder="Search history items..."
+          placeholder="Search history…"
           .value=${this.searchTerm}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
-        ></wa-input>
+        >
+          <span slot="label" class="visually-hidden">Search history</span>
+        </wa-input>
         <div class="search-controls action-button-group">
           ${renderIconActionButton({
             id: 'history-search-prev-button',

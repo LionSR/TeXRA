@@ -420,7 +420,12 @@ export class HistoryItemElement extends LitElement {
                 (!entry.toolUseOnly || presentation.isToolUse) &&
                 (!entry.hideWhenUnsupported ||
                   !isKnownUnsupported(this.unsupportedCommands, entry.command)),
-            ).map((entry) => renderIconActionButton(entry.button))}
+            ).map((entry) =>
+              renderIconActionButton({
+                ...entry.button,
+                label: `${entry.button.label}: ${presentation.title}`,
+              }),
+            )}
           </div>
         </div>
         ${this.renderInstructionBlock(

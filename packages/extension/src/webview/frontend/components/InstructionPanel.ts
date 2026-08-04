@@ -679,7 +679,10 @@ export class InstructionPanel extends LitElement {
             ${renderIconActionButton({
               id: 'recordInstructionButton',
               icon: session.isRecording ? 'circle-stop' : 'microphone',
-              label: 'Record instruction',
+              label: session.isRecording
+                ? 'Stop recording'
+                : 'Record instruction',
+              pressed: session.isRecording,
               tooltip: session.isRecording
                 ? 'Stop recording'
                 : 'Record instruction with microphone',
@@ -691,6 +694,7 @@ export class InstructionPanel extends LitElement {
         ${this.renderSessionHint(session)}
         <wa-textarea
           id="instruction"
+          aria-label="Instruction"
           rows=${this.desktopHost ? '4' : '10'}
           resize="none"
           enterkeyhint=${this.desktopHost ? 'send' : nothing}

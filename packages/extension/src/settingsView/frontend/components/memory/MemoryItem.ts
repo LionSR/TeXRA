@@ -198,6 +198,7 @@ export class MemoryItem extends LitElement {
    */
   private renderActionGroup(): TemplateResult {
     const pinned = this.item?.pinned === true;
+    const memoryName = this.item?.storagePath?.split('/').pop() ?? '';
     const actions = [
       {
         id: 'memory-pin-button',
@@ -222,7 +223,12 @@ export class MemoryItem extends LitElement {
       },
     ].map((action) => ({
       id: action.id,
-      ...renderIconActionButtonParts(action),
+      // Name each control by the memory it acts on: three identical "Delete"s
+      // down a list tell a screen-reader user nothing about which one they hit.
+      ...renderIconActionButtonParts({
+        ...action,
+        label: memoryName ? `${action.label}: ${memoryName}` : action.label,
+      }),
     }));
     return html`
       <wa-button-group label="Memory actions">
