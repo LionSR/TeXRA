@@ -663,7 +663,7 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledTimes(1);
   });
 
-  it('maps a completed run to ApprovalDenied after a shared policy denial', async () => {
+  it('maps a completed run to Success even after a shared policy denial', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const { runOutcomeExitCode } = await import('@cli/runtime/terminalStatus');
     const request = baseRequest();
@@ -678,7 +678,11 @@ describe('executeCliRequest', () => {
 
     await executeCliRequest(request, context);
 
-    expect(runOutcomeExitCode('completed', context)).toBe(
+    // Exit 4 is reserved for a run that FAILED because a gate was denied.
+    // A denial the model routed around does not make the run unsuccessful,
+    // and reporting it as one makes every caller discard a good result.
+    expect(runOutcomeExitCode('completed', context)).toBe(CliExitCode.Success);
+    expect(runOutcomeExitCode('failed', context)).toBe(
       CliExitCode.ApprovalDenied,
     );
   });
