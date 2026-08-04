@@ -1,5 +1,5 @@
 import { isRemoteAgent } from '@agent/index/agentRegistry';
-import type { ProgressStreamMetadata } from '@controllers/session/SessionState';
+import type { SessionStreamMetadata } from '@controllers/session/SessionState';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
@@ -7,7 +7,7 @@ import { getCleanAgentName } from '@shared/schemas/agent';
 
 export interface StreamTabInfoInputs {
   streamId: string;
-  metadata: Readonly<ProgressStreamMetadata>;
+  metadata: Readonly<SessionStreamMetadata>;
   /** Pre-resolved worktree context (branch, dirty, PR). Callers that have
    *  asynchronously resolved this pass it in so the stream tab can render a
    *  worktree chip without async work in this builder. */

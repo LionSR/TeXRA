@@ -47,8 +47,8 @@ interface ProgressStreamConfigDetails {
   workingDirectory?: string;
 }
 
-/** Canonical current metadata used by every progress-view stream consumer. */
-export interface ProgressStreamMetadata {
+/** Canonical current metadata used by every session stream consumer. */
+export interface SessionStreamMetadata {
   /** The run's identity, verbatim from `run.start` or the durable store. */
   identity?: RunIdentity;
   agentCategory?: AgentCategory;
@@ -61,11 +61,11 @@ export interface ProgressStreamMetadata {
 }
 
 /**
- * The stored slice of {@link ProgressStreamMetadata}. `creationTimestamp` is
+ * The stored slice of {@link SessionStreamMetadata}. `creationTimestamp` is
  * not in it: the transcript dates a tab, so it is computed on read rather than
  * carried through every patch that has nothing to say about it.
  */
-type StoredStreamMetadata = Omit<ProgressStreamMetadata, 'creationTimestamp'>;
+type StoredStreamMetadata = Omit<SessionStreamMetadata, 'creationTimestamp'>;
 
 /** Ephemeral session state per stream (not persisted). */
 interface StreamSessionState {
@@ -82,12 +82,12 @@ interface StreamSessionState {
 /** Active stream identifier, or empty string when no stream is selected. */
 export type ActiveStreamId = StreamTabId | '';
 
-/** Schema for consolidated progress view preferences. */
-const ProgressViewPrefsSchema = z.object({
+/** Schema for consolidated session presentation preferences. */
+const SessionPrefsSchema = z.object({
   activeStream: z.string().prefault('') as z.ZodType<ActiveStreamId>,
 });
 
-type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
+type SessionPrefs = z.infer<typeof SessionPrefsSchema>;
 
 /**
  * Backend-owned ephemeral counters, updated during streaming.
@@ -127,7 +127,7 @@ export class SessionState {
   readonly stores: SessionStores;
 
   // -- Preferences ------------------------------------------------------------
-  private readonly _prefs: PersistedState<ProgressViewPrefs>;
+  private readonly _prefs: PersistedState<SessionPrefs>;
 
   // -- Ephemeral state (session-only, not persisted) --------------------------
   private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
@@ -150,7 +150,7 @@ export class SessionState {
     this._prefs = new PersistedState(
       createBackendStorage(storage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
-      ProgressViewPrefsSchema,
+      SessionPrefsSchema,
     );
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
@@ -351,7 +351,7 @@ export class SessionState {
    * transcript's first entry dates the tab as soon as one exists; until then
    * the record's provisional timestamp stands in.
    */
-  getStreamMetadata(stream: StreamTabId): Readonly<ProgressStreamMetadata> {
+  getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
     const session = this.getOrCreateSession(stream);
     const firstTimestamp = this.streamLogs.getFirstTimestamp(stream);
     if (firstTimestamp !== undefined) {

@@ -225,13 +225,13 @@ export class SessionFactApplier {
     withEventErrorHandling('SessionFacts', context, handle);
   }
 
-  handleInquiryThreadUpdated(
+  private handleInquiryThreadUpdated(
     thread: Parameters<SessionRendererPort['onInquiryThreadUpdated']>[0],
   ): void {
     this.renderer.onInquiryThreadUpdated(thread);
   }
 
-  handleUpdateStreamDescription({
+  private handleUpdateStreamDescription({
     streamId,
     description,
   }: UpdateStreamDescriptionPayload): void {
@@ -239,7 +239,7 @@ export class SessionFactApplier {
     this.renderer.onStreamDescriptionChanged(streamId, description);
   }
 
-  handleSetParentStream({
+  private handleSetParentStream({
     childStreamId,
     parentStreamId,
   }: SetParentStreamPayload): void {
@@ -251,25 +251,29 @@ export class SessionFactApplier {
     this.renderer.onParentStreamChanged(childStreamId, parentStreamId ?? null);
   }
 
-  handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
+  private handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
     this.renderer.onFilesChanged(streamId);
   }
 
-  handleUpdateMissingOutputs({ streamId }: UpdateMissingOutputsPayload): void {
+  private handleUpdateMissingOutputs({
+    streamId,
+  }: UpdateMissingOutputsPayload): void {
     this.renderer.onMissingOutputsChanged(streamId);
   }
 
-  handleUpdateCompileFailures({
+  private handleUpdateCompileFailures({
     streamId,
   }: UpdateCompileFailuresPayload): void {
     this.renderer.onCompileFailuresChanged(streamId);
   }
 
-  handleClearMissingOutputs({ streamId }: ClearMissingOutputsPayload): void {
+  private handleClearMissingOutputs({
+    streamId,
+  }: ClearMissingOutputsPayload): void {
     this.renderer.onMissingOutputsChanged(streamId, { reset: true });
   }
 
-  handleUpdateStreamUsage({
+  private handleUpdateStreamUsage({
     streamId,
     storageKey,
     usage,
@@ -279,21 +283,23 @@ export class SessionFactApplier {
     this.renderer.onRunUsageChanged(streamId, storageKey, usage);
   }
 
-  handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
+  private handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
     this.renderer.onTodosChanged(streamId, todos);
   }
 
-  handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
+  private handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
     this.renderer.onPlanChanged(streamId, plan);
   }
 
-  handleUpdateQueuedFollowUps({
+  private handleUpdateQueuedFollowUps({
     streamId,
   }: UpdateQueuedFollowUpsPayload): void {
     this.renderer.onQueuedFollowUpsChanged(streamId);
   }
 
-  async handleSetActiveStream(payload: SetActiveStreamPayload): Promise<void> {
+  private async handleSetActiveStream(
+    payload: SetActiveStreamPayload,
+  ): Promise<void> {
     const { streamId, isRemote } = payload;
     if (!streamId) {
       this.state.switchActiveStream('');
@@ -404,7 +410,7 @@ export class SessionFactApplier {
     }
   }
 
-  handleUpdateConversationProgress(
+  private handleUpdateConversationProgress(
     data: UpdateConversationProgressPayload,
   ): void {
     const { streamId, progress } = data;
@@ -419,7 +425,7 @@ export class SessionFactApplier {
     this.renderer.onConversationProgressChanged(streamId, progress);
   }
 
-  handleUpdateStage(streamId: StreamTabId, stage: StreamStage): void {
+  private handleUpdateStage(streamId: StreamTabId, stage: StreamStage): void {
     this.state.updateStreamState(streamId, (prev) => ({ ...prev, stage }));
     this.renderer.onStageChanged(streamId, stage);
   }
@@ -439,7 +445,7 @@ export class SessionFactApplier {
    * or a retained child going live again) has no recorded phase to keep, so it
    * takes the one stamped at emission.
    */
-  updateChildRoster(
+  private updateChildRoster(
     parentStreamId: StreamTabId,
     next: StreamExecutionState['subagents'],
   ): void {
@@ -528,6 +534,12 @@ export class SessionFactApplier {
     this.renderer.syncStreamContent(stream, options);
   }
 
+  /**
+   * Apply a stream status transition into session state and notify the
+   * renderer. Awaitable so callers that need rehydrate to finish (tests,
+   * and any host that cannot fire-and-forget) can wait; the hub's `status`
+   * fact path calls this without awaiting via {@link handleSessionFact}.
+   */
   async setStreamStatus(
     streamId: StreamTabId,
     status: StreamPhase,
