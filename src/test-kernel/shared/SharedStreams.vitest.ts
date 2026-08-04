@@ -86,8 +86,7 @@ describe('buildStreamMetadata', () => {
       category: AgentCategory.Workflow,
       status: STREAM_STATUS.READY,
       conversationProgress: { toolCallCount: 0 },
-      roundStage: null,
-      phaseStage: null,
+      stage: null,
       subagents: [],
     });
     expect(Object.hasOwn(metadata, 'substate')).toBe(true);
@@ -118,7 +117,7 @@ describe('buildStreamMetadata', () => {
         substate: STREAM_SUBSTATE.STARTING,
         lastTimestamp: 123,
         conversationProgress: { toolCallCount: 5 },
-        roundStage: { index: 1, total: 3 },
+        stage: { kind: 'round', index: 1, total: 3 },
         subagents: [child, finishedChild],
       }),
     ).toEqual({
@@ -127,8 +126,7 @@ describe('buildStreamMetadata', () => {
       substate: STREAM_SUBSTATE.STARTING,
       lastTimestamp: 123,
       conversationProgress: { toolCallCount: 5 },
-      roundStage: { index: 1, total: 3 },
-      phaseStage: null,
+      stage: { kind: 'round', index: 1, total: 3 },
       subagents: [child, finishedChild],
     });
   });
@@ -137,9 +135,9 @@ describe('buildStreamMetadata', () => {
     expect(
       buildStreamMetadata({
         category: AgentCategory.Workflow,
-        phaseStage: { label: 'Reduce', index: 1, total: 3 },
-      }).phaseStage,
-    ).toEqual({ label: 'Reduce', index: 1, total: 3 });
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
+      }).stage,
+    ).toEqual({ kind: 'phase', label: 'Reduce', index: 1, total: 3 });
   });
 });
 

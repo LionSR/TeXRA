@@ -121,10 +121,7 @@ describe('repair-round progress badge (PR #7290 follow-up)', () => {
       // total widened to 3 via Math.max(totalRounds, roundIndex + 1).
       const repairRoundStage: RoundStage = { index: 2, total: 3 };
 
-      const stage = {
-        phaseStage: undefined,
-        roundStage: repairRoundStage,
-      };
+      const stage = { kind: 'round', ...repairRoundStage } as const;
 
       const container = document.createElement('div');
       render(renderProgressBadgeContent(undefined, stage), container);

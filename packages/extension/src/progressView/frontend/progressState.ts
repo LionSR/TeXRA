@@ -277,7 +277,8 @@ let _prevPhaseStages: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
 export const phaseStages$ = new Signal.Computed((): PhaseStageMap => {
   const stages = new Map<StreamTabId, PhaseStage>();
   for (const [streamId, state] of streamStates$.get()) {
-    if (state.phaseStage) stages.set(streamId, state.phaseStage);
+    const stage = state.stage;
+    if (stage?.kind === 'phase') stages.set(streamId, stage);
   }
   if (samePhaseStages(stages, _prevPhaseStages)) return _prevPhaseStages;
   _prevPhaseStages = stages.size > 0 ? stages : EMPTY_PHASE_STAGE_MAP;

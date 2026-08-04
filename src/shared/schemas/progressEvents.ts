@@ -103,17 +103,12 @@ export interface UpdateConversationProgressPayload {
   progress: ConversationProgress;
 }
 
-/** Round advance within a run, projected from `stage.start` (kind 'round'). */
+/** Round advance within a run, projected from `stage.start` (kind 'round').
+ *  Kept for the frozen public NDJSON vocabulary (`updateRoundStage`); internal
+ *  state and the webview wire carry the discriminated `StreamStage` slot. */
 export interface UpdateRoundStagePayload {
   streamId: StreamTabId;
   roundStage: RoundStage;
-}
-
-/** Phase advance within a workflow-script run, projected from `stage.start`
- *  (kind 'phase'). */
-export interface UpdatePhaseStagePayload {
-  streamId: StreamTabId;
-  phaseStage: PhaseStage;
 }
 
 /**

@@ -113,7 +113,7 @@ const views = [
             conversationProgress: {
               toolCallCount: 1,
             },
-            roundStage: { index: 0 },
+            stage: { kind: 'round', index: 0 },
             subagents: [],
             processes: [],
           },
@@ -186,7 +186,7 @@ const views = [
             conversationProgress: {
               toolCallCount: 12,
             },
-            roundStage: { index: 3 },
+            stage: { kind: 'round', index: 3 },
             subagents: [],
             processes: [],
           },

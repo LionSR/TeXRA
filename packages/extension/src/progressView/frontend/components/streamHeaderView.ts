@@ -35,8 +35,7 @@ export function renderStreamHeader(
       .status=${state.status}
       .substate=${state.substate}
       .progress=${state.conversationProgress}
-      .roundStage=${state.roundStage}
-      .phaseStage=${state.phaseStage}
+      .stage=${state.stage}
       .yoloActive=${Boolean(toolUse?.toolEditBypass)}
       .superYoloActive=${Boolean(toolUse?.superYoloBypass)}
       .goalActive=${Boolean(toolUse?.goalActive)}

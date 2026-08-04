@@ -10,12 +10,10 @@ import { updateToolUseState, updateWorkflowState } from '../stateUtils';
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
-  const { conversationProgress, roundStage, phaseStage, badges } =
-    data.activeState;
+  const { conversationProgress, stage, badges } = data.activeState;
   return {
     conversationProgress,
-    roundStage: roundStage ?? undefined,
-    phaseStage: phaseStage ?? undefined,
+    stage: stage ?? undefined,
     subagents: badges.subagents,
   };
 }

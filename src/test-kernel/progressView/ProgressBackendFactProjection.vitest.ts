@@ -177,12 +177,11 @@ describe('ProgressBackend', () => {
     expect(backend.state.activeStream).toBe('root');
     await vi.waitFor(() =>
       expect(backend.state.getStreamState(run)).toMatchObject({
-        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
       }),
     );
     expect(metadataPatchFor(messages, run).streamState).toMatchObject({
-      phaseStage: { label: 'Reduce', index: 1, total: 3 },
-      roundStage: null,
+      stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
     });
   });
 
@@ -864,7 +863,7 @@ describe('ProgressBackend', () => {
 
       expect(target.backend.state.getStreamState(parentStreamId)).toMatchObject(
         {
-          roundStage: { index: 2, total: 4 },
+          stage: { kind: 'round', index: 2, total: 4 },
           subagents: [child],
         },
       );
@@ -931,7 +930,7 @@ describe('ProgressBackend', () => {
     backend.state.updateStreamState(stream, (prev) => ({
       ...prev,
       conversationProgress: { toolCallCount: 7 },
-      roundStage: { index: 2 },
+      stage: { kind: 'round', index: 2 },
       subagents: [
         {
           childStreamId: 'child-stream',
@@ -962,10 +961,10 @@ describe('ProgressBackend', () => {
       category: AgentCategory.ToolUse,
       status: STREAM_PHASE.RUNNING,
       conversationProgress: { toolCallCount: 0 },
-      roundStage: null,
+      stage: null,
       subagents: [],
     });
-    expect(JSON.parse(JSON.stringify(patch)).streamState.roundStage).toBeNull();
+    expect(JSON.parse(JSON.stringify(patch)).streamState.stage).toBeNull();
   });
 
   it('keeps resident background entries during an in-flight status update', async () => {
