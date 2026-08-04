@@ -421,7 +421,8 @@ async function requestRetryInteraction(
       }
       // A cleared or replaced entry was never denied by a user, so it must not
       // mark the run as approval-denied.
-      if (!reservation.signal.aborted) markApprovalDenied(context);
+      if (!reservation.signal.aborted)
+        markApprovalDenied(context, 'Interactive approval');
       return { action: 'cancel' };
     }
     if (
@@ -497,7 +498,7 @@ function announceApproval(payload: ApprovalPayload): void {
 }
 
 function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
-  if (!decision.accepted) markApprovalDenied(context);
+  if (!decision.accepted) markApprovalDenied(context, 'Interactive approval');
 }
 
 function setTuiApprovalBypassState({
