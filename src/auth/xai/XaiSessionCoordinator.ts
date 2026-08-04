@@ -4,18 +4,20 @@
  * Thin policy over {@link SubscriptionOAuthCoordinator} — only authorize URL,
  * claims, and JWT-exp refresh differ from ChatGPT/Codex.
  */
+import { generateOAuthState } from '../oauth/pkce';
 import {
-  generateOAuthState,
   rethrowAsProviderAuthError,
-  SubscriptionOAuthCoordinator,
   wrapProviderOAuthClient,
+} from '../oauth/providerAuthBridge';
+import {
+  SubscriptionOAuthCoordinator,
   type SubscriptionAuthorizeRequest,
   type SubscriptionOAuthClient,
   type SubscriptionOAuthPolicy,
   type SubscriptionSessionStatus,
   type SubscriptionSessionStorage,
   type SubscriptionTokenResponse,
-} from '../oauth';
+} from '../oauth/SubscriptionOAuthCoordinator';
 import {
   XAI_AUTHORIZE_URL,
   XAI_CLIENT_ID,
@@ -187,5 +189,3 @@ export class XaiSessionCoordinator {
     }
   }
 }
-
-export type { SubscriptionTokenResponse };

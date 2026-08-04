@@ -7,15 +7,17 @@
  */
 import {
   rethrowAsProviderAuthError,
-  SubscriptionOAuthCoordinator,
   wrapProviderOAuthClient,
+} from '../oauth/providerAuthBridge';
+import {
+  SubscriptionOAuthCoordinator,
   type SubscriptionAuthorizeRequest,
   type SubscriptionOAuthClient,
   type SubscriptionOAuthPolicy,
   type SubscriptionSessionStatus,
   type SubscriptionSessionStorage,
   type SubscriptionTokenResponse,
-} from '../oauth';
+} from '../oauth/SubscriptionOAuthCoordinator';
 import {
   CODEX_AUTHORIZE_URL,
   CODEX_CLIENT_ID,
@@ -188,6 +190,3 @@ export class CodexSessionCoordinator {
     }
   }
 }
-
-// Keep token types available for tests that import coordinator-adjacent shapes.
-export type { CodexTokenResponse, SubscriptionTokenResponse };

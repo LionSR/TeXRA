@@ -7,5 +7,4 @@ export {
   computeCodeChallenge,
   generatePkcePair,
   generateOAuthState,
-  type PkcePair,
 } from '../oauth/pkce';

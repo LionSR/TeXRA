@@ -9,7 +9,7 @@ import http from 'node:http';
 
 import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 
-export interface LoopbackAuthorizeRequest {
+interface LoopbackAuthorizeRequest {
   url: string;
   verifier: string;
   state: string;

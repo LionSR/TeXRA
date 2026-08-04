@@ -8,7 +8,7 @@ import {
 } from './subscriptionOAuthError';
 import type { SubscriptionOAuthClient } from './SubscriptionOAuthCoordinator';
 
-export interface ProviderAuthError extends Error {
+interface ProviderAuthError extends Error {
   readonly kind: SubscriptionOAuthErrorKind;
   readonly status?: number;
 }

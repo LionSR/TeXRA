@@ -18,7 +18,7 @@ export interface SessionAccessCoordinator {
   loadSession(): Promise<unknown>;
 }
 
-export interface SessionAccessNeedsReauthError {
+interface SessionAccessNeedsReauthError {
   readonly needsReauth: boolean;
   readonly status?: number;
 }

@@ -10,20 +10,6 @@
  * read them without depending on this OAuth machinery.
  */
 export {
-  XAI_CALLBACK_PATH,
-  XAI_CALLBACK_PORT,
-  XAI_CLIENT_ID,
-  XAI_REFERRER,
-  XAI_SESSION_SECRET_KEY,
-  xaiRedirectUri,
-} from './xaiConstants';
-export {
-  generateCodeVerifier,
-  computeCodeChallenge,
-  generatePkcePair,
-  generateOAuthState,
-} from '../oauth/pkce';
-export {
   accessTokenIsExpiring,
   decodeXaiJwtClaims,
   extractXaiClaims,
@@ -39,14 +25,7 @@ export {
   XaiSessionCoordinator,
   type XaiSessionStorage,
   type XaiOAuthClient,
-  type XaiSessionStatus,
-  type XaiAuthorizeRequest,
 } from './XaiSessionCoordinator';
-export {
-  xaiCoordinator,
-  resetXaiCoordinator,
-  getXaiStatus,
-  isXaiSessionRoutable,
-} from './xaiAuthAccess';
+export { xaiCoordinator, getXaiStatus } from './xaiAuthAccess';
 export { loginWithLoopback } from './xaiLoopbackLogin';
 export { loginWithDeviceCode } from './xaiDeviceLogin';

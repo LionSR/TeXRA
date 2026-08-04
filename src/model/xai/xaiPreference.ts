@@ -11,7 +11,7 @@ import {
 } from '../subscriptionPreference';
 
 /** Config key for the "prefer my Grok subscription" switch (off by default). */
-export const XAI_PREFER_SUBSCRIPTION_KEY = 'texra.xaiGrok.preferSubscription';
+const XAI_PREFER_SUBSCRIPTION_KEY = 'texra.xaiGrok.preferSubscription';
 
 export type XaiSubscriptionPreferenceUpdate = SubscriptionPreferenceUpdate;
 

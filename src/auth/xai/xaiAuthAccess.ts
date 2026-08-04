@@ -4,17 +4,13 @@
  */
 import { tryPlatform } from '@platform/platform';
 
-import {
-  getSubscriptionSessionStatus,
-  isSubscriptionSessionRoutable,
-} from '../oauth/sessionAccess';
+import { getSubscriptionSessionStatus } from '../oauth/sessionAccess';
 import { XAI_SESSION_SECRET_KEY } from './xaiConstants';
 import {
   XaiSessionCoordinator,
   type XaiSessionStorage,
   type XaiSessionStatus,
 } from './XaiSessionCoordinator';
-import { XaiAuthError } from './xaiSessionTypes';
 
 const CHANNEL = 'xaiAuth';
 
@@ -39,19 +35,7 @@ export function xaiCoordinator(): XaiSessionCoordinator {
   return singleton;
 }
 
-/** Test seam: drop the cached coordinator. */
-export function resetXaiCoordinator(): void {
-  singleton = null;
-}
-
 /** Signed-in status, safe to call before platform init (returns signed-out). */
 export async function getXaiStatus(): Promise<XaiSessionStatus> {
   return getSubscriptionSessionStatus(xaiCoordinator, CHANNEL, 'Grok');
-}
-
-/**
- * Whether subscription routing should use the stored session.
- */
-export async function isXaiSessionRoutable(): Promise<boolean> {
-  return isSubscriptionSessionRoutable(xaiCoordinator, XaiAuthError, 'Grok');
 }
