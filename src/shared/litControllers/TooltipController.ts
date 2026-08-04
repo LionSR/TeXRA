@@ -1,4 +1,4 @@
-import { clamp } from '@utils/core';
+import { clamp, createFlushableDebounce } from '@utils/core';
 
 /**
  * Tooltip delay in ms before showing (matches VS Code native tooltip timing).
@@ -41,10 +41,13 @@ function findTooltipTarget(e: Event): Element | null {
 }
 
 let tooltipEl: HTMLDivElement | null = null;
-let showTimeoutId: number | null = null;
 let currentTarget: Element | null = null;
 let savedTitle = '';
 let installed = false;
+
+const showTimer = createFlushableDebounce(() => {
+  if (currentTarget) show(currentTarget);
+}, TOOLTIP_SHOW_DELAY_MS);
 
 function show(anchor: Element): void {
   const text = anchor.getAttribute('title');
@@ -81,10 +84,7 @@ function show(anchor: Element): void {
 }
 
 function hide(): void {
-  if (showTimeoutId !== null) {
-    window.clearTimeout(showTimeoutId);
-    showTimeoutId = null;
-  }
+  showTimer.cancel();
   // Restore the title only if no code changed it while the tooltip was shown.
   if (currentTarget && savedTitle && !currentTarget.hasAttribute('title')) {
     currentTarget.setAttribute('title', savedTitle);
@@ -106,9 +106,7 @@ function handleOver(e: Event): void {
 
   hide();
   currentTarget = target;
-  showTimeoutId = window.setTimeout(() => {
-    show(target);
-  }, TOOLTIP_SHOW_DELAY_MS);
+  showTimer.schedule();
 }
 
 function handleOut(e: Event): void {

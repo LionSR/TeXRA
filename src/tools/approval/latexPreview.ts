@@ -6,7 +6,6 @@
 import path from 'node:path';
 
 import { sync as globSync } from 'glob';
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
@@ -20,6 +19,7 @@ import {
   createWorkspaceLocation,
   WorkspaceFS,
 } from '@utils/files';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getValidatedConfig } from '@utils/config/configUtils';
 import { isStrictlyWithin } from '@utils/core/pathCore';
@@ -148,7 +148,7 @@ async function createTempFileWithCleanup(
   const originalPath = entry.request.path;
   const ext = path.extname(originalPath);
   const basename = path.basename(originalPath, ext);
-  const tempFileName = `${basename}${suffix}-${nanoid(TEMP_ID_LENGTH)}${ext}`;
+  const tempFileName = `${basename}${suffix}-${generateShortId(TEMP_ID_LENGTH)}${ext}`;
 
   let tempDir: string;
   if (location === 'workspaceTemp') {
