@@ -1,8 +1,8 @@
-// Unit tests for `resolveCliResume` branch logic and the user-facing
-// `explainNonResumable` strings. The retrieval surface is mocked at its module
-// boundaries (history config + resume retrieval + execution metadata) so
-// the test exercises pure branching, not storage I/O. The agent-category
-// branch runs for real against minimal configs.
+// Unit tests for `readCliToolUseResumeData`, the CLI's retrieval feed for the
+// shared resume funnel. The retrieval surface is mocked at its module
+// boundaries (resume retrieval + execution metadata) so the test exercises
+// pure branching, not storage I/O. The agent-category branch runs for real
+// against minimal configs.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,13 +15,8 @@ import type { ExecutionId } from '@shared/schemas';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const mocks = vi.hoisted(() => ({
-  readCliHistoryConfig: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   readMeta: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/history', () => ({
-  readCliHistoryConfig: mocks.readCliHistoryConfig,
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -51,12 +46,13 @@ function workflowConfig(): AgentConfig {
   });
 }
 
-async function resolve(id: ExecutionId = EXECUTION_ID) {
-  const { resolveCliResume } = await import('@cli/runtime/sessionResume');
-  return resolveCliResume(id);
+async function read(config: AgentConfig, id: ExecutionId = EXECUTION_ID) {
+  const { readCliToolUseResumeData } =
+    await import('@cli/runtime/toolUseResumeData');
+  return readCliToolUseResumeData(id, config);
 }
 
-describe('resolveCliResume', () => {
+describe('readCliToolUseResumeData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.readMeta.mockResolvedValue({
@@ -66,33 +62,8 @@ describe('resolveCliResume', () => {
     });
   });
 
-  it('returns not-found when no config exists for the id', async () => {
-    mocks.readCliHistoryConfig.mockResolvedValue(null);
-
-    const result = await resolve();
-
-    expect(result).toEqual({ type: 'not-found' });
-    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
-  });
-
-  it('returns load-failed when config lookup fails', async () => {
-    mocks.readCliHistoryConfig.mockRejectedValue(new Error('state is locked'));
-
-    const result = await resolve();
-
-    expect(result).toEqual({
-      type: 'load-failed',
-      reason: 'state is locked',
-    });
-    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
-  });
-
-  it('returns workflow for a workflow config (not continuable here)', async () => {
-    mocks.readCliHistoryConfig.mockResolvedValue(workflowConfig());
-
-    const result = await resolve();
-
-    expect(result).toEqual({ type: 'workflow' });
+  it('returns null for a workflow config (resumed via the shared funnel)', async () => {
+    expect(await read(workflowConfig())).toBeNull();
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
@@ -103,12 +74,9 @@ describe('resolveCliResume', () => {
       streamId: STREAM_ID,
       agentConfig: { ...config, model: 'gpt-5.5' },
     });
-    mocks.readCliHistoryConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(resume);
 
-    const result = await resolve();
-
-    expect(result).toEqual(resume);
+    expect(await read(config)).toEqual(resume);
     // The stream id is the one stamped on execution metadata at registration,
     // never re-derived from agent/model, so resume reuses the original
     // stream/transcript.
@@ -119,69 +87,32 @@ describe('resolveCliResume', () => {
     );
   });
 
-  it('returns no-resume-state when metadata carries no stamped stream id', async () => {
+  it('returns null when metadata carries no stamped stream id', async () => {
     // A row without a stamped streamId has no persisted stream: not resumable.
     mocks.readMeta.mockResolvedValue({
       timestamp: '2026-07-31T00:00:00.000Z',
       identity: { kind: 'agent', agent: 'planner' },
     });
-    mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
 
-    const result = await resolve();
-
-    expect(result).toEqual({ type: 'no-resume-state' });
+    expect(await read(toolUseConfig())).toBeNull();
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
-  it('returns no-resume-state without a live flow record', async () => {
-    mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
+  it('returns null without a live flow record', async () => {
     mocks.retrieveSessionResumeData.mockResolvedValue(undefined);
 
-    const result = await resolve();
-
-    expect(result).toEqual({ type: 'no-resume-state' });
+    expect(await read(toolUseConfig())).toBeNull();
   });
 
-  it('returns load-failed when resume state retrieval fails', async () => {
-    mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
+  it('propagates retrieval failures for the active-resume path to surface', async () => {
     mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
 
-    const result = await resolve();
-
-    expect(result).toEqual({
-      type: 'load-failed',
-      reason: 'KV timeout',
-    });
+    await expect(read(toolUseConfig())).rejects.toThrow('KV timeout');
   });
 
-  it('returns no-resume-state for a non-toolUse payload', async () => {
-    mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
+  it('discards a non-toolUse resume payload', async () => {
     mocks.retrieveSessionResumeData.mockResolvedValue({ type: 'workflow' });
 
-    const result = await resolve();
-
-    expect(result).toEqual({ type: 'no-resume-state' });
-  });
-});
-
-describe('explainNonResumable', () => {
-  it('explains each non-tool-use resolution type', async () => {
-    const { explainNonResumable } = await import('@cli/runtime/sessionResume');
-
-    expect(explainNonResumable({ type: 'not-found' }, EXECUTION_ID)).toBe(
-      `Execution not found: ${EXECUTION_ID}`,
-    );
-    expect(explainNonResumable({ type: 'workflow' }, EXECUTION_ID)).toBe(
-      `Execution ${EXECUTION_ID} is a workflow; only tool-use sessions can be resumed.`,
-    );
-    expect(explainNonResumable({ type: 'no-resume-state' }, EXECUTION_ID)).toBe(
-      `Execution ${EXECUTION_ID} has no resumable session state (it completed or was cleared).`,
-    );
-    expect(
-      explainNonResumable(
-        { type: 'load-failed', reason: 'KV timeout' },
-        EXECUTION_ID,
-      ),
-    ).toBe(`Failed to load resumable session ${EXECUTION_ID}: KV timeout`);
+    expect(await read(toolUseConfig())).toBeNull();
   });
 });

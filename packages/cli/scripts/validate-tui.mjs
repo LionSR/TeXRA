@@ -477,11 +477,11 @@ const SCENARIOS = [
     unexpect: ['✓ 1. Prefer ChatGPT', '✓ 2. Prefer Kimi Code'],
   },
   {
-    name: 'orchestrate-delegated-history',
+    name: 'orchestrate-history',
     frame: 'scrollback',
     env: {
       HARNESS_ORCHESTRATION: '1',
-      HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
+      HARNESS_ORCHESTRATION_HISTORY: '1',
     },
     bootExpect: 'Resume — 1 resumable session',
     keys: ['2'],
@@ -494,19 +494,13 @@ const SCENARIOS = [
       'Team physicist',
       'Esc back',
     ],
-    unexpect: [
-      'Resume aaaaaaaaaaaa',
-      'Resume bbbbbbbbbbbb',
-      'Chat with search',
-      'Chat with review',
-    ],
   },
   {
     name: 'orchestrate-resume-submenu',
     frame: 'scrollback',
     env: {
       HARNESS_ORCHESTRATION: '1',
-      HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
+      HARNESS_ORCHESTRATION_HISTORY: '1',
     },
     bootExpect: 'Resume — 1 resumable session',
     keys: ['3'],
@@ -520,7 +514,6 @@ const SCENARIOS = [
       '1-9/a-z/Enter resume',
       'Esc back',
     ],
-    unexpect: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'],
   },
   {
     name: 'compact-orchestrate-launcher',

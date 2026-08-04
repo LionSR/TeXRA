@@ -108,18 +108,6 @@ export function resumableCliHistoryEntries<
   );
 }
 
-/**
- * The rule `isUserVisibleExecution` applies to storage listings, applied to an
- * already-built entry array: a menu assembled from history handed in by its
- * caller (the TUI harness scenarios build one directly) must not offer an
- * agent-spawned child run either.
- */
-export function userStartedCliHistoryEntries<
-  T extends Pick<CliHistoryEntry, 'parentExecutionId'>,
->(entries: readonly T[]): T[] {
-  return entries.filter((entry) => entry.parentExecutionId === undefined);
-}
-
 export type CliHistoryDeleteResult =
   | {
       readonly deleted: 'all';

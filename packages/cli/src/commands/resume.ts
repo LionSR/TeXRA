@@ -3,7 +3,7 @@ import { defineCommand } from 'citty';
 import { CliExitCode } from '../runtime/exitCodes';
 import { parseCliHistoryId } from '../runtime/history';
 import { writeTextStderr } from '../runtime/logSinks';
-import { runResumeExecution } from '../runtime/resumeExecution';
+import { runResumeExecution } from './resumeExecution';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';

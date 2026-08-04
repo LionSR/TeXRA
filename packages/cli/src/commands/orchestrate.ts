@@ -72,7 +72,7 @@ import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { runResumeExecution } from '../runtime/resumeExecution';
+import { runResumeExecution } from './resumeExecution';
 import { type CliContext } from '../runtime/cliContext';
 
 async function canLaunchWithDefaultModel(

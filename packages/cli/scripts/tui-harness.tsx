@@ -215,8 +215,8 @@ const SHOW_BOTH_SUBSCRIPTION_PREFERENCES =
   process.env.HARNESS_BOTH_SUBSCRIPTION_PREFERENCES === '1';
 const SHOW_KIMI_CODE_SUBSCRIPTION =
   process.env.HARNESS_KIMI_CODE_SUBSCRIPTION === '1';
-const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
-  process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
+const SHOW_ORCHESTRATION_HISTORY =
+  process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
 const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
@@ -484,29 +484,11 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
 }
 await loadAgents({ includeRemote: false });
 
+// Models the production boundary: `listCliHistoryEntries` already applies
+// `isUserVisibleExecution`, so menu builders only ever see user-started rows.
 function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
-  if (!SHOW_DELEGATED_ORCHESTRATION_HISTORY) return [];
+  if (!SHOW_ORCHESTRATION_HISTORY) return [];
   return [
-    {
-      id: 'aaaaaaaaaaaa' as ExecutionId,
-      timestamp: '2026-06-06T00:00:00Z',
-      agent: 'search',
-      model: 'harness-model',
-      status: CLI_HISTORY_RESUMABLE_STATUS,
-      inputBasename: '-',
-      category: AgentCategory.ToolUse,
-      parentExecutionId: 'root-session' as ExecutionId,
-    },
-    {
-      id: 'bbbbbbbbbbbb' as ExecutionId,
-      timestamp: '2026-06-06T00:01:00Z',
-      agent: 'review',
-      model: 'harness-model',
-      status: CLI_HISTORY_RESUMABLE_STATUS,
-      inputBasename: '-',
-      category: AgentCategory.ToolUse,
-      parentExecutionId: 'root-session' as ExecutionId,
-    },
     {
       id: 'cccccccccccc' as ExecutionId,
       timestamp: '2026-06-06T00:02:00Z',

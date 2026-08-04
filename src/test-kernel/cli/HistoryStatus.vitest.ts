@@ -17,7 +17,6 @@ import {
   formatCliHistoryDetailsText,
   resumableCliHistoryEntries,
   readCliHistoryDetails,
-  userStartedCliHistoryEntries,
 } from '@cli/runtime/history';
 import {
   EXECUTION_STATUS,
@@ -90,15 +89,6 @@ describe('CLI history status formatting', () => {
         { id: 'errored', status: 'failed' },
       ] as const),
     ).toEqual([{ id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS }]);
-  });
-
-  it('filters history entries to user-started sessions only', () => {
-    expect(
-      userStartedCliHistoryEntries([
-        { id: 'root' },
-        { id: 'child-with-parent', parentExecutionId: 'root' as ExecutionId },
-      ]),
-    ).toEqual([{ id: 'root' }]);
   });
 
   it('reports outcome-free entries as unknown when no flow remains', () => {

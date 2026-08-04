@@ -27,10 +27,8 @@ import {
 import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
-  parseAgentModePresets,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
@@ -113,16 +111,9 @@ export async function setChatDefaultAgent(
 
 async function loadRosterData(): Promise<AgentRosterData> {
   await loadAgents({ includeRemote: false });
-  const { workspaceState } = platform();
   return {
     record: await readCliAgentRoster(),
-    presets: [
-      STARTER_AGENT_MODE_PRESET,
-      ...AGENT_MODE_PRESETS,
-      ...parseAgentModePresets(
-        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      ),
-    ],
+    presets: cliAgentRosterController().allPresets(),
     agents: byCategory((category) => getAgentsByCategory(category)),
   };
 }

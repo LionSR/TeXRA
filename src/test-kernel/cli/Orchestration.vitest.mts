@@ -565,41 +565,6 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('hides delegated child executions from the resume menu', () => {
-    const items = orchestrationItems({
-      history: [
-        historyEntry('aaaaaaaaaaaa', {
-          agent: 'search',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-          parentExecutionId: 'root-session' as ExecutionId,
-        }),
-        historyEntry('bbbbbbbbbbbb', {
-          agent: 'review',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-          parentExecutionId: 'root-session' as ExecutionId,
-        }),
-        historyEntry('cccccccccccc', {
-          agent: 'orchestrator',
-          status: CLI_HISTORY_RESUMABLE_STATUS,
-        }),
-      ],
-      toolUseAgents: [
-        toolUseAgent('assistant'),
-        toolUseAgent('search'),
-        toolUseAgent('review'),
-        toolUseAgent('orchestrator'),
-      ],
-    });
-
-    expect(items.map((item) => item.label)).toEqual([
-      'New chat',
-      'Resume',
-      'Agent',
-      'Settings',
-      'Help',
-    ]);
-  });
-
   it('does not list completed executions as resume launcher rows', () => {
     const items = orchestrationItems({
       history: [

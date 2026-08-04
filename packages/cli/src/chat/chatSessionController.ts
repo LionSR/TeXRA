@@ -11,8 +11,10 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
+import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
@@ -30,11 +32,7 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '@cli/runtime/cliPresentationHost';
-import {
-  explainNonResumable,
-  resolveCliResume,
-  type CliToolUseResumeResolution,
-} from '@cli/runtime/sessionResume';
+import { readCliToolUseResumeData } from '@cli/runtime/toolUseResumeData';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -124,10 +122,7 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(
-    id: ExecutionId,
-    preResolved?: CliToolUseResumeResolution,
-  ): Promise<void>;
+  resume(id: ExecutionId, preResolved?: ToolUseResumeData): Promise<void>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
@@ -432,7 +427,7 @@ export function createChatSessionController(
 
   const resume = async (
     id: ExecutionId,
-    preResolved?: CliToolUseResumeResolution,
+    preResolved?: ToolUseResumeData,
   ): Promise<void> => {
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below — see tryClaimRootRunSlot. This fuses the
@@ -455,13 +450,31 @@ export function createChatSessionController(
 
     const supersededRecovery = supersedeInterruptedRecovery();
     try {
-      const resolution = preResolved ?? (await resolveCliResume(id));
-      if (resolution.type !== 'toolUse') {
-        restoreInterruptedRecovery(supersededRecovery);
-        appendLocalErrorTranscript(explainNonResumable(resolution, id));
-        session.markRunCompleted();
-        resolveRunPromise();
-        return;
+      // Inline resolution over the shared retrieval (the durable record plus
+      // `retrieveSessionResumeData` via the FK-stamped stream id). Workflow
+      // runs resume headless through `texra resume`, not inside a chat.
+      let resolution = preResolved;
+      if (!resolution) {
+        const config = await getExecutionStore(id).readConfig();
+        let failure: string | undefined;
+        if (!config) {
+          failure = `Execution not found: ${id}`;
+        } else if (config.agentCategory !== AgentCategory.ToolUse) {
+          failure = `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`;
+        } else {
+          resolution =
+            (await readCliToolUseResumeData(id, config)) ?? undefined;
+        }
+        if (!resolution) {
+          restoreInterruptedRecovery(supersededRecovery);
+          appendLocalErrorTranscript(
+            failure ??
+              `Execution ${id} has no resumable session state (it completed or was cleared).`,
+          );
+          session.markRunCompleted();
+          resolveRunPromise();
+          return;
+        }
       }
 
       clearLocalTranscript();
@@ -506,7 +519,7 @@ export function createChatSessionController(
       ownExecution(resolution.executionId);
       session.presentationHost = presentationHost;
 
-      // A Ctrl-C during the rehydration awaits above (`resolveCliResume`,
+      // A Ctrl-C during the rehydration awaits above (resume resolution,
       // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
       // `session.stopRequested`. Honor it before starting the real run chain —
       // matching `tryResumeStream()`'s stop-check after its own preparatory

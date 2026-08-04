@@ -133,6 +133,15 @@ export class AgentRosterController<
     return this.deps.getPresets?.() ?? [];
   }
 
+  /**
+   * Every selectable team preset: built-ins plus the host's custom presets.
+   * The one list roster pickers render — a form composing its own preset
+   * list can drift from what {@link setTeam} accepts.
+   */
+  allPresets(): readonly AgentModePreset[] {
+    return allPresets(this.extraPresets());
+  }
+
   getSelection(): AgentRosterSelection {
     return readAgentRosterSelection(this.deps.workspaceState);
   }

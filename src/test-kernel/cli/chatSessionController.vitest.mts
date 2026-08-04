@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => ({
   appendLocalUserTranscript: vi.fn(),
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToStream: vi.fn(),
-  resolveCliResume: vi.fn(),
+  readCliToolUseResumeData: vi.fn(),
   followUpEnqueue: vi.fn(),
   sessionEventEmit: vi.fn(),
 }));
@@ -125,12 +125,8 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
 
-vi.mock('@cli/runtime/sessionResume', () => ({
-  resolveCliResume: mocks.resolveCliResume,
-  explainNonResumable: (
-    resolution: { readonly type: string },
-    id: string,
-  ): string => `not resumable (${resolution.type}): ${id}`,
+vi.mock('@cli/runtime/toolUseResumeData', () => ({
+  readCliToolUseResumeData: mocks.readCliToolUseResumeData,
 }));
 
 import type {
@@ -1154,8 +1150,10 @@ describe('createChatSessionController', () => {
   });
 
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
-    const resolution = pDefer<{ readonly type: 'not-found' }>();
-    mocks.resolveCliResume.mockReturnValueOnce(resolution.promise);
+    const configRead = pDefer<null>();
+    mocks.getExecutionStore.mockReturnValue({
+      readConfig: () => configRead.promise,
+    });
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -1168,7 +1166,7 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(false);
     expect(ctrl.canStartRootRun()).toBe(false);
 
-    resolution.resolve({ type: 'not-found' });
+    configRead.resolve(null);
     await resumed;
     expect(session.runCompleted).toBe(true);
   });
@@ -1266,13 +1264,15 @@ describe('createChatSessionController', () => {
   });
 
   it('resume() suspended on the resolution keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
-    // resume(A) suspends on resolveCliResume (an await-suspension point)
+    // resume(A) suspends on the config read (an await-suspension point)
     // with the slot already claimed; a follow-up wake (tryResumeStream for a
     // different stream) fires while A is still suspended. Exactly one caller
     // (A) holds the slot end to end, so B must bail out rather than claim it
     // and start work that A would clobber on waking.
-    const resolution = pDefer<{ readonly type: 'not-found' }>();
-    mocks.resolveCliResume.mockReturnValueOnce(resolution.promise);
+    const configRead = pDefer<null>();
+    mocks.getExecutionStore.mockReturnValue({
+      readConfig: () => configRead.promise,
+    });
     const session = makeSession({ runCompleted: true });
     const snapshotStoreForB = makeResumeSnapshotStore({
       executionId: undefined,
@@ -1282,7 +1282,7 @@ describe('createChatSessionController', () => {
     );
 
     const resumeA = ctrl.resume('aaaaaa' as ExecutionId);
-    // A is now suspended inside resolveCliResume; the slot is
+    // A is now suspended inside the config read; the slot is
     // already claimed.
     expect(session.runPromise).toBeDefined();
     expect(session.runCompleted).toBe(false);
@@ -1295,7 +1295,7 @@ describe('createChatSessionController', () => {
     await expect(resumedB).resolves.toBe(false);
 
     // A remains the sole owner of the slot end to end.
-    resolution.resolve({ type: 'not-found' });
+    configRead.resolve(null);
     await resumeA;
     expect(session.runCompleted).toBe(true);
   });

@@ -17,9 +17,9 @@ import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
-import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   firstRunSetupAgentOverride,
@@ -155,7 +155,7 @@ export interface RunChatInit {
   /** Pre-resolved startup resume from `texra resume <id>`. */
   readonly initialResume?: {
     readonly id: ExecutionId;
-    readonly resolution: CliToolUseResumeResolution;
+    readonly resolution: ToolUseResumeData;
   };
 }
 
