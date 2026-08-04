@@ -8,6 +8,7 @@ import { safeParseJson } from '@common/parsing/safeParseJson';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TexraApprovalPolicySchema,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -110,9 +111,11 @@ const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
 ];
 const COMMAND_SECTIONS = ['chat', 'run'] as const;
 
-const TOP_LEVEL_KEYS = new Set<string>(
-  CLI_SETTING_PATHS.map(canonicalConfigKey),
-);
+const TOP_LEVEL_KEYS = new Set<string>([
+  ...CLI_SETTING_PATHS.map(canonicalConfigKey),
+  'approvalPolicy',
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+]);
 const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
 
 function isKnownConfigKey(key: string): boolean {

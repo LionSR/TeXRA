@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 // Local imports - shared constants & state keys
 import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  TEXRA_APPROVAL_POLICY_DEFAULT,
+  TexraApprovalPolicySchema,
+} from '@shared/approvalPolicy';
+import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
   LATEX_FORMATTER_VALUES,
@@ -818,9 +823,9 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireEditApproval,
-    title: 'Require edit approval',
+    title: 'Under Ask: require approval for file edits',
     description:
-      'Show a diff and ask for approval before an agent changes workspace files.',
+      'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
     category: 'tools',
     store: 'config',
     hosts: ['vscode', 'desktop'],
@@ -829,12 +834,25 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: BASH_APPROVAL_CONFIG_KEY,
     schema: CoreSettingsShape.toolUse.unwrap().shape.requireBashApproval,
-    title: 'Require bash approval',
+    title: 'Under Ask: require approval for shell commands',
     description:
-      'Ask for approval before an agent runs a shell command in this workspace.',
+      'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
     category: 'tools',
     store: 'config',
     hosts: ['vscode', 'desktop'],
+    settingsViewSnapshot: 'approval',
+  },
+  {
+    key: TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+    schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
+    title: 'Approval policy',
+    description:
+      'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
+    category: 'tools',
+    store: 'config',
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'packages/cli/src/runtime/cliConfig.ts',
+    enumLabels: ['Ask', 'Never', 'Auto-approve'],
     settingsViewSnapshot: 'approval',
   },
   {

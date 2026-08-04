@@ -6,7 +6,10 @@ import * as path from 'node:path';
 import PQueue from 'p-queue';
 
 // Local imports - agent
-import type { WorkspaceStorageTransitionHooks } from '@agent/runtime/SessionHandle';
+import {
+  tryDefaultSession,
+  type WorkspaceStorageTransitionHooks,
+} from '@agent/runtime/SessionHandle';
 
 // Local imports - common
 import { isFileNotFoundError } from '@common/errors';
@@ -22,6 +25,7 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
+import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -137,6 +141,15 @@ export class ExtensionTexraConfig extends JsonConfigProvider {
               path.join(this.storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
             );
             previousStore = this.replaceWorkspaceStore(workspaceStore);
+            // No default session exists yet during activation's own config
+            // setup, and unit tests exercise transitions without one; a live
+            // session always exists by the time a real workspace-folder
+            // change can fire.
+            tryDefaultSession()?.setApprovalPolicy(
+              readPersistedTexraApprovalPolicy((key, fallback) =>
+                this.get(key, fallback),
+              ),
+            );
           },
           afterStorageRollback: rollbackConfig,
           afterStorageFinalize: () => {

@@ -1,17 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  TEXRA_APPROVAL_POLICIES,
+  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+  TEXRA_APPROVAL_POLICY_DISPLAY_ORDER,
   TEXRA_APPROVAL_POLICY_OPTIONS,
+  TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE,
+  TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
+  TEXRA_APPROVAL_YOLO_RETRY_MESSAGE,
+  decideHumanInputRequest,
+  decideRetryApproval,
   decideTexraApproval,
   parseTexraApprovalPolicy,
+  texraApprovalDenialMessage,
+  texraHumanInputDenialMessage,
+  texraRetryDenialMessage,
 } from '@shared/approvalPolicy';
 
 describe('TeXRA approval policy', () => {
   it.each([
-    ['never', true, true, true, 'deny'],
-    ['never', false, false, true, 'deny'],
+    ['never', true, true, true, 'deny-policy'],
+    ['never', false, false, true, 'deny-policy'],
     ['ask', true, false, true, 'present'],
-    ['ask', true, false, false, 'deny'],
+    ['ask', true, false, false, 'deny-unpresentable'],
     ['ask', true, true, false, 'allow'],
     ['ask', false, false, false, 'allow'],
     ['yolo', true, false, false, 'allow'],
@@ -35,7 +46,76 @@ describe('TeXRA approval policy', () => {
       'never',
       'yolo',
     ]);
+    expect(new Set(TEXRA_APPROVAL_POLICY_DISPLAY_ORDER)).toEqual(
+      new Set(TEXRA_APPROVAL_POLICIES),
+    );
+    expect(TEXRA_APPROVAL_POLICY_DISPLAY_ORDER).toHaveLength(
+      TEXRA_APPROVAL_POLICIES.length,
+    );
     expect(parseTexraApprovalPolicy(' Yolo ')).toBe('yolo');
     expect(parseTexraApprovalPolicy('auto')).toBeUndefined();
+  });
+
+  it('maps deny reasons to distinct user-facing messages', () => {
+    expect(texraApprovalDenialMessage('deny-policy')).toBe(
+      TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+    );
+    expect(texraApprovalDenialMessage('deny-unpresentable')).toBe(
+      TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE,
+    );
+  });
+
+  it.each([
+    [
+      { policy: 'yolo', canPresent: true, isCredentialFailure: false },
+      { deny: 'yolo-retry' },
+    ],
+    [
+      { policy: 'yolo', canPresent: true, isCredentialFailure: true },
+      { deny: 'credential' },
+    ],
+    [
+      { policy: 'never', canPresent: true, isCredentialFailure: false },
+      { deny: 'policy' },
+    ],
+    [
+      { policy: 'never', canPresent: false, isCredentialFailure: true },
+      { deny: 'credential' },
+    ],
+    [
+      { policy: 'ask', canPresent: true, isCredentialFailure: false },
+      'present',
+    ],
+    [
+      { policy: 'ask', canPresent: false, isCredentialFailure: true },
+      { deny: 'credential' },
+    ],
+    [
+      { policy: 'ask', canPresent: false, isCredentialFailure: false },
+      { deny: 'unpresentable' },
+    ],
+  ] as const)('decideRetryApproval(%j) → %j', (input, expected) => {
+    expect(decideRetryApproval(input)).toEqual(expected);
+  });
+
+  it('publishes retry denial copy beside the evaluator', () => {
+    expect(texraRetryDenialMessage('yolo-retry')).toBe(
+      TEXRA_APPROVAL_YOLO_RETRY_MESSAGE,
+    );
+  });
+
+  it.each([
+    [{ policy: 'yolo', canPresent: true }, { deny: 'yolo-no-human' }],
+    [{ policy: 'never', canPresent: true }, { deny: 'policy' }],
+    [{ policy: 'ask', canPresent: true }, 'present'],
+    [{ policy: 'ask', canPresent: false }, { deny: 'unpresentable' }],
+  ] as const)('decideHumanInputRequest(%j) → %j', (input, expected) => {
+    expect(decideHumanInputRequest(input)).toEqual(expected);
+  });
+
+  it('publishes human-input denial copy beside the evaluator', () => {
+    expect(texraHumanInputDenialMessage('yolo-no-human')).toBe(
+      TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
+    );
   });
 });

@@ -1,11 +1,13 @@
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  decideHumanInputRequest,
+  texraHumanInputDenialMessage,
+} from '@shared/approvalPolicy';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { type CliContext } from '../cliContext';
 
-import {
-  approvalPromptAllowed,
-  humanInputDenialFeedback,
-} from './approvalPolicy';
+import { markApprovalDenied } from './approvalPrompts';
 
 const EXTERNAL_INQUIRY_YOLO_MESSAGE =
   'External inquiry requires human input; yolo mode cannot synthesize an external answer.';
@@ -22,11 +24,21 @@ export function denyExternalInquiryIfNoHumanInput(
   threadId: string,
   context: CliContext,
 ): boolean {
-  if (approvalPromptAllowed(context)) return false;
-  const feedback = humanInputDenialFeedback(
-    context,
-    EXTERNAL_INQUIRY_YOLO_MESSAGE,
-  );
-  void handleExternalInquiryAction({ action: 'drop', threadId, feedback });
+  const decision = decideHumanInputRequest({
+    policy: defaultSession().approvalPolicy,
+    canPresent: context.mode === 'interactive',
+  });
+  if (decision === 'present') return false;
+  if (decision.deny !== 'yolo-no-human') {
+    markApprovalDenied(context);
+  }
+  void handleExternalInquiryAction({
+    action: 'drop',
+    threadId,
+    feedback: texraHumanInputDenialMessage(
+      decision.deny,
+      EXTERNAL_INQUIRY_YOLO_MESSAGE,
+    ),
+  });
   return true;
 }

@@ -81,6 +81,11 @@ import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import {
+  formatTexraApprovalPolicy,
+  readPersistedTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_OPTIONS,
+} from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
@@ -265,6 +270,11 @@ export async function activate(context: vscode.ExtensionContext) {
     responseTextProcessing: texraResponseTextProcessing,
   });
   await runtimeSession.waitUntilReady();
+  runtimeSession.setApprovalPolicy(
+    readPersistedTexraApprovalPolicy((key, fallback) =>
+      platform().config.get(key, fallback),
+    ),
+  );
   registerAgentFeatures();
   // Mirrors the CLI/desktop Node-host wiring (`nodeHost.ts`'s
   // `initializeNodeRuntimeSkills`, inlined here rather than imported so the
@@ -640,14 +650,21 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
+    const policy = statusBarSession.approvalPolicy;
+    const policyLabel =
+      TEXRA_APPROVAL_POLICY_OPTIONS.find((option) => option.value === policy)
+        ?.label ?? policy;
+    const policyLine = `Approval policy: ${policyLabel} — ${formatTexraApprovalPolicy(policy)}`;
     const { cost, inputTokens, outputTokens } =
       statusBarUsageTracker.totalUsage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-      statusBarItem.tooltip = 'Show TeXRA Tasks';
+      statusBarItem.tooltip = `${policyLine}\n\nClick to open the TeXRA task board`;
       return;
     }
     const tip = new vscode.MarkdownString(
       [
+        policyLine,
+        '',
         '| TeXRA usage | |',
         '| --- | ---: |',
         `| Cost | $${cost.toFixed(4)} |`,
@@ -691,6 +708,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // projects the running streams' totals from it on each refresh.
     onUsageChanged: updateStatusBarTooltip,
   });
+  // Paint the policy line immediately; otherwise the tooltip shows the
+  // generic "Show TeXRA Tasks" text until the first status/usage event.
+  updateStatusBarTooltip();
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).

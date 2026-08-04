@@ -1,8 +1,6 @@
 import PQueue from 'p-queue';
 
-import type { UserQuestionSettlement } from '@agent/runtime/HostInteractions';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
-import { decideTexraApproval } from '@shared/approvalPolicy';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -51,26 +49,14 @@ export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;
 }
 
-export type ApprovalInstructionContext = Pick<
-  CliContext,
-  'approvalPolicy' | 'mode'
->;
-
-const deniedApprovalContexts = new WeakSet<CliContext>();
 const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 
-function denyMessage(policy: CliContext['approvalPolicy']): string {
-  return policy === 'ask'
-    ? 'Interactive approval requires a TTY; this CLI run is headless.'
-    : 'Denied by CLI approval policy.';
-}
-
 export function markApprovalDenied(context: CliContext): void {
-  deniedApprovalContexts.add(context);
+  context.approvalDenied = true;
 }
 
 export function hasCliApprovalDenied(context: CliContext): boolean {
-  return deniedApprovalContexts.has(context);
+  return context.approvalDenied === true;
 }
 
 /** Whether the failed retry was a ChatGPT-subscription (Codex) usage limit, so
@@ -101,27 +87,6 @@ export function appendCliApiSwitchHint(
   }
   if (text.includes('/api personal')) return text;
   return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
-}
-
-export function approvalPromptAllowed(context: CliContext): boolean {
-  return cliExecutableApprovalDecision(context) === 'present';
-}
-
-export function approvalPromptsUnavailable(
-  context: ApprovalInstructionContext,
-): boolean {
-  return cliExecutableApprovalDecision(context) === 'deny';
-}
-
-/** CLI host requests arrive only after shared settings and scoped bypasses
- *  have kept the action gated, so both request facts are true/false here. */
-function cliExecutableApprovalDecision(context: ApprovalInstructionContext) {
-  return decideTexraApproval({
-    policy: context.approvalPolicy,
-    promptRequired: true,
-    scopedBypass: false,
-    canPresent: context.mode === 'interactive',
-  });
 }
 
 function enqueueCliPrompt<T>(
@@ -196,54 +161,6 @@ export function queueCliApprovalQuestion(
   );
 }
 
-export function immediateDecision(
-  context: CliContext,
-): ApprovalDecision | undefined {
-  const decision = cliExecutableApprovalDecision(context);
-  if (decision === 'allow') return { accepted: true };
-  if (decision === 'present') return undefined;
-  markApprovalDenied(context);
-  return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
-}
-
-/** Retry requests caused by exhausted credentials or auth failures. They are
- *  denied under every policy that cannot prompt, and keep the approval-denied
- *  classification so the run reports the credential failure rather than a
- *  generic policy denial. */
-function isCredentialRetryRequest(
-  event: CliDecisionApprovalEvent,
-  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
-): boolean {
-  if (event !== 'showRetryRequest') return false;
-  const details = (payload as RetryPermission).errorDetails;
-  if (!details) return false;
-  if (isCredentialExhausted(details)) return true;
-  return details.statusCode === 401 || details.statusCode === 403;
-}
-
-export function immediateDecisionForApproval(
-  event: CliDecisionApprovalEvent,
-  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
-  context: CliContext,
-): ApprovalDecision | undefined {
-  if (isCredentialRetryRequest(event, payload)) {
-    if (approvalPromptAllowed(context)) return undefined;
-    markApprovalDenied(context);
-    return {
-      accepted: false,
-      userMessage: 'Retry skipped: credential exhausted or unauthorized.',
-    };
-  }
-  if (event === 'showRetryRequest' && context.approvalPolicy === 'yolo') {
-    return {
-      accepted: false,
-      userMessage:
-        'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-    };
-  }
-  return immediateDecision(context);
-}
-
 export async function askApproval(
   context: CliContext,
   summary: string,
@@ -284,33 +201,5 @@ export async function askApproval(
     userMessage: parsed.accepted
       ? undefined
       : feedback || 'Rejected from CLI approval prompt.',
-  };
-}
-
-export function humanInputDenialFeedback(
-  context: CliContext,
-  yoloMessage: string,
-): string {
-  if (context.approvalPolicy === 'yolo') return yoloMessage;
-  markApprovalDenied(context);
-  return denyMessage(context.approvalPolicy);
-}
-
-/**
- * Shared "no human input available" guard for user-question requests, used
- * by both the headless adapter and the TUI approval queue. Returns the
- * unsubmitted result to hand straight back to the caller, or `undefined`
- * when a prompt is allowed and the caller should proceed.
- */
-export function askUserQuestionDenial(
-  context: CliContext,
-): UserQuestionSettlement | undefined {
-  if (approvalPromptAllowed(context)) return undefined;
-  return {
-    action: 'reject',
-    feedback: humanInputDenialFeedback(
-      context,
-      'User question requires human input; yolo mode cannot synthesize an answer.',
-    ),
   };
 }

@@ -12,6 +12,7 @@ import type {
   ExternalInquiryPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type {
   ToolEditApprovalRequest,
@@ -223,7 +224,7 @@ export function cancellationResultFor<K extends SettledInteractionKind>(
   return cancellationResultFactories[kind](feedback);
 }
 
-export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
+export type { ApprovalBypassKind };
 
 export interface HostApprovalBypassStateUpdate {
   readonly streamId: StreamTabId;

@@ -330,9 +330,8 @@ const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
   apiMode: HARNESS_API_MODE,
-  get approvalPolicy(): TexraApprovalPolicy {
-    return defaultSession().approvalPolicy;
-  },
+  approvalPolicy: HARNESS_INITIAL_APPROVAL_POLICY,
+  approvalDenied: false,
   cliConfig: {},
   commandName: 'texra',
   configWarnings: [],

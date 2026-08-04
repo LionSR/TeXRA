@@ -14,13 +14,14 @@ import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  decideTexraApproval,
+  isTexraApprovalDenied,
+} from '@shared/approvalPolicy';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  approvalPromptsUnavailable,
-  markApprovalDenied,
-} from './approval/approvalPolicy';
+import { markApprovalDenied } from './approval/approvalPrompts';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { finalizeCliExecution } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
@@ -293,7 +294,14 @@ export async function executeCliRequest(
           settleLeaseScope(runWithOwnership);
         },
         stopAfterCycle: options.stopAfterCycle,
-        approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
+        approvalPromptsUnavailable: isTexraApprovalDenied(
+          decideTexraApproval({
+            policy: runContext.approvalPolicy,
+            promptRequired: true,
+            scopedBypass: false,
+            canPresent: runContext.mode === 'interactive',
+          }),
+        ),
         onApprovalPolicyDenial: () => markApprovalDenied(runContext),
         runtimeUnavailableTools: [
           ...CLI_UNAVAILABLE_TOOLS,
