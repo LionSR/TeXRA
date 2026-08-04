@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-07-18
+updated: 2026-08-03
 ---
 
 # PRD Index
