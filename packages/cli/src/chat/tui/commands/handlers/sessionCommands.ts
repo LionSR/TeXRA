@@ -19,6 +19,7 @@ import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
+  isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { GoalStore } from '@tools/goal';
@@ -58,6 +59,10 @@ export async function showCliSessionStatus(
           accessTarget.model,
           accessTarget.category,
         );
+  const grokSubscriptionActive =
+    accessTarget.category === undefined
+      ? false
+      : await isXaiSubscriptionActive(accessTarget.model);
   const kimiCodeActive =
     accessTarget.category === undefined
       ? false
@@ -70,6 +75,7 @@ export async function showCliSessionStatus(
       modelAccess: resolveCliModelAccessRoute({
         apiMode: meta.apiMode,
         subscriptionActive,
+        grokSubscriptionActive,
         kimiCodeActive,
         usageRoute: slice?.usage?.usageRoute,
       }),

@@ -40,11 +40,12 @@ describe('ModelAccessForm status', () => {
       await waitFor(() => stdout.output.includes('Loading current preference'));
       expect(stdout.output).not.toContain('Off ·');
 
+      // Preference rows are disabled until status loads; 1–3 are subscriptions.
       stdin.write('1');
       await Promise.resolve();
       expect(onSelect).not.toHaveBeenCalled();
 
-      stdin.write('3');
+      stdin.write('4');
       await waitFor(() => onSelect.mock.calls.length === 1);
       expect(onSelect).toHaveBeenCalledWith(
         cliApiFallbackSelection('included'),
@@ -67,13 +68,13 @@ describe('ModelAccessForm status', () => {
       expect(stdout.output).toContain('model access unavailable');
       expect(stdout.output).toContain('Current preference unavailable');
       expect(stdout.output).not.toContain('Off ·');
-      expect(stdout.output).toContain('✓ 3. Included TeXRA access');
+      expect(stdout.output).toContain('✓ 4. Included TeXRA access');
 
       stdin.write('2');
       await Promise.resolve();
       expect(onSelect).not.toHaveBeenCalled();
 
-      stdin.write('4');
+      stdin.write('5');
       await waitFor(() => onSelect.mock.calls.length === 1);
       expect(onSelect).toHaveBeenCalledWith(
         cliApiFallbackSelection('personal'),
@@ -87,8 +88,9 @@ describe('ModelAccessForm status', () => {
     loadCliModelAccessOverview.mockResolvedValue({
       access: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'on', kimiCode: 'on' },
+        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'on' },
         chatGptSignedIn: true,
+        grokSignedIn: false,
         chatGptAccountLabel: 'user@example.com',
         kimiCodeKeySet: true,
         texraSignedIn: true,

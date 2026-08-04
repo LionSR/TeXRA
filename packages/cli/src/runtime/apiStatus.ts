@@ -8,6 +8,7 @@ import { formatPercent } from '@utils/text/stringUtils';
 import { getCliApiMode } from './apiAccessMode';
 import {
   formatCliChatGptPreference,
+  formatCliGrokPreference,
   formatCliKimiCodePreference,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
@@ -72,6 +73,7 @@ export async function loadCliModelAccessOverview(
   ]);
   const lines = [
     `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
+    `Grok preference: ${formatCliGrokPreference(access)}`,
     `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
     `API fallback: ${formatCliModelAccessRoute(access.apiFallback)}`,
     formatAccountStatusLine(
@@ -231,6 +233,13 @@ export async function loadCliDetailedAccountStatusLines(options: {
         access.chatGptAccountLabel,
       ),
     },
+    grok: {
+      preferred: access.preferences.grok === 'on',
+      account: formatAccountStatus(
+        access.grokSignedIn,
+        access.grokAccountLabel,
+      ),
+    },
     kimiCode: {
       preferred: access.preferences.kimiCode === 'on',
       credential:
@@ -259,6 +268,15 @@ export async function loadCliDetailedAccountStatusLines(options: {
         : routes.chatGpt.account;
     lines.push(
       `ChatGPT: ${routes.chatGpt.preferred ? 'preferred' : 'not preferred'} · ${account}`,
+    );
+  }
+  if (routes.grok.preferred || access.grokSignedIn) {
+    const account =
+      routes.grok.preferred && !access.grokSignedIn
+        ? 'sign in required'
+        : routes.grok.account;
+    lines.push(
+      `Grok: ${routes.grok.preferred ? 'preferred' : 'not preferred'} · ${account}`,
     );
   }
   if (routes.kimiCode.preferred || access.kimiCodeKeySet === true) {

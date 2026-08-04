@@ -203,6 +203,13 @@ export const commandCatalog = [
     icon: '$(comment-discussion)',
   },
   {
+    id: 'texra.auth.grok.signIn',
+    extensionRegistry: true,
+    title: 'Sign In with Grok Subscription',
+    category: 'TeXRA',
+    icon: '$(comment-discussion)',
+  },
+  {
     id: 'texra.auth.signOut',
     extensionRegistry: true,
     title: 'Sign Out',

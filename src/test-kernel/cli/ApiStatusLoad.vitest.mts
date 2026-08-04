@@ -74,8 +74,9 @@ describe('loadCliApiStatusLines', () => {
     mocks.resolveCliUsageTier.mockReset().mockResolvedValue('free');
     mocks.readCliModelAccessStatus.mockReset().mockResolvedValue({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'off', kimiCode: 'off' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
+      grokSignedIn: false,
       kimiCodeKeySet: false,
     });
     mocks.lookupApiKeyOrigin.mockReset().mockResolvedValue('none');
@@ -178,8 +179,9 @@ describe('loadCliApiStatusLines', () => {
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
-      preferences: { chatGpt: 'on', kimiCode: 'on' },
+      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'on' },
       chatGptSignedIn: true,
+      grokSignedIn: false,
       chatGptAccountLabel: 'chatgpt@example.com',
       kimiCodeKeySet: true,
     });
@@ -257,7 +259,7 @@ describe('loadCliApiStatusLines', () => {
     async ({ expected, preference, signedIn }) => {
       mocks.readCliModelAccessStatus.mockResolvedValue({
         apiFallback: 'personal',
-        preferences: { chatGpt: preference, kimiCode: 'off' },
+        preferences: { chatGpt: preference, grok: 'off', kimiCode: 'off' },
         chatGptSignedIn: signedIn,
         chatGptAccountLabel: signedIn ? 'chatgpt@example.com' : undefined,
         kimiCodeKeySet: false,
@@ -311,8 +313,9 @@ describe('loadCliApiStatusLines', () => {
     async ({ expected, keySet, preference }) => {
       mocks.readCliModelAccessStatus.mockResolvedValue({
         apiFallback: 'personal',
-        preferences: { chatGpt: 'off', kimiCode: preference },
+        preferences: { chatGpt: 'off', grok: 'off', kimiCode: preference },
         chatGptSignedIn: false,
+        grokSignedIn: false,
         kimiCodeKeySet: keySet,
       });
 
@@ -343,8 +346,9 @@ describe('loadCliApiStatusLines', () => {
   it('keeps signed-out included-only status truthful and omits empty keys', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
-      preferences: { chatGpt: 'off', kimiCode: 'off' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
+      grokSignedIn: false,
       kimiCodeKeySet: false,
     });
 
@@ -360,8 +364,9 @@ describe('loadCliApiStatusLines', () => {
   it('keeps included-only account, tier, and usage on the fallback route', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
-      preferences: { chatGpt: 'off', kimiCode: 'off' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
+      grokSignedIn: false,
       kimiCodeKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
@@ -386,8 +391,9 @@ describe('loadCliApiStatusLines', () => {
   it('owns the CI relay-token limitation on the included fallback', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
-      preferences: { chatGpt: 'off', kimiCode: 'off' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
+      grokSignedIn: false,
       kimiCodeKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
@@ -416,8 +422,9 @@ describe('loadCliApiStatusLines', () => {
   it('owns usage-fetch failures on the included fallback', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'included',
-      preferences: { chatGpt: 'off', kimiCode: 'off' },
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
+      grokSignedIn: false,
       kimiCodeKeySet: false,
     });
     mocks.getCliAuthProfile.mockResolvedValue({
@@ -469,8 +476,9 @@ describe('loadCliApiStatusLines', () => {
   it('reports the legacy model-access overview without reading key storage', async () => {
     mocks.readCliModelAccessStatus.mockResolvedValue({
       apiFallback: 'personal',
-      preferences: { chatGpt: 'on', kimiCode: 'off' },
+      preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
       chatGptSignedIn: true,
+      grokSignedIn: false,
       chatGptAccountLabel: 'chatgpt@example.com',
       kimiCodeKeySet: false,
     });
@@ -485,14 +493,16 @@ describe('loadCliApiStatusLines', () => {
     ).resolves.toEqual({
       access: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'on', kimiCode: 'off' },
+        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'off' },
         chatGptSignedIn: true,
+        grokSignedIn: false,
         chatGptAccountLabel: 'chatgpt@example.com',
         kimiCodeKeySet: false,
         texraSignedIn: true,
       },
       lines: [
         'ChatGPT preference: On · chatgpt@example.com',
+        'Grok preference: Off · sign in required to enable',
         'Kimi Code preference: Off · key required to enable',
         'API fallback: Personal API keys',
         'TeXRA: signed in as texra@example.com',

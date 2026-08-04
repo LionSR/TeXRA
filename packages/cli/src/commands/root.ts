@@ -118,6 +118,7 @@ export const rootCommand = withUsageSections(
         ['texra', 'open the interactive launcher'],
         ['texra setup', 'choose ChatGPT, sign in, or add a key (guided)'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
+        ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
         ['texra login', 'sign in with Researcher Access'],
         ['texra chat', 'start an interactive tool-use session'],
         [

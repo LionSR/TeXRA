@@ -345,15 +345,17 @@ describe('CLI orchestration items', () => {
   it('keeps model access directly below new chat and presents every access route', () => {
     const status = {
       apiFallback: 'included' as const,
-      preferences: { chatGpt: 'off', kimiCode: 'off' } as const,
+      preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' } as const,
       chatGptSignedIn: true,
+      grokSignedIn: false,
       chatGptAccountLabel: 'researcher@example.com',
     };
     const items = orchestrationItems({ modelAccess: status });
 
     expect(items[1]).toEqual({
       label: 'Model access',
-      description: 'ChatGPT Off · Kimi Off · fallback: included TeXRA access',
+      description:
+        'ChatGPT Off · Grok Off · Kimi Off · fallback: included TeXRA access',
       value: { kind: 'configure-model-access' },
     });
     expect(
@@ -367,6 +369,15 @@ describe('CLI orchestration items', () => {
         },
         label: 'Prefer ChatGPT subscription',
         description: 'Off · researcher@example.com',
+      },
+      {
+        value: {
+          kind: 'subscription-preference',
+          provider: 'grok',
+          state: 'on',
+        },
+        label: 'Prefer Grok subscription',
+        description: 'Off · sign in required to enable',
       },
       {
         value: {
@@ -391,17 +402,21 @@ describe('CLI orchestration items', () => {
   });
 
   it('describes the Kimi Code route by key state and activity', () => {
-    expect(
-      buildCliModelAccessItems({
-        kind: 'loaded',
-        access: {
-          apiFallback: 'personal',
-          preferences: { chatGpt: 'off', kimiCode: 'off' },
-          chatGptSignedIn: false,
-          kimiCodeKeySet: true,
-        },
-      })[1],
-    ).toEqual({
+    const kimiOff = buildCliModelAccessItems({
+      kind: 'loaded',
+      access: {
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+        kimiCodeKeySet: true,
+      },
+    }).find(
+      (item) =>
+        item.value.kind === 'subscription-preference' &&
+        item.value.provider === 'kimi-code',
+    );
+    expect(kimiOff).toEqual({
       value: {
         kind: 'subscription-preference',
         provider: 'kimi-code',
@@ -410,49 +425,67 @@ describe('CLI orchestration items', () => {
       label: 'Prefer Kimi Code subscription',
       description: 'Off · key configured',
     });
-    expect(
-      buildCliModelAccessItems({
-        kind: 'loaded',
-        access: {
-          apiFallback: 'personal',
-          preferences: { chatGpt: 'off', kimiCode: 'on' },
-          chatGptSignedIn: false,
-          kimiCodeKeySet: true,
-        },
-      })[1].description,
-    ).toBe('On · key configured');
+    const kimiOn = buildCliModelAccessItems({
+      kind: 'loaded',
+      access: {
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
+        chatGptSignedIn: false,
+        grokSignedIn: false,
+        kimiCodeKeySet: true,
+      },
+    }).find(
+      (item) =>
+        item.value.kind === 'subscription-preference' &&
+        item.value.provider === 'kimi-code',
+    );
+    expect(kimiOn?.description).toBe('On · key configured');
 
     const items = orchestrationItems({
       modelAccess: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'off', kimiCode: 'on' },
+        preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'on' },
         chatGptSignedIn: false,
+        grokSignedIn: false,
         kimiCodeKeySet: true,
       },
     });
     expect(items[1]).toEqual({
       label: 'Model access',
-      description: 'ChatGPT Off · Kimi On · fallback: personal API keys',
+      description:
+        'ChatGPT Off · Grok Off · Kimi On · fallback: personal API keys',
       value: { kind: 'configure-model-access' },
     });
   });
 
-  it('shows both subscription preferences as on simultaneously', () => {
+  it('shows subscription preferences independently', () => {
     const items = buildCliModelAccessItems({
       kind: 'loaded',
       access: {
         apiFallback: 'personal',
-        preferences: { chatGpt: 'on', kimiCode: 'on' },
+        preferences: { chatGpt: 'on', grok: 'off', kimiCode: 'on' },
         chatGptSignedIn: true,
+        grokSignedIn: false,
         chatGptAccountLabel: 'researcher@example.com',
         kimiCodeKeySet: true,
       },
     });
+    const byProvider = Object.fromEntries(
+      items
+        .filter((item) => item.value.kind === 'subscription-preference')
+        .map((item) => {
+          if (item.value.kind !== 'subscription-preference') {
+            throw new Error('expected subscription preference');
+          }
+          return [item.value.provider, item.description];
+        }),
+    );
 
-    expect(items.slice(0, 2).map(({ description }) => description)).toEqual([
-      'On · researcher@example.com',
-      'On · key configured',
-    ]);
+    expect(byProvider).toEqual({
+      chatgpt: 'On · researcher@example.com',
+      grok: 'Off · sign in required to enable',
+      'kimi-code': 'On · key configured',
+    });
   });
 
   it('offers account management as one startup row with provider actions', () => {
@@ -460,6 +493,7 @@ describe('CLI orchestration items', () => {
       texraSignedIn: true,
       texraAccountLabel: 'researcher@example.com',
       chatGptSignedIn: false,
+      grokSignedIn: false,
     };
     const items = orchestrationItems({ account });
 
@@ -474,6 +508,9 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
       }),
       expect.objectContaining({
+        value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
         label: 'Log out of TeXRA',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
@@ -485,11 +522,15 @@ describe('CLI orchestration items', () => {
     const account = {
       texraSignedIn: false,
       chatGptSignedIn: false,
+      grokSignedIn: false,
     };
 
     expect(buildCliAccountItems(account)).toEqual([
       expect.objectContaining({
         value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
+        value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
       }),
       expect.objectContaining({
         label: 'Log in to TeXRA',
@@ -502,8 +543,9 @@ describe('CLI orchestration items', () => {
         kind: 'loaded',
         access: {
           apiFallback: 'personal',
-          preferences: { chatGpt: 'off', kimiCode: 'off' },
+          preferences: { chatGpt: 'off', grok: 'off', kimiCode: 'off' },
           chatGptSignedIn: false,
+          grokSignedIn: false,
           texraSignedIn: false,
         },
       }).find(
@@ -519,9 +561,15 @@ describe('CLI orchestration items', () => {
       texraSignedIn: true,
       texraCredentialSource: 'relayToken',
       chatGptSignedIn: false,
+      grokSignedIn: false,
     });
 
-    expect(items[1]).toMatchObject({
+    expect(
+      items.find(
+        (item) =>
+          item.value.kind === 'account' && item.value.provider === 'texra',
+      ),
+    ).toMatchObject({
       label: 'Log out of TeXRA',
       value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       disabled: true,

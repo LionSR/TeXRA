@@ -416,6 +416,7 @@ export function createDesktopSettingsIpc(
     unsubscribePR: (message) => unsubscribeGitHub(message),
     openPRSubscriptionStream: (message) => revealStream(message.streamId),
     ...options.credentialSettingsController.chatGptHandlers,
+    ...options.credentialSettingsController.grokHandlers,
     updateStateSetting: (message) =>
       updateStateSetting(message.key, message.value),
     ...options.toolingSettingsController.toolHandlers,

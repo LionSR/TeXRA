@@ -4,6 +4,8 @@ import { includedModelAccess } from '@model/includedModelAccess';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
+import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
@@ -19,7 +21,7 @@ import {
 } from './kimiCodeSubscriptionRouting';
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
 
-type ProviderAuthMode = 'chatgpt-subscription';
+type ProviderAuthMode = 'chatgpt-subscription' | 'xai-subscription';
 
 export interface OpenAIResponseProviderCapabilities {
   readonly backgroundMode: 'base' | 'disabled';
@@ -183,6 +185,60 @@ export async function isCodexSubscriptionActive(
   );
   if (!capabilities) return false;
   return isCodexSignedIn();
+}
+
+/**
+ * Whether `model` is eligible to route through a signed-in Grok (xAI)
+ * subscription. All non-OpenRouter-only xAI registry models qualify; the OAuth
+ * token hits the same `api.x.ai` surface as an API key.
+ */
+export function isXaiSubscriptionEligible(model: ModelConfig): boolean {
+  if (model.provider !== ModelProvider.XAI) return false;
+  if (model.openRouterOnly) return false;
+  return true;
+}
+
+/** Resolve the active Grok-subscription provider profile. */
+export function resolveXaiSubscriptionCapabilities({
+  model,
+  useOpenRouter,
+}: ProviderCapabilityKey): ProviderCapabilityProfile | null {
+  if (useOpenRouter) return null;
+  if (!isXaiSubscriptionEligible(model)) return null;
+  return {
+    authMode: 'xai-subscription',
+    ...zeroCostAccessOverrides(model.contextWindow),
+    usageRoute: 'xai-subscription',
+  };
+}
+
+/**
+ * Resolve Grok-subscription capabilities for a model, or null when the
+ * subscription preference is off or the model is not xAI-eligible.
+ */
+export function resolveXaiSubscriptionCapabilitiesForAgentCategory(
+  config: ModelConfig,
+  useOpenRouter: boolean,
+): ProviderCapabilityProfile | null {
+  if (!isPreferXaiSubscription()) return null;
+  return resolveXaiSubscriptionCapabilities({
+    model: config,
+    useOpenRouter,
+  });
+}
+
+/** Whether the model currently routes through a signed-in Grok subscription. */
+export async function isXaiSubscriptionActive(
+  modelId: string,
+): Promise<boolean> {
+  const config = await resolveRuntimeModelConfig(modelId);
+  if (!config) return false;
+  const capabilities = resolveXaiSubscriptionCapabilitiesForAgentCategory(
+    config,
+    getUseOpenRouter(),
+  );
+  if (!capabilities) return false;
+  return isXaiSignedIn();
 }
 
 /**

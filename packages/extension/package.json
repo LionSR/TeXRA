@@ -334,6 +334,12 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "texra.auth.grok.signIn",
+        "title": "Sign In with Grok Subscription",
+        "category": "TeXRA",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "texra.auth.signOut",
         "title": "Sign Out",
         "category": "TeXRA",
