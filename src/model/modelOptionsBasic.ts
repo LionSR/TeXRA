@@ -54,6 +54,8 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'deepseekproT',
   'kimi26T',
   'kimi3',
+  // Current non-retired xAI flagship — API key or experimental Grok OAuth.
+  'grok45',
 ];
 
 /**
