@@ -34,9 +34,28 @@ live spread and dual usage sum deleted, taskGroups incremental in the TUI,
 `reportMissingOutputs` emits row+fact together, the edited-files
 conversation scraper deleted outright in favor of the persisted list,
 `StatusBarUsageTracker` and both webview components project from the store,
-and workflow delivery summaries travel typed beside row text). Still
-remaining: the `taskRuns` legacy directory probe (#6981, its own dated
-retention policy), and Part III (one view-model, one command layer).
+and workflow delivery summaries travel typed beside row text). **Step 17
+(one command layer)** also landed: `resolveCliHistoryStatus` was already
+gone (shared `resolveHistoryRunStatus`); `texra resume` now funnels through
+`resolveAndResumeStream` — the tool-use arm reopens the chat TUI, the
+workflow arm gains headless workflow resume under the persisted execution
+id (honoring the stored `--output` via `resumeWorkflowOutputFile`) — with
+`sessionResume.ts`'s five-way vocabulary deleted and chat resume resolving
+inline over the shared retrieval; `userStartedCliHistoryEntries` deleted
+(the visibility rule's one home is `isUserVisibleExecution` at the
+listing; menu builders trust their input); `AgentRosterForm` consumes
+`AgentRosterController.allPresets()`. Two step-17 items were found stale
+against the tree and deliberately not forced: the CLI has no auto-open
+action, so `selectAutoOpenFinalOutput` (a GUI editor-opening policy) has
+nothing to unify — the `--output` copy and stdout result line keep their
+explicit-flag/stdout semantics; and the chat-defaults tier already reads
+the shared listing primitives (`listExecutions` + `isUserVisibleExecution`)
+— its extra filters are tier-specific projection, not a duplicated rule.
+Still remaining: the `taskRuns` legacy directory probe (#6981, its own
+dated retention policy), and step 16 / step 18 of Part III (the session
+view-model generalization and the TUI-as-renderer recut — a PR-sized
+change of its own; `ProgressViewState` is already host-neutral and
+`ProgressFactApplier`'s ~25 `WebviewUpdater` call sites are the work).
 Date: 2026-08-03
 Revision: 10 (holistic build order; open-problems register)
 
