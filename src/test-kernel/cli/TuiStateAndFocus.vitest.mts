@@ -3643,11 +3643,16 @@ describe('child-stream ordered transition matrix', () => {
   const parentQ = 'parent-q' as StreamTabId;
   const kid = 'kid' as StreamTabId;
 
+  // Shared reference: `summaryUnchanged` compares `identity` by reference,
+  // so a per-call identity object would defeat the roster no-op detection
+  // that case 12 asserts.
+  const kidIdentity = { kind: 'agent' as const, agent: 'kid-agent' };
+
   function rosterRow(status?: StreamPhase, elapsed?: string) {
     return {
       executionId: 'kid-exec',
       agentName: 'kid-agent',
-      identity: { kind: 'agent' as const, agent: 'kid-agent' },
+      identity: kidIdentity,
       childStreamId: kid,
       status,
       elapsed,

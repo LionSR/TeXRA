@@ -169,7 +169,11 @@ describe('execution listing normalization', () => {
   it('keeps agent-spawned child runs out of history listings', async () => {
     const rootId = 'eee111' as ExecutionId;
     const childId = 'fff222' as ExecutionId;
-    await writeExecution(rootId, '2026-07-15T10:00:00.000Z', config('orchestrator'));
+    await writeExecution(
+      rootId,
+      '2026-07-15T10:00:00.000Z',
+      config('orchestrator'),
+    );
     await writeExecution(
       childId,
       '2026-07-15T10:05:00.000Z',

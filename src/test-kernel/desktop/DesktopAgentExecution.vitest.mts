@@ -2052,34 +2052,30 @@ describe('DesktopProgressBridge', () => {
       executionId,
     }));
     const runAgent = vi.fn(async () => {});
-    const kvRead = vi.fn(async (key: string) =>
-      key === 'meta'
-        ? {
-            // Legacy sidecar shape: a whole runDescriptor object; only its
-            // executionId FK is lifted at the parse boundary.
-            runDescriptor: {
-              schemaVersion: 1,
-              streamId: 'stream-1',
-              executionId,
-              agent: runConfig.agent,
-              category: runConfig.agentCategory,
-              kind: 'agent',
-            },
-            // Legacy sidecar shape: the retired TaskState wrapper, still read
-            // by the snapshot store's disk-read shim.
-            taskState: {
-              agentConfig: runConfig,
-              activeFiles: {
-                input: false,
-                context: false,
-                media: false,
-                output: false,
-              },
-            },
-            description: 'Persisted workflow',
-          }
-        : undefined,
-    );
+    // One mocked KV serves both stores: the stream sidecar lifts only the
+    // legacy runDescriptor's executionId FK from `meta`, while the execution
+    // store reads timestamp/identity/description from the same blob and the
+    // run config from `config` — identity and config live in
+    // `executions/{id}/`, never as a sidecar copy.
+    const kvRead = vi.fn(async (key: string) => {
+      if (key === 'meta') {
+        return {
+          runDescriptor: {
+            schemaVersion: 1,
+            streamId: 'stream-1',
+            executionId,
+            agent: runConfig.agent,
+            category: runConfig.agentCategory,
+            kind: 'agent',
+          },
+          timestamp: '2026-07-10T00:00:00.000Z',
+          identity: { kind: 'agent', agent: runConfig.agent },
+          description: 'Persisted workflow',
+        };
+      }
+      if (key === 'config') return runConfig;
+      return undefined;
+    });
     const bridge = await createBridge([], {
       kvRead,
       retrieveSessionResumeData,

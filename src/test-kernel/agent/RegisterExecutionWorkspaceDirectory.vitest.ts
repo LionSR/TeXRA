@@ -5,7 +5,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
   EXECUTION_STREAM_ID_SOURCE,
-  EXECUTION_STATUS,
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
@@ -144,12 +143,7 @@ describe('execution lifecycle', () => {
 
   it('does not relabel a turn-owned result while persisting terminal metadata', async () => {
     const executionId = 'abc123' as ExecutionId;
-    mocks.readMeta.mockResolvedValue(
-      executionMeta({
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
-        outcome: 'completed',
-      }),
-    );
+    mocks.readMeta.mockResolvedValue(executionMeta({ outcome: 'completed' }));
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Interim result.'),
     );
@@ -163,7 +157,6 @@ describe('execution lifecycle', () => {
     expect(mocks.writeMeta).toHaveBeenCalledWith({
       schemaVersion: 1,
       timestamp: '2026-07-10T00:00:00.000Z',
-      terminalStatus: undefined,
       outcome: 'cancelled',
     });
     expect(mocks.readResultMeta).not.toHaveBeenCalled();
@@ -171,12 +164,7 @@ describe('execution lifecycle', () => {
   });
 
   it('reports a failure when terminal metadata cannot be written', async () => {
-    mocks.readMeta.mockResolvedValue(
-      executionMeta({
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
-        outcome: 'completed',
-      }),
-    );
+    mocks.readMeta.mockResolvedValue(executionMeta({ outcome: 'completed' }));
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Finished.'),
     );
@@ -296,7 +284,6 @@ describe('execution lifecycle', () => {
     });
     expect(mocks.writeMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        terminalStatus: undefined,
         outcome: RUN_OUTCOME.FAILED,
       }),
     );

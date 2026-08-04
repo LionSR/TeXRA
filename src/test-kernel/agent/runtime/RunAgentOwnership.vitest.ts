@@ -18,6 +18,7 @@ vi.mock('@agent/storage', () => ({
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
+  EXECUTION_LEASE_STALE_MS: 120_000,
   abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,

@@ -645,7 +645,10 @@ describe('CLI child list display model', () => {
       kind: 'process',
       tool: 'bash',
     });
-    expect(sessions.find(({ id }) => id === agent)?.identity).toBeUndefined();
+    expect(sessions.find(({ id }) => id === agent)?.identity).toEqual({
+      kind: 'agent',
+      agent: 'bash',
+    });
     expect(output.match(/bash running/g)).toHaveLength(2);
     expect(output).not.toContain('gemini35f');
     expect(output).toContain('bash running · gpt56');
