@@ -9,7 +9,14 @@ with Axis S (steps 10–11: `RunOutcome` as the sole persisted terminal fact,
 (step 14: the roster pair collapse onto category-keyed records with entrance
 migrations), and the Axis-T retirements (the per-read legacy rescan of
 stamped rows and the sidecar description/taskState mirrors, both retired
-early and deliberately). Step 8 (honest `RunRecord` union), the rest of
+early and deliberately). Three legacy readers this document proposed were
+subsequently retired outright rather than shipped: legacy `terminalStatus`
+bytes are never converted to `outcome` (pre-consolidation rows have no
+recorded terminal state), the roster-selection v1 pair vocabulary and the
+versioned `.v2` key are gone (one unversioned key, canonical shape only,
+malformed values warn and read as inherited), and the pre-FK sidecar
+`runDescriptor` is never lifted (the unknown key is stripped; such sidecars
+carry no execution FK). Step 8 (honest `RunRecord` union), the rest of
 Axis T (opaque id minting), and Parts II–III remain proposed.
 Date: 2026-08-03
 Revision: 10 (holistic build order; open-problems register)
@@ -319,7 +326,8 @@ extension's legacy-bucket merge injects v1 rows into an already-migrated
 store; execution-lease fences throw on live or freshly-crashed rows; and
 users restore backups. Mechanics:
 
-- **Per row**: stamp `identity` (+ `outcome` from `terminalStatus`, Axis S)
+- **Per row**: stamp `identity` (only — the proposed `terminalStatus` →
+  `outcome` conversion was retired; legacy rows keep no terminal state)
   under `runWithInactiveExecutionLease`, skipping rows with an active lease
   (they heal on the next entrance) and rows younger than the lease-stale
   horizon (registration writes `meta.json`/`config.json` via
@@ -798,11 +806,11 @@ for terminal state (owned solely by `ExecutionMeta.outcome`).
 the exporter keeps projecting via `runOutcomeToExecutionStatus` at that one
 boundary). Everything else is a display projection computed in one place.
 
-**Step 10 — one terminal field.** The one-shot migration (the same single walker) stamps `outcome` on every row that has only
-`terminalStatus` (unmappable strings → `failed`, matching today's
-non-resumable treatment); after it, `outcome` is required on terminal rows
-and **`terminalStatus` is no longer written or read** — `writeTerminalStatus`
-writes `outcome` alone.
+**Step 10 — one terminal field.** As landed, **`terminalStatus` is no longer
+written or read at all** — `writeTerminalOutcome` writes `outcome` alone, and
+the proposed legacy conversion (stamping `outcome` from `terminalStatus`
+bytes) was retired: pre-consolidation rows simply have no recorded terminal
+state.
 _Delete:_ the `superRefine`, the read/write `.transform`, every raw-string
 reader (`WorkflowScriptTool.ts:505` → `outcome === RUN_OUTCOME.COMPLETED`;
 `executionListing` carries `outcome`; `getExecutionStatusInfo` merges live
@@ -938,11 +946,12 @@ without migration would silently drop them — red-team fixture required). And
 "its entrance" is three entrances, not one: the extension's VS Code memento,
 plus the `state.json` shared by desktop **and** CLI
 (`packages/desktop/src/main/platform/index.ts:97-99`,
-`packages/cli/src/runtime/cliStateStores.ts:26-27`). Because two hosts of
-possibly different versions read that shared file, the new shape is written
-under a **versioned key** (`…agentRosterSelection.v2`) with the v1 key left
-readable and unmodified, and `readAgentRosterSelection` moves to `safeParse`
-with the inherited-roster fallback. The prompt
+`packages/cli/src/runtime/cliStateStores.ts:26-27`). As landed, the
+versioned-key dance this section proposed was retired: one unversioned key
+(`texra.agentRosterSelection`) holds the canonical record shape only, and
+`readAgentRosterSelection` uses `safeParse` with a loud inherited-roster
+fallback — a pair-shaped legacy value reads as inherited until the next
+write replaces it. The prompt
 variables `WORKFLOW_AGENTS`/`TOOL_USE_AGENTS` keep their names — they are an
 external prompt contract — but are built from the record.
 _Delete:_ all 38 non-durable pair declarations and their branch-per-category

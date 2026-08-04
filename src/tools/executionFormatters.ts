@@ -62,7 +62,8 @@ export function getAvailablePaths(
       return [...common, 'files'];
     case 'process':
       return [...common, 'output'];
-    default:
+    case undefined:
+      // Unknown category (incomplete legacy row): offer every path.
       return [
         ...common,
         'conversation',
@@ -71,6 +72,9 @@ export function getAvailablePaths(
         'workspace-files',
         'output',
       ];
+    default:
+      category satisfies never;
+      return common;
   }
 }
 

@@ -84,9 +84,9 @@ describe('AgentRosterController', () => {
     );
 
     await roster.setTeam('test-team');
-    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toEqual(
-      { kind: 'team', teamId: 'test-team' },
-    );
+    expect(
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+    ).toEqual({ kind: 'team', teamId: 'test-team' });
     expect(roster.getSelection()).toEqual({
       kind: 'team',
       teamId: 'test-team',
