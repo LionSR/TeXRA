@@ -127,9 +127,10 @@ export class StreamTab extends LitElement {
     )
       return;
     if (changed.has('info')) {
+      const identityKind = this.info.identity?.kind;
       this._streamDecorator =
-        this.info.identity?.kind === 'multiAgentWorkflow'
-          ? AGENT_DECORATORS.streamKinds.multiAgentWorkflow
+        identityKind === 'multiAgentWorkflow' || identityKind === 'process'
+          ? AGENT_DECORATORS.streamKinds[identityKind]
           : getAgentCategoryDecorator(this.info.agentCategory);
     }
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;

@@ -62,6 +62,10 @@ const AgentModePresetCanonicalSchema = z.object({
  * carried the members as a `workflowAgents`/`toolUseAgents` field pair.
  * Normalized to the category-keyed record once, here at the parse boundary —
  * dropping this member would silently drop users' saved teams.
+ *
+ * Introduced 2026-08-04 (#9705); retire three months after ship (target
+ * 2026-11-04). Stored presets rewrite to the canonical shape on any preset
+ * save, so the window only covers dormant profiles.
  */
 const AgentModePresetLegacySchema = AgentModePresetCanonicalSchema.omit({
   agents: true,

@@ -50,6 +50,11 @@ const AgentDelegationScopeCanonicalSchema = z.record(
  * `workflowAgentKeys`/`toolUseAgentKeys` field pair. Normalized once, here at
  * the parse boundary — dropping this member would fail AgentConfigSchema on
  * those rows and list finished team runs as incomplete.
+ *
+ * Introduced 2026-08-04 (#9705). Permanent parse-side reader, not a dated
+ * migration: the pair lives in immutable per-run history rows that are never
+ * rewritten, so there is no rewrite event to retire on. Retires only with a
+ * policy decision to stop reading pre-record run history.
  */
 const AgentDelegationScopeLegacySchema = z
   .strictObject({

@@ -97,17 +97,26 @@ export const AGENT_DECORATORS = {
   },
   streamKinds: {
     multiAgentWorkflow: { icon: 'list-ul', label: 'Multi-Agent Workflow' },
+    process: { icon: 'terminal', label: 'Process' },
   },
+  /** Classification not known yet (or absent): neutral chrome, never a
+   *  fabricated category default. */
+  pending: { icon: 'circle', label: 'Stream' },
 } as const;
 
 type AgentCategory = keyof typeof AGENT_DECORATORS.agentCategories;
 
+export interface StreamDecorator {
+  readonly icon: TeXRAIconName;
+  readonly label: string;
+}
+
 export function getAgentCategoryDecorator(
   agentCategory: string | undefined,
-): (typeof AGENT_DECORATORS.agentCategories)[AgentCategory] {
+): StreamDecorator {
   const categories = AGENT_DECORATORS.agentCategories;
   return (
     (agentCategory && categories[agentCategory as AgentCategory]) ||
-    categories.workflow
+    AGENT_DECORATORS.pending
   );
 }

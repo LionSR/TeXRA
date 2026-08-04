@@ -39,6 +39,7 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 // Local imports - progress view constants
 import {
   ELEMENT_IDS,
+  NEUTRAL_TOOLBAR,
   TOOLBAR_BUTTONS,
   type ProgressToolbarButton,
 } from '../constants';
@@ -362,9 +363,12 @@ export class StreamHeader extends LitElement {
     const isNativeAgentRun =
       identity?.kind === 'agent' && identity.tool === undefined;
     const agentCategory = this.stream.agentCategory;
+    // No known category (identity pending, process, or multi-agent-workflow
+    // container) renders the neutral toolbar — never a fabricated category's
+    // chrome.
     const toolbarButtons = agentCategory
       ? TOOLBAR_BUTTONS[agentCategory]
-      : TOOLBAR_BUTTONS.workflow;
+      : NEUTRAL_TOOLBAR;
     const displayKey = streamStatusDisplayKey(status, this.substate);
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]

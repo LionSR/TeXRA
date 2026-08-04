@@ -181,6 +181,10 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
  * `toolUseInstruction` fields. Lift them into the canonical `agent`/
  * `instruction` records once, at the parse entrance, when the record keys are
  * absent — otherwise upgrading silently resets the user's saved selections.
+ *
+ * Introduced 2026-08-04 (#9705); retire three months after ship (target
+ * 2026-11-04). The persisted state rewrites in the canonical shape on every
+ * main-view save, so the window only covers dormant workspaces.
  */
 function liftLegacyMainViewFlatFields(input: unknown): unknown {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
