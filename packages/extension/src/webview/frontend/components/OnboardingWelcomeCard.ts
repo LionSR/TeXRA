@@ -151,7 +151,6 @@ export class OnboardingWelcomeCard extends LitElement {
         margin-top: var(--wa-space-3xs);
         text-align: center;
         font-size: var(--font-size-sm);
-        opacity: var(--opacity-subtle);
         line-height: var(--line-height-normal, 1.4);
         overflow-wrap: anywhere;
       }
@@ -167,7 +166,7 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .skip-row wa-button::part(base) {
         font-size: var(--font-size-sm);
-        opacity: var(--opacity-subtle);
+        color: var(--color-text-muted);
       }
 
       @container onboarding-card (max-width: 420px) {
