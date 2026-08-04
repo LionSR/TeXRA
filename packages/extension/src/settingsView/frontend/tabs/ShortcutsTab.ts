@@ -71,7 +71,7 @@ export class ShortcutsTab extends LitElement {
       }
 
       .shortcuts-feedback[data-error='true'] {
-        color: var(--wa-color-danger-60);
+        color: var(--color-error);
       }
 
       @container settings (max-width: 520px) {
