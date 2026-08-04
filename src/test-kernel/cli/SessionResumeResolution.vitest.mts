@@ -1,6 +1,6 @@
 // Unit tests for `resolveCliResume` branch logic and the user-facing
 // `explainNonResumable` strings. The retrieval surface is mocked at its module
-// boundaries (history config + resume retrieval + stream-id derivation) so
+// boundaries (history config + resume retrieval + execution metadata) so
 // the test exercises pure branching, not storage I/O. The agent-category
 // branch runs for real against minimal configs.
 
@@ -17,7 +17,7 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 const mocks = vi.hoisted(() => ({
   readCliHistoryConfig: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
-  getStreamTabId: vi.fn(),
+  readMeta: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/history', () => ({
@@ -28,8 +28,8 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
-vi.mock('@agent/runtime/streamTab', () => ({
-  getStreamTabId: mocks.getStreamTabId,
+vi.mock('@agent/storage', () => ({
+  getExecutionStore: () => ({ readMeta: mocks.readMeta }),
 }));
 
 const EXECUTION_ID = 'exec-1' as ExecutionId;
@@ -59,7 +59,11 @@ async function resolve(id: ExecutionId = EXECUTION_ID) {
 describe('resolveCliResume', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getStreamTabId.mockReturnValue(STREAM_ID);
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: STREAM_ID,
+      identity: { kind: 'agent', agent: 'planner' },
+    });
   });
 
   it('returns not-found when no config exists for the id', async () => {
@@ -105,11 +109,28 @@ describe('resolveCliResume', () => {
     const result = await resolve();
 
     expect(result).toEqual(resume);
-    // The stream id is re-derived from agent + model + execution id so resume
-    // reuses the original stream/transcript.
-    expect(mocks.getStreamTabId).toHaveBeenCalledWith('planner', 'gpt-5', {
-      executionId: EXECUTION_ID,
+    // The stream id is the one stamped on execution metadata at registration,
+    // never re-derived from agent/model, so resume reuses the original
+    // stream/transcript.
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
+      STREAM_ID,
+      EXECUTION_ID,
+      config,
+    );
+  });
+
+  it('returns no-resume-state when metadata carries no stamped stream id', async () => {
+    // A row without a stamped streamId has no persisted stream: not resumable.
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'planner' },
     });
+    mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
+
+    const result = await resolve();
+
+    expect(result).toEqual({ type: 'no-resume-state' });
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
   it('returns no-resume-state without a live flow record', async () => {
