@@ -69,9 +69,18 @@ export type SessionFactApplierOptions = {
  * Host-neutral session fact applier: mutates {@link SessionState} and notifies
  * a {@link SessionRendererPort}. Push policy (active-only, debounce, bridge)
  * lives in the host renderer.
+ *
+ * Attachment vs focus are separate deliveries: metadata (no `activeStream`)
+ * registers a stream with the host; `onActiveStreamChanged` focuses. Do not
+ * use `streamLogs.has` as a proxy for "host already has this tab" — the
+ * transcript store outlives a renderer session (and can be warm from disk
+ * before this host's in-memory tab map exists).
  */
 export class SessionFactApplier {
   private readonly logger: AgentTrace;
+
+  /** Streams this renderer has already received metadata for. */
+  private readonly registeredWithRenderer = new Set<StreamTabId>();
 
   /**
    * Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive.
@@ -86,7 +95,7 @@ export class SessionFactApplier {
       const streamId = event.streamId;
       this.state.refreshStreamMetadataFromSnapshot(streamId);
       if (this.renderer.isAvailable()) {
-        this.renderer.onStreamMetadataChanged(streamId, {
+        this.pushStreamMetadata(streamId, {
           streamStates: this.state.streamStatus.getAllStreamStates(),
         });
       }
@@ -143,7 +152,20 @@ export class SessionFactApplier {
 
   /** Drop buffered renderer work; called by host dispose. */
   dispose(): void {
+    this.registeredWithRenderer.clear();
     this.renderer.dispose();
+  }
+
+  /** Push metadata and mark the stream as registered with this renderer. */
+  private pushStreamMetadata(
+    streamId: StreamTabId,
+    options?: {
+      streamStates?: Map<StreamTabId, StreamPhaseState>;
+      activeStream?: ActiveStreamId;
+    },
+  ): void {
+    this.registeredWithRenderer.add(streamId);
+    this.renderer.onStreamMetadataChanged(streamId, options);
   }
 
   handleSessionFact(fact: SessionFact): void {
@@ -180,6 +202,7 @@ export class SessionFactApplier {
         case 'setParentStream':
           return this.handleSetParentStream(fact.payload);
         case 'removeStream':
+          this.registeredWithRenderer.delete(fact.payload.streamId);
           return this.options.deleteStream(fact.payload.streamId);
       }
       assertNever(fact, 'Unhandled session fact');
@@ -278,7 +301,6 @@ export class SessionFactApplier {
       return;
     }
 
-    const wasKnownStream = this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);
     // Only pass fields the event actually knows; omitted fields retain the
     // canonical metadata already owned by SessionState.
@@ -318,15 +340,13 @@ export class SessionFactApplier {
 
     if (!this.renderer.isAvailable()) return;
 
-    // Mint/register before rehydrate when the host may not have a tab yet.
-    // Never pass `activeStream` — flipping the visible tab before
+    // First delivery to *this* renderer (not `streamLogs.has`): register
+    // before rehydrate so signal hosts can mint a tab synchronously. Never
+    // pass `activeStream` here — flipping the visible tab before
     // `ensureLoaded` races a newer activation that wins during the await.
-    // Known foreground switches skip this (Lit only needs the cheap active
-    // notify). Background attachment (`suppressViewSwitch`) still mints:
-    // `wasKnownStream` can be true from a prior process's persisted
-    // transcripts while this host's in-memory tab map is empty.
-    if (!wasKnownStream || payload.suppressViewSwitch === true) {
-      this.renderer.onStreamMetadataChanged(streamId, {
+    const firstHostDelivery = !this.registeredWithRenderer.has(streamId);
+    if (firstHostDelivery) {
+      this.pushStreamMetadata(streamId, {
         streamStates: this.state.streamStatus.getAllStreamStates(),
       });
     }
@@ -341,13 +361,12 @@ export class SessionFactApplier {
     // its content with stale data.
     if (shouldSwitch && this.state.activeStream !== streamId) return;
 
-    // Match pre-extraction Lit delivery: a brand-new stream gets a full
-    // metadata push (with optional activeStream for Lit); a known stream
-    // that should become active gets the cheap active-stream notify only.
-    // Always notify `onActiveStreamChanged` on switch so signal hosts (TUI)
-    // that ignore metadata's `activeStream` option still focus.
-    if (!wasKnownStream) {
-      this.renderer.onStreamMetadataChanged(streamId, {
+    // First host sighting: full metadata (optional `activeStream` for Lit).
+    // Later switches: cheap active-stream notify only. Always notify
+    // `onActiveStreamChanged` on switch so signal hosts that ignore
+    // metadata's `activeStream` option still focus.
+    if (firstHostDelivery) {
+      this.pushStreamMetadata(streamId, {
         streamStates: this.state.streamStatus.getAllStreamStates(),
         activeStream: shouldSwitch ? this.state.activeStream : undefined,
       });
@@ -360,7 +379,7 @@ export class SessionFactApplier {
     // `StreamTabInfo.parentStreamId` in the stream-metadata update.)
     // includeActiveState is only relevant when this IS the active stream.
     this.renderer.syncStreamContent(streamId, {
-      includeActiveState: shouldSwitch && wasKnownStream,
+      includeActiveState: shouldSwitch && !firstHostDelivery,
     });
   }
 
@@ -379,7 +398,7 @@ export class SessionFactApplier {
       // A run config may change agent name, model, or label, which
       // the frontend tabs display even for background subagents. Patch only
       // the affected stream instead of rebuilding all historical stream tabs.
-      this.renderer.onStreamMetadataChanged(streamId, {
+      this.pushStreamMetadata(streamId, {
         streamStates: this.state.streamStatus.getAllStreamStates(),
       });
     }
@@ -568,7 +587,7 @@ export class SessionFactApplier {
         !this.state.activeStream || this.state.activeStream === streamId
           ? this.state.activeStream
           : undefined;
-      this.renderer.onStreamMetadataChanged(streamId, {
+      this.pushStreamMetadata(streamId, {
         streamStates: this.buildStreamStatesForRefresh(
           streamId,
           status,
@@ -577,7 +596,7 @@ export class SessionFactApplier {
         activeStream,
       });
     } else if (isNewRunningTransition) {
-      this.renderer.onStreamMetadataChanged(streamId, {
+      this.pushStreamMetadata(streamId, {
         streamStates: this.buildStreamStatesForRefresh(
           streamId,
           status,
