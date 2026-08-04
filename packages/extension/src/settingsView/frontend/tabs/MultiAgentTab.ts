@@ -147,9 +147,9 @@ export class MultiAgentTab extends LitElement {
 
       .preset-delete-btn {
         position: absolute;
-        top: var(--wa-space-2xs);
-        right: var(--wa-space-2xs);
-        display: none;
+        inset-block-start: var(--wa-space-2xs);
+        inset-inline-end: var(--wa-space-2xs);
+        opacity: 0;
         z-index: 10;
       }
 
@@ -169,8 +169,9 @@ export class MultiAgentTab extends LitElement {
         border-radius: var(--border-radius-small);
       }
 
-      .preset-card:hover .preset-delete-btn {
-        display: inline-flex;
+      .preset-card:hover .preset-delete-btn,
+      .preset-card:focus-within .preset-delete-btn {
+        opacity: var(--opacity-full);
       }
     `,
   ];

@@ -45,7 +45,7 @@ export const providerKeyListStyles: CSSResult = css`
   .provider-setting-warning {
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
-    padding-left: var(--wa-space-l);
+    padding-inline-start: var(--wa-space-l);
   }
 
   .provider-setting-description {
@@ -60,11 +60,17 @@ export const providerKeyListStyles: CSSResult = css`
   }
 
   wa-button.provider-setting-link {
-    margin-left: var(--wa-space-2xs);
+    margin-inline-start: var(--wa-space-2xs);
   }
 
   .endpoint-input {
-    flex: 1;
     max-width: 400px;
+  }
+
+  @container settings (max-width: 520px) {
+    .provider-setting {
+      align-items: stretch;
+      flex-direction: column;
+    }
   }
 `;

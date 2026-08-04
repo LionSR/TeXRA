@@ -192,6 +192,7 @@ const settingsContainerStyles: CSSResult = css`
     .settings-category-nav,
     .settings-page-nav {
       padding-inline: var(--wa-space-2xs);
+      scrollbar-width: thin;
     }
 
     .settings-page-button::part(base) {

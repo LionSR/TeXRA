@@ -181,7 +181,7 @@ export class FollowUpInput extends LitElement {
         background: var(--wa-color-danger-fill-quiet);
       }
 
-      @media (max-width: 440px) {
+      @container (max-width: 440px) {
         #followUpInput::part(textarea) {
           padding-inline: var(--wa-space-xs);
         }

@@ -83,16 +83,17 @@ export class AIAgentsTab extends LitElement {
       .ai-agents-status {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: var(--wa-space-s);
         margin-bottom: var(--wa-space-xs);
         font-size: var(--font-size-sm);
-        white-space: nowrap;
       }
 
       .ai-agents-status-stat {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+        white-space: nowrap;
       }
 
       .ai-agents-status-stat wa-icon {

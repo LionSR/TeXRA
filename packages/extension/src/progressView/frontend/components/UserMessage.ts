@@ -98,21 +98,20 @@ export class UserMessage extends LitElement {
         align-items: center;
         gap: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
-        color: var(--wa-color-text-quiet);
-        opacity: 0;
-        transition: opacity var(--transition-fast);
+        color: var(--color-text-secondary);
       }
 
       .user-message-header-left {
-        display: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
       }
 
       .user-message-copy {
         opacity: 0;
+        transition: opacity var(--transition-fast);
       }
 
-      .user-message:hover .user-message-header,
-      .user-message:focus-within .user-message-header,
       .user-message:hover .user-message-copy,
       .user-message:focus-within .user-message-copy {
         opacity: 1;
@@ -152,7 +151,7 @@ export class UserMessage extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      @media (max-width: 520px) {
+      @container (max-width: 520px) {
         .user-message {
           max-width: 88%;
         }
