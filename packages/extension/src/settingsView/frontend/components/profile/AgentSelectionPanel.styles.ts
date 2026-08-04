@@ -66,7 +66,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
     border-left: var(--border-medium) solid transparent;
-    outline: none;
   }
 
   /*
@@ -92,11 +91,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   .agent-list-item:hover {
     background: var(--wa-color-neutral-fill-quiet);
-  }
-
-  .agent-list-item:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: -1px;
   }
 
   .agent-list-item.selected {
