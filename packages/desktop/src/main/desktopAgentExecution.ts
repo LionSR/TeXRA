@@ -32,7 +32,7 @@ import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprov
 import { createAgentProposalTransport } from '@controllers/progressView/backend/agentProposalTransport';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
-import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
+import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
@@ -442,10 +442,14 @@ export class DesktopProgressBridge {
       }
       const subagents = this.session.executions.getActiveChildren(streamId);
       if (subagents.length > 0) {
-        this.backend.factApplier.handleRunFact(streamId, {
-          type: 'child.activity',
-          parentStreamId: streamId,
-          items: subagents,
+        this.session.events.emit({
+          scope: 'run',
+          streamId,
+          event: {
+            type: 'child.activity',
+            parentStreamId: streamId,
+            items: subagents,
+          },
         });
       }
     }
@@ -1142,7 +1146,7 @@ export class DesktopProgressBridge {
 
   private syncStreamContent(streamId: StreamTabId | ''): void {
     if (!streamId) {
-      this.backend.factApplier.syncStreamContent('');
+      this.backend.syncStreamContent('');
       return;
     }
 
@@ -1150,7 +1154,7 @@ export class DesktopProgressBridge {
       .ensureLoaded(streamId)
       .then(() => {
         if (this.state.activeStream !== streamId) return;
-        this.backend.factApplier.syncStreamContent(streamId, {
+        this.backend.syncStreamContent(streamId, {
           includeActiveState: true,
         });
       })
