@@ -17,7 +17,7 @@ const tiers = [
     icon: 'bolt',
     kind: 'Simple',
     cue: 'Corrections, quick edits',
-    models: ['qwenturbo', 'deepseek', 'haiku45'],
+    models: ['gpt56--', 'deepseek', 'haiku45'],
   },
   {
     icon: 'sparkle',

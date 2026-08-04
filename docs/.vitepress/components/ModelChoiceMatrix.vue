@@ -12,7 +12,7 @@ const rows = [
     icon: 'bolt',
     use: 'Simple tasks',
     note: 'Fast, cheap models',
-    models: ['qwenturbo', 'deepseek', 'haiku45'],
+    models: ['gpt56--', 'deepseek', 'haiku45'],
   },
   {
     icon: 'chart-line',
@@ -24,7 +24,7 @@ const rows = [
     icon: 'code',
     use: 'Code-heavy / LaTeX editing',
     note: 'Strong editing models',
-    models: ['opus5T', 'sonnet5T', 'qwenplus'],
+    models: ['opus5T', 'sonnet5T', 'gpt56'],
   },
   {
     icon: 'sparkle',
