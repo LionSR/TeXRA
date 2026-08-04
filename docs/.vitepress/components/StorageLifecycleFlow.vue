@@ -53,11 +53,7 @@ import StatusPill from './StatusPill.vue';
         </span>
         <wa-icon class="sf-arr" library="texra" name="arrow-right"></wa-icon>
         <span class="sf-dest">
-          <wa-icon
-            class="sf-dest-ic"
-            library="texra"
-            name="folder"
-          ></wa-icon>
+          <wa-icon class="sf-dest-ic" library="texra" name="folder"></wa-icon>
           <span class="sf-dest-txt">
             <span class="sf-dest-name">Workspace</span>
             <span class="sf-dest-sub">copies reviewed outputs back in</span>
@@ -71,7 +67,11 @@ import StatusPill from './StatusPill.vue';
         </span>
         <wa-icon class="sf-arr" library="texra" name="arrow-right"></wa-icon>
         <span class="sf-dest">
-          <wa-icon class="sf-dest-ic" library="texra" name="clock-rotate-left"></wa-icon>
+          <wa-icon
+            class="sf-dest-ic"
+            library="texra"
+            name="clock-rotate-left"
+          ></wa-icon>
           <span class="sf-dest-txt">
             <span class="sf-dest-name">History/</span>
             <span class="sf-dest-sub">archives the whole run, timestamped</span>

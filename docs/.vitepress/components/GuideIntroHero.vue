@@ -34,7 +34,11 @@ const view = ref('search');
         <span class="sh-badge">4 turns, 18 tool calls</span>
         <span class="sh-tools">
           <wa-icon class="shi" library="texra" name="circle-stop"></wa-icon>
-          <wa-icon class="shi" library="texra" name="clock-rotate-left"></wa-icon>
+          <wa-icon
+            class="shi"
+            library="texra"
+            name="clock-rotate-left"
+          ></wa-icon>
         </span>
       </div>
 
@@ -130,7 +134,11 @@ const view = ref('search');
                 library="texra"
                 name="chevron-right"
               ></wa-icon>
-              <wa-icon class="tc-ic" library="texra" name="circle-user"></wa-icon>
+              <wa-icon
+                class="tc-ic"
+                library="texra"
+                name="circle-user"
+              ></wa-icon>
               <span class="tc-label"
                 ><span class="tc-tool">delegate_agent</span> — lean</span
               >

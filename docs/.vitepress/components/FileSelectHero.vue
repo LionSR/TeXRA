@@ -110,11 +110,7 @@ import MockupFrame from './MockupFrame.vue';
         <div class="field">
           <div class="frow">
             <span class="f-label"
-              ><wa-icon
-                class="lbl-ic"
-                library="texra"
-                name="video"
-              ></wa-icon>
+              ><wa-icon class="lbl-ic" library="texra" name="video"></wa-icon>
               Media
               <span class="act" title="Auto-extract options"
                 ><wa-icon library="texra" name="wand-magic-sparkles"></wa-icon

@@ -21,15 +21,15 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 
 ## Anthropic Models
 
-| Model ID    | Use Case                                  | Cost | Speed  |
-| :---------- | :---------------------------------------- | :--- | :----- |
-| `fable5`    | Most capable, always-on adaptive thinking | $$$$ | Slow   |
-| `opus5T`    | Top-tier reasoning, long-horizon work     | $$$$ | Slow   |
-| `opus5`     | Most capable for agentic coding           | $$$$ | Slow   |
-| `sonnet5T`  | All-rounder with reasoning                | $$$  | Medium |
-| `sonnet5`   | Strong all-rounder                        | $$$  | Medium |
-| `haiku45T`  | Fast with reasoning                       | $$   | Fast   |
-| `haiku45`   | Fast responses                            | $$   | Fast   |
+| Model ID   | Use Case                                  | Cost | Speed  |
+| :--------- | :---------------------------------------- | :--- | :----- |
+| `fable5`   | Most capable, always-on adaptive thinking | $$$$ | Slow   |
+| `opus5T`   | Top-tier reasoning, long-horizon work     | $$$$ | Slow   |
+| `opus5`    | Most capable for agentic coding           | $$$$ | Slow   |
+| `sonnet5T` | All-rounder with reasoning                | $$$  | Medium |
+| `sonnet5`  | Strong all-rounder                        | $$$  | Medium |
+| `haiku45T` | Fast with reasoning                       | $$   | Fast   |
+| `haiku45`  | Fast responses                            | $$   | Fast   |
 
 Fable 5, Opus 5, and Sonnet 5 include the full 1M context window at standard pricing — no opt-in or
 beta header required. Other Claude models use a 200K context window.
@@ -40,13 +40,13 @@ Claude Opus 5 uses adaptive thinking only (extended thinking with a manual `budg
 
 ## OpenAI Models
 
-| Model ID    | Use Case                          | Cost | Speed  |
-| :---------- | :-------------------------------- | :--- | :----- |
-| `gpt56pro`  | Pro reasoning mode, 1M context    | $$$$ | Slow   |
-| `gpt56`     | Flagship reasoning, 1M context    | $$$$ | Medium |
-| `gpt56fast` | Flagship, fast variant            | $$$$ | Fast   |
-| `gpt56-`    | Lower-cost reasoning              | $$$  | Fast   |
-| `gpt56--`   | Budget reasoning                  | $    | Fast   |
+| Model ID    | Use Case                       | Cost | Speed  |
+| :---------- | :----------------------------- | :--- | :----- |
+| `gpt56pro`  | Pro reasoning mode, 1M context | $$$$ | Slow   |
+| `gpt56`     | Flagship reasoning, 1M context | $$$$ | Medium |
+| `gpt56fast` | Flagship, fast variant         | $$$$ | Fast   |
+| `gpt56-`    | Lower-cost reasoning           | $$$  | Fast   |
+| `gpt56--`   | Budget reasoning               | $    | Fast   |
 
 GPT-5.6 Sol (`gpt56`) is OpenAI's current flagship reasoning model; TeXRA pins the
 [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`. GPT-5.6 Pro (`gpt56pro`)
@@ -91,9 +91,9 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## MiniMax Models
 
-| Model ID    | Use Case                                        | Cost | Speed  |
-| :---------- | :---------------------------------------------- | :--- | :----- |
-| `minimaxM3` | Flagship with interleaved thinking, 1M context  | $    | Medium |
+| Model ID    | Use Case                                       | Cost | Speed  |
+| :---------- | :--------------------------------------------- | :--- | :----- |
+| `minimaxM3` | Flagship with interleaved thinking, 1M context | $    | Medium |
 
 MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific — international keys (api.minimax.io) and China keys (api.minimaxi.com) are not interchangeable. Toggle the region in the Models tab.
 
@@ -103,11 +103,11 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 ## GLM (Zhipu AI / Z.AI) Models
 
-| Model ID      | Use Case                        | Cost | Speed  |
-| :------------ | :------------------------------ | :--- | :----- |
-| `glm52`       | Flagship open-source model      | $$   | Medium |
-| `glm5turbo`   | Fast inference, agent-optimized | $$$  | Medium |
-| `glm5vturbo`  | Multimodal vision model         | $$   | Medium |
+| Model ID     | Use Case                        | Cost | Speed  |
+| :----------- | :------------------------------ | :--- | :----- |
+| `glm52`      | Flagship open-source model      | $$   | Medium |
+| `glm5turbo`  | Fast inference, agent-optimized | $$$  | Medium |
+| `glm5vturbo` | Multimodal vision model         | $$   | Medium |
 
 GLM models support thinking mode (reasoning is shown inline). The API uses a non-standard base path (`/api/paas/v4`), which TeXRA handles automatically.
 
