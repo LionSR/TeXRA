@@ -478,18 +478,6 @@ export const instructionPanelStyles: CSSResult = css`
     max-width: none;
   }
 
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
   @media (max-width: 420px) {
     .model-selection-footer .launch-target-group {
       flex-basis: 100%;

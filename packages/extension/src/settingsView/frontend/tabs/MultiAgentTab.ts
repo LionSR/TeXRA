@@ -68,11 +68,6 @@ export class MultiAgentTab extends LitElement {
         border-color: var(--wa-color-focus);
       }
 
-      .preset-card:focus-visible {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: var(--border-thin);
-      }
-
       .preset-card.active {
         background-color: var(--wa-color-brand-fill-quiet);
         color: var(
@@ -166,9 +161,11 @@ export class MultiAgentTab extends LitElement {
         color: var(--wa-color-danger-on-quiet);
       }
 
+      /* Part-piercing: a shadow-scoped :focus-visible cannot reach wa-button's
+         inner control, so this rule is the only ring it gets. */
       .preset-delete-btn:focus-visible::part(base) {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: var(--border-thin);
+        outline: var(--focus-ring-width) solid var(--wa-color-focus);
+        outline-offset: var(--focus-ring-offset);
         border-radius: var(--border-radius-small);
       }
 
