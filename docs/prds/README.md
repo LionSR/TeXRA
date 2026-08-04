@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-07-18
+updated: 2026-08-03
 ---
 
 # PRD Index
@@ -24,6 +24,7 @@ that archived source branch, not `main`.
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [PRD: Unified approval policy across CLI, desktop, and extension](./2026-08-03-prd-approval-policy-unification.md)                       | 2026-08-03 | 2026-08-03 |
 | [PRD: Non-blocking `inquiry` — Async Q&A with the User](./2026-05-15-prd-external-inquiry-async.md)                                      | 2026-05-15 | 2026-06-20 |
 | [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation.md)                                    | 2026-06-14 | 2026-06-14 |
 | [PRD: Team-First Launcher and Onboarding](./2026-04-30-launcher-and-onboarding.md)                                                       | 2026-04-30 | 2026-06-13 |
