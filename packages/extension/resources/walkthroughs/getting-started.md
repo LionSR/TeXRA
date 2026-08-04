@@ -25,7 +25,7 @@ Once a credential is in place, one conversation covers the rest. The setup assis
 
 It asks before every command and explains what it's about to do. You stay in control.
 
-- Command Palette > **TeXRA: Run Setup Assistant Agent (Setup Wizard)**, or click **Run Setup Assistant Agent** in the walkthrough step on the left.
+- Command Palette > **TeXRA: Run Setup Assistant**, or click **Run Setup Assistant** in the walkthrough step on the left.
 - Already have LaTeX and a credential? It'll say so and skip straight to your first run.
 
 ## 3. Meet the orchestrator

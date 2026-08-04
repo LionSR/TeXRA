@@ -254,8 +254,8 @@ export class ShortcutsTab extends LitElement {
         <wa-input
           class="shortcuts-search"
           type="search"
-          placeholder="Filter commands"
-          aria-label="Filter keyboard shortcuts"
+          placeholder="Filter shortcuts"
+          aria-label="Filter shortcuts"
           @input=${this.handleSearch}
         ></wa-input>
         <p

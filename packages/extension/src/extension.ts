@@ -595,7 +595,7 @@ export async function activate(context: vscode.ExtensionContext) {
   statusBarItem.name = 'TeXRA Tasks';
   statusBarItem.command = 'texra.showProgressView';
   statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
-  statusBarItem.tooltip = 'Show TeXRA Tasks';
+  statusBarItem.tooltip = 'Open the TeXRA Progress view';
   statusBarItem.accessibilityInformation = {
     label: 'TeXRA tasks, idle',
   };
@@ -643,7 +643,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const { cost, inputTokens, outputTokens } =
       statusBarUsageTracker.totalUsage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-      statusBarItem.tooltip = 'Show TeXRA Tasks';
+      statusBarItem.tooltip = 'Open the TeXRA Progress view';
       return;
     }
     const tip = new vscode.MarkdownString(
@@ -654,7 +654,7 @@ export async function activate(context: vscode.ExtensionContext) {
         `| Input tokens | ${inputTokens.toLocaleString()} |`,
         `| Output tokens | ${outputTokens.toLocaleString()} |`,
         '',
-        '*Click to open the TeXRA task board*',
+        '*Click to open the Progress view*',
       ].join('\n'),
     );
     tip.isTrusted = false;

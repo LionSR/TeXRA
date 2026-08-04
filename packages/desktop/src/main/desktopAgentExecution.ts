@@ -659,7 +659,7 @@ export class DesktopProgressBridge {
     const { agent, model, inputFile, executionId } = request;
     if (!agent || !model || !inputFile) {
       await this.options.host.showErrorMessage(
-        `Missing required parameters for ${operation}.`,
+        `Select an input file before ${operation === 'pack' ? 'packing' : 'cleaning'}.`,
       );
       return;
     }
@@ -718,7 +718,7 @@ export class DesktopProgressBridge {
         return;
       case 'missingParams':
         await this.options.host.showErrorMessage(
-          `Missing required parameters for ${operation}.`,
+          `Select an input file before ${operation === 'pack' ? 'packing' : 'cleaning'}.`,
         );
         return;
       case 'error':

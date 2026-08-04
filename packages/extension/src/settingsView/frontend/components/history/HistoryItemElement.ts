@@ -105,7 +105,7 @@ const HISTORY_ACTIONS: ReadonlyArray<{
       id: 'history-export-pdf-button',
       icon: 'file-pdf',
       label: 'Export PDF',
-      tooltip: 'Export as LaTeX/PDF',
+      tooltip: 'Export as PDF (via LaTeX)',
       action: 'export-tex',
     },
     command: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,

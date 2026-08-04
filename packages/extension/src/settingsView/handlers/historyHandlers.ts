@@ -30,6 +30,7 @@ import {
   HISTORY_CONFIG_UNREADABLE_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
+import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 // Bundled in the extension's resources/ tree and loaded as raw text by the
 // esbuild `.tex: text` loader, then injected into the host-neutral
@@ -132,6 +133,11 @@ export class HistoryHandlers {
       this.ctx,
       'Failed to clear history',
       async () => {
+        const confirmed = await confirmModal(
+          'Clear all history? This deletes every stored execution and cannot be undone.',
+          'Clear all history',
+        );
+        if (!confirmed) return;
         const result = await deleteAllExecutions();
         await GoalStore.forgetByExecutionIds(result.deleted);
         const outcome = describeClearHistoryResult(result);

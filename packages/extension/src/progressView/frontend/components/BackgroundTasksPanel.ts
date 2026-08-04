@@ -81,7 +81,7 @@ export class BackgroundTasksPanel extends LitElement {
 
       /* The shared panel header already supplies the section boundary and
          lowered surface. Strip Web Awesome's surrounding card so expanding
-         Background Tasks does not introduce a second white, rounded panel
+         Background tasks does not introduce a second white, rounded panel
          around the quiet child sections. */
       wa-details.panel-collapsible::part(base) {
         background: transparent;
@@ -277,7 +277,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details
         class="panel-collapsible"
-        summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background Tasks'}
+        summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background tasks'}
         ?open=${this.open}
         @wa-show=${this.handleShow}
         @wa-hide=${this.handleHide}

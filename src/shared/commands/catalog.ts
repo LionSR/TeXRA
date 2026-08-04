@@ -35,7 +35,7 @@ export const commandCatalog = [
   {
     id: 'texra.runSetupAssistant',
     extensionRegistry: true,
-    title: 'Run Setup Assistant Agent (Setup Wizard)',
+    title: 'Run Setup Assistant',
     category: 'TeXRA',
     icon: '$(rocket)',
   },

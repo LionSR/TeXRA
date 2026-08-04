@@ -342,7 +342,7 @@ export class MultiAgentTab extends LitElement {
               ),
           })}
           ${renderSettingsToggleRow({
-            label: 'Keep agents running after I stop the orchestrator',
+            label: 'Keep agents running after you stop the orchestrator',
             description:
               'Let agents that are already mid-task finish independently.',
             checked: this.detachSubagentsOnStop,

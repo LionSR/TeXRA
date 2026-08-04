@@ -556,7 +556,7 @@ function createWindow(options: {
       },
     }).openDiff,
     confirmAcceptFile: (message) =>
-      confirmDialog({ message, confirmLabel: 'Yes' }),
+      confirmDialog({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability: (unavailableNames) =>
       chooseTeamAvailability(unavailableNames),
     signInForRemoteAgentCatalog,

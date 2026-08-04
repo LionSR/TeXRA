@@ -160,7 +160,8 @@ export class GoalTab extends LitElement {
           this.items.length === 0
             ? renderEmptyState({
                 icon: 'compass',
-                title: 'No Goals yet.',
+                title: 'No goals yet',
+                body: 'Approve a plan with "Run as Goal" to start one.',
                 headingTag: 'h3',
                 className: 'empty-state',
               })
