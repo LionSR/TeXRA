@@ -96,6 +96,7 @@ export class ReliabilitySettingsSection extends LitElement {
         title: 'Reliability',
         description:
           'Tweak how long model sessions handle retries and context limits.',
+        icon: 'rotate-right',
       })}
       <div class="settings-section">
         ${this.settings.map((setting) => this.renderSetting(setting))}

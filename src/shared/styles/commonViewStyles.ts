@@ -474,6 +474,20 @@ export const commonViewStyles: CSSResult = css`
     margin-inline-start: auto;
   }
 
+  /* Quiet limitation note under a keyless (subscription-backed) source. */
+  .keyless-source__limit {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--wa-space-xs);
+    margin: 0 0 var(--wa-space-xs);
+    opacity: 0.85;
+    font-size: var(--font-size-sm);
+  }
+  .keyless-source__limit wa-icon {
+    flex: 0 0 auto;
+    margin-top: var(--wa-space-3xs);
+  }
+
   .category-section {
     margin-bottom: var(--wa-space-s);
   }

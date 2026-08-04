@@ -18,17 +18,22 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { AgentCategory } from '@shared/schemas/agent';
-import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  AgentSelectionItem,
+  NumberSetting,
+} from '@shared/schemas/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
+import '../components/profile/ReliabilitySettingsSection';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
@@ -52,7 +57,8 @@ export class AgentsTab extends LitElement {
         min-width: 0;
       }
 
-      .agent-category + .agent-category {
+      .agent-category + .agent-category,
+      .agent-category + reliability-settings-section {
         margin-top: var(--wa-space-l);
       }
 
@@ -69,6 +75,7 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) userTier = 'free';
+  @property({ attribute: false }) reliabilitySettings: NumberSetting[] = [];
 
   /**
    * Commands the active host's registry declares `unsupported(...)`, sent
@@ -125,6 +132,7 @@ export class AgentsTab extends LitElement {
     agents: AgentSelectionItem[],
     title: string,
     description: string,
+    icon: TeXRAIconName,
   ): TemplateResult {
     const createSupported = !isKnownUnsupported(
       this.unsupportedCommands,
@@ -153,6 +161,7 @@ export class AgentsTab extends LitElement {
         ${renderSettingsSectionHeading({
           title: `${title} (${agents.length})`,
           description,
+          icon,
           actions,
         })}
         <agent-selection-panel
@@ -172,6 +181,7 @@ export class AgentsTab extends LitElement {
           title: 'Agent library',
           description:
             'Configure workflow and tool-use agents, then save the enabled set as a reusable team.',
+          icon: 'robot',
           actions: renderLabeledActionButton({
             icon: 'floppy-disk',
             text: 'Save team',
@@ -214,6 +224,7 @@ export class AgentsTab extends LitElement {
                 this.customAgentDirIsDefault
                   ? nothing
                   : renderLabeledActionButton({
+                      icon: 'arrow-rotate-left',
                       text: 'Reset',
                       kind: 'secondary',
                       appearance: 'outlined',
@@ -224,17 +235,26 @@ export class AgentsTab extends LitElement {
           </div>
         </div>
         ${this.renderAgentCategory(
-          'workflow',
-          this.workflowAgents,
-          'Workflow agents',
-          'Focused specialists for writing, review, research, and structured paper workflows.',
-        )}
-        ${this.renderAgentCategory(
           'toolUse',
           this.toolUseAgents,
           'Tool-use agents',
           'Interactive agents that can inspect files, run tools, and edit the workspace.',
+          'screwdriver-wrench',
         )}
+        ${this.renderAgentCategory(
+          'workflow',
+          this.workflowAgents,
+          'Workflow agents',
+          'Focused specialists for writing, review, research, and structured paper workflows.',
+          'wand-magic-sparkles',
+        )}
+        ${
+          this.reliabilitySettings.length > 0
+            ? html`<reliability-settings-section
+                .settings=${this.reliabilitySettings}
+              ></reliability-settings-section>`
+            : nothing
+        }
       </div>
     `;
   }

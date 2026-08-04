@@ -23,7 +23,14 @@ import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
+import {
+  renderSetStatusIcon,
+  statusCheckIconStyles,
+} from '@shared/wa/statusIcons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome button + icon bundles (side-effect imports)
@@ -250,6 +257,7 @@ export class LaTeXTab extends LitElement {
     designTokens,
     commonViewStyles,
     settingsBannerStyles,
+    statusCheckIconStyles,
     latexTabStyles,
   ];
 
@@ -498,8 +506,10 @@ export class LaTeXTab extends LitElement {
           <span class="settings-row-help">${info.description}</span>
         </div>
         <div class="settings-row-control">
-          ${waIcon(isSet ? 'check' : 'triangle-exclamation', {
-            className: `setting-status-icon ${isSet ? 'is-set' : 'not-set'}`,
+          ${renderSetStatusIcon({
+            status: isSet ? 'set' : 'not-set',
+            title: 'Set',
+            fallbacks: { 'not-set': { label: 'Not set' } },
           })}
           ${
             isSet
@@ -529,7 +539,7 @@ export class LaTeXTab extends LitElement {
     if (!this.loaded) {
       return html`
         <div class="tab-content-container">
-          ${renderLoadingState('Loading LaTeX settings...')}
+          ${renderLoadingState('Loading LaTeX settings…')}
         </div>
       `;
     }
@@ -590,29 +600,13 @@ export class LaTeXTab extends LitElement {
             'Control how TeXRA surfaces structured review annotations in LaTeX documents.',
           icon: 'comments',
         })}
-        <div class="settings-row">
-          <div class="settings-row-text">
-            <span class="settings-row-label"
-              >Surface \\criticize annotations</span
-            >
-            <span class="settings-row-help">
-              Parse \\criticize{message}{severity}{confidence} annotations from
-              agent-revised LaTeX files and show them as editor diagnostics.
-            </span>
-          </div>
-          <div class="settings-row-control">
-            ${waIcon(this.inlineCriticismEnabled ? 'check' : 'circle-xmark', {
-              className: `setting-status-icon ${
-                this.inlineCriticismEnabled ? 'is-set' : 'not-set'
-              }`,
-            })}
-            <wa-switch
-              aria-label="Surface criticize annotations"
-              ?checked=${this.inlineCriticismEnabled}
-              @change=${this.handleInlineCriticismToggle}
-            ></wa-switch>
-          </div>
-        </div>
+        ${renderSettingsToggleRow({
+          label: 'Surface \\criticize annotations',
+          description:
+            'Parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and show them as editor diagnostics.',
+          checked: this.inlineCriticismEnabled,
+          onChange: this.handleInlineCriticismToggle,
+        })}
       </div>
     `;
   }
@@ -900,7 +894,7 @@ export class LaTeXTab extends LitElement {
   private renderConfigRow(opts: {
     label: string;
     description: string;
-    statusIcon: TemplateResult;
+    statusIcon?: TemplateResult | typeof nothing;
     control: TemplateResult;
     reset: TemplateResult | typeof nothing;
   }): TemplateResult {
@@ -911,7 +905,7 @@ export class LaTeXTab extends LitElement {
           <span class="settings-row-help">${opts.description}</span>
         </div>
         <div class="settings-row-control">
-          ${opts.statusIcon} ${opts.control} ${opts.reset}
+          ${opts.statusIcon ?? nothing} ${opts.control} ${opts.reset}
         </div>
       </div>
     `;
@@ -932,12 +926,11 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
+    // No status icon: the switch already carries the on/off state, matching
+    // the toggle rows in the other settings tabs.
     return this.renderConfigRow({
       label: opts.label,
       description: opts.description,
-      statusIcon: waIcon(effective ? 'check' : 'circle-xmark', {
-        className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
-      }),
       control: html`
         <wa-switch
           aria-label=${opts.label}
@@ -957,7 +950,8 @@ export class LaTeXTab extends LitElement {
   /**
    * Icon for non-boolean settings (number/enum): an "edit" pencil when the
    * value has been customized, a neutral gear when it's still the default.
-   * Red is reserved for booleans that are Off, where it carries meaning.
+   * Boolean rows carry their state on the switch itself, so they render no
+   * status icon.
    */
   private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
     return waIcon(isCustom ? 'pencil' : 'gear', {
@@ -971,16 +965,15 @@ export class LaTeXTab extends LitElement {
     field: LatexConfigField,
     defaultDisplay: string,
   ): TemplateResult {
-    return html`<wa-button
-      appearance="outlined"
-      variant="neutral"
-      size="s"
-      aria-label="Reset to default"
-      title="Reset to default (${defaultDisplay})"
-      @click=${() => this.dispatchSetConfigValue(field, undefined)}
-    >
-      ${waIcon('arrow-rotate-left')}
-    </wa-button>`;
+    return renderLabeledActionButton({
+      icon: 'arrow-rotate-left',
+      text: 'Reset',
+      kind: 'secondary',
+      appearance: 'outlined',
+      label: 'Reset to default',
+      title: `Reset to default (${defaultDisplay})`,
+      onClick: () => this.dispatchSetConfigValue(field, undefined),
+    });
   }
 
   private renderNumberSetting(opts: {

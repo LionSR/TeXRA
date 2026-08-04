@@ -7,11 +7,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import {
-  designTokens,
-  animationStyles,
-  commonViewStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
@@ -117,7 +113,6 @@ const EXECUTION_DEPENDENT_BUTTONS = new Set([
 export class StreamHeader extends LitElement {
   static override styles = [
     designTokens,
-    animationStyles,
     commonViewStyles,
     statusIndicatorStyles,
     toolbarToggleStyles,

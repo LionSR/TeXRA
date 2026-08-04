@@ -14,6 +14,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
 // Local imports - shared schemas
@@ -77,13 +78,6 @@ export class AIAgentsTab extends LitElement {
     css`
       :host {
         display: block;
-      }
-
-      .ai-agents-empty {
-        padding: var(--wa-space-l);
-        text-align: center;
-        color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-sm);
       }
 
       .ai-agents-status {
@@ -294,9 +288,13 @@ export class AIAgentsTab extends LitElement {
       <div class="tab-content-container">
         ${
           items.length === 0
-            ? html`<div class="ai-agents-empty">
-                No integrations registered.
-              </div>`
+            ? renderEmptyState({
+                icon: 'robot',
+                title: 'No integrations registered.',
+                body: 'Coding agents and services appear here once TeXRA detects them.',
+                headingTag: 'h3',
+                className: 'empty-state',
+              })
             : html`
                 ${this.renderStatusSummary(items)}
                 <div class="category-section">

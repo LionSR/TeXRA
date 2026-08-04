@@ -106,26 +106,8 @@ export const streamTabStyles = css`
     text-overflow: ellipsis;
   }
 
-  .tab-description {
-    font-size: var(--font-size-xs);
-    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-    opacity: var(--opacity-hover);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
-    display: none;
-  }
-
-  /* Only show description when the tab has enough horizontal space */
-  @container (min-width: 200px) {
-    .tab-description {
-      display: block;
-    }
-  }
-
   .tab-meta {
-    display: flex;
+    display: none;
     align-items: center;
     gap: var(--wa-space-3xs);
     font-size: var(--font-size-xs);
@@ -134,6 +116,14 @@ export const streamTabStyles = css`
     width: 100%;
     min-width: 0;
     overflow: hidden;
+  }
+
+  /* The metadata line stays out of the way until the row is hovered,
+     focused, or selected — the full details also live in the tooltip. */
+  .tab-container:hover .tab-meta,
+  .tab-container:focus-within .tab-meta,
+  .tab-container.is-active .tab-meta {
+    display: flex;
   }
 
   .tab-meta .remote-agent,
@@ -189,7 +179,7 @@ export const streamTabStyles = css`
 
   /*
    * Single descendant rule covers .tab, .tab-title, .tab-meta,
-   * .tab-description, .tab-delete, .tab-expand, and any nested spans
+   * .tab-delete, .tab-expand, and any nested spans
    * (.last-active, .model) and codicon glyphs.
    */
   .tab-container.is-active * {
@@ -197,21 +187,27 @@ export const streamTabStyles = css`
   }
 
   /*
-   * Re-apply the destructive-action cue on active tabs — the
-   * descendant-wildcard above would otherwise hold the close icon on
-   * the selection foreground.
+   * Destructive-action cue on hover: a color flip only, no hover box — the
+   * row's own hover background already carries the affordance. The descendant
+   * selector reaches the slotted icon past the is-active wildcard above; the
+   * ::part rules strip the shared action-icon-button hover/active fill.
    */
-  .tab-container.is-active .tab-delete:hover,
-  .tab-container.is-active .tab-delete:hover *,
-  .tab-container.is-active .tab-delete:focus-within,
-  .tab-container.is-active .tab-delete:focus-within * {
+  .tab-delete:hover,
+  .tab-delete:hover *,
+  .tab-delete:focus-within,
+  .tab-delete:focus-within * {
     color: var(--wa-color-danger-on-quiet);
+  }
+
+  .tab-delete::part(base):hover,
+  .tab-delete::part(base):active {
+    border-color: transparent;
+    background: transparent;
   }
 
   /* Drop the dim-by-default opacity so the flipped foreground renders
    * at full contrast on the selection background. */
-  .tab-container.is-active .tab-meta,
-  .tab-container.is-active .tab-description {
+  .tab-container.is-active .tab-meta {
     opacity: var(--opacity-full);
   }
 
@@ -252,11 +248,6 @@ export const streamTabStyles = css`
     );
   }
 
-  .tab-delete:hover,
-  .tab-delete:focus-within {
-    color: var(--wa-color-danger-on-quiet);
-  }
-
   /* Expand/collapse chevron for parent tabs with children. This
    * component's shadow root doesn't load the shared commonViewStyles
    * sheet, so (like .tab-delete above) the reset lives locally rather
@@ -286,13 +277,9 @@ export const streamTabStyles = css`
     transform: rotate(90deg);
   }
 
-  .worktree-chip-row {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    width: 100%;
-    margin-top: var(--wa-space-3xs);
-    min-width: 0;
-    overflow: hidden;
+  /* The chip shares the meta row with the timestamp and model — keep it
+     truncating instead of wrapping. */
+  .tab-meta worktree-chip {
+    flex-shrink: 1;
   }
 `;

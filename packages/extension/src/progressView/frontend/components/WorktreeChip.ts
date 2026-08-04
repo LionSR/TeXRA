@@ -11,6 +11,7 @@ import {
 import { designTokens } from '@shared/styles';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { getBasename } from '@utils/core';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -217,7 +218,7 @@ export class WorktreeChip extends LitElement {
   private worktreeLabel(): string | undefined {
     const path = this.info.workingDirectory?.trim();
     if (!path) return undefined;
-    return path.split(/[\\/]/).findLast(Boolean) ?? path;
+    return getBasename(path) || path;
   }
 
   private renderPRDetails(pr: NonNullable<WorktreeInfo['pr']>): TemplateResult {
