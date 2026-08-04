@@ -9,7 +9,7 @@ import type {
   AgentProposal,
   ModelOptionData,
 } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunIdentity, StreamTabId } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -319,6 +319,7 @@ export interface ProgressViewSecondTierActions {
   readonly session: SessionHandle;
   /** Look up a stream's run config from persisted snapshots. */
   readonly getRunConfig: (stream: StreamTabId) => AgentConfig | undefined;
+  readonly getRunIdentity: (stream: StreamTabId) => RunIdentity | undefined;
   /**
    * Restore the run config of a completed run into the main view (the extension
    * routes through `texra.restoreState`; the desktop calls
@@ -454,6 +455,10 @@ export function createProgressViewSecondTierHandlers(
 
     // ── State restore ──
     [CMD.RESTORE_STATE]: async (data) => {
+      // Restoring the launcher form from a non-agent stream would push a
+      // synthetic/borrowed config into it — native agent runs only.
+      const identity = deps.getRunIdentity(data.stream);
+      if (identity?.kind !== 'agent' || identity.tool !== undefined) return;
       const config = deps.getRunConfig(data.stream);
       if (!config) return;
       await deps.restoreRunConfig(config);

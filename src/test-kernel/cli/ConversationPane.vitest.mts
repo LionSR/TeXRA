@@ -1007,7 +1007,6 @@ describe('CLI conversation transcript splitting', () => {
       parentStreamId: ROOT,
       activeOnly: [
         {
-          kind: 'subagent',
           executionId: 'ei_search',
           agentName: 'search',
           childStreamId: CHILD,

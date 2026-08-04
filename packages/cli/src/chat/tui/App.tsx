@@ -308,8 +308,7 @@ export function App(props: AppProps): React.JSX.Element {
     return executionIds;
   }, [childStreamEntries, sessionViews, streams]);
   const workflowDashboardRoot =
-    childListTarget.slice?.category === AgentCategory.Workflow &&
-    childListTarget.slice.entries.some((entry) => entry.role === 'workflowTask')
+    childListTarget.slice?.identity?.kind === 'workflowScript'
       ? childListTarget.slice
       : undefined;
   const workflowDashboardTasks = useMemo(

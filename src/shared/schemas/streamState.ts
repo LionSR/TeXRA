@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { GoalStatusSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
+import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { roundIndexedRecord } from './roundIndexed';
 import {
@@ -16,16 +17,17 @@ import { TodoItemSchema } from './todo';
 import { ContextStateDataSchema } from './contextManagement';
 import { RunUsageMapSchema } from './usage';
 
-// Active Child Info — discriminated by `kind` rather than by which array the
-// entry came from (`subagents` vs `processes`) or by guessing from which
-// optional field happens to be set. Only `childStreamId` is genuinely
-// exclusive to one kind (only subagents own a stream tab); `toolName` can
-// appear on either kind — e.g. a subagent launched via a specific CLI tool
-// (`options.toolName` in `createChildStream`), or a background process running
-// a named tool (`bash`, `codex`) — so it stays a shared, optional field.
+// Active Child Info — one flat row shape. Every child owns a stream tab
+// (`childStreamId` always present) and carries its parsed `identity`
+// verbatim; renderers key icons and clickability on `identity.kind` instead
+// of tool-name sniffing or a roster-side kind union.
 
-const ActiveChildInfoBaseSchema = z.object({
+const ActiveChildInfoSchemaBase = z.object({
   executionId: z.string(),
+  /** Stream tab ID — every child stream owns a tab. */
+  childStreamId: z.string(),
+  /** What owns the child stream; absent only for legacy emitters. */
+  identity: RunIdentitySchema.optional(),
   agentName: z.string(),
   /**
    * Current execution phase. Takes `StreamPhase` only: no artifact carries a
@@ -44,9 +46,6 @@ const ActiveChildInfoBaseSchema = z.object({
   finishedAt: z.int().positive().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
   elapsed: z.string().nullish(),
-  /** Tool that spawned this child (e.g. "bash", "codex"). Used for icon/label
-   *  selection in the UI; may be set on either kind. */
-  toolName: z.string().optional(),
   /**
    * Workflow-script phase that owns this child, when its parent is a
    * workflow-script run. This is the only join key between a grandchild's
@@ -59,19 +58,9 @@ const ActiveChildInfoBaseSchema = z.object({
   workflowPhase: z.string().optional(),
 });
 
-export const ActiveChildInfoSchema = z.discriminatedUnion('kind', [
-  ActiveChildInfoBaseSchema.extend({
-    kind: z.literal('subagent'),
-    /** Stream tab ID — subagents own their own tab. */
-    childStreamId: z.string(),
-  }),
-  ActiveChildInfoBaseSchema.extend({
-    kind: z.literal('process'),
-  }),
-]);
+export const ActiveChildInfoSchema = ActiveChildInfoSchemaBase;
 
 export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
-export type SubagentChildInfo = Extract<ActiveChildInfo, { kind: 'subagent' }>;
 
 // Round Stage (ephemeral round label from typed stage.start metadata)
 
@@ -140,7 +129,8 @@ export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
   // still holds, which a plain omission cannot express.
   roundStage: RoundStageSchema.nullable().optional(),
   phaseStage: PhaseStageSchema.nullable().optional(),
-  kind: AgentCategorySchema,
+  /** Absent while the stream's run identity is still pending. */
+  category: AgentCategorySchema.optional(),
 });
 
 export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
@@ -171,7 +161,7 @@ const ToolUseUIStateSchema = z.object({
 // Tool-Use Stream State
 
 const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
-  kind: z.literal(AgentCategory.ToolUse),
+  category: z.literal(AgentCategory.ToolUse),
   // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
   plan: PlanSchema.nullable().prefault(null),
@@ -192,7 +182,7 @@ export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 // One run per tab — all run-scoped data is flat, not keyed by runId.
 
 const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
-  kind: z.literal(AgentCategory.Workflow),
+  category: z.literal(AgentCategory.Workflow),
   // Frontend-owned fields updated by targeted progress-view messages.
   files: roundIndexedRecord(OutputFileInfoSchema).prefault({}),
   missingOutputs: roundIndexedRecord(z.string()).prefault({}),
@@ -203,7 +193,7 @@ export type WorkflowStreamState = z.infer<typeof WorkflowStreamStateSchema>;
 
 // Discriminated Union
 
-const StreamStateSchema = z.discriminatedUnion('kind', [
+const StreamStateSchema = z.discriminatedUnion('category', [
   ToolUseStreamStateSchema,
   WorkflowStreamStateSchema,
 ]);
@@ -215,13 +205,13 @@ export type StreamState = z.infer<typeof StreamStateSchema>;
 export function isToolUseState(
   state: StreamState,
 ): state is ToolUseStreamState {
-  return state.kind === AgentCategory.ToolUse;
+  return state.category === AgentCategory.ToolUse;
 }
 
 export function isWorkflowState(
   state: StreamState,
 ): state is WorkflowStreamState {
-  return state.kind === AgentCategory.Workflow;
+  return state.category === AgentCategory.Workflow;
 }
 
 // Factory Functions
@@ -232,12 +222,12 @@ export function createStreamState(
 ): StreamState {
   if (agentCategory === AgentCategory.ToolUse) {
     return ToolUseStreamStateSchema.parse({
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       ...partial,
     });
   }
   return WorkflowStreamStateSchema.parse({
-    kind: AgentCategory.Workflow,
+    category: AgentCategory.Workflow,
     ...partial,
   });
 }

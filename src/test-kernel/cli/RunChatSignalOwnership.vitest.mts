@@ -478,8 +478,8 @@ describe('runChat signal ownership wiring', () => {
       .spyOn(agents, 'getVisibleAgents')
       .mockReturnValue([]);
     const delegationAgentScope = {
-      workflowAgentKeys: ['builtInWorkflow:physicsReviewer'],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+      workflow: ['builtInWorkflow:physicsReviewer'],
+      toolUse: ['builtInToolUse:orchestrator'],
     } as const;
     const mediaFiles = ['/tmp/diagram.png'];
     const activationPrompt = '<skill_activation>hidden</skill_activation>';

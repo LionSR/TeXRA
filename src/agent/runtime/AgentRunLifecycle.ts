@@ -26,7 +26,6 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
-  buildRunDescriptor,
   toRetryErrorInfo,
   type RetryErrorInfo,
   type RunOutcome,
@@ -152,7 +151,7 @@ export interface FinalizeRunTerminalParams {
 
 export interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
-  readonly terminalStatusPersisted: boolean;
+  readonly outcomePersisted: boolean;
 }
 
 /**
@@ -187,7 +186,7 @@ export async function finalizeRunTerminal(
   // Error facts the run classified for an outcome that did not happen are not
   // facts about this run.
   const error = outcome === params.outcome ? params.error : undefined;
-  let terminalStatusPersisted = false;
+  let outcomePersisted = false;
   if (params.persistence.kind === 'finalize') {
     const { flowRecord } = params.persistence;
     const persisted = await persistTerminalExecution({
@@ -200,7 +199,7 @@ export async function finalizeRunTerminal(
       failedMessage: 'Failed to finalize durable execution state',
       rejectedMessage: 'Execution finalizer rejected unexpectedly',
     });
-    terminalStatusPersisted = persisted.terminalStatusPersisted;
+    outcomePersisted = persisted.outcomePersisted;
   }
   if (params.stage) {
     try {
@@ -277,7 +276,7 @@ export async function finalizeRunTerminal(
       data: { agentIdentifier: handle.agentName, error: cleanupErr },
     });
   }
-  return { event, terminalStatusPersisted };
+  return { event, outcomePersisted };
 }
 
 /** Failures finalizeFailedRun already logged, published, and wrapped; the
@@ -417,18 +416,14 @@ export async function runFlowWithLifecycle(
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId, executionId, session } = ctx.runScope;
   const agentIdentifier = ctx.config.agent;
-  // Launch construction receives an already-normalized AgentConfig; a
-  // descriptor parse failure here is an internal run-contract violation.
-  const descriptor = buildRunDescriptor({
-    streamId,
-    executionId,
-    agent: agentIdentifier,
-    category: ctx.setting.agentCategory,
-    kind: 'agent',
-  });
   const parentStreamId = options?.parentStreamId ?? streamId;
   const handle = new AgentExecutionHandle(
-    descriptor,
+    {
+      streamId,
+      executionId,
+      identity: { kind: 'agent', agent: agentIdentifier },
+      category: ctx.setting.agentCategory,
+    },
     parentStreamId,
     ctx.logger,
   );
@@ -572,7 +567,7 @@ export async function runFlowWithLifecycle(
     const subagentResult = options?.isSubagent
       ? (carried ??
         buildTerminalFlowResult(
-          descriptor.category,
+          handle.category,
           outcome,
           executionId,
           streamId,
@@ -607,7 +602,7 @@ export async function runFlowWithLifecycle(
     }
     if (kind === 'abort') {
       return buildTerminalFlowResult(
-        descriptor.category,
+        handle.category,
         resolvedOutcome,
         executionId,
         streamId,
@@ -623,7 +618,12 @@ export async function runFlowWithLifecycle(
     // Publish run identity/config before the RUNNING transition so progress
     // backends can create the initial StreamExecutionState with the real
     // category when the transition-owned run-start side effects fire.
-    ctx.logger.emit({ type: 'run.start', descriptor: handle.descriptor });
+    ctx.logger.emit({
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity: handle.identity,
+    });
     ctx.logger.emit({
       type: 'run.config',
       streamId,

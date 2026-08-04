@@ -102,6 +102,7 @@ async function deliverResumeWakeFailure(
 /** Tool for delegating tasks to workflow agents (document processing). */
 export class WorkflowAgentTool extends defineTool({
   name: 'delegate_workflow',
+  availabilityCategory: 'workflow',
   requiresApproval: true,
   // Static base text; the "Available agents:" line is resolved per run at the
   // resolveAgentTools boundary.
@@ -210,6 +211,7 @@ export type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
 export class DelegateAgentTool extends defineTool({
   name: 'delegate_agent',
+  availabilityCategory: 'toolUse',
   requiresApproval: true,
   // Static base text; the "Available agents:", "Available models:", and "Git
   // worktree support:" lines are resolved per run at the resolveAgentTools
@@ -297,13 +299,13 @@ Git worktree support: resolved from the active workspace at runtime.`,
     // child) delivers nowhere, and a subagent of another orchestrator reports
     // to that orchestrator, not the caller. Fail fast instead of silently
     // queueing instructions whose results would never come back here.
-    if (handle.parentStreamId === handle.childStreamId) {
+    if (!handle.isChildExecution) {
       throw new Error(
         `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session — start a new delegation instead.`,
       );
     }
     const callerStreamId = getRunContextStreamId(parentContext);
-    if (callerStreamId && handle.parentStreamId !== callerStreamId) {
+    if (callerStreamId && !handle.isOwnedBy(callerStreamId)) {
       throw new Error(
         `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here — start a new delegation instead.`,
       );

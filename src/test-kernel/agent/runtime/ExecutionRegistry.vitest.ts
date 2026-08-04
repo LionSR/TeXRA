@@ -30,7 +30,6 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { projectRunOutcome } from '@shared/streams/streamStatus';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -609,7 +608,7 @@ describe('executionRegistry', () => {
     storageMocks.finalizeExecution.mockResolvedValueOnce({
       status: 'failed',
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
       error: durabilityError,
     });
     channelTraceMocks.warn.mockClear();
@@ -638,7 +637,7 @@ describe('executionRegistry', () => {
             data: {
               executionId,
               stage: 'terminal-status',
-              terminalStatusPersisted: false,
+              outcomePersisted: false,
               error: durabilityError,
             },
           },
@@ -659,7 +658,7 @@ describe('executionRegistry', () => {
     const cleanupError = new Error('transcript reload failed');
     storageMocks.finalizeExecution.mockResolvedValueOnce({
       status: 'durable',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       flowRecord: 'deleted',
     });
     channelTraceMocks.warn.mockClear();
@@ -677,8 +676,7 @@ describe('executionRegistry', () => {
       await vi.waitFor(() => {
         expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
           executionId,
-          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
-            .executionStatus,
+          outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
         });
       });
@@ -704,7 +702,7 @@ describe('executionRegistry', () => {
     storageMocks.finalizeExecution.mockResolvedValueOnce({
       status: 'failed',
       stage: 'flow-record-delete',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       error: cleanupError,
     });
     channelTraceMocks.warn.mockClear();
@@ -722,8 +720,7 @@ describe('executionRegistry', () => {
       await vi.waitFor(() => {
         expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
           executionId,
-          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
-            .executionStatus,
+          outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
         });
       });
@@ -733,7 +730,7 @@ describe('executionRegistry', () => {
           data: {
             executionId,
             stage: 'flow-record-delete',
-            terminalStatusPersisted: true,
+            outcomePersisted: true,
             error: cleanupError,
           },
         },
@@ -817,7 +814,7 @@ describe('executionRegistry', () => {
           releasePersist = () =>
             resolve({
               status: 'durable',
-              terminalStatusPersisted: true,
+              outcomePersisted: true,
               flowRecord: 'deleted',
             });
         }),
@@ -855,8 +852,7 @@ describe('executionRegistry', () => {
       });
       expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith({
         executionId,
-        terminalStatus: projectRunOutcome(RUN_OUTCOME.COMPLETED)
-          .executionStatus,
+        outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
       });
       expect(registry.getHandle(executionId)).toBeUndefined();

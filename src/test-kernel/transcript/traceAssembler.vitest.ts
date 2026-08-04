@@ -78,6 +78,7 @@ describe('assembleTrace', () => {
     const registeredId = `chat@earlierModel#${executionId}` as StreamTabId;
     await registerExecution(executionId, executionConfig, 'review', {
       streamId: registeredId,
+      identity: { kind: 'agent', agent: 'review' },
     });
     await releaseOwnedExecutionLease(executionId);
     await appendLogEntry(

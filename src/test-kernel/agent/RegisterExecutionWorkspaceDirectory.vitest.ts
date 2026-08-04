@@ -87,7 +87,7 @@ describe('execution lifecycle', () => {
     const executionId = 'abc123' as ExecutionId;
     await registerExecution(executionId, baseConfig, 'chat', {
       streamId: 'chat@deepseekT#abc123' as StreamTabId,
-      category: 'toolUse',
+      identity: { kind: 'agent', agent: 'chat' },
     });
 
     expect(mocks.writeConfig).toHaveBeenCalledWith({
@@ -95,15 +95,16 @@ describe('execution lifecycle', () => {
       workingDirectory: '/workspace/root',
     });
     expect(mocks.writeMeta).toHaveBeenCalledWith({
+      schemaVersion: 1,
       timestamp: expect.any(String),
       streamId: 'chat@deepseekT#abc123',
       streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
       parentExecutionId: undefined,
-      category: 'toolUse',
+      identity: { kind: 'agent', agent: 'chat' },
     });
     await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'preserve',
     });
   });
@@ -115,6 +116,7 @@ describe('execution lifecycle', () => {
     await expect(
       registerExecution(executionId, baseConfig, 'chat', {
         streamId: 'chat@deepseekT#abc124' as StreamTabId,
+        identity: { kind: 'agent', agent: 'chat' },
       }),
     ).rejects.toThrow('config write failed');
 
@@ -132,6 +134,7 @@ describe('execution lifecycle', () => {
     await expect(
       registerExecution(executionId, baseConfig, 'chat', {
         streamId: 'chat@deepseekT#abc125' as StreamTabId,
+        identity: { kind: 'agent', agent: 'chat' },
       }),
     ).rejects.toThrow('store construction failed');
     await expect(inspectExecutionLease(executionId)).resolves.toEqual({
@@ -153,14 +156,14 @@ describe('execution lifecycle', () => {
 
     await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
 
     expect(mocks.writeMeta).toHaveBeenCalledWith({
       schemaVersion: 1,
       timestamp: '2026-07-10T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      terminalStatus: undefined,
       outcome: 'cancelled',
     });
     expect(mocks.readResultMeta).not.toHaveBeenCalled();
@@ -183,7 +186,7 @@ describe('execution lifecycle', () => {
     const executionId = 'failed-terminal-write' as ExecutionId;
     const result = await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
 
@@ -191,7 +194,7 @@ describe('execution lifecycle', () => {
       status: 'failed',
       error,
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
     expect(mocks.readResultMeta).not.toHaveBeenCalled();
     expect(mocks.writeResultMeta).not.toHaveBeenCalled();
@@ -203,13 +206,13 @@ describe('execution lifecycle', () => {
 
     const result = await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
 
     expect(result).toEqual({
       status: 'durable',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       flowRecord: 'preserved',
     });
     expect(mocks.delete).not.toHaveBeenCalled();
@@ -221,13 +224,13 @@ describe('execution lifecycle', () => {
 
     const result = await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'delete',
     });
 
     expect(result).toEqual({
       status: 'durable',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       flowRecord: 'deleted',
     });
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
@@ -240,7 +243,7 @@ describe('execution lifecycle', () => {
 
     const result = await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
 
@@ -248,7 +251,7 @@ describe('execution lifecycle', () => {
       status: 'failed',
       error,
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
   });
@@ -260,14 +263,14 @@ describe('execution lifecycle', () => {
 
     const result = await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'preserve',
     });
 
     expect(result).toMatchObject({
       status: 'failed',
       stage: 'terminal-status-and-flow-record-delete',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
       error: expect.any(AggregateError),
     });
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
@@ -281,7 +284,7 @@ describe('execution lifecycle', () => {
 
     const result = await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
 
@@ -289,11 +292,11 @@ describe('execution lifecycle', () => {
       status: 'failed',
       error,
       stage: 'flow-record-delete',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
     });
     expect(mocks.writeMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        terminalStatus: undefined,
         outcome: RUN_OUTCOME.FAILED,
       }),
     );

@@ -75,26 +75,23 @@ describe('isReservedKvKeyName', () => {
 });
 
 describe('ExecutionKVStore meta read shims', () => {
-  it.each([
-    [EXECUTION_STATUS.COMPLETED, RUN_OUTCOME.COMPLETED],
-    [EXECUTION_STATUS.INTERRUPTED, RUN_OUTCOME.CANCELLED],
-    [EXECUTION_STATUS.ERROR, RUN_OUTCOME.FAILED],
-  ] as const)(
-    'maps legacy terminalStatus %s to outcome %s',
-    async (terminalStatus, outcome) => {
-      const id = `legacy-${terminalStatus}` as ExecutionId;
-      await getExecutionStore(id).write('meta', {
-        timestamp: '2026-07-04T00:00:00.000Z',
-        terminalStatus,
-      });
+  it('round-trips legacy terminal residue without read-time derivation', async () => {
+    // Outcome derivation moved to the listing's entrance stamper; the read
+    // keeps the raw residue so the stamper's evidence survives a
+    // read-modify-write cycle.
+    const id = 'legacy-completed' as ExecutionId;
+    await getExecutionStore(id).write('meta', {
+      timestamp: '2026-07-04T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
 
-      await expect(getExecutionStore(id).readMeta()).resolves.toMatchObject({
-        schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-        terminalStatus,
-        outcome,
-      });
-    },
-  );
+    const meta = await getExecutionStore(id).readMeta();
+    expect(meta).toMatchObject({
+      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
+    expect(meta?.outcome).toBeUndefined();
+  });
 
   it.each(Object.values(RUN_OUTCOME) as RunOutcome[])(
     'preserves canonical outcome %s',
@@ -111,18 +108,6 @@ describe('ExecutionKVStore meta read shims', () => {
       });
     },
   );
-
-  it('rejects contradictory terminal status and outcome metadata', async () => {
-    const id = 'contradictory-terminal-meta' as ExecutionId;
-
-    await expect(
-      getExecutionStore(id).writeMeta({
-        timestamp: '2026-07-04T00:00:00.000Z',
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
-        outcome: RUN_OUTCOME.FAILED,
-      }),
-    ).rejects.toThrow('outcome failed contradicts terminalStatus completed');
-  });
 
   it('writes the current schema version for execution meta', async () => {
     const id = 'versioned-meta' as ExecutionId;

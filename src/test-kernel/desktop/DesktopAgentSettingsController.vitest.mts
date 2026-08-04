@@ -193,11 +193,10 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
     ).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:correct'],
-      toolUseAgentKeys: 'all',
+      agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
     });
     expect(posted.map(commandOf)).toEqual(
       expect.arrayContaining([
@@ -274,7 +273,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
     ).toEqual({ kind: 'team', teamId: 'physicist' });
     expect(
       posted.find(
@@ -388,11 +387,11 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
     expect(
       update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
       ),
     ).toHaveLength(1);
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
     ).toEqual({ kind: 'team', teamId: 'remote-team' });
   });
 
@@ -430,7 +429,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(refreshAgents).not.toHaveBeenCalled();
     expect(
       update.mock.calls.some(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
       ),
     ).toBe(false);
   });
@@ -456,8 +455,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)).toEqual([
       expect.objectContaining({
         name: 'Paper Team',
-        workflowAgents: ['correct'],
-        toolUseAgents: ['review'],
+        agents: { workflow: ['correct'], toolUse: ['review'] },
       }),
     ]);
     expect(infoMessages).toEqual(['Saved team "Paper Team"']);
@@ -571,7 +569,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
     expect(errorMessages).toEqual(['Unknown team: missing-team']);
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
     ).toBeUndefined();
   });
 });

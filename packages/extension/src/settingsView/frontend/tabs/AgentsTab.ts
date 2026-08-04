@@ -17,7 +17,11 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared schemas
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { AgentCategory } from '@shared/schemas/agent';
+import {
+  byCategory,
+  type AgentCategory,
+  type ByCategory,
+} from '@shared/schemas';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
@@ -63,8 +67,8 @@ export class AgentsTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) workflowAgents: AgentSelectionItem[] = [];
-  @property({ attribute: false }) toolUseAgents: AgentSelectionItem[] = [];
+  @property({ attribute: false }) agents: ByCategory<AgentSelectionItem[]> =
+    byCategory(() => []);
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) initialSubTab?: AgentCategory;
@@ -225,13 +229,13 @@ export class AgentsTab extends LitElement {
         </div>
         ${this.renderAgentCategory(
           'workflow',
-          this.workflowAgents,
+          this.agents.workflow,
           'Workflow agents',
           'Focused specialists for writing, review, research, and structured paper workflows.',
         )}
         ${this.renderAgentCategory(
           'toolUse',
-          this.toolUseAgents,
+          this.agents.toolUse,
           'Tool-use agents',
           'Interactive agents that can inspect files, run tools, and edit the workspace.',
         )}

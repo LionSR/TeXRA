@@ -66,7 +66,6 @@ function seedChildHierarchy(): void {
   }
   applySubagentRoster(ROOT, [
     {
-      kind: 'subagent',
       executionId: 'escape-child-execution',
       agentName: 'child',
       childStreamId: CHILD,
@@ -75,7 +74,6 @@ function seedChildHierarchy(): void {
   ]);
   applySubagentRoster(CHILD, [
     {
-      kind: 'subagent',
       executionId: 'escape-grandchild-execution',
       agentName: 'grandchild',
       childStreamId: GRANDCHILD,
@@ -157,6 +155,10 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'solo-workflow',
+      identity: {
+        kind: 'workflowScript' as const,
+        workflowName: 'solo-workflow',
+      },
       category: AgentCategory.Workflow,
       entries: [
         {
@@ -202,6 +204,10 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'workflow',
+      identity: {
+        kind: 'workflowScript' as const,
+        workflowName: 'workflow',
+      },
       category: AgentCategory.Workflow,
     }));
     const runTrace = createRunTrace(ROOT, defaultSession().transcripts);
@@ -231,14 +237,12 @@ describe('App foreground Escape ownership', () => {
     syncStreamLog(ROOT);
     applySubagentRoster(ROOT, [
       {
-        kind: 'subagent',
         executionId: 'workflow-child-execution',
         agentName: 'duplicate',
         childStreamId: CHILD,
         status: STREAM_PHASE.RUNNING,
       },
       {
-        kind: 'subagent',
         executionId: 'workflow-review-execution',
         agentName: 'duplicate',
         childStreamId: GRANDCHILD,
@@ -316,7 +320,6 @@ describe('App foreground Escape ownership', () => {
     });
     applySubagentRoster(ROOT, [
       {
-        kind: 'subagent',
         executionId: 'shared-child-execution',
         agentName: 'shared-child',
         childStreamId: CHILD,
@@ -327,6 +330,10 @@ describe('App foreground Escape ownership', () => {
     patchStream(ROOT, (slice) => ({
       ...slice,
       agent: 'ambiguous-workflow',
+      identity: {
+        kind: 'workflowScript' as const,
+        workflowName: 'ambiguous-workflow',
+      },
       category: AgentCategory.Workflow,
       entries: ['first', 'second'].map((id) => ({
         id: `task-${id}`,

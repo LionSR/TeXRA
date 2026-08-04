@@ -124,7 +124,7 @@ describe('SessionHandle restart repair', () => {
 
       expect(session.status.get(streamId)).toBe(STREAM_PHASE.FAILED);
       await expect(executionStore.readMeta()).resolves.toMatchObject({
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
       });
       await expect(
         executionStore.read(flowKey(executionId)),
@@ -232,7 +232,7 @@ describe('SessionHandle restart repair', () => {
     const executionStore = getExecutionStore(completedExecutionId);
     await executionStore.writeMeta({
       timestamp: '2026-07-26T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
     });
 
     const session = openDeferredSession(transcripts);
@@ -243,7 +243,7 @@ describe('SessionHandle restart repair', () => {
         STREAM_PHASE.COMPLETED,
       );
       await expect(executionStore.readMeta()).resolves.toMatchObject({
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: RUN_OUTCOME.COMPLETED,
       });
       expect(
         transcripts.get(completedStreamId)?.getRange(0).at(-1),
@@ -271,7 +271,7 @@ describe('SessionHandle restart repair', () => {
     const executionStore = getExecutionStore(resumableExecutionId);
     await executionStore.writeMeta({
       timestamp: '2026-07-26T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
     });
     await executionStore.write(flowKey(resumableExecutionId), validFlowRecord);
 
@@ -641,7 +641,7 @@ describe('SessionHandle restart repair', () => {
       });
 
       await expect(executionStore.readMeta()).resolves.toMatchObject({
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
       });
       expect(
         transcripts.get(rollbackStreamId)?.getRange(0).at(-1),

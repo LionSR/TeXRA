@@ -14,12 +14,12 @@ import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import {
   EXECUTION_STATUS,
+  RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
-  DELEGATION_AVAILABILITY_CATEGORY,
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
@@ -200,9 +200,6 @@ describe('WorkflowScriptTool', () => {
   it('is registered and classified without becoming a proposal tool', () => {
     expect(getDefaultToolRegistry().has('delegate_multi_agents')).toBe(true);
     expect(DELEGATION_TOOLS.has('delegate_multi_agents')).toBe(true);
-    expect(DELEGATION_AVAILABILITY_CATEGORY.delegate_multi_agents).toBe(
-      'workflow',
-    );
     expect(DELEGATION_TOOL_CATEGORY.delegate_multi_agents).toBeUndefined();
   });
 
@@ -336,6 +333,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionId}`,
+        identity: { kind: 'workflowScript', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -345,8 +343,7 @@ describe('WorkflowScriptTool', () => {
       streamId,
       expect.objectContaining({
         streamPrefix: 'workflow-script',
-        streamCategory: 'workflow',
-        agentName: 'tool-test',
+        run: { kind: 'workflowScript', workflowName: 'tool-test' },
       }),
     );
     // The run's own stream inherits the orchestrator's approval ancestry.
@@ -435,6 +432,10 @@ describe('WorkflowScriptTool', () => {
       'edited-tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('edited-tool-test')}`,
+        identity: {
+          kind: 'workflowScript',
+          workflowName: 'edited-tool-test',
+        },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -521,7 +522,7 @@ describe('WorkflowScriptTool', () => {
       `<workflow-script-result>solved</workflow-script-result>\n\n${scriptReference}`,
     );
     vi.spyOn(store, 'readMeta').mockResolvedValue({
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
     } as never);
 
     const result = await callTool({ stopAfterCycle: true });
@@ -548,7 +549,7 @@ describe('WorkflowScriptTool', () => {
       `<workflow-script-error>broken</workflow-script-error>\n\n${scriptReference}`,
     );
     vi.spyOn(store, 'readMeta').mockResolvedValue({
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
     } as never);
 
     const result = await callTool({ stopAfterCycle: true });
@@ -572,7 +573,7 @@ describe('WorkflowScriptTool', () => {
     const store = getExecutionStore(runExecutionId);
     await store.writeReport('stale success from the prior attempt');
     vi.spyOn(store, 'readMeta').mockResolvedValue({
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
     } as never);
 
     // The default resolved completion writes no report, matching an
@@ -620,6 +621,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
+        identity: { kind: 'workflowScript', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -664,6 +666,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
+        identity: { kind: 'workflowScript', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -726,6 +729,7 @@ describe('WorkflowScriptTool', () => {
       'resume',
       {
         streamId: `workflow-script#${runExecutionIdFor('resume')}`,
+        identity: { kind: 'workflowScript', workflowName: 'resume' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },

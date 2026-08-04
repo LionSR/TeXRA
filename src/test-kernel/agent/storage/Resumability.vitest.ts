@@ -64,26 +64,40 @@ describe('deriveResumability', () => {
   it('does not let a stale flow record make completed executions resumable', async () => {
     const executionId = 'completed-with-flow' as ExecutionId;
     await writeMeta(executionId, {
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
     });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
       resumable: false,
       cause: RESUMABILITY_CAUSE.TERMINAL_COMPLETED,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
     });
   });
 
   it('does not let a stale flow record make failed executions resumable', async () => {
     const executionId = 'failed-with-flow' as ExecutionId;
-    await writeMeta(executionId, { terminalStatus: EXECUTION_STATUS.ERROR });
+    await writeMeta(executionId, { outcome: RUN_OUTCOME.FAILED });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
       resumable: false,
       cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
+    });
+  });
+
+  it('blocks resume on unmapped legacy terminal residue', async () => {
+    const executionId = 'legacy-terminal-with-flow' as ExecutionId;
+    await writeMeta(executionId, {
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
+    await writeFlow(executionId);
+
+    await expect(deriveResumability(executionId)).resolves.toMatchObject({
+      resumable: false,
+      cause: RESUMABILITY_CAUSE.TERMINAL_STATUS,
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
     });
   });
 
@@ -99,19 +113,19 @@ describe('deriveResumability', () => {
     await expect(
       finalizeExecution({
         executionId,
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'delete',
       }),
     ).resolves.toMatchObject({
       status: 'failed',
       stage: 'flow-record-delete',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
       resumable: false,
       cause: RESUMABILITY_CAUSE.TERMINAL_FAILED,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
     });
   });
 
@@ -127,13 +141,13 @@ describe('deriveResumability', () => {
     await expect(
       finalizeExecution({
         executionId,
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       }),
     ).resolves.toMatchObject({
       status: 'failed',
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({

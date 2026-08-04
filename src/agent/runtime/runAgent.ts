@@ -10,7 +10,7 @@ import {
 } from '@agent/storage/executionLease';
 
 import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
-import { EXECUTION_STATUS } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
@@ -101,7 +101,7 @@ export async function runAgent(
   if (shouldRegister) {
     await registerExecution(executionId, config, config.agent, {
       streamId: getStreamTabId(config.agent, config.model, { executionId }),
-      category: config.agentCategory,
+      identity: { kind: 'agent', agent: config.agent },
     });
   } else {
     const lease = await acquireResumedExecutionLease(
@@ -147,7 +147,7 @@ export async function runAgent(
           try {
             const finalization = await finalizeExecution({
               executionId,
-              terminalStatus: EXECUTION_STATUS.ERROR,
+              outcome: RUN_OUTCOME.FAILED,
               flowRecord: 'delete',
             });
             if (finalization.status === 'failed') {

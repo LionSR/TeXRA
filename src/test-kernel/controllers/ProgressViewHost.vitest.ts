@@ -42,6 +42,7 @@ function createHostHarness(runConfig: AgentConfig): HostHarness {
     run: {
       state: {
         getRunConfig: () => runConfig,
+        getRunIdentity: () => ({ kind: 'agent', agent: runConfig.agent }),
         getExecutionId: () => 'exec-1',
       },
       executeAgent: async (request) => {

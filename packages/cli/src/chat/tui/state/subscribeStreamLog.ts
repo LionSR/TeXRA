@@ -53,8 +53,10 @@ import {
   isCliStreamRetired,
   patchStream,
   setTransientNotice,
+  streams,
   type ConversationEntry,
   type LoadedImage,
+  type StreamSlice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
@@ -135,9 +137,18 @@ const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
-function isFullLogChildStream(streamId: StreamTabId): boolean {
-  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk|workflow-script)#/.test(
-    streamId,
+/**
+ * Detached child runs that surface their full log output when focused: a
+ * process stream, an external-CLI agent session, or a workflow-script run.
+ * Keyed on the stream's parsed identity — never on the stream-id format.
+ */
+function isFullLogChildStream(
+  slice: Pick<StreamSlice, 'identity'> | undefined,
+): boolean {
+  const identity = slice?.identity;
+  return (
+    identity !== undefined &&
+    !(identity.kind === 'agent' && identity.tool === undefined)
   );
 }
 
@@ -175,13 +186,15 @@ function workflowOperationalLatestLine(
   return undefined;
 }
 
-function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
+function transcriptMessageTypesForStream(
+  slice: Pick<StreamSlice, 'identity'> | undefined,
+): Set<string> {
   // Detached child runs surface their full log output (phase group rows and
   // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
   // transcript which shows only model/tool/user/error rows. A workflow-script
   // run is one such child: its phases and per-agent Running/Finished lines
   // project onto its own stream trace and must render in its focused viewport.
-  return isFullLogChildStream(streamId)
+  return isFullLogChildStream(slice)
     ? CHILD_STREAM_LOG_MESSAGE_TYPES
     : TRANSCRIPT_MESSAGE_TYPES;
 }
@@ -745,7 +758,9 @@ export function syncStreamLog(
   const taskGroups = projectTaskGroupsFromStreamLog(allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
   const compactingActive = latestCompactionActivityIsRunning(allEntries);
-  const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
+  const transcriptMessageTypes = transcriptMessageTypesForStream(
+    streams.get().get(streamId),
+  );
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
     options.forceFull === true ||
@@ -757,7 +772,7 @@ export function syncStreamLog(
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const workflowStream = slice.category === AgentCategory.Workflow;
     const workflowOperationalOnly =
-      workflowStream && !isFullLogChildStream(streamId);
+      workflowStream && !isFullLogChildStream(slice);
     const syntheticEntries = slice.entries.filter(
       (entry) =>
         entry.synthetic &&

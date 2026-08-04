@@ -26,7 +26,8 @@ vi.mock('@agent/storage', async () => {
 });
 
 const toolUseExecution = {
-  kind: 'agent',
+  kind: 'run',
+  identity: { kind: 'agent', agent: 'chat' },
   id: 'abc123',
   timestamp: '2026-05-31T12:00:00.000Z',
   agentConfig: {
@@ -75,7 +76,8 @@ describe('settings history handlers', () => {
     mocks.listExecutions.mockResolvedValue([
       toolUseExecution,
       {
-        kind: 'process',
+        kind: 'run',
+        identity: { kind: 'process', tool: 'bash' },
         id: 'bash-process',
         timestamp: '2026-05-31T12:01:00.000Z',
         agentConfig: {

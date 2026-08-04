@@ -124,7 +124,7 @@ export class ProgressFactApplier {
   private readonly runFactHandlers: RunFactHandlers = {
     usage: (_streamId, event) => this.handleUpdateStreamUsage(event.payload),
     'run.start': (_streamId, event) => {
-      const streamId = event.descriptor.streamId;
+      const streamId = event.streamId;
       this.state.refreshStreamMetadataFromSnapshot(streamId);
       if (this.webviewUpdater.isAvailable()) {
         this.webviewUpdater.updateStreamMetadata(
@@ -199,8 +199,12 @@ export class ProgressFactApplier {
     this.state.resetStreamMetadataForRun(streamId);
     const knownCategory =
       this.getStreamCategory(streamId) ?? provisionalCategory;
-    const category = knownCategory ?? AgentCategory.Workflow;
-    this.state.getOrCreateStreamState(streamId, category);
+    // Absent is pending, never Workflow: the state is created once the run's
+    // config resolves a real category (run.config lands before RUNNING on
+    // live paths, and the snapshot seed supplies it on rehydration).
+    if (knownCategory) {
+      this.state.getOrCreateStreamState(streamId, knownCategory);
+    }
     this.state.resetPerRunChildState(streamId);
     this.pendingProgressUpdates.delete(streamId);
     return knownCategory;
@@ -282,10 +286,15 @@ export class ProgressFactApplier {
     parentStreamId,
   }: SetParentStreamPayload): void {
     this.state.setStreamParent(childStreamId, parentStreamId);
-    this.webviewUpdater.updateParentStream(
-      childStreamId,
-      parentStreamId ?? undefined,
-    );
+    // The parent edge travels on exactly one wire copy:
+    // `StreamTabInfo.parentStreamId`, carried by UPDATE_STREAMS.
+    if (this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.updateStreamMetadata(
+        this.state,
+        childStreamId,
+        this.state.streamStatus.getAllStreamStates(),
+      );
+    }
   }
 
   handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
@@ -636,15 +645,15 @@ export class ProgressFactApplier {
     this.webviewBridge.syncStream(stream);
 
     const existingState = this.state.getStreamState(stream);
-    const kind =
-      this.getStreamCategory(stream) ??
-      existingState?.kind ??
-      AgentCategory.Workflow;
+    const category = this.getStreamCategory(stream) ?? existingState?.category;
+    // A stream whose category has not resolved yet has nothing to render —
+    // it stays pending until run.config or the snapshot seed supplies one.
+    if (category === undefined) return;
 
     const activeState = includeActiveState
       ? this.toActiveStreamContentSync(
           stream,
-          this.state.getOrCreateStreamState(stream, kind),
+          this.state.getOrCreateStreamState(stream, category),
         )
       : undefined;
 
@@ -655,10 +664,10 @@ export class ProgressFactApplier {
       ...(activeState ? { activeState } : {}),
     };
 
-    if (kind === AgentCategory.Workflow) {
+    if (category === AgentCategory.Workflow) {
       this.webviewUpdater.sendSyncStreamContent({
         ...shared,
-        kind,
+        category,
         outputs: {
           files: this.state.snapshots.getOutputFiles(stream),
           missing: this.state.snapshots.getMissingOutputs(stream),
@@ -672,7 +681,7 @@ export class ProgressFactApplier {
     const controls = this.getStreamControls(stream);
     this.webviewUpdater.sendSyncStreamContent({
       ...shared,
-      kind,
+      category,
       workPlan: {
         todos,
         plan,
@@ -702,7 +711,6 @@ export class ProgressFactApplier {
       roundStage: state.roundStage ?? null,
       phaseStage: state.phaseStage ?? null,
       badges: { subagents: state.subagents },
-      parentStreamId: this.state.snapshots.getParentStreamId(stream) ?? null,
     };
   }
 
@@ -753,9 +761,8 @@ export class ProgressFactApplier {
     this.state.streamLogs.ensureStream(streamId);
     // Persisted streams may be in stream logs but missing from _streamStates.
     // The first RUNNING transition already created/reset the state above.
-    const streamCategory = runningCategory ?? this.getStreamCategory(streamId);
-    const category = streamCategory ?? AgentCategory.Workflow;
-    if (!isNewRunningTransition) {
+    const category = runningCategory ?? this.getStreamCategory(streamId);
+    if (!isNewRunningTransition && category !== undefined) {
       this.state.getOrCreateStreamState(streamId, category);
     }
 

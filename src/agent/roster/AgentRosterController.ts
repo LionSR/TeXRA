@@ -3,11 +3,15 @@ import {
   agentMatchesIdentifier,
   agentKeyOf,
   agentName,
+  byCategory,
+  AGENT_CATEGORIES,
   type AgentCategory,
   type AgentSource,
+  type ByCategory,
 } from '@shared/schemas/agent';
 import {
   AgentRosterSelectionSchema,
+  AgentRosterSelectionV1Schema,
   INHERITED_AGENT_ROSTER,
   type AgentRosterCategorySelection,
   type AgentRosterSelection,
@@ -68,8 +72,7 @@ export interface AgentRosterSnapshot<
   readonly defaultTeamId?: string;
   /** Persisted team identity that could not be resolved; effective roster is all. */
   readonly missingTeamId?: string;
-  readonly workflowAgents: Entry[];
-  readonly toolUseAgents: Entry[];
+  readonly agents: ByCategory<Entry[]>;
   readonly unresolvedNames: string[];
 }
 
@@ -79,16 +82,41 @@ function allPresets(
   return [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS, ...extra];
 }
 
-/** Read the canonical workspace selection. */
+/**
+ * Read the canonical workspace selection.
+ *
+ * The v2 key holds the record-shaped selection; on absence the unversioned v1
+ * key (pair-shaped `custom` member) is read and normalized. The v1 value is
+ * never rewritten, so older binaries sharing the same `state.json` keep
+ * working against their own key.
+ */
 function readAgentRosterSelection(
   workspaceState: StateStore,
 ): AgentRosterSelection {
-  const raw = workspaceState.get<unknown>(
+  const rawV2 = workspaceState.get<unknown>(
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
+  );
+  if (rawV2 !== undefined) {
+    const parsed = AgentRosterSelectionSchema.safeParse(rawV2);
+    if (parsed.success) return parsed.data;
+    console.warn(
+      `[agentRoster] Ignoring malformed v2 roster selection; falling back to ` +
+        `the inherited roster: ${parsed.error.message}`,
+    );
+    return INHERITED_AGENT_ROSTER;
+  }
+
+  const rawV1 = workspaceState.get<unknown>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
-  return raw === undefined
-    ? INHERITED_AGENT_ROSTER
-    : AgentRosterSelectionSchema.parse(raw);
+  if (rawV1 === undefined) return INHERITED_AGENT_ROSTER;
+  const parsed = AgentRosterSelectionV1Schema.safeParse(rawV1);
+  if (parsed.success) return parsed.data;
+  console.warn(
+    `[agentRoster] Ignoring malformed v1 roster selection; falling back to ` +
+      `the inherited roster: ${parsed.error.message}`,
+  );
+  return INHERITED_AGENT_ROSTER;
 }
 
 function selectedIdentifiers(
@@ -98,17 +126,14 @@ function selectedIdentifiers(
 ): readonly string[] | undefined {
   if (selection.kind === 'all') return undefined;
   if (selection.kind === 'custom') {
-    const categorySelection =
-      category === 'workflow'
-        ? selection.workflowAgentKeys
-        : selection.toolUseAgentKeys;
+    const categorySelection = selection.agentKeys[category];
     return categorySelection === 'all' ? undefined : categorySelection;
   }
   const preset = allPresets(presets).find(
     (candidate) => candidate.id === selection.teamId,
   );
   if (!preset) return undefined;
-  return category === 'workflow' ? preset.workflowAgents : preset.toolUseAgents;
+  return preset.agents[category];
 }
 
 export class AgentRosterController<
@@ -160,26 +185,23 @@ export class AgentRosterController<
     const selection = this.getSelection();
     const effectiveSelection = this.resolveEffectiveSelection(selection);
     const presets = this.extraPresets();
-    const unresolvedNames = (['workflow', 'toolUse'] as const).flatMap(
-      (category) => {
-        const identifiers = selectedIdentifiers(
-          effectiveSelection,
-          category,
-          presets,
-        );
-        if (identifiers === undefined) return [];
-        return identifiers
-          .filter((identifier) => !this.resolveEntry(category, identifier))
-          .map(agentName);
-      },
-    );
+    const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
+      const identifiers = selectedIdentifiers(
+        effectiveSelection,
+        category,
+        presets,
+      );
+      if (identifiers === undefined) return [];
+      return identifiers
+        .filter((identifier) => !this.resolveEntry(category, identifier))
+        .map(agentName);
+    });
     return {
       selection,
       effectiveSelection,
       defaultTeamId: this.getDefaultTeamId(),
       missingTeamId: this.missingTeamId(selection),
-      workflowAgents: this.getVisibleAgents('workflow'),
-      toolUseAgents: this.getVisibleAgents('toolUse'),
+      agents: byCategory((category) => this.getVisibleAgents(category)),
       unresolvedNames: unique(unresolvedNames),
     };
   }
@@ -269,7 +291,7 @@ export class AgentRosterController<
   private async writeSelection(selection: AgentRosterSelection): Promise<void> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
     await this.deps.workspaceState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
       parsed,
     );
   }
@@ -289,20 +311,15 @@ export class AgentRosterController<
     await this.setSelection({ kind: 'team', teamId: preset.id });
   }
 
-  async setCustom(input: {
-    readonly workflowAgentKeys: AgentRosterCategorySelection;
-    readonly toolUseAgentKeys: AgentRosterCategorySelection;
-  }): Promise<void> {
+  async setCustom(
+    agentKeys: ByCategory<AgentRosterCategorySelection>,
+  ): Promise<void> {
     await this.setSelection({
       kind: 'custom',
-      workflowAgentKeys:
-        input.workflowAgentKeys === 'all'
-          ? 'all'
-          : unique(input.workflowAgentKeys),
-      toolUseAgentKeys:
-        input.toolUseAgentKeys === 'all'
-          ? 'all'
-          : unique(input.toolUseAgentKeys),
+      agentKeys: byCategory((category) => {
+        const selection = agentKeys[category];
+        return selection === 'all' ? 'all' : unique(selection);
+      }),
     });
   }
 
@@ -313,14 +330,11 @@ export class AgentRosterController<
     await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
       await this.writeSelection({
         kind: 'custom',
-        workflowAgentKeys:
-          category === 'workflow'
+        agentKeys: byCategory((candidate) =>
+          candidate === category
             ? unique(enabledKeys)
-            : this.effectiveCategorySelection('workflow'),
-        toolUseAgentKeys:
-          category === 'toolUse'
-            ? unique(enabledKeys)
-            : this.effectiveCategorySelection('toolUse'),
+            : this.effectiveCategorySelection(candidate),
+        ),
       });
     });
   }
@@ -340,12 +354,11 @@ export class AgentRosterController<
     readonly enabled: boolean;
   }): Promise<void> {
     await serializeWorkspaceWrite(this.deps.workspaceState, async () => {
-      const workflowSelection = this.effectiveCategorySelection('workflow');
-      const toolUseSelection = this.effectiveCategorySelection('toolUse');
-      const targetSelection =
-        input.category === 'workflow' ? workflowSelection : toolUseSelection;
+      const selections = byCategory((category) =>
+        this.effectiveCategorySelection(category),
+      );
       const target = this.materializeCategorySelection(
-        targetSelection,
+        selections[input.category],
         input.category,
       );
       const key = agentKeyOf(input);
@@ -358,10 +371,9 @@ export class AgentRosterController<
       if (!input.enabled && index >= 0) target.splice(index, 1);
       await this.writeSelection({
         kind: 'custom',
-        workflowAgentKeys:
-          input.category === 'workflow' ? target : workflowSelection,
-        toolUseAgentKeys:
-          input.category === 'toolUse' ? target : toolUseSelection,
+        agentKeys: byCategory((category) =>
+          category === input.category ? target : selections[category],
+        ),
       });
     });
   }
@@ -375,8 +387,9 @@ export class AgentRosterController<
       if (selection.kind === 'team' && selection.teamId === teamId) {
         await this.writeSelection({
           kind: 'custom',
-          workflowAgentKeys: this.selectionKeys(selection, 'workflow') ?? 'all',
-          toolUseAgentKeys: this.selectionKeys(selection, 'toolUse') ?? 'all',
+          agentKeys: byCategory(
+            (category) => this.selectionKeys(selection, category) ?? 'all',
+          ),
         });
       }
       await removePreset();

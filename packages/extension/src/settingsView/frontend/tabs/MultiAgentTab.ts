@@ -233,7 +233,7 @@ export class MultiAgentTab extends LitElement {
     preset: AgentModePreset,
     deletable: boolean,
   ): TemplateResult {
-    const allAgents = [...preset.toolUseAgents, ...preset.workflowAgents];
+    const allAgents = [...preset.agents.toolUse, ...preset.agents.workflow];
     const orchestratorAgents = allAgents.filter((name) =>
       this.isOrchestratorAgent(name),
     );

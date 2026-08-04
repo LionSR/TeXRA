@@ -1,6 +1,10 @@
 # One run identity: one struct, one home, one wire
 
-Status: proposed
+Status: Part I implemented (steps 1–7, 9 — `RunIdentity` struct + durable
+`ExecutionMeta.identity` with idempotent entrance stamping, descriptor
+deletion, Lit + CLI recuts onto the identity struct, resume/rerun/restore
+gating, lineage predicate dedup, per-tool delegation availability). Step 8
+(honest `RunRecord` union) and Parts II–III remain proposed.
 Date: 2026-08-03
 Revision: 10 (holistic build order; open-problems register)
 

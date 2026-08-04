@@ -31,7 +31,7 @@ import {
 } from '@agent/storage/executionLease';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   executionLeasePath,
@@ -201,7 +201,7 @@ describe('cross-process execution leases', () => {
     });
     await finalizeExecution({
       executionId,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
       flowRecord: 'preserve',
     });
     await releaseOwnedExecutionLease(executionId);

@@ -17,7 +17,7 @@ import {
 
 function stream(name: string, parentStreamId?: string): StreamTabInfo {
   return {
-    kind: 'agent',
+    identity: { kind: 'agent', agent: name },
     name,
     label: name,
     agentCategory: AgentCategory.ToolUse,

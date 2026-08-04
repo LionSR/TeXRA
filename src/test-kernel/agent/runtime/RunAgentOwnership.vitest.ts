@@ -43,7 +43,7 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { runAgent } from '@agent/runtime/runAgent';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 
 const EXECUTION_ID = 'run-agent-owner' as ExecutionId;
 const CONFIG = AgentConfigSchema.parse({
@@ -213,7 +213,7 @@ describe('runAgent execution ownership', () => {
     expect(order).toEqual(['finalize', 'release']);
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId: EXECUTION_ID,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
   });

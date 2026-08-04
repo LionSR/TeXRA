@@ -13,7 +13,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -115,7 +115,7 @@ export async function executeCliConfig<
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
     await finalizeCliExecution(
       executionId,
-      EXECUTION_STATUS.ERROR,
+      RUN_OUTCOME.FAILED,
       'delete',
       (finalizationError) =>
         writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
@@ -251,7 +251,7 @@ export async function executeCliRequest(
         await runWithOwnership(() =>
           finalizeCliExecution(
             ownedExecutionId,
-            EXECUTION_STATUS.INTERRUPTED,
+            RUN_OUTCOME.CANCELLED,
             'preserve',
             reportShutdownFinalizationFailure,
           ),

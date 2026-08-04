@@ -140,6 +140,7 @@ function createSecondTierActions(
       },
     },
     getRunConfig: vi.fn(),
+    getRunIdentity: vi.fn(() => ({ kind: 'agent' as const, agent: 'chat' })),
     restoreRunConfig: vi.fn(),
     applyFollowUpPlan: vi.fn(),
     applyPolishResult: vi.fn(),

@@ -4,16 +4,14 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
+  agentSelectionItems,
   customAgentDir,
   customAgentDirIsDefault,
-  toolUseAgents,
-  workflowAgents,
 } from '../settingsState';
 
 export const agentSelectionHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION]: (data) => {
-    workflowAgents.set(data.workflow);
-    toolUseAgents.set(data.toolUse);
+    agentSelectionItems.set(data.agents);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR]: (data) => {

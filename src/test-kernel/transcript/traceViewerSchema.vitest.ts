@@ -136,7 +136,10 @@ describe('trace-viewer TraceDataSchema', () => {
       }),
     );
     expect(parsed.meta).not.toHaveProperty('delegationDepth');
-    expect(parsed.meta?.outcome).toBe('failed');
+    // Legacy residue is preserved raw; outcome derivation moved off the read
+    // path (the listing's entrance stamper owns it, not the schema).
+    expect(parsed.meta?.terminalStatus).toBe(EXECUTION_STATUS.ERROR);
+    expect(parsed.meta?.outcome).toBeUndefined();
   });
 
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {

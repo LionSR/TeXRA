@@ -77,7 +77,7 @@ describe('SyncStreamContentMessageSchema', () => {
     command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
     action: 'render',
     stream: 'workflow-stream',
-    kind: 'workflow',
+    category: 'workflow',
     runUsage: {},
     outputs: { files: {}, missing: {}, compileFailures: {} },
     activeState: {
@@ -87,14 +87,13 @@ describe('SyncStreamContentMessageSchema', () => {
       badges: {
         subagents: [],
       },
-      parentStreamId: null,
     },
   } as const;
   const toolUse = {
     command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
     action: 'render',
     stream: 'tool-stream',
-    kind: 'toolUse',
+    category: 'toolUse',
     runUsage: {},
     workPlan: { todos: [], plan: null, queuedFollowUps: [] },
     controls: {
@@ -200,7 +199,6 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
   it("DELETE_ALL clears every remaining stream's persisted LogList toggle state", () => {
     const streamId = 'stream-delete-all' as StreamTabId;
     appState.get().streamById.set(streamId, {
-      kind: 'agent',
       name: streamId,
       label: 'stream-delete-all',
       agentCategory: AgentCategory.Workflow,
@@ -223,7 +221,6 @@ describe('progressView dispatchMessage (createDispatcher migration)', () => {
   it("DELETE_STREAM clears that stream's persisted LogList toggle state", () => {
     const streamId = 'stream-delete-one' as StreamTabId;
     appState.get().streamById.set(streamId, {
-      kind: 'agent',
       name: streamId,
       label: 'stream-delete-one',
       agentCategory: AgentCategory.Workflow,

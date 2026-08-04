@@ -148,6 +148,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
     const streamId = 'orchestrator@deepseekproT#abc555' as StreamTabId;
     await registerExecution(executionId, MINIMAL_CONFIG, 'orchestrator', {
       streamId,
+      identity: { kind: 'agent', agent: 'orchestrator' },
     });
     await releaseOwnedExecutionLease(executionId);
 

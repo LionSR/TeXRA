@@ -102,9 +102,7 @@ export function sessionHeaderIdentityLine(
       streams: context.streams,
     });
     const streamKind =
-      view.toolName === DELEGATE_MULTI_AGENTS_TOOL_NAME
-        ? 'workflow script'
-        : 'subagent';
+      slice?.identity?.kind === 'workflowScript' ? 'workflow script' : 'subagent';
     return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
   const model = meta.model || '—';

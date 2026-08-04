@@ -83,7 +83,7 @@ export class ProcessStreamContent extends LitElement {
     // Bash streams register as tool-use kind, so renderStreamHeader reflects
     // their active YOLO / Super YOLO state from the shared tool-use fields.
     const command = (
-      (streamInfo.kind === 'process' ? streamInfo.command : undefined) ??
+      streamInfo.command ??
       streamInfo.description ??
       ''
     ).trim();

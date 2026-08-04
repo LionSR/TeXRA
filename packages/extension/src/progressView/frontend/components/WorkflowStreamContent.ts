@@ -75,7 +75,9 @@ export class WorkflowStreamContent extends BaseStreamContent {
             .hasOutputFiles=${hasOutputFiles(state.files)}
             .options=${this.streamContext.followupOptions}
             .streamModel=${
-              streamInfo.kind === 'agent' ? (streamInfo.model ?? null) : null
+              streamInfo.identity?.kind === 'agent'
+                ? (streamInfo.model ?? null)
+                : null
             }
             .unsupportedCommands=${this.streamContext.unsupportedCommands}
           ></workflow-tool-use-followup-section>

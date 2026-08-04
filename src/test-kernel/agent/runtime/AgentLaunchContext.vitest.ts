@@ -139,8 +139,8 @@ describe('AgentLaunchContext', () => {
     const order: string[] = [];
     const failure = new Error('user vars unavailable');
     const delegationAgentScope = {
-      workflowAgentKeys: ['builtInWorkflow:correct'],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+      workflow: ['builtInWorkflow:correct'],
+      toolUse: ['builtInToolUse:orchestrator'],
     };
     const postProcessResponse = vi.fn((text: string) => text);
     const responseTextProcessing = {

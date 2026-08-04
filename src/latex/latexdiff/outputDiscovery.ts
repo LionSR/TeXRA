@@ -221,9 +221,10 @@ export async function discoverLatestExecutionOutputs(query: {
 
     const candidates = toNewestFirstByTimestamp(
       executions.filter(
-        (entry): entry is Extract<ExecutionListingEntry, { kind: 'agent' }> => {
+        (entry): entry is Extract<ExecutionListingEntry, { kind: 'run' }> => {
           if (
-            entry.kind !== 'agent' ||
+            entry.kind !== 'run' ||
+            entry.identity.kind !== 'agent' ||
             entry.agentConfig.agent !== query.agent ||
             entry.agentConfig.model !== query.model
           ) {

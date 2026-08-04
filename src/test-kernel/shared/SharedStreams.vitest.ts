@@ -80,10 +80,10 @@ describe('diffActiveChildren', () => {
 
 describe('buildStreamMetadata', () => {
   it('fills backend-owned defaults for a stream state metadata payload', () => {
-    const metadata = buildStreamMetadata({ kind: AgentCategory.Workflow });
+    const metadata = buildStreamMetadata({ category: AgentCategory.Workflow });
 
     expect(metadata).toMatchObject({
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       status: STREAM_STATUS.READY,
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
@@ -96,14 +96,12 @@ describe('buildStreamMetadata', () => {
 
   it('preserves supplied status, progress, child roster, and timestamps', () => {
     const child: ActiveChildInfo = {
-      kind: 'subagent',
       executionId: 'agent-1',
       childStreamId: 'agent-1-stream',
       agentName: 'review',
       status: STREAM_STATUS.RUNNING,
     };
     const finishedChild: ActiveChildInfo = {
-      kind: 'subagent',
       executionId: 'agent-0',
       childStreamId: 'agent-0-stream',
       agentName: 'review',
@@ -113,7 +111,7 @@ describe('buildStreamMetadata', () => {
 
     expect(
       buildStreamMetadata({
-        kind: AgentCategory.ToolUse,
+        category: AgentCategory.ToolUse,
         status: STREAM_STATUS.RUNNING,
         substate: STREAM_SUBSTATE.STARTING,
         lastTimestamp: 123,
@@ -122,7 +120,7 @@ describe('buildStreamMetadata', () => {
         subagents: [child, finishedChild],
       }),
     ).toEqual({
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       status: STREAM_STATUS.RUNNING,
       substate: STREAM_SUBSTATE.STARTING,
       lastTimestamp: 123,
@@ -136,7 +134,7 @@ describe('buildStreamMetadata', () => {
   it('carries a workflow-script phase for the run row', () => {
     expect(
       buildStreamMetadata({
-        kind: AgentCategory.Workflow,
+        category: AgentCategory.Workflow,
         phaseStage: { label: 'Reduce', index: 1, total: 3 },
       }).phaseStage,
     ).toEqual({ label: 'Reduce', index: 1, total: 3 });

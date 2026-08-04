@@ -280,6 +280,11 @@ function makeResumeSnapshotStore(options: {
     getExecutionId: vi.fn(() => options.executionId),
     readPersistedExecutionId: vi.fn(async () => options.persistedExecutionId),
     getRunConfig: vi.fn(() => options.config),
+    getRunIdentity: vi.fn(() =>
+      options.config
+        ? { kind: 'agent' as const, agent: options.config.agent }
+        : undefined,
+    ),
     getParentStreamId: vi.fn(() => options.parentStreamId),
   } as unknown as StreamSnapshotStore;
 }
@@ -1172,8 +1177,8 @@ describe('createChatSessionController', () => {
     const config = makeResumeConfig({
       cliMultiAgentPresetId: 'physicist',
       delegationAgentScope: {
-        workflowAgentKeys: ['builtInWorkflow:physicsReviewer'],
-        toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+        workflow: ['builtInWorkflow:physicsReviewer'],
+        toolUse: ['builtInToolUse:orchestrator'],
       },
     });
     const ctrl = createChatSessionController(makeInit());
@@ -1463,8 +1468,8 @@ describe('createChatSessionController', () => {
     patchSessionMeta({
       cliMultiAgentPresetId: 'stale-team',
       delegationAgentScope: {
-        workflowAgentKeys: ['custom:stale'],
-        toolUseAgentKeys: ['custom:stale'],
+        workflow: ['custom:stale'],
+        toolUse: ['custom:stale'],
       },
     });
     const snapshotStore = makeResumeSnapshotStore({

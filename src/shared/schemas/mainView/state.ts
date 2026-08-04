@@ -6,6 +6,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import { AgentCategorySchema } from '@shared/schemas/agent';
 import { TEXRA_ICON_CANONICAL_NAMES } from '@shared/wa/iconNames';
 import { UIFileFieldsSchema, requiredFileListFields } from '../fileFields';
 import {
@@ -155,12 +156,20 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   launchTarget: LaunchTargetSchema.prefault('agent'),
   selectedTeamId: z.string().prefault(''),
   workingDirectory: z.string().prefault(''),
-  workflowAgent: z.string().prefault('correct'),
-  toolUseAgent: z.string().prefault('orchestrator'),
+  agent: z
+    .object({
+      workflow: z.string().prefault('correct'),
+      toolUse: z.string().prefault('orchestrator'),
+    })
+    .prefault({}),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   commit: z.string().prefault('HEAD'),
-  workflowInstruction: z.string().prefault(''),
-  toolUseInstruction: z.string().prefault(''),
+  instruction: z
+    .object({
+      workflow: z.string().prefault(''),
+      toolUse: z.string().prefault(''),
+    })
+    .prefault({}),
   baseFile: z.string().prefault(''),
   latexdiffsVisible: z.boolean().prefault(false),
   openedFiles: z.array(z.string()).nullish(),
@@ -253,11 +262,9 @@ const SessionContextSchema = z.object({
   selectedTeamId: z.string(),
   instruction: z.string(),
   placeholder: z.string(),
-  workflowAgent: z.string(),
-  toolUseAgent: z.string(),
+  agent: z.record(AgentCategorySchema, z.string()),
   model: z.string(),
-  workflowAgentOptions: z.array(AgentOptionDataSchema),
-  toolUseAgentOptions: z.array(AgentOptionDataSchema),
+  agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
   workspaceRootOptions: z.array(WorkspaceRootOptionDataSchema),

@@ -19,7 +19,13 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@agent/export/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  RunOutcomeSchema,
+  type ExecutionId,
+} from '@shared/schemas';
+import { resolveHistoryRunStatus } from '@shared/schemas/historyViewMessages';
+import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
   hasCompletedRunConversationEvidence,
@@ -204,9 +210,9 @@ export async function readCliHistoryDetails(
   }
   return {
     id,
-    status: resolveCliHistoryStatus({
-      terminalStatus: meta?.terminalStatus,
+    status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
+      outcome: meta?.outcome,
     }),
     meta,
     config,
@@ -423,16 +429,6 @@ export function cliHistoryNdjsonRecords(
   return entries.map((entry) => ({ kind: 'history-entry', ts, entry }));
 }
 
-export function resolveCliHistoryStatus(input: {
-  readonly terminalStatus?: string;
-  readonly resumable: boolean;
-}): string {
-  if (input.resumable) return CLI_HISTORY_RESUMABLE_STATUS;
-  // An absent terminal status means the run never reached its terminal write
-  // (crash, kill, old build) — never report that as 'completed'.
-  return input.terminalStatus ?? 'unknown';
-}
-
 export function formatCliHistoryDetailsText(
   details: CliHistoryDetails,
 ): string {
@@ -487,7 +483,7 @@ export function formatCliHistoryDetailsText(
 }
 
 async function toCliHistoryEntry(
-  entry: Extract<ExecutionListingEntry, { kind: 'agent' }>,
+  entry: Extract<ExecutionListingEntry, { kind: 'run' }>,
 ): Promise<CliHistoryEntry> {
   const config = entry.agentConfig;
   const inputBasename = firstInputBasename(config);
@@ -500,12 +496,12 @@ async function toCliHistoryEntry(
     timestamp: entry.timestamp,
     agent: config.agent,
     model: resumeData?.agentConfig.model ?? config.model,
-    status: resolveCliHistoryStatus({
-      terminalStatus: entry.terminalStatus,
+    status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
+      outcome: entry.outcome,
     }),
     inputBasename,
-    category: entry.runtimeCategory ?? config.agentCategory,
+    category: config.agentCategory,
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentExecutionId: entry.parentExecutionId,

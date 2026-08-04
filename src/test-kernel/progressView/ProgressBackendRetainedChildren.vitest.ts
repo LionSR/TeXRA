@@ -36,7 +36,6 @@ describe('retained finished children', () => {
     overrides: Partial<ActiveChildInfo> = {},
   ): ActiveChildInfo {
     return {
-      kind: 'subagent',
       executionId: id,
       childStreamId: `${id}-stream` as StreamTabId,
       agentName: `agent-${id}`,

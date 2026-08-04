@@ -6,13 +6,13 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   StreamLifecycleStatusSchema,
   streamStatusToLifecycleStatus,
+  type RunIdentity,
   type StreamLifecycleStatus,
   type SyncStreamContentPayload,
   type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { isObject } from '@utils/core';
 import type { TraceDocument } from '@transcript';
 
@@ -153,12 +153,17 @@ export function replayTrace(trace: TraceDocument): void {
     executionId: trace.executionId,
     description: trace.meta?.description,
   };
-  // A replayed process-agent trace (e.g. bash) must keep kind: 'process' so
-  // the progress UI picks the terminal-style renderer instead of tool-use
-  // chrome — matches the live classification in buildStreamTabInfo.
-  const streamTabInfo: StreamTabInfo = isProcessAgent(trace.config.agent)
-    ? { ...streamTabBase, kind: 'process', command: trace.config.instruction }
-    : { ...streamTabBase, kind: 'agent', model: trace.config.model };
+  // The embedded ExecutionMeta carries the run's identity. The one confined
+  // legacy fallback in the tree: a pre-migration export has no identity, and
+  // every pre-migration export is an agent run.
+  const identity: RunIdentity = trace.meta?.identity ?? {
+    kind: 'agent',
+    agent: trace.config.agent,
+  };
+  const streamTabInfo: StreamTabInfo =
+    identity.kind === 'process'
+      ? { ...streamTabBase, identity, command: trace.config.instruction }
+      : { ...streamTabBase, identity, model: trace.config.model };
   const updateStreams: UpdateStreamsMessage = {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [streamTabInfo],
@@ -166,7 +171,7 @@ export function replayTrace(trace: TraceDocument): void {
     streamStates: {
       [trace.streamId]: {
         status: toStreamLifecycleStatus(trace),
-        kind: trace.config.agentCategory,
+        category: trace.config.agentCategory,
         conversationProgress: snapshot.conversationProgress,
         // Liveness is never restored as live (matches the existing
         // ghost-stream hydrate convention documented on StreamSnapshot) —
@@ -196,7 +201,7 @@ export function replayTrace(trace: TraceDocument): void {
     trace.config.agentCategory === AgentCategory.Workflow
       ? {
           ...syncSnapshot,
-          kind: AgentCategory.Workflow,
+          category: AgentCategory.Workflow,
           outputs: {
             files: snapshot.outputFilesByRound,
             missing: snapshot.missingOutputsByRound,
@@ -205,7 +210,7 @@ export function replayTrace(trace: TraceDocument): void {
         }
       : {
           ...syncSnapshot,
-          kind: AgentCategory.ToolUse,
+          category: AgentCategory.ToolUse,
           workPlan: {
             todos: snapshot.todos,
             plan: snapshot.plan,

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import { RunIdentitySchema } from './runIdentity';
 
 /**
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
@@ -78,11 +79,28 @@ const ExecutionMetaBaseSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
-  /** Persisted when execution reaches a terminal state (success or error). */
+  /**
+   * Legacy terminal residue. Not written by current code; the entrance
+   * stamper derives `outcome` from it once and persists that instead.
+   */
   terminalStatus: z.string().optional(),
-  /** Canonical terminal outcome; legacy meta files derive this from terminalStatus. */
+  /** Canonical terminal outcome — the ONE persisted terminal fact. */
   outcome: RunOutcomeSchema.optional(),
-  /** Runtime category override (e.g. 'process' for background bash). */
+  /**
+   * What kind of run this execution is. Required at the write boundary
+   * ({@link RegisteredExecutionMeta}); optional here because this schema is
+   * transitively the trace-export schema (immutable pre-migration exports) and
+   * because the idempotent entrance stamper brings old rows forward on disk
+   * rather than at read time. A row without one is un-healed and lists as
+   * `incomplete`.
+   */
+  identity: RunIdentitySchema.optional(),
+  /**
+   * Legacy classification residue (e.g. 'process' for background bash). Not
+   * written by current code and read only by the entrance stamper, which
+   * derives `identity` from it. Kept on the schema so read-modify-write
+   * cycles on not-yet-stamped rows cannot strip the stamper's evidence.
+   */
   category: z.string().optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
@@ -95,28 +113,19 @@ const ExecutionMetaBaseSchema = z.object({
   streamIdSource: ExecutionStreamIdSourceSchema.optional(),
 });
 
-const ConsistentExecutionMetaSchema = ExecutionMetaBaseSchema.superRefine(
-  (meta, ctx) => {
-    if (meta.terminalStatus == null || meta.outcome == null) return;
-    const projectedOutcome = executionStatusToRunOutcome(meta.terminalStatus);
-    if (projectedOutcome == null || projectedOutcome === meta.outcome) return;
-
-    ctx.addIssue({
-      code: 'custom',
-      path: ['outcome'],
-      message: `outcome ${meta.outcome} contradicts terminalStatus ${meta.terminalStatus}`,
-    });
-  },
-);
-
-export const ExecutionMetaSchema = ConsistentExecutionMetaSchema.transform(
-  (meta): z.infer<typeof ExecutionMetaBaseSchema> => {
-    const outcome =
-      meta.outcome ?? executionStatusToRunOutcome(meta.terminalStatus);
-    return outcome ? { ...meta, outcome } : meta;
-  },
-);
+export const ExecutionMetaSchema = ExecutionMetaBaseSchema;
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
+
+/**
+ * The write-boundary shape: `registerExecution` (the only birth writer) and
+ * the entrance stamper persist metadata with `identity` required. The shared
+ * read schema above keeps it optional forever — it is transitively the
+ * trace-export schema, and old binaries' read-modify-writes strip unknown
+ * fields — so requiredness lives here, at the writers, not on every read.
+ */
+export type RegisteredExecutionMeta = ExecutionMeta & {
+  identity: NonNullable<ExecutionMeta['identity']>;
+};
 
 /**
  * The execution's birth-registered stream identity (#9590 A1). Only
@@ -266,18 +275,25 @@ const WorktreeInfoSchema = z.object({
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 
 /**
- * Fields shared by every stream tab regardless of what's running underneath
- * it — split out rather than folded into the discriminated union below so
- * consumers can validate the common fields directly; Zod's discriminated
- * unions don't support `.pick()`/`.partial()`.
+ * One flat wire shape per stream tab. The parsed {@link RunIdentitySchema}
+ * struct travels verbatim — renderers key on `identity.kind` instead of
+ * inferring ownership from whichever optional field is present — and hosts
+ * add display fields beside it, never re-encodings of it. `identity` is
+ * absent only for a run that never emitted `run.start` (legacy meta, hosts
+ * driving the store by hand); absent renders as pending, never as a default
+ * kind.
  */
-const StreamTabInfoBaseSchema = z.object({
+export const StreamTabInfoSchema = z.object({
   name: z.string(),
   label: z.string(),
-  /** Name of the agent/tool that launched the stream (e.g. "bash",
-   * "paper-polish"). Present for both agent and process streams. */
-  agent: z.string().optional(),
-  agentCategory: AgentCategorySchema,
+  identity: RunIdentitySchema.optional(),
+  /** The agent's execution mode (agent runs only) — display/routing data
+   * beside the identity, sourced from the run's config. */
+  agentCategory: AgentCategorySchema.optional(),
+  model: z.string().optional(),
+  modelLabel: z.string().optional(),
+  /** Full, untruncated command that spawned a process stream. */
+  command: z.string().optional(),
   isRemote: z.boolean().optional(),
   inputFile: z.string().optional(),
   creationTimestamp: z.number(),
@@ -289,30 +305,4 @@ const StreamTabInfoBaseSchema = z.object({
    * worktree other than the workspace root. Surfaced as a chip on the tab. */
   worktree: WorktreeInfoSchema.optional(),
 });
-
-/**
- * Discriminated on `kind`: a stream tab is a live LLM-driven `agent`, a raw
- * OS `process`, or a deterministic `workflowScript` orchestration container.
- * Only agents carry model metadata; only processes carry commands; workflow
- * scripts carry their immutable script name. Renderers switch on `kind`
- * instead of inferring ownership from whichever optional field is present.
- */
-export const StreamTabInfoSchema = z.discriminatedUnion('kind', [
-  StreamTabInfoBaseSchema.extend({
-    kind: z.literal('agent'),
-    model: z.string().optional(),
-    modelLabel: z.string().optional(),
-  }),
-  StreamTabInfoBaseSchema.extend({
-    kind: z.literal('process'),
-    /** Full, untruncated command that spawned this stream; used by the
-     * process stream view. */
-    command: z.string().optional(),
-  }),
-  StreamTabInfoBaseSchema.extend({
-    kind: z.literal('workflowScript'),
-    /** Immutable `meta.name` of the orchestration script. */
-    workflowName: z.string(),
-  }),
-]);
 export type StreamTabInfo = z.infer<typeof StreamTabInfoSchema>;

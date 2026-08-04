@@ -15,19 +15,17 @@ import {
 } from '@shared/schemas';
 
 const parent: StreamTabInfo = {
-  kind: 'agent',
   name: 'parent',
   label: 'parent',
-  agent: 'root',
+  identity: { kind: 'agent', agent: 'root' },
   agentCategory: AgentCategory.ToolUse,
   creationTimestamp: 1,
 };
 
 const completedChild: StreamTabInfo = {
-  kind: 'agent',
   name: 'reviewer#sub-1',
   label: 'reviewer',
-  agent: 'builtInToolUse:reviewer',
+  identity: { kind: 'agent', agent: 'builtInToolUse:reviewer' },
   agentCategory: AgentCategory.ToolUse,
   creationTimestamp: 2,
   executionId: 'sub-1',
@@ -38,15 +36,17 @@ const completedSibling: StreamTabInfo = {
   ...completedChild,
   name: 'leanSolver#sub-2',
   label: 'leanSolver',
-  agent: 'leanSolver',
+  identity: { kind: 'agent', agent: 'leanSolver' },
   executionId: 'sub-2',
 };
 
 const completedWorkflowScript: StreamTabInfo = {
-  kind: 'workflowScript',
   name: 'repo-cleanup#workflow-1',
   label: 'repo-cleanup-readonly-pilot-2026-07-24',
-  workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+  identity: {
+    kind: 'workflowScript',
+    workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+  },
   agentCategory: AgentCategory.Workflow,
   creationTimestamp: 3,
   executionId: 'workflow-1',
@@ -92,10 +92,9 @@ describe('progress executions labels', () => {
   it('does not label child process streams as subagents', () => {
     const process: StreamTabInfo = {
       ...completedChild,
-      kind: 'process',
+      identity: { kind: 'process', tool: 'bash' },
       name: 'bash#process-1',
       label: 'bash',
-      agent: 'bash',
       executionId: 'process-1',
     };
     seedStreams('parent' as StreamTabId, [parent, process]);

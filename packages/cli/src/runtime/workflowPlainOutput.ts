@@ -165,10 +165,10 @@ export function attachWorkflowPlainOutput(
       if (sessionEvent.scope !== 'run') return;
       const { streamId, event } = sessionEvent;
       if (event.type === 'run.start') {
-        if (event.descriptor.kind === 'workflowScript') {
+        if (event.identity.kind === 'workflowScript') {
           projections.set(
             streamId,
-            createWorkflowStreamProjection(event.descriptor.agent, options),
+            createWorkflowStreamProjection(event.identity.workflowName, options),
           );
         }
         return;

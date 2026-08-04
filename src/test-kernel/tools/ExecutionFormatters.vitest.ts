@@ -24,13 +24,13 @@ describe('getExecutionStatusInfo', () => {
     assert.strictEqual(info.status, 'unknown');
   });
 
-  it('reports unknown when terminalStatus fails to parse', () => {
+  it('serves the persisted outcome when the live handle is gone', () => {
     mocks.currentSession.mockReturnValue({
       executions: { getHandle: () => undefined },
     });
 
-    const info = getExecutionStatusInfo('exec-2', 'not-a-real-status');
+    const info = getExecutionStatusInfo('exec-2', 'cancelled');
 
-    assert.strictEqual(info.status, 'unknown');
+    assert.strictEqual(info.status, 'cancelled');
   });
 });

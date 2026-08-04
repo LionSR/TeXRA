@@ -9,8 +9,11 @@ import {
 function metadataToStreamStatePartial(
   metadata: StreamMetadata,
 ): Partial<StreamState> {
+  // `category` is the state union's discriminant, owned by the create/guard
+  // logic in `mergeBackendOwnedState` — never spread it into a patch.
+  const { category: _category, ...backendFields } = metadata;
   return {
-    ...metadata,
+    ...backendFields,
     ...(Object.hasOwn(metadata, 'roundStage') && {
       roundStage: metadata.roundStage ?? undefined,
     }),
@@ -29,26 +32,29 @@ function metadataToStreamStatePartial(
 export function mergeBackendOwnedState(
   existing: StreamState | undefined,
   metadata: StreamMetadata,
-): StreamState {
+): StreamState | undefined {
   if (!existing) {
+    // No state and no resolved category: the stream is still pending — there
+    // is no arm to create, and fabricating one (the old `?? Workflow`) is
+    // exactly the misclassification this shape exists to prevent.
+    if (!metadata.category) return undefined;
     return createStreamState(
-      metadata.kind,
+      metadata.category,
       metadataToStreamStatePartial(metadata),
     );
   }
 
-  if (existing.kind !== metadata.kind) {
-    // Kind changed: create fresh state with new-kind defaults, overlay metadata,
-    // and preserve frontend-owned taskGroups.
-    return createStreamState(metadata.kind, {
+  if (metadata.category && existing.category !== metadata.category) {
+    // Category changed: create fresh state with new-category defaults,
+    // overlay metadata, and preserve frontend-owned taskGroups.
+    return createStreamState(metadata.category, {
       ...metadataToStreamStatePartial(metadata),
       taskGroups: existing.taskGroups,
     });
   }
 
   // Overlay every backend-owned field from metadata (its own keys include
-  // every required BackendOwnedFieldsSchema field plus `kind`, which the guard
-  // above already ensures matches `existing.kind`) so a new field added to
+  // every required BackendOwnedFieldsSchema field) so a new field added to
   // that schema is picked up here without also updating this call site.
   return create(existing, (draft) => {
     Object.assign(draft, metadataToStreamStatePartial(metadata));

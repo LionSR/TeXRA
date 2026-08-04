@@ -71,7 +71,6 @@ describe('background-tasks-panel', () => {
     const element = createPanel();
     element.subagents = [
       {
-        kind: 'subagent',
         executionId: 'exec-1',
         childStreamId: 'child-1',
         agentName: 'reviewer',
@@ -79,7 +78,6 @@ describe('background-tasks-panel', () => {
         elapsed: '12s',
       },
       {
-        kind: 'subagent',
         executionId: 'exec-2',
         childStreamId: 'child-2',
         agentName: 'polisher',
@@ -120,14 +118,12 @@ describe('background-tasks-panel', () => {
     const element = createPanel();
     element.subagents = [
       {
-        kind: 'subagent',
         executionId: 'exec-run',
         childStreamId: 'workflow-run',
         agentName: 'workflow-script',
         status: 'running',
       },
       {
-        kind: 'subagent',
         executionId: 'exec-plain',
         childStreamId: 'plain-child',
         agentName: 'reviewer',
@@ -166,7 +162,6 @@ describe('background-tasks-panel', () => {
     const element = createPanel();
     element.subagents = [
       {
-        kind: 'subagent',
         executionId: 'subagent-1',
         childStreamId: 'child-1',
         agentName: 'reviewer',
@@ -189,7 +184,6 @@ describe('background-tasks-panel', () => {
     element.scope = 'inquiries';
     element.subagents = [
       {
-        kind: 'subagent',
         executionId: 'exec-1',
         childStreamId: 'child-1',
         agentName: 'reviewer',

@@ -148,7 +148,16 @@ export function collectResumeTargets({
     )) {
       if (seen.has(child.executionId)) continue;
       const childSlice = streams.get(child.childStreamId);
-      if (childSlice?.category !== AgentCategory.ToolUse) continue;
+      // Resume is a native-agent affordance: an external-CLI session or a
+      // process/workflow-script stream is not resumable here.
+      const identity = childSlice?.identity;
+      if (
+        identity?.kind !== 'agent' ||
+        identity.tool !== undefined ||
+        childSlice?.category !== AgentCategory.ToolUse
+      ) {
+        continue;
+      }
       seen.add(child.executionId);
       targets.push({
         executionId: child.executionId,

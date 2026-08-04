@@ -64,7 +64,7 @@ function buildTooltip(
   statusLabel: string,
 ): string {
   const modelDisplay =
-    info.kind === 'agent' && info.model
+    info.identity?.kind === 'agent' && info.model
       ? (info.modelLabel ?? info.model)
       : undefined;
   const mainLine = [
@@ -128,7 +128,7 @@ export class StreamTab extends LitElement {
       return;
     if (changed.has('info')) {
       this._streamDecorator =
-        this.info.kind === 'workflowScript'
+        this.info.identity?.kind === 'workflowScript'
           ? AGENT_DECORATORS.streamKinds.workflowScript
           : getAgentCategoryDecorator(this.info.agentCategory);
     }
@@ -242,7 +242,7 @@ export class StreamTab extends LitElement {
                     }
                     <span class="model"
                       >${
-                        stream.kind === 'agent'
+                        stream.identity?.kind === 'agent'
                           ? (stream.modelLabel ?? stream.model ?? '')
                           : ''
                       }</span
@@ -270,7 +270,7 @@ export class StreamTab extends LitElement {
             ? nothing
             : html`<wa-tooltip for="stream-tab-kind"
                   >${
-                    stream.kind === 'workflowScript'
+                    stream.identity?.kind === 'workflowScript'
                       ? streamDecorator.label
                       : `Category: ${streamDecorator.label}`
                   }</wa-tooltip

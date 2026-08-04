@@ -202,11 +202,12 @@ describe('CLI history runtime', () => {
   it('formats history list rows with the stable tab-separated text shape', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'a1' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
         agentConfig: config,
-        terminalStatus: 'completed',
+        outcome: 'completed',
       },
     ]);
 
@@ -237,24 +238,26 @@ describe('CLI history runtime', () => {
     });
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'visible' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
         agentConfig: config,
-        terminalStatus: 'completed',
+        outcome: 'completed',
       },
       {
-        kind: 'process',
+        kind: 'run',
+        identity: { kind: 'process', tool: 'bash' },
         id: 'bash-process' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
         agentConfig: processConfig,
-        terminalStatus: 'completed',
+        outcome: 'completed',
       },
       {
         kind: 'incomplete',
         id: 'configless' as ExecutionId,
         timestamp: '2026-05-18T08:02:00.000Z',
-        terminalStatus: 'completed',
+        outcome: 'completed',
       },
     ]);
 
@@ -266,18 +269,20 @@ describe('CLI history runtime', () => {
   it('hides agent-spawned child runs from the history list', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'root' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
         agentConfig: config,
-        terminalStatus: 'completed',
+        outcome: 'completed',
       },
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'delegated-child' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
         agentConfig: config,
-        terminalStatus: 'completed',
+        outcome: 'completed',
         parentExecutionId: 'root' as ExecutionId,
       },
     ]);
@@ -298,13 +303,21 @@ describe('CLI history runtime', () => {
     });
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'engineer' },
         id: 'team1' as ExecutionId,
         timestamp: '2026-05-18T10:00:00.000Z',
         agentConfig: teamConfig,
-        terminalStatus: 'resumable',
+        outcome: 'cancelled',
       },
     ]);
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
+      agentConfig: teamConfig,
+    });
 
     const entries = await listCliHistoryEntries();
 
@@ -325,14 +338,22 @@ describe('CLI history runtime', () => {
     });
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'assistant' },
         id: 'chat1' as ExecutionId,
         timestamp: '2026-05-18T11:00:00.000Z',
         agentConfig: chatConfig,
-        terminalStatus: 'resumable',
+        outcome: 'cancelled',
         description: 'Sketch a proof outline',
       },
     ]);
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
+      agentConfig: chatConfig,
+    });
 
     const entries = await listCliHistoryEntries();
 

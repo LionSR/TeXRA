@@ -12,14 +12,12 @@ import type { Thread } from '@openai/codex-sdk';
 export interface ActiveCodexThread {
   thread: Thread;
   childStreamId: StreamTabId;
-  parentStreamId: StreamTabId;
   executionId: ExecutionId;
   executions: ExecutionRegistry;
 }
 
 export interface ActiveClaudeAgentSession {
   childStreamId: StreamTabId;
-  parentStreamId: StreamTabId;
   executionId: ExecutionId;
   executions: ExecutionRegistry;
   model: string;

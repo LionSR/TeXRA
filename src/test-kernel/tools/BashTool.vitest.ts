@@ -39,7 +39,7 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
-  EXECUTION_STATUS,
+  RUN_OUTCOME,
   STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
@@ -790,10 +790,7 @@ describe('BashTool', () => {
     });
 
     await vi.waitFor(async () => {
-      assert.equal(
-        (await store.readMeta())?.terminalStatus,
-        EXECUTION_STATUS.COMPLETED,
-      );
+      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.COMPLETED);
     });
     recorded.detach();
     defaultSession().followUps.terminalize(parentStreamId);
@@ -877,10 +874,7 @@ describe('BashTool', () => {
 
     const store = getExecutionStore(executionId);
     await vi.waitFor(async () => {
-      assert.equal(
-        (await store.readMeta())?.terminalStatus,
-        EXECUTION_STATUS.INTERRUPTED,
-      );
+      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.CANCELLED);
     });
     recorded.detach();
     clearStreamStatusForTest(defaultSession().status, childStreamId);

@@ -40,7 +40,6 @@ import {
   TOOL_USE_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.mts';
@@ -118,6 +117,12 @@ beforeEach(async () => {
   await defaultSession().transcripts.clear();
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
+    // Full-log rendering keys on the parsed identity, not the stream-id
+    // prefix: this stream is a workflow-script child run.
+    identity: {
+      kind: 'workflowScript' as const,
+      workflowName: 'draft-sections',
+    },
     category: AgentCategory.Workflow,
     model: 'deepseekT',
   }));
@@ -132,6 +137,8 @@ describe('CLI workflow-script child-stream transcript', () => {
     const sdkStreamId = 'claude@agent-sdk#exec-1' as StreamTabId;
     patchStream(sdkStreamId, (slice) => ({
       ...slice,
+      // External-CLI agent sessions are full-log children too.
+      identity: { kind: 'agent' as const, agent: 'claude', tool: 'claude_code' },
       category: AgentCategory.ToolUse,
       model: 'claude-sonnet',
     }));
@@ -301,6 +308,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
+      identity: {
+        kind: 'workflowScript' as const,
+        workflowName: 'draft-sections',
+      },
       model: 'deepseekT',
     }));
     setStreamStatusInCliState({
@@ -485,6 +496,10 @@ describe('CLI workflow-script child-stream transcript', () => {
     resetCliState();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
+      identity: {
+        kind: 'workflowScript' as const,
+        workflowName: 'draft-sections',
+      },
       model: 'deepseekT',
       entries: syntheticEntry ? [syntheticEntry] : [],
     }));
@@ -968,6 +983,13 @@ describe('CLI workflow-script child-stream transcript', () => {
       splitTranscriptEntries(finalized, STREAM_PHASE.COMPLETED).pending,
     ).toEqual([]);
 
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      identity: {
+        kind: 'workflowScript' as const,
+        workflowName: 'draft-sections',
+      },
+    }));
     const staticItems = appendItems([], {
       childStreamEntries: new Map([
         [
@@ -982,13 +1004,16 @@ describe('CLI workflow-script child-stream transcript', () => {
             summary: {
               agentName: 'draft-sections',
               executionId: 'exec-1',
-              kind: 'subagent' as const,
-              toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
+              identity: {
+                kind: 'workflowScript' as const,
+                workflowName: 'draft-sections',
+              },
             },
           },
         ],
       ]),
       parentStream: new Map([[STREAM_ID, PARENT_STREAM_ID]]),
+      streams: streams.get(),
     });
     expect(staticItems.at(0)).toMatchObject({
       identityLine:

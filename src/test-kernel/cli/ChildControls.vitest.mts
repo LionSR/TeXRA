@@ -48,7 +48,6 @@ describe('CLI child controls', () => {
       parentStreamId: root,
       retained: [
         {
-          kind: 'subagent',
           executionId: 'child-exec',
           agentName: 'critic',
           childStreamId: child,
@@ -85,7 +84,6 @@ describe('CLI child controls', () => {
         parentStreamId: root,
         retained: [
           {
-            kind: 'subagent' as const,
             executionId: 'child-exec',
             agentName: 'child',
             childStreamId: child,
@@ -97,7 +95,6 @@ describe('CLI child controls', () => {
         parentStreamId: child,
         retained: [
           {
-            kind: 'subagent' as const,
             executionId: 'leaf-exec',
             agentName: 'leaf',
             childStreamId: leaf,
@@ -180,7 +177,6 @@ describe('CLI child controls', () => {
       parentStreamId: root,
       retained: [
         {
-          kind: 'subagent',
           executionId: 'a-exec',
           agentName: 'a',
           childStreamId: a,
@@ -188,7 +184,6 @@ describe('CLI child controls', () => {
           workflowPhase: 'Reduce',
         },
         {
-          kind: 'subagent',
           executionId: 'b-exec',
           agentName: 'b',
           childStreamId: b,
@@ -197,7 +192,6 @@ describe('CLI child controls', () => {
           edgeParentStreamId: null,
         },
         {
-          kind: 'subagent',
           executionId: 'c-exec',
           agentName: 'c',
           childStreamId: c,
@@ -205,14 +199,12 @@ describe('CLI child controls', () => {
           workflowPhase: 'Reduce',
         },
         {
-          kind: 'subagent',
           executionId: 'd-exec',
           agentName: 'd',
           childStreamId: d,
           status: STREAM_PHASE.RUNNING,
         },
         {
-          kind: 'subagent',
           executionId: 'e-exec',
           agentName: 'e',
           childStreamId: e,
@@ -279,7 +271,6 @@ describe('CLI child controls', () => {
       parentStreamId: root,
       retained: [
         {
-          kind: 'subagent',
           executionId: 'child-exec',
           agentName: 'critic',
           childStreamId: child,

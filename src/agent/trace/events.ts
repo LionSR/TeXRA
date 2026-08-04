@@ -19,6 +19,7 @@ import type {
   GoalPausedPayload,
   ExecutionId,
   RetryErrorInfo,
+  RunIdentity,
   RunOutcome,
   StreamPhase,
   StreamSubstate,
@@ -31,7 +32,6 @@ import type {
   WorkflowCallProgress,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
-import type { RunDescriptor } from '@shared/schemas/runDescriptor';
 
 /** Status assigned to a tool call when it completes. */
 export type ToolStatus = 'completed' | 'failed' | 'in_progress';
@@ -87,7 +87,9 @@ export interface StageStartEvent extends StageStamp {
 /** Immutable run identity emitted once when a stream enters RUNNING. */
 interface RunStartEvent extends StageStamp {
   readonly type: 'run.start';
-  readonly descriptor: RunDescriptor;
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly identity: RunIdentity;
 }
 
 /** Mutable persisted run config changed after run.start, e.g. model switch. */

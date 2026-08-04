@@ -414,8 +414,8 @@ export class BashTool extends defineTool({
 
     await registerExecution(executionId, syntheticConfig, 'bash', {
       streamId: getChildStreamId(executionId, BASH_CHILD_STREAM_PREFIX),
+      identity: { kind: 'process', tool: 'bash' },
       parentExecutionId,
-      category: 'process',
       description: childStreamDescription(command),
     });
     const runWithOwnership = captureOwnedExecutionLease(executionId);
@@ -425,12 +425,9 @@ export class BashTool extends defineTool({
       runWithOwnership(() => {
         childStream = createChildStream(executionId, parentStreamId, {
           streamPrefix: BASH_CHILD_STREAM_PREFIX,
-          streamCategory: AgentCategory.ToolUse,
-          runKind: 'process',
-          agentName: 'bash',
+          run: { kind: 'process', tool: 'bash' },
           description: command,
           config: syntheticConfig,
-          toolName: 'bash',
         });
       });
     } catch (error) {

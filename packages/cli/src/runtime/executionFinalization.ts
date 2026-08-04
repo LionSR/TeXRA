@@ -1,6 +1,7 @@
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
-import type { ExecutionStatus } from '@shared/schemas';
+import type {
+  RunOutcome, ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type CliFinalizationFailureReporter = (error: Error) => void;
@@ -12,9 +13,9 @@ type FailedFinalizationResult = Extract<
 function finalizationFailureMessage(
   result: FailedFinalizationResult,
   executionId: FinalizeExecutionInput['executionId'],
-  terminalStatus: ExecutionStatus,
+  outcome: RunOutcome,
 ): string {
-  const status = terminalStatus.toLowerCase();
+  const status = outcome;
   const detail = toErrorMessage(result.error);
   switch (result.stage) {
     case 'flow-record-delete':
@@ -32,7 +33,7 @@ function finalizationFailureMessage(
  */
 export async function finalizeCliExecution(
   executionId: FinalizeExecutionInput['executionId'],
-  terminalStatus: ExecutionStatus,
+  outcome: RunOutcome,
   flowRecord: FinalizeExecutionInput['flowRecord'],
   reportFailure: CliFinalizationFailureReporter,
 ): Promise<void> {
@@ -40,7 +41,7 @@ export async function finalizeCliExecution(
   try {
     result = await finalizeExecution({
       executionId,
-      terminalStatus,
+      outcome,
       flowRecord,
     });
   } catch (error) {
@@ -56,10 +57,6 @@ export async function finalizeCliExecution(
   if (result.status === 'durable') return;
   markOwnedExecutionLeaseUndurable(executionId);
 
-  const message = finalizationFailureMessage(
-    result,
-    executionId,
-    terminalStatus,
-  );
+  const message = finalizationFailureMessage(result, executionId, outcome);
   reportFailure(new Error(message, { cause: result.error }));
 }

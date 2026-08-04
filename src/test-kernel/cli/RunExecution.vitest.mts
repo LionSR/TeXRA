@@ -12,7 +12,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
-  EXECUTION_STATUS,
+  RUN_OUTCOME,
   type ExecutionId,
   type StorageKey,
   type StreamTabId,
@@ -168,7 +168,7 @@ function stubRunExecutionDeps(): void {
   mocks.readCliRunOutcome.mockResolvedValue('completed');
   mocks.finalizeExecution.mockResolvedValue({
     status: 'durable',
-    terminalStatusPersisted: true,
+    outcomePersisted: true,
     flowRecord: 'deleted',
   });
   mocks.runAgent.mockImplementation(async (_request, options) => {
@@ -640,7 +640,7 @@ describe('executeCliRequest', () => {
 
     expect(mocks.finalizeExecution).not.toHaveBeenCalledWith({
       executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
     expect(mocks.close).toHaveBeenCalledTimes(1);
@@ -753,7 +753,7 @@ describe('executeCliRequest', () => {
     expect(runWithOwnership).toHaveBeenCalledOnce();
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId: 'exec-1',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
     resolveRun?.(COMPLETED_RUN);
@@ -814,7 +814,7 @@ describe('executeCliRequest', () => {
       status: 'failed',
       error: persistenceError,
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
     let resolveRun:
       | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
@@ -835,7 +835,7 @@ describe('executeCliRequest', () => {
     await platform.lifecycle.runShutdown();
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message:
-        'Failed to persist interrupted status for execution exec-1: terminal metadata disk full',
+        'Failed to persist cancelled status for execution exec-1: terminal metadata disk full',
     });
     resolveRun?.(COMPLETED_RUN);
     mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
@@ -990,7 +990,7 @@ describe('executeCliConfig', () => {
     expect(result).toMatchObject({ ok: false });
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId: expect.any(String),
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
     expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
@@ -1012,7 +1012,7 @@ describe('executeCliConfig', () => {
       status: 'failed',
       error: new Error('terminal metadata disk full'),
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
 
     await expect(
@@ -1025,7 +1025,7 @@ describe('executeCliConfig', () => {
     expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(
       1,
       expect.stringMatching(
-        /^Warning: Failed to persist error status for execution .+: terminal metadata disk full$/,
+        /^Warning: Failed to persist failed status for execution .+: terminal metadata disk full$/,
       ),
     );
     expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(2, 'wrong category');

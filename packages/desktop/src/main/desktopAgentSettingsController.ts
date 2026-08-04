@@ -512,7 +512,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       this.postAgentSelectionData(),
       this.postMainAgentAndTeamOptionsData(
         this.catalogController.getPresetToolUseRoot(
-          result.preset.toolUseAgents,
+          result.preset.agents.toolUse,
           result.preset.id,
         ),
       ),

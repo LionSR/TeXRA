@@ -95,21 +95,3 @@ export function updateWorkflowState(
   });
 }
 
-/**
- * Update a stream's parentStreamId in the streamById map.
- * No-op if the stream doesn't exist or the parentStreamId hasn't changed.
- */
-export function updateParentStreamId(
-  streamId: string,
-  parentStreamId: string | null | undefined,
-): void {
-  const resolved = parentStreamId ?? undefined;
-  const prev = appState.get();
-  const target = prev.streamById.get(streamId);
-  if (!target || target.parentStreamId === resolved) return;
-  appState.set(
-    create(prev, (draft) => {
-      draft.streamById.set(streamId, { ...target, parentStreamId: resolved });
-    }),
-  );
-}

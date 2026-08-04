@@ -116,7 +116,6 @@ const inquiryThread = {
   turnCount: 1,
 };
 const child = {
-  kind: 'subagent' as const,
   executionId: childExecutionId,
   childStreamId,
   agentName: 'review',

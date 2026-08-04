@@ -27,6 +27,12 @@ export const ToolDefinitionSchema = z.looseObject({
   zodSchema: z.custom<ZodType>().optional(),
   /** Runtime-only: do not infer a provider-native tool from this definition's name. */
   forceFunctionCall: z.boolean().optional(),
+  /**
+   * Roster namespace this delegation tool's description is annotated from
+   * ("Available agents:"/"Available models:" lines). Declared by the tool
+   * itself — never a side table mapping tool names to categories.
+   */
+  availabilityCategory: z.enum(['workflow', 'toolUse']).optional(),
 });
 
 /** Tool definition type - derived from schema */

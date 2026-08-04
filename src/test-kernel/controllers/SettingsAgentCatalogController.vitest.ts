@@ -159,8 +159,10 @@ describe('SettingsAgentCatalogController', () => {
       name: 'Custom Team',
       description: 'test',
       icon: 'codicon-bookmark',
-      workflowAgents: ['writer'],
-      toolUseAgents: ['review', 'missing'],
+      agents: {
+        workflow: ['writer'],
+        toolUse: ['review', 'missing'],
+      },
     };
     const { controller, enabled } = createController({
       customPresets: [persistedPreset],
@@ -272,7 +274,7 @@ describe('SettingsAgentCatalogController', () => {
 
     assert.ok(softwareEngineer);
     assert.equal(
-      controller.getPresetToolUseRoot(softwareEngineer.toolUseAgents),
+      controller.getPresetToolUseRoot(softwareEngineer.agents.toolUse),
       'engineer',
     );
   });
@@ -285,7 +287,7 @@ describe('SettingsAgentCatalogController', () => {
 
     assert.ok(physicist);
     assert.equal(
-      controller.getPresetToolUseRoot(physicist.toolUseAgents),
+      controller.getPresetToolUseRoot(physicist.agents.toolUse),
       'orchestrator',
     );
   });
@@ -304,7 +306,7 @@ describe('SettingsAgentCatalogController', () => {
     assert.ok(mathematician);
 
     const preview = controller.getPresetToolUseRoot(
-      mathematician.toolUseAgents,
+      mathematician.agents.toolUse,
       mathematician.id,
     );
 
@@ -316,23 +318,25 @@ describe('SettingsAgentCatalogController', () => {
     assert.equal(
       preview,
       planTeamRun(realPreset, {
-        workflowAgents: [],
-        toolUseAgents: [
-          delegatingLean,
-          // Stand-in for the controller's synthesized built-in root entry.
-          {
-            source: 'builtInToolUse',
-            name: 'orchestrator',
-            category: 'toolUse',
-            tools: ['delegate_agent'],
-          },
-        ],
+        agents: {
+          workflow: [],
+          toolUse: [
+            delegatingLean,
+            // Stand-in for the controller's synthesized built-in root entry.
+            {
+              source: 'builtInToolUse',
+              name: 'orchestrator',
+              category: 'toolUse',
+              tools: ['delegate_agent'],
+            },
+          ],
+        },
       }).rootAgent?.name,
     );
     // The same member list previewed ad-hoc keeps custom semantics and
     // picks the preset-order-first delegating member instead.
     assert.equal(
-      controller.getPresetToolUseRoot(mathematician.toolUseAgents),
+      controller.getPresetToolUseRoot(mathematician.agents.toolUse),
       'lean',
     );
   });
@@ -343,8 +347,10 @@ describe('SettingsAgentCatalogController', () => {
       name: 'Custom Team',
       description: 'test',
       icon: 'bookmark',
-      workflowAgents: [],
-      toolUseAgents: ['teamLead', 'orchestrator'],
+      agents: {
+        workflow: [],
+        toolUse: ['teamLead', 'orchestrator'],
+      },
     };
     const { controller } = createController({
       agents: {
@@ -364,7 +370,7 @@ describe('SettingsAgentCatalogController', () => {
     // member list names (synthesized because the catalog lacks it).
     assert.equal(
       controller.getPresetToolUseRoot(
-        customPreset.toolUseAgents,
+        customPreset.agents.toolUse,
         'custom-team',
       ),
       'teamLead',
@@ -389,8 +395,10 @@ describe('SettingsAgentCatalogController', () => {
           name: 'Custom Team',
           description: 'test',
           icon: 'codicon-bookmark',
-          workflowAgents: [],
-          toolUseAgents: ['review'],
+          agents: {
+            workflow: [],
+            toolUse: ['review'],
+          },
         },
       ],
     });
@@ -401,8 +409,10 @@ describe('SettingsAgentCatalogController', () => {
         name: 'Custom Team',
         description: 'test',
         icon: 'bookmark',
-        workflowAgents: [],
-        toolUseAgents: ['review'],
+        agents: {
+          workflow: [],
+          toolUse: ['review'],
+        },
       },
     ]);
   });
@@ -421,8 +431,10 @@ describe('SettingsAgentCatalogController', () => {
       name: 'My Team',
       description: 'Custom team: review, correct',
       icon: 'bookmark',
-      workflowAgents: ['correct'],
-      toolUseAgents: ['review'],
+      agents: {
+        workflow: ['correct'],
+        toolUse: ['review'],
+      },
       texraHostedAgents: [],
     });
     assert.equal(state.customPresets.length, 1);
@@ -434,8 +446,10 @@ describe('SettingsAgentCatalogController', () => {
       name: 'Legacy Team',
       description: 'test',
       icon: 'future-icon',
-      workflowAgents: [],
-      toolUseAgents: ['review'],
+      agents: {
+        workflow: [],
+        toolUse: ['review'],
+      },
     };
     const malformedPreset = { id: 'broken' };
     const state = createController({
@@ -460,8 +474,10 @@ describe('SettingsAgentCatalogController', () => {
       name: 'Custom Team',
       description: 'test',
       icon: 'bookmark',
-      workflowAgents: [],
-      toolUseAgents: [],
+      agents: {
+        workflow: [],
+        toolUse: [],
+      },
     };
     const state = createController({ customPresets: [preset] });
 
@@ -479,16 +495,20 @@ describe('SettingsAgentCatalogController', () => {
       name: 'Target',
       description: 'test',
       icon: 'bookmark',
-      workflowAgents: [],
-      toolUseAgents: [],
+      agents: {
+        workflow: [],
+        toolUse: [],
+      },
     };
     const unknownIconPreset = {
       id: 'legacy-team',
       name: 'Legacy Team',
       description: 'test',
       icon: 'future-icon',
-      workflowAgents: [],
-      toolUseAgents: ['review'],
+      agents: {
+        workflow: [],
+        toolUse: ['review'],
+      },
     };
     const malformedPreset = { id: 'broken' };
     const state = createController({

@@ -115,8 +115,8 @@ describe('CLI config command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(mocks.setCustom).toHaveBeenCalledWith({
-      workflowAgentKeys: ['builtInWorkflow:write'],
-      toolUseAgentKeys: ['builtInToolUse:assistant'],
+      workflow: ['builtInWorkflow:write'],
+      toolUse: ['builtInToolUse:assistant'],
     });
     expect(mocks.setEnabledAgentKeys).not.toHaveBeenCalled();
   });

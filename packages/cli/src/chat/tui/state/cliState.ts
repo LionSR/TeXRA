@@ -17,6 +17,7 @@ import {
   type OutputFileInfo,
   type Plan,
   type RoundIndexed,
+  type RunIdentity,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -181,6 +182,9 @@ export type StreamStage =
 
 export interface StreamSlice {
   readonly streamId: StreamTabId;
+  /** What owns this stream, verbatim from `run.start` (or the durable store
+   *  on cold read). Never re-derived from names, ids, or transcript roles. */
+  readonly identity?: RunIdentity | undefined;
   /** Canonical agent name captured from this stream's `run.config`. */
   readonly agent?: string | undefined;
   /** Model identity captured from setTaskState for this specific stream. */

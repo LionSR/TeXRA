@@ -46,7 +46,12 @@ import {
   TOOLBAR_BUTTONS,
   type ProgressToolbarButton,
 } from '../constants';
-import { archivedContext } from '../streamContexts';
+import {
+  archivedContext,
+  streamByIdContext,
+  EMPTY_STREAM_BY_ID,
+  type StreamByIdMap,
+} from '../streamContexts';
 import { ProgressEvents } from '../events';
 import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
@@ -327,6 +332,10 @@ export class StreamHeader extends LitElement {
   @consume({ context: archivedContext, subscribe: true })
   private archived = false;
 
+  /** Parent tab labels come from the parent's own tab info, not id parsing. */
+  @consume({ context: streamByIdContext, subscribe: true })
+  private streamById: StreamByIdMap = EMPTY_STREAM_BY_ID;
+
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
       return nothing;
@@ -340,8 +349,9 @@ export class StreamHeader extends LitElement {
     const statusClass = streamStatusIndicatorClass(status, this.substate);
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
-    const toolbarButtons =
-      TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
+    const toolbarButtons = agentCategory
+      ? TOOLBAR_BUTTONS[agentCategory]
+      : TOOLBAR_BUTTONS.workflow;
     const displayKey = streamStatusDisplayKey(status, this.substate);
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
@@ -521,11 +531,9 @@ export class StreamHeader extends LitElement {
     const parentStreamId = this.stream?.parentStreamId;
     if (!parentStreamId) return nothing;
 
-    // Extract agent name from stream ID (format: "agentName@timestamp")
-    const rawName = parentStreamId.split('@')[0];
-    // Strip source prefix (e.g., "builtin:assistant" → "assistant")
-    const colonIdx = rawName.indexOf(':');
-    const displayName = colonIdx !== -1 ? rawName.slice(colonIdx + 1) : rawName;
+    // The parent's own tab info owns its display label; never parse the id.
+    const displayName =
+      this.streamById.get(parentStreamId)?.label ?? parentStreamId;
 
     return html`
       <span

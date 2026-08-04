@@ -11,6 +11,8 @@ import { z } from 'zod';
 
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
+import { AgentCategory, AgentCategorySchema } from './agent';
+
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
   'rocket',
@@ -44,19 +46,45 @@ const AgentModePresetIconSchema = z.string().transform((rawIcon) => {
   return FALLBACK_AGENT_MODE_PRESET_ICON;
 });
 
-/** Schema for a single agent team. */
-export const AgentModePresetSchema = z.object({
+/** Canonical schema for a single agent team: members keyed by category. */
+const AgentModePresetCanonicalSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
   icon: AgentModePresetIconSchema,
-  workflowAgents: z.array(z.string()),
-  toolUseAgents: z.array(z.string()),
+  agents: z.record(AgentCategorySchema, z.array(z.string())),
   /** Members whose definitions may be supplied by TeXRA's remote catalog. */
   texraHostedAgents: z.array(z.string()).optional(),
 });
 
-export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
+/**
+ * Legacy persisted shape: user-authored teams under `CUSTOM_AGENT_PRESETS`
+ * carried the members as a `workflowAgents`/`toolUseAgents` field pair.
+ * Normalized to the category-keyed record once, here at the parse boundary —
+ * dropping this member would silently drop users' saved teams.
+ */
+const AgentModePresetLegacySchema = AgentModePresetCanonicalSchema.omit({
+  agents: true,
+})
+  .extend({
+    workflowAgents: z.array(z.string()),
+    toolUseAgents: z.array(z.string()),
+  })
+  .transform(({ workflowAgents, toolUseAgents, ...rest }) => ({
+    ...rest,
+    agents: {
+      [AgentCategory.Workflow]: workflowAgents,
+      [AgentCategory.ToolUse]: toolUseAgents,
+    },
+  }));
+
+/** Schema for a single agent team (canonical, with legacy-pair normalization). */
+export const AgentModePresetSchema = z.union([
+  AgentModePresetCanonicalSchema,
+  AgentModePresetLegacySchema,
+]);
+
+export type AgentModePreset = z.infer<typeof AgentModePresetCanonicalSchema>;
 
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   const parsedRecords = z.array(z.unknown()).prefault([]).safeParse(raw);
@@ -96,15 +124,17 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
   name: 'Starter',
   description: 'Balanced default roster for a first project.',
   icon: 'rocket',
-  workflowAgents: ['correct', 'polish'],
-  toolUseAgents: [
-    'assistant',
-    'research',
-    'review',
-    'latexFixer',
-    'setup',
-    'orchestrator',
-  ],
+  agents: {
+    workflow: ['correct', 'polish'],
+    toolUse: [
+      'assistant',
+      'research',
+      'review',
+      'latexFixer',
+      'setup',
+      'orchestrator',
+    ],
+  },
   texraHostedAgents: ['orchestrator'],
 };
 
@@ -121,16 +151,18 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For Lean 4 projects -- theorem search, tactic simplification, and blueprints.',
     icon: 'diagram-project',
-    workflowAgents: [],
-    toolUseAgents: [
-      'lean',
-      'leanSearch',
-      'leanSimplifier',
-      'leanBlueprint',
-      'latexFixer',
-      'progressCheck',
-      'leanOrchestrator',
-    ],
+    agents: {
+      workflow: [],
+      toolUse: [
+        'lean',
+        'leanSearch',
+        'leanSimplifier',
+        'leanBlueprint',
+        'latexFixer',
+        'progressCheck',
+        'leanOrchestrator',
+      ],
+    },
     texraHostedAgents: [
       'lean',
       'leanSearch',
@@ -146,25 +178,27 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For physics papers -- analytical derivations, numerical experiments, literature search, slides, and critical review.',
     icon: 'cube',
-    workflowAgents: [
-      'correct',
-      'polish',
-      'generic',
-      'devise',
-      'apply',
-      'criticize',
-    ],
-    toolUseAgents: [
-      'orchestrator',
-      'research',
-      'numerics',
-      'review',
-      'presenter',
-      'simplifier',
-      'latexFixer',
-      'progressCheck',
-      'search',
-    ],
+    agents: {
+      workflow: [
+        'correct',
+        'polish',
+        'generic',
+        'devise',
+        'apply',
+        'criticize',
+      ],
+      toolUse: [
+        'orchestrator',
+        'research',
+        'numerics',
+        'review',
+        'presenter',
+        'simplifier',
+        'latexFixer',
+        'progressCheck',
+        'search',
+      ],
+    },
     texraHostedAgents: [
       'generic',
       'devise',
@@ -183,25 +217,27 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For math research -- attacking open problems, proofs, Lean 4 formalization, and LaTeX correction.',
     icon: 'hashtag',
-    workflowAgents: [
-      'correct',
-      'polish',
-      'generic',
-      'devise',
-      'apply',
-      'criticize',
-    ],
-    toolUseAgents: [
-      'prover',
-      'lean',
-      'research',
-      'numerics',
-      'review',
-      'simplifier',
-      'latexFixer',
-      'progressCheck',
-      'orchestrator',
-    ],
+    agents: {
+      workflow: [
+        'correct',
+        'polish',
+        'generic',
+        'devise',
+        'apply',
+        'criticize',
+      ],
+      toolUse: [
+        'prover',
+        'lean',
+        'research',
+        'numerics',
+        'review',
+        'simplifier',
+        'latexFixer',
+        'progressCheck',
+        'orchestrator',
+      ],
+    },
     texraHostedAgents: [
       'generic',
       'devise',
@@ -219,20 +255,22 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       'For CS papers -- algorithm design, code-driven experiments and ablations, tests for reproducibility, literature search, and critical review.',
     icon: 'cube',
-    workflowAgents: ['criticize', 'generic', 'devise', 'apply', 'polish'],
-    toolUseAgents: [
-      'orchestrator',
-      'research',
-      'numerics',
-      'coder',
-      'testEngineer',
-      'search',
-      'review',
-      'presenter',
-      'simplifier',
-      'latexFixer',
-      'progressCheck',
-    ],
+    agents: {
+      workflow: ['criticize', 'generic', 'devise', 'apply', 'polish'],
+      toolUse: [
+        'orchestrator',
+        'research',
+        'numerics',
+        'coder',
+        'testEngineer',
+        'search',
+        'review',
+        'presenter',
+        'simplifier',
+        'latexFixer',
+        'progressCheck',
+      ],
+    },
     texraHostedAgents: [
       'criticize',
       'generic',
@@ -251,14 +289,16 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     description:
       "For a project's code -- the engineer lead delegates implementation, review, debugging, and testing across a team of specialists.",
     icon: 'screwdriver-wrench',
-    workflowAgents: [],
-    toolUseAgents: [
-      'engineer',
-      'coder',
-      'codeReviewer',
-      'testEngineer',
-      'codeSimplifier',
-    ],
+    agents: {
+      workflow: [],
+      toolUse: [
+        'engineer',
+        'coder',
+        'codeReviewer',
+        'testEngineer',
+        'codeSimplifier',
+      ],
+    },
     texraHostedAgents: [],
   },
 ];

@@ -1,8 +1,10 @@
 import { quote } from 'shell-quote';
 
 import {
+  AGENT_COMPLETION_SOURCES,
   CLI_COMPLETION_SHELLS,
   COMPLETION_SOURCES,
+  allCompletionSources,
   commandKey,
   completionFlagTokens,
   completionFlagVariants,
@@ -11,7 +13,7 @@ import {
   type CompletionFlag,
 } from './completionCommandTree';
 
-const { agents, models, toolUseAgents, workflowAgents } = COMPLETION_SOURCES;
+const { agents, models } = COMPLETION_SOURCES;
 
 interface FlagValueTokenEntry {
   readonly flag: CompletionFlag;
@@ -59,7 +61,10 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
 
 const DYNAMIC_VALUE_FLAG_CASES = [
   { tokens: ['--model', '-m'], source: models.shellFunction },
-  { tokens: ['--agent'], source: toolUseAgents.shellFunction },
+  {
+    tokens: ['--agent'],
+    source: AGENT_COMPLETION_SOURCES.toolUse.shellFunction,
+  },
 ] as const;
 
 function dynamicFlagValueCases(): string {
@@ -118,8 +123,14 @@ const POSITIONAL_COMPLETIONS: readonly {
   readonly commandPath: string;
   readonly words: string;
 }[] = [
-  { commandPath: 'run', words: `"$(${workflowAgents.shellFunction})"` },
-  { commandPath: 'agents run', words: `"$(${toolUseAgents.shellFunction})"` },
+  {
+    commandPath: 'run',
+    words: `"$(${AGENT_COMPLETION_SOURCES.workflow.shellFunction})"`,
+  },
+  {
+    commandPath: 'agents run',
+    words: `"$(${AGENT_COMPLETION_SOURCES.toolUse.shellFunction})"`,
+  },
   { commandPath: 'completion', words: `'${CLI_COMPLETION_SHELLS.join(' ')}'` },
   { commandPath: 'agents show', words: `"$(${agents.shellFunction})"` },
   { commandPath: 'models show', words: `"$(${models.shellFunction})"` },
@@ -136,7 +147,7 @@ function positionalCompletionBlocks(): string {
 }
 
 function dynamicSourceFunctions(): string {
-  return Object.values(COMPLETION_SOURCES)
+  return allCompletionSources()
     .map(
       (source) =>
         `${source.shellFunction}() {

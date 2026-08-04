@@ -15,7 +15,6 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -63,24 +62,18 @@ const config = {
 function startBashChild(executionId: ExecutionId) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'bash',
-    streamCategory: AgentCategory.ToolUse,
-    runKind: 'process',
-    agentName: 'test-agent',
+    run: { kind: 'process', tool: 'bash' },
     description: 'Run a background bash command',
     config,
-    toolName: 'bash',
   });
 }
 
 function startCodexChild(executionId: ExecutionId, description: string) {
   return createChildStream(executionId, parentStreamId, {
     streamPrefix: 'codex',
-    streamCategory: AgentCategory.ToolUse,
-    runKind: 'agent',
-    agentName: 'codex',
+    run: { kind: 'agent', agent: 'codex', tool: 'codex' },
     description,
     config,
-    toolName: 'codex',
   });
 }
 
@@ -208,9 +201,9 @@ describe('child stream progress events', () => {
               expect.objectContaining({
                 executionId,
                 childStreamId,
-                agentName: 'test-agent',
+                agentName: 'bash',
                 status: STREAM_PHASE.RUNNING,
-                toolName: 'bash',
+                identity: { kind: 'process', tool: 'bash' },
               }),
             ],
           }),
@@ -240,12 +233,9 @@ describe('child stream progress events', () => {
     const firstRun = withSessionEventRecording(() =>
       createChildStream(workflowRelaunchExecutionId, parentStreamId, {
         streamPrefix: 'workflow-script',
-        streamCategory: AgentCategory.Workflow,
-        runKind: 'workflowScript',
-        agentName: 'draft-sections',
+        run: { kind: 'workflowScript', workflowName: 'draft-sections' },
         description: 'Run a named child task',
         config,
-        toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
       }),
     );
     await withSessionEventRecording(() => firstRun.finalize());
@@ -259,12 +249,9 @@ describe('child stream progress events', () => {
       parentStreamId,
       {
         streamPrefix: 'workflow-script',
-        streamCategory: AgentCategory.Workflow,
-        runKind: 'workflowScript',
-        agentName: 'draft-sections',
+        run: { kind: 'workflowScript', workflowName: 'draft-sections' },
         description: 'Resume the named child task',
         config,
-        toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
       },
     );
 
@@ -304,12 +291,12 @@ describe('child stream progress events', () => {
       });
     const options = {
       streamPrefix: 'workflow-script',
-      streamCategory: AgentCategory.Workflow,
-      runKind: 'workflowScript' as const,
-      agentName: 'retry-setup',
+      run: {
+        kind: 'workflowScript' as const,
+        workflowName: 'retry-setup',
+      },
       description: 'Retry a failed child stream setup',
       config,
-      toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
     };
 
     try {
@@ -361,22 +348,21 @@ describe('child stream progress events', () => {
         parentStreamId,
         {
           streamPrefix: 'workflow-script',
-          streamCategory: AgentCategory.Workflow,
-          runKind: 'workflowScript',
-          agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          run: {
+            kind: 'workflowScript',
+            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          },
           description: 'Audit the repository without editing',
           config: workerConfig,
-          toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
         },
       );
 
       expect(runEventsOfType(recorded.events, 'run.start')).toContainEqual(
         expect.objectContaining({
-          descriptor: expect.objectContaining({
-            agent: 'repo-cleanup-readonly-pilot-2026-07-24',
-            category: AgentCategory.Workflow,
+          identity: {
             kind: 'workflowScript',
-          }),
+            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          },
         }),
       );
       expect(

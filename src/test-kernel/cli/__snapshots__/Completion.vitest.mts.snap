@@ -11,6 +11,11 @@ _texra_agents() {
   texra agents list --quiet 2>/dev/null | awk '{print $2}'
 }
 
+_texra_models() {
+  _texra_completion_dynamic || return 0
+  texra models list --quiet 2>/dev/null | awk '{print $1}'
+}
+
 _texra_workflow_agents() {
   _texra_completion_dynamic || return 0
   texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
@@ -19,11 +24,6 @@ _texra_workflow_agents() {
 _texra_tool_use_agents() {
   _texra_completion_dynamic || return 0
   texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
-}
-
-_texra_models() {
-  _texra_completion_dynamic || return 0
-  texra models list --quiet 2>/dev/null | awk '{print $1}'
 }
 
 _texra_compgen_files() {
@@ -780,6 +780,11 @@ _texra_agents() {
   texra agents list --quiet 2>/dev/null | awk '{print $2}'
 }
 
+_texra_models() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
+  texra models list --quiet 2>/dev/null | awk '{print $1}'
+}
+
 _texra_workflow_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
   texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
@@ -788,11 +793,6 @@ _texra_workflow_agents() {
 _texra_tool_use_agents() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
   texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
-}
-
-_texra_models() {
-  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra models list --quiet 2>/dev/null | awk '{print $1}'
 }
 
 _texra() {

@@ -28,10 +28,7 @@ import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model/ToolDefinition';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { AgentCategory } from '@shared/schemas/agent';
-import {
-  DELEGATION_AVAILABILITY_CATEGORY,
-  hasDelegationTool,
-} from '@shared/constants/delegationTools';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   getDisabledToolNames,
@@ -91,7 +88,7 @@ async function availableDelegationModelNamesForTools(
   }
   const categories = new Set(
     tools
-      .map((tool) => DELEGATION_AVAILABILITY_CATEGORY[tool.name])
+      .map((tool) => tool.availabilityCategory)
       .filter((category): category is AgentCategory => category !== undefined),
   );
 
@@ -207,8 +204,8 @@ function runtimeNarrowToolDefinition(
 
 /**
  * Refresh a delegation tool's "Available models:", "Available agents:", and
- * "Git worktree support:" lines from current state. A tool with no
- * `DELEGATION_AVAILABILITY_CATEGORY` entry returns untouched at the early guard.
+ * "Git worktree support:" lines from current state. A tool declaring no
+ * `availabilityCategory` returns untouched at the early guard.
  * `availableModelNames` is `undefined` only when the resolved list held no
  * delegation tool at all, so in that case every tool reaching this function is a
  * non-delegation tool that returns early — `category` and `availableModelNames`
@@ -220,7 +217,7 @@ function annotateDelegationTool(
   availableModelNames:
     ReadonlyMap<AgentCategory, readonly string[]> | null | undefined,
 ): ToolDefinition {
-  const category = DELEGATION_AVAILABILITY_CATEGORY[tool.name];
+  const category = tool.availabilityCategory;
   if (!category) return tool;
   const categoryModelNames =
     availableModelNames instanceof Map

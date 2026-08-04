@@ -263,9 +263,8 @@ export function groupPendingApprovalsByRow(
 }
 
 // A workflow-script grandchild `agent()` call is the only interactively
-// skip/retry-able row: it is a Workflow-category subagent whose parent
-// stream is itself the Workflow run (the run stream's parent is the
-// orchestrator, a non-Workflow category), which excludes the run stream
+// skip/retry-able row: an agent run whose parent stream IS the
+// workflow-script run — one identity hop, which excludes the run stream
 // itself so its row never shows a control that would silently no-op.
 export function selectedChildRowWorkflowControllable({
   parentStream,
@@ -283,8 +282,8 @@ export function selectedChildRowWorkflowControllable({
   }
   const parentOfSelectedChild = parentStream.get(selectedChildStreamId);
   return (
-    streams.get(selectedChildStreamId)?.category === AgentCategory.Workflow &&
+    streams.get(selectedChildStreamId)?.identity?.kind === 'agent' &&
     parentOfSelectedChild !== undefined &&
-    streams.get(parentOfSelectedChild)?.category === AgentCategory.Workflow
+    streams.get(parentOfSelectedChild)?.identity?.kind === 'workflowScript'
   );
 }

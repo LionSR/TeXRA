@@ -31,7 +31,7 @@ function child(
     childStreamId: StreamTabId;
   },
 ): ChildStreamEntryRow {
-  return { kind: 'subagent', agentName: 'agent', ...over };
+  return { agentName: 'agent', ...over };
 }
 
 function streamsOf(
@@ -60,10 +60,12 @@ describe('collectResumeTargets', () => {
     const root = makeSlice({ streamId: 'main@m#root' });
     const reviewer = makeSlice({
       streamId: 'reviewer@m#rev',
+      identity: { kind: 'agent', agent: 'reviewer' },
       category: AgentCategory.ToolUse,
     });
     const builder = makeSlice({
       streamId: 'builder@m#flow',
+      identity: { kind: 'agent', agent: 'builder' },
       category: AgentCategory.Workflow,
     });
     const childStreamEntries = buildChildStreamEntries({

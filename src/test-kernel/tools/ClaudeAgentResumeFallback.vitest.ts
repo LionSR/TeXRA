@@ -153,7 +153,10 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   it('resolves the Claude binary before child creation and then tracks startup synchronously', async () => {
     const binaryPath = pDefer<string | undefined>();
-    const executions = { getAgentHandleByStream: () => undefined } as any;
+    const executions = {
+      getAgentHandleByStream: () => undefined,
+      getHandle: () => undefined,
+    } as any;
     const startupEvents: string[] = [];
     const originalTrackInFlight =
       ClaudeAgentSessions.trackInFlight.bind(ClaudeAgentSessions);
@@ -304,7 +307,10 @@ describe('claude_agent tool launch and resume fallback', () => {
   it('launches one fallback loop when concurrent calls use the same stale session_id', async () => {
     const envStarted = pDefer<void>();
     const envReady = pDefer<NodeJS.ProcessEnv>();
-    const executions = { getAgentHandleByStream: () => undefined } as any;
+    const executions = {
+      getAgentHandleByStream: () => undefined,
+      getHandle: () => undefined,
+    } as any;
     let strategy: ChildRunStrategy<unknown> | undefined;
     mocks.buildClaudeAgentEnv.mockImplementation(() => {
       envStarted.resolve(undefined);
@@ -423,9 +429,11 @@ describe('claude_agent tool launch and resume fallback', () => {
   it('still enqueues a follow-up (no fresh launch) when session_id IS active in the registry', async () => {
     ClaudeAgentSessions.register('sess-resumed', {
       childStreamId,
-      parentStreamId,
       executionId,
-      executions: { getAgentHandleByStream: () => undefined } as any,
+      executions: {
+      getAgentHandleByStream: () => undefined,
+      getHandle: () => undefined,
+    } as any,
       model: 'claude-sonnet-4-6',
       permissionMode: 'acceptEdits',
       effort: 'high',

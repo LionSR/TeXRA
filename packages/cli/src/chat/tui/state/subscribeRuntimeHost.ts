@@ -142,6 +142,8 @@ type TuiRunFactHandlers = {
  * a fact reaching the dispatch always has a handler.
  */
 const TUI_RUN_FACT_HANDLERS = {
+  'run.start': (event) =>
+    patchStream(event.streamId, (s) => ({ ...s, identity: event.identity })),
   'run.config': (event) => applyRunConfig(event.streamId, event.config),
   usage: (event) => applyUsageUpdate(event.payload),
   'conversation.progress': (event, fallbackStreamId) =>

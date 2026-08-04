@@ -49,7 +49,8 @@ const { discoverLatestExecutionOutputs } =
 
 function matchingExecution(id: string) {
   return {
-    kind: 'agent',
+    kind: 'run',
+    identity: { kind: 'agent', agent: 'polish' },
     id,
     timestamp: '2026-01-01T00:00:00.000Z',
     agentConfig: {

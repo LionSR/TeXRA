@@ -19,15 +19,11 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-type AgentStreamTabInfo = Extract<StreamTabInfo, { kind: 'agent' }>;
-
-function baseStream(
-  overrides: Partial<AgentStreamTabInfo> = {},
-): AgentStreamTabInfo {
+function baseStream(overrides: Partial<StreamTabInfo> = {}): StreamTabInfo {
   return {
-    kind: 'agent',
     name: 'stream-a',
     label: 'Stream A',
+    identity: { kind: 'agent', agent: 'stream-a' },
     agentCategory: AgentCategory.Workflow,
     creationTimestamp: 1,
     ...overrides,

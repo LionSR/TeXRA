@@ -82,7 +82,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       files: {},
       missingOutputs: {},
       compileFailures: {},
@@ -115,7 +115,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       todos: [{ content: 'Replay the plan' }],
       plan: null,
     });

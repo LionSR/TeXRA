@@ -7,7 +7,6 @@ import {
 } from '@shared/schemas';
 // Local imports
 import {
-  updateParentStreamId,
   updateToolUseState,
   updateWorkflowState,
 } from '../stateUtils';
@@ -32,7 +31,7 @@ export const syncHandlers = {
 
     const runUsage = { ...data.runUsage };
 
-    if (data.kind === AgentCategory.Workflow) {
+    if (data.category === AgentCategory.Workflow) {
       updateWorkflowState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
@@ -63,8 +62,5 @@ export const syncHandlers = {
       }));
     }
 
-    if (data.activeState) {
-      updateParentStreamId(data.stream, data.activeState.parentStreamId);
-    }
   },
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;

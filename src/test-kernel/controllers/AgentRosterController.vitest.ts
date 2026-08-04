@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   AgentRosterController,
@@ -27,8 +27,10 @@ const preset: AgentModePreset = {
   name: 'Test team',
   description: 'A deterministic test roster.',
   icon: 'bookmark',
-  workflowAgents: ['write'],
-  toolUseAgents: ['lead'],
+  agents: {
+    workflow: ['write'],
+    toolUse: ['lead'],
+  },
 };
 
 function controller(
@@ -46,14 +48,55 @@ function controller(
 }
 
 describe('AgentRosterController', () => {
-  it('rejects malformed canonical state instead of treating corruption as inheritance', () => {
+  it('warns and falls back to the inherited roster on malformed state', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const roster = controller(
       new FakeStateStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
       }),
     );
 
-    expect(() => roster.getSelection()).toThrow();
+    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('malformed v1 roster selection'),
+    );
+    warn.mockRestore();
+  });
+
+  it('reads a v1 pair-shaped custom roster and writes the v2 record beside it', async () => {
+    // Durable migration fixture: the unversioned key holds the legacy
+    // `workflowAgentKeys`/`toolUseAgentKeys` pair written by older binaries.
+    const v1Custom = {
+      kind: 'custom',
+      workflowAgentKeys: ['builtInWorkflow:write'],
+      toolUseAgentKeys: 'all',
+    };
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: v1Custom,
+    });
+    const roster = controller(workspaceState);
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'custom',
+      agentKeys: { workflow: ['builtInWorkflow:write'], toolUse: 'all' },
+    });
+    expect(roster.getVisibleAgents('workflow').map((a) => a.name)).toEqual([
+      'write',
+    ]);
+
+    // A write lands under the versioned v2 key; the v1 value stays untouched
+    // for older binaries sharing the same state file.
+    await roster.setTeam('test-team');
+    expect(
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+    ).toEqual({ kind: 'team', teamId: 'test-team' });
+    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
+      v1Custom,
+    );
+    expect(roster.getSelection()).toEqual({
+      kind: 'team',
+      teamId: 'test-team',
+    });
   });
 
   it('uses the user default only for inherited workspaces', () => {
@@ -81,7 +124,7 @@ describe('AgentRosterController', () => {
     await roster.setTeam('test-team');
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
     ).toEqual({
       kind: 'team',
       teamId: 'test-team',
@@ -102,8 +145,10 @@ describe('AgentRosterController', () => {
 
     expect(roster.getSelection()).toEqual({
       kind: 'custom',
-      workflowAgentKeys: 'all',
-      toolUseAgentKeys: ['builtInToolUse:lead'],
+      agentKeys: {
+        workflow: 'all',
+        toolUse: ['builtInToolUse:lead'],
+      },
     });
   });
 
@@ -122,7 +167,7 @@ describe('AgentRosterController', () => {
     });
     expect(inherited.getSelection()).toEqual({ kind: 'inherit' });
     expect(
-      inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+      inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
     ).toBeUndefined();
 
     const team = controller(new FakeStateStore());
@@ -153,7 +198,7 @@ describe('AgentRosterController', () => {
     const unavailablePreset: AgentModePreset = {
       ...preset,
       id: 'partly-unavailable',
-      workflowAgents: ['write', 'future-reviewer'],
+      agents: { ...preset.agents, workflow: ['write', 'future-reviewer'] },
     };
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, {
@@ -175,14 +220,16 @@ describe('AgentRosterController', () => {
 
     expect(roster.getSelection()).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write', 'future-reviewer'],
-      toolUseAgentKeys: ['builtInToolUse:lead', 'custom:search'],
+      agentKeys: {
+        workflow: ['builtInWorkflow:write', 'future-reviewer'],
+        toolUse: ['builtInToolUse:lead', 'custom:search'],
+      },
     });
   });
 
   it('falls back to all agents for a missing symbolic team', () => {
     const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
         kind: 'team',
         teamId: 'deleted-team',
       },
@@ -206,8 +253,10 @@ describe('AgentRosterController', () => {
 
     expect(roster.getSelection()).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write'],
-      toolUseAgentKeys: ['builtInToolUse:lead'],
+      agentKeys: {
+        workflow: ['builtInWorkflow:write'],
+        toolUse: ['builtInToolUse:lead'],
+      },
     });
   });
 
@@ -221,10 +270,12 @@ describe('AgentRosterController', () => {
     };
     const roster = controller(
       new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
           kind: 'custom',
-          workflowAgentKeys: [],
-          toolUseAgentKeys: ['remote:review'],
+          agentKeys: {
+            workflow: [],
+            toolUse: ['remote:review'],
+          },
         },
       }),
       { getAgents: (category) => duplicateAgents[category] },
@@ -248,10 +299,12 @@ describe('AgentRosterController', () => {
     };
     const roster = controller(
       new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
           kind: 'custom',
-          workflowAgentKeys: [],
-          toolUseAgentKeys: ['remote:review'],
+          agentKeys: {
+            workflow: [],
+            toolUse: ['remote:review'],
+          },
         },
       }),
       {
@@ -287,8 +340,10 @@ describe('AgentRosterController', () => {
 
     expect(first.getSelection()).toEqual({
       kind: 'custom',
-      workflowAgentKeys: ['builtInWorkflow:write'],
-      toolUseAgentKeys: ['builtInToolUse:lead'],
+      agentKeys: {
+        workflow: ['builtInWorkflow:write'],
+        toolUse: ['builtInToolUse:lead'],
+      },
     });
   });
 });

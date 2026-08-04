@@ -204,7 +204,10 @@ describe('codex tool - atomic resume fallback', () => {
       id: 'stale-thread',
       runStreamed: vi.fn(),
     };
-    const executions = { getAgentHandleByStream: () => undefined } as any;
+    const executions = {
+      getAgentHandleByStream: () => undefined,
+      getHandle: () => undefined,
+    } as any;
     let strategy: ChildRunStrategy<unknown> | undefined;
 
     mocks.importCodexClass.mockImplementation(() => {

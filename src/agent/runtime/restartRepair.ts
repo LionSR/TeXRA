@@ -217,7 +217,7 @@ async function writeFailedTerminalStatus(
   try {
     const finalization = await finalizeExecution({
       executionId,
-      terminalStatus: projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
     if (finalization.status === 'failed') {
@@ -226,12 +226,12 @@ async function writeFailedTerminalStatus(
           streamId,
           executionId,
           stage: finalization.stage,
-          terminalStatusPersisted: finalization.terminalStatusPersisted,
+          outcomePersisted: finalization.outcomePersisted,
           error: finalization.error,
         },
       });
     }
-    return finalization.terminalStatusPersisted;
+    return finalization.outcomePersisted;
   } catch (error) {
     logger?.warn('Restart-repair finalization rejected unexpectedly', {
       data: { streamId, executionId, error },

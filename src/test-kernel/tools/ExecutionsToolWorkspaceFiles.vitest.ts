@@ -14,7 +14,6 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -121,7 +120,7 @@ async function writeSidecarTodos(
   await StorageFS.write(
     path.join(streamDataDir(streamId), 'meta.json'),
     JSON.stringify({
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      schemaVersion: 1,
       executionId,
     }),
   );

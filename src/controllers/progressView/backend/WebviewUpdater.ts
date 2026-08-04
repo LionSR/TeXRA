@@ -307,17 +307,6 @@ export class WebviewUpdater {
     });
   }
 
-  updateParentStream(
-    stream: StreamTabId,
-    parentStreamId: StreamTabId | undefined,
-  ): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
-      stream,
-      parentStreamId,
-    });
-  }
-
   updateTodos(stream: StreamTabId, todos: TodoItem[]): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
@@ -411,7 +400,7 @@ export class WebviewUpdater {
     const current = state.getStreamState(streamInfo.name);
     const streamState = streamStates?.get(streamInfo.name);
     return buildStreamMetadata({
-      kind: streamInfo.agentCategory,
+      category: streamInfo.agentCategory,
       status: streamState?.phase,
       substate: streamState?.substate,
       lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),

@@ -3,7 +3,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';
 import { platform } from '@platform/platform';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunIdentity, StreamTabId } from '@shared/schemas';
 
 // Local file imports
 import {
@@ -45,7 +45,19 @@ interface ProgressViewHostCommandOptions {
 
 interface ProgressViewRunState {
   getRunConfig(stream: StreamTabId): AgentConfig | undefined;
+  getRunIdentity(stream: StreamTabId): RunIdentity | undefined;
   getExecutionId(stream: StreamTabId): string | undefined;
+}
+
+/**
+ * Resume, rerun, and restore are native-agent affordances. A workflow-script
+ * stream's persisted config is a borrowed default agent, a process stream's is
+ * synthetic, and an external-CLI session resumes through its own tool — for
+ * all three, relaunching the stored config would run the wrong thing
+ * (live defect 3 of the run-classification consolidation).
+ */
+function isNativeAgentRun(identity: RunIdentity | undefined): boolean {
+  return identity?.kind === 'agent' && identity.tool === undefined;
 }
 
 interface ProgressViewRunDependencies {
@@ -63,6 +75,7 @@ async function resumeStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
 ): Promise<void> {
+  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) return;
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
@@ -82,6 +95,7 @@ async function runNewStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
 ): Promise<void> {
+  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) return;
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 

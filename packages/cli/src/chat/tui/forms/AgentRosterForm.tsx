@@ -17,7 +17,13 @@ import {
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import { platform } from '@platform/platform';
-import { agentKeyOf, type AgentCategory } from '@shared/schemas/agent';
+import type { AgentRosterCategorySelection } from '@shared/schemas';
+import {
+  agentKeyOf,
+  byCategory,
+  type AgentCategory,
+  type ByCategory,
+} from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
@@ -40,8 +46,7 @@ type AgentRosterFormMode =
 interface AgentRosterData {
   readonly record: CliAgentRosterRecord;
   readonly presets: readonly AgentModePreset[];
-  readonly workflow: readonly AgentEntry[];
-  readonly toolUse: readonly AgentEntry[];
+  readonly agents: ByCategory<readonly AgentEntry[]>;
 }
 
 export interface AgentRosterFormProps {
@@ -78,16 +83,14 @@ export function buildChatDefaultAgentItems(
 }
 
 export function selectedAgentKeys(
-  selection: CliAgentRosterRecord['workflowAgentKeys'],
+  selection: AgentRosterCategorySelection,
   agents: readonly AgentEntry[],
 ): readonly string[] {
   if (selection === 'all') return agents.map(agentKeyOf);
   return selection;
 }
 
-function selectionSizeLabel(
-  selection: CliAgentRosterRecord['workflowAgentKeys'],
-): string {
+function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
   return selection === 'all' ? 'all' : String(selection.length);
 }
 
@@ -120,8 +123,7 @@ async function loadRosterData(): Promise<AgentRosterData> {
         workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
       ),
     ],
-    workflow: getAgentsByCategory('workflow'),
-    toolUse: getAgentsByCategory('toolUse'),
+    agents: byCategory((category) => getAgentsByCategory(category)),
   };
 }
 
@@ -227,7 +229,7 @@ export function AgentRosterForm(
         {
           value: 'custom-category',
           label: 'Custom selection',
-          description: `${selectionSizeLabel(data.record.workflowAgentKeys)} workflow, ${selectionSizeLabel(data.record.toolUseAgentKeys)} tool-use`,
+          description: `${selectionSizeLabel(data.record.agentKeys.workflow)} workflow, ${selectionSizeLabel(data.record.agentKeys.toolUse)} tool-use`,
         },
       ],
       (value) => setMode(value as AgentRosterFormMode),
@@ -295,8 +297,8 @@ export function AgentRosterForm(
   if (mode === 'chat-default') {
     return frame(
       buildChatDefaultAgentItems(
-        data.toolUse,
-        selectedAgentKeys(data.record.toolUseAgentKeys, data.toolUse),
+        data.agents.toolUse,
+        selectedAgentKeys(data.record.agentKeys.toolUse, data.agents.toolUse),
       ),
       (value) => {
         const cwd = platform().workspace.getWorkspacePath();
@@ -325,14 +327,9 @@ export function AgentRosterForm(
     );
   }
 
-  const agents = data[mode];
+  const agents = data.agents[mode];
   const selected = new Set(
-    selectedAgentKeys(
-      mode === 'workflow'
-        ? data.record.workflowAgentKeys
-        : data.record.toolUseAgentKeys,
-      agents,
-    ),
+    selectedAgentKeys(data.record.agentKeys[mode], agents),
   );
   return frame(
     agents.map((agent) => {

@@ -79,7 +79,7 @@ import {
   formatTodoHeader,
   formatTodoSection,
   getExecutionStatusInfo,
-  resolveExecutionDisplayCategory,
+  executionDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -642,11 +642,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const category = resolveExecutionDisplayCategory(
-      config?.agent,
-      meta?.category ?? config?.agentCategory,
-    );
-    const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
+    const category = executionDisplayCategory(meta?.identity, config);
+    const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const lines = buildCompletedSummaryLines(
       executionId,
       config,
@@ -724,7 +721,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     // Scope: can only kill your own children. Deny if no context.
-    if (!callerStreamId || target.parentStreamId !== callerStreamId) {
+    if (
+      !(target instanceof AgentExecutionHandle) ||
+      !target.isOwnedBy(callerStreamId)
+    ) {
       throw new ToolError(
         `Cannot kill execution ${executionId}: not a child of this session.`,
       );
@@ -868,10 +868,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     // Filter out fields irrelevant to this agent's category
-    const category = resolveExecutionDisplayCategory(
-      config.agent,
-      config.agentCategory,
-    );
+    const meta = await getExecutionStore(executionId).readMeta();
+    const category = executionDisplayCategory(meta?.identity, config);
     return executed(serializeFilteredConfig(config, category));
   }
 
@@ -977,7 +975,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (!meta && !handle) {
       throw new ToolError(`Execution not found: ${executionId}`);
     }
-    if (meta?.category !== 'process') {
+    // Identity is the authority; the legacy `category` residue answers only
+    // for rows the entrance stamper has not healed yet.
+    const isProcess = meta?.identity
+      ? meta.identity.kind === 'process'
+      : meta?.category === 'process';
+    if (!isProcess) {
       return executed(
         `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
           `Use /executions/${executionId}/conversation for an agent run's message history.`,
@@ -1008,7 +1011,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     const { lines, chars } = projectProcessOutput(log.toJSON());
-    const info = getExecutionStatusInfo(executionId, meta.terminalStatus);
+    const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
       ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;

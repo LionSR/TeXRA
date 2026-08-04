@@ -96,8 +96,10 @@ describe('AgentRosterForm', () => {
       selection: { kind: 'team', teamId: 'deleted-team' },
       effectiveSelection: { kind: 'all' },
       missingTeamId: 'deleted-team',
-      workflowAgentKeys: 'all',
-      toolUseAgentKeys: ['future-assistant'],
+      agentKeys: {
+        workflow: 'all',
+        toolUse: ['future-assistant'],
+      },
       unresolvedNames: ['future-assistant'],
     });
 

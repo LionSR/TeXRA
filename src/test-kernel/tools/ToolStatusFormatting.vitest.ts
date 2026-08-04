@@ -95,7 +95,8 @@ describe('tool status formatting', () => {
 
   it('renders bash execution history as a process without a model', () => {
     const entry: ExecutionListingEntry = {
-      kind: 'process',
+      kind: 'run',
+      identity: { kind: 'process', tool: 'bash' },
       id: '16c0f3f748e4',
       timestamp: '2026-05-15T23:42:06.000Z',
       parentExecutionId: 'fcf5150d37c6',
@@ -105,7 +106,7 @@ describe('tool status formatting', () => {
         instruction: 'ls',
         agentCategory: 'toolUse',
       }),
-      terminalStatus: 'completed',
+      outcome: 'completed',
     };
 
     expect(formatListingLine(entry)).toBe(

@@ -58,8 +58,8 @@ describe('CLI chat run config', () => {
       teamName: 'Physicist',
       cliMultiAgentPresetId: 'physicist',
       delegationAgentScope: {
-        workflowAgentKeys: ['builtInWorkflow:polish'],
-        toolUseAgentKeys: ['builtInToolUse:assistant'],
+        workflow: ['builtInWorkflow:polish'],
+        toolUse: ['builtInToolUse:assistant'],
       },
     });
     const context = {

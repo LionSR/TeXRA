@@ -46,7 +46,7 @@ function seedWaiting(
 function createDurableFinalizer() {
   return vi.fn(async () => ({
     status: 'durable' as const,
-    terminalStatusPersisted: true as const,
+    outcomePersisted: true as const,
     flowRecord: 'deleted' as const,
   }));
 }
@@ -402,7 +402,7 @@ describe('repairRestartedStreams', () => {
     );
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
   });
@@ -462,7 +462,7 @@ describe('repairRestartedStreams', () => {
     expect(streamStatus.get(firstStream)).toBe(STREAM_PHASE.FAILED);
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId: firstExecution,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
     expect(result.failedStreams).toEqual([firstStream]);
@@ -516,7 +516,7 @@ describe('repairRestartedStreams', () => {
     );
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
   });
@@ -564,7 +564,7 @@ describe('repairRestartedStreams', () => {
     const finalizeExecution = vi.fn(async () => ({
       status: 'failed' as const,
       stage: 'terminal-status' as const,
-      terminalStatusPersisted: false as const,
+      outcomePersisted: false as const,
       error: durabilityError,
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
@@ -587,7 +587,7 @@ describe('repairRestartedStreams', () => {
           streamId,
           executionId,
           stage: 'terminal-status',
-          terminalStatusPersisted: false,
+          outcomePersisted: false,
           error: durabilityError,
         },
       },
@@ -603,7 +603,7 @@ describe('repairRestartedStreams', () => {
     const finalizeExecution = vi.fn(async () => ({
       status: 'failed' as const,
       stage: 'flow-record-delete' as const,
-      terminalStatusPersisted: true as const,
+      outcomePersisted: true as const,
       error: cleanupError,
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
@@ -625,7 +625,7 @@ describe('repairRestartedStreams', () => {
           streamId,
           executionId,
           stage: 'flow-record-delete',
-          terminalStatusPersisted: true,
+          outcomePersisted: true,
           error: cleanupError,
         },
       },
@@ -680,11 +680,12 @@ describe('repairRestartedStreams', () => {
       closeRunningGroups: async () => [],
     });
 
-    await expect(store.readMeta()).resolves.toMatchObject({
+    const repairedMeta = await store.readMeta();
+    expect(repairedMeta).toMatchObject({
       description: 'keep this field',
-      terminalStatus: EXECUTION_STATUS.ERROR,
       outcome: RUN_OUTCOME.FAILED,
     });
+    expect(repairedMeta?.terminalStatus).toBeUndefined();
     await expect(store.readResultMeta()).resolves.toMatchObject({
       result: {
         outcome: RUN_OUTCOME.FAILED,

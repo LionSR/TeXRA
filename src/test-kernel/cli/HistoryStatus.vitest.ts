@@ -17,7 +17,6 @@ import {
   formatCliHistoryDetailsText,
   resumableCliHistoryEntries,
   readCliHistoryDetails,
-  resolveCliHistoryStatus,
   userStartedCliHistoryEntries,
 } from '@cli/runtime/history';
 import {
@@ -25,6 +24,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { resolveHistoryRunStatus } from '@shared/schemas/historyViewMessages';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
@@ -44,19 +44,19 @@ const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
 setupPlatform({ workspacePath: '/workspace' });
 
 describe('CLI history status formatting', () => {
-  it('keeps failed terminal statuses authoritative', () => {
+  it('keeps failed terminal outcomes authoritative', () => {
     expect(
-      resolveCliHistoryStatus({
-        terminalStatus: EXECUTION_STATUS.ERROR,
+      resolveHistoryRunStatus({
+        outcome: 'failed',
         resumable: false,
       }),
-    ).toBe(EXECUTION_STATUS.ERROR);
+    ).toBe('failed');
   });
 
   it('marks interrupted tool-use sessions with flow records as resumable', () => {
     expect(
-      resolveCliHistoryStatus({
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      resolveHistoryRunStatus({
+        outcome: 'cancelled',
         resumable: true,
       }),
     ).toBe(CLI_HISTORY_RESUMABLE_STATUS);
@@ -65,8 +65,8 @@ describe('CLI history status formatting', () => {
       resumableCliHistoryEntries([
         {
           id: 'stopped-with-flow',
-          status: resolveCliHistoryStatus({
-            terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          status: resolveHistoryRunStatus({
+            outcome: 'cancelled',
             resumable: true,
           }),
         },
@@ -76,17 +76,8 @@ describe('CLI history status formatting', () => {
     ]);
   });
 
-  it('uses nullish fallback semantics for persisted terminal status', () => {
-    expect(
-      resolveCliHistoryStatus({
-        terminalStatus: '',
-        resumable: false,
-      }),
-    ).toBe('');
-  });
-
-  it('marks flow records without terminal status as resumable', () => {
-    expect(resolveCliHistoryStatus({ resumable: true })).toBe(
+  it('marks flow records without a terminal outcome as resumable', () => {
+    expect(resolveHistoryRunStatus({ resumable: true })).toBe(
       CLI_HISTORY_RESUMABLE_STATUS,
     );
   });
@@ -110,10 +101,10 @@ describe('CLI history status formatting', () => {
     ).toEqual([{ id: 'root' }]);
   });
 
-  it('reports legacy terminal-status-free entries as unknown when no flow remains', () => {
-    // A missing terminal status means the terminal write never happened
+  it('reports outcome-free entries as unknown when no flow remains', () => {
+    // A missing terminal outcome means the terminal write never happened
     // (crash, kill, old build) — reporting 'completed' would mask crashes.
-    expect(resolveCliHistoryStatus({ resumable: false })).toBe('unknown');
+    expect(resolveHistoryRunStatus({ resumable: false })).toBe('unknown');
   });
 
   it('prints resumable details instead of inventing completed status', () => {
@@ -142,6 +133,7 @@ describe('CLI history status formatting', () => {
     const id = 'abc123' as ExecutionId;
     await registerExecution(id, TOOL_USE_CONFIG, 'orchestrator', {
       streamId: `orchestrator@deepseekT#${id}` as StreamTabId,
+      identity: { kind: 'agent', agent: 'orchestrator' },
     });
     await releaseOwnedExecutionLease(id);
     await getExecutionStore(id).write(flowKey(id), {
@@ -167,6 +159,7 @@ describe('CLI history status formatting', () => {
     const id = 'workflow-with-flow' as ExecutionId;
     await registerExecution(id, WORKFLOW_CONFIG, 'correct', {
       streamId: `correct@deepseekT#${id}` as StreamTabId,
+      identity: { kind: 'agent', agent: 'correct' },
     });
     await releaseOwnedExecutionLease(id);
     await getExecutionStore(id).write(flowKey(id), {

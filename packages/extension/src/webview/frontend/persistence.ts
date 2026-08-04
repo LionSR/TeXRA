@@ -30,6 +30,11 @@ import { hostBridge } from '@shared/hostBridge';
 import type { MainViewPersistedState } from '@shared/schemas';
 import { Signal } from '@shared/signals';
 import {
+  AGENT_CATEGORIES,
+  byCategory,
+  type ByCategory,
+} from '@shared/schemas';
+import {
   createWebviewStorage,
   PersistedState,
 } from '@shared/state/PersistedState';
@@ -41,8 +46,10 @@ import { VscodeMainViewPersistedStateSchema } from '../vscodeMainViewPersistedSt
 import { SESSION_TYPES } from './constants';
 import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
+  agent$,
   checkboxValues$,
   commit$,
+  instructionDrafts$,
   latexdiffsVisible$,
   launchTarget$,
   model$,
@@ -50,10 +57,6 @@ import {
   selectedTeamId$,
   sessionType$,
   singleFiles$,
-  toolUseAgent$,
-  toolUseInstruction$,
-  workflowAgent$,
-  workflowInstruction$,
   workingDirectory$,
 } from './mainViewState';
 
@@ -86,12 +89,10 @@ const persistedSnapshot$ = new Signal.Computed<MainViewPersistedState>(() => {
     launchTarget: launchTarget$.get(),
     selectedTeamId: selectedTeamId$.get(),
     workingDirectory: workingDirectory$.get(),
-    workflowAgent: workflowAgent$.get(),
-    toolUseAgent: toolUseAgent$.get(),
+    agent: agent$.get(),
     model: model$.get(),
     commit: commit$.get(),
-    workflowInstruction: workflowInstruction$.get(),
-    toolUseInstruction: toolUseInstruction$.get(),
+    instruction: instructionDrafts$.get(),
     editedFile: sf.editedFile,
     baseFile: sf.baseFile,
     inputFiles: mf.inputFiles,
@@ -115,10 +116,7 @@ const persistedSnapshot$ = new Signal.Computed<MainViewPersistedState>(() => {
 let lastWritten: MainViewPersistedState | undefined;
 
 /** Fields a keystroke moves. Their writes are rate-limited; nothing else is. */
-const DRAFT_FIELDS = new Set<keyof MainViewPersistedState>([
-  'workflowInstruction',
-  'toolUseInstruction',
-]);
+const DRAFT_FIELDS = new Set<keyof MainViewPersistedState>(['instruction']);
 
 const DRAFT_SAVE_DEBOUNCE_MS = 300;
 
@@ -142,6 +140,9 @@ function fieldChanged(
   const b = previous[field];
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length !== b.length || a.some((item, index) => item !== b[index]);
+  }
+  if (isByCategoryRecord(a) && isByCategoryRecord(b)) {
+    return AGENT_CATEGORIES.some((category) => a[category] !== b[category]);
   }
   return a !== b;
 }
@@ -197,8 +198,7 @@ export function restorePersistedState(): void {
 }
 
 function restorePerModeInstructions(state: MainViewPersistedState): void {
-  workflowInstruction$.set(state.workflowInstruction);
-  toolUseInstruction$.set(state.toolUseInstruction);
+  instructionDrafts$.set({ ...state.instruction });
 }
 
 /**
@@ -243,8 +243,7 @@ function applyState(state: MainViewPersistedState): void {
   );
   selectedTeamId$.set(state.selectedTeamId);
   workingDirectory$.set(state.workingDirectory);
-  workflowAgent$.set(state.workflowAgent);
-  toolUseAgent$.set(state.toolUseAgent);
+  agent$.set({ ...state.agent });
   model$.set(state.model);
   commit$.set(state.commit);
   restorePerModeInstructions(state);
@@ -268,8 +267,7 @@ function applyState(state: MainViewPersistedState): void {
 }
 
 function clearForNewSession(): void {
-  workflowInstruction$.set('');
-  toolUseInstruction$.set('');
+  instructionDrafts$.set(byCategory(() => ''));
   const defaults = SESSION_DEFAULTS[sessionType$.get()];
   if (defaults.resetFiles) {
     singleFiles$.set({
@@ -313,4 +311,14 @@ export function resetPersistenceRuntime(): void {
   watcher.unwatch(persistedSnapshot$);
   lastWritten = undefined;
   stateManager.reload();
+}
+
+/** Category-keyed persisted fields (`agent`, `instruction`) for {@link fieldChanged}. */
+function isByCategoryRecord(value: unknown): value is ByCategory<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    AGENT_CATEGORIES.every((category) => category in value)
+  );
 }

@@ -460,17 +460,19 @@ if (
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
   await platform().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
     {
       kind: 'custom',
-      workflowAgentKeys:
-        process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-          ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-          : 'all',
-      toolUseAgentKeys:
-        process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-          ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-          : 'all',
+      agentKeys: {
+        workflow:
+          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+            : 'all',
+        toolUse:
+          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+            : 'all',
+      },
     },
   );
 }
@@ -523,8 +525,10 @@ const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
 );
 const HARNESS_ALL_TOOL_USE_AGENTS = getAgentsByCategory(AgentCategory.ToolUse);
 const HARNESS_PRESET_PLANS = planTeamRuns(teamPresets(undefined), {
-  workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
-  toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
+  agents: {
+    workflow: getAgentsByCategory(AgentCategory.Workflow),
+    toolUse: HARNESS_ALL_TOOL_USE_AGENTS,
+  },
 });
 const HARNESS_MODEL_ACCESS =
   SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
@@ -1269,11 +1273,10 @@ function seedWorkflowTimeline(): void {
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
-      kind: 'subagent',
       executionId,
       agentName: 'repositoryAudit',
       childStreamId,
-      toolName: 'delegate_multi_agents',
+      identity: { kind: 'workflowScript', workflowName: 'repositoryAudit' },
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
@@ -1382,11 +1385,13 @@ function seedRunningWorkflow(): void {
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
-      kind: 'subagent',
       executionId,
       agentName: 'live-workflow-validation',
       childStreamId,
-      toolName: 'delegate_multi_agents',
+      identity: {
+        kind: 'workflowScript',
+        workflowName: 'live-workflow-validation',
+      },
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
@@ -1436,7 +1441,6 @@ function seedRunningWorkflow(): void {
 
   const workflowChildren = [
     {
-      kind: 'subagent',
       executionId: 'harness-workflow-agent-a',
       agentName: 'correct',
       childStreamId: firstAgentStreamId,
@@ -1444,7 +1448,6 @@ function seedRunningWorkflow(): void {
       workflowPhase: 'Proofread',
     },
     {
-      kind: 'subagent',
       executionId: 'harness-workflow-agent-b',
       agentName: 'correct',
       childStreamId: secondAgentStreamId,
@@ -1497,7 +1500,6 @@ const HARNESS_DISPOSERS: Array<() => void> = [];
 
 function childEventOrderRosterRow(): ActiveChildInfo {
   return {
-    kind: 'subagent',
     executionId: CHILD_EVENT_ORDER_EXECUTION_ID,
     agentName: CHILD_EVENT_ORDER_AGENT_NAME,
     childStreamId: CHILD_EVENT_ORDER_STREAM_ID,

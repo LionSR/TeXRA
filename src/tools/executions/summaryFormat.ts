@@ -41,11 +41,10 @@ function isCallerParentOfToolUseSubagent(
   callerStreamId: StreamTabId | undefined,
 ): boolean {
   return (
-    callerStreamId != null &&
     handle instanceof AgentExecutionHandle &&
+    handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
-    handle.parentStreamId !== handle.childStreamId &&
-    handle.parentStreamId === callerStreamId
+    handle.isOwnedBy(callerStreamId)
   );
 }
 
@@ -75,7 +74,7 @@ export function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
 ): string {
-  const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
+  const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;

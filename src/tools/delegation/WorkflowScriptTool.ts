@@ -21,7 +21,7 @@ import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import {
   AgentCategory,
-  EXECUTION_STATUS,
+  RUN_OUTCOME,
   type StreamTabId,
 } from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
@@ -182,6 +182,10 @@ function withScriptReference(
  */
 export class WorkflowScriptTool extends defineTool({
   name: DELEGATE_MULTI_AGENTS_TOOL_NAME,
+  // The script runner is bi-categorical (plain agent() calls use the workflow
+  // roster; structured calls name tool-use agents explicitly). The workflow
+  // roster is what the description advertises.
+  availabilityCategory: 'workflow',
   slow: true,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before execution and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
 
@@ -370,6 +374,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     try {
       await registerExecution(runExecutionId, runConfig, meta.name, {
         streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
+        identity: { kind: 'workflowScript', workflowName: meta.name },
         parentExecutionId: runScope.executionId,
         description: childStreamDescription(meta.description),
       });
@@ -423,12 +428,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           runScope.streamId,
           {
             streamPrefix: STREAM_PREFIX,
-            streamCategory: AgentCategory.Workflow,
-            runKind: 'workflowScript',
-            agentName: meta.name,
+            run: { kind: 'workflowScript', workflowName: meta.name },
             description: meta.description,
             config: runConfig,
-            toolName: DELEGATE_MULTI_AGENTS_TOOL_NAME,
           },
         );
         runChildStreamId = childStream.childStreamId;
@@ -502,7 +504,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             `Workflow script '${meta.name}' completed without a persisted report.`,
           );
         }
-        if (runMeta?.terminalStatus !== EXECUTION_STATUS.COMPLETED) {
+        if (runMeta?.outcome !== RUN_OUTCOME.COMPLETED) {
           return errorResult(report, {
             summary: `Workflow script '${meta.name}' failed`,
           });

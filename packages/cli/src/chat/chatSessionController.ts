@@ -610,8 +610,13 @@ export function createChatSessionController(
         // A follow-up wake may target a stream the user /clear-ed;
         // resuming it un-retires it (patchStream drops the retired mark),
         // matching the explicit resume path, or focusStream would refuse
-        // and the resumed run would stay invisible.
-        patchStream(streamId, (slice) => slice);
+        // and the resumed run would stay invisible. A rehydrated stream never
+        // re-emits `run.start`, so its identity is seeded from the durable
+        // store (ExecutionMeta by FK) on this cold read.
+        const identity = snapshotStore.getRunIdentity(streamId);
+        patchStream(streamId, (slice) =>
+          identity && !slice.identity ? { ...slice, identity } : slice,
+        );
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 

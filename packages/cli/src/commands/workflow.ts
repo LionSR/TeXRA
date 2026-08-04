@@ -1,7 +1,7 @@
 import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -150,7 +150,7 @@ export async function runWorkflowAgent(
             if (result.outcome !== RUN_OUTCOME.CANCELLED) {
               await finalizeCliExecution(
                 result.executionId,
-                EXECUTION_STATUS.ERROR,
+                RUN_OUTCOME.FAILED,
                 'delete',
                 (finalizationError) =>
                   writeTextStderr(

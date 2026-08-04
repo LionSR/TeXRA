@@ -53,7 +53,6 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
-import { isChildExecutionErrorStatus } from '@cli/chat/tui/state/childExecutionStatus';
 import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
@@ -94,7 +93,6 @@ import {
   type StorageKey,
   type StreamPhase,
   type StreamTabId,
-  type SubagentChildInfo,
   type TodoItem,
 } from '@shared/schemas';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
@@ -112,11 +110,11 @@ function orderedSessionDescendants(parent: StreamTabId): StreamTabId[] {
   ];
 }
 
-function activeRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+function activeRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return activeSubagentsFor(parent, childStreamEntries.get(), streams.get());
 }
 
-function retainedRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+function retainedRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return retainedChildStreamsFor(
     parent,
     childStreamEntries.get(),
@@ -124,7 +122,7 @@ function retainedRows(parent: StreamTabId): readonly SubagentChildInfo[] {
   );
 }
 
-function visibleRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+function visibleRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return visibleSubagentRows(parent, childStreamEntries.get(), streams.get());
 }
 
@@ -305,7 +303,6 @@ describe('cliState stream, focus, and child-edge fields', () => {
     // active membership, then the explicit edge arrives.
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'agent-1',
         agentName: 'critic',
         childStreamId: child1,
@@ -333,7 +330,6 @@ describe('cliState stream, focus, and child-edge fields', () => {
     withStreamStatus(() => {
       applySubagentRoster(root, [
         {
-          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'codex',
           childStreamId: child1,
@@ -356,7 +352,6 @@ describe('cliState stream, focus, and child-edge fields', () => {
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
       expect(visibleRows(root)).toMatchObject([
         {
-          kind: 'subagent',
           executionId: 'agent-1',
           childStreamId: child1,
           status: STREAM_PHASE.FAILED,
@@ -453,7 +448,6 @@ describe('cliState stream, focus, and child-edge fields', () => {
           parentStreamId: root,
           items: [
             {
-              kind: 'subagent',
               executionId: 'agent-1',
               agentName: 'critic',
               childStreamId: child1,
@@ -1193,7 +1187,6 @@ describe('CLI TUI row allocation', () => {
     });
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'child-exec-1',
         agentName: 'critic',
         childStreamId: child1,
@@ -1223,7 +1216,6 @@ describe('CLI TUI row allocation', () => {
     });
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'child-exec-1',
         agentName: 'critic',
         childStreamId: child1,
@@ -1289,7 +1281,6 @@ describe('CLI TUI row allocation', () => {
       });
       applySubagentRoster(root, [
         {
-          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -1326,7 +1317,6 @@ describe('CLI TUI row allocation', () => {
       });
       applySubagentRoster(root, [
         {
-          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
           childStreamId: child1,
@@ -3044,7 +3034,6 @@ describe('subscribeRuntimeHost run facts', () => {
   it('applies direct child activity and parent-link facts without host emission', () => {
     withRunFacts((hub) => {
       const child: ActiveChildInfo = {
-        kind: 'subagent',
         executionId: 'agent-1',
         agentName: 'critic',
         childStreamId: child1,
@@ -3585,29 +3574,17 @@ describe('subscribeRuntimeHost run facts', () => {
       });
     });
   });
-
-  it('classifies child-execution error statuses', () => {
-    expect(isChildExecutionErrorStatus('running')).toBe(false);
-    expect(isChildExecutionErrorStatus('exit 0')).toBe(false);
-    expect(isChildExecutionErrorStatus('exit 1')).toBe(true);
-    expect(isChildExecutionErrorStatus('exited with code 2')).toBe(true);
-    expect(isChildExecutionErrorStatus('failed')).toBe(true);
-    // A user stop is not an error (RUN_OUTCOME keeps cancelled ≠ failed).
-    expect(isChildExecutionErrorStatus('stopped')).toBe(false);
-  });
 });
 
 describe('session tree order', () => {
   it('orders retained sibling sessions', () => {
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'e1',
         agentName: 'a',
         childStreamId: child1,
       },
       {
-        kind: 'subagent',
         executionId: 'e2',
         agentName: 'b',
         childStreamId: child2,
@@ -3658,7 +3635,6 @@ describe('child-stream ordered transition matrix', () => {
 
   function rosterRow(status?: StreamPhase, elapsed?: string) {
     return {
-      kind: 'subagent' as const,
       executionId: 'kid-exec',
       agentName: 'kid-agent',
       childStreamId: kid,
@@ -3882,7 +3858,6 @@ describe('child-stream ordered transition matrix', () => {
     setParentStream(freshKid, parentP);
     applySubagentRoster(parentP, [
       {
-        kind: 'subagent',
         executionId: 'kid-2-exec',
         agentName: 'kid-agent',
         childStreamId: freshKid,
@@ -3899,14 +3874,12 @@ describe('child-stream ordered transition matrix', () => {
     const kidA = 'kid-a' as StreamTabId;
     const kidB = 'kid-b' as StreamTabId;
     const rowA = (status?: StreamPhase) => ({
-      kind: 'subagent' as const,
       executionId: 'exec-a',
       agentName: 'a',
       childStreamId: kidA,
       status,
     });
     const rowB = (status?: StreamPhase) => ({
-      kind: 'subagent' as const,
       executionId: 'exec-b',
       agentName: 'b',
       childStreamId: kidB,

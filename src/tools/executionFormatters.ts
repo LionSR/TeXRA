@@ -1,22 +1,29 @@
 import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
-  ExecutionStatusSchema,
   STATUS_DISPLAY,
   TODO_STATUS,
+  runIdentityName,
+  type RunIdentity,
+  type RunOutcome,
   type TodoStatus,
 } from '@shared/schemas';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
-export function resolveExecutionDisplayCategory(
-  agent: string | undefined,
-  category: string | undefined,
+/**
+ * The display category of a run: an agent run shows its execution mode
+ * (`workflow` / `toolUse`), every other run shows what it IS
+ * (`process` / `workflowScript`). Identity-less legacy rows fall back to the
+ * config's category.
+ */
+export function executionDisplayCategory(
+  identity: RunIdentity | undefined,
+  config: Pick<AgentConfig, 'agentCategory'> | null | undefined,
 ): string | undefined {
-  // Raw detail reads have not crossed the listing normalization boundary;
-  // normalized listing rows use their discriminated `kind` below instead.
-  return isProcessAgent(agent) ? 'process' : category;
+  if (!identity) return config?.agentCategory;
+  return identity.kind === 'agent' ? config?.agentCategory : identity.kind;
 }
 
 function listingDisplay(entry: ExecutionListingEntry): {
@@ -25,24 +32,15 @@ function listingDisplay(entry: ExecutionListingEntry): {
   category: string | undefined;
 } {
   switch (entry.kind) {
-    case 'agent':
+    case 'run':
       return {
-        agent: entry.agentConfig.agent,
-        model: entry.agentConfig.model,
-        category: entry.runtimeCategory ?? entry.agentConfig.agentCategory,
-      };
-    case 'process':
-      return {
-        agent: entry.agentConfig.agent,
-        model: null,
-        category: 'process',
+        agent: runIdentityName(entry.identity),
+        model:
+          entry.identity.kind === 'agent' ? entry.agentConfig.model : null,
+        category: executionDisplayCategory(entry.identity, entry.agentConfig),
       };
     case 'incomplete':
-      return {
-        agent: 'unknown',
-        model: entry.runtimeCategory === 'process' ? null : 'unknown',
-        category: entry.runtimeCategory,
-      };
+      return { agent: 'unknown', model: 'unknown', category: undefined };
   }
 }
 
@@ -57,6 +55,7 @@ export function getAvailablePaths(
     case 'toolUse':
       return [...common, 'conversation', 'todos', 'workspace-files'];
     case 'workflow':
+    case 'workflowScript':
       return [...common, 'files'];
     case 'process':
       return [...common, 'output'];
@@ -79,26 +78,21 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
     : info.status;
 }
 
-/** Resolve the runtime status for an execution ID, using persisted terminal status as fallback. */
+/** Resolve the runtime status for an execution ID: live phase, else the persisted outcome. */
 export function getExecutionStatusInfo(
   executionId: string,
-  terminalStatus?: string,
+  outcome?: RunOutcome,
 ): ExecutionStatusInfo {
   const session = currentSession();
   const handle = session.executions.getHandle(executionId);
   if (handle) return session.executions.getStatus(handle);
-
-  const persistedStatus = ExecutionStatusSchema.safeParse(terminalStatus);
-  const status: ExecutionStatusInfo['status'] = persistedStatus.success
-    ? persistedStatus.data
-    : 'unknown';
-  return { status, elapsed: null };
+  return { status: outcome ?? 'unknown', elapsed: null };
 }
 
 /** Format a listing entry as a single summary line. */
 export function formatListingLine(entry: ExecutionListingEntry): string {
   const ts = formatTimestamp(entry.timestamp);
-  const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
+  const info = getExecutionStatusInfo(entry.id, entry.outcome);
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;

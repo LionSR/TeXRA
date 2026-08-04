@@ -36,17 +36,16 @@ import {
   isEmptyUsage,
   OutputFileInfoListSchema,
   PersistedWorkPlanSchema,
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
+  STREAM_TAB_META_SCHEMA_VERSION,
   planSummaryLine,
   RoundKeySchema,
   StreamTabIdSchema,
   sumUsageStats,
   TokenUsageStatsParsingBaseSchema,
-  buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
   type OutputFileInfo,
-  type RunDescriptor,
+  type RunIdentity,
   type Plan,
   type RoundIndexed,
   type StorageKey,
@@ -58,7 +57,6 @@ import {
   type UpdateStreamUsagePayload,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { mapToRecord } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -145,7 +143,7 @@ type UsageUpdateResult =
   TokenUsageStats | undefined | Promise<TokenUsageStats | undefined>;
 interface HydratedRunState {
   config?: AgentConfig;
-  descriptor?: RunDescriptor;
+  identity?: RunIdentity;
 }
 
 /**
@@ -230,20 +228,6 @@ function mergeUsagePatch(
   return merged;
 }
 
-function descriptorFromConfig(
-  stream: StreamTabId,
-  executionId: ExecutionId,
-  config: AgentConfig,
-): RunDescriptor {
-  return buildRunDescriptor({
-    streamId: stream,
-    executionId,
-    agent: config.agent,
-    category: config.agentCategory,
-    kind: isProcessAgent(config.agent) ? 'process' : 'agent',
-  });
-}
-
 /**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
  * (`records`): the accumulators, the `seeded`/`seedChain` seeding bookkeeping,
@@ -274,16 +258,17 @@ interface StreamRecord {
   workPlan: WorkPlanSnapshot;
   meta: StreamTabMeta | undefined;
   /**
-   * Run identity: the descriptor and config of the ONE execution `meta` names,
-   * always for the same execution (a `run.start` for a new one drops the
-   * previous run's config with it). The descriptor is immutable per execution,
-   * so the live `run.start` owns it and a seed never re-derives a competing one
-   * for that execution. The config is mutable and persisted — a model switch
-   * rewrites `executions/{id}/config.json` and re-emits `run.config` — so
-   * `config.json` owns it and a seed re-reads it, yielding only to a live event
-   * that landed after the seed read disk.
+   * Run identity: the execution id, identity, and config of the ONE execution
+   * `meta` names, always for the same execution (a `run.start` for a new one
+   * drops the previous run's config with it). The identity is immutable per
+   * execution, so the live `run.start` owns it and a seed only fills an
+   * absence from the durable `ExecutionMeta`. The config is mutable and
+   * persisted — a model switch rewrites `executions/{id}/config.json` and
+   * re-emits `run.config` — so `config.json` owns it and a seed re-reads it,
+   * yielding only to a live event that landed after the seed read disk.
    */
-  runDescriptor: RunDescriptor | undefined;
+  runExecutionId: ExecutionId | undefined;
+  runIdentity: RunIdentity | undefined;
   runConfig: AgentConfig | undefined;
   /**
    * Display description projected from the authority,
@@ -367,7 +352,8 @@ export class StreamSnapshotStore {
     usageUnparsed: new Map(),
     workPlan: EMPTY_WORK_PLAN,
     meta: undefined,
-    runDescriptor: undefined,
+    runExecutionId: undefined,
+    runIdentity: undefined,
     runConfig: undefined,
     description: undefined,
     descriptionRevision: 0,
@@ -477,7 +463,7 @@ export class StreamSnapshotStore {
 
         switch (event.type) {
           case 'run.start':
-            this.setRunDescriptor(event.descriptor);
+            this.setRunStart(event.streamId, event.executionId, event.identity);
             return;
           case 'run.config':
             this.setRunConfig(event.streamId, event.config, event.executionId);
@@ -1470,7 +1456,7 @@ export class StreamSnapshotStore {
     const next: StreamTabMeta = {
       ...(record.meta ?? {}),
       ...patch,
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      schemaVersion: STREAM_TAB_META_SCHEMA_VERSION,
     };
     record.meta = next;
     return next;
@@ -1484,12 +1470,10 @@ export class StreamSnapshotStore {
     // a LEGACY sidecar already carried, so rewriting an unrelated meta field
     // cannot destroy legacy display data before its Stage 7 retirement.
     const file: StreamTabMeta = {
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-      ...(next.runDescriptor !== undefined && {
-        runDescriptor: next.runDescriptor,
-      }),
+      schemaVersion: STREAM_TAB_META_SCHEMA_VERSION,
+      ...(next.executionId !== undefined && { executionId: next.executionId }),
       ...(next.taskState !== undefined &&
-        next.runDescriptor === undefined && { taskState: next.taskState }),
+        next.executionId === undefined && { taskState: next.taskState }),
       ...(next.parentStreamId !== undefined && {
         parentStreamId: next.parentStreamId,
       }),
@@ -1528,27 +1512,23 @@ export class StreamSnapshotStore {
     const record = this.getOrCreateRecord(stream);
     if (
       executionId &&
-      record.runDescriptor &&
-      record.runDescriptor.executionId !== executionId
+      record.runExecutionId &&
+      record.runExecutionId !== executionId
     ) {
+      // A config for a new execution the store never saw `run.start` for:
+      // the previous run's identity and description are not this run's.
+      // Identity stays absent (renders pending) until `run.start` or a seed
+      // reads the durable `ExecutionMeta.identity` — never synthesized here.
+      record.runIdentity = undefined;
       record.description = undefined;
       record.descriptionRevision++;
     }
     record.runConfig = config;
-    // Synthesize an identity only for a run that never emitted `run.start`
-    // (legacy meta, hosts driving the store by hand). A descriptor left over
-    // from a PREVIOUS execution is not this run's identity, so it is replaced
-    // rather than kept: the descriptor always describes the execution the
-    // stream's meta names, which is what lets the seed path tell a live pair
-    // apart from one disk has moved past.
-    let descriptor = record.runDescriptor;
-    if (executionId && descriptor?.executionId !== executionId) {
-      descriptor = descriptorFromConfig(stream, executionId, config);
-    }
-    if (descriptor) record.runDescriptor = descriptor;
-    this.queueMetaPatch(stream, {
-      ...(descriptor ? { runDescriptor: descriptor } : {}),
-    });
+    if (executionId) record.runExecutionId = executionId;
+    this.queueMetaPatch(
+      stream,
+      executionId ? { executionId } : {},
+    );
   }
 
   /**
@@ -1556,23 +1536,25 @@ export class StreamSnapshotStore {
    * facts may change model or instruction, but cannot rename or recategorize
    * the stream.
    */
-  private setRunDescriptor(descriptor: RunDescriptor): void {
-    const stream = descriptor.streamId;
+  private setRunStart(
+    stream: StreamTabId,
+    executionId: ExecutionId,
+    identity: RunIdentity,
+  ): void {
     const record = this.getOrCreateRecord(stream);
     // The config of the run this stream just left is not this run's config;
     // `run.config` follows `run.start` with the new one. A config carrying no
     // identity yet is this run's until something says otherwise, so only a
     // KNOWN previous execution drops it.
-    const previous = record.runDescriptor;
-    if (previous && previous.executionId !== descriptor.executionId) {
+    const previous = record.runExecutionId;
+    if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
       record.descriptionRevision++;
     }
-    record.runDescriptor = descriptor;
-    this.queueMetaPatch(stream, {
-      runDescriptor: descriptor,
-    });
+    record.runExecutionId = executionId;
+    record.runIdentity = identity;
+    this.queueMetaPatch(stream, { executionId });
   }
 
   private setParentStream(
@@ -1594,8 +1576,8 @@ export class StreamSnapshotStore {
     record.descriptionRevision++;
   }
 
-  getRunDescriptor(stream: StreamTabId): RunDescriptor | undefined {
-    return this.records.get(stream)?.runDescriptor;
+  getRunIdentity(stream: StreamTabId): RunIdentity | undefined {
+    return this.records.get(stream)?.runIdentity;
   }
 
   getRunConfig(stream: StreamTabId): AgentConfig | undefined {
@@ -1603,7 +1585,7 @@ export class StreamSnapshotStore {
   }
 
   getExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    return this.records.get(stream)?.runDescriptor?.executionId;
+    return this.records.get(stream)?.runExecutionId;
   }
 
   /** Streams with persisted sidecars under `streamData/`. */
@@ -1626,7 +1608,7 @@ export class StreamSnapshotStore {
   async readPersistedExecutionId(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
-    return (await readMeta(this.kv(stream)))?.runDescriptor?.executionId;
+    return (await readMeta(this.kv(stream)))?.executionId;
   }
 
   /**
@@ -1639,9 +1621,7 @@ export class StreamSnapshotStore {
   }> {
     const meta = await readMeta(this.kv(stream));
     return {
-      ...(meta?.runDescriptor?.executionId
-        ? { executionId: meta.runDescriptor.executionId }
-        : {}),
+      ...(meta?.executionId ? { executionId: meta.executionId } : {}),
       ...(meta?.parentStreamId
         ? { parentStreamId: meta.parentStreamId as StreamTabId }
         : {}),
@@ -1677,7 +1657,7 @@ export class StreamSnapshotStore {
     const record = this.records.get(stream);
     return (
       record?.description ??
-      (!record?.runDescriptor || record.descriptionRevision === 0
+      (!record?.runExecutionId || record.descriptionRevision === 0
         ? record?.meta?.description
         : undefined)
     );
@@ -1687,7 +1667,7 @@ export class StreamSnapshotStore {
   getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
     const map = new Map<StreamTabId, ExecutionId>();
     for (const [stream, record] of this.records) {
-      const executionId = record.runDescriptor?.executionId;
+      const executionId = record.runExecutionId;
       if (executionId) map.set(stream, executionId);
     }
     return map;
@@ -2100,7 +2080,7 @@ export class StreamSnapshotStore {
       logger.warn(
         CHANNEL,
         `Loaded legacy taskState for stream ${stream}; run config should come from execution config on new writes.`,
-        { data: { stream, executionId: meta.runDescriptor?.executionId } },
+        { data: { stream, executionId: meta.executionId } },
       );
       return parsed.data.agentConfig;
     }
@@ -2111,7 +2091,7 @@ export class StreamSnapshotStore {
       {
         data: {
           stream,
-          executionId: meta.runDescriptor?.executionId,
+          executionId: meta.executionId,
           error: z.prettifyError(parsed.error),
         },
       },
@@ -2123,36 +2103,32 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     meta: StreamTabMeta,
   ): Promise<HydratedRunState> {
-    const executionId = meta.runDescriptor?.executionId;
-    let descriptor = meta.runDescriptor;
+    const executionId = meta.executionId;
+    let identity: RunIdentity | undefined;
 
     if (executionId) {
       let config: AgentConfig | null = null;
       try {
-        config = await getExecutionStore(executionId).readConfig();
+        const store = getExecutionStore(executionId);
+        const [execMeta, execConfig] = await Promise.all([
+          store.readMeta(),
+          store.readConfig(),
+        ]);
+        identity = execMeta?.identity;
+        config = execConfig;
       } catch (error) {
         logger.warn(
           CHANNEL,
-          `Could not read execution config for stream ${stream}; falling back to legacy taskState.`,
+          `Could not read execution record for stream ${stream}; falling back to legacy taskState.`,
           { data: { stream, executionId, error } },
         );
       }
-      if (config) {
-        return {
-          config,
-          descriptor:
-            descriptor ?? descriptorFromConfig(stream, executionId, config),
-        };
-      }
+      if (config) return { config, identity };
     }
 
     const config = this.parseLegacyTaskState(stream, meta);
-    if (!config) return { descriptor };
-    if (executionId) {
-      descriptor =
-        descriptor ?? descriptorFromConfig(stream, executionId, config);
-    }
-    return { config, descriptor };
+    if (!config) return { identity };
+    return { config, identity };
   }
 
   /** Seed the in-memory accumulators for one stream. */
@@ -2198,10 +2174,11 @@ export class StreamSnapshotStore {
     // stream was evicted during the await, that would resurrect a record for a
     // deleted stream and defeat `writeMergedSidecars`' eviction check (#8226);
     // an orphaned `record` is mutated harmlessly and never written.
-    const executionId = meta?.runDescriptor?.executionId;
-    const previousExecutionId = record.runDescriptor?.executionId;
+    const executionId = meta?.executionId;
+    const previousExecutionId = record.runExecutionId;
     if (!meta || previousExecutionId !== executionId) {
-      record.runDescriptor = undefined;
+      record.runExecutionId = undefined;
+      record.runIdentity = undefined;
       record.runConfig = undefined;
       // The display description belongs to the execution it was projected
       // from (#9590 Stage 6); when identity changes hands, drop it with the
@@ -2216,9 +2193,10 @@ export class StreamSnapshotStore {
       if (this.streamVersion(stream) !== version) return;
       // Re-checked after the await: a `run.start` for another execution can
       // land during it, and this seed's pair belongs to the run it read.
-      const liveDescriptor = record.runDescriptor;
-      if (!liveDescriptor || liveDescriptor.executionId === executionId) {
-        record.runDescriptor ??= hydrated.descriptor;
+      const liveExecutionId = record.runExecutionId;
+      if (liveExecutionId === undefined || liveExecutionId === executionId) {
+        record.runExecutionId ??= executionId;
+        record.runIdentity ??= hydrated.identity;
         const liveRunConfig =
           record.runConfig !== undefined &&
           (pendingLiveWrite || record.runConfig !== configBeforeHydration);
@@ -2337,14 +2315,14 @@ export class StreamSnapshotStore {
     streamId: StreamTabId,
     record: StreamRecord,
   ): Promise<void> {
-    const executionId = record.runDescriptor?.executionId;
+    const executionId = record.runExecutionId;
     if (!executionId) return;
     const revision = record.descriptionRevision;
     try {
       const execMeta = await getExecutionStore(executionId).readMeta();
       if (
         this.records.get(streamId) !== record ||
-        record.runDescriptor?.executionId !== executionId ||
+        record.runExecutionId !== executionId ||
         record.descriptionRevision !== revision
       ) {
         return;

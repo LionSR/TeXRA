@@ -13,10 +13,7 @@ import {
 import { KVStore } from '@common/storage/KVStore';
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import {
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
-  buildRunDescriptor,
-} from '@shared/schemas';
+import { STREAM_TAB_META_SCHEMA_VERSION } from '@shared/schemas';
 import type {
   CompileFailure,
   ExecutionId,
@@ -135,24 +132,9 @@ async function writeMetaFile(
   stream: StreamTabId,
   meta: Record<string, unknown>,
 ): Promise<void> {
-  const { executionId, ...rest } = meta;
-  let runDescriptor = rest.runDescriptor;
-  if (runDescriptor === undefined && typeof executionId === 'string') {
-    const config = await getExecutionStore(
-      executionId as ExecutionId,
-    ).readConfig();
-    runDescriptor = buildRunDescriptor({
-      streamId: stream,
-      executionId: executionId as ExecutionId,
-      agent: config?.agent ?? 'search',
-      category: config?.agentCategory ?? AgentCategory.ToolUse,
-      kind: 'agent',
-    });
-  }
   await writeStreamFile(stream, 'meta.json', {
-    schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-    ...rest,
-    ...(runDescriptor === undefined ? {} : { runDescriptor }),
+    schemaVersion: STREAM_TAB_META_SCHEMA_VERSION,
+    ...meta,
   });
 }
 
@@ -301,6 +283,7 @@ describe('StreamSnapshotStore', () => {
     // authority write to `ExecutionMeta.description` lands before the event.
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
+      identity: { kind: 'agent', agent: 'session-label' },
       description: 'session-search / kimi26T',
     });
 
@@ -309,13 +292,9 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'run.start',
-        descriptor: buildRunDescriptor({
-          streamId: STREAM,
-          executionId,
-          agent: 'session-label',
-          category: AgentCategory.ToolUse,
-          kind: 'agent',
-        }),
+        streamId: STREAM,
+        executionId,
+        identity: { kind: 'agent', agent: 'session-label' },
       },
     });
     events.emit({
@@ -444,12 +423,9 @@ describe('StreamSnapshotStore', () => {
     expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
     expect(reader.getRunConfig(STREAM)).toEqual(runConfig);
-    expect(reader.getRunDescriptor(STREAM)).toMatchObject({
-      streamId: STREAM,
-      executionId,
-      agent: 'session-label',
-      category: AgentCategory.ToolUse,
+    expect(reader.getRunIdentity(STREAM)).toEqual({
       kind: 'agent',
+      agent: 'session-label',
     });
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);
@@ -458,18 +434,19 @@ describe('StreamSnapshotStore', () => {
     expect(goalPausedOnly.runUsage).toEqual({});
   });
 
-  it('treats run.start as authoritative after run.config synthesizes identity', async () => {
+  it('keeps identity pending after run.config until run.start supplies it', async () => {
     const events = new SessionEventHub();
     const writer = new StreamSnapshotStore();
     const detach = writer.attachSessionEvents(events);
     const executionId = 'a1b2c3d4' as ExecutionId;
     const runConfig = toolUseConfig('worker-agent');
-    const workflowDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId,
-      agent: 'workflow-script',
-      category: AgentCategory.Workflow,
+    const workflowIdentity = {
       kind: 'workflowScript',
+      workflowName: 'workflow-script',
+    } as const;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      identity: workflowIdentity,
     });
 
     events.emit({
@@ -482,27 +459,27 @@ describe('StreamSnapshotStore', () => {
         config: runConfig,
       },
     });
-    expect(writer.getRunDescriptor(STREAM)).toMatchObject({
-      agent: 'worker-agent',
-      kind: 'agent',
-    });
+    // No synthesis from the config: identity stays pending until run.start.
+    expect(writer.getRunIdentity(STREAM)).toBeUndefined();
 
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
         type: 'run.start',
-        descriptor: workflowDescriptor,
+        streamId: STREAM,
+        executionId,
+        identity: workflowIdentity,
       },
     });
     detach();
     await writer.flush();
 
-    expect(writer.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(writer.getRunIdentity(STREAM)).toEqual(workflowIdentity);
     const reader = new StreamSnapshotStore();
     await reader.load([STREAM]);
     expect(reader.getExecutionId(STREAM)).toBe(executionId);
-    expect(reader.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(reader.getRunIdentity(STREAM)).toEqual(workflowIdentity);
   });
 
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {
@@ -915,7 +892,7 @@ describe('StreamSnapshotStore', () => {
       parentStreamId?: unknown;
       description?: unknown;
     };
-    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
+    expect(raw.schemaVersion).toBe(STREAM_TAB_META_SCHEMA_VERSION);
     expect(raw.parentStreamId).toBe(OTHER_STREAM);
     // The rejected file's fields do not leak into the fresh current record.
     expect(raw.description).toBeUndefined();
@@ -943,7 +920,7 @@ describe('StreamSnapshotStore', () => {
       parentStreamId?: unknown;
       description?: unknown;
     };
-    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
+    expect(raw.schemaVersion).toBe(STREAM_TAB_META_SCHEMA_VERSION);
     expect(raw.taskState).toEqual(taskState);
     expect(raw.parentStreamId).toBe(OTHER_STREAM);
     expect(raw.description).toBe('Prior session');
@@ -970,19 +947,22 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('resolves the descriptor execution id everywhere', async () => {
+  it('lifts the legacy runDescriptor execution id everywhere', async () => {
     await installPlatform();
     const executionId = 'aa11bb22' as ExecutionId;
     const runConfig = toolUseConfig('legacy-search');
     await getExecutionStore(executionId).writeConfig(runConfig);
+    // Legacy pre-FK sidecar: a whole runDescriptor object whose executionId
+    // IS the FK, lifted once at the parse boundary.
     await writeMetaFile(STREAM, {
-      runDescriptor: buildRunDescriptor({
+      runDescriptor: {
+        schemaVersion: 1,
         streamId: STREAM,
         executionId,
         agent: 'legacy-search',
         category: AgentCategory.ToolUse,
         kind: 'agent',
-      }),
+      },
     });
 
     const store = new StreamSnapshotStore();
@@ -996,43 +976,23 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
-  it('omits an invalid run descriptor without discarding other stream metadata', async () => {
-    const executionId = 'aa11bb33' as ExecutionId;
-    const validDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId,
-      agent: 'legacy-search',
-      category: AgentCategory.ToolUse,
-      kind: 'agent',
-    });
-    const invalidDescriptors = [
-      { ...validDescriptor, kind: undefined },
-      { kind: 'agent', executionId: 'not-hex!!' },
-    ];
+  it('discards meta whose legacy runDescriptor is unreadable, loudly', async () => {
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    await writeMetaFile(STREAM, {
+      parentStreamId: OTHER_STREAM,
+      description: 'Prior session',
+      runDescriptor: { kind: 'agent', executionId: 'not-hex!!' },
+    });
 
-    for (const [index, runDescriptor] of invalidDescriptors.entries()) {
-      const description = `Prior session ${index}`;
-      await writeMetaFile(STREAM, {
-        parentStreamId: OTHER_STREAM,
-        description,
-        runDescriptor,
-      });
-
-      const store = new StreamSnapshotStore();
-      await expect(
-        store.readPersistedStreamAssociation(STREAM),
-      ).resolves.toEqual({ parentStreamId: OTHER_STREAM });
-      await expect(store.read(STREAM)).resolves.toMatchObject({
-        executionId: undefined,
-        parentStreamId: OTHER_STREAM,
-        description,
-      });
-    }
-
+    const store = new StreamSnapshotStore();
+    await expect(store.read(STREAM)).resolves.toMatchObject({
+      executionId: undefined,
+      parentStreamId: undefined,
+      description: undefined,
+    });
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
-      expect.stringContaining('unreadable run descriptor'),
+      expect.stringContaining('unreadable persisted stream metadata'),
       expect.anything(),
     );
   });
@@ -1098,7 +1058,12 @@ describe('StreamSnapshotStore', () => {
     const persistedMeta = await executionStore.readMeta();
     const readStarted = pDefer<void>();
     const deferredRead = pDefer<typeof persistedMeta>();
+    // The first readMeta is the seed's run-state hydration; the deferred one
+    // is the description-hydration read the eviction races against.
+    let readMetaCalls = 0;
     vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+      readMetaCalls += 1;
+      if (readMetaCalls === 1) return Promise.resolve(persistedMeta);
       readStarted.resolve();
       return deferredRead.promise;
     });
@@ -1137,18 +1102,16 @@ describe('StreamSnapshotStore', () => {
     const facts = snapshotFacts(store);
     const loading = store.load([STREAM]);
     await readStarted.promise;
-    const newDescriptor = buildRunDescriptor({
+    const newIdentity = { kind: 'agent', agent: 'new-search' } as const;
+    facts.setRunStart({
       streamId: STREAM,
       executionId: newExecutionId,
-      agent: 'new-search',
-      category: AgentCategory.ToolUse,
-      kind: 'agent',
+      identity: newIdentity,
     });
-    facts.setRunDescriptor(newDescriptor);
     deferredRead.resolve(oldMeta);
     await loading;
 
-    expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
+    expect(store.getRunIdentity(STREAM)).toEqual(newIdentity);
     expect(store.getDescription(STREAM)).toBeUndefined();
   });
 
@@ -1165,7 +1128,12 @@ describe('StreamSnapshotStore', () => {
     const capturedMeta = await executionStore.readMeta();
     const readStarted = pDefer<void>();
     const deferredRead = pDefer<typeof capturedMeta>();
+    // The first readMeta is the seed's run-state hydration; the deferred one
+    // is the description-hydration read this test races against.
+    let readMetaCalls = 0;
     vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+      readMetaCalls += 1;
+      if (readMetaCalls === 1) return Promise.resolve(capturedMeta);
       readStarted.resolve();
       return deferredRead.promise;
     });
@@ -1401,13 +1369,9 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'run.start',
-        descriptor: buildRunDescriptor({
-          streamId: STREAM,
-          executionId,
-          agent: 'search',
-          category: AgentCategory.ToolUse,
-          kind: 'agent',
-        }),
+        streamId: STREAM,
+        executionId,
+        identity: { kind: 'agent', agent: 'search' },
       },
     });
     // Emitter contract (#9590 A4): the authority write to
@@ -1427,31 +1391,27 @@ describe('StreamSnapshotStore', () => {
     detach();
     await store.flush();
 
-    // Persistence boundary: the sidecar meta carries the descriptor reverse
-    // edge but no description copy — the sidecar write stopped in Stage 6.
+    // Persistence boundary: the sidecar meta carries the execution FK but no
+    // description copy — the sidecar write stopped in Stage 6.
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
-      runDescriptor?: { executionId?: unknown };
+      executionId?: unknown;
       description?: unknown;
     };
-    expect(raw.runDescriptor).toMatchObject({ executionId });
+    expect(raw.executionId).toBe(executionId);
     expect(raw.description).toBeUndefined();
 
-    // A fresh store reads the description back via descriptor → ExecutionMeta.
+    // A fresh store reads the description back via the FK → ExecutionMeta.
     const reloaded = new StreamSnapshotStore();
     await reloaded.load([STREAM]);
     expect(reloaded.getDescription(STREAM)).toBe('Current label');
 
     // The label is execution-scoped: a live run.start handing the stream to a
     // new execution synchronously drops the previous run's description.
-    snapshotFacts(reloaded).setRunDescriptor(
-      buildRunDescriptor({
-        streamId: STREAM,
-        executionId: 'bb77bb88' as ExecutionId,
-        agent: 'search',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    snapshotFacts(reloaded).setRunStart({
+      streamId: STREAM,
+      executionId: 'bb77bb88' as ExecutionId,
+      identity: { kind: 'agent', agent: 'search' },
+    });
     expect(reloaded.getDescription(STREAM)).toBeUndefined();
   });
 
@@ -1481,13 +1441,10 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       executionId?: unknown;
-      runDescriptor?: { executionId?: unknown; agent?: unknown };
+      runDescriptor?: unknown;
     };
-    expect(raw.executionId).toBeUndefined();
-    expect(raw.runDescriptor).toMatchObject({
-      executionId: newExecutionId,
-      agent: 'new-search',
-    });
+    expect(raw.executionId).toBe(newExecutionId);
+    expect(raw.runDescriptor).toBeUndefined();
   });
 
   it('keeps a same-execution model switch that arrives during async hydration', async () => {
@@ -1516,33 +1473,34 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('does not re-derive the run.start descriptor when a seed re-reads disk meta', async () => {
+  it('does not re-derive the run.start identity when a seed re-reads disk meta', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
     const runConfig = toolUseConfig('worker-agent');
-    const workflowDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId,
-      agent: 'workflow-script',
-      category: AgentCategory.Workflow,
+    const workflowIdentity = {
       kind: 'workflowScript',
-    });
+      workflowName: 'workflow-script',
+    } as const;
     await getExecutionStore(executionId).writeConfig(runConfig);
 
     const store = new StreamSnapshotStore();
-    snapshotFacts(store).setRunDescriptor(workflowDescriptor);
+    snapshotFacts(store).setRunStart({
+      streamId: STREAM,
+      executionId,
+      identity: workflowIdentity,
+    });
     snapshotFacts(store).setRunConfig(STREAM, runConfig, executionId);
     await store.flush();
 
-    // Disk meta drops back to the pre-descriptor shape for the same execution.
-    // Re-seeding may read it, but may not synthesize a competing identity from
-    // the execution config over the one run.start emitted.
+    // Disk meta names the same execution but carries no identity of its own.
+    // Re-seeding may read it, but may not synthesize a competing identity
+    // from the execution config over the one run.start emitted.
     await writeMetaFile(STREAM, {
       executionId,
     });
     await store.load([STREAM]);
 
-    expect(store.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(store.getRunIdentity(STREAM)).toEqual(workflowIdentity);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
@@ -1561,6 +1519,10 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
+    await getExecutionStore(foreignExecutionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      identity: { kind: 'agent', agent: 'foreign-search' },
+    });
     await writeMetaFile(STREAM, {
       executionId: foreignExecutionId,
     });
@@ -1568,8 +1530,8 @@ describe('StreamSnapshotStore', () => {
 
     expect(store.getExecutionId(STREAM)).toBe(foreignExecutionId);
     expect(store.getRunConfig(STREAM)).toEqual(foreignConfig);
-    expect(store.getRunDescriptor(STREAM)).toMatchObject({
-      executionId: foreignExecutionId,
+    expect(store.getRunIdentity(STREAM)).toEqual({
+      kind: 'agent',
       agent: 'foreign-search',
     });
   });
@@ -1609,21 +1571,25 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
     expect(store.getRunConfig(STREAM)).toEqual(legacyTaskState.agentConfig);
-    expect(store.getRunDescriptor(STREAM)).toBeUndefined();
+    expect(store.getRunIdentity(STREAM)).toBeUndefined();
 
-    // A legacy config carries no descriptor, so the handoff cannot be detected
-    // from the descriptor half alone: the pair still has to move together.
+    // A legacy config carries no identity, so the handoff cannot be detected
+    // from the identity half alone: the pair still has to move together.
     const executionId = 'def456' as ExecutionId;
     const handoffConfig = toolUseConfig('handoff-search');
     await getExecutionStore(executionId).writeConfig(handoffConfig);
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      identity: { kind: 'agent', agent: 'handoff-search' },
+    });
     await writeMetaFile(STREAM, {
       executionId,
     });
     await store.load([STREAM]);
 
     expect(store.getRunConfig(STREAM)).toEqual(handoffConfig);
-    expect(store.getRunDescriptor(STREAM)).toMatchObject({
-      executionId,
+    expect(store.getRunIdentity(STREAM)).toEqual({
+      kind: 'agent',
       agent: 'handoff-search',
     });
   });
@@ -1638,14 +1604,14 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunDescriptor(STREAM)).toMatchObject({ executionId });
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
 
     await writeMetaFile(STREAM, {
       description: 'Detached tab',
     });
     await store.load([STREAM]);
 
-    expect(store.getRunDescriptor(STREAM)).toBeUndefined();
+    expect(store.getRunIdentity(STREAM)).toBeUndefined();
     expect(store.getRunConfig(STREAM)).toBeUndefined();
     expect(store.getExecutionId(STREAM)).toBeUndefined();
     expect(store.getDescription(STREAM)).toBe('Detached tab');
@@ -1665,24 +1631,26 @@ describe('StreamSnapshotStore', () => {
     await store.load([STREAM]);
     expect(store.getRunConfig(STREAM)).toEqual(oldConfig);
 
-    const newDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId: newExecutionId,
-      agent: 'workflow-script',
-      category: AgentCategory.Workflow,
+    const newIdentity = {
       kind: 'workflowScript',
-    });
+      workflowName: 'workflow-script',
+    } as const;
     // `run.start` for the next execution lands while the seed is still reading
     // the previous one's config, which belongs to neither the new identity nor
     // this stream any more.
     const wasRunStartInjected = injectDuringExecutionConfigHydration(
       oldExecutionId,
-      () => snapshotFacts(store).setRunDescriptor(newDescriptor),
+      () =>
+        snapshotFacts(store).setRunStart({
+          streamId: STREAM,
+          executionId: newExecutionId,
+          identity: newIdentity,
+        }),
     );
     await store.load([STREAM]);
 
     expect(wasRunStartInjected).toHaveBeenCalledOnce();
-    expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
+    expect(store.getRunIdentity(STREAM)).toEqual(newIdentity);
     expect(store.getRunConfig(STREAM)).toBeUndefined();
   });
 
@@ -2905,16 +2873,22 @@ describe('StreamSnapshotStore', () => {
     expect(snap.plan).toBeNull();
   });
 
-  it('drops a malformed executionId at the read entry without aborting the snapshot', async () => {
-    // A legacy/corrupt executionId would trip the strict ExecutionIdSchema in
-    // assembleSnapshot; validating at the read entry drops just the bad pointer
-    // so the rest of meta (description) still surfaces and resume never throws.
+  it('discards meta with a malformed executionId loudly without aborting the snapshot', async () => {
+    // A legacy/corrupt executionId fails StreamTabMetaSchema, so the whole
+    // meta record is discarded (warned, not silently coerced); the snapshot
+    // read still succeeds with an empty-but-valid record.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'meta.json', {
       executionId: 'not-hex!!',
       description: 'Prior session',
     });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
-    expect(snap.description).toBe('Prior session');
+    expect(snap.description).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('unreadable persisted stream metadata'),
+      expect.anything(),
+    );
   });
 });

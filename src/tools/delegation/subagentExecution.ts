@@ -164,6 +164,7 @@ export async function executeSubagent(
   });
   await registerExecution(executionId, config, agentName, {
     streamId: childStreamId,
+    identity: { kind: 'agent', agent: config.agent },
     parentExecutionId,
   });
   const runWithOwnership = captureOwnedExecutionLease(executionId);

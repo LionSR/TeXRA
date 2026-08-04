@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearStoreCache,
@@ -55,7 +55,11 @@ describe('execution listing normalization', () => {
     );
 
     expect(await listExecutions()).toEqual([
-      expect.objectContaining({ id, kind: 'agent' }),
+      expect.objectContaining({
+        id,
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'assistant' },
+      }),
     ]);
   });
 
@@ -82,7 +86,7 @@ describe('execution listing normalization', () => {
       expect.objectContaining({
         id,
         description: 'Updated by another host',
-        terminalStatus: 'completed',
+        outcome: 'completed',
       }),
     ]);
   });
@@ -101,9 +105,10 @@ describe('execution listing normalization', () => {
 
     expect(entries).toEqual([
       {
-        kind: 'agent',
+        kind: 'run',
         id,
         timestamp: '2026-07-15T10:00:00.000Z',
+        identity: { kind: 'agent', agent: 'assistant' },
         agentConfig,
       },
     ]);
@@ -138,25 +143,55 @@ describe('execution listing normalization', () => {
     const entries = await listExecutions();
 
     expect(entries.map(({ kind }) => kind)).toEqual([
-      'process',
-      'agent',
+      'run',
+      'run',
       'incomplete',
     ]);
     expect(entries[0]).toMatchObject({
-      kind: 'process',
+      kind: 'run',
+      identity: { kind: 'process', tool: 'assistant' },
       agentConfig: { agent: 'assistant' },
     });
     expect(entries[1]).toMatchObject({
-      kind: 'agent',
+      kind: 'run',
+      identity: { kind: 'agent', agent: 'bash' },
       agentConfig: { agent: 'bash' },
     });
     expect(entries[2]).toEqual({
       kind: 'incomplete',
       id: incompleteId,
       timestamp: '2026-07-15T07:00:00.000Z',
-      runtimeCategory: 'legacy',
     });
     expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
+  });
+
+  it('heals unstamped legacy rows durably on the listing read', async () => {
+    const legacyId = 'abc777' as ExecutionId;
+    const store = getExecutionStore(legacyId);
+    // Legacy row: pre-identity metadata with legacy terminal residue, old
+    // enough to be safely classified and written back.
+    await store.writeMeta({
+      timestamp: '2026-07-15T06:00:00.000Z',
+      category: 'process',
+      terminalStatus: 'interrupted',
+    });
+    await store.writeConfig(config('bash'));
+
+    const entries = await listExecutions();
+    expect(entries).toEqual([
+      expect.objectContaining({
+        kind: 'run',
+        identity: { kind: 'process', tool: 'bash' },
+        outcome: 'cancelled',
+      }),
+    ]);
+
+    // The async best-effort write-back stamps identity and outcome durably.
+    await vi.waitFor(async () => {
+      const healed = await store.readMeta();
+      expect(healed?.identity).toEqual({ kind: 'process', tool: 'bash' });
+      expect(healed?.outcome).toBe('cancelled');
+    });
   });
 
   it('keeps agent-spawned child runs out of history listings', async () => {
