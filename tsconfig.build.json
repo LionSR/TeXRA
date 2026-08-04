@@ -13,31 +13,89 @@
     "sourceMap": false,
     "types": ["node"],
     "paths": {
-      "@shared/*": ["./src/shared/*.ts", "./src/shared/*/index.ts"],
-      "@common/*": ["./src/common/*.ts", "./src/common/*/index.ts"],
-      "@agent/*": ["./src/agent/*.ts", "./src/agent/*/index.ts"],
-      "@hosts/*": ["./src/hosts/*.ts", "./src/hosts/*/index.ts"],
-      "@utils/*": ["./src/utils/*.ts", "./src/utils/*/index.ts"],
-      "@logger/*": ["./src/logger/*.ts", "./src/logger/*/index.ts"],
-      "@telemetry/*": ["./src/telemetry/*.ts", "./src/telemetry/*/index.ts"],
+      "@shared/*": [
+        "./src/shared/*.ts",
+        "./src/shared/*/index.ts",
+        "./src/shared/*"
+      ],
+      "@common/*": [
+        "./src/common/*.ts",
+        "./src/common/*/index.ts",
+        "./src/common/*"
+      ],
+      "@agent/*": [
+        "./src/agent/*.ts",
+        "./src/agent/*/index.ts",
+        "./src/agent/*"
+      ],
+      "@hosts/*": [
+        "./src/hosts/*.ts",
+        "./src/hosts/*/index.ts",
+        "./src/hosts/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*.ts",
+        "./src/utils/*/index.ts",
+        "./src/utils/*"
+      ],
+      "@logger/*": [
+        "./src/logger/*.ts",
+        "./src/logger/*/index.ts",
+        "./src/logger/*"
+      ],
+      "@telemetry/*": [
+        "./src/telemetry/*.ts",
+        "./src/telemetry/*/index.ts",
+        "./src/telemetry/*"
+      ],
       "@transcript": ["./src/transcript/index.ts"],
-      "@transcript/*": ["./src/transcript/*.ts", "./src/transcript/*/index.ts"],
-      "@latex/*": ["./src/latex/*.ts", "./src/latex/*/index.ts"],
-      "@model/*": ["./src/model/*.ts", "./src/model/*/index.ts"],
-      "@skills/*": ["./src/skills/*.ts", "./src/skills/*/index.ts"],
+      "@transcript/*": [
+        "./src/transcript/*.ts",
+        "./src/transcript/*/index.ts",
+        "./src/transcript/*"
+      ],
+      "@latex/*": [
+        "./src/latex/*.ts",
+        "./src/latex/*/index.ts",
+        "./src/latex/*"
+      ],
+      "@model/*": [
+        "./src/model/*.ts",
+        "./src/model/*/index.ts",
+        "./src/model/*"
+      ],
+      "@skills/*": [
+        "./src/skills/*.ts",
+        "./src/skills/*/index.ts",
+        "./src/skills/*"
+      ],
       "@housekeeping": ["./src/housekeeping/index.ts"],
       "@housekeeping/*": [
         "./src/housekeeping/*.ts",
-        "./src/housekeeping/*/index.ts"
+        "./src/housekeeping/*/index.ts",
+        "./src/housekeeping/*"
       ],
       "@replacement/*": [
         "./src/replacement/*.ts",
-        "./src/replacement/*/index.ts"
+        "./src/replacement/*/index.ts",
+        "./src/replacement/*"
       ],
-      "@tools/*": ["./src/tools/*.ts", "./src/tools/*/index.ts"],
-      "@eventBus/*": ["./src/eventBus/*.ts", "./src/eventBus/*/index.ts"],
-      "@auth/*": ["./src/auth/*.ts", "./src/auth/*/index.ts"],
-      "@platform/*": ["./src/platform/*.ts", "./src/platform/*/index.ts"]
+      "@tools/*": [
+        "./src/tools/*.ts",
+        "./src/tools/*/index.ts",
+        "./src/tools/*"
+      ],
+      "@eventBus/*": [
+        "./src/eventBus/*.ts",
+        "./src/eventBus/*/index.ts",
+        "./src/eventBus/*"
+      ],
+      "@auth/*": ["./src/auth/*.ts", "./src/auth/*/index.ts", "./src/auth/*"],
+      "@platform/*": [
+        "./src/platform/*.ts",
+        "./src/platform/*/index.ts",
+        "./src/platform/*"
+      ]
     }
   },
   "include": ["packages/agent/src/**/*.ts", "src/types/ambient.d.ts"],

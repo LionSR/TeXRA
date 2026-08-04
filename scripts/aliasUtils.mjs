@@ -20,7 +20,12 @@ export function loadAliases(rootDir) {
       .filter(([, values]) => !values[0].endsWith('.d.ts'))
       .map(([key, values]) => {
         const aliasKey = key.replace('/*', '');
-        const pathValue = values[0].replace('/*', '');
+        // Prefer the bare '*' variant (ends with just '/*') — it strips
+        // cleanly to a directory path for build tools.  Fall back to the
+        // first value when there is no bare variant (e.g. single-file
+        // mappings like "@openrouter/sdk").
+        const best = values.find((v) => v.endsWith('/*')) ?? values[0];
+        const pathValue = best.replace('/*', '');
 
         return [aliasKey, resolve(rootDir, pathValue)];
       }),
@@ -124,17 +129,9 @@ export const BUILD_EXCLUDED_ALIASES = [
 /** Derives the declaration-only agent build map from the root aliases. */
 export function deriveBuildPaths(rootPaths) {
   return Object.fromEntries(
-    Object.entries(rootPaths)
-      .filter(([key]) => !BUILD_EXCLUDED_ALIASES.includes(key))
-      .map(([key, values]) => [
-        key,
-        key.endsWith('/*')
-          ? values.flatMap((value) => {
-              const prefix = value.slice(0, -1);
-              return [`${prefix}*.ts`, `${prefix}*/index.ts`];
-            })
-          : values.map((value) => `${value}/index.ts`),
-      ]),
+    Object.entries(rootPaths).filter(
+      ([key]) => !BUILD_EXCLUDED_ALIASES.includes(key),
+    ),
   );
 }
 
@@ -147,7 +144,13 @@ export function loadAliasEntries(rootDir) {
       const requiresSubpath = key.endsWith('/*');
 
       return values
-        .filter((pathValue) => !pathValue.endsWith('.d.ts'))
+        .filter(
+          (pathValue) =>
+            !pathValue.endsWith('.d.ts') &&
+            // Only use the bare '*' variant for build aliases — the *.ts
+            // and */index.ts variants are for tsc nodenext resolution only.
+            pathValue.endsWith('/*'),
+        )
         .map((pathValue) => ({
           alias,
           requiresSubpath,

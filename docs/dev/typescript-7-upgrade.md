@@ -2,6 +2,12 @@
 
 Status: **implemented on branch `feat/typescript-7`, all checks green** · Last updated: 2026-08-04
 
+Moved from `module: commonjs` + `moduleResolution: bundler` (TS 6 transitional
+combo) to full **`module: nodenext` + `moduleResolution: nodenext`** — the
+compatibility layer is gone. Every paths alias now uses three variants:
+`*.ts`, `*/index.ts`, and bare `*` (catches explicit-extension imports like
+`.mts`/`.js` under both `nodenext` and `bundler`-mode configs).
+
 Accumulating doc for the TeXRA workspace's move from TypeScript 6 to
 TypeScript 7 (the Go-native compiler). Facts below were verified against the
 linked sources and against dry-run compiler probes on this repo.
@@ -19,8 +25,9 @@ linked sources and against dry-run compiler probes on this repo.
   [typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940)
   (locked; labeled `blocked by external API`).
 - Repo-specific dry runs show the config migration is **config-only, zero
-  source edits**: `moduleResolution: bundler` + drop `baseUrl` + `./`-prefix
-  all `paths` values typechecks clean on this codebase.
+  source edits**: `moduleResolution: nodenext` + drop `baseUrl` + three-value
+  `paths` variants (`*.ts`, `*/index.ts`, bare `*`) typechecks clean on this
+  codebase.
 
 ## Verified facts (with sources)
 
@@ -143,10 +150,14 @@ Dry-run probes (ran the real TS 6 compiler against TS-7-style configs):
 | same + `*.ts` / `*/index.ts` path variants (like `tsconfig.build.json`)                                             | **0**  | config-only fix                                                                                    |
 | `commonjs` kept + `moduleResolution: bundler`, no `baseUrl`, `./`-prefixed paths (incl. `./node_modules/…` entries) | **0**  | simplest: no path variants needed                                                                  |
 
-**Recommended repo path:** keep `module: commonjs`, switch root + extension
-configs to `moduleResolution: bundler`, drop `baseUrl`, `./`-prefix all
-`paths` values (update `scripts/sync-tsconfig-paths.mjs` to generate them so
-`check:tsconfig-paths` stays green), drop `ignoreDeprecations`.
+**Recommended repo path:** switch root + extension configs to
+`module: nodenext` + `moduleResolution: nodenext`, drop `baseUrl`, use
+three-variant `paths` values (`*.ts`, `*/index.ts`, bare `*`) so both
+`nodenext` (extensionless dynamic imports) and `bundler`-mode configs
+(explicit-extension `.mts`/`.js` imports) resolve cleanly. Update
+`scripts/aliasUtils.mjs` builders to pick the bare `*` variant for vite
+aliases and to not double-add variants in `deriveBuildPaths`. Drop
+`ignoreDeprecations`.
 
 ## Package-by-package (probed/audited 2026-08-04)
 
@@ -201,10 +212,10 @@ the compiler).
 
 ## Migration checklist (implemented on branch `feat/typescript-7`)
 
-Results: `tsc` = 7.0.2 / `tsc6` = 6.0.3 via pnpm aliases · all `tsc`
-invocations pinned at `--checkers 8` for reproducibility · lint, test
-(8459 passed), compile:fast, agent build (689 declarations validated),
-all repo checks, prettier — green.
+Results: `tsc` = 7.0.2 / `tsc6` = 6.0.3 via pnpm aliases · full `nodenext`
+(no compatibility layers) · all `tsc` invocations pinned at `--checkers 8` ·
+typecheck (7 configs, 21s), lint, test (8459 passed), compile:fast, agent
+build (689 declarations validated), all repo checks, prettier — green.
 
 - [x] package.json (**×6**: root, agent, cli, desktop, extension,
       trace-viewer): `"typescript": "npm:@typescript/typescript6@^6.0.2"` +
