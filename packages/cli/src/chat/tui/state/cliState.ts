@@ -618,14 +618,15 @@ export function clearTransientNotice(): void {
 // codexPreferenceSlice
 // ---------------------------------------------------------------------------
 
-// Bumped whenever the in-process ChatGPT-subscription preference changes so the
+// Bumped whenever an in-process subscription preference changes (ChatGPT/Grok)
+// so the
 // status bar re-reads it immediately instead of waiting for its periodic poll.
 // External changes (extension/desktop/config edits) are still picked up by that
 // poll.
 
 export const codexPreferenceVersion = signal<number>(0);
 
-/** Signal the status bar to re-read the ChatGPT-subscription preference now. */
+/** Signal the status bar to re-read subscription preferences now. */
 export function bumpCodexPreferenceVersion(): void {
   codexPreferenceVersion.set(codexPreferenceVersion.get() + 1);
 }

@@ -251,6 +251,12 @@ const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
 const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
   CMD.SET_CHATGPT_PREFER_SUBSCRIPTION,
 );
+// Grok (xAI) subscription sign-in messages
+const SignInGrokMessageSchema = commandOnly(CMD.SIGN_IN_GROK);
+const SignOutGrokMessageSchema = commandOnly(CMD.SIGN_OUT_GROK);
+const SetGrokPreferSubscriptionMessageSchema = enabledFlag(
+  CMD.SET_GROK_PREFER_SUBSCRIPTION,
+);
 const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
 
 const UnsubscribePRMessageSchema = z.object({
@@ -392,6 +398,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignInChatGptMessageSchema,
     SignOutChatGptMessageSchema,
     SetChatGptPreferSubscriptionMessageSchema,
+    // Grok subscription sign-in messages
+    SignInGrokMessageSchema,
+    SignOutGrokMessageSchema,
+    SetGrokPreferSubscriptionMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,

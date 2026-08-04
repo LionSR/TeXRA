@@ -11,6 +11,7 @@
 
 import { ReasoningEffort } from 'llm-zoo';
 import { getCodexStatus } from '@auth/codex';
+import { getXaiStatus } from '@auth/xai';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, MAX_TIER } from '@auth/config';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -20,6 +21,7 @@ import {
 } from '@model/includedModelAccess';
 import { isGpt5ModelName } from '@model/modelNames';
 import { setCodexSignedInProbe } from '@model/codex/codexSignedIn';
+import { setXaiSignedInProbe } from '@model/xai/xaiSignedIn';
 
 /**
  * Tier caps on GPT-5 reasoning effort for relay-served requests. The
@@ -76,11 +78,12 @@ const TEXRA_INCLUDED_MODEL_ACCESS: IncludedModelAccess = {
 };
 
 /**
- * Install TeXRA's included (relay) access and ChatGPT sign-in state into the
- * model layer. Idempotent; call once per process from the host composition
+ * Install TeXRA's included (relay) access and ChatGPT / Grok sign-in state into
+ * the model layer. Idempotent; call once per process from the host composition
  * root, immediately after `initPlatform()`.
  */
 export function installTexraModelAccess(): void {
   setIncludedModelAccess(TEXRA_INCLUDED_MODEL_ACCESS);
   setCodexSignedInProbe(async () => (await getCodexStatus()).signedIn);
+  setXaiSignedInProbe(async () => (await getXaiStatus()).signedIn);
 }

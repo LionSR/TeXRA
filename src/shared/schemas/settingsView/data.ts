@@ -460,6 +460,22 @@ export type UpdateChatGptAuthStatusMessage = z.infer<
   typeof UpdateChatGptAuthStatusMessageSchema
 >;
 
+/** Outbound: backend → frontend Grok-subscription sign-in status. */
+const GrokAuthStatusSchema = z.object({
+  signedIn: z.boolean(),
+  email: z.string().nullish(),
+  preferSubscription: z.boolean(),
+});
+export type GrokAuthStatus = z.infer<typeof GrokAuthStatusSchema>;
+
+const UpdateGrokAuthStatusMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS),
+  status: GrokAuthStatusSchema,
+});
+export type UpdateGrokAuthStatusMessage = z.infer<
+  typeof UpdateGrokAuthStatusMessageSchema
+>;
+
 const PRSubscriptionOwnerSchema = z.object({
   streamId: StreamTabIdSchema,
   label: z.string(),
@@ -628,6 +644,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,
   UpdateChatGptAuthStatusMessageSchema,
+  UpdateGrokAuthStatusMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
   UpdateLatexConfigValuesMessageSchema,

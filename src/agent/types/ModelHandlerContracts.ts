@@ -33,12 +33,19 @@ export type ModelCredentialSelection = 'configured' | 'personal';
 
 /** Credential route actually captured by an immutable provider client. */
 export type ModelCredentialRoute =
-  'api-key' | 'chatgpt-subscription' | 'openrouter' | 'relay';
+  | 'api-key'
+  | 'chatgpt-subscription'
+  | 'xai-subscription'
+  | 'openrouter'
+  | 'relay';
 
 export interface ResolvedClientCredential {
   readonly apiKey: string;
   readonly baseUrl: string | null;
-  readonly route: Exclude<ModelCredentialRoute, 'chatgpt-subscription'>;
+  readonly route: Exclude<
+    ModelCredentialRoute,
+    'chatgpt-subscription' | 'xai-subscription'
+  >;
 }
 
 /**

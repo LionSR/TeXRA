@@ -190,6 +190,7 @@ export interface ExtensionCommandActions {
   indentTeX(): Promise<void>;
   signIn(): Promise<boolean>;
   signInChatGpt(): Promise<boolean>;
+  signInGrok(): Promise<boolean>;
   signOut(): Promise<void>;
   runSetupAssistant(): Promise<void>;
   openGettingStarted(): Thenable<unknown>;
@@ -292,6 +293,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.indentTeX': (actions) => awaitTrue(actions.indentTeX()),
   'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
   'texra.auth.chatgpt.signIn': (actions) => awaitTrue(actions.signInChatGpt()),
+  'texra.auth.grok.signIn': (actions) => awaitTrue(actions.signInGrok()),
   'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
   'texra.auth.viewProfile': (actions) =>
     awaitTrue(actions.showSettings(SETTINGS_TAB.ACCOUNT)),

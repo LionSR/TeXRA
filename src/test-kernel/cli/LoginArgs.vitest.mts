@@ -142,6 +142,16 @@ describe('CLI login arguments (texra login)', () => {
       noBrowser: true,
       device: false,
     });
+    expect(parseChatLoginSlashArgs('grok')).toEqual({
+      target: 'grok',
+      noBrowser: false,
+      device: false,
+    });
+    expect(parseChatLoginSlashArgs('xai --device')).toEqual({
+      target: 'grok',
+      noBrowser: false,
+      device: true,
+    });
     expect(parseChatLoginSlashArgs('--device')).toMatchObject({
       target: 'texra',
       device: true,

@@ -1,7 +1,16 @@
-import { codexCoordinator, loginWithLoopback } from '@auth/codex';
+import {
+  codexCoordinator,
+  loginWithLoopback as loginWithCodexLoopback,
+} from '@auth/codex';
+import {
+  loginWithLoopback as loginWithGrokLoopback,
+  xaiAccountLabel,
+  xaiCoordinator,
+} from '@auth/xai';
 import { relayTokenSignOutNotice } from '@auth/relayToken';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
+import { getGrokAuthStatus } from '@controllers/modelAccess/grokAuthStatus';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
@@ -23,6 +32,7 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
+import { setPreferXaiSubscription } from '@model/xai/xaiPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -35,6 +45,7 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
+import { buildGrokAuthStatusMessage } from '@shared/settingsView/handlers/grokHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import {
   getProviderDisplayName,
@@ -56,7 +67,10 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly prompt: Pick<PromptHost, 'input' | 'confirm'>;
   readonly externalOpener: Pick<ExternalOpener, 'openExternal'> & {
-    presentChatGptSignInUrl(url: string): void | Promise<void>;
+    presentSubscriptionSignInUrl(
+      url: string,
+      productName: string,
+    ): void | Promise<void>;
   };
   readonly notifications: {
     showInfoMessage(message: string): Promise<void>;
@@ -100,20 +114,30 @@ type DesktopChatGptHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION
 >;
 
+type DesktopGrokHandlers = Pick<
+  SettingsViewInboundHandlerRegistry,
+  | typeof SETTINGS_VIEW_COMMANDS.SIGN_IN_GROK
+  | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK
+  | typeof SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION
+>;
+
 export interface DesktopCredentialSettingsController {
   readonly profileHandlers: DesktopProfileHandlers;
   readonly chatGptHandlers: DesktopChatGptHandlers;
+  readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
   postMainModelOptionsData(): Promise<void>;
   postStartupData(): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
   signInChatGpt(): Promise<void>;
+  signInGrok(): Promise<void>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
 export class DefaultDesktopCredentialSettingsController implements DesktopCredentialSettingsController {
   readonly profileHandlers: DesktopProfileHandlers;
   readonly chatGptHandlers: DesktopChatGptHandlers;
+  readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController;
 
   private readonly profileController: SettingsProfileController;
@@ -193,10 +217,20 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       setChatGptPreferSubscription: (message) =>
         this.setChatGptPreferSubscription(message.enabled),
     };
+    this.grokHandlers = {
+      signInGrok: () => this.signInGrok(),
+      signOutGrok: () => this.signOutGrok(),
+      setGrokPreferSubscription: (message) =>
+        this.setGrokPreferSubscription(message.enabled),
+    };
   }
 
   async postStartupData(): Promise<void> {
-    await Promise.all([this.postProfileData(), this.postChatGptAuthStatus()]);
+    await Promise.all([
+      this.postProfileData(),
+      this.postChatGptAuthStatus(),
+      this.postGrokAuthStatus(),
+    ]);
   }
 
   async postMainModelOptionsData(): Promise<void> {
@@ -226,33 +260,68 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.postProfileData();
   }
 
-  async signInChatGpt(): Promise<void> {
+  private async signInSubscription(options: {
+    displayName: string;
+    login: (
+      openBrowser: (url: string) => Promise<void>,
+    ) => Promise<{ email?: string }>;
+    accountLabel: (
+      session: { email?: string | null } | null | undefined,
+    ) => string;
+    enablePrefer: () => Promise<unknown>;
+    refresh: () => Promise<void>;
+  }): Promise<void> {
     try {
-      const session = await loginWithLoopback({
-        coordinator: codexCoordinator(),
-        openBrowser: async (url) => {
-          await this.options.externalOpener.openExternal(url);
-          // This dialog is informational. Awaiting it would delay the OAuth
-          // callback until the user dismisses the dialog.
-          void Promise.resolve(
-            this.options.externalOpener.presentChatGptSignInUrl(url),
-          ).catch(this.options.onError);
-        },
+      const session = await options.login(async (url) => {
+        await this.options.externalOpener.openExternal(url);
+        // Informational only — awaiting would block the OAuth callback.
+        void Promise.resolve(
+          this.options.externalOpener.presentSubscriptionSignInUrl(
+            url,
+            options.displayName,
+          ),
+        ).catch(this.options.onError);
       });
-      // Signing in with ChatGPT exists to route Codex models through the
-      // subscription, so every host enables the preference on success.
-      await setPreferCodexSubscription(true);
+      await options.enablePrefer();
       await this.options.notifications.showInfoMessage(
-        `Signed in with ChatGPT as ${codexAccountLabel(session)}.`,
+        `Signed in with ${options.displayName} as ${options.accountLabel(session)}.`,
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `ChatGPT sign-in failed: ${toErrorMessage(error)}`,
+        `${options.displayName} sign-in failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {
-      await this.refreshAfterChatGptAuthChange();
+      await options.refresh();
     }
+  }
+
+  async signInChatGpt(): Promise<void> {
+    await this.signInSubscription({
+      displayName: 'ChatGPT',
+      login: (openBrowser) =>
+        loginWithCodexLoopback({
+          coordinator: codexCoordinator(),
+          openBrowser,
+        }),
+      accountLabel: codexAccountLabel,
+      enablePrefer: () => setPreferCodexSubscription(true),
+      refresh: () => this.refreshAfterChatGptAuthChange(),
+    });
+  }
+
+  async signInGrok(): Promise<void> {
+    await this.signInSubscription({
+      displayName: 'Grok',
+      login: (openBrowser) =>
+        loginWithGrokLoopback({
+          coordinator: xaiCoordinator(),
+          openBrowser,
+        }),
+      accountLabel: xaiAccountLabel,
+      enablePrefer: () => setPreferXaiSubscription(true),
+      refresh: () => this.refreshAfterGrokAuthChange(),
+    });
   }
 
   private async acceptKnownProvider(provider: string): Promise<boolean> {
@@ -345,14 +414,28 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
-  private async refreshAfterChatGptAuthChange(): Promise<void> {
+  private async refreshAfterSubscriptionAuthChange(
+    postStatus: () => Promise<void>,
+  ): Promise<void> {
     invalidateModelOptionsCache();
     await Promise.all([
-      this.postChatGptAuthStatus(),
+      postStatus(),
       this.postModelSelectionData(),
       this.postMainModelOptionsData(),
     ]);
     await this.options.onCredentialChanged();
+  }
+
+  private refreshAfterChatGptAuthChange(): Promise<void> {
+    return this.refreshAfterSubscriptionAuthChange(() =>
+      this.postChatGptAuthStatus(),
+    );
+  }
+
+  private refreshAfterGrokAuthChange(): Promise<void> {
+    return this.refreshAfterSubscriptionAuthChange(() =>
+      this.postGrokAuthStatus(),
+    );
   }
 
   private async signOut(): Promise<void> {
@@ -379,6 +462,20 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
   }
 
+  private async signOutGrok(): Promise<void> {
+    try {
+      await xaiCoordinator().signOut();
+      await this.options.notifications.showInfoMessage('Signed out of Grok.');
+    } catch (error) {
+      await this.options.notifications.showErrorMessage(
+        `Grok sign-out failed: ${toErrorMessage(error)}`,
+      );
+      this.options.onError(error);
+    } finally {
+      await this.refreshAfterGrokAuthChange();
+    }
+  }
+
   private async setChatGptPreferSubscription(enabled: boolean): Promise<void> {
     try {
       const update = await setPreferCodexSubscription(enabled);
@@ -397,6 +494,24 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     }
   }
 
+  private async setGrokPreferSubscription(enabled: boolean): Promise<void> {
+    try {
+      const update = await setPreferXaiSubscription(enabled);
+      if (update.effective !== enabled) {
+        await this.options.notifications.showWarningMessage(
+          `A more specific setting still keeps Grok subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+        );
+      }
+    } catch (error) {
+      await this.options.notifications.showErrorMessage(
+        `Grok subscription preference update failed: ${toErrorMessage(error)}`,
+      );
+      this.options.onError(error);
+    } finally {
+      await this.refreshAfterGrokAuthChange();
+    }
+  }
+
   private async postProfileData(): Promise<void> {
     this.options.renderer.postToRenderer(
       await this.profileController.buildProfileMessage(),
@@ -406,6 +521,12 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   private async postChatGptAuthStatus(): Promise<void> {
     this.options.renderer.postToRenderer(
       await buildChatGptAuthStatusMessage(getChatGptAuthStatus),
+    );
+  }
+
+  private async postGrokAuthStatus(): Promise<void> {
+    this.options.renderer.postToRenderer(
+      await buildGrokAuthStatusMessage(getGrokAuthStatus),
     );
   }
 

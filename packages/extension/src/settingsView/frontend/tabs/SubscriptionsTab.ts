@@ -11,6 +11,7 @@ import {
   SETTINGS_TAB,
   type ChatGptAuthStatus,
   type CopilotRouteInfo,
+  type GrokAuthStatus,
 } from '@shared/schemas';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
@@ -27,6 +28,7 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/CodexSubscriptionSection';
+import '../components/profile/GrokSubscriptionSection';
 
 const KIMI_CODE_CONSOLE_URL = 'https://www.kimi.com/code/console';
 
@@ -57,6 +59,7 @@ export class SubscriptionsTab extends LitElement {
   ];
 
   @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
+  @property({ attribute: false }) grokAuth: GrokAuthStatus | null = null;
   @property({ attribute: false }) copilotModels: CopilotRouteInfo[] = [];
 
   override render(): TemplateResult {
@@ -65,6 +68,9 @@ export class SubscriptionsTab extends LitElement {
         <codex-subscription-section
           .chatgptAuth=${this.chatgptAuth}
         ></codex-subscription-section>
+        <grok-subscription-section
+          .grokAuth=${this.grokAuth}
+        ></grok-subscription-section>
         ${this.renderKimiCodeSection()} ${this.renderCopilotSection()}
       </div>
     `;

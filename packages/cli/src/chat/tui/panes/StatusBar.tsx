@@ -9,6 +9,7 @@ import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
+  isXaiSubscriptionActive,
 } from '@model/providerCapabilities';
 import type { SpendingStatus } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -91,17 +92,17 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const accessTarget = streamAccessTarget(statusSlice, sessionMeta);
 
   // Whether the selected stream's model/category would currently route through
-  // the ChatGPT subscription (preference + eligibility + signed in) or the Kimi
-  // Code coding endpoint (prefer switch + eligibility + stored key). The
-  // completed usage snapshot supersedes this prospective value in the display.
-  // Polling re-reads external config changes; an in-process access change also
-  // bumps `codexPreferenceVersion` for an immediate refresh.
+  // ChatGPT, Grok, or Kimi Code subscription access. The completed usage
+  // snapshot supersedes this prospective value in the display. Polling
+  // re-reads external config changes; an in-process access change also bumps
+  // `codexPreferenceVersion` for an immediate refresh.
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
   const [subscriptionResolution, setSubscriptionResolution] = useState<{
     readonly model: string;
     readonly category: typeof accessTarget.category;
     readonly preferenceVersion: number;
     readonly active: boolean;
+    readonly grokActive: boolean;
     readonly kimiCodeActive: boolean;
   }>();
   const resolutionCurrent =
@@ -111,30 +112,39 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionActive = resolutionCurrent
     ? (subscriptionResolution?.active ?? false)
     : false;
+  const grokSubscriptionActive = resolutionCurrent
+    ? (subscriptionResolution?.grokActive ?? false)
+    : false;
   const kimiCodeActive = resolutionCurrent
     ? (subscriptionResolution?.kimiCodeActive ?? false)
     : false;
   const modelAccess = resolveCliModelAccessRoute({
     apiMode: sessionMeta.apiMode,
     subscriptionActive,
+    grokSubscriptionActive,
     kimiCodeActive,
     usageRoute: statusSlice?.usage?.usageRoute,
   });
 
   useEffect(() => {
     let cancelled = false;
-    const resolve = (active: boolean, kimiActive: boolean): void => {
+    const resolve = (
+      active: boolean,
+      grokActive: boolean,
+      kimiActive: boolean,
+    ): void => {
       if (cancelled) return;
       setSubscriptionResolution({
         ...accessTarget,
         preferenceVersion: codexPreferenceVersion,
         active,
+        grokActive,
         kimiCodeActive: kimiActive,
       });
     };
     const agentCategory = accessTarget.category;
     if (agentCategory === undefined) {
-      resolve(false, false);
+      resolve(false, false, false);
       return;
     }
     let inFlight = false;
@@ -143,10 +153,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       inFlight = true;
       void Promise.all([
         isCodexSubscriptionActive(accessTarget.model, agentCategory),
+        isXaiSubscriptionActive(accessTarget.model),
         isKimiCodeSubscriptionActive(accessTarget.model),
       ])
-        .then(([active, kimiActive]) => resolve(active, kimiActive))
-        .catch(() => resolve(false, false))
+        .then(([active, grokActive, kimiActive]) =>
+          resolve(active, grokActive, kimiActive),
+        )
+        .catch(() => resolve(false, false, false))
         .finally(() => {
           inFlight = false;
         });

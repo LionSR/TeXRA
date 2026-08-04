@@ -708,12 +708,12 @@ function createWindow(options: {
       },
       externalOpener: {
         openExternal: previewHost.openExternal,
-        presentChatGptSignInUrl: async (url) => {
+        presentSubscriptionSignInUrl: async (url, productName) => {
           const result = await dialog.showMessageBox(window, {
             type: 'info',
-            message: 'Signing in with ChatGPT',
+            message: `Signing in with ${productName}`,
             detail:
-              'Opened your default browser. Using a different browser for ChatGPT? ' +
+              `Opened your default browser. Using a different browser for ${productName}? ` +
               'Open this link there instead:\n\n' +
               `${url}`,
             buttons: ['Copy Sign-in Link', 'Close'],
