@@ -679,7 +679,10 @@ export class InstructionPanel extends LitElement {
             ${renderIconActionButton({
               id: 'recordInstructionButton',
               icon: session.isRecording ? 'circle-stop' : 'microphone',
-              label: 'Record instruction',
+              label: session.isRecording
+                ? 'Stop recording'
+                : 'Record instruction',
+              pressed: session.isRecording,
               tooltip: session.isRecording
                 ? 'Stop recording'
                 : 'Record instruction with microphone',
@@ -689,6 +692,11 @@ export class InstructionPanel extends LitElement {
           </div>
         </div>
         ${this.renderSessionHint(session)}
+        <!-- A light-DOM <label for>, not a host aria-label and not WebAwesome's
+             label slot: wa-textarea is form-associated, so this names the inner
+             control for real while adding no shadow-DOM label chrome that could
+             shift the composer's layout. -->
+        <label class="visually-hidden" for="instruction">Instruction</label>
         <wa-textarea
           id="instruction"
           rows=${this.desktopHost ? '4' : '10'}

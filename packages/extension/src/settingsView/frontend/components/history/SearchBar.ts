@@ -68,10 +68,14 @@ export class SearchBar extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="search-container">
+        <label class="visually-hidden" for="history-search">
+          Search history
+        </label>
         <wa-input
+          id="history-search"
           class="search-input"
           type="search"
-          placeholder="Search history items..."
+          placeholder="Search history…"
           .value=${this.searchTerm}
           @input=${this.handleInput}
           @keydown=${this.handleKeydown}
