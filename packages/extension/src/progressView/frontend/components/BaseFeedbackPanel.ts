@@ -93,6 +93,7 @@ export abstract class BaseFeedbackPanel<
       <div class=${containerClass}>
         <wa-textarea
           class=${inputClass}
+          aria-label=${placeholder}
           placeholder=${placeholder}
           rows="3"
           data-feedback-input

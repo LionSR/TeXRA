@@ -404,6 +404,7 @@ export class FollowUpInput extends LitElement {
         <div class="composer-surface">
           <wa-textarea
             id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
+            aria-label="Follow-up message"
             placeholder="Message TeXRA…"
             rows="6"
             resize="vertical"
