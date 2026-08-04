@@ -30,7 +30,7 @@ const rows = [
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable5', 'opus5T', 'sonnet5T', 'deepseekT', 'kimi26T'],
+    models: ['fable5', 'opus5T', 'sonnet5T', 'deepseekT', 'kimi3'],
   },
   {
     icon: 'file-lines',
