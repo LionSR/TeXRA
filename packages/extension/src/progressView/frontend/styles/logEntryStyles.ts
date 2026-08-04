@@ -304,6 +304,15 @@ export const logEntryStyles = css`
     opacity: var(--opacity-full);
   }
 
+  /* Same shadow-piercing exception as .code-block-copy: this is a wa-button,
+     and WebAwesome ships no focus styling of its own for it, so without this
+     the control falls back to the UA default ring while every sibling control
+     shows the branded one. */
+  .banner-content-copy:focus-visible::part(base) {
+    outline: var(--focus-ring-width) solid var(--wa-color-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
+
   .banner-content-copy.copy-success {
     opacity: var(--opacity-full);
     color: var(--color-success);
