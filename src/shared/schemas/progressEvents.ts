@@ -2,11 +2,7 @@ import type { AgentCategory } from './agent';
 import type { ExecutionId, StorageKey, StreamTabId } from './identifiers';
 import type { CompileFailure, FileLocation, OutputFileInfo } from './output';
 import type { RoundIndexed } from './roundIndexed';
-import type {
-  ConversationProgress,
-  PhaseStage,
-  RoundStage,
-} from './streamState';
+import type { ConversationProgress, RoundStage } from './streamState';
 import type { StreamPhase, StreamSubstate } from './stream';
 import type { ExtendedTokenUsageStats } from './usage';
 
