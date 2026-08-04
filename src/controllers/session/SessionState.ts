@@ -387,11 +387,21 @@ export class SessionState {
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamExecutionState {
     const existing = this._streamStates.get(stream);
-    if (!existing || existing.category !== agentCategory) {
+    if (!existing) {
       const state: StreamExecutionState = {
         category: agentCategory,
         conversationProgress: { toolCallCount: 0 },
         subagents: [],
+      };
+      this._streamStates.set(stream, state);
+      return state;
+    }
+    // Roster facts may provision a ToolUse placeholder before RUNNING supplies
+    // the real category. Refresh category in place — do not wipe `subagents`.
+    if (existing.category !== agentCategory) {
+      const state: StreamExecutionState = {
+        ...existing,
+        category: agentCategory,
       };
       this._streamStates.set(stream, state);
       return state;

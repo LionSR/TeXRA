@@ -128,6 +128,27 @@ describe('retained finished children', () => {
     expect(roster[0]?.finishedAt).toBeUndefined();
   });
 
+  it('keeps a roster-first child when the parent category is later corrected', () => {
+    const { backend } = createRecordingBackend();
+    backend.state.streamLogs.ensureStream(PARENT);
+
+    // Roster arrives before RUNNING/config; applier provisions a ToolUse bucket.
+    applyRoster(backend, PARENT, [subagent('early')]);
+    expect(backend.state.getStreamState(PARENT)?.category).toBe(
+      AgentCategory.ToolUse,
+    );
+    expect(
+      backend.state.getStreamState(PARENT)?.subagents.map((c) => c.executionId),
+    ).toEqual(['early']);
+
+    // Real category arrives via getOrCreateStreamState — must not wipe roster.
+    backend.state.getOrCreateStreamState(PARENT, AgentCategory.Workflow);
+    const state = backend.state.getStreamState(PARENT);
+    expect(state?.category).toBe(AgentCategory.Workflow);
+    expect(state?.subagents.map((c) => c.executionId)).toEqual(['early']);
+    expect(state?.subagents[0]?.finishedAt).toBeUndefined();
+  });
+
   it('shows a terminal status that lands after the roster drop', async () => {
     const { backend, messages } = createRecordingBackend();
     seedParent(backend);
