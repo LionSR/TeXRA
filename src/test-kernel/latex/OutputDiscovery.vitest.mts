@@ -53,7 +53,7 @@ function matchingExecution(id: string) {
     identity: { kind: 'agent', agent: 'polish' },
     id,
     timestamp: '2026-01-01T00:00:00.000Z',
-    agentConfig: {
+    record: {
       agent: 'polish',
       model: 'deepseek',
       inputFiles: ['paper.tex'],

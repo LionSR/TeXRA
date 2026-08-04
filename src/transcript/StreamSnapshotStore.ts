@@ -2044,9 +2044,17 @@ export class StreamSnapshotStore {
         ]);
         // Un-healed legacy row: derive in memory with the stamper's rule so
         // resume/rerun and rendering behave identically before the durable
-        // stamp lands (the listing entrance remains the only writer).
+        // stamp lands (the listing entrance remains the only writer). When
+        // the execution row predates registration-time streamId stamping,
+        // this sidecar's own id is still valid evidence — its association
+        // with the execution is proven by the registration-written
+        // `meta.executionId` edge, not by name resemblance.
         identity =
-          execMeta?.identity ?? deriveLegacyIdentity(execMeta, execConfig);
+          execMeta?.identity ??
+          deriveLegacyIdentity(
+            { streamId: execMeta?.streamId ?? stream },
+            execConfig,
+          );
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {
