@@ -631,6 +631,18 @@ body.texra-high-contrast {
   --wa-color-success-fill-quiet: Canvas;
   --wa-color-success-border-quiet: Highlight;
   --wa-color-success-on-quiet: Highlight;
+
+  /* The --color-* aliases substitute their --wa-* source at the point of
+     declaration, not at the point of use. Declared on :root, they would keep
+     the ordinary palette even here, because this block sits on <body> — a
+     descendant — so overriding the --wa-* names alone never reaches them.
+     Re-declaring the aliases is what actually carries the system palette into
+     the light-DOM consumers. */
+  --color-success: Highlight;
+  --color-error: Mark;
+  --color-text-link: LinkText;
+  --color-text-muted: GrayText;
+  --border-control: CanvasText;
 }
 
 /* Honor the OS motion preference for both Web Awesome components and the
