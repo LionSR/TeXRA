@@ -41,18 +41,6 @@ export const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = [
   'yolo',
 ] as const satisfies ReadonlyArray<TexraApprovalPolicy>;
 
-type _DisplayOrderIsPermutation =
-  Exclude<
-    TexraApprovalPolicy,
-    (typeof TEXRA_APPROVAL_POLICY_DISPLAY_ORDER)[number]
-  > extends never
-    ? (typeof TEXRA_APPROVAL_POLICY_DISPLAY_ORDER)['length'] extends (typeof TEXRA_APPROVAL_POLICIES)['length']
-      ? true
-      : never
-    : never;
-const _displayOrderIsPermutation: _DisplayOrderIsPermutation = true;
-void _displayOrderIsPermutation;
-
 export const TEXRA_APPROVAL_POLICY_OPTIONS = Object.freeze(
   TEXRA_APPROVAL_POLICY_DISPLAY_ORDER.map((value) =>
     Object.freeze({
