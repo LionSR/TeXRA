@@ -47,7 +47,7 @@ describe('form token endpoint (declarative)', () => {
   });
 
   it('exchanges an authorization code via form body', async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       Response.json({
         access_token: 'access',
         refresh_token: 'refresh',
@@ -76,7 +76,7 @@ describe('form token endpoint (declarative)', () => {
   });
 
   it('refreshes with the refresh_token grant', async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       Response.json({
         access_token: 'new-access',
         expires_in: 1800,
