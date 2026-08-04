@@ -21,15 +21,8 @@ export class LoginBanner extends LitElement {
          min-content flex basis keeps the buttons pinned to the corner in
          narrow sidebars (the title wraps instead); the row itself only wraps
          when even the title's longest word no longer fits beside the buttons,
-         so they can't be pushed off-screen. */
-      .banner-header {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--wa-space-3xs) var(--wa-space-xs);
-      }
-
+         so they can't be pushed off-screen. The shared .banner-row supplies
+         the flex row. */
       .banner-title {
         flex: 1 1 min-content;
         font-weight: var(--font-weight-semibold);
@@ -83,7 +76,7 @@ export class LoginBanner extends LitElement {
       variant: 'brand',
       icon: 'wand-magic-sparkles',
       body: html`
-        <div class="banner-header">
+        <div class="banner-row">
           <span class="banner-title">Researcher Access Program</span>
           <div class="actions">
             <wa-button

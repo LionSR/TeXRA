@@ -9,7 +9,10 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -222,28 +225,17 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderGlobalStreamingToggle(): TemplateResult {
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <span class="settings-row-label">Enable streaming</span>
-          <span class="settings-row-help"
-            >Global default for all providers</span
-          >
-        </div>
-        <div class="settings-row-control">
-          <wa-switch
-            aria-label="Enable streaming"
-            ?checked=${this.globalStreamingDefault}
-            @change=${(e: Event) => {
-              const checked = (e.target as WaSwitch).checked;
-              postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
-                enabled: checked,
-              });
-            }}
-          ></wa-switch>
-        </div>
-      </div>
-    `;
+    return renderSettingsToggleRow({
+      label: 'Enable streaming',
+      description: 'Global default for all providers',
+      checked: this.globalStreamingDefault,
+      onChange: (e: Event) => {
+        const checked = (e.target as WaSwitch).checked;
+        postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
+          enabled: checked,
+        });
+      },
+    });
   }
 
   override render(): TemplateResult {

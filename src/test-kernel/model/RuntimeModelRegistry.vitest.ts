@@ -30,10 +30,15 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
-const SONNET: LanguageModelInfo = {
-  id: 'claude-sonnet-4.6',
-  name: 'Claude Sonnet 4.6',
-  family: 'claude-sonnet-4.6',
+// The discovered-editor-model fixture must track an llm-zoo base model that
+// is active (neither deprecated nor retired) and Copilot-documented (carries
+// `copilotFullName`): route resolution filters deprecated/retired configs and
+// matches the editor id against the registry's Copilot name. gemini36f
+// satisfies both in llm-zoo 1.25.0 (the previous pin is deprecated there).
+const GEMINI_FLASH: LanguageModelInfo = {
+  id: 'gemini-3.6-flash',
+  name: 'Gemini 3.6 Flash',
+  family: 'gemini-3.6-flash',
   vendor: 'copilot',
   version: '2026-07',
   maxInputTokens: 160_000,
@@ -115,18 +120,18 @@ describe('runtime model registry', () => {
   });
 
   it('maps a discovered editor model to a route on its canonical base model', async () => {
-    const port = await installModels(SONNET);
+    const port = await installModels(GEMINI_FLASH);
 
     await refreshRuntimeModelRegistry();
 
     expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
-    expect(copilotRouteForModel('sonnet46')).toEqual(
+    expect(copilotRouteForModel('gemini36f')).toEqual(
       expect.objectContaining({
         access: 'allowed',
-        reference: { vendor: 'copilot', id: SONNET.id },
+        reference: { vendor: 'copilot', id: GEMINI_FLASH.id },
         effectiveConfig: expect.objectContaining({
-          name: 'sonnet46',
-          contextWindow: SONNET.maxInputTokens,
+          name: 'gemini36f',
+          contextWindow: GEMINI_FLASH.maxInputTokens,
           inputPrice: 0,
           outputPrice: 0,
           capabilities: expect.objectContaining({
@@ -136,27 +141,27 @@ describe('runtime model registry', () => {
       }),
     );
     // No synthetic picker identity is materialized for the route.
-    expect(copilotRouteForModel('copilot:sonnet46')).toBeUndefined();
-    expect(getRuntimeModelConfig('sonnet46')?.label).not.toContain('Copilot');
+    expect(copilotRouteForModel('copilot:gemini36f')).toBeUndefined();
+    expect(getRuntimeModelConfig('gemini36f')?.label).not.toContain('Copilot');
   });
 
   it('resolves duplicate editor versions deterministically to the newest', async () => {
     await installModels(
-      { ...SONNET, id: 'claude-sonnet-4.6-old', version: '2026-01' },
-      { ...SONNET, id: 'claude-sonnet-4.6', version: '2026-07' },
+      { ...GEMINI_FLASH, id: 'gemini-3.6-flash-old', version: '2026-01' },
+      { ...GEMINI_FLASH, id: 'gemini-3.6-flash', version: '2026-07' },
     );
 
     await refreshRuntimeModelRegistry();
 
-    expect(copilotRouteForModel('sonnet46')?.reference).toEqual({
+    expect(copilotRouteForModel('gemini36f')?.reference).toEqual({
       vendor: 'copilot',
-      id: 'claude-sonnet-4.6',
+      id: 'gemini-3.6-flash',
     });
   });
 
   it('omits editor models whose capabilities TeXRA cannot establish', async () => {
     await installModels({
-      ...SONNET,
+      ...GEMINI_FLASH,
       id: 'future-model',
       family: 'future-model',
       name: 'Future model',
@@ -170,15 +175,15 @@ describe('runtime model registry', () => {
 
   it('keeps the exact editor reference for the access-request consent prompt', async () => {
     const port = await installModels({
-      ...SONNET,
+      ...GEMINI_FLASH,
       access: 'consent-required',
     });
 
-    await expect(requestRuntimeModelAccess('sonnet46')).resolves.toBe(
+    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
       'requested',
     );
     expect(port.sendRequest).toHaveBeenCalledWith(
-      { vendor: 'copilot', id: SONNET.id },
+      { vendor: 'copilot', id: GEMINI_FLASH.id },
       [
         {
           role: 'user',
@@ -196,28 +201,28 @@ describe('runtime model registry', () => {
 
     invalidateRuntimeModelRegistry();
     const unavailablePort = await installModels({
-      ...SONNET,
+      ...GEMINI_FLASH,
       access: 'unavailable',
     });
-    await expect(requestRuntimeModelAccess('sonnet46')).resolves.toBe(
+    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
       'unavailable',
     );
     expect(unavailablePort.sendRequest).not.toHaveBeenCalled();
   });
 
   it('re-discovers stale allowed access before entering the native consent flow', async () => {
-    let models: readonly LanguageModelInfo[] = [SONNET];
+    let models: readonly LanguageModelInfo[] = [GEMINI_FLASH];
     const port = {
       ...languageModelPort([]),
       selectModels: vi.fn(async () => models),
     };
     await installPlatform({}, { languageModel: port });
     await refreshRuntimeModelRegistry();
-    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+    expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
 
-    models = [{ ...SONNET, access: 'consent-required' }];
+    models = [{ ...GEMINI_FLASH, access: 'consent-required' }];
 
-    await expect(requestRuntimeModelAccess('sonnet46')).resolves.toBe(
+    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
       'requested',
     );
     expect(port.selectModels).toHaveBeenCalledTimes(2);
@@ -225,18 +230,18 @@ describe('runtime model registry', () => {
   });
 
   it('re-discovers stale allowed access before reporting unavailable', async () => {
-    let models: readonly LanguageModelInfo[] = [SONNET];
+    let models: readonly LanguageModelInfo[] = [GEMINI_FLASH];
     const port = {
       ...languageModelPort([]),
       selectModels: vi.fn(async () => models),
     };
     await installPlatform({}, { languageModel: port });
     await refreshRuntimeModelRegistry();
-    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+    expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
 
-    models = [{ ...SONNET, access: 'unavailable' }];
+    models = [{ ...GEMINI_FLASH, access: 'unavailable' }];
 
-    await expect(requestRuntimeModelAccess('sonnet46')).resolves.toBe(
+    await expect(requestRuntimeModelAccess('gemini36f')).resolves.toBe(
       'unavailable',
     );
     expect(port.selectModels).toHaveBeenCalledTimes(2);
@@ -244,7 +249,7 @@ describe('runtime model registry', () => {
   });
 
   it('retries when access invalidation supersedes a forced allowed probe', async () => {
-    const port = await installModels(SONNET);
+    const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
     let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
@@ -254,20 +259,20 @@ describe('runtime model registry', () => {
     });
     vi.mocked(port.selectModels)
       .mockReturnValueOnce(forced)
-      .mockResolvedValueOnce([{ ...SONNET, access: 'unavailable' }]);
+      .mockResolvedValueOnce([{ ...GEMINI_FLASH, access: 'unavailable' }]);
 
-    const request = requestRuntimeModelAccess('sonnet46');
+    const request = requestRuntimeModelAccess('gemini36f');
     invalidateRuntimeModelRegistry();
-    releaseForced([SONNET]);
+    releaseForced([GEMINI_FLASH]);
 
     await expect(request).resolves.toBe('unavailable');
     expect(port.selectModels).toHaveBeenCalledTimes(3);
     expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(copilotRouteForModel('sonnet46')?.access).toBe('unavailable');
+    expect(copilotRouteForModel('gemini36f')?.access).toBe('unavailable');
   });
 
   it('fails closed when repeated invalidation supersedes the bounded retry', async () => {
-    const port = await installModels(SONNET);
+    const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
     let releaseForced: (models: readonly LanguageModelInfo[]) => void = () =>
@@ -291,17 +296,17 @@ describe('runtime model registry', () => {
         return retry;
       });
 
-    const request = requestRuntimeModelAccess('sonnet46');
+    const request = requestRuntimeModelAccess('gemini36f');
     invalidateRuntimeModelRegistry();
-    releaseForced([SONNET]);
+    releaseForced([GEMINI_FLASH]);
     await retryStarted;
     invalidateRuntimeModelRegistry();
-    releaseRetry([SONNET]);
+    releaseRetry([GEMINI_FLASH]);
 
     await expect(request).resolves.toBe('unavailable');
     expect(port.selectModels).toHaveBeenCalledTimes(3);
     expect(port.sendRequest).not.toHaveBeenCalled();
-    expect(copilotRouteForModel('sonnet46')?.access).toBe('allowed');
+    expect(copilotRouteForModel('gemini36f')?.access).toBe('allowed');
   });
 
   it('does not let a superseded ordinary discovery overwrite forced access state', async () => {
@@ -325,16 +330,16 @@ describe('runtime model registry', () => {
     await installPlatform({}, { languageModel: port });
 
     const staleOrdinaryRefresh = refreshRuntimeModelRegistry();
-    const forcedRequest = requestRuntimeModelAccess('sonnet46');
-    releaseForced([{ ...SONNET, access: 'unavailable' }]);
+    const forcedRequest = requestRuntimeModelAccess('gemini36f');
+    releaseForced([{ ...GEMINI_FLASH, access: 'unavailable' }]);
     await expect(forcedRequest).resolves.toBe('unavailable');
 
     // Resolve stale allowed data last: the superseded generation must not
     // overwrite the forced result that authorized the opt-in outcome.
-    releaseOrdinary([SONNET]);
+    releaseOrdinary([GEMINI_FLASH]);
     await staleOrdinaryRefresh;
 
-    expect((await discoveredCopilotRoutes()).get('sonnet46')?.access).toBe(
+    expect((await discoveredCopilotRoutes()).get('gemini36f')?.access).toBe(
       'unavailable',
     );
     expect(port.sendRequest).not.toHaveBeenCalled();
@@ -342,7 +347,7 @@ describe('runtime model registry', () => {
   });
 
   it('coalesces overlapping user-initiated fresh discoveries', async () => {
-    const port = await installModels(SONNET);
+    const port = await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
     let releaseDiscovery: (models: readonly LanguageModelInfo[]) => void = () =>
@@ -352,9 +357,9 @@ describe('runtime model registry', () => {
     });
     vi.mocked(port.selectModels).mockReturnValueOnce(deferred);
 
-    const first = requestRuntimeModelAccess('sonnet46');
-    const second = requestRuntimeModelAccess('sonnet46');
-    releaseDiscovery([{ ...SONNET, access: 'unavailable' }]);
+    const first = requestRuntimeModelAccess('gemini36f');
+    const second = requestRuntimeModelAccess('gemini36f');
+    releaseDiscovery([{ ...GEMINI_FLASH, access: 'unavailable' }]);
 
     await expect(Promise.all([first, second])).resolves.toEqual([
       'unavailable',
@@ -370,34 +375,34 @@ describe('runtime model registry', () => {
       ...languageModelPort([]),
       selectModels: vi.fn(async () => {
         if (discoveryFails) throw error;
-        return [SONNET];
+        return [GEMINI_FLASH];
       }),
     };
     await installPlatform({}, { languageModel: port });
     await refreshRuntimeModelRegistry();
     discoveryFails = true;
 
-    await expect(requestRuntimeModelAccess('sonnet46')).rejects.toBe(error);
+    await expect(requestRuntimeModelAccess('gemini36f')).rejects.toBe(error);
 
     // Settings reads through the public asynchronous boundary. Its retry also
     // fails, but the previously visible route remains available for display.
     const visibleRoutes = await discoveredCopilotRoutes();
-    expect(visibleRoutes.get('sonnet46')?.access).toBe('allowed');
+    expect(visibleRoutes.get('gemini36f')?.access).toBe('allowed');
     expect(preferredCopilotRouteModels()).toEqual([]);
     expect(port.selectModels).toHaveBeenCalledTimes(3);
   });
 
   it('reports the direct fallback for a base model and a legacy copilot id', async () => {
-    await installModels(SONNET, GPT_56);
+    await installModels(GEMINI_FLASH, GPT_56);
     await refreshRuntimeModelRegistry();
 
-    expect(getRuntimeModelDirectFallback('sonnet46', false)).toEqual({
-      model: 'sonnet46',
-      provider: 'anthropic',
+    expect(getRuntimeModelDirectFallback('gemini36f', false)).toEqual({
+      model: 'gemini36f',
+      provider: 'google',
       chatGptSubscriptionEligible: false,
     });
-    expect(getRuntimeModelDirectFallback('sonnet46', true)).toEqual({
-      model: 'sonnet46',
+    expect(getRuntimeModelDirectFallback('gemini36f', true)).toEqual({
+      model: 'gemini36f',
       provider: 'openRouter',
       chatGptSubscriptionEligible: false,
     });
@@ -407,9 +412,9 @@ describe('runtime model registry', () => {
       chatGptSubscriptionEligible: true,
     });
     // Retry panels persisted before #9635 can still carry the synthetic id.
-    expect(getRuntimeModelDirectFallback('copilot:sonnet46', false)).toEqual({
-      model: 'sonnet46',
-      provider: 'anthropic',
+    expect(getRuntimeModelDirectFallback('copilot:gemini36f', false)).toEqual({
+      model: 'gemini36f',
+      provider: 'google',
       chatGptSubscriptionEligible: false,
     });
   });
@@ -417,44 +422,42 @@ describe('runtime model registry', () => {
   it('normalizes persisted copilot ids to the canonical base model config', async () => {
     await installModels();
 
-    expect(getRuntimeModelConfig('copilot:sonnet46')).toBe(
-      getRuntimeModelConfig('sonnet46'),
+    expect(getRuntimeModelConfig('copilot:gemini36f')).toBe(
+      getRuntimeModelConfig('gemini36f'),
     );
-    expect(getRuntimeModelConfig('copilot:sonnet46')?.provider).toBe(
-      'anthropic',
-    );
+    expect(getRuntimeModelConfig('copilot:gemini36f')?.provider).toBe('google');
     expect(
-      inferPersistedModelHandlerCompatibilityKey('copilot:sonnet46', []),
+      inferPersistedModelHandlerCompatibilityKey('copilot:gemini36f', []),
     ).toBe('ModelHandlerVscodeLm');
   });
 
   it('routes a preferred model through Copilot only when access is allowed', async () => {
-    const port = languageModelPort([SONNET]);
+    const port = languageModelPort([GEMINI_FLASH]);
     await installPlatform(
-      { globalState: { [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet46'] } },
+      { globalState: { [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'] } },
       { languageModel: port },
     );
 
     await refreshRuntimeModelRegistry();
-    expect(shouldRouteModelThroughCopilot('sonnet46')).toBe(true);
+    expect(shouldRouteModelThroughCopilot('gemini36f')).toBe(true);
     // A preference for a model the editor does not offer cannot route.
     expect(shouldRouteModelThroughCopilot('gpt56')).toBe(false);
 
-    await setCopilotRoutePreference('sonnet46', false);
-    expect(shouldRouteModelThroughCopilot('sonnet46')).toBe(false);
+    await setCopilotRoutePreference('gemini36f', false);
+    expect(shouldRouteModelThroughCopilot('gemini36f')).toBe(false);
   });
 
   it('replaces route state after invalidation', async () => {
-    await installModels(SONNET);
+    await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
-    expect(copilotRouteForModel('sonnet46')).toBeDefined();
+    expect(copilotRouteForModel('gemini36f')).toBeDefined();
 
     invalidateRuntimeModelRegistry();
-    expect(copilotRouteForModel('sonnet46')).toBeDefined();
+    expect(copilotRouteForModel('gemini36f')).toBeDefined();
     await installModels();
     await refreshRuntimeModelRegistry();
 
-    expect(copilotRouteForModel('sonnet46')).toBeUndefined();
+    expect(copilotRouteForModel('gemini36f')).toBeUndefined();
   });
 
   it('discards a discovery that an invalidation superseded mid-flight', async () => {
@@ -475,12 +478,12 @@ describe('runtime model registry', () => {
 
     const inFlight = refreshRuntimeModelRegistry();
     invalidateRuntimeModelRegistry();
-    releaseDiscovery([SONNET]);
+    releaseDiscovery([GEMINI_FLASH]);
     await inFlight;
 
     // The superseded result must not land, and the registry must still be
     // stale enough that the next refresh re-probes the (new) port.
-    expect(copilotRouteForModel('sonnet46')).toBeUndefined();
+    expect(copilotRouteForModel('gemini36f')).toBeUndefined();
 
     const port = await installModels(GPT_56);
     await refreshRuntimeModelRegistry();
@@ -496,13 +499,13 @@ describe('runtime model registry', () => {
   });
 
   it('returns the last-known route catalogue when rediscovery fails', async () => {
-    await installModels(SONNET);
+    await installModels(GEMINI_FLASH);
     await refreshRuntimeModelRegistry();
 
     invalidateRuntimeModelRegistry();
     await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
-    expect((await discoveredCopilotRoutes()).get('sonnet46')?.access).toBe(
+    expect((await discoveredCopilotRoutes()).get('gemini36f')?.access).toBe(
       'allowed',
     );
   });
@@ -519,21 +522,21 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('shows a base model available both directly and through Copilot exactly once', async () => {
-    const port = languageModelPort([SONNET]);
+    const port = languageModelPort([GEMINI_FLASH]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet46'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'],
         },
       },
       { languageModel: port },
     );
 
     const options = await computeModelOptionsData(
-      ['sonnet46'],
+      ['gemini36f'],
       modelOptionsAccess({
         secrets: new FakeSecrets({
-          [apiKeySecretName('anthropic')]: 'sk-anthropic',
+          [apiKeySecretName('google')]: 'sk-google',
         }),
       }),
     );
@@ -541,7 +544,7 @@ describe('Copilot route in model pickers', () => {
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'sonnet46',
+        value: 'gemini36f',
         availability: 'copilot-access',
         availabilityLabel: 'Copilot subscription',
         routeLabel: 'Via Copilot',
@@ -554,7 +557,7 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('never appends route rows to the visible model list', async () => {
-    const port = languageModelPort([SONNET, GPT_56]);
+    const port = languageModelPort([GEMINI_FLASH, GPT_56]);
     await installPlatform({}, { languageModel: port });
 
     const options = await computeModelOptionsData(
@@ -566,11 +569,13 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('reports consent-required on the base row without adding entries', async () => {
-    const port = languageModelPort([{ ...SONNET, access: 'consent-required' }]);
+    const port = languageModelPort([
+      { ...GEMINI_FLASH, access: 'consent-required' },
+    ]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet46'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'],
         },
       },
       { languageModel: port },
@@ -578,13 +583,13 @@ describe('Copilot route in model pickers', () => {
 
     const options = await computeModelOptionsData(
       undefined,
-      modelOptionsAccess({ visibleModels: ['sonnet46'] }),
+      modelOptionsAccess({ visibleModels: ['gemini36f'] }),
     );
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'sonnet46',
+        value: 'gemini36f',
         availability: 'copilot-consent-required',
         availabilityLabel: 'Copilot consent required',
         disabled: true,
@@ -593,21 +598,23 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('reports an unavailable route instead of falling back to a direct key', async () => {
-    const port = languageModelPort([{ ...SONNET, access: 'unavailable' }]);
+    const port = languageModelPort([
+      { ...GEMINI_FLASH, access: 'unavailable' },
+    ]);
     await installPlatform(
       {
         globalState: {
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet46'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini36f'],
         },
       },
       { languageModel: port },
     );
 
     const options = await computeModelOptionsData(
-      ['sonnet46'],
+      ['gemini36f'],
       modelOptionsAccess({
         secrets: new FakeSecrets({
-          [apiKeySecretName('anthropic')]: 'sk-anthropic',
+          [apiKeySecretName('google')]: 'sk-google',
         }),
       }),
     );
@@ -615,7 +622,7 @@ describe('Copilot route in model pickers', () => {
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'sonnet46',
+        value: 'gemini36f',
         availability: 'copilot-unavailable',
         availabilityLabel: 'Copilot unavailable',
         disabled: true,
@@ -624,21 +631,21 @@ describe('Copilot route in model pickers', () => {
   });
 
   it('leaves non-preferred models on their ordinary routes', async () => {
-    const port = languageModelPort([SONNET]);
+    const port = languageModelPort([GEMINI_FLASH]);
     await installPlatform({}, { languageModel: port });
 
     const options = await computeModelOptionsData(
-      ['sonnet46'],
+      ['gemini36f'],
       modelOptionsAccess({
         secrets: new FakeSecrets({
-          [apiKeySecretName('anthropic')]: 'sk-anthropic',
+          [apiKeySecretName('google')]: 'sk-google',
         }),
       }),
     );
 
     expect(options[0]).toEqual(
       expect.objectContaining({
-        value: 'sonnet46',
+        value: 'gemini36f',
         availability: 'provider-key',
       }),
     );

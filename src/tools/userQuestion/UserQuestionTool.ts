@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { createChannelTrace } from '@agent/trace';
@@ -15,6 +14,7 @@ import {
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { generateShortId } from '@utils/core';
 
 const logger = createChannelTrace('UserQuestionTool');
 
@@ -48,7 +48,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const context = tryUseRunContext();
     requireInteractions('ask_user_question', context);
     const streamId = getRunContextStreamId(context);
-    const requestId = `user-question-${nanoid()}`;
+    const requestId = `user-question-${generateShortId()}`;
 
     logger.info('User question requested', {
       data: input.questions[0]?.question.slice(0, 100) ?? '',

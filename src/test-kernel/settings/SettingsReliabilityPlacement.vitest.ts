@@ -41,18 +41,18 @@ type LitTestElement = HTMLElement & {
   updateComplete: Promise<unknown>;
 };
 
-type ModelsTabElement = LitTestElement & {
+type AgentsTabElement = LitTestElement & {
   reliabilitySettings: typeof reliabilitySettings;
 };
 
-function mountModelsTab(): Promise<ModelsTabElement> {
-  return mountComponent<ModelsTabElement>('models-tab', {
+function mountAgentsTab(): Promise<AgentsTabElement> {
+  return mountComponent<AgentsTabElement>('agents-tab', {
     reliabilitySettings,
   });
 }
 
 async function getReliabilitySection(
-  tab: ModelsTabElement,
+  tab: AgentsTabElement,
 ): Promise<LitTestElement | null> {
   const section = tab.shadowRoot?.querySelector(
     'reliability-settings-section',
@@ -63,16 +63,16 @@ async function getReliabilitySection(
 
 describe('settings reliability placement', () => {
   useLitComponentTestDom(async () => {
+    await import('@settingsView/frontend/tabs/AgentsTab');
     await import('@settingsView/frontend/tabs/ModelsTab');
-    await import('@settingsView/frontend/tabs/MultiAgentTab');
   });
 
   beforeEach(() => {
     mocks.postMessage.mockClear();
   });
 
-  it('shows reliability settings at the bottom of the Models tab', async () => {
-    const tab = await mountModelsTab();
+  it('shows reliability settings at the bottom of the Agents tab', async () => {
+    const tab = await mountAgentsTab();
     const section = await getReliabilitySection(tab);
 
     expect(section).not.toBeNull();
@@ -80,15 +80,15 @@ describe('settings reliability placement', () => {
     expect(section?.shadowRoot?.textContent).toContain('Retry attempts');
   });
 
-  it('does not render model reliability controls in Multi-Agent', async () => {
-    const tab = await mountComponent<LitTestElement>('multi-agent-tab');
+  it('does not render model reliability controls in Models', async () => {
+    const tab = await mountComponent<LitTestElement>('models-tab');
 
     expect(tab.shadowRoot?.textContent).not.toContain('Compaction threshold');
     expect(tab.shadowRoot?.textContent).not.toContain('Retry attempts');
   });
 
   it('posts numeric reliability changes through the provider setting command', async () => {
-    const tab = await mountModelsTab();
+    const tab = await mountAgentsTab();
 
     const section = await getReliabilitySection(tab);
 

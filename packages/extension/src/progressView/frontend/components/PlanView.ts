@@ -15,11 +15,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  designTokens,
-  animationStyles,
-  commonViewStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import type { Plan } from '@shared/schemas';
 
 // Local imports - progress view constants
@@ -33,7 +29,6 @@ export class PlanView extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    animationStyles,
     css`
       :host {
         display: block;
