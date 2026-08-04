@@ -212,10 +212,9 @@ export class ModelSelectionList extends LitElement {
 
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
     const available = !model.disabled;
-    const unavailableClass = !available ? ' model-row--unavailable' : '';
 
     return html`
-      <div class="model-row${unavailableClass}">
+      <div class="model-row">
         <wa-switch
           ?checked=${model.enabled}
           ?disabled=${!available && !model.enabled}

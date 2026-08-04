@@ -166,7 +166,6 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .skip-row wa-button::part(base) {
         font-size: var(--font-size-sm);
-        color: var(--color-text-muted);
       }
 
       @container onboarding-card (max-width: 420px) {
