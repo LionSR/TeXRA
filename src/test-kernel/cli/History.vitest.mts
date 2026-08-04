@@ -1504,29 +1504,6 @@ describe('CLI history runtime', () => {
         expect(stderr).not.toContain('sidecars (');
       });
 
-      it('reports ambiguous transcript ownership without exporting an arbitrary trace', async () => {
-        mocks.assembleTrace.mockResolvedValue({
-          status: 'streamId_ambiguous',
-          candidateStreamIds: ['orchestrator@old#a1', 'orchestrator@new#a1'],
-        });
-
-        const exitCode = await runHistoryExport(
-          makeContext('/resources'),
-          'a1' as ExecutionId,
-          'html',
-          { assetsDir: '/assets' },
-        );
-
-        expect(exitCode).toBe(CliExitCode.Usage);
-        expect(stdout).toBe('');
-        expect(stderr).toContain(
-          'multiple associated transcript sidecars (orchestrator@old#a1, orchestrator@new#a1)',
-        );
-        expect(stderr).toContain('no canonical trace timeline');
-        expect(stderr).toContain('HTML trace export was not written');
-        expect(stderr).not.toContain('texra history show');
-      });
-
       it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
         const resourcesPath = await makeTempDir(
           'texra-history-export-missing-src-',

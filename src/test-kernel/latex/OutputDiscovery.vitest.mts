@@ -118,7 +118,6 @@ describe('discoverLatestExecutionOutputs', () => {
       readMeta: async () => ({
         timestamp: '2026-01-01T00:00:00.000Z',
         streamId: 'polish@earlierModel#exec-registered',
-        streamIdSource: 'registration',
       }),
     } as never);
     const rounds = { 0: [] };
