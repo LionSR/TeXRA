@@ -113,6 +113,7 @@ import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { HistoryHandlers } from './handlers/historyHandlers';
 import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import { ChatGptSubscriptionHandlers } from './handlers/chatgptSubscriptionHandlers';
+import { GrokSubscriptionHandlers } from './handlers/grokSubscriptionHandlers';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 
 // Re-use the shared type helper for extracting specific message types.
@@ -132,6 +133,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private readonly historyHandlers: HistoryHandlers;
   private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly chatgptHandlers: ChatGptSubscriptionHandlers;
+  private readonly grokHandlers: GrokSubscriptionHandlers;
   private readonly settingsHost: SettingsViewHost;
   private readonly profileController: SettingsProfileController;
   private readonly profileKeyController: SettingsProfileKeyController;
@@ -206,7 +208,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.historyHandlers = new HistoryHandlers(ctx);
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new ChatGptSubscriptionHandlers(ctx, () =>
-      this.refreshAfterChatGptAuthChange(),
+      this.refreshAfterSubscriptionAuthChange(),
+    );
+    this.grokHandlers = new GrokSubscriptionHandlers(ctx, () =>
+      this.refreshAfterSubscriptionAuthChange(),
     );
     this.handlerRegistry = this.createHandlerRegistry();
 
@@ -448,6 +453,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       signOutChatGpt: () => this.chatgptHandlers.handleSignOutChatGpt(),
       setChatGptPreferSubscription: (message) =>
         this.chatgptHandlers.handleSetPreferSubscription(message.enabled),
+      signInGrok: () => this.grokHandlers.handleSignInGrok(),
+      signOutGrok: () => this.grokHandlers.handleSignOutGrok(),
+      setGrokPreferSubscription: (message) =>
+        this.grokHandlers.handleSetPreferSubscription(message.enabled),
       updateStateSetting: (message) =>
         this.updateStateSetting(message.key, message.value),
       openToolInstallUrl: (message) => this.openExternalUrl(message.url),
@@ -555,6 +564,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.sendGitAuthorSettings(webview),
       this.githubHandlers.sendGitHubTokenStatus(webview),
       this.chatgptHandlers.sendChatGptAuthStatus(webview),
+      this.grokHandlers.sendGrokAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.sendAgentSkillsSettings(webview),
@@ -915,11 +925,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  private async refreshAfterChatGptAuthChange(): Promise<void> {
+  /** Subscription auth is a setup credential: same host refresh as API-key changes. */
+  private async refreshAfterSubscriptionAuthChange(): Promise<void> {
     invalidateModelOptionsCache();
     await Promise.all([
-      // ChatGPT subscription is now a setup credential, so reuse the same
-      // host refresh path as API-key changes to update the welcome card.
       safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName),
       safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
       this.withActiveWebview((w) => this.sendModelSelectionData(w)),

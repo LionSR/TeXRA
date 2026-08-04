@@ -117,11 +117,17 @@ export function createStubDesktopCredentialSettingsController(
       signOutChatGpt: noOp,
       setChatGptPreferSubscription: noOp,
     },
+    grokHandlers: {
+      signInGrok: noOp,
+      signOutGrok: noOp,
+      setGrokPreferSubscription: noOp,
+    },
     modelSelectionController: createModelSelectionController(state),
     postMainModelOptionsData: noOp,
     postStartupData: noOp,
     refreshAuthDependentData: noOp,
     signInChatGpt: noOp,
+    signInGrok: noOp,
     ...overrides,
   };
 }

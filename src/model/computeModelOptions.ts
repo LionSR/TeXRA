@@ -6,6 +6,8 @@ import {
 } from '@model/includedModelAccess';
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
+import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
+import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -24,7 +26,10 @@ import {
   apiKeyExistsUncached,
   type ApiProvider,
 } from './apiProviders';
-import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from './providerCapabilities';
+import {
+  resolveCodexSubscriptionCapabilitiesForAgentCategory,
+  resolveXaiSubscriptionCapabilitiesForAgentCategory,
+} from './providerCapabilities';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
@@ -318,6 +323,8 @@ interface ModelAvailabilityContext {
   /** Whether the user is signed in with ChatGPT (only resolved when the
    * "prefer subscription" switch is on). */
   codexSignedIn: boolean;
+  /** Whether the user is signed in with Grok (only when prefer is on). */
+  xaiSignedIn: boolean;
   /** Whether the "Prefer Kimi Code" switch is on. */
   preferKimiCode: boolean;
   /** Whether a Kimi Code console API key is stored. */
@@ -422,6 +429,21 @@ async function resolveModelAvailability(
     }
   }
 
+  // Grok (xAI) subscription — same preference pattern as ChatGPT.
+  if (ctx.xaiSignedIn) {
+    const subscriptionCapabilities =
+      resolveXaiSubscriptionCapabilitiesForAgentCategory(
+        config,
+        ctx.useOpenRouter,
+      );
+    if (subscriptionCapabilities) {
+      return {
+        ...availabilityStatus('subscription-access'),
+        providerCapabilities: subscriptionCapabilities,
+      };
+    }
+  }
+
   // OpenRouter routing is intentionally outside included access; a configured
   // OpenRouter key is the only ready state for these calls.
   if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
@@ -474,6 +496,7 @@ async function buildAvailabilityContext(
     hasOpenRouter,
     hasServerAccess,
     codexSignedIn,
+    xaiSignedIn,
     kimiCodeKeySet,
     includedAccessSignedOut,
   ] = await Promise.all([
@@ -481,6 +504,7 @@ async function buildAvailabilityContext(
     serverSideKeyService.canUseServerSideKeys(),
     // Only worth a secrets read when the "prefer subscription" switch is on.
     isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
+    isPreferXaiSubscription() ? isXaiSignedIn() : Promise.resolve(false),
     hasApiKey('kimiCode'),
     // Signed-out is only a distinct availability reason on the included-access
     // route, so personal mode never pays for this read.
@@ -499,6 +523,7 @@ async function buildAvailabilityContext(
     useOpenRouter: access.useOpenRouter,
     useIncludedAccess,
     codexSignedIn,
+    xaiSignedIn,
     preferKimiCode: getPreferKimiCode(),
     kimiCodeKeySet,
     agentCategory: access.agentCategory,

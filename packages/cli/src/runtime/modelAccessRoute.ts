@@ -7,13 +7,14 @@ export const CLI_MODEL_ACCESS_DESCRIPTION =
   'Toggle subscription preferences or choose the API fallback.';
 
 export type CliModelAccessRoute =
-  'chatgpt' | 'kimi-code' | 'included' | 'personal';
+  'chatgpt' | 'grok' | 'kimi-code' | 'included' | 'personal';
 
 type CliSubscriptionPreferenceState = 'off' | 'on';
-type CliSubscriptionProvider = 'chatgpt' | 'kimi-code';
+type CliSubscriptionProvider = 'chatgpt' | 'grok' | 'kimi-code';
 
 interface CliSubscriptionPreferences {
   readonly chatGpt: CliSubscriptionPreferenceState;
+  readonly grok: CliSubscriptionPreferenceState;
   readonly kimiCode: CliSubscriptionPreferenceState;
 }
 
@@ -50,6 +51,8 @@ export interface CliModelAccessStatus {
   readonly preferences: CliSubscriptionPreferences;
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
+  readonly grokSignedIn: boolean;
+  readonly grokAccountLabel?: string;
   readonly kimiCodeKeySet?: boolean;
   readonly texraSignedIn?: boolean;
 }
@@ -92,6 +95,14 @@ export function parseCliModelAccessSelection(
         provider: 'chatgpt',
         state: 'on',
       };
+    case 'grok':
+    case 'xai':
+    case 'supergrok':
+      return {
+        kind: 'subscription-preference',
+        provider: 'grok',
+        state: 'on',
+      };
     case 'kimi':
     case 'kimicode':
     case 'kimi-code':
@@ -109,11 +120,15 @@ export function parseCliModelAccessSelection(
 export function resolveCliModelAccessRoute({
   apiMode,
   subscriptionActive,
+  grokSubscriptionActive,
   kimiCodeActive,
   usageRoute,
 }: {
   readonly apiMode: ApiAccessMode;
+  /** Whether the current model would route through ChatGPT/Codex. */
   readonly subscriptionActive: boolean;
+  /** Whether the current model would route through Grok/xAI OAuth. */
+  readonly grokSubscriptionActive?: boolean;
   readonly kimiCodeActive?: boolean;
   readonly usageRoute?: UsageRoute;
 }): CliModelAccessRoute {
@@ -121,6 +136,8 @@ export function resolveCliModelAccessRoute({
     switch (usageRoute) {
       case 'chatgpt-subscription':
         return 'chatgpt';
+      case 'xai-subscription':
+        return 'grok';
       case 'kimi-code-subscription':
         return 'kimi-code';
       case 'relay':
@@ -134,6 +151,7 @@ export function resolveCliModelAccessRoute({
     }
   }
   if (subscriptionActive) return 'chatgpt';
+  if (grokSubscriptionActive === true) return 'grok';
   // The Kimi Code route only describes personal access — under included
   // access the relay owns eligible models.
   if (kimiCodeActive === true && apiMode === 'personal') return 'kimi-code';
@@ -149,6 +167,8 @@ export function formatCliModelAccessRoute(route: CliModelAccessRoute): string {
   switch (route) {
     case 'chatgpt':
       return 'ChatGPT subscription';
+    case 'grok':
+      return 'Grok subscription';
     case 'kimi-code':
       return 'Kimi Code subscription';
     case 'included':
@@ -166,7 +186,7 @@ export function formatCliModelAccessRouteInline(
 ): string {
   const label = formatCliModelAccessRoute(route);
   // Proper-noun labels keep their casing; plain labels lowercase like prose.
-  return route === 'chatgpt' || route === 'kimi-code'
+  return route === 'chatgpt' || route === 'grok' || route === 'kimi-code'
     ? label
     : label.charAt(0).toLowerCase() + label.slice(1);
 }
@@ -182,6 +202,19 @@ export function formatCliChatGptPreference(
     return `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
   }
   return status.preferences.chatGpt === 'on'
+    ? 'On · sign in required'
+    : 'Off · sign in required to enable';
+}
+
+/** Format the Grok preference independently of credential availability. */
+export function formatCliGrokPreference(status: CliModelAccessStatus): string {
+  if (status.preferences.grok === 'on' && status.grokSignedIn) {
+    return `On · ${status.grokAccountLabel ?? 'your account'}`;
+  }
+  if (status.grokSignedIn) {
+    return `Off · ${status.grokAccountLabel ?? 'your account'}`;
+  }
+  return status.preferences.grok === 'on'
     ? 'On · sign in required'
     : 'Off · sign in required to enable';
 }
@@ -205,6 +238,12 @@ const cliSubscriptionAccessItems = [
     preference: 'chatGpt',
     label: 'Prefer ChatGPT subscription',
     formatDescription: formatCliChatGptPreference,
+  },
+  {
+    provider: 'grok',
+    preference: 'grok',
+    label: 'Prefer Grok subscription',
+    formatDescription: formatCliGrokPreference,
   },
   {
     provider: 'kimi-code',
@@ -270,6 +309,7 @@ export function formatCliModelAccessSummary(
   status: CliModelAccessStatus,
 ): string {
   const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
+  const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
   const kimiCode = status.preferences.kimiCode === 'on' ? 'On' : 'Off';
-  return `ChatGPT ${chatGpt} · Kimi ${kimiCode} · fallback: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
+  return `ChatGPT ${chatGpt} · Grok ${grok} · Kimi ${kimiCode} · fallback: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
 }

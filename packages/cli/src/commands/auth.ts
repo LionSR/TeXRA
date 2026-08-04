@@ -44,6 +44,7 @@ import { withUsageSections } from './_helpers/dispatch';
 import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { cliProgressWriter, emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
+import { grokAuthCommand } from './grokAuth';
 import { authTokenCommand } from './relayTokens';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
@@ -215,6 +216,7 @@ export const loginCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
+        ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
         ['texra login', 'sign in with Researcher Access'],
         ['texra login --device', 'sign in to Researcher Access over SSH'],
       ],
@@ -389,6 +391,7 @@ const AUTH_SUBCOMMANDS = {
   usage: usageCommand,
   token: authTokenCommand,
   chatgpt: chatgptAuthCommand,
+  grok: grokAuthCommand,
 } as const;
 
 export const AUTH_SUBCOMMAND_NAMES: readonly string[] =
@@ -398,7 +401,7 @@ export const authCommand = defineCommand({
   meta: {
     name: 'auth',
     description:
-      'Sign in with ChatGPT or Researcher Access, check status, and view usage',
+      'Sign in with ChatGPT, Grok, or Researcher Access; check status; and view usage',
   },
   args: {
     ...GLOBAL_ARGS,

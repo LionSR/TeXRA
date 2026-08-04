@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-08-03
+updated: 2026-08-04
 ---
 
 # PRD Index
@@ -24,6 +24,7 @@ that archived source branch, not `main`.
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [PRD: xAI Responses API and `previous_response_id` for Grok](./2026-08-04-prd-xai-responses-previous-response-id.md)                     | 2026-08-04 | 2026-08-04 |
 | [PRD: Unified approval policy across CLI, desktop, and extension](./2026-08-03-prd-approval-policy-unification.md)                       | 2026-08-03 | 2026-08-03 |
 | [PRD: Non-blocking `inquiry` — Async Q&A with the User](./2026-05-15-prd-external-inquiry-async.md)                                      | 2026-05-15 | 2026-06-20 |
 | [PRD: Largest Dual-Systems Consolidation Audit (2026-06)](./2026-06-14-dual-systems-consolidation.md)                                    | 2026-06-14 | 2026-06-14 |

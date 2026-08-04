@@ -62,6 +62,11 @@ function usageRouteBadge(
         label: 'ChatGPT',
         subscription: true,
       };
+    case 'xai-subscription':
+      return {
+        label: 'Grok',
+        subscription: true,
+      };
     case 'kimi-code-subscription':
       return {
         label: 'Kimi Code',
