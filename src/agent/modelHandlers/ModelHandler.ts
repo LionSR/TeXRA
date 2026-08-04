@@ -669,7 +669,8 @@ export abstract class ModelHandler<
 
   /** Route tag for usage recorded after a successful attempt. */
   getLastCredentialUsageRoute(): NormalizedUsage['usageRoute'] {
-    switch (this.lastAttemptCredentialRoute) {
+    const route = this.lastAttemptCredentialRoute;
+    switch (route) {
       case 'chatgpt-subscription':
         return 'chatgpt-subscription';
       case 'relay':
@@ -677,7 +678,12 @@ export abstract class ModelHandler<
       case 'api-key':
       case 'openrouter':
         return 'api-key';
+      case undefined:
+        return undefined;
       default:
+        // A new route must pick its own usage tag here: untagged usage is
+        // dropped silently by the caller rather than reported.
+        route satisfies never;
         return undefined;
     }
   }
