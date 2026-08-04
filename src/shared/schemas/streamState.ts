@@ -64,7 +64,7 @@ export type ActiveChildInfo = z.infer<typeof ActiveChildInfoSchema>;
 
 // Round Stage (ephemeral round label from typed stage.start metadata)
 
-export const RoundStageSchema = z.object({
+const RoundStageSchema = z.object({
   /** Zero-based round/turn index. */
   index: z.int().nonnegative(),
   /** Planned total, when known. Workflow runs set this; tool-use turns may not. */
@@ -80,7 +80,7 @@ export type RoundStage = z.infer<typeof RoundStageSchema>;
 // are projected from the same `stage.start` fact, discriminated by its `kind`,
 // and a stream that opens phases never opens rounds.
 
-export const PhaseStageSchema = z.object({
+const PhaseStageSchema = z.object({
   /** Phase title, free-form text from the workflow script. */
   label: z.string(),
   /** Zero-based position in the declared phase list. Absent for a phase the
@@ -91,6 +91,20 @@ export const PhaseStageSchema = z.object({
 });
 
 export type PhaseStage = z.infer<typeof PhaseStageSchema>;
+
+/**
+ * The one discriminated run-progress slot: a tool-use run advances through
+ * numbered rounds, a workflow-script run through named phases — never both —
+ * so state and wire carry one `stage` field rather than two
+ * independently-optional ones every reader has to fall back between. The arms
+ * extend the payload schemas above, so projecting to either is a `kind` strip.
+ */
+export const StreamStageSchema = z.discriminatedUnion('kind', [
+  RoundStageSchema.extend({ kind: z.literal('round') }),
+  PhaseStageSchema.extend({ kind: z.literal('phase') }),
+]);
+
+export type StreamStage = z.infer<typeof StreamStageSchema>;
 
 // Conversation Progress (tool-call counters updated during execution)
 
@@ -117,8 +131,7 @@ export const BackendOwnedFieldsSchema = z.object({
   conversationProgress: ConversationProgressSchema.prefault(
     DEFAULT_CONVERSATION_PROGRESS,
   ),
-  roundStage: RoundStageSchema.optional(),
-  phaseStage: PhaseStageSchema.optional(),
+  stage: StreamStageSchema.optional(),
   /** Child roster — live entries plus the finished ones retained for display
    *  (`finishedAt` set). */
   subagents: z.array(ActiveChildInfoSchema).prefault([]),
@@ -127,8 +140,7 @@ export const BackendOwnedFieldsSchema = z.object({
 export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
   // Nullable over the wire: an explicit `null` clears a stage the frontend
   // still holds, which a plain omission cannot express.
-  roundStage: RoundStageSchema.nullable().optional(),
-  phaseStage: PhaseStageSchema.nullable().optional(),
+  stage: StreamStageSchema.nullable().optional(),
   /** Absent while the stream's run identity is still pending. */
   category: AgentCategorySchema.optional(),
 });

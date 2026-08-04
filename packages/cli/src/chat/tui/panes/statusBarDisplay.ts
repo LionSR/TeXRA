@@ -21,11 +21,11 @@ import {
   spendingQuotaState,
   type SpendingStatus,
   type StreamPhase,
+  type StreamStage,
   type StreamSubstate,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import type { StreamStage } from '@shared/streams/stage';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import {

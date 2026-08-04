@@ -82,8 +82,7 @@ describe('SyncStreamContentMessageSchema', () => {
     outputs: { files: {}, missing: {}, compileFailures: {} },
     activeState: {
       conversationProgress: { toolCallCount: 0 },
-      roundStage: null,
-      phaseStage: null,
+      stage: null,
       badges: {
         subagents: [],
       },
@@ -132,7 +131,7 @@ describe('SyncStreamContentMessageSchema', () => {
       ...workflow,
       activeState: {
         conversationProgress: workflow.activeState.conversationProgress,
-        roundStage: null,
+        stage: null,
         badges: workflow.activeState.badges,
         parentStreamId: null,
       },

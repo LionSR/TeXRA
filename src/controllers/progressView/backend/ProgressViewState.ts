@@ -19,8 +19,7 @@ import {
   type ActiveChildInfo,
   type ConversationProgress,
   type ExecutionId,
-  type PhaseStage,
-  type RoundStage,
+  type StreamStage,
   type RunIdentity,
   type StreamPhase,
   type StreamTabId,
@@ -97,8 +96,7 @@ type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
 export interface StreamExecutionState {
   category: (typeof AgentCategory)[keyof typeof AgentCategory];
   conversationProgress: ConversationProgress;
-  roundStage?: RoundStage;
-  phaseStage?: PhaseStage;
+  stage?: StreamStage;
   /** Live children plus the finished ones retained for display (`finishedAt`
    *  set). */
   subagents: ActiveChildInfo[];
@@ -425,8 +423,7 @@ export class ProgressViewState {
     const needsReset =
       retainedSubagents.length > 0 ||
       current.conversationProgress.toolCallCount !== 0 ||
-      current.roundStage !== undefined ||
-      current.phaseStage !== undefined;
+      current.stage !== undefined;
 
     if (needsReset) {
       this._streamStates.set(stream, {
@@ -435,8 +432,7 @@ export class ProgressViewState {
           (child) => child.finishedAt === undefined,
         ),
         conversationProgress: { toolCallCount: 0 },
-        roundStage: undefined,
-        phaseStage: undefined,
+        stage: undefined,
       });
     }
   }

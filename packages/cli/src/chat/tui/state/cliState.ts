@@ -19,6 +19,7 @@ import {
   type RoundIndexed,
   type RunIdentity,
   type StreamPhase,
+  type StreamStage,
   type StreamSubstate,
   type StreamTabId,
   type TaskGroup,
@@ -28,7 +29,6 @@ import {
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import type { StreamStage } from '@shared/streams/stage';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   applyChildStreamRemoval,
