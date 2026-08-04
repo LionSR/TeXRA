@@ -262,9 +262,13 @@ export class StreamTab extends LitElement {
             ? nothing
             : html`<wa-tooltip for="stream-tab-kind"
                   >${
-                    stream.identity?.kind === 'multiAgentWorkflow'
-                      ? streamDecorator.label
-                      : `Category: ${streamDecorator.label}`
+                    // Only agent runs have an execution-mode category; other
+                    // stream kinds (and pending streams) show their label bare.
+                    (stream.identity === undefined ||
+                      stream.identity.kind === 'agent') &&
+                    stream.agentCategory !== undefined
+                      ? `Category: ${streamDecorator.label}`
+                      : streamDecorator.label
                   }</wa-tooltip
                 >${when(
                   stream.isRemote,

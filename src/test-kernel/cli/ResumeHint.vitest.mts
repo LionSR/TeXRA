@@ -6,9 +6,9 @@ import {
   formatResumeCommand,
   formatResumeHint,
   formatResumeUsage,
-  type ResumeUsageStats,
 } from '@cli/chat/tui/state/resumeHint';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import { type TokenUsageStats } from '@shared/schemas';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import {
   buildChildStreamEntries,
@@ -245,7 +245,7 @@ describe('formatResumeHint', () => {
         cost: 0,
         cacheReadInputTokens: 6_470_327_168,
         reasoningTokens: 3_489_148,
-      } satisfies ResumeUsageStats),
+      } satisfies TokenUsageStats),
     ).toBe(
       [
         'Token usage: total=197,232,342 input=186,189,742 (+ 6,470,327,168 cached) output=11,042,600 (reasoning 3,489,148)',
@@ -280,7 +280,7 @@ describe('collectResumeUsage', () => {
           cost: 0.3,
           cacheReadInputTokens: 3,
           reasoningTokens: 5,
-        } as ResumeUsageStats,
+        } as TokenUsageStats,
       }),
     );
 
@@ -316,6 +316,7 @@ describe('collectResumeUsage', () => {
       inputTokens: 100,
       outputTokens: 20,
       cost: 0.3,
+      reasoningTokens: 0,
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,

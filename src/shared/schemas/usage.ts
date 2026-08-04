@@ -35,6 +35,7 @@ export const TokenUsageStatsBaseSchema = z.strictObject({
   cacheReadInputTokens: TokenCountSchema.optional(),
   cacheMissInputTokens: TokenCountSchema.optional(),
   cacheCreationInputTokens: TokenCountSchema.optional(),
+  reasoningTokens: TokenCountSchema.optional(),
   usageRoute: UsageRouteSchema.optional(),
 });
 
@@ -65,6 +66,7 @@ export function emptyUsageStats(): EmptyUsageStats {
     cacheReadInputTokens: 0,
     cacheMissInputTokens: 0,
     cacheCreationInputTokens: 0,
+    reasoningTokens: 0,
   };
 }
 
@@ -76,7 +78,8 @@ export function isEmptyUsage(usage: TokenUsageStats): boolean {
     usage.cost === 0 &&
     (usage.cacheReadInputTokens ?? 0) === 0 &&
     (usage.cacheMissInputTokens ?? 0) === 0 &&
-    (usage.cacheCreationInputTokens ?? 0) === 0
+    (usage.cacheCreationInputTokens ?? 0) === 0 &&
+    (usage.reasoningTokens ?? 0) === 0
   );
 }
 
@@ -94,6 +97,7 @@ export function sumUsageStats(
     total.cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
     total.cacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
     total.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
+    total.reasoningTokens += usage.reasoningTokens ?? 0;
     if (!isEmptyUsage(usage)) {
       const usageRoute = usage.usageRoute;
       if (usageRoute == null) {
@@ -122,7 +126,6 @@ export const RunUsageMapSchema = z.record(z.string(), TokenUsageStatsSchema);
 export const ExtendedTokenUsageStatsSchema = TokenUsageStatsBaseSchema.extend({
   elapsedTime: z.number().nonnegative().optional(),
   percentageCached: z.number().nonnegative().optional(),
-  reasoningTokens: TokenCountSchema.optional(),
   toolUseTokens: TokenCountSchema.optional(),
 });
 

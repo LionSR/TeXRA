@@ -35,10 +35,6 @@ export interface ResumeTargetsInput {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
-export type ResumeUsageStats = TokenUsageStats & {
-  readonly reasoningTokens?: number;
-};
-
 export interface ResumeCommandOptions {
   /** Effective workspace for the session being resumed. */
   readonly cwd?: string;
@@ -68,7 +64,7 @@ function formatInteger(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
-function usageHasTokens(usage: ResumeUsageStats): boolean {
+function usageHasTokens(usage: TokenUsageStats): boolean {
   return (
     usage.inputTokens > 0 ||
     usage.outputTokens > 0 ||
@@ -79,36 +75,24 @@ function usageHasTokens(usage: ResumeUsageStats): boolean {
   );
 }
 
-function sumResumeUsageStats(
-  items: Iterable<ResumeUsageStats>,
-): ResumeUsageStats {
-  const usages = [...items];
-  const total = sumUsageStats(usages);
-  const reasoningTokens = usages.reduce(
-    (sum, usage) => sum + (usage.reasoningTokens ?? 0),
-    0,
-  );
-  return reasoningTokens > 0 ? { ...total, reasoningTokens } : total;
-}
-
 export function collectResumeUsage(
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
-): ResumeUsageStats | undefined {
-  const usages: ResumeUsageStats[] = [];
+): TokenUsageStats | undefined {
+  const usages: TokenUsageStats[] = [];
 
   for (const slice of streams.values()) {
-    const usage: ResumeUsageStats | undefined =
+    const usage: TokenUsageStats | undefined =
       slice.cumulativeUsage ?? slice.usage;
     if (!usage || !usageHasTokens(usage)) continue;
     usages.push(usage);
   }
 
-  const total = sumResumeUsageStats(usages);
+  const total = sumUsageStats(usages);
   return usageHasTokens(total) ? total : undefined;
 }
 
 export function formatResumeUsage(
-  usage: ResumeUsageStats | undefined,
+  usage: TokenUsageStats | undefined,
 ): string | undefined {
   if (!usage || !usageHasTokens(usage)) return undefined;
   const total = usage.inputTokens + usage.outputTokens;
@@ -173,7 +157,7 @@ export function collectResumeTargets({
 /** Multi-line reopen hint, or undefined when there's nothing to resume. */
 export function formatResumeHint(
   targets: readonly ResumeTarget[],
-  usage?: ResumeUsageStats,
+  usage?: TokenUsageStats,
   commandName?: string,
   commandOptions?: ResumeCommandOptions,
 ): string | undefined {

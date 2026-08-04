@@ -3117,8 +3117,7 @@ describe('subscribeRuntimeHost run facts', () => {
 
       expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
-      // the store keeps base TokenUsageStats only, so extended fields like
-      // `reasoningTokens` live solely on the latest `usage` snapshot.
+      // reasoningTokens is part of the one accumulated vocabulary.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
         inputTokens: 100,
         outputTokens: 20,
@@ -3126,6 +3125,7 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheReadInputTokens: 30,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 0,
+        reasoningTokens: 7,
       });
     });
   });
@@ -3429,8 +3429,8 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
-      // Summed from the store's per-run map (base TokenUsageStats — no
-      // extended `reasoningTokens`), not a second running sum in the slice.
+      // Summed from the store's per-run map — the one accumulator, which
+      // carries reasoningTokens — not a second running sum in the slice.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
         inputTokens: 150,
         outputTokens: 30,
@@ -3438,6 +3438,7 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheReadInputTokens: 35,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 0,
+        reasoningTokens: 10,
       });
     });
   });
@@ -3591,6 +3592,7 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheReadInputTokens: 35,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 7,
+        reasoningTokens: 0,
       });
     });
   });

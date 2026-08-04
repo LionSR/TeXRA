@@ -44,6 +44,9 @@ type DisplayState = {
   isStructuredDelivery: boolean;
   hasRawMessage: boolean;
   displayText: string;
+  /** What the copy action yields: the presented content — the formatted
+   *  workflow summary when one renders, the display text otherwise. */
+  copyText: string;
   structuredMarkdownHtml: string;
 };
 
@@ -200,6 +203,7 @@ export class UserMessage extends LitElement {
     isStructuredDelivery: false,
     hasRawMessage: false,
     displayText: '',
+    copyText: '',
     structuredMarkdownHtml: '',
   };
 
@@ -230,6 +234,7 @@ export class UserMessage extends LitElement {
       isStructuredDelivery,
       hasRawMessage,
       displayText,
+      copyText: structuredDisplayText,
       // Cached alongside displayText: message text is immutable after
       // creation, so the Markdown parse must not rerun on every render.
       structuredMarkdownHtml: isStructuredDelivery
@@ -252,6 +257,7 @@ export class UserMessage extends LitElement {
       isStructuredDelivery,
       hasRawMessage,
       displayText,
+      copyText,
       structuredMarkdownHtml,
     } = this.getDisplayState();
 
@@ -279,7 +285,7 @@ export class UserMessage extends LitElement {
               label: copyState.ariaLabel,
               tooltip: copyState.title,
               className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
-              onClick: () => this.copyController.copy(displayText),
+              onClick: () => this.copyController.copy(copyText),
             })}
             ${
               hasRawMessage

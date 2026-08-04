@@ -45,11 +45,12 @@ function listingDisplay(entry: ExecutionListingEntry): {
       // Honest non-agent records carry a model only when a real one backs
       // the run; a legacy fabricated AgentConfig on a non-agent identity
       // stays suppressed.
-      const model = isAgentRunRecord(entry.record)
-        ? entry.identity.kind === 'agent'
-          ? entry.record.model
-          : null
-        : (entry.record.model ?? null);
+      let model: string | null;
+      if (isAgentRunRecord(entry.record)) {
+        model = entry.identity.kind === 'agent' ? entry.record.model : null;
+      } else {
+        model = entry.record.model ?? null;
+      }
       return {
         agent: runIdentityName(entry.identity),
         model,

@@ -9,6 +9,7 @@ import {
   resetExecutionLeaseCoordinationForTests,
 } from '@agent/storage/executionLease';
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
@@ -23,8 +24,11 @@ import {
 } from '@shared/schemas';
 import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
-import { StreamLogStore } from '@transcript';
+import {
+  appendTranscriptEntry,
+  snapshotFacts,
+} from '@test/support/storeTestDrivers';
+import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 
 setupPlatform({ workspacePath: '/workspace/session-restart-repair' });
@@ -57,11 +61,33 @@ function openDeferredSession(transcripts: StreamLogStore): SessionHandle {
   return new SessionHandle({ transcripts, restartRepair: 'deferred' });
 }
 
+/**
+ * Persist the stream→execution sidecar FK — since Axis T the ONE reverse
+ * edge restart repair recognizes; name suffixes are never ownership.
+ */
+async function seedSidecarFk(
+  stream: StreamTabId,
+  ownedExecutionId: ExecutionId,
+): Promise<void> {
+  const snapshots = new StreamSnapshotStore();
+  snapshotFacts(snapshots).setRunConfig(
+    stream,
+    AgentConfigSchema.parse({
+      agent: 'chat',
+      model: 'deepseekT',
+      agentCategory: 'toolUse',
+    }),
+    ownedExecutionId,
+  );
+  await snapshots.flush();
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const directory of [
     WORKSPACE_STORAGE_LAYOUT.executionLeases,
     'executions',
+    'streamData',
     'streamLogs',
     'streamLogSummaries',
   ]) {
@@ -106,6 +132,7 @@ describe('SessionHandle restart repair', () => {
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, streamId, 'crashed-running-group');
     await transcripts.flush();
+    await seedSidecarFk(streamId, executionId);
 
     const executionStore = getExecutionStore(executionId);
     await executionStore.writeMeta({
@@ -175,6 +202,7 @@ describe('SessionHandle restart repair', () => {
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, streamId, 'malformed-meta-running-group');
     await transcripts.flush();
+    await seedSidecarFk(streamId, executionId);
 
     const executionStore = getExecutionStore(executionId);
     const malformedMeta = { timestamp: 123 };
@@ -228,6 +256,7 @@ describe('SessionHandle restart repair', () => {
       'completed-running-group',
     );
     await transcripts.flush();
+    await seedSidecarFk(completedStreamId, completedExecutionId);
 
     const executionStore = getExecutionStore(completedExecutionId);
     await executionStore.writeMeta({
@@ -256,7 +285,7 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
-  it('detects a resumable run from its canonical stream suffix', async () => {
+  it('detects a resumable run from its persisted sidecar FK', async () => {
     const resumableExecutionId = 'facade123' as ExecutionId;
     const resumableStreamId =
       `resumable#${resumableExecutionId}` as StreamTabId;
@@ -267,6 +296,7 @@ describe('SessionHandle restart repair', () => {
       'resumable-running-group',
     );
     await transcripts.flush();
+    await seedSidecarFk(resumableStreamId, resumableExecutionId);
 
     const executionStore = getExecutionStore(resumableExecutionId);
     await executionStore.writeMeta({
@@ -279,9 +309,9 @@ describe('SessionHandle restart repair', () => {
     try {
       await session.waitUntilReady();
 
-      expect(
-        session.snapshots.getExecutionId(resumableStreamId),
-      ).toBeUndefined();
+      expect(session.snapshots.getExecutionId(resumableStreamId)).toBe(
+        resumableExecutionId,
+      );
       expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.WAITING);
       await expect(
         executionStore.read(flowKey(resumableExecutionId)),
@@ -297,12 +327,15 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
-  it('fails a suffix-only crashed run when resumability detection fails', async () => {
+  it('preserves mapped runs and fails only unmapped streams when resumability detection fails', async () => {
     const degradedExecutionId = 'decade123' as ExecutionId;
     const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;
+    const unmappedStreamId = 'unmapped#no-sidecar-fk' as StreamTabId;
     const transcripts = await StreamLogStore.open();
     appendRunningGroup(transcripts, degradedStreamId, 'degraded-running-group');
+    appendRunningGroup(transcripts, unmappedStreamId, 'unmapped-running-group');
     await transcripts.flush();
+    await seedSidecarFk(degradedStreamId, degradedExecutionId);
 
     const executionStore = getExecutionStore(degradedExecutionId);
     await executionStore.writeMeta({
@@ -317,15 +350,21 @@ describe('SessionHandle restart repair', () => {
     try {
       await session.waitUntilReady();
 
-      expect(
-        session.snapshots.getExecutionId(degradedStreamId),
-      ).toBeUndefined();
-      expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.FAILED);
+      // A mapped stream keeps its recovery state: failing it blindly could
+      // destroy a flow record that is in fact resumable.
+      expect(session.snapshots.getExecutionId(degradedStreamId)).toBe(
+        degradedExecutionId,
+      );
+      expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.RUNNING);
       await expect(
         executionStore.read(flowKey(degradedExecutionId)),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(validFlowRecord);
+
+      // An unmapped stream owns no execution: it is failed in-transcript
+      // only, with no execution-store writes.
+      expect(session.status.get(unmappedStreamId)).toBe(STREAM_PHASE.FAILED);
       expect(
-        transcripts.get(degradedStreamId)?.getRange(0).at(-1),
+        transcripts.get(unmappedStreamId)?.getRange(0).at(-1),
       ).toMatchObject({
         type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
         data: { status: RUN_OUTCOME.FAILED },
@@ -608,6 +647,7 @@ describe('SessionHandle restart repair', () => {
       Date.now(),
     );
     await transcripts.flush();
+    await seedSidecarFk(rollbackStreamId, rollbackExecutionId);
     const executionStore = getExecutionStore(rollbackExecutionId);
     await executionStore.writeMeta({
       timestamp: new Date().toISOString(),

@@ -202,7 +202,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('derives an active execution from the stream id when snapshot mapping is absent', async () => {
+  it('never derives execution ownership from the stream id: stream state clears, execution survives', async () => {
     const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966c' as StreamTabId;
     const executionId = 'a6966c' as ExecutionId;
@@ -213,14 +213,16 @@ describe('ProgressBackend', () => {
       await writeExecutionConfig(executionId);
       await backend.state.flush();
       await StorageFS.ensureDir(streamDataDir(stream));
-      await GoalStore.start(stream, 'preserve the unmapped active execution');
+      await GoalStore.start(stream, 'goal on an unowned stream');
       await writeForeignLease(executionId);
 
       await backend.state.clearStream(stream);
 
+      // Name resemblance is not ownership: the stream's own state goes, the
+      // execution directory it merely resembles is untouched.
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-      expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
-      expect(GoalStore.getForStream(stream)).not.toBeNull();
+      expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
+      expect(GoalStore.getForStream(stream)).toBeNull();
     } finally {
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       await GoalStore.forget(stream);
@@ -229,7 +231,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('retains a log-only stream during bulk cleanup when its execution is active', async () => {
+  it('clears a log-only stream during bulk cleanup without touching its unowned execution', async () => {
     const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966d' as StreamTabId;
     const executionId = 'a6966d' as ExecutionId;
@@ -237,18 +239,16 @@ describe('ProgressBackend', () => {
     try {
       backend.state.streamLogs.ensureStream(stream);
       await writeExecutionConfig(executionId);
-      await GoalStore.start(stream, 'preserve the log-only active execution');
+      await GoalStore.start(stream, 'goal on a log-only stream');
       await writeForeignLease(executionId);
 
       const retained = await backend.state.clearAll();
 
-      expect(retained).toEqual({
-        active: new Set([stream]),
-        failed: new Set(),
-      });
-      expect(backend.state.streamLogs.has(stream)).toBe(true);
+      // A log-only stream carries no sidecar FK, so it owns no execution:
+      // its stream state clears and the leased execution stays untouched.
+      expect(retained).toEqual({ active: new Set(), failed: new Set() });
+      expect(backend.state.streamLogs.has(stream)).toBe(false);
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
-      expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
       await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       await GoalStore.forget(stream);

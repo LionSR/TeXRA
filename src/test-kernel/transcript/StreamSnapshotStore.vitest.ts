@@ -403,7 +403,8 @@ describe('StreamSnapshotStore', () => {
     });
     expect(snap.runUsage[RUN]).not.toHaveProperty('elapsedTime');
     expect(snap.runUsage[RUN]).not.toHaveProperty('percentageCached');
-    expect(snap.runUsage[RUN]).not.toHaveProperty('reasoningTokens');
+    // reasoningTokens is part of the accumulated vocabulary and persists.
+    expect(snap.runUsage[RUN].reasoningTokens).toBe(7);
     expect(snap.runUsage[RUN]).not.toHaveProperty('toolUseTokens');
     expect(snap.executionId).toBe(executionId);
     // The live event updated the writer's display value in memory only.

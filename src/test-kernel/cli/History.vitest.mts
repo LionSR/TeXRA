@@ -456,7 +456,10 @@ describe('CLI history runtime', () => {
     ).resolves.toBeNull();
   });
 
-  it('treats candidate-only sidecar associations as a found execution', async () => {
+  it('treats sidecar-only associations as not found in history details', async () => {
+    // The sidecar FK maps a stream to an execution for session bookkeeping;
+    // since Axis T it is NOT existence evidence for an execution whose
+    // metadata carries no stamped stream and whose transcript is empty.
     const executionId = 'a11ce5a11ce5' as ExecutionId;
     const snapshots = new StreamSnapshotStore();
     snapshotFacts(snapshots).setRunConfig(
@@ -474,43 +477,12 @@ describe('CLI history runtime', () => {
     mocks.readMeta.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
 
-    await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
-      id: executionId,
-      status: 'unknown',
-      conversationPreview: null,
-    });
-    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-      status: 'incomplete',
-    });
+    await expect(readCliHistoryDetails(executionId)).resolves.toBeNull();
   });
 
-  it('treats children-only associations as incomplete markdown export evidence', async () => {
-    const executionId = 'a11ce6a11ce6' as ExecutionId;
-    const parent = 'orchestrator@model#parent' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    for (const streamId of [
-      `bash@tool#${executionId}`,
-      `codex@tool#${executionId}`,
-    ] as StreamTabId[]) {
-      snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
-      snapshotFacts(snapshots).setParentStream(streamId, parent);
-    }
-    await snapshots.flush();
-    mocks.readConfig.mockResolvedValue(null);
-    mocks.readMeta.mockResolvedValue(null);
-    mocks.exists.mockResolvedValue(false);
-
-    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-      status: 'incomplete',
-    });
-  });
-
-  it('finds a sole diagnostic-only exact root in CLI history details', async () => {
+  it('finds a stamped diagnostic-only root in CLI history details', async () => {
     const executionId = 'a11ce7a11ce7' as ExecutionId;
     const root = `orchestrator@model#${executionId}` as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(root, config, executionId);
-    await snapshots.flush();
     const logs = await StreamLogStore.open();
     appendTranscriptEntry(logs, root, {
       id: 'diagnostic-only-root',
@@ -522,7 +494,13 @@ describe('CLI history runtime', () => {
     });
     await logs.flush();
     mocks.readConfig.mockResolvedValue(null);
-    mocks.readMeta.mockResolvedValue(null);
+    // The streamId stamped on execution metadata at registration is the one
+    // execution→stream mapping; the diagnostic-only transcript row proves
+    // the run exists even though it yields no conversation.
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId: root,
+    });
     mocks.exists.mockResolvedValue(false);
 
     await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
@@ -1251,7 +1229,10 @@ describe('CLI history runtime', () => {
       ).resolves.toEqual({ status: 'not_found' });
     });
 
-    it('reports candidate-only sidecars as incomplete rather than not found', async () => {
+    it('reports sidecar-only associations as not found for markdown export', async () => {
+      // Since Axis T the sidecar FK is session bookkeeping, not transcript
+      // evidence: without meta, config, a stamped stream, or a conversation,
+      // the id resolves to nothing at all.
       const executionId = 'a11ce6a11ce6' as ExecutionId;
       const snapshots = new StreamSnapshotStore();
       snapshotFacts(snapshots).setRunConfig(
@@ -1270,7 +1251,7 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue(null);
 
       await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-        status: 'incomplete',
+        status: 'not_found',
       });
     });
 

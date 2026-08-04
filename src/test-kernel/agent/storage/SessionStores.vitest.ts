@@ -5,12 +5,12 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   getExecutionStore,
   SessionStores,
   type DeleteExecutionOptions,
 } from '@agent/storage';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import * as logUtils from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -78,9 +78,20 @@ describe('SessionStores deletion coordination', () => {
     );
     const releases: StreamTabId[] = [];
     session.followUps.onRelease((released) => releases.push(released));
+    const snapshots = new StreamSnapshotStore();
+    // Ownership is the sidecar FK, never the stream-name suffix.
+    snapshotFacts(snapshots).setRunConfig(
+      stream,
+      AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'deepseekT',
+        agentCategory: 'toolUse',
+      }),
+      'abc001' as ExecutionId,
+    );
     const stores = new SessionStores({
       streamLogs: session.transcripts,
-      snapshots: new StreamSnapshotStore(),
+      snapshots,
       deleteExecution,
       onCanonicalStreamDeleted: (deleted) =>
         releaseStreamResources(deleted, session),
@@ -110,9 +121,21 @@ describe('SessionStores deletion coordination', () => {
     session.transcripts.ensureStream(retained);
     const releases: StreamTabId[] = [];
     session.followUps.onRelease((stream) => releases.push(stream));
+    const snapshots = new StreamSnapshotStore();
+    // The retained stream owns its execution through the sidecar FK; the
+    // deleted stream has none and only its adjacent state is removed.
+    snapshotFacts(snapshots).setRunConfig(
+      retained,
+      AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'deepseekT',
+        agentCategory: 'toolUse',
+      }),
+      'ac71e1' as ExecutionId,
+    );
     const stores = new SessionStores({
       streamLogs: session.transcripts,
-      snapshots: new StreamSnapshotStore(),
+      snapshots,
       deleteExecution: async (executionId) => ({
         status: 'active',
         executionId,

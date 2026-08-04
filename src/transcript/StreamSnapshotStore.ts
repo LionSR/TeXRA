@@ -541,6 +541,7 @@ export class StreamSnapshotStore {
       cacheReadInputTokens,
       cacheMissInputTokens,
       cacheCreationInputTokens,
+      reasoningTokens,
       usageRoute,
     } = payload.usage;
     void this.addUsage(payload.streamId, payload.storageKey, {
@@ -550,6 +551,7 @@ export class StreamSnapshotStore {
       cacheReadInputTokens,
       cacheMissInputTokens,
       cacheCreationInputTokens,
+      reasoningTokens,
       usageRoute,
     });
   }

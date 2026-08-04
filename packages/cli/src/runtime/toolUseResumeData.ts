@@ -1,11 +1,11 @@
 import { createChannelTrace } from '@agent/trace';
+import { getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from '@agent/runtime/SessionResumeRetrieval';
-import { getExecutionStore } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

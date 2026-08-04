@@ -39,6 +39,7 @@ describe('stream data usage parsing', () => {
       inputTokens: 10,
       outputTokens: 2,
       cost: 0.25,
+      reasoningTokens: 0,
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,

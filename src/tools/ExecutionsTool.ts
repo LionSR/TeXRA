@@ -36,6 +36,10 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import { platform } from '@platform/platform';
 import {
   ExecutionIdSchema,
@@ -91,10 +95,6 @@ import {
 import { formatConversation } from './executions/conversationFormat';
 import { listRunDirectoryFiles } from './executions/runDirectoryFiles';
 import { serializeFilteredConfig } from './executions/configFieldFilter';
-import {
-  isAgentRunRecord,
-  type RunRecord,
-} from '@agent/core/definition/RunRecord';
 import {
   listenForFollowUp,
   shouldSkipWait,
