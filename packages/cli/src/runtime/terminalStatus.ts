@@ -41,7 +41,15 @@ export function toolUseResultText(result: CliToolUseRunResult): string {
 
 /** Map a run outcome to the CLI process exit code, treating an
  *  approval-denied error distinctly from a generic agent error. A resumed
- *  subagent that parks back to WAITING is a successfully completed turn. */
+ *  subagent that parks back to WAITING is a successfully completed turn.
+ *
+ *  The denial check is nested inside FAILED on purpose. A denied approval gate
+ *  is not, by itself, a failed run: under `--approval-policy never` the gate
+ *  returns feedback to the model, the model works around it, and the run
+ *  completes normally. Hoisting the check above the outcome made every such run
+ *  exit 4, which silently broke any caller that treats a nonzero exit as "did
+ *  not produce a result" — TeXRA's own PR review workflow among them, where the
+ *  review completed and was then thrown away before it could be posted. */
 export function runOutcomeExitCode(
   outcome: RunOutcome | typeof STREAM_PHASE.WAITING,
   context: CliContext,
@@ -49,9 +57,10 @@ export function runOutcomeExitCode(
   if (outcome === RUN_OUTCOME.CANCELLED) {
     return CliExitCode.Interrupted;
   }
-  if (hasCliApprovalDenied(context)) return CliExitCode.ApprovalDenied;
   if (outcome === RUN_OUTCOME.FAILED) {
-    return CliExitCode.AgentError;
+    return hasCliApprovalDenied(context)
+      ? CliExitCode.ApprovalDenied
+      : CliExitCode.AgentError;
   }
   return CliExitCode.Success;
 }
