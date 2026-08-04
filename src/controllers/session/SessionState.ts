@@ -41,7 +41,7 @@ import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
  * together from that one `AgentConfig`. Display data only — what the run IS
  * travels as the parsed {@link RunIdentity} beside it.
  */
-interface ProgressStreamConfigDetails {
+interface SessionStreamConfigDetails {
   instruction: string;
   model?: string;
   workingDirectory?: string;
@@ -57,7 +57,7 @@ export interface SessionStreamMetadata {
   executionId?: ExecutionId;
   parentStreamId?: StreamTabId;
   description?: string;
-  config?: ProgressStreamConfigDetails;
+  config?: SessionStreamConfigDetails;
 }
 
 /**

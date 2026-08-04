@@ -500,41 +500,6 @@ export class SessionFactApplier {
   }
 
   /**
-   * Cancel every still-running stream because the app itself is going away.
-   *
-   * An app-lifecycle fact, not a run-lifecycle write: the only caller is the
-   * extension's `extensionDeactivating` signal
-   * (`attachProgressBackendAppSignals`), which fires when no run can report its
-   * own outcome any more. Runs that end on their own or are found stale after a
-   * restart are still terminalized by `runFlowWithLifecycle` and
-   * `repairRestartedStreams`, and this goes through the same
-   * `StreamStatusMachine`, whose transition table refuses anything a run
-   * already terminalized.
-   */
-  markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of this.state.streamStatus.entries()) {
-      if (status === STREAM_PHASE.RUNNING) {
-        this.state.streamStatus.transition(
-          stream,
-          STREAM_PHASE.CANCELLED,
-          'restart-repair',
-          { trace: this.logger },
-        );
-      }
-    }
-  }
-
-  syncStreamContent(
-    stream: ActiveStreamId,
-    options: {
-      /** Include conversation progress, round/phase stage, and badges in the batch. */
-      includeActiveState?: boolean;
-    } = {},
-  ): void {
-    this.renderer.syncStreamContent(stream, options);
-  }
-
-  /**
    * Apply a stream status transition into session state and notify the
    * renderer. Awaitable so callers that need rehydrate to finish (tests,
    * and any host that cannot fire-and-forget) can wait; the hub's `status`
@@ -628,10 +593,6 @@ export class SessionFactApplier {
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
     return this.state.getStreamMetadata(streamId).agentCategory;
-  }
-
-  getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
-    return this.state.streamStatus.getAllStreamStates();
   }
 
   /**

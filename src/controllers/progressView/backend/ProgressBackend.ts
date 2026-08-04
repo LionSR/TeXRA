@@ -31,6 +31,7 @@ import {
 import * as logger from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
 import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
@@ -93,11 +94,12 @@ export class ProgressBackend {
   readonly state: SessionState;
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
-  readonly factApplier: SessionFactApplier;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
   readonly setApprovalBypassState: (
     update: HostApprovalBypassStateUpdate,
   ) => void;
+  private readonly factApplier: SessionFactApplier;
+  private readonly litRenderer: LitSessionRenderer;
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
@@ -151,17 +153,60 @@ export class ProgressBackend {
       webviewUpdater: this.webviewUpdater,
       canSend: options.approvals.canSend,
     });
-    const litRenderer = new LitSessionRenderer(
+    this.litRenderer = new LitSessionRenderer(
       this.state,
       this.webviewUpdater,
       this.webviewBridge,
       options.getStreamControls,
     );
-    this.factApplier = new SessionFactApplier(this.state, litRenderer, {
+    this.factApplier = new SessionFactApplier(this.state, this.litRenderer, {
       hasPendingPermissions: ui.hasPendingPermissions,
       deleteStream: (stream) => this.deleteStream(stream),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
+  }
+
+  /** Full active-viewport rebuild for the Lit progress surface. */
+  syncStreamContent(
+    stream: Parameters<LitSessionRenderer['syncStreamContent']>[0],
+    options?: Parameters<LitSessionRenderer['syncStreamContent']>[1],
+  ): void {
+    this.litRenderer.syncStreamContent(stream, options);
+  }
+
+  /**
+   * Cancel every still-running stream because the app itself is going away.
+   * App-lifecycle only (extension deactivating); not a session fact.
+   */
+  markAllRunningTasksAsCancelled(): void {
+    for (const [stream, status] of this.state.streamStatus.entries()) {
+      if (status === STREAM_PHASE.RUNNING) {
+        this.state.streamStatus.transition(
+          stream,
+          STREAM_PHASE.CANCELLED,
+          'restart-repair',
+        );
+      }
+    }
+  }
+
+  /** Awaitable status application for tests and hosts that cannot fire-and-forget. */
+  applyStreamStatus(
+    ...args: Parameters<SessionFactApplier['setStreamStatus']>
+  ): ReturnType<SessionFactApplier['setStreamStatus']> {
+    return this.factApplier.setStreamStatus(...args);
+  }
+
+  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
+  applySessionFact(
+    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+  ): void {
+    this.factApplier.handleSessionFact(...args);
+  }
+
+  /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
+  applyRunFact(...args: Parameters<SessionFactApplier['handleRunFact']>): void {
+    this.factApplier.handleRunFact(...args);
   }
 
   async stopStream(stream: StreamTabId): Promise<void> {

@@ -10,6 +10,7 @@ import {
   SessionState,
   type ActiveStreamId,
 } from '@controllers/session/SessionState';
+import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   sumUsageStats,
@@ -81,17 +82,17 @@ class TuiSessionRenderer implements SessionRendererPort {
       }
       return;
     }
+    // Same display projection Lit uses for tab chips (identity, category,
+    // model, description); files still come from the run-config snapshot.
+    const tab = buildStreamTabInfo({ streamId, metadata });
+    const identityAgent =
+      tab.identity?.kind === 'agent' ? tab.identity.agent : undefined;
     patchStream(streamId, (slice) => ({
       ...slice,
-      identity: metadata.identity ?? slice.identity,
-      agent:
-        config?.agent ??
-        (metadata.identity?.kind === 'agent'
-          ? metadata.identity.agent
-          : slice.agent),
-      model: config?.model ?? metadata.config?.model ?? slice.model,
-      category:
-        metadata.agentCategory ?? config?.agentCategory ?? slice.category,
+      identity: tab.identity ?? slice.identity,
+      agent: config?.agent ?? identityAgent ?? slice.agent,
+      model: tab.model ?? config?.model ?? slice.model,
+      category: tab.agentCategory ?? config?.agentCategory ?? slice.category,
       ...(config
         ? {
             files: {
@@ -102,8 +103,8 @@ class TuiSessionRenderer implements SessionRendererPort {
             },
           }
         : {}),
-      ...(metadata.description !== undefined
-        ? { description: metadata.description }
+      ...(tab.description !== undefined
+        ? { description: tab.description }
         : {}),
     }));
   }

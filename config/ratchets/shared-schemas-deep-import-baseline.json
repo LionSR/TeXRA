@@ -525,7 +525,7 @@
       "src/common/teams/TeamRoster.ts",
       "src/controllers/onboarding/setupLaunch.ts",
       "src/controllers/progressView/backend/agentProposalTransport.ts",
-      "src/controllers/progressView/backend/streamTabInfo.ts",
+      "src/controllers/session/streamTabInfo.ts",
       "src/controllers/settingsView/SettingsAgentCatalogController.ts",
       "src/controllers/settingsView/SettingsAgentControllerFactory.ts",
       "src/controllers/settingsView/SettingsAgentDirectoryController.ts (type-only)",

@@ -36,7 +36,7 @@ describe('retained finished children', () => {
     parent: StreamTabId,
     items: ActiveChildInfo[],
   ): void {
-    backend.factApplier.handleRunFact(parent, {
+    backend.applyRunFact(parent, {
       type: 'child.activity',
       parentStreamId: parent,
       items,
@@ -48,7 +48,7 @@ describe('retained finished children', () => {
     childStreamId: StreamTabId,
     parentStreamId: StreamTabId | null,
   ): void {
-    backend.factApplier.handleSessionFact({
+    backend.applySessionFact({
       type: 'setParentStream',
       payload: { childStreamId, parentStreamId },
     });
@@ -149,10 +149,7 @@ describe('retained finished children', () => {
       STREAM_PHASE.COMPLETED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    await backend.factApplier.setStreamStatus(
-      childStreamId,
-      STREAM_PHASE.COMPLETED,
-    );
+    await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);
 
     const badges = messages.filter(
       (message) =>
@@ -200,12 +197,12 @@ describe('retained finished children', () => {
     // with the authoritative status-machine outcome.
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
-      backend.factApplier.getAllStreamStates(),
+      backend.state.streamStatus.getAllStreamStates(),
     );
     backend.webviewUpdater.updateStreamMetadata(
       backend.state,
       PARENT,
-      backend.factApplier.getAllStreamStates(),
+      backend.state.streamStatus.getAllStreamStates(),
     );
 
     const rosters = messages.flatMap((message) => {
@@ -236,10 +233,7 @@ describe('retained finished children', () => {
     const live = subagent('stale', { childStreamId });
 
     applyRoster(backend, PARENT, [live]);
-    await backend.factApplier.setStreamStatus(
-      childStreamId,
-      STREAM_PHASE.FAILED,
-    );
+    await backend.applyStreamStatus(childStreamId, STREAM_PHASE.FAILED);
     messages.length = 0;
 
     // A roster snapshot stamped before the transition, delivered after it: the
@@ -364,10 +358,7 @@ describe('retained finished children', () => {
     applyParentEdge(backend, childStreamId, null);
     applyRoster(backend, PARENT, []);
 
-    await backend.factApplier.setStreamStatus(
-      childStreamId,
-      STREAM_PHASE.COMPLETED,
-    );
+    await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);
 
     expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([
       expect.objectContaining({
@@ -413,7 +404,7 @@ describe('retained finished children', () => {
     applyRoster(backend, PARENT, [live]);
     expect(backend.state.getStreamState(PARENT)?.subagents).toHaveLength(2);
 
-    await backend.factApplier.setStreamStatus(
+    await backend.applyStreamStatus(
       PARENT,
       STREAM_PHASE.RUNNING,
       STREAM_PHASE.COMPLETED,

@@ -5,7 +5,7 @@ import {
   buildStreamInfos,
   type StreamInfoListSource,
   type StreamInfoSource,
-} from '@controllers/progressView/backend/streamInfoUtils';
+} from '@controllers/session/streamInfoUtils';
 import type {
   ActiveStreamId,
   SessionState,
