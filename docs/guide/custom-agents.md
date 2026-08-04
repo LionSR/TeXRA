@@ -178,7 +178,7 @@ To create your own tool-use agent, set `agentCategory: toolUse` and list the too
 
 <ToolCategoriesHero />
 
-<p class="hero-caption">The eight tool categories on <strong>Dashboard → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
+<p class="hero-caption">The seven grantable tool categories on <strong>Dashboard → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
 

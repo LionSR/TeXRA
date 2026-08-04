@@ -484,7 +484,7 @@ The ProgressBoard is your main debugging tool. See the [ProgressBoard Guide](./p
 Key points for troubleshooting:
 
 1. **Access ProgressBoard**:
-   - The ProgressBoard shares the TeXRA view in the Activity Bar with the
+   - The ProgressBoard shares the TeXRA view in the Secondary Side Bar with the
      launcher — click the TeXRA icon, then switch to the Progress view
    - If not visible, open it via the Command Palette: "TeXRA: Show Progress"
 

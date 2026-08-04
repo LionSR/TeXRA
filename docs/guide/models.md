@@ -52,7 +52,7 @@ GPT-5.6 Sol (`gpt56`) is OpenAI's current flagship reasoning model; TeXRA pins t
 [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`. GPT-5.6 Pro (`gpt56pro`)
 runs the same model in the Responses API's pro reasoning mode — billed at standard token rates
 rather than a premium tier — for the hardest planning and long-horizon tasks; it is hidden by
-default, so enable it from Settings → Models when you need it. For one-off hard questions you can
+default, so enable it from Settings → Providers & Models when you need it. For one-off hard questions you can
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
 running a full agent turn against the API. `gpt56-` (Terra) and `gpt56--` (Luna) are the lower-cost
 options for most workloads. See the [API reference](https://developers.openai.com/api/docs) for

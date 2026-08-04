@@ -74,7 +74,7 @@ EOF
 ### In VS Code
 
 1. Open `draft.tex`.
-2. Click the TeXRA icon in the activity bar.
+2. Click the TeXRA icon in the Secondary Side Bar.
 3. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `draft.tex` from the file picker.
 4. Pick **polish** under Agent. Pick **sonnet5T** under Model (or any
    available model).

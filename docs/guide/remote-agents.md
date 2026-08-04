@@ -47,7 +47,7 @@ The selected agent will appear in your main TeXRA view alongside your built-in a
 
 Remote agents work just like built-in agents:
 
-1. Open the TeXRA view (click the TeXRA icon in the Activity Bar)
+1. Open the TeXRA view (click the TeXRA icon in the Secondary Side Bar)
 2. Select your remote agent from the agent dropdown
 3. Choose your input file and model
 4. Click **Run** to execute the agent

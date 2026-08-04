@@ -71,7 +71,7 @@ texra run polish --input intro.tex --output intro.polished.tex
 ## Run it in VS Code
 
 1. Open `intro.tex`.
-2. Click the TeXRA icon in the activity bar.
+2. Click the TeXRA icon in the Secondary Side Bar.
 3. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `intro.tex` from the file picker.
 4. Pick **polish** as the agent. Pick a model.
 5. Type the instruction. Press **Execute**.

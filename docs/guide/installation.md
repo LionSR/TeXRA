@@ -324,7 +324,7 @@ See [TeXRA CLI](./texra-cli.md) for sign-in, workspace defaults, and switching b
 To verify that TeXRA and all dependencies are correctly installed:
 
 1. Open VS Code
-2. Click on the TeXRA icon in the Activity Bar
+2. Click on the TeXRA icon in the Secondary Side Bar
 3. The TeXRA panel should load without errors
 4. Create or open a LaTeX document
 5. Try a simple command like "Indent Current TeX" from the editor title menu
