@@ -5,7 +5,11 @@ Status: **implemented on branch `feat/typescript-7`, all checks green** · Last 
 Moved from `module: commonjs` + `moduleResolution: bundler` (TS 6 transitional
 combo) to full **`module: nodenext` + `moduleResolution: nodenext`** — the
 compatibility layer is gone. Every paths alias now uses three variants:
-`*.ts`, `*/index.ts`, and bare `*` (catches explicit-extension imports like
+`*`, `*.ts`, and `*/index.ts` (bare first to keep bundlers from hitting
+`*/index.ts` on files). `esModuleInterop` / `sourceMap` / heap flags removed
+as TS7 defaults. Extension tsconfig now extends root; desktop/trace-viewer
+chain simplified via `paths.json extends root`. CI `NODE_OPTIONS` memory
+flags deleted — TS7's Go compiler doesn't use the Node heap.
 `.mts`/`.js` under both `nodenext` and `bundler`-mode configs).
 
 Accumulating doc for the TeXRA workspace's move from TypeScript 6 to

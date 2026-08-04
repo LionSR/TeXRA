@@ -2,9 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "declaration": true,
-    "declarationMap": false,
     "emitDeclarationOnly": true,
-    "noEmit": false,
     "outDir": "packages/agent/dist/types",
     "rootDir": ".",
     "removeComments": true,
