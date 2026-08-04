@@ -59,9 +59,10 @@ const EXTENSION_PREFIX = 'packages/extension/';
 
 /**
  * Derives `packages/extension/tsconfig.json`'s `paths` block from the root
- * map. The extension's `baseUrl` is `packages/extension`, so root path
- * values under `packages/extension/` become extension-relative, and every
- * other (repo-root-relative) value gets `../../` prepended.
+ * map. Neither tsconfig sets `baseUrl`, so values resolve relative to the
+ * file that declares them: root values under `packages/extension/` become
+ * `./`-prefixed extension-relative values, and every other
+ * (repo-root-relative) value gets a `./../../` prefix.
  */
 export function deriveExtensionPaths(rootPaths) {
   return Object.fromEntries(
@@ -69,23 +70,29 @@ export function deriveExtensionPaths(rootPaths) {
       .filter(([key]) => !EXTENSION_EXCLUDED_ALIASES.includes(key))
       .map(([key, values]) => [
         key,
-        values.map((value) =>
-          value.startsWith(EXTENSION_PREFIX)
-            ? value.slice(EXTENSION_PREFIX.length)
-            : `../../${value}`,
-        ),
+        values.map((value) => {
+          const repoRelative = value.replace(/^\.\//u, '');
+          return repoRelative.startsWith(EXTENSION_PREFIX)
+            ? `./${repoRelative.slice(EXTENSION_PREFIX.length)}`
+            : `./../../${repoRelative}`;
+        }),
       ]),
   );
 }
 
 /**
  * Derives `packages/desktop/tsconfig.paths.json`'s `paths` block from the
- * root map. Desktop's `baseUrl` is already `../..` (the repo root), so its
- * path values are identical to the root tsconfig's — no rewriting, no
- * exclusions.
+ * root map. With no `baseUrl`, desktop's values resolve relative to
+ * `packages/desktop/`, so every root value gets a `./../../` prefix to stay
+ * repo-root-relative. No exclusions.
  */
 export function deriveDesktopPaths(rootPaths) {
-  return { ...rootPaths };
+  return Object.fromEntries(
+    Object.entries(rootPaths).map(([key, values]) => [
+      key,
+      values.map((value) => `./../../${value.replace(/^\.\//u, '')}`),
+    ]),
+  );
 }
 
 // Aliases that the declaration-only agent build cannot resolve because its

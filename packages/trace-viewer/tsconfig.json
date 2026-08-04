@@ -1,7 +1,6 @@
 {
   "extends": "../desktop/tsconfig.paths.json",
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "ES2022",

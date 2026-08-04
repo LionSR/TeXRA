@@ -30,29 +30,29 @@ const {
 )) as AliasUtilsModule;
 
 const SAMPLE_ROOT_PATHS = {
-  'vscode-jsonrpc/node': ['node_modules/vscode-jsonrpc/lib/node/main'],
-  '@/*': ['packages/extension/src/*', 'src/*'],
-  '@shared/*': ['src/shared/*'],
-  '@commands/*': ['packages/extension/src/commands/*'],
-  '@extensionSchemas/*': ['packages/extension/src/schemas/*'],
-  '@test/*': ['src/test-kernel/*'],
-  '@cli/*': ['packages/cli/src/*'],
-  '@desktop/*': ['packages/desktop/src/*'],
+  'vscode-jsonrpc/node': ['./node_modules/vscode-jsonrpc/lib/node/main'],
+  '@/*': ['./packages/extension/src/*', './src/*'],
+  '@shared/*': ['./src/shared/*'],
+  '@commands/*': ['./packages/extension/src/commands/*'],
+  '@extensionSchemas/*': ['./packages/extension/src/schemas/*'],
+  '@test/*': ['./src/test-kernel/*'],
+  '@cli/*': ['./packages/cli/src/*'],
+  '@desktop/*': ['./packages/desktop/src/*'],
 };
 
 describe('aliasUtils deriveExtensionPaths', () => {
   const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
 
   it('rewrites packages/extension/-prefixed values as extension-relative', () => {
-    expect(result['@commands/*']).toEqual(['src/commands/*']);
+    expect(result['@commands/*']).toEqual(['./src/commands/*']);
   });
 
-  it('prepends ../../ to repo-root-relative values', () => {
-    expect(result['@shared/*']).toEqual(['../../src/shared/*']);
+  it('prepends ./../../ to repo-root-relative values', () => {
+    expect(result['@shared/*']).toEqual(['./../../src/shared/*']);
   });
 
   it('rewrites each entry of a multi-value alias independently', () => {
-    expect(result['@/*']).toEqual(['src/*', '../../src/*']);
+    expect(result['@/*']).toEqual(['./src/*', './../../src/*']);
   });
 
   it('drops every deliberately excluded alias and keeps everything else', () => {
@@ -66,8 +66,12 @@ describe('aliasUtils deriveExtensionPaths', () => {
 describe('aliasUtils deriveDesktopPaths', () => {
   const result = deriveDesktopPaths(SAMPLE_ROOT_PATHS);
 
-  it('returns the root paths unchanged (desktop baseUrl is already the repo root)', () => {
-    expect(result).toEqual(SAMPLE_ROOT_PATHS);
+  it('prefixes every value with ./../../ so it stays repo-root-relative', () => {
+    expect(result['@shared/*']).toEqual(['./../../src/shared/*']);
+    expect(result['@/*']).toEqual([
+      './../../packages/extension/src/*',
+      './../../src/*',
+    ]);
   });
 
   it('excludes nothing, unlike deriveExtensionPaths', () => {

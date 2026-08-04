@@ -1,6 +1,6 @@
 # TypeScript 7 upgrade — running notes
 
-Status: **assessment complete, not yet adopted** · Last updated: 2026-08-04
+Status: **implemented on branch `feat/typescript-7`, all checks green** · Last updated: 2026-08-04
 
 Accumulating doc for the TeXRA workspace's move from TypeScript 6 to
 TypeScript 7 (the Go-native compiler). Facts below were verified against the
@@ -199,27 +199,57 @@ interact with TS only via shipped `.d.ts`, consumed under
 negligible. Note: ink carries a pnpm patch (version-pinned, unrelated to
 the compiler).
 
-## Migration checklist (not started)
+## Migration checklist (implemented on branch `feat/typescript-7`)
 
-- [ ] package.json (**×6**: root, agent, cli, desktop, extension,
+Results: `tsc` = 7.0.2 / `tsc6` = 6.0.3 via pnpm aliases · all `tsc`
+invocations pinned at `--checkers 8` for reproducibility · lint, test
+(8459 passed), compile:fast, agent build (689 declarations validated),
+all repo checks, prettier — green.
+
+- [x] package.json (**×6**: root, agent, cli, desktop, extension,
       trace-viewer): `"typescript": "npm:@typescript/typescript6@^6.0.2"` +
-      `"@typescript/native": "npm:typescript@^7.0.2"`; `pnpm install`;
-      confirm `npx tsc -v` = 7.x and `npx tsc6 -v` = 6.x.
-- [ ] Update `scripts/sync-tsconfig-paths.mjs` (emit `./` prefixes).
-- [ ] Migrate `tsconfig.json`, `packages/extension/tsconfig.json` (bundler
+      `"@typescript/native": "npm:typescript@^7.0.2"`; lockfile refreshed;
+      pnpm created `tsc` + `tsc6` shims in every package `.bin`.
+- [x] Update `scripts/aliasUtils.mjs` (emit `./` prefixes).
+      `deriveExtensionPaths` emits `./` / `./../../`; `deriveDesktopPaths`
+      is no longer identity — every value gets `./../../`.
+      `sync:tsconfig-paths` + `check:tsconfig-paths` pass.
+- [x] Migrate `tsconfig.json`, `packages/extension/tsconfig.json` (bundler
       resolution, no `baseUrl`/`ignoreDeprecations`);
       `packages/desktop/tsconfig.paths.json` (`./../../` prefixes);
-      drop stale `ignoreDeprecations` in desktop/trace-viewer.
-- [ ] `npm run typecheck` (7 configs) on TS 7 — expect large speedup.
-- [ ] `npm run compile:fast` + desktop build — proves esbuild/vite alias
-      resolution still works with baseUrl-free tsconfigs.
-- [ ] `npm run lint` — must still pass on the TS 6 API alias.
-- [ ] `npm test` — ratchet tests import `typescript` (→ TS 6 API).
-- [ ] Verify `packages/agent` declaration emit + `packages/agent/scripts/rewrite-declaration-aliases.mjs`
-      under the TS 7 compiler (the repo's only real `tsc` emit path).
-- [ ] CI: note `--checkers N` tuning; consider pinning `--checkers` for
-      reproducibility (rare order-dependent results, per announcement).
-- [ ] Optional: `--stableTypeOrdering` if lint/tsc output ordering differs.
+      dropped stale `ignoreDeprecations` in desktop/trace-viewer;
+      `tsconfig.build.json` paths `./`-prefixed.
+- [x] `npm run typecheck` (7 configs) on TS 7 — 24s total, 0 errors.
+- [x] `npm run compile:fast` — esbuild/vite alias resolution works with
+      baseUrl-free tsconfigs.
+- [x] `npm run lint` — passes on the TS 6 API alias.
+- [x] `npm test` — passes; three fixtures that pin the generated paths
+      format were updated (AliasMapGeneration, BuildAliasConfig,
+      subsystemEdgeRatchet `./`-strip).
+- [x] Verify `packages/agent` declaration emit +
+      `packages/agent/scripts/rewrite-declaration-aliases.mjs` under TS 7 —
+      validated 689 declarations / 70 external packages.
+- [x] CI: pinned `--checkers 8` in every `tsc` script for reproducibility
+      (TS 7 `--checkers` can produce rare order-dependent results).
+- [x] Optional: `--stableTypeOrdering` — not needed; we typecheck with TS 7
+      and have no snapshot tests comparing TS 6 vs TS 7 ordering.
+
+### Surprises found during implementation (2026-08-04)
+
+- `packages/agent/scripts/rewrite-declaration-aliases.mjs` and
+  `validate-artifacts.mjs` filtered node_modules-pointing aliases with
+  `startsWith('node_modules/')`, which stops matching once paths values are
+  `./`-prefixed — would have broken the agent build. Both now strip a
+  leading `./` first.
+- Desktop previously relied on `baseUrl: "../.."` making its paths identical
+  to root's; without `baseUrl` they must be `./../../`-prefixed (the sync
+  generator now encodes this).
+- Prettier is non-idempotent on the gitignored minified trace-viewer bundle
+  produced by `compile:fast` — pre-existing flake, unrelated; a second
+  `prettier --write` settles `format:check`.
+- `.vscode/extensions.json` now recommends `TypeScriptTeam.native-preview`
+  (editor-side TS 7; the workspace `typescript` package remains TS 6 for
+  API tooling).
 
 ## Watch list
 

@@ -57,7 +57,7 @@ function loadSubsystemAliases(): Map<string, string> {
     const alias = key.replace(/\/\*$/, '');
     if (!alias.startsWith('@')) continue;
 
-    const target = values[0]?.replace(/\/\*$/, '');
+    const target = values[0]?.replace(/\/\*$/, '').replace(/^\.\//, '');
     if (target == null) continue;
 
     const subsystem = subsystemFromRepoRelative(target);
