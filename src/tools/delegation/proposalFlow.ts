@@ -5,9 +5,6 @@
  * waits for user approval via `session.interactions` before executing.
  */
 
-// Third-party imports
-import { nanoid } from 'nanoid';
-
 // Local imports
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import { currentSession } from '@agent/runtime/SessionHandle';
@@ -23,6 +20,7 @@ import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
+import { generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -150,7 +148,7 @@ export async function proposeAndExecute(
     });
   }
 
-  const proposalId = nanoid();
+  const proposalId = generateShortId();
 
   const interaction = currentSession().interactions.requestAgentProposal({
     proposalId,
