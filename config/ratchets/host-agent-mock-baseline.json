@@ -159,11 +159,6 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
       "form": "doMock",
-      "specifier": "@agent/runtime/SessionHandle"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.mts",
-      "form": "doMock",
       "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
@@ -187,14 +182,14 @@
       "specifier": "@agent/runtime/SessionResumeRetrieval"
     },
     {
+      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.mts",
+      "form": "doMock",
+      "specifier": "@agent/storage/detectWaitingStreams"
+    },
+    {
       "file": "src/test-kernel/desktop/DesktopToolEditApproval.vitest.mts",
       "form": "doMock",
       "specifier": "@agent/runtime/RunContext"
-    },
-    {
-      "file": "src/test-kernel/desktop/ElectronMainViewIpc.vitest.mts",
-      "form": "doMock",
-      "specifier": "@agent/index/agentRegistry"
     }
   ]
 }
