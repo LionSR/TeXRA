@@ -25,13 +25,13 @@ describe('default helper model', () => {
 });
 
 describe('default model list', () => {
-  it('includes Gemini 3.5 Flash as a free-tier relay model', () => {
-    const config = MODEL_CONFIGS.gemini35f;
+  it('includes Gemini 3.6 Flash as a free-tier relay model', () => {
+    const config = MODEL_CONFIGS.gemini36f;
 
-    expect(DEFAULT_MODELS).toContain('gemini35f');
+    expect(DEFAULT_MODELS).toContain('gemini36f');
     expect(config).toMatchObject({
-      fullName: 'gemini-3.5-flash',
-      label: 'Gemini 3.5 Flash',
+      fullName: 'gemini-3.6-flash',
+      label: 'Gemini 3.6 Flash',
       provider: 'google',
       openRouterOnly: false,
     });

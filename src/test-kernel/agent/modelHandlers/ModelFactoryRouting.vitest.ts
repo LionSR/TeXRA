@@ -121,10 +121,15 @@ describe('Copilot model handler routing', () => {
 });
 
 describe('Copilot route preference on a canonical base model', () => {
-  const SONNET_DISCOVERY = {
-    id: 'claude-sonnet-4.6',
-    name: 'Claude Sonnet 4.6',
-    family: 'claude-sonnet-4.6',
+  // The discovered-editor-model fixture must track an llm-zoo base model that
+  // is active (neither deprecated nor retired) and Copilot-documented (carries
+  // `copilotFullName`): route resolution filters deprecated/retired configs and
+  // matches the editor id against the registry's Copilot name. gemini36f
+  // satisfies both in llm-zoo 1.25.0 (the sonnet46 pin deprecated there).
+  const GEMINI_FLASH_DISCOVERY = {
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
+    family: 'gemini-3.6-flash',
     vendor: 'copilot',
     version: '2026-07',
     maxInputTokens: 160_000,
@@ -140,7 +145,7 @@ describe('Copilot route preference on a canonical base model', () => {
       {
         languageModel: {
           ...AVAILABLE_LANGUAGE_MODEL_PORT,
-          selectModels: async () => [SONNET_DISCOVERY],
+          selectModels: async () => [GEMINI_FLASH_DISCOVERY],
         },
       },
     );
@@ -153,11 +158,11 @@ describe('Copilot route preference on a canonical base model', () => {
 
   it('routes the base model through Copilot when the preference and access align', async () => {
     await installCopilotRoute({
-      'texra.copilotRouteModels': ['sonnet46'],
+      'texra.copilotRouteModels': ['gemini36f'],
       'texra.useOpenRouter': true,
     });
 
-    const config = MODEL_CONFIGS.sonnet46;
+    const config = MODEL_CONFIGS.gemini36f;
     expect(modelHandlerCompatibilityKey(config, true, false)).toBe(
       'ModelHandlerVscodeLm',
     );
@@ -165,7 +170,7 @@ describe('Copilot route preference on a canonical base model', () => {
     const handler = await createModelHandler(config);
     try {
       expect(handler.constructor.name).toBe('ModelHandlerVscodeLm');
-      expect(handler.config.name).toBe('sonnet46');
+      expect(handler.config.name).toBe('gemini36f');
     } finally {
       handler.dispose();
     }
@@ -174,19 +179,19 @@ describe('Copilot route preference on a canonical base model', () => {
   it('keeps the ordinary provider route without the preference', async () => {
     await installCopilotRoute();
 
-    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet46, false)).toBe(
-      'ModelHandlerAnthropic',
+    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false)).toBe(
+      'ModelHandlerGoogleInteractions',
     );
   });
 
   it('scopes a direct retry override without changing concurrent route selection', async () => {
     await installCopilotRoute({
-      'texra.copilotRouteModels': ['sonnet46'],
+      'texra.copilotRouteModels': ['gemini36f'],
     });
 
-    const config = MODEL_CONFIGS.sonnet46;
+    const config = MODEL_CONFIGS.gemini36f;
     expect(modelHandlerCompatibilityKey(config, false, false, 'direct')).toBe(
-      'ModelHandlerAnthropic',
+      'ModelHandlerGoogleInteractions',
     );
     expect(modelHandlerCompatibilityKey(config, false, false)).toBe(
       'ModelHandlerVscodeLm',
@@ -200,7 +205,9 @@ describe('Copilot route preference on a canonical base model', () => {
     );
     const concurrentHandler = await createModelHandler(config);
     try {
-      expect(directHandler.constructor.name).toBe('ModelHandlerAnthropic');
+      expect(directHandler.constructor.name).toBe(
+        'ModelHandlerGoogleInteractions',
+      );
       expect(concurrentHandler.constructor.name).toBe('ModelHandlerVscodeLm');
     } finally {
       directHandler.dispose();
@@ -211,12 +218,12 @@ describe('Copilot route preference on a canonical base model', () => {
   it('rejects a preferred route the editor cannot serve instead of falling through', async () => {
     invalidateRuntimeModelRegistry();
     await installPlatform(
-      { globalState: { 'texra.copilotRouteModels': ['sonnet46'] } },
+      { globalState: { 'texra.copilotRouteModels': ['gemini36f'] } },
       {
         languageModel: {
           ...AVAILABLE_LANGUAGE_MODEL_PORT,
           selectModels: async () => [
-            { ...SONNET_DISCOVERY, access: 'consent-required' as const },
+            { ...GEMINI_FLASH_DISCOVERY, access: 'consent-required' as const },
           ],
         },
       },
@@ -226,10 +233,10 @@ describe('Copilot route preference on a canonical base model', () => {
     // A Copilot preference is a hard route choice (#9635): consent-required
     // must surface as a named failure, never a silent direct-key dispatch.
     expect(() =>
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet46, false),
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.gemini36f, false),
     ).toThrowError(/consent/);
     await expect(
-      createModelHandler(MODEL_CONFIGS.sonnet46),
+      createModelHandler(MODEL_CONFIGS.gemini36f),
     ).rejects.toThrowError(/consent/);
   });
 
@@ -245,11 +252,11 @@ describe('Copilot route preference on a canonical base model', () => {
 
   it('applies the discovered context ceiling and zero-cost subscription overrides', async () => {
     await installCopilotRoute({
-      'texra.copilotRouteModels': ['sonnet46'],
-      'texra.reasoningLevels': { sonnet46: 'low' },
+      'texra.copilotRouteModels': ['gemini36f'],
+      'texra.reasoningLevels': { gemini36f: 'low' },
     });
 
-    const handler = await createModelHandler(MODEL_CONFIGS.sonnet46);
+    const handler = await createModelHandler(MODEL_CONFIGS.gemini36f);
     try {
       expect(handler.config.contextWindow).toBe(160_000);
       expect(handler.config.inputPrice).toBe(0);
@@ -259,7 +266,7 @@ describe('Copilot route preference on a canonical base model', () => {
       // The persisted override is intentionally ignored because VS Code's LM
       // request surface has no reasoning-effort parameter.
       expect(handler.config.capabilities.reasoningEffort).toBe(
-        MODEL_CONFIGS.sonnet46.capabilities.reasoningEffort,
+        MODEL_CONFIGS.gemini36f.capabilities.reasoningEffort,
       );
     } finally {
       handler.dispose();
@@ -317,7 +324,7 @@ describe('Copilot route preference on a canonical base model', () => {
     await installCopilotRoute();
 
     const handler = await createModelHandlerForCompatibilityKey(
-      MODEL_CONFIGS.sonnet46,
+      MODEL_CONFIGS.gemini36f,
       'ModelHandlerVscodeLm',
     );
     try {
@@ -406,7 +413,7 @@ describe('OpenAI model handler routing', () => {
       modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false, false),
     ).toBe('ModelHandlerOpenAIResponse');
     expect(
-      modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet46T, false, false),
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet5T, false, false),
     ).toBe('ModelHandlerAnthropic');
   });
 

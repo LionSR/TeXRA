@@ -215,8 +215,125 @@ function aliasedImportFor(filename, importPath) {
   return aliasedPath === importPath ? undefined : aliasedPath;
 }
 
+const REPO_SOURCE_ROOT = __dirname;
+
+/**
+ * A union type is TeXRA's to keep exhaustive only when we declare it. Vendor
+ * unions (SDK block types, NodeJS.Platform, VS Code enums) grow without our
+ * say, which is exactly when a catch-all `default` is the correct handling.
+ */
+function isRepoDeclaredAlias(type) {
+  const declarations = type?.aliasSymbol?.declarations;
+  if (!declarations || declarations.length === 0) return false;
+  return declarations.every((declaration) => {
+    const file = declaration.getSourceFile?.().fileName;
+    return (
+      typeof file === 'string' &&
+      !file.includes('node_modules') &&
+      isUnderDir(path.normalize(file), REPO_SOURCE_ROOT)
+    );
+  });
+}
+
+/**
+ * `T | undefined` is a synthesized union carrying no alias symbol, and a
+ * `const` narrowed off a property carries none either. Walk the discriminant
+ * back through its declaration and initializer until the alias name appears.
+ */
+function discriminantIsOwnedUnion(checker, tsNode, depth = 0) {
+  if (!tsNode || depth > 4) return false;
+  if (isRepoDeclaredAlias(checker.getTypeAtLocation(tsNode))) return true;
+
+  for (const declaration of checker.getSymbolAtLocation(tsNode)?.declarations ??
+    []) {
+    const typeNode = declaration.type;
+    for (const part of typeNode?.types ?? (typeNode ? [typeNode] : [])) {
+      if (isRepoDeclaredAlias(checker.getTypeAtLocation(part))) return true;
+    }
+    if (
+      declaration.initializer &&
+      discriminantIsOwnedUnion(checker, declaration.initializer, depth + 1)
+    ) {
+      return true;
+    }
+  }
+  // `a?.b` and `a.b`: the alias lives on the property, not the expression.
+  return tsNode.name
+    ? discriminantIsOwnedUnion(checker, tsNode.name, depth + 1)
+    : false;
+}
+
 const localRules = {
   rules: {
+    'exhaustive-switch-over-owned-union': {
+      meta: {
+        type: 'problem',
+        docs: {
+          description:
+            'Require switches over TeXRA-declared union types to name every member.',
+        },
+        messages: {
+          nonExhaustive:
+            'Switch over the TeXRA-declared union {{union}} leaves {{missing}} to a catch-all `default`. Name every member and reduce `default` to a `satisfies never` guard, so adding a member fails to compile here instead of changing behavior silently.',
+        },
+        schema: [],
+      },
+      create(context) {
+        const services = context.sourceCode.parserServices;
+        const checker = services?.program?.getTypeChecker();
+        if (!checker || !services.esTreeNodeToTSNodeMap) return {};
+
+        const nameOf = (type) =>
+          type.isLiteral?.() ? String(type.value) : checker.typeToString(type);
+
+        return {
+          SwitchStatement(node) {
+            const tsNode = services.esTreeNodeToTSNodeMap.get(
+              node.discriminant,
+            );
+            if (!tsNode) return;
+            const type = checker.getTypeAtLocation(tsNode);
+            if (!type?.isUnion?.()) return;
+            if (!discriminantIsOwnedUnion(checker, tsNode)) return;
+
+            // Only a union of literals (optionally with undefined / null) has
+            // an enumerable `case` form; anything else has nothing to compare.
+            const members = new Set();
+            for (const member of type.types) {
+              const name = nameOf(member);
+              if (
+                !member.isLiteral?.() &&
+                name !== 'undefined' &&
+                name !== 'null'
+              ) {
+                return;
+              }
+              members.add(name);
+            }
+
+            for (const switchCase of node.cases) {
+              if (!switchCase.test) continue;
+              const testNode = services.esTreeNodeToTSNodeMap.get(
+                switchCase.test,
+              );
+              if (testNode)
+                members.delete(nameOf(checker.getTypeAtLocation(testNode)));
+            }
+
+            if (members.size === 0) return;
+            context.report({
+              node: node.discriminant,
+              messageId: 'nonExhaustive',
+              data: {
+                union:
+                  type.aliasSymbol?.getName() ?? checker.typeToString(type),
+                missing: [...members].join(', '),
+              },
+            });
+          },
+        };
+      },
+    },
     'no-platform-init-outside-composition-root': {
       meta: {
         type: 'problem',
@@ -457,6 +574,10 @@ export default tseslint.config(
       'unicorn/prefer-ternary': 'off', // Often less readable
       'unicorn/no-null': 'off', // null is valid in this codebase
       'unicorn/prevent-abbreviations': 'off', // Too strict
+
+      // #9698: a `default` must not stand in for members of a union we own.
+      'local/exhaustive-switch-over-owned-union': 'error',
+
       // --- Migrated rules from .eslintrc.json ---
       '@typescript-eslint/naming-convention': [
         'warn',
