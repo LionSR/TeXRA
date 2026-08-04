@@ -33,8 +33,10 @@ export const logEntryStyles = css`
     padding: var(--wa-space-3xs) 0;
     display: block;
     white-space: pre-wrap;
-    word-wrap: break-word;
-    word-break: break-all;
+    /* anywhere breaks only what cannot fit (long paths, ids, URLs); break-all
+       split ordinary prose mid-word on every wrap. The terminal variant below
+       already made this trade for the same reason. */
+    overflow-wrap: anywhere;
     content-visibility: auto;
     contain-intrinsic-size: auto 24px;
   }
@@ -80,10 +82,11 @@ export const logEntryStyles = css`
     cursor: pointer;
   }
 
-  .workflow-task--linked:hover,
-  .workflow-task--linked:focus-visible {
+  /* Hover only. Focus keeps the shared 2px ring from focusRingStyles: the
+     border-color flip alone was identical to hover, so a keyboard user had no
+     way to tell "focused" from "pointed at". */
+  .workflow-task--linked:hover {
     border-color: var(--wa-color-focus);
-    outline: none;
   }
 
   .workflow-task--completed,
@@ -234,9 +237,9 @@ export const logEntryStyles = css`
     text-decoration: underline;
   }
 
+  /* Radius only — the ring itself comes from focusRingStyles, which an
+     outline here would narrow to 1px. */
   :is(.file-link, .web-search-link):focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 
@@ -301,9 +304,13 @@ export const logEntryStyles = css`
     opacity: var(--opacity-full);
   }
 
-  .banner-content-copy:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
+  /* Same shadow-piercing exception as .code-block-copy: this is a wa-button,
+     and WebAwesome ships no focus styling of its own for it, so without this
+     the control falls back to the UA default ring while every sibling control
+     shows the branded one. */
+  .banner-content-copy:focus-visible::part(base) {
+    outline: var(--focus-ring-width) solid var(--wa-color-focus);
+    outline-offset: var(--focus-ring-offset);
   }
 
   .banner-content-copy.copy-success {

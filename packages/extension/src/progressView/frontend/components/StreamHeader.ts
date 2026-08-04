@@ -280,9 +280,8 @@ export class StreamHeader extends LitElement {
         color: var(--color-text-link);
       }
 
+      /* Radius only — the ring comes from focusRingStyles. */
       .parent-link:focus-visible {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: var(--border-thin);
         border-radius: var(--border-radius-small);
       }
 
