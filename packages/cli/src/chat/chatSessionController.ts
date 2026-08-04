@@ -60,7 +60,7 @@ import {
   type TuiSession,
 } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
-import { attachTuiRunFactSubscription } from './tui/state/subscribeRuntimeHost';
+import { attachSessionSignalsAdapter } from './tui/state/sessionSignalsAdapter';
 import { notify } from './tui/notifications/terminalNotifier';
 import {
   appendLocalErrorTranscript,
@@ -195,7 +195,11 @@ export function createChatSessionController(
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
   disposers.push(
-    attachTuiRunFactSubscription(runtimeSession.events, snapshotStore),
+    attachSessionSignalsAdapter({
+      events: runtimeSession.events,
+      session: runtimeSession,
+      snapshots: snapshotStore,
+    }),
   );
 
   // Shared prelude of the three run-starting paths (start, resume,
