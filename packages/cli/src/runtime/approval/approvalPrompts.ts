@@ -1,7 +1,7 @@
 import PQueue from 'p-queue';
 
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
-import { warn } from '@logger/logUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
-import { askCliQuestion } from '../logSinks';
+import { askCliQuestion, writeTextStderr } from '../logSinks';
 
 /**
  * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
@@ -51,10 +51,12 @@ export function markApprovalDenied(context: CliContext, gate?: string): void {
     return;
   }
   context.approvalDenied = true;
-  // One warn on first denial so exit code 4 has a visible cause on stderr.
-  warn(
-    'cli-approval',
-    `${gate?.trim() || 'Approval gate'} denied under policy "${context.approvalPolicy}".`,
+  // Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
+  // frozen CliContext.approvalPolicy can be stale. Operator-facing warnings
+  // go to stderr (not @logger/logUtils).
+  const policy = defaultSession().approvalPolicy;
+  writeTextStderr(
+    `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${policy}".`,
   );
 }
 
