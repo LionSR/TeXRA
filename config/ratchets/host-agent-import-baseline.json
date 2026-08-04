@@ -26,7 +26,6 @@
       "@agent/runtime/SessionEventHub",
       "@agent/runtime/SessionHandle",
       "@agent/runtime/SessionResumeRetrieval",
-      "@agent/runtime/streamTab",
       "@agent/runtime/terminalResultToast",
       "@agent/storage",
       "@agent/storage/conversationFormat",

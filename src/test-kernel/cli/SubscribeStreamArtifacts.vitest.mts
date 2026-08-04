@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
   patchStream,
@@ -13,7 +14,7 @@ import {
   subscribeStreamArtifacts,
   type StreamArtifactReader,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
-import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
+import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import type {
   CompileFailure,
   OutputFileInfo,
@@ -21,7 +22,7 @@ import type {
   StreamTabId,
   TokenUsageStats,
 } from '@shared/schemas';
-import { StreamSnapshotStore } from '@transcript';
+import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 const STREAM_A = 'workflow#a' as StreamTabId;
 const STREAM_B = 'workflow#b' as StreamTabId;
@@ -149,7 +150,16 @@ describe('subscribeStreamArtifacts', () => {
     const hub = new SessionEventHub();
     const store = new StreamSnapshotStore();
     const detachSnapshots = store.attachSessionEvents(hub);
-    const detachFacts = attachTuiRunFactSubscription(hub, store);
+    const session = new SessionHandle({
+      events: hub,
+      snapshots: store,
+      transcripts: StreamLogStore.ephemeral('SubscribeStreamArtifacts test'),
+    });
+    const detachFacts = attachSessionSignalsAdapter({
+      events: hub,
+      session,
+      snapshots: store,
+    });
     const preloads: Array<Promise<void>> = [];
     const reader: StreamArtifactReader = {
       preload: (streamIds) => {

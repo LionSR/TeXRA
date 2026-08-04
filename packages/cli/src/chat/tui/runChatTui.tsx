@@ -428,7 +428,6 @@ export async function runChat(
   disposers.push(terminalTitleUpdates.dispose);
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamArtifacts(runtimeSession.snapshots));
-  disposers.push(subscribeStreamStatus());
 
   const session = new TuiSession();
 
@@ -498,6 +497,7 @@ export async function runChat(
     followUpQueue,
     snapshotStore: runtimeSession.snapshots,
   });
+  disposers.push(subscribeStreamStatus());
   disposers.push(
     setCliAgentResumeHandler({
       tryResumeStream: chatController.tryResumeStream,

@@ -14,12 +14,13 @@ import type * as vscode from 'vscode';
 const mocks = vi.hoisted(() => ({
   backend: {
     approvalHandlers: { toolEdit: { show: vi.fn(), dismiss: vi.fn() } },
-    factApplier: { getAllStreamStates: vi.fn(() => new Map()) },
     reloadAfterStorageRootChange:
       vi.fn<(hooks: WorkspaceStorageTransitionHooks) => Promise<void>>(),
     dispose: vi.fn(),
     setupEventListeners: vi.fn(),
-    state: {},
+    state: {
+      streamStatus: { getAllStreamStates: vi.fn(() => new Map()) },
+    },
     webviewBridge: {},
     webviewUpdater: {},
     setApprovalBypassState: vi.fn(),

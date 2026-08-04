@@ -1,4 +1,4 @@
-import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
+import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
 import type { StreamTabId } from '@shared/schemas';
 
 import {

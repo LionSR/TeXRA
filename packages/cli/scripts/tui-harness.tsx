@@ -101,7 +101,7 @@ import {
 } from '../src/chat/tui/state/cliState';
 import {
   activeSubagentsFor,
-  applySubagentRoster,
+  projectChildRoster,
   childStreamEntries,
   parentStream,
   setParentStream,
@@ -123,7 +123,7 @@ import {
   type ApprovalPayload,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
-import { attachTuiRunFactSubscription } from '../src/chat/tui/state/subscribeRuntimeHost';
+import { attachSessionSignalsAdapter } from '../src/chat/tui/state/sessionSignalsAdapter';
 import { createTuiHostInteractions } from '../src/chat/tui/state/subscribeApprovals';
 import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
@@ -279,7 +279,7 @@ const RETARGET_FOCUSED_ESCAPE =
 // #7967 / the "PTY ordering tests" section of
 // docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md): drives one child
 // stream through the real event-subscription path
-// (attachTuiRunFactSubscription + subscribeStreamStatus, exactly as
+// (attachSessionSignalsAdapter + subscribeStreamStatus, exactly as
 // runChatTui.tsx/chatSessionController.ts wire a real run — see
 // `runChildEventOrderFixture` below) in each of the eight orderings the
 // design names, so validate-tui.mjs can assert both intermediate render
@@ -1458,8 +1458,8 @@ function seedRunningWorkflow(): void {
 
 // One child stream, its attachment/roster/edge/status/removal facts driven
 // through the real production subscription path rather than the CHILD_STREAMS
-// map mutators (`applySubagentRoster`/`setParentStream`) directly — a
-// regression in `attachTuiRunFactSubscription` or `subscribeStreamStatus`
+// map mutators (`projectChildRoster`/`setParentStream`) directly — a
+// regression in `attachSessionSignalsAdapter` or `subscribeStreamStatus`
 // wiring must be able to fail these scenarios, matching the "PTY ordering
 // tests" section of docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
 // No `startedAt` is set on the roster row, so `childElapsed` returns the
@@ -1768,8 +1768,8 @@ if (SHOW_CHILDREN) {
   // mirroring the production sequence where a roster stops including a child
   // once it leaves the runtime's active registry, while its retained history
   // survives.
-  applySubagentRoster(STREAM_ID, childStreams);
-  applySubagentRoster(STREAM_ID, activeSubagents);
+  projectChildRoster(STREAM_ID, childStreams);
+  projectChildRoster(STREAM_ID, activeSubagents);
   setStreamStatusInCliState({
     streamId: STREAM_ID,
     status: STREAM_PHASE.RUNNING,
@@ -1780,7 +1780,7 @@ if (SHOW_CHILDREN) {
     const addNestedChildren =
       SHOW_NESTED_CHILDREN && child.agentName === 'strategy';
     setParentStream(streamId, STREAM_ID);
-    if (addNestedChildren) applySubagentRoster(streamId, [nestedStrategyChild]);
+    if (addNestedChildren) projectChildRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
       description: `${child.agentName} sub-workflow`,
@@ -1978,7 +1978,7 @@ function markHarnessInterrupted(): void {
   // Clear active roster membership through the real transition function;
   // each retained row's status comes from its own StreamSlice, set by the
   // per-child patchStream loop below.
-  applySubagentRoster(STREAM_ID, []);
+  projectChildRoster(STREAM_ID, []);
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
     entries: [
@@ -2029,7 +2029,7 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     canInterrupt = false;
     rootRunPending.set(false);
   } else {
-    applySubagentRoster(
+    projectChildRoster(
       STREAM_ID,
       activeSubagentsFor(
         STREAM_ID,
@@ -2163,7 +2163,7 @@ function markHarnessExecutionStopped(executionId: string): void {
   if (!executionRow) return;
 
   const messageId = `harness-killed-${executionId}-${Date.now()}`;
-  applySubagentRoster(
+  projectChildRoster(
     STREAM_ID,
     activeSubagentRows.filter((child) => child.executionId !== executionId),
   );
@@ -2417,19 +2417,19 @@ const ink = render(renderHarnessApp(), {
 });
 inkRef.current = ink;
 
-HARNESS_DISPOSERS.push(subscribeStreamStatus());
-
 if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
-  // `subscribeStreamStatus()` and the run-fact subscription once per TUI
+  // the session adapter before `subscribeStreamStatus()` once per TUI
   // session.
   HARNESS_DISPOSERS.push(
-    attachTuiRunFactSubscription(
-      defaultSession().events,
-      defaultSession().snapshots,
-    ),
+    attachSessionSignalsAdapter({
+      events: defaultSession().events,
+      session: defaultSession(),
+      snapshots: defaultSession().snapshots,
+    }),
   );
 }
+HARNESS_DISPOSERS.push(subscribeStreamStatus());
 
 if (SHOW_WORKFLOW_TIMELINE) {
   seedWorkflowTimeline();

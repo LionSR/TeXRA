@@ -22,7 +22,7 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
-  applySubagentRoster,
+  projectChildRoster,
   setParentStream,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
@@ -64,7 +64,7 @@ function seedChildHierarchy(): void {
       status: STREAM_PHASE.RUNNING,
     });
   }
-  applySubagentRoster(ROOT, [
+  projectChildRoster(ROOT, [
     {
       executionId: 'escape-child-execution',
       agentName: 'child',
@@ -73,7 +73,7 @@ function seedChildHierarchy(): void {
       status: STREAM_PHASE.RUNNING,
     },
   ]);
-  applySubagentRoster(CHILD, [
+  projectChildRoster(CHILD, [
     {
       executionId: 'escape-grandchild-execution',
       agentName: 'grandchild',
@@ -237,7 +237,7 @@ describe('App foreground Escape ownership', () => {
       });
     }
     syncStreamLog(ROOT);
-    applySubagentRoster(ROOT, [
+    projectChildRoster(ROOT, [
       {
         executionId: 'workflow-child-execution',
         agentName: 'duplicate',
@@ -322,7 +322,7 @@ describe('App foreground Escape ownership', () => {
       streamId: CHILD,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(ROOT, [
+    projectChildRoster(ROOT, [
       {
         executionId: 'shared-child-execution',
         agentName: 'shared-child',
