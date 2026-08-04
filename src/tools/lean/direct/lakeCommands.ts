@@ -12,6 +12,8 @@ import * as path from 'node:path';
 import { execa } from 'execa';
 import { Mutex } from 'async-mutex';
 
+import { deriveCommandStderr } from '@utils/system/execUtils';
+
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 // Keep execa 10's current per-stream failure ceiling explicit. capOutput()
@@ -94,8 +96,11 @@ async function executeLake(
     result.exitCode === undefined ||
     result.timedOut ||
     !stdout;
-  const stderrOrMessage =
-    stderr || (shouldUseShortMessage ? (result.shortMessage ?? '') : '');
+  const stderrOrMessage = deriveCommandStderr(
+    stderr,
+    result.shortMessage,
+    shouldUseShortMessage,
+  );
   return {
     exitCode:
       result.failed && (!result.exitCode || result.isMaxBuffer)
