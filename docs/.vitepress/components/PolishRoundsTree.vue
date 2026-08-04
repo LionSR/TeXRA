@@ -34,7 +34,7 @@ const rounds = [
     <div class="mk-card-head prt-head">
       <wa-icon class="mk-card-head-ic" library="texra" name="folder"></wa-icon>
       <span class="mk-card-title prt-head-name"
-        >.texra/runs/&lt;run-id&gt;/</span
+        >executions/&lt;run-id&gt;/</span
       >
       <span class="mk-card-sub prt-head-sub">one folder per round</span>
     </div>

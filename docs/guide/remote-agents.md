@@ -22,7 +22,7 @@ To access remote agents, you need a TeXRA account:
 
 1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
 2. Run the command: **TeXRA: Sign In**
-3. Choose your preferred sign-in method (GitHub, Google, or GitLab)
+3. Choose your preferred sign-in method (GitHub or Google)
 4. Complete the authentication flow in your browser
 5. Return to VS Code once authenticated
 
@@ -39,7 +39,7 @@ Once signed in, you can explore remote agents from the Agents tab:
 3. Select any remote agent in the list to see its details
 4. Click **Show in agent selector** to add it to your agent selector
 
-Your account at a glance — your email and access level — sits on the Account tab (**TeXRA: View Profile**).
+Your account at a glance — your email and access level — sits on the Account & Usage tab (**TeXRA: View Profile**).
 
 The selected agent will appear in your main TeXRA view alongside your built-in agents.
 
@@ -70,13 +70,13 @@ In the agent dropdown, your local agents sit above a **Remote** group whose entr
     ] },
     { label: 'Remote', items: [
       { name: 'search', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
-      { name: 'discuss', icon: 'cloud' },
       { name: 'simplifier', icon: 'cloud' },
+      { name: 'orchestrator', icon: 'cloud' },
     ] },
   ]"
 />
 
-<p class="hero-caption">The agent dropdown: remote agents (<code>search</code>, <code>discuss</code>, <code>simplifier</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
+<p class="hero-caption">The agent dropdown: remote agents (<code>search</code>, <code>simplifier</code>, <code>orchestrator</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
 
 None of this is VS Code-only — the whole loop works from a terminal too:
 
@@ -105,7 +105,7 @@ The **Researcher Access Program** provides access to specialized remote agents d
 
 <p class="hero-caption">What Researcher Access Program members get: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
 
-Current remote agents include `search` (literature discovery), `discuss` (academic brainstorming with literature), and `simplifier` (code and writing simplification). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
+Current remote agents include `search` (literature discovery), `simplifier` (code and writing simplification), and `orchestrator` (multi-agent coordination). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
 
 Different agents may be available to different research groups based on their domain and needs.
 
@@ -133,7 +133,7 @@ Check your account status:
 
 1. Open Command Palette
 2. Run: **TeXRA: View Profile**
-3. View your email and access level on the Account tab
+3. View your email and access level on the Account & Usage tab
 
 Run **TeXRA: Show Agents** to browse the remote agents available to you.
 

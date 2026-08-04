@@ -1,8 +1,8 @@
 <script setup>
 // Terminal card for guide/agent-integrations.md "Quick Start" — the
-// IntegrationCard flow (Not Found → Install → Sign in → Recheck → Available)
+// IntegrationCard flow (Not Found → Install → Sign in → Re-check → Available)
 // beat for beat, from a terminal. Output lines reproduce the real shapes:
-// `texra tools show codex` prints `key: value` detail lines including the
+// `texra tools status codex` prints `key: value` detail lines including the
 // registered installCommand / authCommand (packages/cli/src/runtime/tools.ts
 // formatCliToolStatus); `tools install --run` prints the install guide then
 // executes the registered command; `tools auth` runs `codex login`. The codex
@@ -19,7 +19,7 @@
     <!-- Beat 1: detect -->
     <div class="mk-term-prompt">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd">texra tools show codex</span>
+      <span class="mk-term-cmd">texra tools status codex</span>
     </div>
     <div class="ctf-block">
       <div><span class="ctf-k">name:</span> OpenAI Codex CLI</div>
@@ -55,10 +55,10 @@
       <div>Command: codex login</div>
     </div>
 
-    <!-- Beat 4: recheck -->
+    <!-- Beat 4: re-check -->
     <div class="mk-term-prompt ctf-beat">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd">texra tools show codex</span>
+      <span class="mk-term-cmd">texra tools status codex</span>
     </div>
     <div class="ctf-block">
       <div>

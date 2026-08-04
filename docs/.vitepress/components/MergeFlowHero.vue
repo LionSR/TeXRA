@@ -1,8 +1,9 @@
 <script setup>
 // The mental model behind Intelligent Merge: a PARTIAL agent output
-// (r1/output.tex — only the sections the agent touched) plus the FULL Base File
-// feed the `merge` agent, which synthesizes a COMPLETE document (_full.tex) that
-// is the valid latexdiff input against the original basename.tex.
+// (r1/spectral-gap.tex — only the sections the agent touched) plus the FULL
+// Base File feed the `merge` agent, which synthesizes a COMPLETE document
+// (r0/spectral-gap.tex) that is the valid latexdiff input against the original
+// basename.tex.
 //
 // Root carries `.mockup`, so the shared `--mk-*` tokens and the
 // .surface/.cl/.kw mono-code vocabulary in theme/mockup.css resolve here and
@@ -45,7 +46,7 @@ import StatusPill from './StatusPill.vue';
             library="texra"
             name="file-code"
           ></wa-icon>
-          <span class="mf-name">r1/output.tex</span>
+          <span class="mf-name">r1/spectral-gap.tex</span>
           <StatusPill variant="warning" shape="pill"
             >Edited · partial</StatusPill
           >
@@ -86,7 +87,7 @@ import StatusPill from './StatusPill.vue';
     <article class="mf-doc mf-out">
       <header class="mf-doc-head">
         <wa-icon class="mf-fi t-tex" library="texra" name="file-code"></wa-icon>
-        <span class="mf-name">_full.tex</span>
+        <span class="mf-name">r0/spectral-gap.tex</span>
         <StatusPill variant="success" shape="pill">Complete</StatusPill>
       </header>
       <div class="surface mf-code">

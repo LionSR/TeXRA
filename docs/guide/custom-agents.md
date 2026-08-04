@@ -36,7 +36,7 @@ Custom agents live in a dedicated directory that TeXRA prepares for you.
 
 ### <wa-icon library="texra" name="wand"></wa-icon> Automatic Creation
 
-If you'd like TeXRA to draft an agent for you, click **New Agent** (<wa-icon library="texra" name="add"></wa-icon>) in the **Agents** tab. The wizard only asks for a short description and the default output filenames. TeXRA sends that info to a Claude model, which returns the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a basic CoT template (single or multiple files) in your Custom Agents folder.
+If you'd like TeXRA to draft an agent for you, click **New Agent** (<wa-icon library="texra" name="add"></wa-icon>) in the **Agents** tab. The wizard asks for the agent name and a short description (tool-use agents additionally let you pick the tools to grant). TeXRA sends that info to your configured helper model, which returns the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a template in your Custom Agents folder (falling back to a built-in template if generation fails).
 
 ### <wa-icon library="texra" name="file-add"></wa-icon> Step 2 — Create a New YAML File
 
@@ -58,7 +58,7 @@ Customize it to define your agent's structure. Here are the key fields:
 # --- Agent Inheritance (Optional) ---
 # Specify a built-in or other custom agent to inherit settings and prompts from.
 # See guide/built-in-agents.md for potential parents.
-inherits: base # Or polish, correct, etc.
+inherits: polish # Or correct, merge, etc.
 
 # --- Agent Settings ---
 # Define the agent's core behavior and operational parameters.
@@ -107,9 +107,9 @@ prompts:
 > prompts. If a run requests more reflections than the list provides, the first
 > reflection template is reused.
 
-#### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using Variables in Prompts (Jinja2 Templating)
+#### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using Variables in Prompts (Nunjucks Templating)
 
-Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
+Prompts are processed using the Nunjucks templating engine (Jinja2-style syntax), allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
 
 This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `{{ INPUT_CONTENT }}` while the full list of selected files can be accessed through `{{ ALL_INPUTS }}`. When you run the agent these placeholders are replaced with real data.
 
@@ -120,9 +120,7 @@ that file's text, `ALL_*` bundles every selected file into one
 `<document name="...">…</document>` XML string, and `LIST_OF_*` gives the same
 set as a comma-separated path list. Media is the exception — `MEDIA_FILE` is a
 path, but the media itself is sent to multimodal models separately rather than
-inlined as text (see [Working with Figures](./working-with-figures.md)). Legacy
-custom agents can still read the `REFERENCE_*` and `AUXILIARY_*` aliases, but new
-agents should use `CONTEXT_*`.
+inlined as text (see [Working with Figures](./working-with-figures.md)).
 
 **Multiple Document Output:**
 
@@ -180,7 +178,7 @@ To create your own tool-use agent, set `agentCategory: toolUse` and list the too
 
 <ToolCategoriesHero />
 
-<p class="hero-caption">The seven tool categories on <strong>Dashboard → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
+<p class="hero-caption">The eight tool categories on <strong>Dashboard → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
 
@@ -240,11 +238,10 @@ filename from the selected input list or from `settings.defaultOutputFiles`:
 
 See [Handling Multiple Files](./multiple-output.md) for more details.
 
-### <wa-icon library="texra" name="save"></wa-icon> Step 4 — Save and Reload
+### <wa-icon library="texra" name="save"></wa-icon> Step 4 — Save and Run
 
 1. Save your `.yaml` file.
-2. Reload the VS Code window (Command Palette → `Developer: Reload Window`).
-3. Your new custom agent should now appear in the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>) of the TeXRA UI.
+2. TeXRA watches the custom agents directory, so your new agent appears automatically in the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>) of the TeXRA UI — no window reload needed.
 
 From a terminal the iteration loop is faster — no window reload needed.
 Verify the agent registered, then smoke-test it in one go:

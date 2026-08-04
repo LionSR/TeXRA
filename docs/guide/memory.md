@@ -65,7 +65,8 @@ The pinned indicator in the Dashboard is a blue left border plus a `Pinned` badg
 
 ## Managing memories from the Dashboard
 
-The Memory tab shows every saved note, sorted with the most recently updated first. For each note you get:
+The Memory tab shows every saved note, with pinned notes first and the rest sorted most recently
+updated. For each note you get:
 
 - **Path** — the canonical `/memories/...` location
 - **Metadata strip** — `Pinned · size · line count · updated · by <agent>`

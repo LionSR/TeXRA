@@ -10,12 +10,12 @@ const items = [
   { id: 'opus5T', thinking: true },
   { id: 'opus5', thinking: false },
   {
-    id: 'sonnet46T',
+    id: 'sonnet5T',
     thinking: true,
     hovered: true,
     tip: { context: '1M', input: '$3', output: '$15', mode: 'Thinking' },
   },
-  { id: 'sonnet46', thinking: false },
+  { id: 'sonnet5', thinking: false },
   { id: 'haiku45T', thinking: true },
   { id: 'haiku45', thinking: false },
 ];
@@ -26,7 +26,7 @@ const items = [
     <span class="mp-label">Model</span>
     <div class="mp-control">
       <wa-icon class="mp-cv-ic" library="texra" name="cpu"></wa-icon>
-      <span class="mp-value">sonnet46T</span>
+      <span class="mp-value">sonnet5T</span>
       <wa-icon class="mp-caret" library="texra" name="chevron-down"></wa-icon>
     </div>
     <div class="mp-menu">

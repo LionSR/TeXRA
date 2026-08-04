@@ -35,18 +35,18 @@ import MockupFrame from './MockupFrame.vue';
               ></wa-icon>
               Input
               <span class="act" title="Tool configuration options"
-                ><wa-icon library="texra" name="tools"></wa-icon
+                ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon
               ></span>
             </span>
             <div class="acts">
               <span class="act" title="Add opened files as input"
-                ><wa-icon library="texra" name="folder-opened"></wa-icon
+                ><wa-icon library="texra" name="folder-open"></wa-icon
               ></span>
               <span class="act" title="Clear all input files"
                 ><wa-icon library="texra" name="trash"></wa-icon
               ></span>
               <span class="act" title="Add input files"
-                ><wa-icon library="texra" name="add"></wa-icon
+                ><wa-icon library="texra" name="plus"></wa-icon
               ></span>
             </div>
           </div>
@@ -74,13 +74,13 @@ import MockupFrame from './MockupFrame.vue';
             >
             <div class="acts">
               <span class="act" title="Add opened files as context"
-                ><wa-icon library="texra" name="folder-opened"></wa-icon
+                ><wa-icon library="texra" name="folder-open"></wa-icon
               ></span>
               <span class="act" title="Clear all context files"
                 ><wa-icon library="texra" name="trash"></wa-icon
               ></span>
               <span class="act" title="Add context files"
-                ><wa-icon library="texra" name="add"></wa-icon
+                ><wa-icon library="texra" name="plus"></wa-icon
               ></span>
             </div>
           </div>
@@ -113,22 +113,22 @@ import MockupFrame from './MockupFrame.vue';
               ><wa-icon
                 class="lbl-ic"
                 library="texra"
-                name="device-camera-video"
+                name="video"
               ></wa-icon>
               Media
               <span class="act" title="Auto-extract options"
-                ><wa-icon library="texra" name="wand"></wa-icon
+                ><wa-icon library="texra" name="wand-magic-sparkles"></wa-icon
               ></span>
             </span>
             <div class="acts">
               <span class="act" title="Add opened files as media"
-                ><wa-icon library="texra" name="folder-opened"></wa-icon
+                ><wa-icon library="texra" name="folder-open"></wa-icon
               ></span>
               <span class="act" title="Clear all media files"
                 ><wa-icon library="texra" name="trash"></wa-icon
               ></span>
               <span class="act" title="Add media files"
-                ><wa-icon library="texra" name="add"></wa-icon
+                ><wa-icon library="texra" name="plus"></wa-icon
               ></span>
             </div>
           </div>

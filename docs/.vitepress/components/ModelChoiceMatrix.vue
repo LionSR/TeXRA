@@ -18,25 +18,25 @@ const rows = [
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['fable5', 'opus5', 'gpt55', 'gemini31p'],
+    models: ['fable5', 'opus5', 'gpt56', 'gemini31p'],
   },
   {
     icon: 'code',
     use: 'Code-heavy / LaTeX editing',
     note: 'Strong editing models',
-    models: ['opus5T', 'sonnet46T', 'qwenplus'],
+    models: ['opus5T', 'sonnet5T', 'qwenplus'],
   },
   {
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable5', 'opus5T', 'sonnet46T', 'deepseekT', 'kimi26T'],
+    models: ['fable5', 'opus5T', 'sonnet5T', 'deepseekT', 'kimi26T'],
   },
   {
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['gemini31p', 'fable5', 'sonnet46', 'opus5'],
+    models: ['gemini31p', 'fable5', 'sonnet5', 'opus5'],
   },
 ];
 </script>

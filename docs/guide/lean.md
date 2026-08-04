@@ -67,7 +67,7 @@ The built-in `lean` agent is always available. The **Lean Project** team adds a 
 | `leanBlueprint`    | Remote / Lean team | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean |
 | `leanOrchestrator` | Remote / Lean team | Coordinating a whole formalization project across the agents above       |
 
-To load the full set, open the **Multi-Agent** tab and select the **Lean Project** team. Formalizing a paper that's also part LaTeX? The **Mathematician** team bundles the `lean` agent alongside the LaTeX and research agents.
+To load the full set, open the **Teams** tab and select the **Lean Project** team. Formalizing a paper that's also part LaTeX? The **Mathematician** team bundles the `lean` agent alongside the LaTeX and research agents.
 
 ::: tip
 Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check **Dashboard → Agents** (<wa-icon library="texra" name="sparkle"></wa-icon>) to see exactly which tools each one has enabled.
