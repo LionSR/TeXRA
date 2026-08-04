@@ -247,8 +247,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           outcome: meta.outcome,
           description: meta.description,
         };
-        const agentRecord =
-          record && isAgentRunRecord(record) ? record : null;
+        const agentRecord = record && isAgentRunRecord(record) ? record : null;
         const identity =
           meta.identity ?? deriveLegacyIdentity(meta, agentRecord);
         // Durable healing is async and best-effort; this read already has

@@ -108,7 +108,9 @@ describe('execution lifecycle', () => {
 
   it('rolls back lease ownership when fresh registration fails', async () => {
     const executionId = 'abc124' as ExecutionId;
-    mocks.writeRunRecord.mockRejectedValueOnce(new Error('config write failed'));
+    mocks.writeRunRecord.mockRejectedValueOnce(
+      new Error('config write failed'),
+    );
 
     await expect(
       registerExecution(executionId, baseConfig, 'chat', {

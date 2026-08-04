@@ -300,4 +300,3 @@ export async function writeSessionDescription(
     'session description',
   );
 }
-
