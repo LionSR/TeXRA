@@ -1,7 +1,6 @@
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
-import type {
-  RunOutcome, ExecutionStatus } from '@shared/schemas';
+import type { RunOutcome, ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type CliFinalizationFailureReporter = (error: Error) => void;

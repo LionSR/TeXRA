@@ -431,9 +431,9 @@ describe('claude_agent tool launch and resume fallback', () => {
       childStreamId,
       executionId,
       executions: {
-      getAgentHandleByStream: () => undefined,
-      getHandle: () => undefined,
-    } as any,
+        getAgentHandleByStream: () => undefined,
+        getHandle: () => undefined,
+      } as any,
       model: 'claude-sonnet-4-6',
       permissionMode: 'acceptEdits',
       effort: 'high',

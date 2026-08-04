@@ -105,14 +105,19 @@ const STAMP_MIN_AGE_MS = EXECUTION_LEASE_STALE_MS;
 /**
  * Legacy terminal residue → canonical outcome. An unmappable string maps to
  * `failed` — the same non-resumable treatment those rows already get.
+ * Exported for store-read entrances (hydration, direct detail reads) so an
+ * un-healed row behaves identically before its durable stamp lands; the
+ * listing's stamper remains the only WRITER of the derived values.
  */
-function deriveLegacyOutcome(meta: ExecutionMeta): RunOutcome | undefined {
+export function deriveLegacyOutcome(
+  meta: ExecutionMeta,
+): RunOutcome | undefined {
   if (meta.outcome) return meta.outcome;
   if (meta.terminalStatus === undefined) return undefined;
   return executionStatusToRunOutcome(meta.terminalStatus) ?? RUN_OUTCOME.FAILED;
 }
 
-function deriveLegacyIdentity(
+export function deriveLegacyIdentity(
   meta: ExecutionMeta,
   cfg: AgentConfig | null,
 ): RunIdentity | undefined {
@@ -129,7 +134,10 @@ function deriveLegacyIdentity(
  * active lease or a write failure leaves the row to heal on the next pass,
  * and the caller still uses the derived value for this read.
  */
-async function stampExecutionRow(id: ExecutionId, meta: ExecutionMeta): Promise<void> {
+async function stampExecutionRow(
+  id: ExecutionId,
+  meta: ExecutionMeta,
+): Promise<void> {
   if (Date.now() - Date.parse(meta.timestamp) < STAMP_MIN_AGE_MS) return;
   try {
     await runWithInactiveExecutionLease(id, async () => {

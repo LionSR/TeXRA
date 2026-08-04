@@ -168,7 +168,10 @@ export function attachWorkflowPlainOutput(
         if (event.identity.kind === 'workflowScript') {
           projections.set(
             streamId,
-            createWorkflowStreamProjection(event.identity.workflowName, options),
+            createWorkflowStreamProjection(
+              event.identity.workflowName,
+              options,
+            ),
           );
         }
         return;

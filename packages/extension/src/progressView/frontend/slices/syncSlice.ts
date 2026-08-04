@@ -6,10 +6,7 @@ import {
   type StreamContentRenderPayload,
 } from '@shared/schemas';
 // Local imports
-import {
-  updateToolUseState,
-  updateWorkflowState,
-} from '../stateUtils';
+import { updateToolUseState, updateWorkflowState } from '../stateUtils';
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
@@ -61,6 +58,5 @@ export const syncHandlers = {
         goalObjective: goal.active ? goal.objective : undefined,
       }));
     }
-
   },
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;

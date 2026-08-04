@@ -102,7 +102,9 @@ export function sessionHeaderIdentityLine(
       streams: context.streams,
     });
     const streamKind =
-      slice?.identity?.kind === 'workflowScript' ? 'workflow script' : 'subagent';
+      slice?.identity?.kind === 'workflowScript'
+        ? 'workflow script'
+        : 'subagent';
     return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
   const model = meta.model || '—';

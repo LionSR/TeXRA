@@ -30,7 +30,6 @@ import { createChannelTrace } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { writeLegacyExecutionStreamId } from '@agent/storage/executionLifecycle';
 import {
-  EXECUTION_STREAM_ID_SOURCE,
   ExecutionIdSchema,
   registeredStreamId,
   type ExecutionId,
@@ -190,10 +189,12 @@ export async function resolvePersistedStreamIdForExecution(
   options: PersistedStreamIdResolverOptions = {},
 ): Promise<PersistedStreamIdResolution | null> {
   const executionMeta = await getExecutionStore(executionId).readMeta();
-  if (
-    executionMeta?.streamId &&
-    executionMeta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
-  ) {
+  // A stamped stream id of EITHER provenance is authoritative: birth
+  // registration, or a legacy resolution this module itself backfilled on a
+  // uniquely-provable match. Resolution is fixed once — the per-read
+  // O(all-streams) re-scan the old contract forced on stamped rows is
+  // retired; only never-resolved rows still scan below.
+  if (executionMeta?.streamId) {
     return { streamId: executionMeta.streamId, fallbackStreamIds: [] };
   }
 

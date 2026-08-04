@@ -1,9 +1,5 @@
 // Type imports
-import {
-  AGENT_CATEGORIES,
-  byCategory,
-  type ByCategory,
-} from '@shared/schemas';
+import { AGENT_CATEGORIES, byCategory, type ByCategory } from '@shared/schemas';
 import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
 
 export const CLI_COMPLETION_SHELLS = ['bash', 'zsh', 'fish'] as const;

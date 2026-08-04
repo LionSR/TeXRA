@@ -29,11 +29,7 @@ import { type ZodError } from 'zod';
 import { hostBridge } from '@shared/hostBridge';
 import type { MainViewPersistedState } from '@shared/schemas';
 import { Signal } from '@shared/signals';
-import {
-  AGENT_CATEGORIES,
-  byCategory,
-  type ByCategory,
-} from '@shared/schemas';
+import { AGENT_CATEGORIES, byCategory, type ByCategory } from '@shared/schemas';
 import {
   createWebviewStorage,
   PersistedState,

@@ -14,6 +14,7 @@ import {
   unwrapResultMeta,
   type ExecutionListingEntry,
   type ExecutionMeta,
+  deriveLegacyOutcome,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
@@ -212,7 +213,7 @@ export async function readCliHistoryDetails(
     id,
     status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
-      outcome: meta?.outcome,
+      outcome: meta ? deriveLegacyOutcome(meta) : undefined,
     }),
     meta,
     config,

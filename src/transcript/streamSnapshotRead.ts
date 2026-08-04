@@ -181,7 +181,6 @@ export function assembleSnapshot(
       runUsage: mapToRecord(data.usage),
       executionId: data.meta?.executionId,
       parentStreamId: data.meta?.parentStreamId,
-      description: data.meta?.description,
     });
   } catch (error) {
     // Defense-in-depth for the unwrapped CLI resume path (`await store.read`):

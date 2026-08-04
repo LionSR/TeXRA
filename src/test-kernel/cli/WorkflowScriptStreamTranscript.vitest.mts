@@ -138,7 +138,11 @@ describe('CLI workflow-script child-stream transcript', () => {
     patchStream(sdkStreamId, (slice) => ({
       ...slice,
       // External-CLI agent sessions are full-log children too.
-      identity: { kind: 'agent' as const, agent: 'claude', tool: 'claude_code' },
+      identity: {
+        kind: 'agent' as const,
+        agent: 'claude',
+        tool: 'claude_code',
+      },
       category: AgentCategory.ToolUse,
       model: 'claude-sonnet',
     }));

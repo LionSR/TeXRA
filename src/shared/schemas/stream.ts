@@ -128,10 +128,11 @@ export type RegisteredExecutionMeta = ExecutionMeta & {
 };
 
 /**
- * The execution's birth-registered stream identity (#9590 A1). Only
- * registration provenance is authoritative: a `LEGACY_RESOLUTION` value is a
- * replaceable read cache, and readers holding one must keep using the
- * compatibility resolver.
+ * The execution's birth-registered stream identity (#9590 A1). Callers that
+ * need birth provenance specifically (deletion admission's contradiction
+ * check) use this; general execution→stream reads accept a stamped
+ * `meta.streamId` of either provenance — a backfilled legacy resolution is
+ * fixed at stamp time, not re-derived per read.
  */
 export function registeredStreamId(
   meta: Pick<ExecutionMeta, 'streamId' | 'streamIdSource'> | null | undefined,

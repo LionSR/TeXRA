@@ -38,9 +38,7 @@ import {
   clearFollowUpInputTransientStateStore,
   deleteFollowUpInputTransientState,
 } from '../followUpInputState';
-import {
-  removePermissionsForStream,
-} from '../stateUtils';
+import { removePermissionsForStream } from '../stateUtils';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
 
 // ============================================================
@@ -235,5 +233,4 @@ export const streamLifecycleHandlers = {
       }),
     );
   },
-
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;

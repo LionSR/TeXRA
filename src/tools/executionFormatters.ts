@@ -35,8 +35,7 @@ function listingDisplay(entry: ExecutionListingEntry): {
     case 'run':
       return {
         agent: runIdentityName(entry.identity),
-        model:
-          entry.identity.kind === 'agent' ? entry.agentConfig.model : null,
+        model: entry.identity.kind === 'agent' ? entry.agentConfig.model : null,
         category: executionDisplayCategory(entry.identity, entry.agentConfig),
       };
     case 'incomplete':

@@ -7,6 +7,7 @@
  */
 
 import type { ChildRecord, ExecutionMeta, TodoEntry } from '@agent/storage';
+import { deriveLegacyOutcome } from '@agent/storage';
 import {
   getRunContextStreamId,
   tryUseRunContext,
@@ -74,7 +75,10 @@ export function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
 ): string {
-  const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
+  const info = getExecutionStatusInfo(
+    child.id,
+    childMeta ? deriveLegacyOutcome(childMeta) : undefined,
+  );
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;

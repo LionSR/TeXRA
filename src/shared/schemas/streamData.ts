@@ -32,9 +32,7 @@ export const STREAM_TAB_META_SCHEMA_VERSION = 1;
  * (`executionId`) into `executions/{id}/` — identity and config live there,
  * never as a sidecar copy. Legacy sidecars carried a whole `runDescriptor`;
  * its `executionId` field IS the FK, normalized here once at the parse
- * boundary. `taskState` is kept as `unknown` so this schema stays
- * `@agent`-free; consumers that need the typed value parse it with
- * `TaskStateSchema` (which depends on `@agent`).
+ * boundary.
  */
 export const StreamTabMetaSchema = z
   .object({
@@ -45,20 +43,7 @@ export const StreamTabMetaSchema = z
     /** FK into `executions/{executionId}/` — the durable run authority. */
     executionId: ExecutionIdSchema.optional(),
     /** Legacy pre-FK sidecar shape; only the FK inside it is read. */
-    runDescriptor: z
-      .looseObject({ executionId: ExecutionIdSchema })
-      .optional(),
-    /** Legacy field — read-shimmed from pre-RunDescriptor snapshots only. */
-    taskState: z.unknown().optional(),
-    /**
-     * Legacy field — read-only mirror of `ExecutionMeta.description` (#9590 A4).
-     * Current records stopped writing it in #9590 Stage 6; readers use
-     * ExecutionMeta and fall back to this field only for records whose execution
-     * metadata carries no description (pre-registration records, desktop legacy
-     * imports). Scheduled for deletion in #9590 Stage 7 / #9627 with the
-     * ≥ 2026-11-01 legacy-retirement cohort.
-     */
-    description: z.string().optional(),
+    runDescriptor: z.looseObject({ executionId: ExecutionIdSchema }).optional(),
   })
   .transform(({ runDescriptor, ...meta }) => {
     const executionId = meta.executionId ?? runDescriptor?.executionId;

@@ -324,10 +324,10 @@ describe('resolveAgentTools delegation roster annotation', () => {
       await resolveAgentTools(
         resolveAgentToolsInput([
           {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
+            name: 'delegate_agent',
+            availabilityCategory: 'toolUse',
+            description: DELEGATE_AGENT_DESCRIPTION,
+          },
         ]),
       )
     ).tools.find((t) => t.name === 'delegate_agent');
@@ -341,10 +341,10 @@ describe('resolveAgentTools delegation roster annotation', () => {
       await resolveAgentTools(
         resolveAgentToolsInput([
           {
-          name: 'delegate_agent',
-          availabilityCategory: 'toolUse',
-          description: DELEGATE_AGENT_DESCRIPTION,
-        },
+            name: 'delegate_agent',
+            availabilityCategory: 'toolUse',
+            description: DELEGATE_AGENT_DESCRIPTION,
+          },
         ]),
       )
     ).tools.find((t) => t.name === 'delegate_agent');

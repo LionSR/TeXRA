@@ -19,6 +19,8 @@ import {
   type TodoEntry,
   listExecutions,
   resolveExecutionWorkspaceFilePath,
+  deriveLegacyIdentity,
+  deriveLegacyOutcome,
 } from '@agent/storage';
 import {
   currentSession,
@@ -642,8 +644,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const category = executionDisplayCategory(meta?.identity, config);
-    const info = getExecutionStatusInfo(executionId, meta?.outcome);
+    const identity =
+      meta?.identity ?? (meta ? deriveLegacyIdentity(meta, config) : undefined);
+    const category = executionDisplayCategory(identity, config);
+    const info = getExecutionStatusInfo(
+      executionId,
+      meta ? deriveLegacyOutcome(meta) : undefined,
+    );
     const lines = buildCompletedSummaryLines(
       executionId,
       config,
@@ -869,7 +876,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Filter out fields irrelevant to this agent's category
     const meta = await getExecutionStore(executionId).readMeta();
-    const category = executionDisplayCategory(meta?.identity, config);
+    const identity =
+      meta?.identity ?? (meta ? deriveLegacyIdentity(meta, config) : undefined);
+    const category = executionDisplayCategory(identity, config);
     return executed(serializeFilteredConfig(config, category));
   }
 
@@ -1011,7 +1020,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     const { lines, chars } = projectProcessOutput(log.toJSON());
-    const info = getExecutionStatusInfo(executionId, meta?.outcome);
+    const info = getExecutionStatusInfo(
+      executionId,
+      meta ? deriveLegacyOutcome(meta) : undefined,
+    );
     const footer = handle
       ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;

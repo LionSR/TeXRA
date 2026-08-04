@@ -1,6 +1,8 @@
 // Third-party imports
 import { z, type ZodType } from 'zod';
 
+import { AgentCategorySchema } from '@shared/schemas/agent';
+
 // ============================================================================
 // Tool Definition Schema - Single Source of Truth
 // ============================================================================
@@ -32,7 +34,7 @@ export const ToolDefinitionSchema = z.looseObject({
    * ("Available agents:"/"Available models:" lines). Declared by the tool
    * itself — never a side table mapping tool names to categories.
    */
-  availabilityCategory: z.enum(['workflow', 'toolUse']).optional(),
+  availabilityCategory: AgentCategorySchema.optional(),
 });
 
 /** Tool definition type - derived from schema */

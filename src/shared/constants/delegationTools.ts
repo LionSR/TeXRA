@@ -33,7 +33,6 @@ export const DELEGATION_TOOL_CATEGORY: Readonly<Record<string, AgentCategory>> =
     delegate_agent: AgentCategory.ToolUse,
   };
 
-
 /** True when any of the given tool names is a delegation tool. */
 export function hasDelegationTool(
   toolNames: Iterable<string> | undefined,

@@ -99,6 +99,9 @@ function readAgentRosterSelection(
   if (rawV2 !== undefined) {
     const parsed = AgentRosterSelectionSchema.safeParse(rawV2);
     if (parsed.success) return parsed.data;
+    // Deliberate `console`: this parse/migration boundary runs before any
+    // agent trace or logger channel exists (settings-layer convention,
+    // matching agentPresets.ts).
     console.warn(
       `[agentRoster] Ignoring malformed v2 roster selection; falling back to ` +
         `the inherited roster: ${parsed.error.message}`,
