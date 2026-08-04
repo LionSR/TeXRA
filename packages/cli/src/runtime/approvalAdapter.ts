@@ -159,7 +159,7 @@ async function askHeadlessUserQuestion(
       if (parsed != null) answers[question.question] = parsed;
     }
   } catch {
-    markApprovalDenied(context);
+    markApprovalDenied(context, 'User-question prompt');
     return {
       action: 'reject',
       feedback: 'CLI user question prompt failed.',

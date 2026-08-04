@@ -294,7 +294,8 @@ export async function executeCliRequest(
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
-        onApprovalPolicyDenial: () => markApprovalDenied(runContext),
+        onApprovalPolicyDenial: () =>
+          markApprovalDenied(runContext, 'Tool or edit approval'),
         runtimeUnavailableTools: [
           ...CLI_UNAVAILABLE_TOOLS,
           ...(options.runtimeUnavailableTools ?? []),
