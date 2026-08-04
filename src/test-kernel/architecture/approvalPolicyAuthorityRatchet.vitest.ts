@@ -29,11 +29,9 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
   'src/shared/approvalPolicy.ts',
   'src/tools/approval/bashApproval.ts',
   'src/tools/approval/toolEditApproval.ts',
-  'packages/cli/src/runtime/approvalAdapter.ts',
-  'packages/cli/src/runtime/approval/humanInputHandlers.ts',
+  'packages/cli/src/runtime/approval/settleApprovals.ts',
   'packages/cli/src/runtime/runExecution.ts',
   'packages/cli/src/chat/chatSessionController.ts',
-  'packages/cli/src/chat/tui/state/subscribeApprovals.ts',
 ]);
 
 /**

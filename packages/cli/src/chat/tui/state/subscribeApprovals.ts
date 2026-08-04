@@ -38,7 +38,12 @@ import {
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
 } from '@cli/runtime/approval/approvalPrompts';
-import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
+import {
+  denyExternalInquiryIfNoHumanInput,
+  settleExecutable,
+  settleHumanInputDenial,
+  settleRetry,
+} from '@cli/runtime/approval/settleApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
@@ -51,16 +56,8 @@ import {
 } from '@model/apiProviders';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
-  decideHumanInputRequest,
-  decideRetryApproval,
-  decideTexraApproval,
-  texraApprovalDenialMessage,
-  texraHumanInputDenialMessage,
-  texraRetryDenialMessage,
-} from '@shared/approvalPolicy';
-import {
-  isCredentialExhausted,
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
   type ExternalInquiryPermission,
@@ -83,7 +80,6 @@ import { notify } from '../notifications/terminalNotifier';
 import { patchSessionMeta, patchStream } from './cliState';
 import { setCliCodexSubscription } from './codexSubscription';
 import {
-  type ApprovalBypassKind,
   approveQueuedDelegatedWorkForStream,
   approvalPayloadStreamId,
   clearApprovalsForOwner,
@@ -96,71 +92,12 @@ import {
   type TuiRetryRequest,
 } from './approvalQueue';
 
-function livePolicy() {
-  return defaultSession().approvalPolicy;
-}
-
-function canPresent(context: CliContext): boolean {
-  return context.mode === 'interactive';
-}
-
-function settleExecutable(context: CliContext): ApprovalDecision | undefined {
-  const decision = decideTexraApproval({
-    policy: livePolicy(),
-    promptRequired: true,
-    scopedBypass: false,
-    canPresent: canPresent(context),
-  });
-  if (decision === 'allow') return { accepted: true };
-  if (decision === 'present') return undefined;
-  markApprovalDenied(context);
-  return {
-    accepted: false,
-    userMessage: texraApprovalDenialMessage(decision),
-  };
-}
-
-function isCredentialRetryFailure(payload: RetryPermission): boolean {
-  const details = payload.errorDetails;
-  if (!details) return false;
-  if (isCredentialExhausted(details)) return true;
-  return details.statusCode === 401 || details.statusCode === 403;
-}
-
-function settleRetry(
-  payload: RetryPermission,
-  context: CliContext,
-): ApprovalDecision | undefined {
-  const retryDecision = decideRetryApproval({
-    policy: livePolicy(),
-    canPresent: canPresent(context),
-    isCredentialFailure: isCredentialRetryFailure(payload),
-  });
-  if (retryDecision === 'present') return undefined;
-  if (retryDecision.deny !== 'yolo-retry') {
-    markApprovalDenied(context);
-  }
-  return {
-    accepted: false,
-    userMessage: texraRetryDenialMessage(retryDecision.deny),
-  };
-}
-
-function settleHumanInputDenial(
+function settleTuiHumanInputDenial(
   context: CliContext,
 ): UserQuestionSettlement | undefined {
-  const decision = decideHumanInputRequest({
-    policy: livePolicy(),
-    canPresent: canPresent(context),
-  });
-  if (decision === 'present') return undefined;
-  if (decision.deny !== 'yolo-no-human') {
-    markApprovalDenied(context);
-  }
-  return {
-    action: 'reject',
-    feedback: texraHumanInputDenialMessage(decision.deny),
-  };
+  const denial = settleHumanInputDenial(context);
+  if (denial == null) return undefined;
+  return { action: 'reject', feedback: denial.userMessage };
 }
 
 // =========================================================================
@@ -532,7 +469,7 @@ async function requestUserQuestionInteraction(
   payload: HostUserQuestionRequest,
   context: CliContext,
 ): Promise<UserQuestionSettlement> {
-  const denial = settleHumanInputDenial(context);
+  const denial = settleTuiHumanInputDenial(context);
   if (denial) return denial;
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });

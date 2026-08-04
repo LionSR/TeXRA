@@ -1,4 +1,3 @@
-import type { ApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type {
   ActiveStreamId,
@@ -11,6 +10,7 @@ import {
   type StreamInfoListSource,
   type StreamInfoSource,
 } from '@controllers/progressView/backend/streamInfoUtils';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   CompileFailure,

@@ -43,6 +43,7 @@ import {
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
+import { setApprovalPolicyTooltipRefresh } from '@frontend/statusBar/approvalPolicyTooltipRefresh';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
@@ -711,6 +712,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
   updateStatusBarTooltip();
+  setApprovalPolicyTooltipRefresh(updateStatusBarTooltip);
 
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
@@ -718,6 +720,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },
+    {
+      dispose: () => setApprovalPolicyTooltipRefresh(undefined),
+    },
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.

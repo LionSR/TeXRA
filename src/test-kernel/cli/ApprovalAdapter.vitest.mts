@@ -28,7 +28,7 @@ import {
   markApprovalDenied,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPrompts';
-import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
+import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/settleApprovals';
 import {
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,

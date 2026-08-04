@@ -5,11 +5,7 @@
  * `ConfigProvider` rather than workspace state.
  */
 import type { ConfigProvider } from '@platform/interfaces';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DEFAULT_TOOL_PATH_PROTECTION_ENABLED } from '@shared/schemas/stateSettings';
 import { TOOL_EDIT_APPROVAL_CONFIG_KEY } from '@shared/schemas/coreSettings';
@@ -52,9 +48,8 @@ export function buildApprovalSettingsMessage(
 
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
-    approvalPolicy: config.get<TexraApprovalPolicy>(
-      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      TEXRA_APPROVAL_POLICY_DEFAULT,
+    approvalPolicy: readPersistedTexraApprovalPolicy((key, fallback) =>
+      config.get(key, fallback),
     ),
     editApprovalEnabled: config.get<boolean>(
       TOOL_EDIT_APPROVAL_CONFIG_KEY,

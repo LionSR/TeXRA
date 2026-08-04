@@ -42,6 +42,7 @@ import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { refreshApprovalPolicyTooltip } from '@frontend/statusBar/approvalPolicyTooltipRefresh';
 import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -745,6 +746,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
             ? TEXRA_APPROVAL_POLICY_DEFAULT
             : (write.value as TexraApprovalPolicy),
         );
+        refreshApprovalPolicyTooltip();
       }
     } catch (error) {
       await showLoggedErrorMessage(

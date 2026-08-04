@@ -8,7 +8,7 @@ import {
   type ExhaustionReason,
   type PlanApprovalPermission,
   type RetryPermission,
-  type ApprovalDecision as SharedApprovalDecision,
+  type ApprovalDecision,
 } from '@shared/schemas';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
@@ -32,12 +32,6 @@ export interface CliDecisionApprovalPayloads {
 }
 
 export type CliDecisionApprovalEvent = keyof CliDecisionApprovalPayloads;
-
-// The headless adapter only ever sets accepted + userMessage, but reusing the
-// host-neutral shape (which also carries optional userQuestionAnswers) keeps a
-// single source of truth for the decision vocabulary across hosts. See
-// docs/proposals/2026-05-31-tui-extension-sharing.md (Rung 1).
-export type ApprovalDecision = SharedApprovalDecision;
 
 export const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';

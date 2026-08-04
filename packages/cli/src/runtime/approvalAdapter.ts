@@ -1,8 +1,4 @@
-// The headless CLI's `HostInteractions` implementation. Approval policy and
-// summary formatting live in the focused modules under ./approval/; import
-// those directly. Policy decisions come from `@shared/approvalPolicy` — this
-// file only settles them into host results and presents prompts.
-
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type {
   HostAgentProposalRequest,
   HostApprovalBypassStateUpdate,
@@ -12,32 +8,22 @@ import type {
   RetryResult,
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
-  decideHumanInputRequest,
-  decideRetryApproval,
-  decideTexraApproval,
-  texraApprovalDenialMessage,
-  texraHumanInputDenialMessage,
-  texraRetryDenialMessage,
-} from '@shared/approvalPolicy';
-import {
-  isCredentialExhausted,
+  type ApprovalDecision,
   type RetryPermission,
   type UserQuestionAnswers,
 } from '@shared/schemas';
-
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-
-import { type CliContext } from './cliContext';
-import { writeTextStderr } from './logSinks';
-
 import {
-  type ApprovalDecision,
+  settleExecutable,
+  settleHumanInputDenial,
+  settleRetry,
+} from './approval/settleApprovals';
+import {
   type CliApprovalPromptHooks,
   type CliDecisionApprovalEvent,
   type CliDecisionApprovalPayloads,
@@ -53,6 +39,8 @@ import {
 } from './approval/approvalSummaries';
 import { summarizeApprovalEvent } from './approval/eventDispatch';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
+import { type CliContext } from './cliContext';
+import { writeTextStderr } from './logSinks';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   readonly emit?: HostInteractions['emit'];
@@ -61,74 +49,15 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   ) => void;
 }
 
-function livePolicy() {
-  return defaultSession().approvalPolicy;
-}
-
-function canPresent(context: CliContext): boolean {
-  return context.mode === 'interactive';
-}
-
-/** Settle a shared executable decision into a CLI approval result, or `undefined` to prompt. */
-function settleExecutable(context: CliContext): ApprovalDecision | undefined {
-  const decision = decideTexraApproval({
-    policy: livePolicy(),
-    promptRequired: true,
-    scopedBypass: false,
-    canPresent: canPresent(context),
-  });
-  if (decision === 'allow') return { accepted: true };
-  if (decision === 'present') return undefined;
-  markApprovalDenied(context);
-  return {
-    accepted: false,
-    userMessage: texraApprovalDenialMessage(decision),
-  };
-}
-
-function isCredentialRetryFailure(payload: RetryPermission): boolean {
-  const details = payload.errorDetails;
-  if (!details) return false;
-  if (isCredentialExhausted(details)) return true;
-  return details.statusCode === 401 || details.statusCode === 403;
-}
-
 function settleApprovalEvent(
   event: CliDecisionApprovalEvent,
   payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (event === 'showRetryRequest') {
-    const retryDecision = decideRetryApproval({
-      policy: livePolicy(),
-      canPresent: canPresent(context),
-      isCredentialFailure: isCredentialRetryFailure(payload as RetryPermission),
-    });
-    if (retryDecision === 'present') return undefined;
-    if (retryDecision.deny !== 'yolo-retry') {
-      markApprovalDenied(context);
-    }
-    return {
-      accepted: false,
-      userMessage: texraRetryDenialMessage(retryDecision.deny),
-    };
+    return settleRetry(payload as RetryPermission, context);
   }
   return settleExecutable(context);
-}
-
-function settleHumanInputDenial(
-  context: CliContext,
-  yoloMessage?: string,
-): string | undefined {
-  const decision = decideHumanInputRequest({
-    policy: livePolicy(),
-    canPresent: canPresent(context),
-  });
-  if (decision === 'present') return undefined;
-  if (decision.deny !== 'yolo-no-human') {
-    markApprovalDenied(context);
-  }
-  return texraHumanInputDenialMessage(decision.deny, yoloMessage);
 }
 
 export function toToolEditResult(
@@ -219,9 +148,9 @@ async function askHeadlessUserQuestion(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
 ): Promise<UserQuestionSettlement> {
-  const feedback = settleHumanInputDenial(context);
-  if (feedback != null) {
-    return { action: 'reject', feedback };
+  const denial = settleHumanInputDenial(context);
+  if (denial != null) {
+    return { action: 'reject', feedback: denial.userMessage };
   }
 
   const answers: UserQuestionAnswers = {};

@@ -224,8 +224,6 @@ export function cancellationResultFor<K extends SettledInteractionKind>(
   return cancellationResultFactories[kind](feedback);
 }
 
-export type { ApprovalBypassKind };
-
 export interface HostApprovalBypassStateUpdate {
   readonly streamId: StreamTabId;
   readonly kind: ApprovalBypassKind;
