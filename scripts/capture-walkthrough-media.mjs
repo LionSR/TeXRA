@@ -346,7 +346,7 @@ function progressMessages() {
           conversationProgress: {
             toolCallCount: 5,
           },
-          roundStage: { index: 1 },
+          stage: { kind: 'round', index: 1 },
           subagents: [
             {
               executionId: 'exec-polish',

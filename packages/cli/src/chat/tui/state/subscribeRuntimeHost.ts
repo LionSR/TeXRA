@@ -10,14 +10,12 @@ import {
   sumUsageStats,
   type ClearMissingOutputsPayload,
   type SetActiveStreamPayload,
+  type StreamStage,
   type StreamTabId,
   type UpdateQueuedFollowUpsPayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
-import {
-  streamStageFromStageStart,
-  type StreamStage,
-} from '@shared/streams/stage';
+import { streamStageFromStageStart } from '@shared/streams/stage';
 import { assertNever } from '@utils/core';
 
 import {

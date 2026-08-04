@@ -6,9 +6,9 @@ import {
   type PhaseStage,
   type RoundStage,
   type StreamPhase,
+  type StreamStage,
   type StreamSubstate,
 } from '@shared/schemas';
-import type { StreamStage } from '@shared/streams/stage';
 
 export type StreamStatusDisplayKey = StreamPhase | StreamSubstate | 'ready';
 
