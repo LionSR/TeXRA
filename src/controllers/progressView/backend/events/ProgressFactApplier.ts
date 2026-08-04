@@ -24,25 +24,21 @@ import {
   type SetActiveStreamPayload,
   type SetParentStreamPayload,
   type StreamPhase,
+  type StreamStage,
   type StreamSubstate,
   type StreamTabId,
   type UpdateCompileFailuresPayload,
   type UpdateConversationProgressPayload,
   type UpdateMissingOutputsPayload,
-  type UpdatePhaseStagePayload,
   type UpdatePlanPayload,
   type UpdateQueuedFollowUpsPayload,
-  type UpdateRoundStagePayload,
   type UpdateStreamDescriptionPayload,
   type UpdateStreamUsagePayload,
   type UpdateTodosPayload,
 } from '@shared/schemas';
 import { isGoalInFlight } from '@shared/schemas/goal';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
-import {
-  phaseStageFromStageStart,
-  roundStageFromStageStart,
-} from '@shared/streams/stage';
+import { streamStageFromStageStart } from '@shared/streams/stage';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
@@ -156,12 +152,8 @@ export class ProgressFactApplier {
         progress: event.progress,
       }),
     'stage.start': (streamId, event) => {
-      const phaseStage = phaseStageFromStageStart(event);
-      if (phaseStage)
-        return this.handleUpdatePhaseStage({ streamId, phaseStage });
-      const roundStage = roundStageFromStageStart(event);
-      if (roundStage)
-        return this.handleUpdateRoundStage({ streamId, roundStage });
+      const stage = streamStageFromStageStart(event);
+      if (stage) return this.handleUpdateStage(streamId, stage);
     },
     'child.activity': (_streamId, event) =>
       this.updateChildRoster(event.parentStreamId, [...event.items]),
@@ -482,38 +474,26 @@ export class ProgressFactApplier {
     if (!this.progressDebounce.pending) this.progressDebounce.schedule();
   }
 
-  handleUpdateRoundStage(data: UpdateRoundStagePayload): void {
-    const { streamId, roundStage } = data;
-    this.state.updateStreamState(streamId, (prev) => ({
-      ...prev,
-      roundStage,
-    }));
+  handleUpdateStage(streamId: StreamTabId, stage: StreamStage): void {
+    this.state.updateStreamState(streamId, (prev) => ({ ...prev, stage }));
 
+    if (stage.kind === 'phase') {
+      // A workflow-script run's phase is read from its *parent's* viewport
+      // (the Background Tasks row for that run), so unlike round progress it
+      // cannot be pushed only for the active stream. It rides the existing
+      // per-stream metadata patch instead of the targeted message: phases
+      // advance a handful of times per run, so the extra fields on the wire
+      // cost nothing.
+      if (!this.webviewUpdater.isAvailable()) return;
+      this.webviewUpdater.updateStreamMetadata(
+        this.state,
+        streamId,
+        this.state.streamStatus.getAllStreamStates(),
+      );
+      return;
+    }
     this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateRoundStage(streamId, roundStage),
-    );
-  }
-
-  /**
-   * A workflow-script run's phase is read from its *parent's* viewport (the
-   * Background Tasks row for that run), so unlike `roundStage` this cannot be
-   * pushed only for the active stream. It rides the existing per-stream
-   * metadata patch instead of a new targeted message: phases advance a
-   * handful of times per run, so the extra fields on the wire cost nothing
-   * and no new command has to be added to the outbound union.
-   */
-  private handleUpdatePhaseStage(data: UpdatePhaseStagePayload): void {
-    const { streamId, phaseStage } = data;
-    this.state.updateStreamState(streamId, (prev) => ({
-      ...prev,
-      phaseStage,
-    }));
-
-    if (!this.webviewUpdater.isAvailable()) return;
-    this.webviewUpdater.updateStreamMetadata(
-      this.state,
-      streamId,
-      this.state.streamStatus.getAllStreamStates(),
+      this.webviewUpdater.updateStage(streamId, stage),
     );
   }
 
@@ -697,8 +677,7 @@ export class ProgressFactApplier {
   ) {
     return {
       conversationProgress: state.conversationProgress,
-      roundStage: state.roundStage ?? null,
-      phaseStage: state.phaseStage ?? null,
+      stage: state.stage ?? null,
       badges: { subagents: state.subagents },
     };
   }

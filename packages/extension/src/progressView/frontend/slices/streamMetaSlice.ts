@@ -145,10 +145,10 @@ export const streamMetaHandlers = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_ROUND_STAGE]: (data) => {
+  [PROGRESS_VIEW_COMMANDS.UPDATE_STAGE]: (data) => {
     setStreamStateForId(data.stream, (prev) =>
       create(prev, (draft) => {
-        draft.roundStage = data.roundStage;
+        draft.stage = data.stage;
       }),
     );
   },

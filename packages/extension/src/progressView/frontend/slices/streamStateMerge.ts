@@ -14,11 +14,8 @@ function metadataToStreamStatePartial(
   const { category: _category, ...backendFields } = metadata;
   return {
     ...backendFields,
-    ...(Object.hasOwn(metadata, 'roundStage') && {
-      roundStage: metadata.roundStage ?? undefined,
-    }),
-    ...(Object.hasOwn(metadata, 'phaseStage') && {
-      phaseStage: metadata.phaseStage ?? undefined,
+    ...(Object.hasOwn(metadata, 'stage') && {
+      stage: metadata.stage ?? undefined,
     }),
   } as Partial<StreamState>;
 }

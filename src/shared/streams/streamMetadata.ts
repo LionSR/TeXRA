@@ -32,8 +32,7 @@ export function buildStreamMetadata(
     conversationProgress: inputs.conversationProgress ?? {
       ...DEFAULT_CONVERSATION_PROGRESS,
     },
-    roundStage: inputs.roundStage ?? null,
-    phaseStage: inputs.phaseStage ?? null,
+    stage: inputs.stage ?? null,
     subagents: inputs.subagents ?? [],
   };
 }

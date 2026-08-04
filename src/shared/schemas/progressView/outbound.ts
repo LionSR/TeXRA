@@ -41,8 +41,7 @@ import {
 import {
   ActiveChildInfoSchema,
   ConversationProgressSchema,
-  PhaseStageSchema,
-  RoundStageSchema,
+  StreamStageSchema,
   StreamMetadataSchema,
 } from '../streamState';
 import { PlanSchema } from '../plan';
@@ -82,9 +81,9 @@ const UpdateConversationProgressMessageSchema = StreamScopedBaseSchema.extend({
   progress: ConversationProgressSchema,
 });
 
-const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_ROUND_STAGE),
-  roundStage: RoundStageSchema,
+const UpdateStageMessageSchema = StreamScopedBaseSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STAGE),
+  stage: StreamStageSchema,
 });
 
 const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
@@ -291,8 +290,7 @@ const StreamContentRenderFields = {
   activeState: z
     .strictObject({
       conversationProgress: ConversationProgressSchema,
-      roundStage: RoundStageSchema.nullable(),
-      phaseStage: PhaseStageSchema.nullable(),
+      stage: StreamStageSchema.nullable(),
       badges: z.strictObject({
         subagents: z.array(ActiveChildInfoSchema),
       }),
@@ -391,7 +389,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateStreamMetadataMessageSchema,
     SetActiveStreamMessageSchema,
     UpdateConversationProgressMessageSchema,
-    UpdateRoundStageMessageSchema,
+    UpdateStageMessageSchema,
     UpdateStreamBadgesMessageSchema,
     UpdateStreamDescriptionMessageSchema,
     UpdateStreamStatusMessageSchema,

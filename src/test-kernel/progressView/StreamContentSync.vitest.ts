@@ -133,7 +133,7 @@ describe('progress view stream-content projection', () => {
     state.updateStreamState(stream, (prev) => ({
       ...prev,
       conversationProgress: { toolCallCount: 5 },
-      roundStage: { index: 2 },
+      stage: { kind: 'round', index: 2 },
       subagents: [activeSubagent],
     }));
 
@@ -159,10 +159,7 @@ describe('progress view stream-content projection', () => {
       },
       activeState: {
         conversationProgress: { toolCallCount: 5 },
-        roundStage: { index: 2 },
-        // All-or-nothing: a tool-use run has no phase, and the slot is still
-        // sent so a tab switch clears whatever the frontend had cached.
-        phaseStage: null,
+        stage: { kind: 'round', index: 2 },
         badges: {
           subagents: [activeSubagent],
         },
@@ -184,7 +181,7 @@ describe('progress view stream-content projection', () => {
     state.getOrCreateStreamState(stream, AgentCategory.Workflow);
     state.updateStreamState(stream, (prev) => ({
       ...prev,
-      phaseStage: { label: 'Reduce', index: 1, total: 3 },
+      stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
     }));
 
     handler.syncStreamContent(stream, { includeActiveState: true });
@@ -194,8 +191,7 @@ describe('progress view stream-content projection', () => {
       action: 'render',
       category: AgentCategory.Workflow,
       activeState: {
-        roundStage: null,
-        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
       },
     });
   });

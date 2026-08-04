@@ -1041,7 +1041,7 @@ describe('DesktopProgressBridge', () => {
     );
     expect(streamSync?.streamStates?.parent).toMatchObject({
       conversationProgress: { toolCallCount: 5 },
-      roundStage: { index: 2 },
+      stage: { kind: 'round', index: 2 },
       subagents: [{ executionId: 'agent-1', agentName: 'reviewer' }],
     });
   });
@@ -1738,7 +1738,7 @@ describe('DesktopProgressBridge', () => {
       outputs: { files: {}, missing: {}, compileFailures: {} },
       activeState: {
         conversationProgress: { toolCallCount: 0 },
-        roundStage: null,
+        stage: null,
         badges: {
           subagents: [],
         },
