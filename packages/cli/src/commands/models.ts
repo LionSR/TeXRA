@@ -1,11 +1,18 @@
 import { defineCommand } from 'citty';
 
 import { AgentCategory } from '@shared/schemas/agent';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { effectiveCliApiMode } from '../runtime/apiAccessMode';
+import { knownCliModelIds } from '../runtime/cliConfig';
+import {
+  getCliEnabledModels,
+  listCliEnabledModelCatalog,
+  setCliModelEnabled,
+} from '../runtime/enabledModels';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
   cliModelRecord,
   formatCliModelDetails,
@@ -15,7 +22,6 @@ import {
   loadCliModelAccessEntry,
   type CliModelListOptions,
 } from '../runtime/modelAccess';
-import { knownCliModelIds } from '../runtime/cliConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -144,10 +150,127 @@ const modelsShowCommand = defineCliCommand({
   run: (context, ctx) => showModel(context, ctx.args.id),
 });
 
+async function listEnabledModels(context: CliContext): Promise<number> {
+  try {
+    await initCliPlatform({ ...context, quietLogs: true });
+  } catch (error) {
+    writeTextStderr(formatCliModelListError(error));
+    return CliExitCode.ModelOrNetworkError;
+  }
+  const catalog = listCliEnabledModelCatalog();
+  const enabled = getCliEnabledModels();
+  emitCliResult(
+    context,
+    {
+      json: { enabled, catalog },
+      ndjson: [
+        { kind: 'models-enabled' as const, models: enabled },
+        ...catalog.map(
+          (model) =>
+            ({ kind: 'model-catalog' as const, model }) satisfies {
+              kind: 'model-catalog';
+              model: typeof model;
+            },
+        ),
+      ],
+      text: catalog
+        .map(
+          (model) =>
+            `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
+        )
+        .join('\n'),
+    },
+    { paged: true },
+  );
+  return CliExitCode.Success;
+}
+
+async function setModelEnabled(
+  context: CliContext,
+  id: string,
+  enabled: boolean,
+): Promise<number> {
+  try {
+    await initCliPlatform({ ...context, quietLogs: true });
+  } catch (error) {
+    writeTextStderr(formatCliModelListError(error));
+    return CliExitCode.ModelOrNetworkError;
+  }
+  try {
+    const result = await setCliModelEnabled(id, enabled);
+    emitCliResult(context, {
+      json: result,
+      ndjson: {
+        kind: 'model-enabled',
+        model: {
+          id: result.model,
+          enabled: result.enabled,
+          list: result.list,
+        },
+      },
+      text: result.enabled
+        ? `Enabled ${result.model} in the model picker.`
+        : `Disabled ${result.model} in the model picker.`,
+    });
+    return CliExitCode.Success;
+  } catch (error) {
+    writeTextStderr(toErrorMessage(error));
+    return CliExitCode.Usage;
+  }
+}
+
+const modelsEnabledCommand = defineCliCommand({
+  meta: {
+    name: 'enabled',
+    description:
+      'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
+  },
+  args: { ...GLOBAL_ARGS },
+  run: (context) => listEnabledModels(context),
+});
+
+const modelsEnableCommand = defineCliCommand({
+  meta: {
+    name: 'enable',
+    description: 'Add a model to the picker catalog',
+  },
+  args: {
+    ...GLOBAL_ARGS,
+    id: {
+      type: 'positional',
+      required: true,
+      description: 'Model id (e.g. grok45, deepseekproT)',
+    },
+  },
+  run: (context, ctx) => setModelEnabled(context, ctx.args.id, true),
+});
+
+const modelsDisableCommand = defineCliCommand({
+  meta: {
+    name: 'disable',
+    description: 'Remove a model from the picker catalog',
+  },
+  args: {
+    ...GLOBAL_ARGS,
+    id: {
+      type: 'positional',
+      required: true,
+      description: 'Model id currently shown by `texra models enabled`',
+    },
+  },
+  run: (context, ctx) => setModelEnabled(context, ctx.args.id, false),
+});
+
 export const modelsCommand = defineCommand({
-  meta: { name: 'models', description: 'Inspect TeXRA models' },
+  meta: {
+    name: 'models',
+    description: 'Inspect and manage TeXRA models',
+  },
   subCommands: {
     list: modelsListCommand,
     show: modelsShowCommand,
+    enabled: modelsEnabledCommand,
+    enable: modelsEnableCommand,
+    disable: modelsDisableCommand,
   },
 });

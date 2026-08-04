@@ -44,7 +44,7 @@ describe('signInCliChatGpt browser choice', () => {
     vi.clearAllMocks();
   });
 
-  it('prints the sign-in link even after a successful browser launch', async () => {
+  it('prints the sign-in link once, then browser status without repeating the URL', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(true);
     publishLoopbackUrl('https://auth.openai.com/authorize?x=1');
     const progress: string[] = [];
@@ -54,14 +54,14 @@ describe('signInCliChatGpt browser choice', () => {
       { writeProgress: (message) => progress.push(message) },
     );
 
-    expect(progress).toHaveLength(2);
-    expect(progress[0]).toContain('https://auth.openai.com/authorize?x=1');
-    expect(progress[0]).toContain('Browser launch in progress');
-    expect(progress[1]).toContain('https://auth.openai.com/authorize?x=1');
-    expect(progress[1]).toContain('another browser');
+    expect(progress).toEqual([
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=1',
+      'Browser launch in progress...',
+      'Browser opened; the same URL works in another browser.',
+    ]);
   });
 
-  it('prints only the URL when the browser fails to launch', async () => {
+  it('prints the URL once when the browser fails to launch', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(false);
     publishLoopbackUrl('https://auth.openai.com/authorize?x=2');
     const progress: string[] = [];
@@ -72,8 +72,9 @@ describe('signInCliChatGpt browser choice', () => {
     );
 
     expect(progress).toEqual([
-      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2\nBrowser launch in progress...',
-      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2\nAutomatic browser launch failed; the URL remains available above.',
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
+      'Browser launch in progress...',
+      'Automatic browser launch failed; open the sign-in URL above.',
     ]);
   });
 

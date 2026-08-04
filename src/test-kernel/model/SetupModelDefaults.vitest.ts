@@ -59,6 +59,10 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     assert.equal(MODEL_CONFIGS[resolved]?.provider, 'xai');
   });
 
+  it('prefers the live grok45 pin for xAI setup probes', () => {
+    assert.equal(SETUP_MODEL_BY_PROVIDER.xai, 'grok45');
+  });
+
   it('keeps the preferred pick when it is still live (anthropic/opus5T)', () => {
     assert.equal(MODEL_CONFIGS.opus5T?.retired ?? false, false);
     assert.equal(SETUP_MODEL_BY_PROVIDER.anthropic, 'opus5T');
