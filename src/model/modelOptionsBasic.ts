@@ -43,9 +43,9 @@ export function isRetiredModel(model: string): boolean {
  * constant either way.
  */
 export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
-  'gemini35f',
+  'gemini36f',
   'gemini31p',
-  'sonnet46T',
+  'sonnet5T',
   'opus5T',
   'fable5',
   'gpt56',
