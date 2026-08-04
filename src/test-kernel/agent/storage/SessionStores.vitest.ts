@@ -11,11 +11,7 @@ import {
   type DeleteExecutionOptions,
 } from '@agent/storage';
 import * as logUtils from '@logger/logUtils';
-import {
-  EXECUTION_STREAM_ID_SOURCE,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { releaseStreamResources } from '@tools/approval';
 import { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -153,7 +149,6 @@ describe('SessionStores deletion admission (#9590 A2)', () => {
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-31T00:00:00.000Z',
       streamId: ownerStream,
-      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
     });
     // Carries the execution's id as a name suffix but has no sidecar
     // ownership: a formatting hint, not deletion authority.

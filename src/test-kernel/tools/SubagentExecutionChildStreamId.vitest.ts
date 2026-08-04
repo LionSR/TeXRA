@@ -141,16 +141,14 @@ describe('executeSubagent childStreamId derivation', () => {
         streamId: loopParams.childStreamId,
       }),
     );
-    const expectedChildStreamId = getStreamTabId(
-      configPayload.agent,
-      configPayload.model,
-      { executionId: loopParams.executionId as never },
-    );
+    const expectedChildStreamId = getStreamTabId(configPayload.agent, {
+      executionId: loopParams.executionId as never,
+    });
     expect(loopParams.childStreamId).toBe(expectedChildStreamId);
     // Confirms the bug the review flagged would have actually mismatched:
     // the OLD (agentName-keyed) formula produces a different id.
     expect(loopParams.childStreamId).not.toBe(
-      getStreamTabId(agentName, configPayload.model, {
+      getStreamTabId(agentName, {
         executionId: loopParams.executionId as never,
       }),
     );

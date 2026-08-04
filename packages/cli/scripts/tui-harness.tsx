@@ -1267,9 +1267,11 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 }
 
 function seedWorkflowTimeline(): void {
-  const executionId = 'harness-workflow-timeline' as ExecutionId;
+  // Hex-valid: the StreamSnapshotStore (the one artifact accumulator) parses
+  // payload execution ids and drops non-conforming rows.
+  const executionId = 'aaaa0001f10e' as ExecutionId;
   const childStreamId =
-    'workflow-script#harness-workflow-timeline' as StreamTabId;
+    'workflow-script#aaaa0001f10e' as StreamTabId;
   emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
@@ -1374,9 +1376,9 @@ function seedWorkflowTimeline(): void {
 }
 
 function seedRunningWorkflow(): void {
-  const executionId = 'harness-workflow-running' as ExecutionId;
+  const executionId = 'aaaa0002f10e' as ExecutionId;
   const childStreamId =
-    'workflow-script#harness-workflow-running' as StreamTabId;
+    'workflow-script#aaaa0002f10e' as StreamTabId;
   const firstAgentStreamId =
     'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
   const secondAgentStreamId =

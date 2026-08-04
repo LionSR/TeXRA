@@ -129,13 +129,11 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       model: 'gemini35f',
       agentCategory: AgentCategory.Workflow,
     });
+    const streamId = getStreamTabId(config.agent, { executionId });
     await getExecutionStore(executionId).writeRunRecord(config);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-06T00:00:00.000Z',
-    });
-
-    const streamId = getStreamTabId(config.agent, config.model, {
-      executionId,
+      streamId,
     });
     const store = await StreamLogStore.open();
     appendTranscriptEntry(store, streamId, {

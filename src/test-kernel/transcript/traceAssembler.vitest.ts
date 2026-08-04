@@ -36,7 +36,7 @@ const tempDirs: string[] = [];
 
 /** Persists a single stream-log entry so the stream is discoverable on disk. */
 async function appendLogEntry(
-  streamId: ReturnType<typeof getStreamTabId>,
+  streamId: StreamTabId,
   text: string,
 ): Promise<void> {
   const store = await StreamLogStore.open();
@@ -81,18 +81,11 @@ describe('assembleTrace', () => {
       identity: { kind: 'agent', agent: 'review' },
     });
     await releaseOwnedExecutionLease(executionId);
-    await appendLogEntry(
-      registeredId as ReturnType<typeof getStreamTabId>,
-      'registered row',
-    );
+    await appendLogEntry(registeredId, 'registered row');
 
     const scan = vi.spyOn(
       StreamSnapshotStore.prototype,
       'listPersistedStreams',
-    );
-    const association = vi.spyOn(
-      StreamSnapshotStore.prototype,
-      'readPersistedStreamAssociation',
     );
 
     const result = await assembleTrace(executionId);
@@ -101,20 +94,19 @@ describe('assembleTrace', () => {
     if (result.status !== 'ok') return;
     expect(result.trace.streamId).toBe(registeredId);
     expect(scan).not.toHaveBeenCalled();
-    expect(association).not.toHaveBeenCalled();
   });
 
-  it('assembles a full trace document, deriving streamId from agent/model/executionId', async () => {
+  it('assembles a full trace document from the streamId stamped on execution metadata', async () => {
     const executionId = 'exec-happy-path' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
+    const streamId = getStreamTabId('review', { executionId });
 
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
+      streamId,
     });
-
-    const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
     await appendLogEntry(streamId, 'hello');
 
     const result = await assembleTrace(executionId);
@@ -140,7 +132,7 @@ describe('assembleTrace', () => {
     expect(result).toEqual({ status: 'config_missing' });
   });
 
-  it('returns streamLogs_missing when a config exists but stream logs were never persisted', async () => {
+  it('returns streamLogs_missing when metadata carries no stamped stream id', async () => {
     const executionId = 'exec-no-logs' as ExecutionId;
     await getExecutionStore(executionId).writeRunRecord(config());
 
@@ -149,115 +141,66 @@ describe('assembleTrace', () => {
     expect(result).toEqual({ status: 'streamLogs_missing' });
   });
 
-  it('reports candidate-only sidecars as ambiguous without choosing the derived fallback', async () => {
+  it('returns streamLogs_missing when the stamped stream has no persisted log', async () => {
+    const executionId = 'exec-empty-stream' as ExecutionId;
+    const streamId = getStreamTabId('orchestrator', { executionId });
+    await getExecutionStore(executionId).writeRunRecord(config());
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-05T00:00:00.000Z',
+      streamId,
+    });
+
+    const result = await assembleTrace(executionId);
+
+    expect(result).toEqual({ status: 'streamLogs_missing' });
+  });
+
+  it('never resolves a stream from sidecar candidates when metadata has no stamp', async () => {
     const executionId = 'aaa444aaa444' as ExecutionId;
     const executionConfig = config();
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-05T00:00:00.000Z',
+    });
 
+    // Sidecar candidates that the deleted legacy resolver would have found —
+    // and a stream whose name embeds the execution id: neither may resolve.
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
-    const derived = getStreamTabId(
-      executionConfig.agent,
-      executionConfig.model,
-      { executionId },
-    );
-    expect(derived).not.toBe(first);
-    expect(derived).not.toBe(second);
-
     const snapshots = new StreamSnapshotStore();
     snapshotFacts(snapshots).setRunConfig(first, executionConfig, executionId);
     snapshotFacts(snapshots).setRunConfig(second, executionConfig, executionId);
     await snapshots.flush();
-    await appendLogEntry(first, 'first candidate');
-    await appendLogEntry(second, 'second candidate');
-    await appendLogEntry(derived, 'derived fallback must not be selected');
-
-    const result = await assembleTrace(executionId);
-
-    expect(result).toEqual({
-      status: 'streamId_ambiguous',
-      candidateStreamIds: [second, first],
-    });
-  });
-
-  it('reports candidate-only sidecars as ambiguous even when execution config is absent', async () => {
-    const executionId = 'aaa446aaa446' as ExecutionId;
-    const first = `orchestrator@old#${executionId}` as StreamTabId;
-    const second = `orchestrator@new#${executionId}` as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(first, config(), executionId);
-    snapshotFacts(snapshots).setRunConfig(second, config(), executionId);
-    await snapshots.flush();
-
-    await expect(assembleTrace(executionId)).resolves.toEqual({
-      status: 'streamId_ambiguous',
-      candidateStreamIds: [second, first],
-    });
-  });
-
-  it('does not classify children-only associations as ambiguous or choose a fallback', async () => {
-    const executionId = 'aaa445aaa445' as ExecutionId;
-    const executionConfig = config();
-    await getExecutionStore(executionId).writeRunRecord(executionConfig);
-
-    const parent = 'orchestrator@model#parent' as StreamTabId;
-    const firstChild = `bash@tool#${executionId}` as StreamTabId;
-    const secondChild = `codex@tool#${executionId}` as StreamTabId;
-    const derived = getStreamTabId(
-      executionConfig.agent,
-      executionConfig.model,
-      { executionId },
-    );
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(
-      firstChild,
-      config({ agent: 'bash' }),
-      executionId,
-    );
-    snapshotFacts(snapshots).setParentStream(firstChild, parent);
-    snapshotFacts(snapshots).setRunConfig(
-      secondChild,
-      config({ agent: 'codex' }),
-      executionId,
-    );
-    snapshotFacts(snapshots).setParentStream(secondChild, parent);
-    await snapshots.flush();
-    await appendLogEntry(firstChild, 'first child must not be selected');
-    await appendLogEntry(secondChild, 'second child must not be selected');
-    await appendLogEntry(derived, 'derived fallback must not be selected');
+    await appendLogEntry(first, 'first candidate must not be selected');
+    await appendLogEntry(second, 'second candidate must not be selected');
 
     await expect(assembleTrace(executionId)).resolves.toEqual({
       status: 'streamLogs_missing',
     });
   });
 
-  it('resolves a child stream by executionId suffix when its id does not match the derived agent@model#executionId format', async () => {
+  it('resolves a tool-format child stream through its stamped metadata, not name derivation', async () => {
     // Background child streams (bash/codex/claude subagents, see
     // @tools/delegation/childStream.createChildStream) use a tool-specific
-    // "${streamPrefix}#executionId" id, not getStreamTabId's
-    // "agent@model#executionId" — the config's own agent/model would derive
-    // the wrong id entirely for these.
+    // "${streamPrefix}#executionId" id, not getStreamTabId's format — the
+    // stamped meta.streamId is the only mapping that reaches them.
     const executionId = 'exec-child-1' as ExecutionId;
     const executionConfig = config({
       agent: 'orchestrator',
       model: 'deepseekT',
     });
+    const actualChildStreamId = `bash@tool#${executionId}` as StreamTabId;
+    expect(actualChildStreamId).not.toBe(
+      getStreamTabId('orchestrator', { executionId }),
+    );
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
+      streamId: actualChildStreamId,
     });
 
-    const derivedId = getStreamTabId('orchestrator', 'deepseekT', {
-      executionId,
-    });
-    const actualChildStreamId = `bash@tool#${executionId}`;
-    expect(actualChildStreamId).not.toBe(derivedId);
-
-    await appendLogEntry(
-      actualChildStreamId as ReturnType<typeof getStreamTabId>,
-      'child stream output',
-    );
+    await appendLogEntry(actualChildStreamId, 'child stream output');
 
     const result = await assembleTrace(executionId);
 
@@ -270,16 +213,12 @@ describe('assembleTrace', () => {
   it('returns a null terminalStatus when meta has no recorded outcome', async () => {
     const executionId = 'exec-no-outcome' as ExecutionId;
     const executionConfig = config();
+    const streamId = getStreamTabId(executionConfig.agent, { executionId });
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
+      streamId,
     });
-
-    const streamId = getStreamTabId(
-      executionConfig.agent,
-      executionConfig.model,
-      { executionId },
-    );
     await appendLogEntry(streamId, 'hello');
 
     const result = await assembleTrace(executionId);

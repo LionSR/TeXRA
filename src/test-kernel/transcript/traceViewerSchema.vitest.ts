@@ -67,13 +67,13 @@ describe('trace-viewer TraceDataSchema', () => {
     const executionId = 'abc12345' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
+    const streamId = getStreamTabId('review', { executionId });
     await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
+      streamId,
     });
-
-    const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
     const store = await StreamLogStore.open();
     appendTranscriptEntry(store, streamId, {
       id: 'entry-1',

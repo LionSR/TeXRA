@@ -91,7 +91,7 @@ describe('runAgent execution ownership', () => {
       CONFIG,
       CONFIG.agent,
       expect.objectContaining({
-        streamId: getStreamTabId(CONFIG.agent, CONFIG.model, {
+        streamId: getStreamTabId(CONFIG.agent, {
           executionId: EXECUTION_ID,
         }),
       }),

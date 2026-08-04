@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
-  EXECUTION_STREAM_ID_SOURCE,
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
@@ -97,7 +96,6 @@ describe('execution lifecycle', () => {
       schemaVersion: 1,
       timestamp: expect.any(String),
       streamId: 'chat@deepseekT#abc123',
-      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
       parentExecutionId: undefined,
       identity: { kind: 'agent', agent: 'chat' },
     });
