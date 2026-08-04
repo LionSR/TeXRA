@@ -84,8 +84,7 @@ export const selectStyles: CSSResult = css`
 
   wa-option[disabled],
   wa-option[data-requires-key='true'] {
-    color: var(--color-text-secondary, var(--wa-color-text-quiet));
-    opacity: var(--opacity-subtle, 0.7);
+    color: var(--color-text-muted);
     font-style: italic;
   }
 
