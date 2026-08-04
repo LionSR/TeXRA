@@ -34,15 +34,16 @@ export class LoginBanner extends LitElement {
         display: block;
         margin-top: var(--wa-space-3xs);
         font-size: var(--font-size-sm);
-        opacity: var(--opacity-normal);
         line-height: var(--line-height-normal, 1.4);
       }
 
+      /* Terms the user is agreeing to. Was --font-size-xs (10.4px) at 0.6
+         opacity on an already-translucent callout: 3.22:1. It now inherits the
+         13px body size and takes its de-emphasis from the callout treatment,
+         not from a second size step plus an alpha. */
       .banner-fineprint {
         display: block;
         margin-top: var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        opacity: var(--opacity-muted);
         line-height: var(--line-height-normal, 1.4);
       }
 

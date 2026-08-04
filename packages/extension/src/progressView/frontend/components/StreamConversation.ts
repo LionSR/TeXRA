@@ -50,7 +50,11 @@ import './LogList';
 export class StreamConversation extends SignalWatcher(LitElement) {
   static override styles = css`
     :host {
-      --conversation-reading-width: 800px;
+      /* Body text renders at --wa-font-size-m (13px from the host), so 800px
+         put the measure near 127 characters per line — roughly double the
+         60-75 that keeps the eye finding the next line. Code blocks and
+         diffs are free to overflow this column. */
+      --conversation-reading-width: 680px;
 
       display: flex;
       flex-direction: column;

@@ -1,6 +1,6 @@
 <script setup>
 // The live side-panel a `codex` / `claude_code` hand-off opens on the
-// ProgressBoard: a stream tab labelled `claude@agent-sdk` that streams the
+// ProgressBoard: a stream tab labelled `claude_code` that streams the
 // delegated agent's reasoning, the commands it runs, file changes, web
 // searches, and todos — then shows WAITING when the turn ends, with a Stop
 // control. The final message + token cost hand back to the calling TeXRA agent.
@@ -21,17 +21,14 @@ import StatusPill from './StatusPill.vue';
   >
     <!-- Stream head: tab name · Stop · turn/tool-call badge -->
     <div class="stream-head">
-      <span class="sh-name">claude@agent-sdk</span>
+      <span class="sh-name">claude_code</span>
       <span class="sh-dot" title="Running"></span>
-      <span class="sh-badge"
-        ><wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon>1 turn
-        · 6 tool calls</span
-      >
+      <span class="sh-badge">1 turn · 6 tool calls</span>
       <span class="sh-tools">
         <wa-icon
           class="shi"
           library="texra"
-          name="debug-stop"
+          name="circle-stop"
           title="Stop"
         ></wa-icon>
       </span>

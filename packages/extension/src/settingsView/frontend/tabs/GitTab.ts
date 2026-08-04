@@ -420,16 +420,18 @@ export class GitTab extends LitElement {
               ? html`
                   <div class="identity-fields">
                     <div class="input-row">
-                      <label>Name</label>
+                      <label for="git-author-name">Name</label>
                       <wa-input
+                        id="git-author-name"
                         .value=${this.authorName}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                         @change=${this.handleAuthorNameChange}
                       ></wa-input>
                     </div>
                     <div class="input-row">
-                      <label>Email</label>
+                      <label for="git-author-email">Email</label>
                       <wa-input
+                        id="git-author-email"
                         .value=${this.authorEmail}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                         @change=${this.handleAuthorEmailChange}

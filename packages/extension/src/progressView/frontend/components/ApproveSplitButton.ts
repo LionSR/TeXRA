@@ -68,8 +68,13 @@ export class ApproveSplitButton extends LitElement {
         flex: 0 1 auto;
         min-width: auto;
         max-width: min(14rem, 100%);
-        /* Tints both halves of the shared split-button skin. */
-        --split-accent: var(--wa-color-success-fill-loud);
+        /* Tints both halves of the shared split-button skin. The on-quiet
+           token, not fill-loud: the skin applies this as the label color, and
+           a fill token used as a foreground measured 3.90:1 (Light+) and
+           4.07:1 (Light Modern) against the panel surface — under AA for the
+           primary action of the approval flow. The on-quiet token is the
+           role-correct one and measures 5.63 / 5.88 / 7.65:1. */
+        --split-accent: var(--wa-color-success-on-quiet);
       }
     `,
   ];

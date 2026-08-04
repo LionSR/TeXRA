@@ -1,9 +1,9 @@
 <script setup>
 // Frameless variant of LatexDiffHero's left sidebar — the LaTeXDiffs section on
 // its own, with the editor / PDF pane dropped so the merge controls read
-// clearly. Mirrors the four-step Merge Workflow: pick a Base File, pick an
-// Edited File, choose the Model below, then click Merge in the Edited row (the
-// merge icon is highlighted here as the act-on control).
+// clearly. Mirrors the Merge Workflow: pick a Base File, pick an Edited File,
+// then click Merge in the Edited row (the merge icon is highlighted here as the
+// act-on control). The merge runs on the configured helper model.
 //
 // Root carries `.mockup`, so the shared `--mk-*` tokens and the .field/.frow/
 // .select/.acts/.act vocabulary in theme/mockup.css resolve here and flip with
@@ -42,7 +42,7 @@
         </div>
       </div>
 
-      <!-- Step 2 · Edited File + Step 4 · Merge action (highlighted) -->
+      <!-- Step 2 · Edited File + Step 3 · Merge action (highlighted) -->
       <div class="field">
         <div class="frow">
           <span class="f-label"
@@ -66,26 +66,7 @@
           <span class="step-n">2</span>
         </div>
         <div class="select">
-          <span class="s-val">r1/output.tex</span>
-          <wa-icon
-            class="s-caret"
-            library="texra"
-            name="chevron-down"
-          ></wa-icon>
-        </div>
-      </div>
-
-      <!-- Step 3 · Merge Model (lives below the instruction box) -->
-      <div class="field model-field">
-        <div class="frow">
-          <span class="f-label"
-            ><wa-icon class="lbl-ic" library="texra" name="robot"></wa-icon>
-            Model</span
-          >
-          <span class="step-n">3</span>
-        </div>
-        <div class="select">
-          <span class="s-val">opus5T</span>
+          <span class="s-val">r1/spectral-gap.tex</span>
           <wa-icon
             class="s-caret"
             library="texra"
@@ -119,12 +100,6 @@
   display: inline-flex;
   color: var(--mk-accent);
   font-size: var(--mk-space-13);
-}
-/* The Model selector is conceptually below the instruction box, not in the
-   LaTeXDiffs section — set it off with a faint rule. */
-.model-field {
-  border-top: 1px solid var(--mk-border);
-  padding-top: var(--mk-space-12);
 }
 /* Small numbered step marker pinned to each row's far right. */
 .step-n {

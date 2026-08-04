@@ -23,7 +23,7 @@ Agent Execution History** in VS Code.
 
 ## Accessing the ProgressBoard
 
-The ProgressBoard shares the **TeXRA view** in the Activity Bar with the launcher — click the TeXRA icon in the Activity Bar, then switch to the Progress view.
+The ProgressBoard shares the **TeXRA view** with the launcher — click the TeXRA icon in the Secondary Side Bar, then switch to the Progress view.
 
 - **Automatic**: It often opens automatically when you execute an agent.
 - **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Progress**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS).
@@ -44,10 +44,9 @@ The ProgressBoard interface is split into two main sections (usually side-by-sid
 
 This section lists all the agent execution streams from your current VS Code session.
 
-- **Switching Streams**: Click on a stream name (e.g., `polish@sonnet46: paper.tex`) to view its specific logs and status in the Content Area.
-- **Delete All**: The <wa-icon library="texra" name="trash"></wa-icon> **Delete All** button at the bottom permanently removes all streams and their logs from the ProgressBoard view for the current session.
+- **Switching Streams**: Click on a stream name (e.g., `polish: paper.tex`) to view its specific logs and status in the Content Area.
+- **Removing a Stream**: Each tab has an <wa-icon library="texra" name="xmark"></wa-icon> button that removes that stream and its logs from the ProgressBoard view.
 - **Metadata**: Tabs display the model and when the stream was last active on a second line. Icons indicate the agent type and if multiple output files were generated.
-- **Sorting**: Use the buttons below the tab list to order streams by time, input file, or agent name. The chosen order is saved for the workspace.
 
 ## Content Area
 
@@ -58,16 +57,17 @@ This area shows the details for the stream selected in the Stream Tabs section.
 The header provides a summary and actions for the selected stream:
 
 - **Stream Name**: Displays the identifier of the current run.
-  Workflow agents use the familiar `agent@model: inputFile` format.
+  Workflow agents show `agent: inputFile` so parallel runs are easy to tell apart.
   Tool-use sessions show just the agent name so they stand alone even without an associated input file.
+  The model rides on the second line of the tab.
 - **Status Indicator**: A colored circle shows the current status — the four states read at a glance:
 
 <StatusDotLegend />
 
-<p class="hero-caption">The status dot: only the running state pulses; stopped, error, and ready are static.</p>
+<p class="hero-caption">The status dot: green while running, blue while waiting for input, grey once finished, red on error.</p>
 
 - **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream Header Actions**: A toolbar of icon buttons acting on the selected stream, in order — Stop, Run Again, Restore, Diff, Accept, Open in task storage, Pack, Clean, and Erase.
+- **Stream Header Actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in task storage, Diff, Clean, and Pack; tool-use streams get Stop, YOLO, agent-work approval, Compact, Restore, and Open in task storage.
 
 <StreamHeaderActions />
 
@@ -75,18 +75,20 @@ The header provides a summary and actions for the selected stream:
 
 Each action in detail:
 
-- <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
-- <wa-icon library="texra" name="debug-rerun"></wa-icon> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
+- <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
+- <wa-icon library="texra" name="play"></wa-icon> **Run New**: Starts a fresh run of the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction), discarding previous outputs. Useful for retrying failed tasks or reproducing results.
+- <wa-icon library="texra" name="forward-step"></wa-icon> **Resume**: Continues the run from its saved outputs, picking up where it left off instead of starting over.
 - <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
-- <wa-icon library="texra" name="diff-multiple"></wa-icon> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
-- <wa-icon library="texra" name="check"></wa-icon> **Accept**: After reviewing a diff, replace the base file with the edited version.
-- <wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage**:
+- <wa-icon library="texra" name="code-compare"></wa-icon> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
+- <wa-icon library="texra" name="folder-open"></wa-icon> **Open in task storage**:
   Reveals the run folder under task-run storage so you can browse generated
   files, compile logs, mirrored dependencies, and intermediate artifacts
   manually.
-- <wa-icon library="texra" name="archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
+- <wa-icon library="texra" name="box-archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
 - <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the task storage folder associated with this stream.
-- <wa-icon library="texra" name="clear-all"></wa-icon> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
+
+Reviewed outputs are accepted per file: each row under **Generated Files** has
+an **Accept** action that copies the edited version into your workspace.
 
 ### YOLO Mode
 
@@ -115,7 +117,7 @@ The followup picks up right where the previous run left off - no need to re-sele
 
 ### Memory
 
-Tool-use agents can remember things between sessions. When memory is enabled (toggle in the toolbar), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette. See the [Memory guide](./memory.md) for a full walkthrough.
+Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Dashboard's **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette. See the [Memory guide](./memory.md) for a full walkthrough.
 
 ### Log Content
 
@@ -131,7 +133,3 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 <p class="hero-caption">The log: each row is color-keyed by severity — green for info/success, yellow for warnings, red for errors — with expandable nested detail and per-task IDs.</p>
 
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](./troubleshooting.md) guide for more tips on using logs.
-
-At the bottom of the tab list, there is a "Delete All" button (<wa-icon library="texra" name="close-all"></wa-icon>) that allows you to clear all streams and their associated logs from the ProgressBoard view.
-Above the sorter, the **All / Workflow / Tool Use** buttons let you focus the tab list on specific agent types.
-Next to "Delete All" are sorting buttons (<wa-icon library="texra" name="clock"></wa-icon>, <wa-icon library="texra" name="file"></wa-icon>, <wa-icon library="texra" name="account"></wa-icon>) for ordering the tabs.

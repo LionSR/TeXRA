@@ -484,8 +484,9 @@ The ProgressBoard is your main debugging tool. See the [ProgressBoard Guide](./p
 Key points for troubleshooting:
 
 1. **Access ProgressBoard**:
-   - Look for "TeXRA ProgressBoard" in the panel at the bottom of VS Code
-   - If not visible, open it via the Command Palette: "TeXRA: Show ProgressBoard"
+   - The ProgressBoard shares the TeXRA view in the Secondary Side Bar with the
+     launcher — click the TeXRA icon, then switch to the Progress view
+   - If not visible, open it via the Command Palette: "TeXRA: Show Progress"
 
 2. **Interpreting logs**: entries are colour-coded by severity, and nested
    entries expand to reveal detail — green for information and successful
@@ -496,7 +497,6 @@ Key points for troubleshooting:
 <p class="hero-caption">ProgressBoard colour-codes every entry by severity — green info/success, yellow warnings, red errors — with task-id chips and expandable nested detail.</p>
 
 3. **Finding specific information**:
-   - Use the search function to find relevant messages
    - Look for task IDs to track specific operations
    - Expand nested entries to see detailed information
 

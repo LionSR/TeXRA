@@ -14,6 +14,8 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import {
   DEFAULT_STREAM_METADATA_STATUS,
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
   type StreamSubstate,
   type StreamTabId,
   type StreamTabInfo,
@@ -22,6 +24,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import {
   formatStreamStatusLabel,
   streamStatusDisplayKey,
+  type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import {
   AGENT_DECORATORS,
@@ -53,6 +56,25 @@ import type { StreamState } from '../store';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+
+/**
+ * Non-color cue for the states that light the row's status rail. The rail's
+ * `border-left-color` alone put running/failed/waiting/starting apart by hue
+ * only, which is no distinction at all for a red-green colorblind reader and
+ * left "blocked on your approval" — the one state that wants you now —
+ * carrying no shape. Finished states (completed/cancelled/ready) leave the
+ * rail transparent and get no glyph, so a settled rail stays quiet.
+ *
+ * Rendered in `currentColor`: the border carries hue for fast scanning, the
+ * glyph carries shape, and neither introduces a new foreground to contrast-check.
+ */
+const STATUS_ICONS: Partial<Record<StreamStatusDisplayKey, TeXRAIconName>> = {
+  [STREAM_SUBSTATE.STARTING]: 'spinner',
+  [STREAM_SUBSTATE.RESUMING]: 'spinner',
+  [STREAM_PHASE.RUNNING]: 'play',
+  [STREAM_PHASE.WAITING]: 'clock',
+  [STREAM_PHASE.FAILED]: 'circle-exclamation',
+};
 
 function buildTooltip(
   info: StreamTabInfo,
@@ -145,8 +167,19 @@ export class StreamTab extends LitElement {
   override render(): TemplateResult {
     const stream = this.info;
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
-    const statusKey = streamStatusDisplayKey(status, this.substate) ?? status;
+    const displayKey = streamStatusDisplayKey(status, this.substate);
+    const statusKey = displayKey ?? status;
+    // Pending approval outranks the lifecycle phase: a run held at the
+    // approval gate is still "running", and the gate is what you act on.
+    const phaseGlyph =
+      displayKey === undefined ? undefined : STATUS_ICONS[displayKey];
+    const statusGlyph: TeXRAIconName | undefined = this.hasPendingApproval
+      ? 'triangle-exclamation'
+      : phaseGlyph;
     const tooltip = this._tooltip;
+    // Also names the delete button: one "Delete" repeated down the rail tells
+    // a screen-reader user nothing about which session it destroys.
+    const streamTitle = stream.description || stream.label || stream.name;
     const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
     const showCompactChildHint = this.childCount > 0 && this.compact;
@@ -193,12 +226,17 @@ export class StreamTab extends LitElement {
           aria-label=${tooltip}
         >
           <div class="tab-header">
+            ${
+              statusGlyph
+                ? waIcon(statusGlyph, { className: 'tab-status-icon' })
+                : nothing
+            }
             <span id="stream-tab-title" class="tab-title"
               >${
                 stream.parentStreamId
                   ? waIcon('chevron-right', { className: 'nested-stream-icon' })
                   : nothing
-              }${stream.description || stream.label || stream.name}</span
+              }${streamTitle}</span
             >
             ${
               showCompactChildHint
@@ -285,7 +323,7 @@ export class StreamTab extends LitElement {
           variant="neutral"
           size="s"
           type="button"
-          aria-label="Delete"
+          aria-label=${`Delete ${streamTitle}`}
           data-stream=${stream.name}
           data-action="delete"
         >

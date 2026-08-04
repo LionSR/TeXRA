@@ -136,9 +136,10 @@ export const instructionPanelStyles: CSSResult = css`
     flex: 1 1 auto;
   }
 
+  /* No element opacity: --wa-color-text-quiet is already 70% alpha, and the
+     extra 0.85 composited to 3.18:1 on the brand callout. */
   .session-hint-time {
     color: var(--wa-color-text-quiet);
-    opacity: var(--opacity-normal);
   }
 
   .session-hint-dismiss {
@@ -475,18 +476,6 @@ export const instructionPanelStyles: CSSResult = css`
     width: auto;
     min-width: 0;
     max-width: none;
-  }
-
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
   }
 
   @media (max-width: 420px) {

@@ -11,15 +11,14 @@
 // Root carries `.mockup`, so every --mk-* token + the wa-* bridge resolves
 // and the figure flips with the docs light/dark theme.
 const actions = [
-  { icon: 'debug-stop', label: 'Stop', desc: 'Abort the running task' },
-  { icon: 'debug-rerun', label: 'Run Again', desc: 'Re-run, same config' },
+  { icon: 'circle-stop', label: 'Stop', desc: 'Abort the running task' },
+  { icon: 'play', label: 'Run New', desc: 'Fresh run, same config' },
+  { icon: 'forward-step', label: 'Resume', desc: 'Continue saved outputs' },
   { icon: 'reply', label: 'Restore', desc: 'Load config into Launcher' },
-  { icon: 'diff-multiple', label: 'Diff', desc: 'latexdiff vs. base' },
-  { icon: 'check', label: 'Accept', desc: 'Replace base with edit' },
-  { icon: 'folder-opened', label: 'Open', desc: 'Reveal task storage' },
-  { icon: 'archive', label: 'Pack', desc: 'Archive to History' },
+  { icon: 'folder-open', label: 'Open', desc: 'Reveal task storage' },
+  { icon: 'code-compare', label: 'Diff', desc: 'latexdiff vs. base' },
   { icon: 'trash', label: 'Clean', desc: 'Delete task storage' },
-  { icon: 'clear-all', label: 'Erase', desc: 'Remove stream + log' },
+  { icon: 'box-archive', label: 'Pack', desc: 'Archive to History' },
 ];
 </script>
 
@@ -27,12 +26,9 @@ const actions = [
   <div class="mockup sha" role="group" aria-label="Stream header actions">
     <!-- Identity strip: name + live status dot + token/cost summary -->
     <div class="stream-head">
-      <span class="sh-name">polish@sonnet46: paper.tex</span>
+      <span class="sh-name">polish: paper.tex</span>
       <span class="sh-dot" title="Running"></span>
-      <span class="sh-badge">
-        <wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon>
-        r0–r2 · 48.2K in / 6.1K out · $0.21
-      </span>
+      <span class="sh-badge">r0–r2 · 48.2K in / 6.1K out · $0.21</span>
     </div>
 
     <!-- Labeled action toolbar — one icon button per header action -->

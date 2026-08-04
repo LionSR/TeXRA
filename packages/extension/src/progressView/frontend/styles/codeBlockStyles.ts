@@ -83,9 +83,13 @@ export const codeBlockStyles = css`
     color: var(--wa-color-git-added, #3fb950);
   }
 
+  /* Kept rather than deleted like the others: the focus-visible rule in
+     focusRingStyles cannot reach inside wa-button's shadow root, so this
+     part-piercing rule is the only ring this control gets. Widened to the
+     shared tokens. */
   .code-block-copy:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
+    outline: var(--focus-ring-width) solid var(--wa-color-focus);
+    outline-offset: var(--focus-ring-offset);
   }
 
   /* Syntax highlighted code blocks */

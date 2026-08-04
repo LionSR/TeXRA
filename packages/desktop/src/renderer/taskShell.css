@@ -99,7 +99,6 @@
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
   line-height: 1;
-  opacity: 0.45;
   pointer-events: none;
   transform: rotate(90deg);
 }
@@ -112,7 +111,6 @@
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
   line-height: 1;
-  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -282,7 +280,6 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
   line-height: 1;
-  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -626,7 +623,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-environment-trailing.is-success {
-  color: var(--wa-color-success-60);
+  color: var(--color-success);
 }
 
 .task-environment-diff {
@@ -634,11 +631,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-environment-diff .is-added {
-  color: var(--wa-color-success-60);
+  color: var(--color-success);
 }
 
 .task-environment-diff .is-deleted {
-  color: var(--wa-color-danger-60);
+  color: var(--color-error);
 }
 
 .task-environment-more {
