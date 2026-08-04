@@ -302,7 +302,8 @@ export async function executeCliRequest(
             canPresent: runContext.mode === 'interactive',
           }),
         ),
-        onApprovalPolicyDenial: () => markApprovalDenied(runContext),
+        onApprovalPolicyDenial: () =>
+          markApprovalDenied(runContext, 'Tool or edit approval'),
         runtimeUnavailableTools: [
           ...CLI_UNAVAILABLE_TOOLS,
           ...(options.runtimeUnavailableTools ?? []),

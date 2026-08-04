@@ -1,6 +1,7 @@
 import PQueue from 'p-queue';
 
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
+import { warn } from '@logger/logUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
@@ -45,8 +46,16 @@ export interface CliApprovalPromptHooks {
 
 const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 
-export function markApprovalDenied(context: CliContext): void {
+export function markApprovalDenied(context: CliContext, gate?: string): void {
+  if (context.approvalDenied === true) {
+    return;
+  }
   context.approvalDenied = true;
+  // One warn on first denial so exit code 4 has a visible cause on stderr.
+  warn(
+    'cli-approval',
+    `${gate?.trim() || 'Approval gate'} denied under policy "${context.approvalPolicy}".`,
+  );
 }
 
 export function hasCliApprovalDenied(context: CliContext): boolean {
@@ -169,7 +178,7 @@ export async function askApproval(
       prompt: 'Approve? [y/N, or n <feedback>] ',
     });
   } catch {
-    markApprovalDenied(context);
+    markApprovalDenied(context, 'Approval prompt');
     return { accepted: false, userMessage: 'CLI approval prompt failed.' };
   }
 
@@ -189,7 +198,7 @@ export async function askApproval(
     }
   }
 
-  if (!parsed.accepted) markApprovalDenied(context);
+  if (!parsed.accepted) markApprovalDenied(context, 'Interactive approval');
   return {
     accepted: parsed.accepted,
     userMessage: parsed.accepted

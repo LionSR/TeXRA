@@ -50,7 +50,7 @@ export function settleExecutable(
   });
   if (decision === 'allow') return { accepted: true };
   if (decision === 'present') return undefined;
-  markApprovalDenied(context);
+  markApprovalDenied(context, 'Approval policy');
   return {
     accepted: false,
     userMessage: texraApprovalDenialMessage(decision),
@@ -76,7 +76,12 @@ export function settleRetry(
   });
   if (retryDecision === 'present') return undefined;
   if (retryDecision.deny !== 'yolo-retry') {
-    markApprovalDenied(context);
+    markApprovalDenied(
+      context,
+      retryDecision.deny === 'credential'
+        ? 'Credential-exhausted retry'
+        : 'Approval policy',
+    );
   }
   return {
     accepted: false,
@@ -98,7 +103,7 @@ export function settleHumanInputDenial(
   });
   if (decision === 'present') return undefined;
   if (decision.deny !== 'yolo-no-human') {
-    markApprovalDenied(context);
+    markApprovalDenied(context, 'Human-input request');
   }
   return {
     userMessage: texraHumanInputDenialMessage(decision.deny, yoloMessage),
