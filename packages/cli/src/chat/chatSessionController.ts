@@ -373,7 +373,8 @@ export function createChatSessionController(
             registerExecution: true,
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () => markApprovalDenied(sessionContext),
+            onApprovalPolicyDenial: () =>
+              markApprovalDenied(sessionContext, 'Tool or edit approval'),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             onStreamResolved: (resolvedStreamId) => {
               // Each chat round mints a fresh root StreamTabId (new
@@ -535,7 +536,8 @@ export function createChatSessionController(
         .then(() =>
           resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
-            onApprovalPolicyDenial: () => markApprovalDenied(sessionContext),
+            onApprovalPolicyDenial: () =>
+              markApprovalDenied(sessionContext, 'Tool or edit approval'),
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
               ...followUp,
@@ -664,7 +666,7 @@ export function createChatSessionController(
                   recovery: claimedRecovery,
                   approvalPromptsUnavailable: approvalsUnavailable,
                   onApprovalPolicyDenial: () =>
-                    markApprovalDenied(sessionContext),
+                    markApprovalDenied(sessionContext, 'Tool or edit approval'),
                   runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
                   extraFollowUps: options.extraFollowUps,
                   onFollowUpQueueReady: (lease) => {
