@@ -198,7 +198,7 @@ export class MemoryItem extends LitElement {
    */
   private renderActionGroup(): TemplateResult {
     const pinned = this.item?.pinned === true;
-    const memoryName = this.item?.storagePath?.split('/').pop() ?? '';
+    const memoryName = this.item?.displayPath?.split('/').pop() ?? '';
     const actions = [
       {
         id: 'memory-pin-button',

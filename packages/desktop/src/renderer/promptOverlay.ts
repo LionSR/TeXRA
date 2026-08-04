@@ -96,7 +96,12 @@ export function createDesktopPromptOverlay(
     // label. As a subtitle it named nothing — wa-input puts its control inside
     // a shadow root, so only WebAwesome's `label` produces a real <label for>.
     // Kept in one place rather than two so the text is not read out twice.
-    if (shell.subtitleEl) shell.subtitleEl.textContent = '';
+    // Hide the empty subtitle so its always-on top margin does not leave a gap
+    // between the title and the input.
+    if (shell.subtitleEl) {
+      shell.subtitleEl.textContent = '';
+      shell.subtitleEl.hidden = true;
+    }
     input.type = message.password ? 'password' : 'text';
     input.label = message.prompt;
     input.value = '';
