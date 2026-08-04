@@ -336,6 +336,31 @@ describe('CodexSessionCoordinator', () => {
     expect(storage.peek()?.refreshToken).toBe('refresh-new');
   });
 
+  it('returns the newer login when a successful refresh is superseded', async () => {
+    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
+    const refreshTokens = vi.fn(() => pending);
+    const exchangeAuthorizationCode = vi.fn(async () =>
+      newLoginTokenResponse(),
+    );
+    const coordinator = makeCoordinator(storage, {
+      exchangeAuthorizationCode,
+      refreshTokens,
+    });
+
+    const token = coordinator.getFreshAccessToken();
+    await delay(0);
+    expect(refreshTokens).toHaveBeenCalledOnce();
+
+    await completeLogin(coordinator);
+    resolve(tokenResponse());
+
+    // Concurrent sign-in is not a re-auth failure — hand back the new session.
+    await expect(token).resolves.toBe('access-new');
+    expect(storage.peek()?.accessToken).toBe('access-new');
+    expect(storage.peek()?.refreshToken).toBe('refresh-new');
+  });
+
   it('keeps the previous refresh token when the response omits a new one', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
     const refreshTokens = vi.fn(async () =>

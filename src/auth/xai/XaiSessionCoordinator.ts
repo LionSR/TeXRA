@@ -4,7 +4,6 @@
  * Thin policy over {@link SubscriptionOAuthCoordinator} — only authorize URL,
  * claims, and JWT-exp refresh differ from ChatGPT/Codex.
  */
-import { generateOAuthState } from '../oauth/pkce';
 import {
   rethrowAsProviderAuthError,
   wrapProviderOAuthClient,
@@ -62,9 +61,10 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   sessionChangedMessage: 'Grok session changed while refreshing. Try again.',
   // xAI pins one redirect port; the loopback bind uses that port and we ignore
   // the parameter for the authorize URL construction.
+  // CSRF is covered by `state` on the loopback callback. We do not send an
+  // OIDC `nonce` unless we also verify it against `id_token` (we don't).
   buildAuthorizeRequest(_port, pkce, state) {
     const redirectUri = xaiRedirectUri();
-    const nonce = generateOAuthState();
     const url = new URL(XAI_AUTHORIZE_URL);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('client_id', XAI_CLIENT_ID);
@@ -73,7 +73,6 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
     url.searchParams.set('code_challenge', pkce.challenge);
     url.searchParams.set('code_challenge_method', pkce.method);
     url.searchParams.set('state', state);
-    url.searchParams.set('nonce', nonce);
     url.searchParams.set('plan', XAI_PLAN);
     url.searchParams.set('referrer', XAI_REFERRER);
     return {

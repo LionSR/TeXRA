@@ -228,7 +228,9 @@ function accountSummary(status: CliAccountStatus): string {
     }
     return `TeXRA · ${status.texraAccountLabel ?? 'signed in'}`;
   }
-  return `${signed.join(' and ')} signed in`;
+  // Oxford list for 3+ accounts ("A, B, and C"), plain "A and B" for two.
+  if (signed.length === 2) return `${signed[0]} and ${signed[1]} signed in`;
+  return `${signed.slice(0, -1).join(', ')}, and ${signed.at(-1)} signed in`;
 }
 
 export function buildCliAccountItems(

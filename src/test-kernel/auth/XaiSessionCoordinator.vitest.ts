@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   XaiAuthError,
@@ -8,6 +8,7 @@ import {
   type XaiSessionStorage,
   type XaiTokenResponse,
 } from '@auth/xai';
+import * as logger from '@logger/logUtils';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -48,6 +49,10 @@ function tokens(overrides: Partial<XaiTokenResponse> = {}): XaiTokenResponse {
 }
 
 describe('XaiSessionCoordinator', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('buildAuthorizeRequest includes pinned redirect, plan, and referrer', () => {
     const coordinator = new XaiSessionCoordinator({
       storage: memoryStorage(),
@@ -63,8 +68,47 @@ describe('XaiSessionCoordinator', () => {
     expect(url.searchParams.get('plan')).toBe('generic');
     expect(url.searchParams.get('referrer')).toBe('texra');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    // CSRF is `state`; we do not send an unverified OIDC nonce.
+    expect(url.searchParams.get('nonce')).toBeNull();
     expect(auth.verifier.length).toBeGreaterThan(20);
     expect(auth.state.length).toBeGreaterThan(20);
+  });
+
+  it('warns and treats corrupt stored sessions as signed out', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const storage: XaiSessionStorage = {
+      get: async () => '{not-json',
+      store: async () => {},
+      delete: async () => {},
+    };
+    const coordinator = new XaiSessionCoordinator({
+      storage,
+      now: () => NOW,
+    });
+    expect(await coordinator.loadSession()).toBeNull();
+    expect(await coordinator.getStatus()).toEqual({ signedIn: false });
+    expect(warn).toHaveBeenCalledWith(
+      'SubscriptionOAuth',
+      expect.stringContaining('not valid JSON'),
+    );
+  });
+
+  it('warns and treats schema-invalid stored sessions as signed out', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const storage: XaiSessionStorage = {
+      get: async () => JSON.stringify({ accessToken: 'only' }),
+      store: async () => {},
+      delete: async () => {},
+    };
+    const coordinator = new XaiSessionCoordinator({
+      storage,
+      now: () => NOW,
+    });
+    expect(await coordinator.loadSession()).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      'SubscriptionOAuth',
+      expect.stringContaining('schema validation'),
+    );
   });
 
   it('stores a session after code exchange', async () => {

@@ -11,6 +11,8 @@ import PQueue from 'p-queue';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
+import * as logger from '@logger/logUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { generateOAuthState, generatePkcePair } from './pkce';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
@@ -122,8 +124,23 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     const raw = await this.storage.get();
     if (!raw) return null;
     const parsedJson = safeParseJson(raw);
-    if (parsedJson.isErr()) return null;
-    return this.policy.sessionSchema.safeParse(parsedJson.value).data ?? null;
+    if (parsedJson.isErr()) {
+      // Present-but-corrupt is not the same as never signed in.
+      logger.warn(
+        'SubscriptionOAuth',
+        `Stored subscription session is not valid JSON; treating as signed out: ${toErrorMessage(parsedJson.error)}`,
+      );
+      return null;
+    }
+    const parsed = this.policy.sessionSchema.safeParse(parsedJson.value);
+    if (!parsed.success) {
+      logger.warn(
+        'SubscriptionOAuth',
+        `Stored subscription session failed schema validation; treating as signed out: ${toErrorMessage(parsed.error)}`,
+      );
+      return null;
+    }
+    return parsed.data;
   }
 
   private async storeSession(session: S): Promise<void> {
@@ -153,13 +170,20 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this.refreshInFlight = null;
   }
 
-  private assertSameGeneration(generation: number): void {
-    if (generation !== this.sessionGeneration) {
-      throw new SubscriptionOAuthError(
-        this.policy.sessionChangedMessage,
-        'expired',
-      );
-    }
+  /**
+   * After a refresh is superseded (concurrent login/sign-out), wait for queued
+   * storage mutations and return the current session when one remains. Only
+   * surface `expired`/re-auth when storage is empty — a newer valid sign-in
+   * must not look like a forced re-auth.
+   */
+  private async sessionAfterSupersede(): Promise<S> {
+    await this.sessionMutations.onIdle();
+    const current = await this.loadSession();
+    if (current) return current;
+    throw new SubscriptionOAuthError(
+      this.policy.sessionChangedMessage,
+      'expired',
+    );
   }
 
   async signOut(): Promise<void> {
@@ -251,10 +275,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     }
     const session = this.policy.buildSession(tokens, this.now(), previous);
     await this.mutateSession(async () => {
-      this.assertSameGeneration(generation);
+      if (generation !== this.sessionGeneration) return;
       await this.storeSession(session);
     });
-    this.assertSameGeneration(generation);
-    return session;
+    if (generation === this.sessionGeneration) return session;
+    return this.sessionAfterSupersede();
   }
 }
