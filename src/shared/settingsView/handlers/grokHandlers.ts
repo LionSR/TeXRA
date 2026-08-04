@@ -5,7 +5,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   GrokAuthStatus,
   UpdateGrokAuthStatusMessage,
-} from '@shared/schemas/settingsViewMessages';
+} from '@shared/schemas';
 
 export async function buildGrokAuthStatusMessage(
   getStatus: () => Promise<GrokAuthStatus>,

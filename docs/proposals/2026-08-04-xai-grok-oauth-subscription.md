@@ -124,6 +124,10 @@ Shared host helpers (not reinvented per provider):
 - Borrowing Grok CLI originator strings other than the registered client id
 - Sending OAuth tokens to user-defined OpenAI-compatible endpoints
 - Presenting SuperGrok as “free unlimited API”
+- **xAI Responses API / `previous_response_id`** — separate PRD
+  (`docs/prds/2026-08-04-prd-xai-responses-previous-response-id.md`); OAuth only
+  supplies a Bearer for the same `api.x.ai` surface, whether Completions or
+  Responses
 
 ## Security notes
 

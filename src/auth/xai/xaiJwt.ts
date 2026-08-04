@@ -7,6 +7,12 @@
  */
 import { z } from 'zod';
 
+import {
+  NonEmptyJwtClaim,
+  claimsPreferringIdToken,
+  decodeJwtClaimsWithSchema,
+} from '../oauth/jwtDecode';
+
 /** Account identity distilled from a JWT (any field may be absent). */
 export interface XaiJwtClaims {
   email?: string;
@@ -14,12 +20,10 @@ export interface XaiJwtClaims {
   expiresAtMs?: number;
 }
 
-const NonEmptyClaim = z.string().min(1).optional().catch(undefined);
-
 const XaiJwtClaimsSchema = z
   .object({
-    email: NonEmptyClaim,
-    preferred_username: NonEmptyClaim,
+    email: NonEmptyJwtClaim,
+    preferred_username: NonEmptyJwtClaim,
     exp: z.number().finite().optional().catch(undefined),
   })
   .transform((claims): XaiJwtClaims => ({
@@ -27,35 +31,29 @@ const XaiJwtClaimsSchema = z
     expiresAtMs: claims.exp == null ? undefined : Math.trunc(claims.exp) * 1000,
   }));
 
+const EMPTY_CLAIMS: XaiJwtClaims = {};
+
 /**
  * Decode + validate a JWT's claims (middle base64url segment). Returns empty
  * claims on any structural error; never throws.
  */
 export function decodeXaiJwtClaims(token: string): XaiJwtClaims {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return {};
-    const json = Buffer.from(parts[1], 'base64url').toString('utf-8');
-    return XaiJwtClaimsSchema.catch({}).parse(JSON.parse(json));
-  } catch {
-    return {};
-  }
+  return decodeJwtClaimsWithSchema(token, XaiJwtClaimsSchema, EMPTY_CLAIMS);
 }
 
 /**
- * Extract email (and optional exp) preferring the id_token, falling back to
- * the access_token field-by-field.
+ * Extract display email preferring the id_token, falling back to the
+ * access_token. Expiry is not merged here — refresh must use the access JWT
+ * via {@link decodeXaiJwtClaims} / {@link accessTokenIsExpiring} (id_token.exp
+ * can outlive the access token).
  */
 export function extractXaiClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
-): XaiJwtClaims {
-  const idClaims = idToken ? decodeXaiJwtClaims(idToken) : {};
-  const accessClaims = accessToken ? decodeXaiJwtClaims(accessToken) : {};
-  return {
-    email: idClaims.email ?? accessClaims.email,
-    expiresAtMs: idClaims.expiresAtMs ?? accessClaims.expiresAtMs,
-  };
+): Pick<XaiJwtClaims, 'email'> {
+  return claimsPreferringIdToken(idToken, accessToken, decodeXaiJwtClaims, [
+    'email',
+  ]);
 }
 
 /**

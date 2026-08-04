@@ -43,3 +43,18 @@ export {
   type ProviderAuthError,
   type ProviderAuthErrorCtor,
 } from './providerAuthBridge';
+export {
+  exchangeAuthorizationCode,
+  oauthRequestSignal,
+  oauthTokenErrorKind,
+  parseOAuthJson,
+  postOAuthForm,
+  refreshOAuthTokens,
+  throwOAuthHttpError,
+  type OAuthFormEndpoint,
+} from './formTokenClient';
+export {
+  NonEmptyJwtClaim,
+  claimsPreferringIdToken,
+  decodeJwtClaimsWithSchema,
+} from './jwtDecode';

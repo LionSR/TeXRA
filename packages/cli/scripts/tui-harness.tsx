@@ -520,12 +520,16 @@ const HARNESS_MODEL_ACCESS =
           chatGpt: SHOW_BOTH_SUBSCRIPTION_PREFERENCES
             ? ('on' as const)
             : ('off' as const),
+          // Grok stays off in the dual-subscription harness so ChatGPT + Kimi
+          // remain the visible "on" pair (Grok still appears as a row).
+          grok: 'off' as const,
           kimiCode: 'on' as const,
         },
         chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
         ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
+        grokSignedIn: false,
         kimiCodeKeySet: true,
       }
     : undefined;

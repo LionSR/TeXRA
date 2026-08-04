@@ -538,12 +538,10 @@ export const CLI_CORE_SETTING_CONSUMERS = {
     'model.compactionThresholdPercent',
   ],
   'src/agent/core/flows/RetryState.ts': ['model.retry.maxAttempts'],
+  // Thin provider modules own the public prefer-switch surface; the shared
+  // factory in subscriptionPreference.ts is not a separate consumer key.
   'src/model/codex/codexPreference.ts': ['chatgptCodex.preferSubscription'],
   'src/model/xai/xaiPreference.ts': ['xaiGrok.preferSubscription'],
-  'src/model/subscriptionPreference.ts': [
-    'chatgptCodex.preferSubscription',
-    'xaiGrok.preferSubscription',
-  ],
   'src/utils/media/img.ts': ['maxImageDimension'],
   'src/tools/latex/ExtractBibliographyTool.ts': ['bib.defaultPath'],
   'src/tools/zotero/bbtClient.ts': ['bib.zoteroPort'],

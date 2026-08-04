@@ -26,7 +26,7 @@ import {
   XAI_TOKEN_REFRESH_BUFFER_MS,
   xaiRedirectUri,
 } from './xaiConstants';
-import { decodeXaiJwtClaims, extractXaiClaims } from './xaiJwt';
+import { decodeXaiJwtClaims } from './xaiJwt';
 import {
   exchangeAuthorizationCode as defaultExchange,
   refreshTokens as defaultRefresh,
@@ -89,21 +89,19 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
         'config',
       );
     }
-    const claims = extractXaiClaims(
-      tokens.id_token ?? undefined,
-      tokens.access_token,
-    );
     // Refresh keys off the *access* token. Prefer access JWT exp over
-    // id_token.exp (which can outlive the access token).
-    const accessExpMs = decodeXaiJwtClaims(tokens.access_token).expiresAtMs;
+    // id_token.exp (which can outlive the access token). Decode each token
+    // once; do not use extractXaiClaims (email-only and would re-decode).
+    const idClaims = tokens.id_token ? decodeXaiJwtClaims(tokens.id_token) : {};
+    const accessClaims = decodeXaiJwtClaims(tokens.access_token);
     const expiresInSec = tokens.expires_in ?? XAI_DEFAULT_EXPIRES_IN_SEC;
-    const expiresAtMs = accessExpMs ?? nowMs + expiresInSec * 1000;
+    const expiresAtMs = accessClaims.expiresAtMs ?? nowMs + expiresInSec * 1000;
     return {
       accessToken: tokens.access_token,
       refreshToken,
       idToken: tokens.id_token ?? previous?.idToken,
       expiresAtMs,
-      email: claims.email ?? previous?.email,
+      email: idClaims.email ?? accessClaims.email ?? previous?.email,
     };
   },
 };
