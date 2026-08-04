@@ -8,14 +8,14 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
+import { SessionState } from '@controllers/session/SessionState';
 import type { StreamTabId } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-describe('ProgressViewState session-store wiring', () => {
+describe('SessionState session-store wiring', () => {
   it('clears session status for a stores-initiated canonical deletion', async () => {
     const session = defaultSession();
-    const state = new ProgressViewState(new FakeStateStore());
+    const state = new SessionState(new FakeStateStore());
     const stream = 'swept-stream' as StreamTabId;
     session.transcripts.ensureStream(stream);
     expect(session.status.tryAcquire(stream)).toBe(true);
