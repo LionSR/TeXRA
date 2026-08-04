@@ -38,6 +38,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Side-effect: register tool card component
@@ -177,7 +178,7 @@ export class ToolsTab extends LitElement {
   }
 
   private handleApprovalPolicyChange = (e: Event): void => {
-    const target = e.target as HTMLSelectElement | null;
+    const target = e.target as WaSelect | null;
     const value = target?.value;
     if (value !== 'ask' && value !== 'never' && value !== 'yolo') {
       return;
