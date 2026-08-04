@@ -21,6 +21,15 @@ const REPRESENTATIVE_RECORDS: CliNdjsonRecord[] = [
   { kind: 'tool-guide', guide: { id: 'codex', operation: 'install' } },
   { kind: 'version', version: '0.39.1' },
   { kind: 'model', model: { value: 'sonnet45', label: 'Sonnet 4.5' } },
+  {
+    kind: 'model-catalog',
+    model: { id: 'grok45', enabled: true, provider: 'xai' },
+  },
+  { kind: 'models-enabled', models: ['deepseekproT', 'grok45'] },
+  {
+    kind: 'model-enabled',
+    model: { id: 'grok45', enabled: true, list: ['grok45'] },
+  },
   { kind: 'memory', memory: { id: 'm1', text: 'remember' } },
   { kind: 'memory-detail', id: 'm1', text: 'remember', scope: 'workspace' },
   { kind: 'auth', authenticated: true, account: 'a@b.c', expiresAt: 1 },

@@ -164,8 +164,14 @@ async function listEnabledModels(context: CliContext): Promise<number> {
     {
       json: { enabled, catalog },
       ndjson: [
-        { kind: 'models-enabled', models: enabled },
-        ...catalog.map((model) => ({ kind: 'model-catalog', model })),
+        { kind: 'models-enabled' as const, models: enabled },
+        ...catalog.map(
+          (model) =>
+            ({ kind: 'model-catalog' as const, model }) satisfies {
+              kind: 'model-catalog';
+              model: typeof model;
+            },
+        ),
       ],
       text: catalog
         .map(
@@ -189,7 +195,14 @@ async function setModelEnabled(
     const result = await setCliModelEnabled(id, enabled);
     emitCliResult(context, {
       json: result,
-      ndjson: { kind: 'model-enabled', ...result },
+      ndjson: {
+        kind: 'model-enabled',
+        model: {
+          id: result.model,
+          enabled: result.enabled,
+          list: result.list,
+        },
+      },
       text: result.enabled
         ? `Enabled ${result.model} in the model picker.`
         : `Disabled ${result.model} in the model picker.`,
