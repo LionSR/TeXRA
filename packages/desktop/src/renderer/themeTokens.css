@@ -121,7 +121,7 @@
   );
   --desktop-color-info: light-dark(#087ea4, #74c7ec);
   --desktop-color-info-background: light-dark(#e7f5fa, rgb(116 199 236 / 14%));
-  --desktop-color-success: light-dark(#0c875e, #56e0a0);
+  --desktop-color-success: light-dark(#0a7a54, #56e0a0);
   --desktop-color-success-background: light-dark(
     #e3f7ee,
     rgb(86 224 160 / 12%)
