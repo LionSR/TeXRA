@@ -35,7 +35,7 @@ are defined once in `src/controllers` or the owning domain; hosts contribute
 presentation verbs and transports only. Where a standing ruling says a
 per-host surface is the deliberate resting state (interaction registries,
 per-host reducers), this plan does not fight it — the finding of the cross-host
-audit is that the duplication worth removing sits *above* those sanctioned
+audit is that the duplication worth removing sits _above_ those sanctioned
 seams, in the sequence layer.
 
 Rules of accounting (salvaged from the retired gold-standard PRD, still good):
@@ -50,11 +50,11 @@ Rules of accounting (salvaged from the retired gold-standard PRD, still good):
   preference.** A PR moves a surface from its current state to its **final**
   state. Temporary bridges, dual-writes, transitional schemas, re-export
   shims, and "adopt later" shared modules are out of scope by definition:
-  a shared helper lands in the same PR as *all* of its consumers and the
-  deletion of *all* of its restatements, or it does not land. The only
+  a shared helper lands in the same PR as _all_ of its consumers and the
+  deletion of _all_ of its restatements, or it does not land. The only
   sanctioned "temporary" code in this repo is a **dated retirement row** in
   #9627/#9422 — and the dual of this rule is just as binding: code that
-  already has a death date is never *improved*, refactored around, or given
+  already has a death date is never _improved_, refactored around, or given
   new machinery; it is only deleted on its date (§10.16).
 - Every PR: `npm run typecheck` (builds do not type check), `npm test` for
   touched kernels, `npm run lint`, `npm run check:dead-code-ratchet`.
@@ -67,7 +67,7 @@ wrong even if it "simplifies":
 1. No new bus, plane, event vocabulary, coordinator layer, or
    fact-router/auto-forwarding hub. Hosts ignoring facts is a feature; the
    explicit ignore arm stays.
-2. No unifying the status enums or cycle-outcome unions — one *source* with
+2. No unifying the status enums or cycle-outcome unions — one _source_ with
    projections, not one enum. Rail C (`onDidChange`) stays beside the fact rail.
 3. The trace `'status'` arm **stays** (#9127 gave it a persistence consumer);
    do not cite the stale contrary line at state-of-the-architecture `:1112-1113`.
@@ -92,8 +92,8 @@ wrong even if it "simplifies":
 10. The Zod `.catch()` budget: never on persisted/authoritative data; the
     sanctioned exceptions are display-only view state.
 11. No `BootstrapConfig` parameter object threaded through hosts. Composition
-    folds take the `nodeHost.ts` shape: additional *named helpers called in
-    order by each composition root*.
+    folds take the `nodeHost.ts` shape: additional _named helpers called in
+    order by each composition root_.
 
 ### 0.2 Open-problem register (reconciled 2026-08-03)
 
@@ -101,20 +101,20 @@ Every open issue touching this plan's territory, and how the plan relates to
 it. A PR from this plan that touches one of these updates it (per each
 issue's own completion condition).
 
-| Issue | State | Relation |
-| --- | --- | --- |
-| #9597 approval-policy tracking | open | owned by the companion PRD; F10 coordinates with its Stage C key hoist |
-| #9627 dated retirement queue (Aug–Nov 2026) | open | **collides with the original A1** — the legacy `EndGroupStatus` projection dies 2026-10-31 and the `rN` stage inference dies 2026-10-26; A1 is re-scoped below to ride the queue instead of building around it. The `FollowUpQueue.drain()` row (2026-09-30) is adjacent to F1 — F1 must not add a `drain` caller |
-| #9422 four persisted-format readers | open | the `meta.taskState` fallback (mid-layer branch the normalization audit flagged) is already queued for 2026-10-05 — **no plan item touches it**; A-items add no new migration machinery (the boundary-only migration ruling, #9434, is closed) |
-| #9590 store-surface reduction | open | Stages 1–6 landed; Stage 7 gated ≥2026-11-01. C6 makes the snapshot store the TUI artifact owner — compatible with (and strengthened by) the store being the single identity authority; C6 must not add any current-path resolver Stage 7 would delete |
-| #9698 switch-exhaustiveness (3 model-layer switches) | open | sibling of C9 — same defect class, different unions. Fold its three fixes into the C9 PR and close it |
-| #9531 resumed-subagent stale results | open, needs-validation | overlaps F1's territory (resume/follow-up). F1 lands the repair-probe fold only; it must not attempt this bug, and its regression test must not mask it |
-| #9532 retry batch bounds | open | adjacent to the yolo-retry rule (approval PRD Stage B); no file overlap expected — recheck at PR time |
-| #9044 trace-viewer sync ingest | open, Later | C7's replayTrace changes are orthogonal (shape, not ingestion); don't expand into it |
-| #6981 legacy retirement ledger | open, deferred | every deletion in §8 that removes a compat arm gets a ledger row update |
-| #6984 age-based retirements (D3) | open, deferred | the frozen CLI JSON deprecation clock lives here; C7's fake-incremental deletion keeps public NDJSON keys until this clock says otherwise |
-| #7724 SDK north star | open, deferred | this plan's deletions all reduce the surface Steps 0–3 must carry — no conflict |
-| #8974 tech-debt tournament ledger | open | its do-not-do list is honored via §0.1; tournament cycles should not re-file items this plan owns |
+| Issue                                                | State                  | Relation                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #9597 approval-policy tracking                       | open                   | owned by the companion PRD; F10 coordinates with its Stage C key hoist                                                                                                                                                                                                                                            |
+| #9627 dated retirement queue (Aug–Nov 2026)          | open                   | **collides with the original A1** — the legacy `EndGroupStatus` projection dies 2026-10-31 and the `rN` stage inference dies 2026-10-26; A1 is re-scoped below to ride the queue instead of building around it. The `FollowUpQueue.drain()` row (2026-09-30) is adjacent to F1 — F1 must not add a `drain` caller |
+| #9422 four persisted-format readers                  | open                   | the `meta.taskState` fallback (mid-layer branch the normalization audit flagged) is already queued for 2026-10-05 — **no plan item touches it**; A-items add no new migration machinery (the boundary-only migration ruling, #9434, is closed)                                                                    |
+| #9590 store-surface reduction                        | open                   | Stages 1–6 landed; Stage 7 gated ≥2026-11-01. C6 makes the snapshot store the TUI artifact owner — compatible with (and strengthened by) the store being the single identity authority; C6 must not add any current-path resolver Stage 7 would delete                                                            |
+| #9698 switch-exhaustiveness (3 model-layer switches) | open                   | sibling of C9 — same defect class, different unions. Fold its three fixes into the C9 PR and close it                                                                                                                                                                                                             |
+| #9531 resumed-subagent stale results                 | open, needs-validation | overlaps F1's territory (resume/follow-up). F1 lands the repair-probe fold only; it must not attempt this bug, and its regression test must not mask it                                                                                                                                                           |
+| #9532 retry batch bounds                             | open                   | adjacent to the yolo-retry rule (approval PRD Stage B); no file overlap expected — recheck at PR time                                                                                                                                                                                                             |
+| #9044 trace-viewer sync ingest                       | open, Later            | C7's replayTrace changes are orthogonal (shape, not ingestion); don't expand into it                                                                                                                                                                                                                              |
+| #6981 legacy retirement ledger                       | open, deferred         | every deletion in §8 that removes a compat arm gets a ledger row update                                                                                                                                                                                                                                           |
+| #6984 age-based retirements (D3)                     | open, deferred         | the frozen CLI JSON deprecation clock lives here; C7's fake-incremental deletion keeps public NDJSON keys until this clock says otherwise                                                                                                                                                                         |
+| #7724 SDK north star                                 | open, deferred         | this plan's deletions all reduce the surface Steps 0–3 must carry — no conflict                                                                                                                                                                                                                                   |
+| #8974 tech-debt tournament ledger                    | open                   | its do-not-do list is honored via §0.1; tournament cycles should not re-file items this plan owns                                                                                                                                                                                                                 |
 
 ## 1. Workstream A — normalize at the entry point (schemas)
 
@@ -140,9 +140,10 @@ intermediate compatibility layer by this plan's own governing rule (§0,
 §10.16): three months of new machinery, then a deletion that has to unwind it.
 
 **What actually happens:**
+
 - **Now:** nothing structural. One 3-line comment PR: annotate the three
   duplicate legacy mappings with `// dies 2026-10-31 with #9627 — do not
-  extend` and correct the false "ONE read boundary" claim at
+extend` and correct the false "ONE read boundary" claim at
   `StreamLogStore.ts:185` to name the retirement row.
 - **On the #9627 dates:** the retirement deletes all four legacy arms as one
   unit (the queue's own rule), leaving the canonical `TaskGroupStatus` parse
@@ -212,7 +213,7 @@ tables (`:100-110` vs `:154-181`) because the extraction path uses
 per process (`cliContext.ts:390`, `chatDefaults.ts:78`, `agentRoster.ts:37`)
 with no cache, alongside the platform's own `JsonStore` read.
 
-**Fix:** one `z.object` + `safeParse` producing values *and* warnings in one
+**Fix:** one `z.object` + `safeParse` producing values _and_ warnings in one
 pass; memoize `loadWorkspaceCliConfig` per `cwd` **with an mtime check or
 workspace-file-write invalidation** — not a blind process-lifetime memo
 (§10.14). **Delete:** `collectValidationWarnings`' parallel table, the
@@ -244,28 +245,29 @@ sanctioned.
 ## 2. Workstream B — one usage-accounting fact
 
 Nine accumulators fold the same `usage` events with four field-set rules; three
-incompatible "is empty" predicates; and `inputTokens` means *total input* in
-every UI but *cache-miss input* on the telemetry wire (`UsageMonitor.ts:289`,
+incompatible "is empty" predicates; and `inputTokens` means _total input_ in
+every UI but _cache-miss input_ on the telemetry wire (`UsageMonitor.ts:289`,
 undocumented at `UsageLogTypes.ts:18`).
 
 **Decision to take first (owner call): the canonical field set.** Recommended:
 `sumUsageStats`' six fields + `reasoningTokens` (what the CLI already bolts on)
-+ the `usageRoute` consensus rule. One fold, one `isEmptyUsage`. Surfaces then
-*select columns* from the canonical totals — display narrowing is a projection,
-silent field-dropping in a private fold is not (§10.12).
 
-| Item | Add | Delete |
-| --- | --- | --- |
-| B1. Canonical fold | widen `sumUsageStats` (`usage.ts:84-112`) to the decided set | `sumResumeUsageStats` bolt-on (`resumeHint.ts:82-92`) |
-| B2. One empty-predicate | — | `usageHasTokens` (`resumeHint.ts:71-80`), `UsagePanel.hasUsage` (`UsagePanel.ts:189-198`), the inline check at `extension.ts:644` — all become `isEmptyUsage` |
-| B3. Status bar consumes folded totals | subscribe the tracker to the snapshot-store fold it currently re-implements | `StatusBarUsageTracker.ts:52-63,74-82` hand-`+=` (3-field, drops route/cache — silent under-report) |
-| B4. Webview stops re-folding per render | ship the folded total in the payload it already receives | `sumUsageStats(Object.values(runUsage))` at `ToolUseStreamContent.ts:76`, `WorkflowStreamContent.ts:63` |
-| B5. Honest telemetry field | rename at the schema or document the divergence at `UsageLogTypes.ts:18` — the wire is external; renaming needs backend agreement | the ambiguity, not the field |
+- the `usageRoute` consensus rule. One fold, one `isEmptyUsage`. Surfaces then
+  _select columns_ from the canonical totals — display narrowing is a projection,
+  silent field-dropping in a private fold is not (§10.12).
+
+| Item                                    | Add                                                                                                                               | Delete                                                                                                                                                        |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1. Canonical fold                      | widen `sumUsageStats` (`usage.ts:84-112`) to the decided set                                                                      | `sumResumeUsageStats` bolt-on (`resumeHint.ts:82-92`)                                                                                                         |
+| B2. One empty-predicate                 | —                                                                                                                                 | `usageHasTokens` (`resumeHint.ts:71-80`), `UsagePanel.hasUsage` (`UsagePanel.ts:189-198`), the inline check at `extension.ts:644` — all become `isEmptyUsage` |
+| B3. Status bar consumes folded totals   | subscribe the tracker to the snapshot-store fold it currently re-implements                                                       | `StatusBarUsageTracker.ts:52-63,74-82` hand-`+=` (3-field, drops route/cache — silent under-report)                                                           |
+| B4. Webview stops re-folding per render | ship the folded total in the payload it already receives                                                                          | `sumUsageStats(Object.values(runUsage))` at `ToolUseStreamContent.ts:76`, `WorkflowStreamContent.ts:63`                                                       |
+| B5. Honest telemetry field              | rename at the schema or document the divergence at `UsageLogTypes.ts:18` — the wire is external; renaming needs backend agreement | the ambiguity, not the field                                                                                                                                  |
 
 Not in scope: `RunUsageAccumulator`'s in-run accumulator (different layer, its
 own documented legacy union — correct as is); the snapshot store's
 overlay-replay design stays — fold its two copies of the sum
-(`StreamSnapshotStore.ts:219-230/696-705`) into one function *without*
+(`StreamSnapshotStore.ts:219-230/696-705`) into one function _without_
 touching the overlay machinery.
 
 ## 3. Workstream C — projection rails (executes standing rulings + new finds)
@@ -292,7 +294,7 @@ subscriber.
 
 The triple-wired legacy channel is dead; delete end-to-end. IF-1 constraint:
 `requestToolEditApproval` stays optional (its `undefined` is the dispatch
-signal); the deletion is of the *legacy target*, not the dispatch.
+signal); the deletion is of the _legacy target_, not the dispatch.
 
 ### C4. `useHostInteractions` pass-through — pre-authorized (PT-2)
 
@@ -324,7 +326,7 @@ paths (one writer total); the TUI port fan-out
 ### C6. TUI artifact double path — one owner
 
 Artifacts (`addOutputFiles`/`updateMissingOutputs`/`updateCompileFailures`)
-are folded live into `cliState` (`subscribeRuntimeHost.ts:169-189`) *and*
+are folded live into `cliState` (`subscribeRuntimeHost.ts:169-189`) _and_
 re-read from `StreamSnapshotStore` on focus (`subscribeStreamArtifacts.ts:47-75`),
 with a revision counter arbitrating disagreements.
 
@@ -336,19 +338,19 @@ re-read-on-ping pattern); the live fold becomes an invalidation ping.
 
 ### C7. Pass-through and duplicate-hop deletions (mechanical batch)
 
-| Item | Delete | Notes |
-| --- | --- | --- |
-| Desktop double Zod parse | the classification `safeParse` at `renderer/main.ts:462-467` | route on `dispatchMessage`'s existing unrecognized-command result; hot path (60fps `LOG_DELTA`) |
-| Redundant re-checks | scope re-checks (`ProgressBackend.ts:421,427`), duplicate `hasTarget` (`:113`) | filter already guarantees both |
-| `run.start`/`run.config` twin handlers | one of the two verbatim bodies (`ProgressFactApplier.ts:126-137`) | |
-| Single-file payload round-trips | `UpdatePhaseStagePayload` (zero external consumers), the pack/unpack for round-stage + conversation-progress | pass plain args; `UpdateRoundStagePayload` survives only while the frozen NDJSON projection needs its type |
-| `runFactSubscriptions.ts:9-21` | the 12-line field-by-field payload reconstruction | subscribe to the payload directly |
-| Reveal-stream triplication | the two copies in `toolEditApproval.ts:117-131`, `ExternalInquiryTool.ts:421-432` | call `revealStream` (`progressHostInteractions.ts:89-104`) |
-| Inbound forward chains | `ProgressViewHost`'s file-command re-forward (`ProgressViewHost.ts:119-140`); the 12 one-line arms delegate to controller methods directly | PT-1 scope only: `module:` fields + never-read `interactionHandler` also deletable; do **not** fold `handleInteractionEvent` (real guard) |
-| `CliRuntimeHost` dissolution | the 4-member interface (`cliPresentationHost.ts`); no caller uses >2 members | split: presentation-event sink; renderer attaches directly at `runExecution.ts:193`. Shrinks further after C5 |
-| Fake-incremental messages | `UPDATE_FILES`/`UPDATE_MISSING_OUTPUTS`/`UPDATE_COMPILE_FAILURES` (3 schemas + 3 updater methods + 3 handlers) fold into the sync path they duplicate (`ProgressFactApplier.ts:291-319` ship full snapshots today) | internal webview wire ships atomically with the app — free to change; the **public NDJSON keys are frozen** and keep emitting from the projection (§10.1) |
-| Child roster derived fields | `ActiveChildInfo.status` + pre-formatted `elapsed`; `recordChildPhase` (`ProgressViewState.ts:504-528`); the roster regression guard (`:552-566`) | ship `childStreamId` + `startedAt`; renderers join (pattern: `BackgroundTasksPanel.ts:399-403`) and tick live (pattern: `ToolTimer`) |
-| `replayTrace` hand-copies | the all-false controls literal (`replayTrace.ts:214-219`) → shared default; the hand-built `SyncStreamContentPayload` (`:195-220`) and `StreamTabInfo` (`:145-160`) → shared **pure** builder cores | the pure cores must be extracted to `src/shared/streams` first — trace-viewer must not import `src/controllers` (§10.7) |
+| Item                                   | Delete                                                                                                                                                                                                             | Notes                                                                                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop double Zod parse               | the classification `safeParse` at `renderer/main.ts:462-467`                                                                                                                                                       | route on `dispatchMessage`'s existing unrecognized-command result; hot path (60fps `LOG_DELTA`)                                                           |
+| Redundant re-checks                    | scope re-checks (`ProgressBackend.ts:421,427`), duplicate `hasTarget` (`:113`)                                                                                                                                     | filter already guarantees both                                                                                                                            |
+| `run.start`/`run.config` twin handlers | one of the two verbatim bodies (`ProgressFactApplier.ts:126-137`)                                                                                                                                                  |                                                                                                                                                           |
+| Single-file payload round-trips        | `UpdatePhaseStagePayload` (zero external consumers), the pack/unpack for round-stage + conversation-progress                                                                                                       | pass plain args; `UpdateRoundStagePayload` survives only while the frozen NDJSON projection needs its type                                                |
+| `runFactSubscriptions.ts:9-21`         | the 12-line field-by-field payload reconstruction                                                                                                                                                                  | subscribe to the payload directly                                                                                                                         |
+| Reveal-stream triplication             | the two copies in `toolEditApproval.ts:117-131`, `ExternalInquiryTool.ts:421-432`                                                                                                                                  | call `revealStream` (`progressHostInteractions.ts:89-104`)                                                                                                |
+| Inbound forward chains                 | `ProgressViewHost`'s file-command re-forward (`ProgressViewHost.ts:119-140`); the 12 one-line arms delegate to controller methods directly                                                                         | PT-1 scope only: `module:` fields + never-read `interactionHandler` also deletable; do **not** fold `handleInteractionEvent` (real guard)                 |
+| `CliRuntimeHost` dissolution           | the 4-member interface (`cliPresentationHost.ts`); no caller uses >2 members                                                                                                                                       | split: presentation-event sink; renderer attaches directly at `runExecution.ts:193`. Shrinks further after C5                                             |
+| Fake-incremental messages              | `UPDATE_FILES`/`UPDATE_MISSING_OUTPUTS`/`UPDATE_COMPILE_FAILURES` (3 schemas + 3 updater methods + 3 handlers) fold into the sync path they duplicate (`ProgressFactApplier.ts:291-319` ship full snapshots today) | internal webview wire ships atomically with the app — free to change; the **public NDJSON keys are frozen** and keep emitting from the projection (§10.1) |
+| Child roster derived fields            | `ActiveChildInfo.status` + pre-formatted `elapsed`; `recordChildPhase` (`ProgressViewState.ts:504-528`); the roster regression guard (`:552-566`)                                                                  | ship `childStreamId` + `startedAt`; renderers join (pattern: `BackgroundTasksPanel.ts:399-403`) and tick live (pattern: `ToolTimer`)                      |
+| `replayTrace` hand-copies              | the all-false controls literal (`replayTrace.ts:214-219`) → shared default; the hand-built `SyncStreamContentPayload` (`:195-220`) and `StreamTabInfo` (`:145-160`) → shared **pure** builder cores                | the pure cores must be extracted to `src/shared/streams` first — trace-viewer must not import `src/controllers` (§10.7)                                   |
 
 ### C8. Frontend compensation → fix at source
 
@@ -390,7 +392,7 @@ documented only in a distant comment (`SubagentListDisplay.ts:20-39`).
 **Fix:** per the lifecycle doc's standing rule ("never declare a status list by
 hand — add a trait column"): add appearance columns (indicator class, icon,
 CLI color) to `STREAM_STATUS_TRAITS`. Hosts read columns; the CLI's deliberate
-divergence becomes a *named column*, not a distant table.
+divergence becomes a _named column_, not a distant table.
 **Delete:** the `groupStyles` divergent map, the dead `status-*` keys and the
 third scheme, the private icon switch, `childStatusColor` /
 `TASK_GROUP_APPEARANCE` as free-standing tables.
@@ -413,7 +415,7 @@ label stack (`streamViews.ts:105-133` → `childExecutionLabel`) and the
 trace-viewer hand-builds the record (C7). The desktop palette adds a fifth
 fallback chain (`desktopCommandPalette.ts:374-386`).
 
-**Fix:** extract the *pure* label core of `buildStreamTabInfo` (name cleaning,
+**Fix:** extract the _pure_ label core of `buildStreamTabInfo` (name cleaning,
 workflow decoration, model label — no worktree probe) into `src/shared/streams`
 and have the CLI stack, palette, and trace-viewer consume it. Relocation + two
 deletions, not a new layer: **delete** `childExecutionLabel`'s independent rule
@@ -471,7 +473,7 @@ full-sync call path. (Superseded in part by F1, which owns the emit.)
 
 ## 5. Workstream F — one language across hosts
 
-The cross-host audit's headline: the *seam layer* is genuinely shared
+The cross-host audit's headline: the _seam layer_ is genuinely shared
 (`resolveAndResumeStream`, `prepareMainViewExecutionLaunch`,
 `createProgressViewCommandHandlers`, `SettingsAgentControllerFactory`,
 `nodeHost.ts`, `HistoryActionOutcomes`); what is restated per host is the
@@ -553,13 +555,14 @@ the extension bypasses `nodeHost.ts` entirely, inlining three of its helpers
 for bundle-size reasons.
 
 **Fix (three PRs, §10.10):**
+
 1. Behavior: desktop gains the two missing calls (usage-log init gated on the
    telemetry setting — owner decision 6).
 2. `initSharedHostStartupState({versionStateKey, currentVersion})` folds the
    `seedDisabledToolDefaults` + model-refresh pair so the gap cannot reopen.
 3. Split the Lean-free helpers into `hostRuntime.ts` so the extension can
    consume them, deleting its inlined copies (`extension.ts:185-187, 268,
-   276-281`) without the bundle regression that justified the inlining.
+276-281`) without the bundle regression that justified the inlining.
    All folds are named-helpers-called-in-order (constraint 11).
 
 ### F6. Session/store bring-up: one open sequence
@@ -659,15 +662,15 @@ PR to cross and then demolish**. Three ordering principles drive it:
 
 ### Wave 0 — enablers and live-bug fixes (now; all independent, no decisions needed)
 
-| PR | Content | Why first |
-| --- | --- | --- |
-| 0.1 | C9 + #9698: loud switches (SessionFact ×4, model-layer ×3) | every later fact/union change now compile-fails where it must be handled |
-| 0.2 | E1: hub subscriber-order invariant test | makes the re-read pattern's precondition explicit before C5/C6 rely on it |
-| 0.3 | E2: NDJSON byte-parity fixture (record/replay/compare) | the tripwire every channel move runs against |
-| 0.4 | C2: desktop `removeStream` (pre-authorized live bug) | leaked resources today |
-| 0.5 | F1: follow-up repair probe, all three hosts (behavior fix + wrapper fold in one PR — the fold *is* the fix delivery, both hosts' deletions included) | live correctness divergence; coordinate with #9531, no `drain()` callers |
-| 0.6 | F5.1: desktop `refreshModelListStateIfNeeded`; reliability stub wire-up (F9's gap) | stale models / dead panel today; usage-log half waits on decision 6 |
-| 0.7 | A1-rescoped comment PR + E5 doc corrections | costs nothing; stops future readers trusting five false comments |
+| PR  | Content                                                                                                                                              | Why first                                                                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 0.1 | C9 + #9698: loud switches (SessionFact ×4, model-layer ×3)                                                                                           | every later fact/union change now compile-fails where it must be handled  |
+| 0.2 | E1: hub subscriber-order invariant test                                                                                                              | makes the re-read pattern's precondition explicit before C5/C6 rely on it |
+| 0.3 | E2: NDJSON byte-parity fixture (record/replay/compare)                                                                                               | the tripwire every channel move runs against                              |
+| 0.4 | C2: desktop `removeStream` (pre-authorized live bug)                                                                                                 | leaked resources today                                                    |
+| 0.5 | F1: follow-up repair probe, all three hosts (behavior fix + wrapper fold in one PR — the fold _is_ the fix delivery, both hosts' deletions included) | live correctness divergence; coordinate with #9531, no `drain()` callers  |
+| 0.6 | F5.1: desktop `refreshModelListStateIfNeeded`; reliability stub wire-up (F9's gap)                                                                   | stale models / dead panel today; usage-log half waits on decision 6       |
+| 0.7 | A1-rescoped comment PR + E5 doc corrections                                                                                                          | costs nothing; stops future readers trusting five false comments          |
 
 ### Wave 1 — the decision sitting (owner, one pass)
 
@@ -696,14 +699,14 @@ channel moves of Wave 4 touch it.
   the PR — the parity fixture is the proof.
 - C7 (mechanical batch) follows; its replayTrace rows depend on D3's
   pure-core extraction, so D3 ships inside Wave 4 immediately before them —
-  extraction and *all* consumer repointing in one PR (no "extract now, adopt
+  extraction and _all_ consumer repointing in one PR (no "extract now, adopt
   later").
 - C6 (artifact owner) closes the wave, standing on 0.2.
 - C8 items each pair backend-guarantee + frontend-deletion atomically.
 
 ### Wave 5 — canonical folds and display sources (B1–B5, D1–D7)
 
-B needs decision 1; each B PR switches a consumer *and* deletes its private
+B needs decision 1; each B PR switches a consumer _and_ deletes its private
 fold together (§10.12: column selection preserves displayed numbers; the
 status-bar column fix is its own labeled PR). D-items are independent;
 D4's elapsed rule rides C7's `ActiveChildInfo` deletion, hence after Wave 4.
@@ -737,9 +740,9 @@ Waves 0–6 leave their deletion sites untouched.
 
 Symbols that cease to exist (relocations excluded, per §0):
 
-**Workstream A:** *(the `GROUP_END` legacy arms — `taskGroupProjection.ts:27-36`
+**Workstream A:** _(the `GROUP_END` legacy arms — `taskGroupProjection.ts:27-36`
 and the `StreamLogStore` private status map — are #9627's deletions, not this
-plan's; listed there, dated 2026-10-26/31)*; `metadataToStreamStatePartial`;
+plan's; listed there, dated 2026-10-26/31)_; `metadataToStreamStatePartial`;
 `syncSlice` stage unwraps; `childExecutions` tri-state branch;
 `stateUtils.ts:106`; duplicate `TokenUsageStats` transform + `as` cast; four
 external-inquiry unwraps + one duplicate permission constructor;
@@ -762,12 +765,13 @@ redundant scope/`hasTarget` re-checks; one `run.start`/`run.config` twin;
 `UpdatePhaseStagePayload` (+ round-trip pack/unpacks);
 `runFactSubscriptions.ts` reconstruction; two reveal-stream copies;
 `ProgressViewHost` file re-forward + 12 one-line arms + inert `module:` fields
-+ never-read `interactionHandler`; `CliRuntimeHost` as an interface; three
-fake-incremental messages (schemas, updater methods, handlers);
-`ActiveChildInfo.status`/`.elapsed` + `recordChildPhase` + roster regression
-guard; `replayTrace` hand-built controls/payload/tab-info;
-`pendingDescriptions` buffer + three drains; frontend re-sort +
-`resolveActiveStreamId`.
+
+- never-read `interactionHandler`; `CliRuntimeHost` as an interface; three
+  fake-incremental messages (schemas, updater methods, handlers);
+  `ActiveChildInfo.status`/`.elapsed` + `recordChildPhase` + roster regression
+  guard; `replayTrace` hand-built controls/payload/tab-info;
+  `pendingDescriptions` buffer + three drains; frontend re-sort +
+  `resolveActiveStreamId`.
 
 **Workstream D:** `groupStyles` divergent color map; dead `status-*` keys +
 third class scheme; `TaskGroupList` icon switch; `childStatusColor` +
@@ -817,7 +821,7 @@ desktop `() => []` reliability stub.
 ## 10. Adversarial analysis — how this goes wrong, and the clean fix
 
 Each entry: the failure mode, the symptom you'd see, and the clean fix (which
-is in all cases *already folded into the workstream items above* — this
+is in all cases _already folded into the workstream items above_ — this
 section is the reasoning, so a future implementer doesn't "simplify" the
 safeguard away).
 
@@ -839,7 +843,7 @@ Deletions of public keys ride the D3 deprecation clock, never a refactor.
 
 ### 10.2 Late-join and replay loss (C5)
 
-**Risk:** the bypass port push targets the *active attachment*; the session
+**Risk:** the bypass port push targets the _active attachment_; the session
 fact fan-out has no replay. A webview attaching mid-run could miss a toggle
 emitted between its initial sync and its subscription.
 **Symptom:** stale bypass badge until the next toggle.
@@ -860,7 +864,7 @@ C6 extends this pattern to the CLI. Anyone who reorders construction, or
 simultaneously — with no failing test today.
 **Symptom:** UI shows the previous artifact state, off-by-one against events;
 intermittent, load-order dependent.
-**Clean fix:** E1 lands *before* C6: a kernel test that asserts
+**Clean fix:** E1 lands _before_ C6: a kernel test that asserts
 store-before-projection delivery order, plus a sentence on
 `SessionEventHub.subscribe` documenting that ordering is part of the contract.
 If the hub ever needs unordered delivery, the applier switches to
@@ -874,7 +878,7 @@ complete, race-free data → visibly unsorted tabs, missing subagent
 descriptions, wrong active tab.
 **Symptom:** immediate, user-visible; worst on slow machines where the races
 the buffers papered over actually occur.
-**Clean fix:** anti-mixed-state applies *within* each item: the backend
+**Clean fix:** anti-mixed-state applies _within_ each item: the backend
 guarantee (emit description with registration; wire carries authoritative
 order/active) and the frontend deletion land in one atomic PR, with a test
 encoding the guarantee. If the guarantee can't be written as a test, the
@@ -883,7 +887,7 @@ compensation isn't deletable yet — sanction it with a comment instead.
 ### 10.5 Schema transforms leaking into the write path (A1, A2, A5)
 
 **Risk:** `GroupLogPayloadSchema` (and stage/inquiry schemas) may be used to
-*construct or validate writes*, not just reads. A normalizing `.transform()`
+_construct or validate writes_, not just reads. A normalizing `.transform()`
 on a shared schema would then rewrite legacy spellings on disk (churning
 persisted bytes), or worse, run twice (read → normalize → re-persist →
 re-normalize) and mask a producer writing the legacy form today.
@@ -893,7 +897,7 @@ gate can never catch because the schema silently launders it.
 (the `AgentWorkspaceState` pattern: a canonical-only schema for interiors, the
 union+transform at the boundary). Before A1 lands: grep every use of the
 payload schema, split read/write variants if both exist, and add a test that
-the *writer* emits only canonical spellings — making the legacy arm read-only
+the _writer_ emits only canonical spellings — making the legacy arm read-only
 archaeology by construction.
 
 ### 10.6 The ratchet that cries wolf (E3, and the approval PRD's Stage E)
@@ -905,7 +909,7 @@ taking their protection with them.
 **Symptom:** gate removed "temporarily" in an unrelated PR; the mirror it
 guarded regrows.
 **Clean fix:** symbol-scoped scanning (files importing the guarded symbol),
-the >100-files vacuity guard, and landing each gate only *after* its deletion
+the >100-files vacuity guard, and landing each gate only _after_ its deletion
 completes so the allowlist is minimal. A gate whose allowlist must include
 something the plan was supposed to delete has found an incomplete migration —
 that is its job; finish the deletion rather than widening the list.
@@ -948,8 +952,7 @@ changes nobody signed off on.
 working; or data (orphaned streams) deleted by a "no-op" refactor.
 **Clean fix:** behavior-carrying items ship as their own labeled PRs with
 regression tests (F1: terminal-but-resumable follow-up on all three hosts),
-and F6's sweep asymmetry is *investigated before unification* (owner decision
-8) — if the extension skips the sweep for a reason, that reason becomes a
+and F6's sweep asymmetry is _investigated before unification_ (owner decision 8) — if the extension skips the sweep for a reason, that reason becomes a
 parameter, not a casualty. The shared-fold PR that follows is then genuinely
 behavior-neutral and reviewable as such.
 
@@ -957,7 +960,7 @@ behavior-neutral and reviewable as such.
 
 **Risk:** the desktop title's "deliberately exact `RUNNING`" predicate, the
 CLI's intentional `completed`/`waiting` color divergence, and desktop's
-telemetry posture are *choices*, not drift. A zealous unifier flattens them
+telemetry posture are _choices_, not drift. A zealous unifier flattens them
 and silently changes product behavior (worst case: F5 turning on usage
 logging for desktop users who never consented — a privacy change, not a
 refactor).
@@ -967,17 +970,17 @@ trust violation.
 parameter or trait column in the shared source** (D1 does exactly this for
 CLI colors; D2 makes strictness explicit), and every formerly-implicit choice
 becomes an owner decision (6, 7). The rule: sharing must make divergence
-*visible and named*, never impossible — and never accidental.
+_visible and named_, never impossible — and never accidental.
 
 ### 10.11 The half-migration plateau (F2–F9)
 
 **Risk:** the sequence folds are many small PRs; if the effort stalls halfway,
-the codebase has *three* spellings (shared module + two host restatements)
+the codebase has _three_ spellings (shared module + two host restatements)
 instead of two — strictly worse than not starting.
 **Symptom:** a shared `SettingsCredentialActions` with one consumer while the
 other host keeps its copy "for now".
 **Clean fix:** each F-item is atomic per sequence: the shared module lands
-*with both hosts' deletions in the same PR* (anti-mixed-state). If a fold
+_with both hosts' deletions in the same PR_ (anti-mixed-state). If a fold
 can't take both hosts in one PR, it is not ready. The knip dead-code ratchet
 backstops this: a shared export with one consumer while a twin restatement
 survives is exactly the "exports are contracts" violation it flags.
@@ -988,8 +991,8 @@ survives is exactly the "exports are contracts" violation it flags.
 includes cache fields; CLI totals gain `reasoningTokens`), which reads as a
 billing regression to users comparing before/after.
 **Symptom:** "TeXRA says I spent more after the update."
-**Clean fix:** canonical *fields* with explicit per-surface *column
-selection*: each display keeps its current columns in the migration PR
+**Clean fix:** canonical _fields_ with explicit per-surface _column
+selection_: each display keeps its current columns in the migration PR
 (pure refactor, snapshot-tested output), and any column change ships
 separately as a labeled display fix. The B3 under-report fix (status bar
 missing route/cache) is one such labeled change, not a silent side effect.
@@ -1026,7 +1029,7 @@ silent divergence this plan exists to kill) or skip to unblocked items,
 leaving the highest-value fixes last.
 **Clean fix:** every gated item has a recommended default recorded in §9;
 Wave 0 is decision-free by construction and the decision sitting is Wave 1,
-so no wave ever blocks on §9. A decision changes *which* PR lands, never
+so no wave ever blocks on §9. A decision changes _which_ PR lands, never
 whether progress continues.
 
 ### 10.16 Building on code that is scheduled to die (the A1 lesson)
@@ -1036,7 +1039,7 @@ consolidation — and the duplicated code already has a deletion date in a
 retirement queue the audit didn't cross-check. The consolidation ships,
 works for ten weeks, then the dated retirement has to unwind the new
 machinery along with the old: two migrations where zero were needed. This
-plan *caught itself* doing exactly this: v2's A1 proposed a
+plan _caught itself_ doing exactly this: v2's A1 proposed a
 `GroupLogPayloadSchema` transform around legacy arms that #9627 kills on
 2026-10-26/31.
 **Symptom:** a retirement PR whose diff is half "revert the improvement from
@@ -1058,7 +1061,7 @@ refactor's green tests can hide the very staleness #9531 describes.
 **Symptom:** #9531's reproduction stops reproducing after F1 without the bug
 being fixed; duplicate issues; churn.
 **Clean fix:** §0.2 assigns each overlap a rule: F1 fixes the probe only and
-its tests assert the probe, not resume-result freshness; #9698 folds *into*
+its tests assert the probe, not resume-result freshness; #9698 folds _into_
 the C9 PR and closes; plan-owned items get a "tracked by the SSOT plan" note
 so the tournament skips them. Any new issue landing in a plan seam gets
 reconciled into §0.2 before the affected wave starts.
@@ -1070,7 +1073,7 @@ stale source of truth beside the issues and the code. Its line numbers rot;
 its "open" items complete; future audits re-derive its content.
 **Symptom:** an implementer follows a v2 instruction (the A1 transform) that
 v3 withdrew.
-**Clean fix:** the plan is a *plan*, not a ledger: each wave's completion is
+**Clean fix:** the plan is a _plan_, not a ledger: each wave's completion is
 recorded in the issues (per §0.2), and when a workstream fully lands, its
 section is compressed to a completion note pointing at the PRs — the
 convention #9590's issue body already demonstrates ("historical proposal

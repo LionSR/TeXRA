@@ -73,14 +73,14 @@ The #9597 matrix covers Bash and tool edits. The running system has three
 more request kinds whose policy behavior currently exists only as CLI code.
 This PRD promotes them to spec:
 
-| Request kind | `never` | `ask` | `yolo` |
-| --- | --- | --- | --- |
-| Bash | deny | present iff `requireBashApproval`, else allow | allow |
-| Tool edit | deny | present iff `requireEditApproval`, else allow | allow |
-| Plan approval / agent proposal | deny | present (deny if unpresentable) | allow |
-| Retry request | deny | present (deny if unpresentable) | **deny** — automatic attempts are exhausted; continuing requires explicit human approval. Not classified as a policy denial for exit-code purposes. |
-| Retry after credential exhaustion / 401 / 403 | deny | present (deny if unpresentable) | deny ("credential exhausted or unauthorized") |
-| User question / external inquiry | deny | present (deny if unpresentable) | **deny** — yolo approves execution; it must not invent human intent or synthesize an answer. |
+| Request kind                                  | `never` | `ask`                                         | `yolo`                                                                                                                                              |
+| --------------------------------------------- | ------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bash                                          | deny    | present iff `requireBashApproval`, else allow | allow                                                                                                                                               |
+| Tool edit                                     | deny    | present iff `requireEditApproval`, else allow | allow                                                                                                                                               |
+| Plan approval / agent proposal                | deny    | present (deny if unpresentable)               | allow                                                                                                                                               |
+| Retry request                                 | deny    | present (deny if unpresentable)               | **deny** — automatic attempts are exhausted; continuing requires explicit human approval. Not classified as a policy denial for exit-code purposes. |
+| Retry after credential exhaustion / 401 / 403 | deny    | present (deny if unpresentable)               | deny ("credential exhausted or unauthorized")                                                                                                       |
+| User question / external inquiry              | deny    | present (deny if unpresentable)               | **deny** — yolo approves execution; it must not invent human intent or synthesize an answer.                                                        |
 
 Additional rows preserved as-is: `approve_and_goal` is produced only by an
 explicit user action; Run as Goal grants Bash-only scoped permission and
@@ -136,7 +136,7 @@ session.
 - Shared vocabulary, copy, parser, evaluator: `src/shared/approvalPolicy.ts`.
 - Live value on `SessionHandle` (`src/agent/runtime/SessionHandle.ts:269-275`);
   CLI seeds it (`runExecution.ts:189`, `runChatTui.tsx:271`) and `/approval`
-  + `/yolo` update it live.
+  - `/yolo` update it live.
 - Enforcement at the shared boundaries only:
   `src/tools/approval/bashApproval.ts:103-117`,
   `toolEditApproval.ts:257-270`. The consumer map in
@@ -368,13 +368,13 @@ and `AGENTS.md` gain the ratchet; cited paths must resolve
 
 Order is load-bearing:
 
-| Stage | Depends on | Why the order |
-| --- | --- | --- |
-| A | — | Deny reasons must exist before hosts adopt, or three hosts' messages churn twice. |
-| B | A | The hoisted helpers return reasoned denials. |
-| C | A (B recommended) | Hosts consume the honest evaluator; C must add zero decision code. |
-| D | — | Independent; any time before E. |
-| E | A–D | The allowlist freezes the final state. Landing it earlier would enshrine the intermediate one. |
+| Stage | Depends on        | Why the order                                                                                  |
+| ----- | ----------------- | ---------------------------------------------------------------------------------------------- |
+| A     | —                 | Deny reasons must exist before hosts adopt, or three hosts' messages churn twice.              |
+| B     | A                 | The hoisted helpers return reasoned denials.                                                   |
+| C     | A (B recommended) | Hosts consume the honest evaluator; C must add zero decision code.                             |
+| D     | —                 | Independent; any time before E.                                                                |
+| E     | A–D               | The allowlist freezes the final state. Landing it earlier would enshrine the intermediate one. |
 
 Every stage: `npm run typecheck` (builds do not type check),
 `npm run lint`, `npm test` for the touched kernels,
@@ -385,23 +385,23 @@ Every stage: `npm run typecheck` (builds do not type check),
 The migration is complete only if all of these are gone. This list is also
 the negative space of the Stage E allowlist: nothing below may appear in it.
 
-| # | Deletion | Location | Stage |
-| --- | --- | --- | --- |
-| 1 | `denyMessage` — second denial-message vocabulary | `packages/cli/src/runtime/approval/approvalPolicy.ts:62-66` | A |
-| 2 | `cliExecutableApprovalDecision` wrapper evaluator | same file `:118-125` | B |
-| 3 | `approvalPromptAllowed` / `approvalPromptsUnavailable` policy predicates | `:106-114` | B |
-| 4 | `immediateDecision` / `immediateDecisionForApproval` | `:199-245` | B |
-| 5 | `isCredentialRetryRequest` + yolo-retry branch (hoisted to shared) | `:213-244` | B |
-| 6 | `humanInputDenialFeedback` / `askUserQuestionDenial` (hoisted to shared) | `:290-316` | B |
-| 7 | `WeakSet<CliContext>` denial marker (`markApprovalDenied` / `hasCliApprovalDenied`) | `:59, 68-74` | B |
-| 8 | `ApprovalInstructionContext` pick type | `:54-57` | B |
-| 9 | The module `runtime/approval/approvalPolicy.ts` itself (survivors move to `approvalPrompts.ts`; no re-export shim) | whole file | B |
-| 10 | TUI live-alias `get approvalPolicy()` on the per-run context | `packages/cli/src/chat/tui/runChatTui.tsx:341-346` | B |
-| 11 | Bare `'never'`/`'ask'` fallback literals and unnormalized env parsing | `packages/cli/src/runtime/cliContext.ts:407, 429-438` | B |
-| 12 | CLI-local declaration of the `approvalPolicy` settings key (hoisted to shared catalog) | `packages/cli/src/schemas/cliSettings.ts:26` | C |
-| 13 | `WorkspaceStateKey.SUPER_YOLO_ENABLED` + `WORKTREE_SHARED_KEYS` entry | `src/shared/state/stateKeys.ts:22`, `packages/extension/src/common/state/stateManager.ts:18` | D |
-| 14 | One of two copies of the bypass-kind union | `src/shared/schemas/progressView/outbound.ts:235` vs `src/agent/runtime/HostInteractions.ts:226` | D |
-| 15 | `superYolo`-named internal identifiers on the reliability/orchestration message | `src/shared/settingsView/handlers/superYoloHandlers.ts` and its two host callers | D |
+| #   | Deletion                                                                                                           | Location                                                                                         | Stage |
+| --- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----- |
+| 1   | `denyMessage` — second denial-message vocabulary                                                                   | `packages/cli/src/runtime/approval/approvalPolicy.ts:62-66`                                      | A     |
+| 2   | `cliExecutableApprovalDecision` wrapper evaluator                                                                  | same file `:118-125`                                                                             | B     |
+| 3   | `approvalPromptAllowed` / `approvalPromptsUnavailable` policy predicates                                           | `:106-114`                                                                                       | B     |
+| 4   | `immediateDecision` / `immediateDecisionForApproval`                                                               | `:199-245`                                                                                       | B     |
+| 5   | `isCredentialRetryRequest` + yolo-retry branch (hoisted to shared)                                                 | `:213-244`                                                                                       | B     |
+| 6   | `humanInputDenialFeedback` / `askUserQuestionDenial` (hoisted to shared)                                           | `:290-316`                                                                                       | B     |
+| 7   | `WeakSet<CliContext>` denial marker (`markApprovalDenied` / `hasCliApprovalDenied`)                                | `:59, 68-74`                                                                                     | B     |
+| 8   | `ApprovalInstructionContext` pick type                                                                             | `:54-57`                                                                                         | B     |
+| 9   | The module `runtime/approval/approvalPolicy.ts` itself (survivors move to `approvalPrompts.ts`; no re-export shim) | whole file                                                                                       | B     |
+| 10  | TUI live-alias `get approvalPolicy()` on the per-run context                                                       | `packages/cli/src/chat/tui/runChatTui.tsx:341-346`                                               | B     |
+| 11  | Bare `'never'`/`'ask'` fallback literals and unnormalized env parsing                                              | `packages/cli/src/runtime/cliContext.ts:407, 429-438`                                            | B     |
+| 12  | CLI-local declaration of the `approvalPolicy` settings key (hoisted to shared catalog)                             | `packages/cli/src/schemas/cliSettings.ts:26`                                                     | C     |
+| 13  | `WorkspaceStateKey.SUPER_YOLO_ENABLED` + `WORKTREE_SHARED_KEYS` entry                                              | `src/shared/state/stateKeys.ts:22`, `packages/extension/src/common/state/stateManager.ts:18`     | D     |
+| 14  | One of two copies of the bypass-kind union                                                                         | `src/shared/schemas/progressView/outbound.ts:235` vs `src/agent/runtime/HostInteractions.ts:226` | D     |
+| 15  | `superYolo`-named internal identifiers on the reliability/orchestration message                                    | `src/shared/settingsView/handlers/superYoloHandlers.ts` and its two host callers                 | D     |
 
 Explicitly **kept**: all pinned wire literals (§6); the per-stream bypass
 machinery; `proposalFlow.ts:147` (a comment, not logic); both
@@ -445,7 +445,7 @@ display copy, exhaustively switched, not a decision fork).
 ## 11. Risks
 
 - **Exit-code-4 regression while replacing the WeakSet.** Mitigation:
-  pin both denial paths with tests *before* the swap (§10.7).
+  pin both denial paths with tests _before_ the swap (§10.7).
 - **Message-text churn breaking snapshot tests.** Stage A lands the final
   strings once; B and C reuse them; hosts adopt after.
 - **Ratchet false positives** on `'never'`/`'ask'` literals in unrelated
