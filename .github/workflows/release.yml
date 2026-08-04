@@ -54,10 +54,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        # tsc on this workspace exceeds Node's default heap on the CI runner
-        # (v0.39.10 release OOMed with exit 134); mirror the lint script's bump.
-        env:
-          NODE_OPTIONS: '--max-old-space-size=6144'
         run: pnpm run typecheck
 
       # Fail the release before building/publishing if the code-generated

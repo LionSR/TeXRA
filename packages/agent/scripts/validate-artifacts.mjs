@@ -39,7 +39,9 @@ const declarationText = (
 ).join('\n');
 const internalAliases = Object.entries(rootTsconfig.compilerOptions.paths)
   .filter(([, targets]) =>
-    targets.some((target) => !target.startsWith('node_modules/')),
+    targets.some(
+      (target) => !target.replace(/^\.\//u, '').startsWith('node_modules/'),
+    ),
   )
   .map(([pattern]) => pattern.replace(/\/\*$/u, ''));
 
