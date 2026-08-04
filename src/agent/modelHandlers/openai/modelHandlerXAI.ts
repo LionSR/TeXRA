@@ -11,6 +11,7 @@ import {
   xaiCoordinator,
 } from '@auth/xai';
 import { resolveXaiSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
+import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -18,11 +19,18 @@ import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 
 /**
+ * Trusted inference origin for OAuth Bearer tokens. User custom endpoints /
+ * relay / OpenRouter must never receive the SuperGrok access token.
+ */
+const XAI_SUBSCRIPTION_BASE_URL = 'https://api.x.ai/v1';
+
+/**
  * Handler for xAI models using OpenAI-compatible API.
  *
- * When "Prefer Grok subscription" is on and the user is signed in, requests
+ * When "Prefer Grok subscription" is on **and** the user is signed in, requests
  * authenticate with the OAuth access token as the SDK `apiKey` (Bearer) against
- * the same `api.x.ai` surface as an API key — no unofficial backend rewrite.
+ * the trusted `api.x.ai` surface only. Prefer-on without a session falls through
+ * to the API-key / relay path (preference is not a hard requirement).
  * EXPERIMENTAL: see docs/proposals/2026-08-04-xai-grok-oauth-subscription.md.
  *
  * Note: the legacy grok-4 generation (deprecated May 2026) rejected the
@@ -48,7 +56,10 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     return 'high';
   }
 
-  private wantsSubscriptionRoute(selection: ModelCredentialSelection): boolean {
+  /** Prefer is on and this model is xAI-eligible (ignores sign-in). */
+  private prefersSubscriptionRoute(
+    selection: ModelCredentialSelection,
+  ): boolean {
     if (selection !== 'configured') return false;
     return (
       resolveXaiSubscriptionCapabilitiesForAgentCategory(
@@ -56,6 +67,17 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
         getUseOpenRouter(),
       )?.authMode === 'xai-subscription'
     );
+  }
+
+  /**
+   * Prefer on, model eligible, and a live Grok session. Prefer alone does not
+   * force OAuth — unsigned prefer falls back to the API key path.
+   */
+  private async wantsSubscriptionRoute(
+    selection: ModelCredentialSelection,
+  ): Promise<boolean> {
+    if (!this.prefersSubscriptionRoute(selection)) return false;
+    return isXaiSignedIn();
   }
 
   /** Subscription usage is billed by plan, not per token. */
@@ -73,21 +95,37 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     return super.standardPricingConfig();
   }
 
+  /**
+   * While a subscription request is in flight, report the trusted xAI origin
+   * (never a user custom endpoint or relay) so retries stay on the same surface.
+   */
+  public override getBaseUrl(): string | null {
+    if (this.activeCredentialRoute === 'xai-subscription') {
+      return XAI_SUBSCRIPTION_BASE_URL;
+    }
+    return super.getBaseUrl();
+  }
+
   protected override async createOpenAIClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<OpenAI> {
-    if (!this.wantsSubscriptionRoute(selection)) {
+    if (!(await this.wantsSubscriptionRoute(selection))) {
+      if (this.prefersSubscriptionRoute(selection)) {
+        this.logger.debug(
+          'Prefer Grok subscription is on but no signed-in session — using the xAI API key path.',
+        );
+      }
       return super.createOpenAIClient(selection);
     }
 
     const apiKey = await this.resolveAccessToken();
-    const baseUrl = this.getBaseUrl();
     this.logger.debug(
-      `Using Grok subscription (xAI OAuth). Base URL: ${baseUrl ?? 'default'}`,
+      `Using Grok subscription (xAI OAuth). Base URL: ${XAI_SUBSCRIPTION_BASE_URL}`,
     );
     const client = new OpenAI({
       apiKey,
-      baseURL: baseUrl,
+      // Never send the OAuth token to custom endpoints, OpenRouter, or relay.
+      baseURL: XAI_SUBSCRIPTION_BASE_URL,
       fetch: this.longRunningModelFetch,
       maxRetries: 0,
     });
