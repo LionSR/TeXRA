@@ -128,16 +128,13 @@ function repairCandidates(
 
 type ExecutionSettlement =
   | { readonly kind: 'unsettled' }
-  | { readonly kind: 'unmappable-terminal' }
   | { readonly kind: 'settled'; readonly outcome: RunOutcome };
 
 /**
  * Revalidate terminal metadata while holding the execution lease.
  *
  * A cancelled execution remains unsettled when it still has a resumable flow;
- * completed and failed executions are always terminal. Unknown legacy terminal
- * statuses are protected from repair even though they cannot be projected onto
- * the current stream-phase vocabulary.
+ * completed and failed executions are always terminal.
  */
 async function readExecutionSettlement(
   executionId: ExecutionId,
@@ -145,9 +142,6 @@ async function readExecutionSettlement(
   const meta = await getExecutionStore(executionId).readMetaStrict();
   if (!meta || meta.outcome == null) {
     return { kind: 'unsettled' };
-  }
-  if (meta.outcome == null) {
-    return { kind: 'unmappable-terminal' };
   }
   if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
     return {
@@ -271,9 +265,6 @@ export async function repairRestartedStreams(
           if (options.signal?.aborted) {
             return { kind: 'cancelled' as const };
           }
-          if (settlement.kind === 'unmappable-terminal') {
-            return { kind: 'protected-terminal' as const };
-          }
           if (settlement.kind === 'settled') {
             synchronizeSettledPhase(
               options.streamStatus,
@@ -321,12 +312,6 @@ export async function repairRestartedStreams(
         continue;
       }
       if (repaired.value.kind === 'cancelled') break;
-      if (repaired.value.kind === 'protected-terminal') {
-        options.logger?.debug(
-          `Skipped restart repair for execution ${executionId} with an unknown legacy terminal status`,
-        );
-        continue;
-      }
       if (repaired.value.kind === 'settled') {
         options.logger?.debug(
           `Skipped restart repair for terminal execution ${executionId}`,

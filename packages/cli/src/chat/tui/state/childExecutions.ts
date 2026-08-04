@@ -10,7 +10,11 @@
 // transition/selector semantics this module implements.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import type {
+  ActiveChildInfo,
+  RunIdentity,
+  StreamTabId,
+} from '@shared/schemas';
 
 import type { StreamSlice } from './cliState';
 
@@ -227,9 +231,24 @@ function summaryUnchanged(
     a.executionId === b.executionId &&
     a.startedAt === b.startedAt &&
     a.elapsed === b.elapsed &&
-    a.identity === b.identity &&
+    sameIdentity(a.identity, b.identity) &&
     a.workflowPhase === b.workflowPhase
   );
+}
+
+/** Structural identity equality — roster polls resend fresh objects, so a
+ *  reference compare would defeat the no-op detection on every tick. */
+function sameIdentity(a: RunIdentity, b: RunIdentity): boolean {
+  switch (a.kind) {
+    case 'agent':
+      return b.kind === 'agent' && a.agent === b.agent && a.tool === b.tool;
+    case 'process':
+      return b.kind === 'process' && a.tool === b.tool;
+    case 'multiAgentWorkflow':
+      return (
+        b.kind === 'multiAgentWorkflow' && a.workflowName === b.workflowName
+      );
+  }
 }
 
 /** Whether applying `nextEntry` over `entry` would be a no-op. */
