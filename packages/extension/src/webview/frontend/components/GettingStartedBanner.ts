@@ -45,12 +45,12 @@ export class GettingStartedBanner extends LitElement {
       }
 
       .getting-started-title span {
-        color: var(--vscode-descriptionForeground);
+        color: var(--wa-color-text-quiet);
       }
 
       .getting-started-copy {
         margin: 0;
-        color: var(--vscode-descriptionForeground);
+        color: var(--wa-color-text-quiet);
         line-height: var(--line-height-normal, 1.4);
       }
 
