@@ -39,7 +39,7 @@ export class OnboardingSetupCard extends LitElement {
 
       .copy {
         margin: 0 0 var(--wa-space-s);
-        color: var(--vscode-descriptionForeground);
+        color: var(--wa-color-text-quiet);
         line-height: var(--line-height-normal, 1.4);
       }
 

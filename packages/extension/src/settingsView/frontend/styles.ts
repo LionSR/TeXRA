@@ -49,7 +49,7 @@ const settingsContainerStyles: CSSResult = css`
 
   .settings-category-nav {
     gap: var(--wa-space-3xs);
-    min-height: var(--height-control-l);
+    min-height: var(--height-control);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-bottom: var(--border-thin) solid var(--border-hairline);
   }

@@ -111,6 +111,28 @@ export const designTokens: CSSResult = css`
     --surface-active: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 10%));
     --surface-selected: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%));
 
+    /* De-emphasis that survives a contrast check. The pattern these replace was
+       a --color-text-secondary foreground plus an element opacity, which
+       multiplied two alphas into a value nobody wrote down and landed under
+       threshold. Express the step once, here, in colour.
+
+       55%, not 45%: at 45% this measures 2.41:1 against Light Modern's
+       #3B3B3B-on-#FFFFFF and misses the 3:1 non-text minimum. At 55% the worst
+       of the four stock VS Code themes plus both desktop appearances is 3.07:1.
+
+       Two names for one expression on purpose: a border reading a text token is
+       the same role violation these exist to stop. */
+    --color-text-muted: color-mix(
+      in srgb,
+      var(--wa-color-text-normal) 55%,
+      transparent
+    );
+    --border-control: color-mix(
+      in srgb,
+      var(--wa-color-text-normal) 55%,
+      transparent
+    );
+
     /* Seams. Alpha hairlines for the places a border is load-bearing (settings
        rows, code blocks, inputs); large regions separate by a background step
        instead. */

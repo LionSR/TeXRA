@@ -178,7 +178,7 @@
 }
 
 .desktop-review-empty .empty-state-icon {
-  font-size: var(--icon-size-l);
+  font-size: var(--font-size-h1);
 }
 
 .desktop-review-empty .empty-state-title {

@@ -121,7 +121,7 @@
   );
   --desktop-color-info: light-dark(#087ea4, #74c7ec);
   --desktop-color-info-background: light-dark(#e7f5fa, rgb(116 199 236 / 14%));
-  --desktop-color-success: light-dark(#0e9f6e, #56e0a0);
+  --desktop-color-success: light-dark(#0a7a54, #56e0a0);
   --desktop-color-success-background: light-dark(
     #e3f7ee,
     rgb(86 224 160 / 12%)
@@ -322,6 +322,34 @@
   --surface-hover: light-dark(rgb(0 0 0 / 7%), rgb(255 255 255 / 15%));
   --surface-active: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 10%));
   --surface-selected: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%));
+
+  /* Border widths and the caps tracking. Previously missing from this mirror
+     while styles.css and reviewPane.css consumed them 14 times: in light DOM
+     `border: var(--border-thin) solid X` with --border-thin undefined makes the
+     whole shorthand invalid at computed-value time, so those seams were not
+     rendering as authored. */
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --letter-spacing-caps: 0.06em;
+
+  /* Status foregrounds. Same names the shared :host block declares, so a rule
+     moved between light and shadow DOM keeps its meaning. */
+  --color-success: var(--wa-color-success-on-quiet);
+  --color-error: var(--wa-color-danger-on-quiet);
+  --color-text-link: var(--wa-color-text-link);
+
+  /* De-emphasis that survives a contrast check — mirror of the same two tokens
+     in litStyles.ts. See that file for why the step is 55% and not 45%. */
+  --color-text-muted: color-mix(
+    in srgb,
+    var(--wa-color-text-normal) 55%,
+    transparent
+  );
+  --border-control: color-mix(
+    in srgb,
+    var(--wa-color-text-normal) 55%,
+    transparent
+  );
 
   /* Seams. Only where a border is load-bearing; large regions separate by a
      background step. */
@@ -603,6 +631,18 @@ body.texra-high-contrast {
   --wa-color-success-fill-quiet: Canvas;
   --wa-color-success-border-quiet: Highlight;
   --wa-color-success-on-quiet: Highlight;
+
+  /* The --color-* aliases substitute their --wa-* source at the point of
+     declaration, not at the point of use. Declared on :root, they would keep
+     the ordinary palette even here, because this block sits on <body> — a
+     descendant — so overriding the --wa-* names alone never reaches them.
+     Re-declaring the aliases is what actually carries the system palette into
+     the light-DOM consumers. */
+  --color-success: Highlight;
+  --color-error: Mark;
+  --color-text-link: LinkText;
+  --color-text-muted: GrayText;
+  --border-control: CanvasText;
 }
 
 /* Honor the OS motion preference for both Web Awesome components and the
