@@ -15,6 +15,8 @@ import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBui
 import type { ChatExportController } from '@controllers/settingsView/ChatExportController';
 import {
   ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+  CLEAR_HISTORY_CONFIRM_LABEL,
+  CLEAR_HISTORY_CONFIRM_MESSAGE,
   describeClearHistoryResult,
   describeDeleteExecutionResult,
   describeLatexExportResult,
@@ -54,6 +56,11 @@ export interface DesktopHistoryOptions {
   readonly postToRenderer: (message: unknown) => void;
   readonly openPath: (filePath: string) => Promise<void>;
   readonly showInfoMessage: (message: string) => Promise<void>;
+  /** Ask before a destructive action; resolves true when the user confirms. */
+  readonly confirmAction: (
+    message: string,
+    confirmLabel: string,
+  ) => Promise<boolean>;
   /** Surface for an action that did not happen, such as a refused delete. */
   readonly showWarningMessage: (message: string) => Promise<void>;
   readonly showErrorMessage: (message: string) => Promise<void>;
@@ -108,6 +115,11 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async clear(): Promise<void> {
+    const confirmed = await this.dependencies.confirmAction(
+      CLEAR_HISTORY_CONFIRM_MESSAGE,
+      CLEAR_HISTORY_CONFIRM_LABEL,
+    );
+    if (!confirmed) return;
     const result = await deleteAllExecutions();
     await GoalStore.forgetByExecutionIds(result.deleted);
     const outcome = describeClearHistoryResult(result);

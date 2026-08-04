@@ -813,6 +813,7 @@ function createWindow(options: {
       (await getAgentExecution()).restoreRunConfig(config),
     openPath: settingsUi.openPath,
     showInfoMessage: settingsUi.showInfoMessage,
+    confirmAction: settingsUi.confirmAction,
     showWarningMessage,
     showErrorMessage: settingsUi.showErrorMessage,
     onError: settingsUi.onError,

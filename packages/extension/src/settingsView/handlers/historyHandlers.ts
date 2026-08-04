@@ -21,6 +21,8 @@ import {
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
   ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
+  CLEAR_HISTORY_CONFIRM_LABEL,
+  CLEAR_HISTORY_CONFIRM_MESSAGE,
   describeClearHistoryResult,
   describeDeleteExecutionResult,
   describeLatexExportResult,
@@ -134,8 +136,8 @@ export class HistoryHandlers {
       'Failed to clear history',
       async () => {
         const confirmed = await confirmModal(
-          'Clear all history? This deletes every stored execution and cannot be undone.',
-          'Clear all history',
+          CLEAR_HISTORY_CONFIRM_MESSAGE,
+          CLEAR_HISTORY_CONFIRM_LABEL,
         );
         if (!confirmed) return;
         const result = await deleteAllExecutions();

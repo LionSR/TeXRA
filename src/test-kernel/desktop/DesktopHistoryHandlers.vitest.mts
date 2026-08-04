@@ -257,6 +257,26 @@ describe('DesktopHistoryHandlers', () => {
     });
   });
 
+  it('leaves history untouched when the user cancels the clear prompt', async () => {
+    await writeHistoryConfig();
+    const showInfoMessage = vi.fn(async () => undefined);
+    const confirmAction = vi.fn(async () => false);
+    const actions = createHistoryHandlers({ showInfoMessage, confirmAction });
+
+    await assertSupported(actions.clearHistory)({
+      command: SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY,
+    });
+
+    expect(confirmAction).toHaveBeenCalledWith(
+      'Clear all history? This deletes every stored execution and cannot be undone.',
+      'Clear all history',
+    );
+    expect(await getExecutionStore(HISTORY_ID).readConfig()).toEqual(
+      HISTORY_CONFIG,
+    );
+    expect(showInfoMessage).not.toHaveBeenCalled();
+  });
+
   it('clears inactive history while preserving active executions', async () => {
     const activeHistoryId = 'cccc3333';
     const inactiveHistoryId = 'dddd4444';

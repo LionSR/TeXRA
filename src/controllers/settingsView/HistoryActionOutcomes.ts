@@ -39,6 +39,14 @@ export const ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE =
 
 export const HISTORY_CLEARED_MESSAGE = 'Agent history cleared';
 
+/**
+ * Confirmation copy for the clear-all-history action, shared by the
+ * extension and desktop hosts so the destructive prompt cannot drift.
+ */
+export const CLEAR_HISTORY_CONFIRM_MESSAGE =
+  'Clear all history? This deletes every stored execution and cannot be undone.';
+export const CLEAR_HISTORY_CONFIRM_LABEL = 'Clear all history';
+
 /** Message for a failed {@link ChatExportController.buildExportInput} status. */
 export function exportInputErrorMessage(
   status: Exclude<ExportInputStatus, 'ok'>,
