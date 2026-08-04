@@ -2,7 +2,6 @@ import PQueue from 'p-queue';
 
 import type { UserQuestionSettlement } from '@agent/runtime/HostInteractions';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
-import { warn } from '@logger/logUtils';
 import { decideTexraApproval } from '@shared/approvalPolicy';
 import {
   isChatGptSubscriptionLimitError,
@@ -15,7 +14,7 @@ import {
 } from '@shared/schemas';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
-import { askCliQuestion } from '../logSinks';
+import { askCliQuestion, writeTextStderr } from '../logSinks';
 
 /**
  * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
@@ -71,10 +70,10 @@ export function markApprovalDenied(context: CliContext, gate?: string): void {
     return;
   }
   deniedApprovalContexts.add(context);
-  // One warn on first denial so exit code 4 has a visible cause on stderr.
-  warn(
-    'cli-approval',
-    `${gate?.trim() || 'Approval gate'} denied under policy "${context.approvalPolicy}".`,
+  // Operator-facing CLI warnings go to stderr (not @logger/logUtils, which can
+  // fall through to stdout/console before the CLI log backend is wired).
+  writeTextStderr(
+    `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${context.approvalPolicy}".`,
   );
 }
 

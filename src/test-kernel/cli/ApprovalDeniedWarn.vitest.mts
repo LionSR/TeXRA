@@ -3,13 +3,13 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const warnMock = vi.hoisted(() => vi.fn());
+const writeTextStderrMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@logger/logUtils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@logger/logUtils')>();
+vi.mock('@cli/runtime/logSinks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@cli/runtime/logSinks')>();
   return {
     ...actual,
-    warn: warnMock,
+    writeTextStderr: writeTextStderrMock,
   };
 });
 
@@ -21,7 +21,7 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 describe('markApprovalDenied', () => {
   beforeEach(() => {
-    warnMock.mockClear();
+    writeTextStderrMock.mockClear();
   });
 
   it('warns once with the gate and policy on first denial', () => {
@@ -31,10 +31,9 @@ describe('markApprovalDenied', () => {
     markApprovalDenied(context, 'Tool or edit approval');
 
     expect(hasCliApprovalDenied(context)).toBe(true);
-    expect(warnMock).toHaveBeenCalledTimes(1);
-    expect(warnMock).toHaveBeenCalledWith(
-      'cli-approval',
-      'Tool or edit approval denied under policy "never".',
+    expect(writeTextStderrMock).toHaveBeenCalledTimes(1);
+    expect(writeTextStderrMock).toHaveBeenCalledWith(
+      '[warn] [cli-approval] Tool or edit approval denied under policy "never".',
     );
   });
 
@@ -43,9 +42,8 @@ describe('markApprovalDenied', () => {
 
     markApprovalDenied(context);
 
-    expect(warnMock).toHaveBeenCalledWith(
-      'cli-approval',
-      'Approval gate denied under policy "ask".',
+    expect(writeTextStderrMock).toHaveBeenCalledWith(
+      '[warn] [cli-approval] Approval gate denied under policy "ask".',
     );
   });
 });
