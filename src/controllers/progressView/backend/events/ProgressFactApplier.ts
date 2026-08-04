@@ -39,6 +39,10 @@ import {
 } from '@shared/schemas';
 import { isGoalInFlight } from '@shared/schemas/goal';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
+import {
+  phaseStageFromStageStart,
+  roundStageFromStageStart,
+} from '@shared/streams/stage';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
@@ -152,28 +156,12 @@ export class ProgressFactApplier {
         progress: event.progress,
       }),
     'stage.start': (streamId, event) => {
-      if (event.kind === 'phase') {
-        return this.handleUpdatePhaseStage({
-          streamId,
-          phaseStage: {
-            label: event.label,
-            ...(event.index !== undefined ? { index: event.index } : {}),
-            ...(event.total !== undefined && event.total > 0
-              ? { total: event.total }
-              : {}),
-          },
-        });
-      }
-      if (event.kind !== 'round') return;
-      return this.handleUpdateRoundStage({
-        streamId,
-        roundStage: {
-          index: event.index ?? 0,
-          ...(event.total !== undefined && event.total > 0
-            ? { total: event.total }
-            : {}),
-        },
-      });
+      const phaseStage = phaseStageFromStageStart(event);
+      if (phaseStage)
+        return this.handleUpdatePhaseStage({ streamId, phaseStage });
+      const roundStage = roundStageFromStageStart(event);
+      if (roundStage)
+        return this.handleUpdateRoundStage({ streamId, roundStage });
     },
     'child.activity': (_streamId, event) =>
       this.updateChildRoster(event.parentStreamId, [...event.items]),

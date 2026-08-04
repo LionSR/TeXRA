@@ -18,6 +18,7 @@ import type {
   StreamPhase,
   StreamTabId,
 } from '@shared/schemas';
+import { roundStageFromStageStart } from '@shared/streams/stage';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   formatRoundStageLabel,
@@ -219,20 +220,15 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.render();
         }
         return;
-      case 'stage.start':
-        if (this.rootStreamTerminal || event.kind !== 'round') return;
-        if (
-          this.applyRoundStage(streamId, {
-            index: event.index ?? 0,
-            ...(event.total !== undefined && event.total > 0
-              ? { total: event.total }
-              : {}),
-          })
-        ) {
+      case 'stage.start': {
+        if (this.rootStreamTerminal) return;
+        const roundStage = roundStageFromStageStart(event);
+        if (roundStage && this.applyRoundStage(streamId, roundStage)) {
           this.updateHeartbeat();
           this.render();
         }
         return;
+      }
       case 'child.activity':
         if (this.rootStreamTerminal) return;
         this.applyActiveSubagents(event.parentStreamId, event.items);
