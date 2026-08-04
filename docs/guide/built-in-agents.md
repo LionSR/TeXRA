@@ -333,20 +333,20 @@ current revision (main.tex), highlighting additions and deletions.
 
 ### `ocr`
 
-The `ocr` agent performs Optical Character Recognition (OCR) on image or PDF files.
+The `ocr` agent converts handwritten mathematical content from images into LaTeX.
 
-**Purpose:** Extract text content from images or non-searchable PDFs.
+**Purpose:** Turn handwritten equations and notes into LaTeX code that matches your document's notation and style.
 
 **Best for:**
 
-- Extracting text from scanned documents or figures
-- Making image-based text searchable and editable
-- Processing figures containing text for analysis
+- Converting handwritten derivations or lecture-board photos into LaTeX
+- Digitizing handwritten mathematical notes across multiple images
+- Keeping converted notation consistent with the existing document
 
 **Example instruction:**
 
 ```
-Perform OCR on the provided image file [figure.png] and extract all text content. Format the output as plain text.
+Convert the handwritten derivation in [notes.png] into LaTeX, matching the notation used in the attached document.
 ```
 
 ### `transcribe_audio`
@@ -474,19 +474,6 @@ Find recent papers on transformer architectures for scientific document understa
 Focus on papers from 2023-2024 that address mathematical equation handling.
 ```
 
-### `discuss`
-
-A brainstorming partner that can pull in relevant literature as you talk. Useful for thinking through research directions, poking holes in methodology, or connecting ideas across papers. Read-only.
-
-**Best for:** Brainstorming, methodology critique, research direction guidance
-
-**Example instruction:**
-
-```
-I'm considering attention mechanisms for my theorem prover. What are the
-tradeoffs compared to tree-based approaches? What does the literature say?
-```
-
 ### `simplifier`
 
 Cuts through complexity in your code and writing. Whether it's duplicated logic across files, overly-abstract wrappers, or LLM-generated filler prose, `simplifier` cleans things up while preserving correctness.
@@ -508,7 +495,7 @@ Coordinates multi-agent work on LaTeX research projects. It reads project contex
 
 ### `progressCheck`
 
-An end-of-session reviewer. It looks at what was just done, the project's standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still on the table. Read-only — it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams).
+An end-of-session reviewer. It looks at what was just done, the project's standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still on the table. Read-only — it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams) except Software Engineer.
 
 **Best for:** Auditing what a team run actually delivered versus the goal
 
@@ -519,7 +506,7 @@ Additional remote agents may be available depending on your access level. In the
 ## Built-in Teams
 
 Teams are predefined collections of agents for a discipline. Pick one from the
-**Multi-Agent** tab in the Dashboard, or run one from the CLI with
+**Teams** tab in the Dashboard, or run one from the CLI with
 `texra multi-agent run <team>`:
 
 | Team               | For                                                                                         | Lead agent         |
@@ -530,9 +517,9 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 | Computer Scientist | CS papers — algorithm design, code-driven experiments and ablations, tests, and review      | `orchestrator`     |
 | Software Engineer  | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
 
-Every team bundles the `progressCheck` audit helper, and the paper-focused
-teams also include `latexFixer`. The Software Engineer lead and its specialists
-run locally; some specialists in other teams are
+Every team except Software Engineer bundles the `progressCheck` audit helper,
+and the paper-focused teams also include `latexFixer`. The Software Engineer
+lead and its specialists run locally; some specialists in other teams are
 [remote agents](./remote-agents.md) that sync after you sign in.
 
 ## Next Steps

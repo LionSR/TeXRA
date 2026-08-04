@@ -21,17 +21,18 @@ TeXRA supports models from multiple providers. Select models from the dropdown i
 
 ## Anthropic Models
 
-| Model ID    | Use Case                                  | Cost | Speed  |
-| :---------- | :---------------------------------------- | :--- | :----- |
-| `fable5`    | Most capable, always-on adaptive thinking | $$$$ | Slow   |
-| `opus5T`    | Top-tier reasoning, long-horizon work     | $$$$ | Slow   |
-| `opus5`     | Most capable for agentic coding           | $$$$ | Slow   |
-| `sonnet46T` | All-rounder with reasoning                | $$$  | Medium |
-| `sonnet46`  | Strong all-rounder                        | $$$  | Medium |
-| `haiku45T`  | Fast with reasoning                       | $$   | Fast   |
-| `haiku45`   | Fast responses                            | $$   | Fast   |
+| Model ID   | Use Case                                  | Cost | Speed  |
+| :--------- | :---------------------------------------- | :--- | :----- |
+| `fable5`   | Most capable, always-on adaptive thinking | $$$$ | Slow   |
+| `opus5T`   | Top-tier reasoning, long-horizon work     | $$$$ | Slow   |
+| `opus5`    | Most capable for agentic coding           | $$$$ | Slow   |
+| `sonnet5T` | All-rounder with reasoning                | $$$  | Medium |
+| `sonnet5`  | Strong all-rounder                        | $$$  | Medium |
+| `haiku45T` | Fast with reasoning                       | $$   | Fast   |
+| `haiku45`  | Fast responses                            | $$   | Fast   |
 
-Fable 5, Opus 5, and Sonnet 4.6 include the full 1M context window at standard pricing — no opt-in or beta header required. Other Claude models use a 200K context window.
+Fable 5, Opus 5, and Sonnet 5 include the full 1M context window at standard pricing — no opt-in or
+beta header required. Other Claude models use a 200K context window.
 
 Claude Fable 5 (`fable5`) is Anthropic's most capable model. Thinking is always on — adaptive, with summarized reasoning — so there is no separate `T` variant. It supports the full reasoning-effort range up to Extra High and the top Max tier, and is eligible for context compaction in tool-use mode.
 
@@ -39,15 +40,23 @@ Claude Opus 5 uses adaptive thinking only (extended thinking with a manual `budg
 
 ## OpenAI Models
 
-| Model ID   | Use Case                       | Cost  | Speed  |
-| :--------- | :----------------------------- | :---- | :----- |
-| `gpt55pro` | Top-tier reasoning, 1M context | $$$$$ | Slow   |
-| `gpt55`    | Flagship reasoning             | $$$$  | Medium |
-| `gpt54`    | Mid-tier reasoning             | $$$   | Medium |
-| `gpt54-`   | Lower-cost reasoning           | $$    | Fast   |
-| `gpt54--`  | Budget reasoning               | $     | Fast   |
+| Model ID    | Use Case                       | Cost | Speed  |
+| :---------- | :----------------------------- | :--- | :----- |
+| `gpt56pro`  | Pro reasoning mode, 1M context | $$$$ | Slow   |
+| `gpt56`     | Flagship reasoning, 1M context | $$$$ | Medium |
+| `gpt56fast` | Flagship, fast variant         | $$$$ | Fast   |
+| `gpt56-`    | Lower-cost reasoning           | $$$  | Fast   |
+| `gpt56--`   | Budget reasoning               | $    | Fast   |
 
-GPT-5.5 is OpenAI's latest flagship and the model TeXRA pins the [Codex integration](./agent-integrations.md#openai-codex) to. GPT-5.5 Pro (`gpt55pro`) extends GPT-5.5 with a 1.05M context window and `xhigh` default reasoning for the hardest planning and long-horizon tasks, at premium pricing — it is hidden by default; enable it from Settings → Models when you need it. The GPT Pro variants (`gpt5pro`, `gpt52pro`, `gpt55pro`) charge $15-$30 per 1M input and $120-$180 per 1M output, so for one-off hard questions consider enabling the `inquiry` tool and pasting the answer from your own ChatGPT subscription instead of running a full agent turn against the API. `gpt54` and its mini/nano variants remain the lower-cost option for most workloads. See the [API reference](https://developers.openai.com/api/docs) for full capabilities.
+GPT-5.6 Sol (`gpt56`) is OpenAI's current flagship reasoning model; TeXRA pins the
+[Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`. GPT-5.6 Pro (`gpt56pro`)
+runs the same model in the Responses API's pro reasoning mode — billed at standard token rates
+rather than a premium tier — for the hardest planning and long-horizon tasks; it is hidden by
+default, so enable it from Settings → Providers & Models when you need it. For one-off hard questions you can
+also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
+running a full agent turn against the API. `gpt56-` (Terra) and `gpt56--` (Luna) are the lower-cost
+options for most workloads. See the [API reference](https://developers.openai.com/api/docs) for
+full capabilities.
 
 GPT-5 reasoning summaries require account verification. Enable with `texra.model.gpt5ReasoningSummary`.
 
@@ -56,7 +65,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 | Model ID    | Use Case                       | Cost | Speed  |
 | :---------- | :----------------------------- | :--- | :----- |
 | `gemini31p` | Pro with reasoning, 1M context | $$$  | Medium |
-| `gemini35f` | Flash model with 1M context    | $$   | Fast   |
+| `gemini36f` | Flash model with 1M context    | $$   | Fast   |
 
 ## DeepSeek Models
 
@@ -66,14 +75,12 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 | `deepseekT`    | V4 Flash with reasoning | $    | Medium |
 | `deepseekpro`  | V4 Pro chat mode        | $    | Medium |
 | `deepseekproT` | V4 Pro with reasoning   | $    | Medium |
-| `dsr1`         | Advanced reasoning      | $$   | Medium |
 
 ## Moonshot Kimi Models
 
-| Model ID  | Use Case                | Cost | Speed  |
-| :-------- | :---------------------- | :--- | :----- |
-| `kimi26T` | K2.6 with thinking mode | $$$  | Medium |
-| `kimi26`  | K2.6, agent tasks       | $$$  | Medium |
+| Model ID | Use Case                | Cost | Speed  |
+| :------- | :---------------------- | :--- | :----- |
+| `kimi3`  | K3 flagship, 1M context | $$$  | Medium |
 
 ## DashScope Qwen Models
 
@@ -84,10 +91,9 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 
 ## MiniMax Models
 
-| Model ID     | Use Case                           | Cost | Speed  |
-| :----------- | :--------------------------------- | :--- | :----- |
-| `minimaxM27` | Flagship with interleaved thinking | $$   | Medium |
-| `minimaxM25` | Strong all-rounder                 | $$   | Medium |
+| Model ID    | Use Case                                       | Cost | Speed  |
+| :---------- | :--------------------------------------------- | :--- | :----- |
+| `minimaxM3` | Flagship with interleaved thinking, 1M context | $    | Medium |
 
 MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific — international keys (api.minimax.io) and China keys (api.minimaxi.com) are not interchangeable. Toggle the region in the Models tab.
 
@@ -97,13 +103,11 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 ## GLM (Zhipu AI / Z.AI) Models
 
-| Model ID    | Use Case                             | Cost | Speed  |
-| :---------- | :----------------------------------- | :--- | :----- |
-| `glm5`      | Flagship open-source model           | $$$  | Medium |
-| `glm5turbo` | Fast inference, agent-optimized      | $$$  | Medium |
-| `glm47`     | Programming and multi-step reasoning | $$   | Medium |
-| `glm46v`    | Multimodal vision model              | $$   | Medium |
-| `glm45`     | Hybrid reasoning (MoE)               | $$   | Medium |
+| Model ID     | Use Case                        | Cost | Speed  |
+| :----------- | :------------------------------ | :--- | :----- |
+| `glm52`      | Flagship open-source model      | $$   | Medium |
+| `glm5turbo`  | Fast inference, agent-optimized | $$$  | Medium |
+| `glm5vturbo` | Multimodal vision model         | $$   | Medium |
 
 GLM models support thinking mode (reasoning is shown inline). The API uses a non-standard base path (`/api/paas/v4`), which TeXRA handles automatically.
 
@@ -126,11 +130,9 @@ developers.
 
 ## Grok / xAI Models
 
-| Model ID | Use Case                        | Cost | Speed  |
-| :------- | :------------------------------ | :--- | :----- |
-| `grok4`  | Large context (256k), reasoning | $$$  | Medium |
-| `grok3`  | Large context (131k)            | $$$  | Medium |
-| `grok2v` | Vision-enabled                  | $$   | Medium |
+| Model ID | Use Case           | Cost | Speed  |
+| :------- | :----------------- | :--- | :----- |
+| `grok45` | Reasoning + vision | $$$  | Medium |
 
 ## Choosing a Model
 
@@ -143,7 +145,7 @@ developers.
 ### Subscription-backed models in VS Code
 
 The VS Code extension can also use compatible models from a GitHub Copilot
-subscription. Open **Settings → Models → Copilot in VS Code**, then choose
+subscription. Open **Settings → Subscriptions → Copilot in VS Code**, then choose
 **Grant access**. VS Code presents its own consent prompt; TeXRA never asks for
 or stores a Copilot API key.
 

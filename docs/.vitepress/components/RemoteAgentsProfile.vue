@@ -16,8 +16,8 @@ const rows = [
     state: 'use',
   },
   {
-    name: 'discuss',
-    desc: 'Academic brainstorming with literature',
+    name: 'orchestrator',
+    desc: 'Multi-agent coordination',
     state: 'in-use',
   },
   {

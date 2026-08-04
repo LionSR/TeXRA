@@ -213,8 +213,8 @@ texra multi-agent run software-engineer --instruction "Profile and speed up scri
 
 `run` starts the team's orchestrator, which plans the work and delegates to its
 specialists. For example, the Software Engineer team's `engineer` lead delegates
-to `coder`, `codeReviewer`, `testEngineer`, `codeSimplifier`, and
-`progressCheck`. Pass `--input` and `--context` files as with `texra run`;
+to `coder`, `codeReviewer`, `testEngineer`, and `codeSimplifier`. Pass `--input`
+and `--context` files as with `texra run`;
 read-only context files are included in the instruction the team receives.
 
 <CliMultiAgentHero />
@@ -374,19 +374,19 @@ defaults.
 
 <ConfigPrecedenceStack />
 
-<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key, which beats the built-in default (<code>deepseekT</code>).</p>
+<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key, which beats the built-in default (<code>deepseekproT</code>).</p>
 
 ```json
 {
-  "texra.model": "deepseekT",
+  "texra.model": "deepseekproT",
   "texra.outputFormat": "text",
   "texra.approvalPolicy": "never",
   "texra.chat": {
     "agent": "assistant",
-    "model": "deepseekT"
+    "model": "deepseekproT"
   },
   "texra.run": {
-    "model": "deepseekT"
+    "model": "deepseekproT"
   }
 }
 ```
@@ -394,7 +394,7 @@ defaults.
 Supported top-level keys are `texra.agent`, `texra.model`,
 `texra.outputFormat`, and `texra.approvalPolicy`; `texra.chat` and `texra.run`
 may set command-specific `agent` and `model` defaults. The built-in CLI model
-default is `deepseekT`.
+default is `deepseekproT`.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, `TEXRA_APPROVAL_POLICY`, and `TEXRA_API_MODE`. Run
@@ -405,8 +405,8 @@ Use `--api-mode personal` or `TEXRA_API_MODE=personal` to force a `run` or
 `chat` invocation to use provider API keys even when the CLI is signed in for
 included hosted access. `--api-mode included` keeps the default hosted behavior
 when the account is signed in. The accepted aliases match the TUI `/api`
-command: for example, `direct`, `api`, and `byok` select personal API keys,
-while `included` selects hosted access.
+command: `personal` (or its shorthand `byok`) selects your own provider keys,
+while `included` (or `relay`) selects hosted access.
 
 Two switches are environment-only:
 
