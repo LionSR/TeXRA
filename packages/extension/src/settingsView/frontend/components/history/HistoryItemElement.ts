@@ -30,6 +30,7 @@ import {
   historyStyles,
   searchHighlightStyles,
 } from '@shared/styles/historyStyles';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - history view events
 import { HistoryViewEvents } from './events';
@@ -423,7 +424,7 @@ export class HistoryItemElement extends LitElement {
             ).map((entry) =>
               renderIconActionButton({
                 ...entry.button,
-                label: `${entry.button.label}: ${presentation.title}`,
+                label: `${entry.button.label}: ${truncateWithEllipsis(presentation.title, LONG_INSTRUCTION_CHARS)}`,
               }),
             )}
           </div>
