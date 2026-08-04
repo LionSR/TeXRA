@@ -5,7 +5,7 @@ updated: 2026-08-03
 
 # PRD: Unified approval policy across CLI, desktop, and extension
 
-**Status:** Draft (v1 — grounded in a three-front codebase scout, August 2026)
+**Status:** Draft (v1.1 — every factual claim re-verified against main @ `363e2941d4`, 2026-08-03)
 **Owner:** TBD
 **Date:** 2026-08-03
 **Tracking issue:** [#9597](https://github.com/LionSR/TeXRA/issues/9597)
@@ -94,10 +94,11 @@ evaluator distinguishes:
   prompt (headless `ask`).
 
 Each reason has its own user-facing message. Today both cases emit
-`'Denied by TeXRA approval policy.'` at the shared boundaries
-(`src/tools/approval/toolEditApproval.ts`, `bashApproval.ts`), which is
-false in the unpresentable case and sends users hunting for a `never`
-setting they did not set.
+`'Denied by TeXRA approval policy.'` (constant at
+`src/shared/approvalPolicy.ts:7-8`, emitted at the shared boundaries
+`src/tools/approval/toolEditApproval.ts:264-270` and `bashApproval.ts:111-117`),
+which is false in the unpresentable case and sends users hunting for a
+`never` setting they did not set.
 
 ## 4. The canonical persisted spelling
 
@@ -131,6 +132,12 @@ session.
 
 ## 5. Current state (verified inventory)
 
+Line numbers and symbols below were re-verified against main @ `363e2941d4`
+(2026-08-03): every citation holds unless a correction is marked inline. The
+merged-PR ledger (#9610, #9673, #9687, #9689, #9692) is confirmed landed; the
+CLI mirror's deletable spans sum to ≈87 lines, matching the "~90 lines"
+estimate. No open PR touches this baseline.
+
 ### 5.1 What is done and correct
 
 - Shared vocabulary, copy, parser, evaluator: `src/shared/approvalPolicy.ts`.
@@ -163,8 +170,10 @@ session.
   fresh context literal per run; it works only because one object happens to
   be threaded end-to-end).
 - **Second parser.** `cliContext.ts:429-438` resolves flag/env/config
-  precedence without normalizing through `parseTexraApprovalPolicy`, plus
-  bare `'never'`/`'ask'` fallback literals at `:407`.
+  precedence via `pickEnum` (`:306-320`), whose `allowed.includes(candidate)`
+  check validates without normalizing through `parseTexraApprovalPolicy`
+  (no trim/lowercase), plus a bare `'never'`/`'ask'` fallback literal at
+  `:407`.
 - **Internal duplication in the shared module itself.**
   `TEXRA_APPROVAL_POLICIES` and `TEXRA_APPROVAL_POLICY_DISPLAY_ORDER` are
   two independent literal tuples; nothing asserts they are permutations.
@@ -251,7 +260,8 @@ The CLI then consumes shared decisions directly:
   context object; exit code 4 (`CliExitCode.ApprovalDenied`) behavior is
   unchanged and covered by tests on both the headless and TUI paths.
 - `CliContext.approvalPolicy` reverts to a plain pre-session seed. The TUI
-  live-alias getter (`runChatTui.tsx:341-346`) is deleted; the genuinely
+  live-alias getter (`runChatTui.tsx:342-344`, inside the per-run
+  `currentSessionContext` literal at `:339-347`) is deleted; the genuinely
   pre-session readers (`multiAgent.ts`, `orchestrate.ts`,
   `runInstructions.ts`, `resumeExecution.ts`, init wizard) keep reading the
   seed.
@@ -396,7 +406,7 @@ the negative space of the Stage E allowlist: nothing below may appear in it.
 | 7   | `WeakSet<CliContext>` denial marker (`markApprovalDenied` / `hasCliApprovalDenied`)                                | `:59, 68-74`                                                                                     | B     |
 | 8   | `ApprovalInstructionContext` pick type                                                                             | `:54-57`                                                                                         | B     |
 | 9   | The module `runtime/approval/approvalPolicy.ts` itself (survivors move to `approvalPrompts.ts`; no re-export shim) | whole file                                                                                       | B     |
-| 10  | TUI live-alias `get approvalPolicy()` on the per-run context                                                       | `packages/cli/src/chat/tui/runChatTui.tsx:341-346`                                               | B     |
+| 10  | TUI live-alias `get approvalPolicy()` on the per-run context                                                       | `packages/cli/src/chat/tui/runChatTui.tsx:342-344`                                               | B     |
 | 11  | Bare `'never'`/`'ask'` fallback literals and unnormalized env parsing                                              | `packages/cli/src/runtime/cliContext.ts:407, 429-438`                                            | B     |
 | 12  | CLI-local declaration of the `approvalPolicy` settings key (hoisted to shared catalog)                             | `packages/cli/src/schemas/cliSettings.ts:26`                                                     | C     |
 | 13  | `WorkspaceStateKey.SUPER_YOLO_ENABLED` + `WORKTREE_SHARED_KEYS` entry                                              | `src/shared/state/stateKeys.ts:22`, `packages/extension/src/common/state/stateManager.ts:18`     | D     |
