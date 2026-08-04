@@ -10,7 +10,9 @@ const tsconfig = JSON.parse(
 );
 const aliases = Object.entries(tsconfig.compilerOptions.paths)
   .filter(([, targets]) =>
-    targets.every((target) => !target.startsWith('node_modules/')),
+    targets.every(
+      (target) => !target.replace(/^\.\//u, '').startsWith('node_modules/'),
+    ),
   )
   .toSorted(([left], [right]) => right.length - left.length);
 

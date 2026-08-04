@@ -39,7 +39,7 @@
     "access": "public"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
+    "typecheck": "tsc --noEmit --checkers 8 -p tsconfig.json && tsc --noEmit --checkers 8 -p tsconfig.scripts.json",
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "node scripts/build-bundle.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
@@ -63,6 +63,7 @@
     "@lit-labs/signals": "^0.3.0",
     "@types/react": "^19.2.18",
     "@types/semver": "^7.7.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "@xterm/headless": "^6.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "citty": "^0.2.2",
@@ -82,7 +83,7 @@
     "slice-ansi": "^9.0.0",
     "string-width": "^8.2.2",
     "strip-ansi": "^7.2.0",
-    "typescript": "^6.0.3",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "wrap-ansi": "^10.0.0"
   }
 }
