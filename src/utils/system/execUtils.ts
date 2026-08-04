@@ -38,6 +38,20 @@ function normalizeOutput(text: string | null | undefined): string | null {
   return text?.trim() || null;
 }
 
+/**
+ * Prefer captured stderr; fall back to execa's `shortMessage` only when
+ * stderr is empty and the result looks abnormal (caller-defined: max-buffer
+ * trip, missing exit code, timeout, ...). Shared by every execa result
+ * normalizer in the codebase so this fallback rule only exists once.
+ */
+export function deriveCommandStderr(
+  stderr: string,
+  shortMessage: string | undefined,
+  looksAbnormal: boolean,
+): string {
+  return stderr || (looksAbnormal ? (shortMessage ?? '') : '');
+}
+
 /** Normalize Node's 'utf-8' alias to execa's 'utf8' encoding option. */
 function normalizeEncoding(encoding: ExecEncoding = 'utf8'): ExecaTextEncoding {
   return encoding === 'utf-8' ? 'utf8' : encoding;
@@ -412,7 +426,7 @@ export async function executeCommand(
     const normalizedStderr =
       aborted && !stderr
         ? 'Command aborted by user'
-        : stderr || (shouldUseShortMessage ? (result.shortMessage ?? '') : '');
+        : deriveCommandStderr(stderr, result.shortMessage, shouldUseShortMessage);
 
     if (!options.quiet) {
       logCommandStderr(logChannel, normalizedStderr, options.truncate);
