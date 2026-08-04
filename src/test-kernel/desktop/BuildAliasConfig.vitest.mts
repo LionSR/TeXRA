@@ -31,7 +31,16 @@ describe('build alias configuration', () => {
     const viteConfig = readText('packages/desktop/vite.config.ts');
 
     expect(desktopTsconfig.extends).toBe('./tsconfig.paths.json');
-    expect(desktopPaths).toEqual(rootPaths);
+    // Desktop's map is the root map re-rooted: with no baseUrl, its values
+    // resolve from packages/desktop, so each swaps the root's ./ for ./../../.
+    expect(desktopPaths).toEqual(
+      Object.fromEntries(
+        Object.entries(rootPaths ?? {}).map(([key, values]) => [
+          key,
+          values.map((value) => value.replace(/^\.\//, './../../')),
+        ]),
+      ),
+    );
     expect(viteConfig).toContain("from '../../scripts/aliases.mjs'");
     expect(viteConfig).not.toContain('../extension/scripts/aliases.mjs');
   });

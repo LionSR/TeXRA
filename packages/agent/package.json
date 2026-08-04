@@ -40,7 +40,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:bundle": "node scripts/bundle.mjs",
-    "build:types": "tsc -p ../../tsconfig.build.json && node scripts/rewrite-declaration-aliases.mjs",
+    "build:types": "tsc --checkers 8 -p ../../tsconfig.build.json && node scripts/rewrite-declaration-aliases.mjs",
     "check:artifacts": "node scripts/validate-artifacts.mjs",
     "clean": "node scripts/clean.mjs",
     "prepack": "npm run build"
@@ -121,8 +121,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@typescript/native": "npm:typescript@^7.0.2",
     "esbuild": "^0.28.1",
-    "typescript": "^6.0.3",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "zod": "^4.4.3"
   }
 }
