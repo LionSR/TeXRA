@@ -23,9 +23,8 @@
 import { unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { nanoid } from 'nanoid';
-
 import { debug } from '@logger/logUtils';
+import { generateShortId } from '@utils/core';
 
 export interface ApprovalTempFiles {
   readonly originalPath: string;
@@ -55,8 +54,14 @@ export async function writeApprovalTempFiles(
 ): Promise<ApprovalTempFiles> {
   const { directory, targetPath, originalContent, proposedContent } = input;
   const ext = path.extname(targetPath) || '.txt';
-  const originalPath = path.join(directory, `${nanoid()}-original${ext}`);
-  const proposedPath = path.join(directory, `${nanoid()}-proposed${ext}`);
+  const originalPath = path.join(
+    directory,
+    `${generateShortId()}-original${ext}`,
+  );
+  const proposedPath = path.join(
+    directory,
+    `${generateShortId()}-proposed${ext}`,
+  );
 
   await Promise.all([
     writeFile(originalPath, originalContent, 'utf8'),
