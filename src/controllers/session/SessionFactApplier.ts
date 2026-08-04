@@ -318,10 +318,14 @@ export class SessionFactApplier {
 
     if (!this.renderer.isAvailable()) return;
 
-    // Mint/register a brand-new stream for signal hosts before rehydrate.
-    // Do not pass `activeStream` — flipping the visible tab before
+    // Mint/register before rehydrate when the host may not have a tab yet.
+    // Never pass `activeStream` — flipping the visible tab before
     // `ensureLoaded` races a newer activation that wins during the await.
-    if (!wasKnownStream) {
+    // Known foreground switches skip this (Lit only needs the cheap active
+    // notify). Background attachment (`suppressViewSwitch`) still mints:
+    // `wasKnownStream` can be true from a prior process's persisted
+    // transcripts while this host's in-memory tab map is empty.
+    if (!wasKnownStream || payload.suppressViewSwitch === true) {
       this.renderer.onStreamMetadataChanged(streamId, {
         streamStates: this.state.streamStatus.getAllStreamStates(),
       });
