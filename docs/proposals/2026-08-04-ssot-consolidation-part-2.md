@@ -124,7 +124,7 @@ do not wait for the full consolidation.
 ### G6. `texra.memory.enabled` default: backend `true`, frontend signal `false`
 
 `src/agent/features.ts:12` and `SettingsViewHost.ts:64-68` read default `true`;
-`settingsState.ts:96` initializes `memoryEnabled = trackedSignal(() => false)`.
+`settingsState.ts:106` initializes `memoryEnabled = trackedSignal(() => false)`.
 Before the backend snapshot lands, the Memory tab renders "off" for users who
 have memory on — the exact first-paint flash the `DEFAULT_GIT_MARK_COMMITS`
 comment (`stateSettings.ts:49-56`) was written to prevent.
@@ -290,9 +290,6 @@ Normalize the tool name once at the top of `formatToolUseTemplate` and pass
 only the canonical key inward. The CLI's external-variant sniffing (Claude
 Code names) is a true external boundary — keep it, but normalize into the same
 display struct once.
-
-**Immediate deletion (zero consumers, PRD-ordered, overlooked):**
-`DELEGATION_AVAILABILITY_CATEGORY` (`shared/constants/delegationTools.ts:37-42`).
 
 ## 4. Workstream J — model policy: one predicate per fact
 
@@ -479,9 +476,8 @@ sound; this proposal deliberately contains no core-layer restructuring.
 
 ## 10. Execution order
 
-- **Wave 0 (now, independent):** G1–G8 (live bugs), plus the
-  `DELEGATION_AVAILABILITY_CATEGORY` deletion and N18's annotation. G5 lands
-  through the M1 owner; G6 through the K-pattern; neither waits for its
+- **Wave 0 (now, independent):** G1–G8 (live bugs), plus N18's annotation. G5
+  lands through the M1 owner; G6 through the K-pattern; neither waits for its
   workstream.
 - **Wave 1 (small, high-yield):** H3, H4 (with A4), J, L4, L5, N-table rows
   N1–N8. Mostly export-one/delete-two edits with compile-time guards.
