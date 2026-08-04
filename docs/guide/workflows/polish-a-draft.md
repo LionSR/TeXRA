@@ -44,17 +44,18 @@ texra run polish \
     { label: 'r0 — first revision', state: 'done' },
     { label: 'r1 — critique-and-revise pass', state: 'done' },
   ]"
-  :outputs="['.texra/runs/c4e19b07a52d/r1/intro.tex']"
+  :outputs="['executions/c4e19b07a52d/r1/intro.tex']"
 />
 
 <p class="hero-caption">Rounds stream as progress, then the path to the final revision prints on stdout — that printed path is the success signal.</p>
 
-Each round writes its output into the run's task storage, using the
-**input filename** as the document name:
+Each round writes its output into the run's task storage — an
+`executions/<run-id>/` folder under TeXRA's workspace storage directory —
+using the **input filename** as the document name:
 
 ```
-.texra/runs/<run-id>/r0/intro.tex   # Round 0 — first revision
-.texra/runs/<run-id>/r1/intro.tex   # Round 1 — critique-and-revise pass
+executions/<run-id>/r0/intro.tex   # Round 0 — first revision
+executions/<run-id>/r1/intro.tex   # Round 1 — critique-and-revise pass
 ```
 
 <PolishRoundsTree />
@@ -70,7 +71,7 @@ texra run polish --input intro.tex --output intro.polished.tex
 ## Run it in VS Code
 
 1. Open `intro.tex`.
-2. Click the TeXRA icon in the activity bar.
+2. Click the TeXRA icon in the Secondary Side Bar.
 3. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `intro.tex` from the file picker.
 4. Pick **polish** as the agent. Pick a model.
 5. Type the instruction. Press **Execute**.
@@ -83,8 +84,8 @@ Same run, same history, same output files — whichever surface you used.
 CLI — diff the rounds against your input:
 
 ```sh
-diff -u intro.tex .texra/runs/<run-id>/r0/intro.tex
-diff -u .texra/runs/<run-id>/r0/intro.tex .texra/runs/<run-id>/r1/intro.tex
+diff -u intro.tex executions/<run-id>/r0/intro.tex
+diff -u executions/<run-id>/r0/intro.tex executions/<run-id>/r1/intro.tex
 ```
 
 VS Code — the Progress Board shows side-by-side diffs and lets you accept

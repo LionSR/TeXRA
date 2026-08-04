@@ -66,7 +66,7 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 ### Creating New Figures
 
 1. Select a tool-use agent — `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>) — `sonnet46T`, `opus5T`, `gpt55`, or `gemini31p` are good choices for complex drawings.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>) — `sonnet5T`, `opus5T`, `gpt56`, or `gemini31p` are good choices for complex drawings.
 3. Provide a detailed description of the figure you want.
 4. Click Execute (<wa-icon library="texra" name="play"></wa-icon>).
 
@@ -132,8 +132,8 @@ When automatic extraction is enabled, TeXRA will:
 
 1. <wa-icon library="texra" name="search"></wa-icon> Scan your LaTeX documents for `tikzpicture` environments.
 2. <wa-icon library="texra" name="file-add"></wa-icon> Extract each figure as a separate file.
-3. <wa-icon library="texra" name="output"></wa-icon> Compile the figures to generate PNG previews.
-4. <wa-icon library="texra" name="eye"></wa-icon> Make both the TikZ code and previews available to the agent.
+3. <wa-icon library="texra" name="output"></wa-icon> Compile the figures into standalone PDFs.
+4. <wa-icon library="texra" name="eye"></wa-icon> Make both the TikZ code and compiled PDFs available to the agent.
 
 ### Manual Extraction Commands
 
@@ -167,17 +167,17 @@ Once extracted, TikZ figures can be compiled into viewable images.
 
 ### Automatic Compilation
 
-With automatic extraction on, one source file fans out into one standalone document, one PDF, and one PNG preview per figure — handed back to the agent:
+With automatic extraction on, one source file fans out into one standalone document and one compiled PDF per figure — handed back to the agent:
 
 <FlowSteps :steps="[
   { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
   { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
   { icon: 'play-circle', title: 'Compile', desc: 'latexmk / pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
-  { icon: 'output', title: 'Preview', desc: 'PDF → PNG via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: '3 PNGs', variant: 'success', icon: 'eye' }] },
-  { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered previews.', chips: [{ text: 'code + image', variant: 'accent' }] }
+  { icon: 'output', title: 'Attach', desc: 'Models with native PDF support read the PDFs directly; others get rasterised PNGs via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: 'PDF or PNG', variant: 'success', icon: 'eye' }] },
+  { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered output.', chips: [{ text: 'code + image', variant: 'accent' }] }
 ]" />
 
-<p class="hero-caption">The extract → compile → preview pipeline: each <code>tikzpicture</code> becomes its own standalone document, PDF, and PNG. The last hop needs GraphicsMagick / ImageMagick + Ghostscript.</p>
+<p class="hero-caption">The extract → compile → attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterisation to PNG — only for models without native PDF support — needs GraphicsMagick / ImageMagick + Ghostscript.</p>
 
 Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
@@ -186,7 +186,7 @@ Missing system dependencies show <wa-icon library="texra" name="warning"></wa-ic
 1. Open the Command Palette (`Ctrl+Shift+P`).
 2. Run **TeXRA: Compile TikZ Figures from Current File**.
 
-This compiles all extracted figures and generates preview images.
+This compiles all extracted figures into standalone PDFs.
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customising TikZ Processing
 
@@ -228,7 +228,7 @@ Tool-use agents can reuse existing figures as references when creating new ones.
 
 ### Using Reference Figures
 
-1. Add previous TikZ figures to the **Reference** section (<wa-icon library="texra" name="book"></wa-icon>).
+1. Add previous TikZ figures to the **Context** section (<wa-icon library="texra" name="book"></wa-icon>).
 2. Mention them explicitly in your instructions.
 3. Ask the agent to adopt similar styles or approaches.
 

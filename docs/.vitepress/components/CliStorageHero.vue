@@ -6,8 +6,9 @@
 // `--output` copies the final artifact out — the CLI's "Accept", (3)
 // `texra history show <id>` lists the run's stored artifacts with the real
 // `Files (N):` `<size>\t<path>` format (packages/cli/src/runtime/history.ts
-// formatCliHistoryDetailsText). The CLI's run store lives under
-// `.texra/runs/<run-id>/` (see First run); ids are 12-char hex.
+// formatCliHistoryDetailsText). The CLI shares the host-neutral run store at
+// `executions/<executionId>/` under TeXRA's workspace storage; ids are
+// 12-char hex.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const files = [
@@ -29,7 +30,7 @@ const files = [
         <span class="mk-term-flag">--input</span> paper.tex</span
       >
     </div>
-    <div class="csh-out">.texra/runs/9f3a6c81d24e/r1/paper.tex</div>
+    <div class="csh-out">…/executions/9f3a6c81d24e/r1/paper.tex</div>
     <div class="csh-note">outputs land in the run's storage folder first</div>
 
     <!-- Beat 2: copy out on request (the CLI's "Accept") -->

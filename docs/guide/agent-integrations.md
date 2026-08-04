@@ -24,22 +24,22 @@ does its thing.
 
 Both integrations follow the same setup flow from the TeXRA Dashboard.
 
-1. Open **TeXRA: Show Settings Dashboard** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="robot"></wa-icon>).
+1. Open **TeXRA: Show Settings Dashboard** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="link"></wa-icon>).
 2. Find the **OpenAI Codex CLI** or **Claude Code CLI** card. When it's **Not Found**, the setup actions expand automatically.
-3. Click <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="sign-in"></wa-icon> **Sign in** to OAuth in your browser.
-4. Click **Recheck**. The status flips to <wa-icon library="texra" name="check"></wa-icon> **Available**.
+3. Click <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="right-to-bracket"></wa-icon> **Sign in** to OAuth in your browser.
+4. Reopen the dashboard (or click **Re-check** on the **Tools** tab). The status flips to <wa-icon library="texra" name="check"></wa-icon> **Available** once TeXRA detects the install.
 
 <IntegrationCard />
-<p class="hero-caption">Each integration has its own card: a <strong>Not Found</strong> card expands its setup actions, and <strong>Recheck</strong> flips it to <strong>Available</strong> with a settings summary.</p>
+<p class="hero-caption">Each integration has its own card: a <strong>Not Found</strong> card expands its setup actions, and <strong>Re-check</strong> flips it to <strong>Available</strong> with a settings summary.</p>
 
 The same flow runs beat for beat in a terminal — detect, install, sign in,
 recheck:
 
 <CliToolsLifecycleHero />
 
-<p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>show</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
+<p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>status</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
 
-Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by the global **Require approval for shell commands & agent sessions** switch under **Dashboard → Tools → Approval & Safety** (on by default); turn it off to let agents call Codex or Claude Code without confirming each time.
+Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by the global **Approve shell commands** switch under **Dashboard → Tools → Approval & safety** (on by default); turn it off to let agents call Codex or Claude Code without confirming each time.
 
 Both CLIs are installed once per machine and shared by every TeXRA surface — the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA: each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
@@ -100,7 +100,7 @@ the session is still working).
 ## Running an Integration
 
 Check which agents have the `codex` or `claude_code` tool enabled on the
-**Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>), then prompt
+**Agents** tab (<wa-icon library="texra" name="robot"></wa-icon>), then prompt
 one of them:
 
 > Use codex to sketch a minimal FastAPI server that returns a JSON healthcheck.
@@ -109,9 +109,9 @@ one of them:
 
 When the tool fires:
 
-1. A new stream tab opens on the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) labelled `codex@codex-sdk` or `claude@agent-sdk`.
+1. A new stream tab opens on the ProgressBoard labelled `codex` or `claude_code`.
 2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>) and todos — all live.
-3. When the turn ends, the tab shows **WAITING**. Type into it to send a follow-up, or press <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop** to close the session.
+3. When the turn ends, the tab shows **WAITING**. Type into it to send a follow-up, or press <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to close the session.
 4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
 
 <DelegatedStreamHero />

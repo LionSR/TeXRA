@@ -74,7 +74,7 @@ The `web_search` tool prefers the active provider's native search (Anthropic, Op
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage References with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Make sure Zotero is running while you use these features — check status on **Dashboard → Integrations** (<wa-icon library="texra" name="robot"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Make sure Zotero is running while you use these features — check status on **Dashboard → Integrations** (<wa-icon library="texra" name="link"></wa-icon>).
 
 ```
 Search my Zotero library for papers by Vaswani on attention mechanisms.
@@ -103,7 +103,7 @@ Add this arXiv paper to my Zotero library.
 <p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation — search → add → export — as the calls surface in the Progress view.</p>
 
 ::: tip Default Bibliography Path
-Set a default location for Zotero exports so agents always know where to save bibliography entries. The setting key is `texra.bib.defaultPath` — configure it in your `.texra/config.json` (CLI) or VS Code settings.
+Set a default location for Zotero exports so agents always know where to save bibliography entries. The setting key is `texra.bib.defaultPath` — configure it in your `.texra/config.json`.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify Math with Wolfram
@@ -120,7 +120,7 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which Agent to Use
 
-Three research agents, each tuned for a different stage of the work — pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>):
+Two research agents, each tuned for a different stage of the work — pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>):
 
 <DropdownMenu
   label="Agent"
@@ -130,7 +130,6 @@ Three research agents, each tuned for a different stage of the work — pick one
   :groups="[{ label: 'Research', items: [
     { name: 'search', icon: 'mortar-board', badge: 'tool-use', badgeVariant: 'info', active: true },
     { name: 'research', icon: 'symbol-operator', badge: 'tool-use', badgeVariant: 'info' },
-    { name: 'discuss', icon: 'comment-discussion', badge: 'tool-use', badgeVariant: 'info' },
   ] }]"
 />
 
@@ -150,11 +149,6 @@ Three research agents, each tuned for a different stage of the work — pick one
       { text: 'file-edit', variant: 'neutral' },
       { text: 'texcount', variant: 'neutral' },
       { text: 'extract_figures', variant: 'neutral' },
-    ] },
-    { icon: 'comment-discussion', title: 'discuss', desc: 'Brainstorming research directions with literature context.', chips: [
-      { text: 'web_search', variant: 'neutral' },
-      { text: 'arxiv_metadata', variant: 'neutral' },
-      { text: 'inquiry', variant: 'neutral' },
     ] },
   ]"
 />

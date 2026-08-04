@@ -233,9 +233,11 @@ deliberately when adopting a new release.
 :::
 
 This is the same workflow the TeXRA repository runs on its own pull requests,
-with two documented differences: TeXRA pins the action to a release commit (the
-tip above) and adds a custom prompt (see
-[Writing your own review prompt](#writing-your-own-review-prompt)).
+with documented differences: TeXRA pins the action to a release commit (the
+tip above), adds a custom prompt (see
+[Writing your own review prompt](#writing-your-own-review-prompt)), and
+triggers on PR open only — a `re-review` label requests a fresh run instead of
+reviewing every push.
 
 ### 4. Open a pull request and watch it run
 

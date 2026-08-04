@@ -14,15 +14,15 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 The Dashboard groups the current controls by subject:
 
-- **Account & usage** — sign-in status, included usage, telemetry, and
-  subscription access (ChatGPT, Kimi Code, and Copilot).
+- **Account** — sign-in status, included usage, telemetry, and subscription
+  access (ChatGPT, Kimi Code, and Copilot).
 - **Models** — access mode, provider keys, and model visibility.
-- **Agents and teams** — available agents, active teams, orchestration, and
-  session reliability.
-- **Tools and integrations** — tool availability, permissions, skills, and
-  connected coding agents.
-- **Workspace** — Git behavior and LaTeX processing.
-- **Data & activity** — history, memory, and autonomous goals.
+- **Agents** — available agents, active teams, orchestration, and session
+  reliability.
+- **Capabilities** — tool availability, permissions, skills, connected coding
+  agents, and LaTeX processing.
+- **Workspace** — Git behavior and shortcuts.
+- **Data & Activity** — history, memory, and autonomous goals.
 
 Settings that benefit from an ordinary control appear directly in these views.
 File-handling rules and other internal implementation constants are not exposed
@@ -67,11 +67,13 @@ them at the intended project or user scope.
 
 ## Model access and credentials
 
-The **Models** view is the single home for model access, provider API keys,
-provider behavior, model visibility, and retry settings. Account connections
-that stand in for a provider key — Researcher Access and the ChatGPT
-subscription — live in **Account & usage**. Included-usage data remains visible whenever the signed-in account
-has usage data, regardless of the currently selected access mode.
+The **Providers & Models** view is the single home for model access, provider
+API keys, provider behavior, model visibility, and retry settings. Account
+connections that stand in for a provider key live in the **Account** group:
+Researcher Access sign-in under **Account & Usage**, and the ChatGPT, Kimi
+Code, and Copilot subscriptions under **Subscriptions**. Included-usage data
+remains visible whenever the signed-in account has usage data, regardless of
+the currently selected access mode.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys
@@ -109,8 +111,7 @@ The **LaTeX** view contains the settings that remain useful to change:
 
 - inline criticism display;
 - compile and diff behavior;
-- formatter selection;
-- TikZ processing; and
+- formatter selection; and
 - direct, regular-expression, and custom replacement rules.
 
 The latexdiff picture-environment pattern is a fixed product rule rather than a
@@ -123,9 +124,8 @@ TeXRA's native configuration.
 ## Agent execution settings (webview interface)
 
 Per-run controls in the task composer affect only the task being launched. They
-include attached files and optional context helpers such as TeX count or editor
-diagnostics. Persistent agent visibility and team selection belong in the
-Dashboard instead.
+include attached files and optional context helpers such as TeX count.
+Persistent agent visibility and team selection belong in the Dashboard instead.
 
 ## Debugging
 
