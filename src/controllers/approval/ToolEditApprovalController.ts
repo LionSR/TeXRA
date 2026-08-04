@@ -7,8 +7,6 @@
  * what the user edited — lives behind {@link ToolEditApprovalHost}.
  */
 
-import { nanoid } from 'nanoid';
-
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   matchesCancelSelector,
@@ -31,6 +29,7 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -135,7 +134,7 @@ export class ToolEditApprovalController {
       throw new Error('Tool edit approval controller is disposed.');
     }
 
-    const requestId = `approval-${nanoid()}`;
+    const requestId = `approval-${generateShortId()}`;
     const relativePath = this.options.host.relativeDisplayPath(request.path);
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',

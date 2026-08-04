@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import type {
@@ -28,6 +27,7 @@ import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
 import { errorResult } from '@tools/core/result';
+import { generateShortId } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -81,7 +81,7 @@ export function prepareBashApprovalPrompt(
     : false;
   const cwd = request.cwd?.trim();
   return {
-    requestId: `bash-${nanoid()}`,
+    requestId: `bash-${generateShortId()}`,
     command: request.command,
     ...(cwd ? { cwd } : {}),
     allowBypass: !isBypassed,
