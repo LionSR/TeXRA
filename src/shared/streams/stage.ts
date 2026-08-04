@@ -1,16 +1,4 @@
-import type { PhaseStage, RoundStage } from '@shared/schemas';
-
-/**
- * One discriminated run-progress slot. A tool-use run advances through
- * numbered rounds; a workflow-script run advances through named phases —
- * never both — so consumers hold one `stage` field rather than two
- * independently-optional ones (`roundStage` / `phaseStage`) every reader
- * has to fall back between. The arms extend the wire payload shapes, so a
- * projection to either is a `kind` strip, never a field mapping.
- */
-export type StreamStage =
-  | ({ readonly kind: 'round' } & RoundStage)
-  | ({ readonly kind: 'phase' } & PhaseStage);
+import type { PhaseStage, RoundStage, StreamStage } from '@shared/schemas';
 
 /** The `stage.start` fact fields the normalizers below read. */
 interface StageStartLike {
@@ -38,7 +26,7 @@ export function roundStageFromStageStart(
 }
 
 /** The `PhaseStage` payload of a `kind: "phase"` stage fact, or undefined. */
-export function phaseStageFromStageStart(
+function phaseStageFromStageStart(
   event: StageStartLike,
 ): PhaseStage | undefined {
   if (event.kind !== 'phase') return undefined;

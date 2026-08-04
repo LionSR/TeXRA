@@ -148,7 +148,7 @@ describe('stream-header', () => {
 
     it('anchors the progress badge tooltip via wa-tooltip[for], not a native title', async () => {
       const element = await mount({
-        roundStage: { index: 0, total: 2 },
+        stage: { kind: 'round', index: 0, total: 2 },
       });
 
       const badge = element.shadowRoot?.querySelector('#progressBadge');
@@ -173,10 +173,9 @@ describe('stream-header', () => {
   });
 
   /**
-   * The badge's stage slot follows the CLI's child-row rule: a workflow-script
-   * run advances through named phases, a tool-use run through numbered rounds,
-   * and one slot carries whichever this stream has, phase first. Before this,
-   * a workflow-script stream's own header showed no stage at all.
+   * The badge's stage slot is the canonical discriminated `StreamStage`: a
+   * workflow-script run advances through named phases, a tool-use run through
+   * numbered rounds — one slot carries whichever this stream has.
    */
   describe('phase/round stage slot', () => {
     function badgeText(element: StreamHeader): string | undefined {
@@ -193,7 +192,7 @@ describe('stream-header', () => {
 
     it('renders the phase label when the stream has one', async () => {
       const element = await mount({
-        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
       });
 
       expect(badgeText(element)).toBe('Reduce 2/3');
@@ -201,25 +200,17 @@ describe('stream-header', () => {
     });
 
     it('renders a dynamically opened phase with no declared position', async () => {
-      const element = await mount({ phaseStage: { label: 'Cleanup' } });
+      const element = await mount({
+        stage: { kind: 'phase', label: 'Cleanup' },
+      });
 
       expect(badgeText(element)).toBe('Cleanup');
       expect(badgeTooltip(element)).toBe('Phase: Cleanup');
     });
 
-    it('prefers the phase over a round when both are somehow present', async () => {
-      const element = await mount({
-        phaseStage: { label: 'Reduce', index: 1, total: 3 },
-        roundStage: { index: 0, total: 2 },
-      });
-
-      expect(badgeText(element)).toBe('Reduce 2/3');
-      expect(badgeTooltip(element)).toBe('Phase 2 of 3: Reduce');
-    });
-
     it('keeps the tool-call count alongside the phase', async () => {
       const element = await mount({
-        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+        stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
         progress: { toolCallCount: 4 },
       });
 
