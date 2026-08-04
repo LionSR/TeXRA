@@ -1,38 +1,36 @@
 <script setup>
 // Frameless status-indicator legend for the ProgressBoard guide. The prose
-// enumerates four states as colored circles (Green/Grey/Red/Yellow); a swatch
-// legend beats parsing "a colored circle shows the current status" four times.
+// enumerates the live status-dot states as colored circles; a swatch legend
+// beats parsing "a colored circle shows the current status" four times.
 //
-// Reuses the .sh-dot sizing intent from theme/mockup.css and the
-// --color-success / --color-warning / --color-error tokens (plus --mk-text-faint
-// for the grey Stopped dot). Only the Running dot pulses (mk-shpulse keyframe);
-// the others are static, matching how the live header reads. Root carries
-// `.mockup` so every --mk-* token resolves and the figure flips with the theme.
+// Colors mirror src/shared/styles/statusIndicatorStyles.ts: running = green,
+// waiting = link blue, completed/cancelled = grey, failed = red. No state
+// pulses in the live UI. Root carries `.mockup` so every --mk-* token
+// resolves and the figure flips with the theme.
 const states = [
   {
     cls: 'd-run',
     label: 'Running',
     desc: 'Agent is actively processing',
-    pulse: true,
   },
   {
-    cls: 'd-stop',
-    label: 'Stopped',
-    desc: 'Finished successfully or stopped manually',
+    cls: 'd-wait',
+    label: 'Waiting',
+    desc: 'Paused for your input or a follow-up',
   },
-  { cls: 'd-err', label: 'Error', desc: 'The run hit an error' },
   {
-    cls: 'd-ready',
-    label: 'Ready',
-    desc: 'View is idle — no active stream yet',
+    cls: 'd-done',
+    label: 'Completed',
+    desc: 'Finished (or cancelled) — grey',
   },
+  { cls: 'd-err', label: 'Failed', desc: 'The run hit an error' },
 ];
 </script>
 
 <template>
   <div class="mockup sdl" role="group" aria-label="Status indicator legend">
     <div v-for="s in states" :key="s.label" class="sdl-row">
-      <span class="sdl-dot" :class="[s.cls, { 'sdl-pulse': s.pulse }]"></span>
+      <span class="sdl-dot" :class="s.cls"></span>
       <span class="sdl-label">{{ s.label }}</span>
       <span class="sdl-desc">{{ s.desc }}</span>
     </div>
@@ -68,19 +66,14 @@ const states = [
 .sdl-dot.d-run {
   background: var(--color-success);
 }
-.sdl-dot.d-stop {
+.sdl-dot.d-wait {
+  background: var(--wa-color-text-link, var(--mk-accent));
+}
+.sdl-dot.d-done {
   background: var(--mk-text-faint);
 }
 .sdl-dot.d-err {
   background: var(--color-error);
-}
-.sdl-dot.d-ready {
-  background: var(--color-warning);
-}
-/* Only the Running dot animates — same intent as the live .sh-dot. */
-.sdl-dot.sdl-pulse {
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 60%, transparent);
-  animation: mk-shpulse 1.8s infinite;
 }
 .sdl-label {
   font-family: var(--vp-font-family-mono);

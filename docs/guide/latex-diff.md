@@ -11,7 +11,7 @@ A core design philosophy of TeXRA is transparency and control over the AI's modi
 
 <p class="hero-caption">Pick a base and an edited file (or a git commit), press latexdiff, and TeXRA compiles and opens the marked-up PDF — additions underlined in blue, deletions struck through in red.</p>
 
-TeXRA automatically generates diff files after agent runs that modify `.tex` files (like `correct` or `polish`), comparing the agent's task-storage output (`r0/output.tex` or `r1/output.tex`) against the original input or the previous round's output. This provides immediate observability into the agent's actions.
+TeXRA automatically generates diff files after agent runs that modify `.tex` files (like `correct` or `polish`), comparing the agent's task-storage output (e.g. `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous round's output. This provides immediate observability into the agent's actions.
 
 This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparing arbitrary file versions and understanding the results.
 
@@ -24,7 +24,7 @@ LaTeX versions.
 
 ### Controlling Between-Round Diffs
 
-TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diff_rN-rM.tex`). Between-round diffs are disabled by default—enable them from the **Dashboard → LaTeX** tab (the `texra.latexdiff.generateBetweenRoundDiffs` setting in the VS Code extension). When left off, the run command and progress notifications only account for the original-vs-round comparisons, reducing the number of diff files created.
+TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diffr1r0.tex` for the r0→r1 comparison). Between-round diffs are disabled by default—enable them from the **Dashboard → LaTeX** tab (the `texra.latexdiff.generateBetweenRoundDiffs` setting in the VS Code extension). When left off, the run command and progress notifications only account for the original-vs-round comparisons, reducing the number of diff files created.
 
 ### Focusing Diff PDFs on Changed Pages
 
@@ -103,17 +103,17 @@ The commit dropdown shows recent commits. Click the refresh icon (<wa-icon libra
 
 Click the **Diff** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Commit dropdown to compare your file with its version at the selected commit.
 
-TeXRA runs the same five-stage pipeline shown above — only this route uses the `latexdiff-vc` tool and names its output with the commit hash (e.g., `original_diff_rev[commit_hash].tex`).
+TeXRA runs the same five-stage pipeline shown above — only this route uses the `latexdiff-vc` tool and names its output with the commit hash (e.g., `original-diff<commit_hash>.tex`).
 
 ### Step 3: Manage Diff Outputs
 
 After generating a Git-based diff using the **Diff** button beneath the Commit dropdown, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
 
-Each diff route writes its own predictably-named artifacts alongside the source pair — `latexdiff` produces `_diff.tex`, `latexdiff-vc` appends the commit hash (`_diff_rev<hash>.tex`), and between-round runs use `_diff_rN-rM.tex` — and every `.tex` compiles to a matching `.pdf`. Pack and Clean act on this whole set:
+Each diff route writes its own predictably-named artifacts — `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file, while agent runs write round (`_diff.tex`) and between-round (`_diffr<newer>r<older>.tex`) diffs into the run's task storage — and every `.tex` compiles to a matching `.pdf`. Pack and Clean act on the selected commit's diff files:
 
 <DiffArtifactsHero />
 
-<p class="hero-caption">The diff file-naming scheme grounded as one set — the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. The Pack and Clean buttons archive or remove the whole set.</p>
+<p class="hero-caption">The diff file-naming scheme grounded as one set — the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. The Pack and Clean buttons archive or remove the selected commit's diff files.</p>
 
 ## Understanding Diff Output
 

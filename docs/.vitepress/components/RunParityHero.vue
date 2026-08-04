@@ -40,7 +40,7 @@ const RUN_ID = '9f3a6c81d24e';
           <span>run complete</span>
           <code class="rph-id">{{ RUN_ID }}</code>
         </div>
-        <div class="rph-path">.texra/runs/{{ RUN_ID }}/r1/draft.tex</div>
+        <div class="rph-path">executions/{{ RUN_ID }}/r1/draft.tex</div>
       </div>
     </section>
 

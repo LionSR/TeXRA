@@ -1,9 +1,9 @@
 <script setup>
 // Dashboard → Integrations cards (mirrors the OpenAI Codex CLI / Claude Code
 // CLI setup cards). Two states stacked: a `Not Found` card whose setup actions
-// are expanded (Install in Terminal · Sign in · Recheck), and an `Available`
+// are expanded (Install in Terminal · Sign in), and an `Available`
 // card with its version + settings summary. The contrast visualizes the
-// Recheck flip the Quick Start prose describes.
+// Re-check flip the Quick Start prose describes.
 //
 // Root carries `.mockup` so the shared `--mk-*` tokens resolve and the card
 // flips with the docs light / dark theme. Static strings only.
@@ -31,17 +31,14 @@ import StatusPill from './StatusPill.vue';
           <wa-icon library="texra" name="terminal"></wa-icon>Install in Terminal
         </button>
         <button type="button" class="r-btn">
-          <wa-icon library="texra" name="sign-in"></wa-icon>Sign in
-        </button>
-        <button type="button" class="r-btn r-btn--accent">
-          <wa-icon library="texra" name="refresh"></wa-icon>Recheck
+          <wa-icon library="texra" name="right-to-bracket"></wa-icon>Sign in
         </button>
       </div>
     </article>
 
     <div class="ic-flip" aria-hidden="true">
       <wa-icon library="texra" name="arrow-down"></wa-icon>
-      <span>Recheck</span>
+      <span>Re-check</span>
     </div>
 
     <!-- Available: version + settings summary -->
@@ -168,7 +165,7 @@ import StatusPill from './StatusPill.vue';
   color: var(--mk-accent);
 }
 
-/* The Recheck flip connector between the two states. */
+/* The Re-check flip connector between the two states. */
 .ic-flip {
   display: flex;
   align-items: center;

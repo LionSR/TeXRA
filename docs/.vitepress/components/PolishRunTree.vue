@@ -1,6 +1,7 @@
 <script setup>
 // Frameless task-storage file tree for guide/first-run.md ("In the terminal").
-// Polish writes one folder per round under .texra/runs/<run-id>/, and KEEPS the
+// Polish writes one folder per round under executions/<run-id>/ in the
+// workspace store, and KEEPS the
 // input filename (draft.tex, not output.tex). r0 is the first revision, r1 the
 // critique pass / final. A side note pins the preserved-filename point, and a
 // dimmed sibling leaf shows the --output draft.polished.tex alternative.
@@ -29,7 +30,7 @@ const rounds = [
 <template>
   <MockCard
     class="prt"
-    title=".texra/runs/"
+    title="executions/"
     icon="folder-opened"
     sub="one folder per round · input filename preserved"
   >

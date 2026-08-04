@@ -41,7 +41,7 @@ TeXRA organizes files into three categories, each with its own accepted file typ
       ],
     },
     {
-      icon: 'device-camera-video',
+      icon: 'video',
       title: 'Media',
       tag: 'Visual / audio',
       tagVariant: 'neutral',
@@ -88,7 +88,7 @@ TeXRA supports directly pasting images from your clipboard into the instruction 
 2. **Click in the instruction text area** where you want to reference the image
 3. **Paste** (Ctrl/Cmd+V) - the image will be automatically:
    - Saved to the workspace storage
-   - Referenced in the text as `[pasted_timestamp_hash.ext]`
+   - Referenced in the text as `[pasted_<timestamp>_<rand>.ext]`
    - Added to the Media Files list
    - Made available to the AI model
 
@@ -100,7 +100,7 @@ Note: Pasted images are stored in workspace storage and automatically cleaned up
 
 ## File Selection Interface
 
-The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Context <wa-icon library="texra" name="book"></wa-icon>, Media <wa-icon library="texra" name="device-camera-video"></wa-icon>):
+The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Context <wa-icon library="texra" name="book"></wa-icon>, Media <wa-icon library="texra" name="video"></wa-icon>):
 
 <FileSelectHero />
 
@@ -110,9 +110,9 @@ The TeXRA interface provides a streamlined way to select and manage files using 
 
 Each category — Input, Context, and Media — manages a list of files (a single-file workflow is just a list of length one). The header exposes three buttons:
 
-- **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): Append every editor tab whose extension matches the category to the list.
+- **Add opened files** (<wa-icon library="texra" name="folder-open"></wa-icon>): Append every editor tab whose extension matches the category to the list.
 - **Clear all files** (<wa-icon library="texra" name="trash"></wa-icon>): Empty the list.
-- **Add files** (<wa-icon library="texra" name="add"></wa-icon>): Open a file picker to append files.
+- **Add files** (<wa-icon library="texra" name="plus"></wa-icon>): Open a file picker to append files.
 
 You can also **drag-and-drop files** from the OS file manager (or from VS Code's Explorer) onto a category to add them.
 
@@ -166,8 +166,8 @@ For example:
 
 - Input: `paper.tex`
 - Agent: `polish`
-- Model: `sonnet46`
-- Output: `r0/output.tex`
+- Model: `sonnet5`
+- Output: `r0/paper.tex`
 
 When the agent definition includes reflection rounds, you may also see:
 
@@ -179,7 +179,7 @@ TeXRA provides several commands for managing generated files, accessible from th
 
 ### Pack
 
-The "Pack" button (<wa-icon library="texra" name="archive"></wa-icon>) snapshots the run's task storage folder into a structured history folder:
+The "Pack" button (<wa-icon library="texra" name="box-archive"></wa-icon>) snapshots the run's task storage folder into a structured history folder:
 
 1. Creates a timestamped directory in the "History" folder
 2. Copies all relevant output files, logs, and mirrored dependencies
@@ -205,7 +205,7 @@ viewer, so PDFs and images display correctly while `.tex` documents open in the
 editor.
 
 To browse the whole run folder, use the
-<wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage** toolbar
+<wa-icon library="texra" name="folder-open"></wa-icon> **Open in task storage** toolbar
 button. This reveals the task-run storage folder with generated files, compile
 logs, mirrored LaTeX dependencies, and intermediate artifacts. (From a
 terminal, `texra history show <id>` lists the same stored artifacts — see the
@@ -227,8 +227,9 @@ files. Three commands then move that run's artifacts to three different places:
 
 <p class="hero-caption">Accept copies reviewed outputs into the workspace, Pack archives the run into History, and Clean deletes the run folder — your input files are never touched.</p>
 
-The CLI follows the same storage-first lifecycle — its run store lives at
-`.texra/runs/<run-id>/`, and `--output` plays the role of **Accept**:
+The CLI follows the same storage-first lifecycle — it reads and writes the
+same `executions/<executionId>/` run store, and `--output` plays the role of
+**Accept**:
 
 <CliStorageHero />
 
@@ -275,17 +276,12 @@ to inspect and apply the available workspace recommendations explicitly.
 
 ## Cross-Computer Syncing
 
-For users working on multiple computers, we recommend using a cloud storage service like Dropbox to sync the following folders:
+For users working on multiple computers, we recommend using a cloud storage service like Dropbox to sync the **History** folder, which keeps track of packed versions of your documents.
 
-- **Log**: Contains thinking logs and other processing information
-- **Diffs**: Stores difference files generated by LaTeX diff functionality
-- **History**: Keeps track of different versions of your documents
-
-To maintain your local directory structure while syncing these folders, we suggest using soft links (symbolic links). This approach allows you to store the actual folders in Dropbox while creating symbolic links in your local project directory. For example:
+To maintain your local directory structure while syncing this folder, we suggest using soft links (symbolic links). This approach allows you to store the actual folder in Dropbox while creating a symbolic link in your local project directory. For example:
 
 ```bash
-ln -s /path/to/Dropbox/texra-papers/ProjectName/Diffs /path/to/local/ProjectName
-ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName
+ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName/History
 ```
 
 Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and local project paths.
