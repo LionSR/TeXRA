@@ -74,7 +74,7 @@ const storageMocks = vi.hoisted(() => ({
       flowRecord: 'preserve' | 'delete';
     }): Promise<FinalizeExecutionResult> => ({
       status: 'durable',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       flowRecord: input.flowRecord === 'delete' ? 'deleted' : 'preserved',
     }),
   ),
@@ -557,7 +557,7 @@ describe('runFlowWithLifecycle', () => {
           releasePersist = () =>
             resolve({
               status: 'durable',
-              terminalStatusPersisted: true,
+              outcomePersisted: true,
               flowRecord: 'deleted',
             });
         }),
@@ -703,7 +703,7 @@ describe('runFlowWithLifecycle', () => {
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(storageMocks.finalizeExecution).toHaveBeenCalledWith(
         expect.objectContaining({
-          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
         }),
       );
@@ -772,7 +772,7 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
-          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'preserve',
         }),
       );
@@ -805,7 +805,7 @@ describe('runFlowWithLifecycle', () => {
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
       expect(storageMocks.finalizeExecution).toHaveBeenCalledWith(
         expect.objectContaining({
-          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          outcome: RUN_OUTCOME.CANCELLED,
         }),
       );
       expect(onError).toHaveBeenCalledOnce();
@@ -893,7 +893,7 @@ describe('runFlowWithLifecycle', () => {
       await vi.waitFor(() =>
         expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
           executionId,
-          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
         }),
       );
@@ -1011,17 +1011,14 @@ describe('runFlowWithLifecycle', () => {
     const cases = [
       {
         outcome: RUN_OUTCOME.COMPLETED,
-        terminal: EXECUTION_STATUS.COMPLETED,
         stream: STREAM_PHASE.COMPLETED,
       },
       {
         outcome: RUN_OUTCOME.CANCELLED,
-        terminal: EXECUTION_STATUS.INTERRUPTED,
         stream: STREAM_PHASE.CANCELLED,
       },
       {
         outcome: RUN_OUTCOME.FAILED,
-        terminal: EXECUTION_STATUS.ERROR,
         stream: STREAM_PHASE.FAILED,
       },
     ] as const;
@@ -1041,7 +1038,7 @@ describe('runFlowWithLifecycle', () => {
         expect(result.outcome).toBe(expected.outcome);
         expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
           executionId,
-          terminalStatus: expected.terminal,
+          outcome: expected.outcome,
           flowRecord:
             expected.outcome === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve',
         });
@@ -1068,7 +1065,7 @@ describe('runFlowWithLifecycle', () => {
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
         executionId,
-        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        outcome: RUN_OUTCOME.CANCELLED,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.CANCELLED);
@@ -1094,7 +1091,7 @@ describe('runFlowWithLifecycle', () => {
 
       expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
         executionId,
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
@@ -1192,7 +1189,7 @@ describe('runFlowWithLifecycle', () => {
       // status, same stage outcome, same classified error on the result event.
       expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
         executionId,
-        terminalStatus: EXECUTION_STATUS.ERROR,
+        outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       });
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
@@ -1298,7 +1295,7 @@ describe('finalizeRunTerminal', () => {
           releasePersist = () =>
             resolve({
               status: 'durable' as const,
-              terminalStatusPersisted: true as const,
+              outcomePersisted: true as const,
               flowRecord: 'deleted' as const,
             });
         }),
@@ -1328,7 +1325,7 @@ describe('finalizeRunTerminal', () => {
       const event = await first;
 
       expect(event).toMatchObject({
-        terminalStatusPersisted: true,
+        outcomePersisted: true,
         event: {
           type: 'result',
           outcome: RUN_OUTCOME.COMPLETED,
@@ -1405,7 +1402,7 @@ describe('finalizeRunTerminal', () => {
     storageMocks.finalizeExecution.mockResolvedValueOnce({
       status: 'failed',
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
       error: durabilityError,
     });
     channelTraceMocks.warn.mockClear();
@@ -1426,7 +1423,7 @@ describe('finalizeRunTerminal', () => {
       });
 
       expect(event).toMatchObject({
-        terminalStatusPersisted: false,
+        outcomePersisted: false,
         event: {
           type: 'result',
           outcome: RUN_OUTCOME.FAILED,
@@ -1443,7 +1440,7 @@ describe('finalizeRunTerminal', () => {
             agentIdentifier: 'test-agent',
             executionId,
             stage: 'terminal-status',
-            terminalStatusPersisted: false,
+            outcomePersisted: false,
             error: durabilityError,
           },
         },
@@ -1494,7 +1491,7 @@ describe('finalizeRunTerminal', () => {
       expect(stage.end).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.CANCELLED);
       expect(storageMocks.finalizeExecution).toHaveBeenCalledWith(
         expect.objectContaining({
-          terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+          outcome: RUN_OUTCOME.CANCELLED,
         }),
       );
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);

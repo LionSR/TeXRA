@@ -61,18 +61,6 @@ function writeCanonicalStreamFixture(input: {
   writeJson(join(sidecarDirectory, 'meta.json'), {
     schemaVersion: 1,
     executionId: input.executionId,
-    runDescriptor: {
-      schemaVersion: 1,
-      streamId: input.streamId,
-      executionId: input.executionId,
-      agent: 'search',
-      category: 'toolUse',
-      configRef: {
-        kind: 'executionConfig',
-        executionId: input.executionId,
-        path: `executions/${input.executionId}/config.json`,
-      },
-    },
   });
   writeJson(join(executionDirectory, 'config.json'), {
     agent: 'search',

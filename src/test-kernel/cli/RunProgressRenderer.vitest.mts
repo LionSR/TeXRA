@@ -28,7 +28,6 @@ import {
   type RoundStage,
   type StreamPhase,
   type StreamTabId,
-  type SubagentChildInfo,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -157,13 +156,13 @@ function runConfigEvent(overrides: RunConfigOverrides = {}): SessionEvent {
 }
 
 function subagentChild(
-  overrides: Partial<SubagentChildInfo> = {},
-): SubagentChildInfo {
+  overrides: Partial<ActiveChildInfo> = {},
+): ActiveChildInfo {
   return {
-    kind: 'subagent',
     executionId: 'child-1',
     childStreamId: 'child-stream',
     agentName: 'review',
+    identity: { kind: 'agent', agent: 'review' },
     status: 'running',
     ...overrides,
   };
@@ -895,10 +894,10 @@ describe('CLI run progress renderer', () => {
           parentStreamId: 'parent-stream',
           items: [
             {
-              kind: 'subagent',
               executionId: 'child-execution',
               childStreamId: 'child-stream',
               agentName: 'review',
+              identity: { kind: 'agent' as const, agent: 'review' },
               status: 'running',
             },
           ],
@@ -913,15 +912,16 @@ describe('CLI run progress renderer', () => {
       expect.objectContaining({
         kind: 'progress',
         event: 'updateActiveSubagents',
+        // The frozen public row shape: `kind` discriminant, no `identity`.
         payload: {
           parentStreamId: 'parent-stream',
           children: [
             {
               kind: 'subagent',
               executionId: 'child-execution',
-              childStreamId: 'child-stream',
               agentName: 'review',
               status: 'running',
+              childStreamId: 'child-stream',
             },
           ],
         },

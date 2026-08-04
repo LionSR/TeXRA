@@ -43,8 +43,9 @@ export function shouldSkipWait(executionId: string): boolean {
   if (
     status === STREAM_PHASE.WAITING &&
     handle instanceof AgentExecutionHandle &&
+    handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
-    handle.parentStreamId !== handle.childStreamId
+    handle.isChildExecution
   ) {
     return true;
   }

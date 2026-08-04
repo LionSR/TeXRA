@@ -6,11 +6,7 @@ import {
   type StreamContentRenderPayload,
 } from '@shared/schemas';
 // Local imports
-import {
-  updateParentStreamId,
-  updateToolUseState,
-  updateWorkflowState,
-} from '../stateUtils';
+import { updateToolUseState, updateWorkflowState } from '../stateUtils';
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
@@ -32,7 +28,7 @@ export const syncHandlers = {
 
     const runUsage = { ...data.runUsage };
 
-    if (data.kind === AgentCategory.Workflow) {
+    if (data.category === AgentCategory.Workflow) {
       updateWorkflowState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
@@ -61,10 +57,6 @@ export const syncHandlers = {
         goalStatus: goal.active ? goal.status : undefined,
         goalObjective: goal.active ? goal.objective : undefined,
       }));
-    }
-
-    if (data.activeState) {
-      updateParentStreamId(data.stream, data.activeState.parentStreamId);
     }
   },
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;

@@ -267,7 +267,7 @@ jobs:
             edit-approval subagent-list-focus-full-frame hidden-root-approval-tab-return \
             orchestrate-launcher orchestrate-agent-submenu \
             orchestrate-independent-subscription-preferences \
-            orchestrate-delegated-history orchestrate-resume-submenu \
+            orchestrate-history orchestrate-resume-submenu \
             compact-orchestrate-launcher single-run-liveness \
             agent-proposal-approve-all workflow-timeline
 

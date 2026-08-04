@@ -13,7 +13,7 @@ import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,6 +49,8 @@ export interface CliExecuteOptions {
   /** Additional tools unavailable in this CLI runtime. */
   readonly runtimeUnavailableTools?: readonly string[];
   readonly openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
+  /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
+  readonly modelHandlerCompatibilityKey?: RunAgentOptions['modelHandlerCompatibilityKey'];
   /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
    *  runtime-host lifecycle into the caller. */
   readonly wrap?: (
@@ -67,6 +69,12 @@ export interface CliConfigExecuteOptions<
   /** Defensive post-run guard for command paths that must stay in one category. */
   readonly expectedCategory?: C;
   readonly categoryMismatchMessage?: string;
+  /**
+   * Resume an existing execution under its persisted id instead of minting a
+   * fresh one. `runAgent` treats a request that carries an id as a resume and
+   * reuses its registered record.
+   */
+  readonly executionId?: ExecutionId;
 }
 
 export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
@@ -93,9 +101,13 @@ export async function executeCliConfig<
   runContext: CliContext,
   options: CliConfigExecuteOptions<C> = {},
 ): Promise<CliConfigExecuteResult<C>> {
-  const { expectedCategory, categoryMismatchMessage, ...executeOptions } =
-    options;
-  const executionId = generateExecutionId();
+  const {
+    expectedCategory,
+    categoryMismatchMessage,
+    executionId: resumedExecutionId,
+    ...executeOptions
+  } = options;
+  const executionId = resumedExecutionId ?? generateExecutionId();
   const validation = validateExecutionRequest({ config, executionId });
   if (!validation.valid) {
     writeTextStderr(validation.message);
@@ -115,7 +127,7 @@ export async function executeCliConfig<
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
     await finalizeCliExecution(
       executionId,
-      EXECUTION_STATUS.ERROR,
+      RUN_OUTCOME.FAILED,
       'delete',
       (finalizationError) =>
         writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
@@ -251,7 +263,7 @@ export async function executeCliRequest(
         await runWithOwnership(() =>
           finalizeCliExecution(
             ownedExecutionId,
-            EXECUTION_STATUS.INTERRUPTED,
+            RUN_OUTCOME.CANCELLED,
             'preserve',
             reportShutdownFinalizationFailure,
           ),
@@ -275,6 +287,7 @@ export async function executeCliRequest(
         enforceCategory: options.enforceCategory,
         registerExecution: options.registerExecution,
         openWorkflowOutput: options.openWorkflowOutput,
+        modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
         beforeLeaseRelease: finalizeShutdownStatus,
         onExecutionLeaseAcquired: (runWithOwnership) => {
           settleLeaseScope(runWithOwnership);

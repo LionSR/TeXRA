@@ -24,6 +24,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports - shared schemas and utilities
 import {
   ErrorLogDataSchema,
+  UserMessagePayloadSchema,
   type ErrorLogData,
   type LogMessageData,
 } from '@shared/schemas';
@@ -41,9 +42,13 @@ import type { FormatResult } from '../baseLogFormatter';
 export function formatUserMessageTemplate(
   message: LogMessageData,
 ): FormatResult {
-  const { id, text, timestamp } = message;
+  const { id, text, timestamp, data } = message;
+  const payload = UserMessagePayloadSchema.safeParse(data);
+  const workflowSummary = payload.success
+    ? (payload.data.workflowSummary ?? null)
+    : null;
   // prettier-ignore
-  return html`<user-message .text=${text ?? ''} .logId=${id} .timestamp=${timestamp}></user-message>`;
+  return html`<user-message .text=${text ?? ''} .logId=${id} .timestamp=${timestamp} .workflowSummary=${workflowSummary}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */

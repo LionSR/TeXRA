@@ -21,6 +21,7 @@ import {
   type ExecutionId,
   type PhaseStage,
   type RoundStage,
+  type RunIdentity,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -29,54 +30,36 @@ import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+
 /**
- * Config-derived run details: undefined until the stream's `RunConfig`
- * snapshot resolves (see `applySnapshotMetadata`), at which point `kind` and
- * every field below are always populated together from that one `AgentConfig`
- * — they can't drift independently of each other the way top-level
- * `ProgressStreamMetadata` fields (set by separate calls at separate times)
- * can. `kind` mirrors the three owners `buildStreamTabInfo` renders
- * differently: a `process` runs a raw OS tool, an `agent` is LLM-driven, and
- * a `workflowScript` is a deterministic orchestration container whose worker
- * agents run in child streams.
+ * Config-derived display fields: undefined until the stream's `RunConfig`
+ * snapshot resolves (see `applySnapshotMetadata`), then always populated
+ * together from that one `AgentConfig`. Display data only — what the run IS
+ * travels as the parsed {@link RunIdentity} beside it.
  */
-type ProgressStreamRunDetails =
-  | {
-      kind: 'process';
-      agent: string;
-      instruction: string;
-      workingDirectory?: string;
-    }
-  | {
-      kind: 'agent';
-      agent: string;
-      inputFile?: string;
-      model: string;
-      instruction: string;
-      workingDirectory?: string;
-    }
-  | {
-      kind: 'workflowScript';
-      workflowName: string;
-      instruction: string;
-      workingDirectory?: string;
-    };
+interface ProgressStreamConfigDetails {
+  instruction: string;
+  inputFile?: string;
+  model?: string;
+  workingDirectory?: string;
+}
 
 /** Canonical current metadata used by every progress-view stream consumer. */
 export interface ProgressStreamMetadata {
+  /** The run's identity, verbatim from `run.start` or the durable store. */
+  identity?: RunIdentity;
   agentCategory?: AgentCategory;
   isRemote?: boolean;
   creationTimestamp: number;
   executionId?: ExecutionId;
   parentStreamId?: StreamTabId;
   description?: string;
-  run?: ProgressStreamRunDetails;
+  config?: ProgressStreamConfigDetails;
 }
 
 /**
@@ -112,7 +95,7 @@ type ProgressViewPrefs = z.infer<typeof ProgressViewPrefsSchema>;
  * Backend-owned ephemeral counters, updated during streaming.
  */
 export interface StreamExecutionState {
-  kind: (typeof AgentCategory)[keyof typeof AgentCategory];
+  category: (typeof AgentCategory)[keyof typeof AgentCategory];
   conversationProgress: ConversationProgress;
   roundStage?: RoundStage;
   phaseStage?: PhaseStage;
@@ -295,59 +278,30 @@ export class ProgressViewState {
   }
 
   /**
-   * Build the snapshot-owned slice of a metadata patch: `agentCategory` and
-   * `run` are only ever set together, atomically, from one `RunConfig` (see
-   * the {@link ProgressStreamRunDetails} doc) and are therefore omitted from
-   * the patch entirely when no config has resolved yet, rather than being
-   * patched to `undefined` — that is what lets `run`'s three-owner union
-   * stay all-or-nothing instead of drifting field-by-field. `executionId`,
-   * `parentStreamId`, and `description` fall back to the current value when
-   * the snapshot store doesn't have one yet, so a patch built before that
-   * data loads can never clear a field the snapshot hasn't caught up to.
+   * Build the snapshot-owned slice of a metadata patch: `identity` is set
+   * only once the snapshot store has one, and `agentCategory`/`config` are
+   * set together from one resolved `AgentConfig` — never patched to
+   * `undefined` while still pending. `executionId`, `parentStreamId`, and
+   * `description` fall back to the current value when the snapshot store
+   * doesn't have one yet, so a patch built before that data loads can never
+   * clear a field the snapshot hasn't caught up to.
    */
   private buildSnapshotMetadataPatch(
     stream: StreamTabId,
     current: StoredStreamMetadata,
   ): Partial<StoredStreamMetadata> {
     const patch: Partial<StoredStreamMetadata> = {};
+    const identity = this.snapshots.getRunIdentity(stream);
+    if (identity) patch.identity = identity;
     const config = this.snapshots.getRunConfig(stream);
     if (config) {
-      // The descriptor is the run's identity, taken whole: a stream whose meta
-      // predates descriptors has none, and then the config answers for all
-      // three fields rather than each one falling back on its own, which is
-      // what kept a descriptor's agent from being paired with the config's
-      // category. Every descriptor carries its kind, so nothing re-derives it.
-      const identity = this.snapshots.getRunDescriptor(stream) ?? {
-        agent: config.agent,
-        category: config.agentCategory,
-        kind: isProcessAgent(config.agent) ? 'process' : 'agent',
+      patch.agentCategory = config.agentCategory;
+      patch.config = {
+        instruction: config.instruction,
+        inputFile: config.inputFiles?.at(0),
+        model: config.model,
+        workingDirectory: config.workingDirectory ?? undefined,
       };
-      patch.agentCategory = identity.category;
-      const workingDirectory = config.workingDirectory ?? undefined;
-      if (identity.kind === 'workflowScript') {
-        patch.run = {
-          kind: 'workflowScript',
-          workflowName: identity.agent,
-          instruction: config.instruction,
-          workingDirectory,
-        };
-      } else if (identity.kind === 'process') {
-        patch.run = {
-          kind: 'process',
-          agent: identity.agent,
-          instruction: config.instruction,
-          workingDirectory,
-        };
-      } else {
-        patch.run = {
-          kind: 'agent',
-          agent: identity.agent,
-          inputFile: config.inputFiles?.at(0),
-          model: config.model,
-          instruction: config.instruction,
-          workingDirectory,
-        };
-      }
     }
 
     patch.executionId =
@@ -437,9 +391,9 @@ export class ProgressViewState {
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamExecutionState {
     const existing = this._streamStates.get(stream);
-    if (!existing || existing.kind !== agentCategory) {
+    if (!existing || existing.category !== agentCategory) {
       const state: StreamExecutionState = {
-        kind: agentCategory,
+        category: agentCategory,
         conversationProgress: { toolCallCount: 0 },
         subagents: [],
       };
@@ -509,15 +463,13 @@ export class ProgressViewState {
     for (const [parent, state] of this._streamStates) {
       const tracksChild = state.subagents.some(
         (child) =>
-          child.kind === 'subagent' &&
-          child.childStreamId === childStreamId &&
-          child.status !== phase,
+          child.childStreamId === childStreamId && child.status !== phase,
       );
       if (!tracksChild) continue;
       this._streamStates.set(parent, {
         ...state,
         subagents: state.subagents.map((child) =>
-          child.kind === 'subagent' && child.childStreamId === childStreamId
+          child.childStreamId === childStreamId
             ? { ...child, status: phase }
             : child,
         ),

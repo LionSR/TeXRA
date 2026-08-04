@@ -17,6 +17,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type { RunIdentity } from '@shared/schemas';
 
 // Local file imports
 import {
@@ -29,19 +30,26 @@ interface HostHarness {
   readonly executed: unknown[];
   readonly openedLabels: string[];
   readonly infoMessages: string[];
+  readonly bypassInfoMessages: string[];
   readonly settledProposals: unknown[];
 }
 
-function createHostHarness(runConfig: AgentConfig): HostHarness {
+function createHostHarness(
+  runConfig: AgentConfig,
+  identity?: RunIdentity,
+): HostHarness {
   const executed: unknown[] = [];
   const openedLabels: string[] = [];
   const infoMessages: string[] = [];
+  const bypassInfoMessages: string[] = [];
   const settledProposals: unknown[] = [];
 
   const host = new ProgressViewHost({
     run: {
       state: {
         getRunConfig: () => runConfig,
+        getRunIdentity: () =>
+          identity ?? { kind: 'agent', agent: runConfig.agent },
         getExecutionId: () => 'exec-1',
       },
       executeAgent: async (request) => {
@@ -91,7 +99,11 @@ function createHostHarness(runConfig: AgentConfig): HostHarness {
         sendFollowUp: vi.fn(),
         reportImageSaveError: vi.fn(),
       },
-      bypass: { showInfo: vi.fn() },
+      bypass: {
+        showInfo: (message: string) => {
+          bypassInfoMessages.push(message);
+        },
+      },
       file: {
         openFile: vi.fn(),
         openFileCompile: vi.fn(),
@@ -109,7 +121,14 @@ function createHostHarness(runConfig: AgentConfig): HostHarness {
     },
   });
 
-  return { host, executed, openedLabels, infoMessages, settledProposals };
+  return {
+    host,
+    executed,
+    openedLabels,
+    infoMessages,
+    bypassInfoMessages,
+    settledProposals,
+  };
 }
 
 describe('ProgressViewHost', () => {
@@ -182,4 +201,39 @@ describe('ProgressViewHost', () => {
     assert.deepEqual(harness.executed, [{ config: runConfig }]);
     assert.equal(tryResumeStreamMock.mock.calls.length, 0);
   });
+
+  // Defect 3 of the run-classification consolidation: resume/re-run must be
+  // refused — with feedback, never a silent no-op relaunch of the stored
+  // config — for every non-native identity.
+  const nonNativeIdentities: readonly RunIdentity[] = [
+    { kind: 'multiAgentWorkflow', workflowName: 'engineer' },
+    { kind: 'process', tool: 'bash' },
+    { kind: 'agent', agent: 'coder', tool: 'codex' },
+  ];
+
+  for (const identity of nonNativeIdentities) {
+    it(`refuses RESUME and RUN_NEW with feedback for ${JSON.stringify(identity)}`, async () => {
+      tryResumeStreamMock.mockClear();
+      const runConfig = createAgentConfig({
+        agentCategory: AgentCategory.ToolUse,
+      });
+      const harness = createHostHarness(runConfig, identity);
+
+      await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RESUME]?.({
+        command: PROGRESS_VIEW_COMMANDS.RESUME,
+        stream: 'stream-a',
+      });
+      await harness.host.commandHandlers[PROGRESS_VIEW_COMMANDS.RUN_NEW]?.({
+        command: PROGRESS_VIEW_COMMANDS.RUN_NEW,
+        stream: 'stream-a',
+      });
+
+      assert.deepEqual(harness.executed, []);
+      assert.equal(tryResumeStreamMock.mock.calls.length, 0);
+      assert.equal(harness.bypassInfoMessages.length, 2);
+      for (const message of harness.bypassInfoMessages) {
+        assert.match(message, /Only TeXRA agent runs/);
+      }
+    });
+  }
 });

@@ -4,10 +4,13 @@ import {
 } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
+  AGENT_CATEGORIES,
   AgentCategory,
   agentKeyOf,
   agentMatchesIdentifier,
+  byCategory,
   type AgentSource,
+  type ByCategory,
 } from '@shared/schemas/agent';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
@@ -75,15 +78,12 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
   readonly preset: TeamPreset;
   readonly rootAgent?: T;
   readonly missingAgentOverride?: string;
-  readonly workflowAgentKeys: readonly string[];
-  readonly toolUseAgentKeys: readonly string[];
-  readonly missingWorkflowAgents: readonly string[];
-  readonly missingToolUseAgents: readonly string[];
+  readonly agentKeys: ByCategory<readonly string[]>;
+  readonly missingAgents: ByCategory<readonly string[]>;
 }
 
 interface TeamRunOptions<T extends TeamCatalogAgent> {
-  readonly workflowAgents: readonly T[];
-  readonly toolUseAgents: readonly T[];
+  readonly agents: ByCategory<readonly T[]>;
   readonly agentOverride?: string;
 }
 
@@ -91,36 +91,32 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   preset: TeamPreset,
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T> {
-  const workflow = resolvePresetAgents(
-    preset.workflowAgents,
-    options.workflowAgents,
-  );
-  const toolUse = resolvePresetAgents(
-    preset.toolUseAgents,
-    options.toolUseAgents,
+  const resolved = byCategory((category) =>
+    resolvePresetAgents(preset.agents[category], options.agents[category]),
   );
   const override = resolveAgentOverride(
     options.agentOverride,
-    options.toolUseAgents,
+    options.agents.toolUse,
   );
   const rootAgent =
     override.agent ??
-    selectTeamRootAgent(toolUse.resolved, {
-      presetOrder: preset.toolUseAgents,
+    selectTeamRootAgent(resolved.toolUse.resolved, {
+      presetOrder: preset.agents.toolUse,
       presetSource: preset.source,
     });
   const toolUseAgents = rootAgent
-    ? includeAgent(toolUse.resolved, rootAgent)
-    : toolUse.resolved;
+    ? includeAgent(resolved.toolUse.resolved, rootAgent)
+    : resolved.toolUse.resolved;
 
   return {
     preset,
     rootAgent,
     missingAgentOverride: override.missing,
-    workflowAgentKeys: workflow.resolved.map(agentKeyOf),
-    toolUseAgentKeys: toolUseAgents.map(agentKeyOf),
-    missingWorkflowAgents: workflow.missing,
-    missingToolUseAgents: toolUse.missing,
+    agentKeys: {
+      workflow: resolved.workflow.resolved.map(agentKeyOf),
+      toolUse: toolUseAgents.map(agentKeyOf),
+    },
+    missingAgents: byCategory((category) => resolved[category].missing),
   };
 }
 
@@ -135,8 +131,7 @@ export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
   return (
     !plan.rootAgent ||
     plan.missingAgentOverride !== undefined ||
-    plan.missingWorkflowAgents.length > 0 ||
-    plan.missingToolUseAgents.length > 0
+    AGENT_CATEGORIES.some((category) => plan.missingAgents[category].length > 0)
   );
 }
 
@@ -180,8 +175,7 @@ export interface TeamAgentAvailability {
 
 export interface TeamAvailability {
   readonly status: TeamPlanStatus;
-  readonly workflow: TeamAgentAvailability;
-  readonly toolUse: TeamAgentAvailability;
+  readonly agents: ByCategory<TeamAgentAvailability>;
   readonly rootAgent?: {
     readonly key: string;
     readonly name: string;
@@ -193,13 +187,11 @@ export interface TeamAvailability {
 export function teamAvailability(plan: TeamRunPlan): TeamAvailability {
   return {
     status: teamPlanStatus(plan),
-    workflow: presetAgentAvailability(
-      plan.preset.workflowAgents,
-      plan.missingWorkflowAgents,
-    ),
-    toolUse: presetAgentAvailability(
-      plan.preset.toolUseAgents,
-      plan.missingToolUseAgents,
+    agents: byCategory((category) =>
+      presetAgentAvailability(
+        plan.preset.agents[category],
+        plan.missingAgents[category],
+      ),
     ),
     rootAgent: plan.rootAgent
       ? {
@@ -221,10 +213,9 @@ export function teamExecutionFields<T extends TeamCatalogAgent>(
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
-    delegationAgentScope: {
-      workflowAgentKeys: [...plan.workflowAgentKeys],
-      toolUseAgentKeys: [...plan.toolUseAgentKeys],
-    },
+    delegationAgentScope: byCategory((category) => [
+      ...plan.agentKeys[category],
+    ]),
     cliMultiAgentPresetId: plan.preset.id,
   };
 }
@@ -455,15 +446,14 @@ export function formatPartialTeamLaunchMessage(
 function currentCatalogOptions<T extends TeamCatalogAgent>(
   getAgents: (category: AgentCategory) => readonly T[],
 ): TeamRunOptions<T> {
-  return {
-    workflowAgents: getAgents(AgentCategory.Workflow),
-    toolUseAgents: getAgents(AgentCategory.ToolUse),
-  };
+  return { agents: byCategory((category) => getAgents(category)) };
 }
 
 /** Missing workflow and tool-use member names, in preset-declaration order. */
 function missingMemberNames(plan: TeamRunPlan): string[] {
-  return [...plan.missingWorkflowAgents, ...plan.missingToolUseAgents];
+  return AGENT_CATEGORIES.flatMap((category) => [
+    ...plan.missingAgents[category],
+  ]);
 }
 
 function resolvePresetAgents<T extends TeamCatalogAgent>(
@@ -527,8 +517,8 @@ function includeAgent<T extends TeamCatalogAgent>(
 export function availableTeamMemberCount(plan: TeamRunPlan): number {
   const rootKey = plan.rootAgent ? agentKeyOf(plan.rootAgent) : undefined;
   const memberKeys = [
-    ...plan.workflowAgentKeys,
-    ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
+    ...plan.agentKeys.workflow,
+    ...plan.agentKeys.toolUse.filter((key) => key !== rootKey),
   ];
   return new Set(memberKeys).size;
 }

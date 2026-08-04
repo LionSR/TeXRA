@@ -1,19 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const mocks = vi.hoisted(() => ({
-  explainNonResumable: vi.fn(),
+  executeCliWorkflowConfig: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
-  resolveCliResume: vi.fn(),
+  initializeHeadlessTranscriptSession: vi.fn(),
+  readConfig: vi.fn(),
+  readMeta: vi.fn(),
+  retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
-// `texra resume` always reopens the chat TUI (below), so it must route
+// `texra resume` reopens the chat TUI for tool-use sessions, so it must route
 // through initInteractiveCliPlatform — not plain initCliPlatform — to leave
 // the TUI as the sole SIGINT/SIGTERM owner once it mounts (see
 // initPlatform.ts).
@@ -25,9 +33,25 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
 }));
 
-vi.mock('@cli/runtime/sessionResume', () => ({
-  explainNonResumable: mocks.explainNonResumable,
-  resolveCliResume: mocks.resolveCliResume,
+vi.mock('@agent/storage', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage')>()),
+  getExecutionStore: () => ({
+    readConfig: mocks.readConfig,
+    readMeta: mocks.readMeta,
+  }),
+}));
+
+vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
+  retrieveSessionResumeData: mocks.retrieveSessionResumeData,
+}));
+
+vi.mock('@cli/runtime/transcriptSession', () => ({
+  initializeHeadlessTranscriptSession:
+    mocks.initializeHeadlessTranscriptSession,
+}));
+
+vi.mock('@cli/commands/workflow', () => ({
+  executeCliWorkflowConfig: mocks.executeCliWorkflowConfig,
 }));
 
 vi.mock('@cli/chat/tui/runChatTui', () => ({
@@ -35,6 +59,19 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
 }));
 
 const EXECUTION_ID = 'exec-1' as ExecutionId;
+const STREAM_ID = 'planner#exec-1';
+
+const TOOL_USE_CONFIG = AgentConfigSchema.parse({
+  agent: 'planner',
+  model: 'gpt-5',
+  agentCategory: AgentCategory.ToolUse,
+});
+
+const WORKFLOW_CONFIG = AgentConfigSchema.parse({
+  agent: 'correct',
+  model: 'gemini31p',
+  agentCategory: AgentCategory.Workflow,
+});
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
@@ -48,60 +85,96 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+async function run(context: CliContext, id: ExecutionId = EXECUTION_ID) {
+  const { runResumeExecution } = await import('@cli/commands/resumeExecution');
+  return runResumeExecution(context, id);
+}
+
 describe('runResumeExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    mocks.resolveCliResume.mockResolvedValue(createToolUseResumeData());
+    mocks.initializeHeadlessTranscriptSession.mockResolvedValue({
+      session: {
+        interactions: {},
+        status: { isActiveOrResuming: () => false },
+      },
+    });
+    mocks.readConfig.mockResolvedValue(TOOL_USE_CONFIG);
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: STREAM_ID,
+      identity: { kind: 'agent', agent: 'planner' },
+    });
+    mocks.retrieveSessionResumeData.mockResolvedValue(
+      createToolUseResumeData({
+        executionId: EXECUTION_ID,
+        streamId: STREAM_ID,
+      }),
+    );
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
+    mocks.executeCliWorkflowConfig.mockResolvedValue(0);
   });
 
-  it('uses the CLI context TTY snapshot before reopening chat', async () => {
-    const resolution = createToolUseResumeData();
-    mocks.resolveCliResume.mockResolvedValueOnce(resolution);
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
+  it('reopens the chat TUI with the retrieved tool-use resume state', async () => {
+    const resolution = createToolUseResumeData({
+      executionId: EXECUTION_ID,
+      streamId: STREAM_ID,
+    });
+    mocks.retrieveSessionResumeData.mockResolvedValue(resolution);
 
-    await expect(
-      runResumeExecution(cliContext({ stdoutIsTty: true }), EXECUTION_ID),
-    ).resolves.toBe(0);
+    await expect(run(cliContext())).resolves.toBe(0);
 
     expect(mocks.runChat).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
-        initialResume: {
-          id: EXECUTION_ID,
-          resolution,
-        },
+        initialResume: { id: EXECUTION_ID, resolution },
       }),
     );
+    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('routes platform init through the TUI-owning signal path, not headless init', async () => {
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
-    const context = cliContext({ stdoutIsTty: true });
+    const context = cliContext();
 
-    await runResumeExecution(context, EXECUTION_ID);
+    await run(context);
 
-    // `texra resume` usually reopens the chat TUI, so it must route through
-    // initInteractiveCliPlatform — not plain initCliPlatform — so the TUI can
-    // later hand itself exclusive SIGINT/SIGTERM ownership once it mounts
-    // (see initPlatform.ts).
     expect(mocks.initInteractiveCliPlatform).toHaveBeenCalledWith(
       expect.objectContaining({ ...context, quietLogs: true }),
     );
   });
 
-  it('rejects resume when the context says stdout is not a TTY', async () => {
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
+  it('resumes a workflow run headless under its persisted execution id', async () => {
+    mocks.readConfig.mockResolvedValue(WORKFLOW_CONFIG);
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: WORKFLOW_CONFIG,
+      executionId: EXECUTION_ID,
+      modelHandlerCompatibilityKey: 'anthropic',
+    });
+    mocks.executeCliWorkflowConfig.mockResolvedValue(0);
 
-    await expect(
-      runResumeExecution(cliContext({ stdoutIsTty: false }), EXECUTION_ID),
-    ).resolves.toBe(2);
+    // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
+    // needs an interactive terminal.
+    await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(0);
 
-    expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliResume).not.toHaveBeenCalled();
+    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
+      WORKFLOW_CONFIG,
+      expect.any(Object),
+      expect.objectContaining({
+        executionId: EXECUTION_ID,
+        modelHandlerCompatibilityKey: 'anthropic',
+      }),
+    );
     expect(mocks.runChat).not.toHaveBeenCalled();
+  });
+
+  it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
+    await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(2);
+
+    expect(mocks.runChat).not.toHaveBeenCalled();
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining(`texra resume ${EXECUTION_ID}`),
     );
@@ -111,13 +184,8 @@ describe('runResumeExecution', () => {
   });
 
   it('uses the local launcher in headless resume guidance', async () => {
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
-
     await expect(
-      runResumeExecution(
-        cliContext({ commandName: 'texra-local', stdoutIsTty: false }),
-        EXECUTION_ID,
-      ),
+      run(cliContext({ commandName: 'texra-local', stdoutIsTty: false })),
     ).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
@@ -128,53 +196,135 @@ describe('runResumeExecution', () => {
     );
   });
 
-  it('rejects resume in dumb terminals before falling through to chat', async () => {
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
+  it('rejects tool-use resume in dumb terminals before falling through to chat', async () => {
+    await expect(run(cliContext({ termIsDumb: true }))).resolves.toBe(2);
 
-    await expect(
-      runResumeExecution(cliContext({ termIsDumb: true }), EXECUTION_ID),
-    ).resolves.toBe(2);
-
-    expect(mocks.initInteractiveCliPlatform).not.toHaveBeenCalled();
-    expect(mocks.resolveCliResume).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'texra resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
     );
   });
 
-  it('uses the local launcher in dumb-terminal resume guidance', async () => {
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
+  it('reports an unknown execution id as a usage error', async () => {
+    mocks.readConfig.mockResolvedValue(null);
 
-    await expect(
-      runResumeExecution(
-        cliContext({ commandName: 'texra-local', termIsDumb: true }),
-        EXECUTION_ID,
-      ),
-    ).resolves.toBe(2);
+    await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'texra-local resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra-local run`.',
+      `Execution not found: ${EXECUTION_ID}`,
     );
+    expect(mocks.runChat).not.toHaveBeenCalled();
+  });
+
+  it('reports a row without a stamped stream id as not resumable', async () => {
+    // FK-first: a row without a registration-stamped stream id has no
+    // persisted stream to continue.
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'planner' },
+    });
+
+    await expect(run(cliContext())).resolves.toBe(2);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      `Execution ${EXECUTION_ID} has no resumable session state (it completed or was cleared).`,
+    );
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('reports empty retrieval as not resumable', async () => {
+    mocks.retrieveSessionResumeData.mockResolvedValue(null);
+
+    await expect(run(cliContext())).resolves.toBe(2);
+
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      `Execution ${EXECUTION_ID} has no resumable session state (it completed or was cleared).`,
+    );
+    expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
   it('reports resume-state load failures as operational errors', async () => {
-    mocks.resolveCliResume.mockResolvedValue({
-      type: 'load-failed',
-      reason: 'KV timeout',
-    });
-    mocks.explainNonResumable.mockReturnValue(
-      `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
-    );
-    const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
+    mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
 
-    await expect(
-      runResumeExecution(cliContext({ stdoutIsTty: true }), EXECUTION_ID),
-    ).resolves.toBe(1);
+    await expect(run(cliContext())).resolves.toBe(1);
 
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
     );
+  });
+});
+
+// `readCliToolUseResumeData` is the chat-session feed for the same resume
+// surface (`/resume` inside the chat TUI). It reads the same storage and
+// retrieval seams this file already mocks, so its unit tests live here; the
+// agent-category branch runs for real against the minimal configs above.
+describe('readCliToolUseResumeData', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: STREAM_ID,
+      identity: { kind: 'agent', agent: 'planner' },
+    });
+  });
+
+  async function read(config: AgentConfig, id: ExecutionId = EXECUTION_ID) {
+    const { readCliToolUseResumeData } =
+      await import('@cli/runtime/toolUseResumeData');
+    return readCliToolUseResumeData(id, config);
+  }
+
+  it('returns null for a workflow config (resumed via the shared funnel)', async () => {
+    expect(await read(WORKFLOW_CONFIG)).toBeNull();
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('returns canonical tool-use state when a flow record exists', async () => {
+    const resume = createToolUseResumeData({
+      executionId: EXECUTION_ID,
+      streamId: STREAM_ID,
+      agentConfig: { ...TOOL_USE_CONFIG, model: 'gpt-5.5' },
+    });
+    mocks.retrieveSessionResumeData.mockResolvedValue(resume);
+
+    expect(await read(TOOL_USE_CONFIG)).toEqual(resume);
+    // The stream id is the one stamped on execution metadata at registration,
+    // never re-derived from agent/model, so resume reuses the original
+    // stream/transcript.
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
+      STREAM_ID,
+      EXECUTION_ID,
+      TOOL_USE_CONFIG,
+    );
+  });
+
+  it('returns null when metadata carries no stamped stream id', async () => {
+    // A row without a stamped streamId has no persisted stream: not resumable.
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'planner' },
+    });
+
+    expect(await read(TOOL_USE_CONFIG)).toBeNull();
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('returns null without a live flow record', async () => {
+    mocks.retrieveSessionResumeData.mockResolvedValue(undefined);
+
+    expect(await read(TOOL_USE_CONFIG)).toBeNull();
+  });
+
+  it('propagates retrieval failures for the active-resume path to surface', async () => {
+    mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
+
+    await expect(read(TOOL_USE_CONFIG)).rejects.toThrow('KV timeout');
+  });
+
+  it('discards a non-toolUse resume payload', async () => {
+    mocks.retrieveSessionResumeData.mockResolvedValue({ type: 'workflow' });
+
+    expect(await read(TOOL_USE_CONFIG)).toBeNull();
   });
 });

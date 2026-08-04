@@ -40,6 +40,7 @@ import type {
   TeamOptionData,
   WorkspaceRootOptionData,
 } from '@shared/schemas';
+import { byCategory, type ByCategory } from '@shared/schemas';
 
 // Local imports - main view
 import { SESSION_TYPES, type SessionType } from './constants';
@@ -89,26 +90,22 @@ export const selectedTeamId$ = trackedSignal(
 export const workingDirectory$ = trackedSignal(
   () => DEFAULT_STATE.workingDirectory,
 );
-export const workflowAgent$ = trackedSignal(() => DEFAULT_STATE.workflowAgent);
-export const toolUseAgent$ = trackedSignal(() => DEFAULT_STATE.toolUseAgent);
+export const agent$ = trackedSignal<ByCategory<string>>(() => ({
+  ...DEFAULT_STATE.agent,
+}));
 export const model$ = trackedSignal(() => DEFAULT_STATE.model);
 export const commit$ = trackedSignal(() => DEFAULT_STATE.commit);
-export const workflowInstruction$ = trackedSignal(
-  () => DEFAULT_STATE.workflowInstruction,
-);
-export const toolUseInstruction$ = trackedSignal(
-  () => DEFAULT_STATE.toolUseInstruction,
-);
+export const instructionDrafts$ = trackedSignal<ByCategory<string>>(() => ({
+  ...DEFAULT_STATE.instruction,
+}));
 
 /**
  * The draft of the active session mode. Derived, not stored: the per-mode
  * drafts above are the only writable instruction state, so switching modes
  * cannot leave the visible draft out of sync with the mode it belongs to.
  */
-export const instruction$ = new Signal.Computed((): string =>
-  sessionType$.get() === SESSION_TYPES.WORKFLOW
-    ? workflowInstruction$.get()
-    : toolUseInstruction$.get(),
+export const instruction$ = new Signal.Computed(
+  (): string => instructionDrafts$.get()[sessionType$.get()],
 );
 export const instructionPlaceholder$ = trackedSignal(
   () => ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
@@ -145,14 +142,12 @@ export const latexdiffsVisible$ = trackedSignal(
 // ---------------------------------------------------------------------------
 
 export const modelOptions$ = trackedSignal<ModelOptionData[]>(() => []);
-export const workflowModelOptions$ = trackedSignal<
-  ModelOptionData[] | undefined
->(() => undefined);
-export const toolUseModelOptions$ = trackedSignal<
-  ModelOptionData[] | undefined
->(() => undefined);
-export const workflowAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
-export const toolUseAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
+export const sessionModelOptions$ = trackedSignal<
+  ByCategory<ModelOptionData[] | undefined>
+>(() => byCategory(() => undefined));
+export const agentOptions$ = trackedSignal<ByCategory<AgentOptionData[]>>(() =>
+  byCategory(() => []),
+);
 export const teamOptions$ = trackedSignal<TeamOptionData[]>(() => []);
 export const workspaceRootOptions$ = trackedSignal<WorkspaceRootOptionData[]>(
   () => [],
@@ -211,10 +206,7 @@ export const debugMode$ = trackedSignal(() => false);
 export function getModelOptionsForSession(
   sessionType: SessionType,
 ): ModelOptionData[] {
-  if (sessionType === SESSION_TYPES.WORKFLOW) {
-    return workflowModelOptions$.get() ?? modelOptions$.get();
-  }
-  return toolUseModelOptions$.get() ?? modelOptions$.get();
+  return sessionModelOptions$.get()[sessionType] ?? modelOptions$.get();
 }
 
 export function primaryInputFile(): string {
@@ -229,8 +221,8 @@ export function primaryInputFile(): string {
  */
 export const isSelectedAgentOrchestrator$ = new Signal.Computed((): boolean => {
   if (sessionType$.get() !== SESSION_TYPES.TOOL_USE) return false;
-  const agentId = toolUseAgent$.get();
-  const opt = toolUseAgentOptions$.get().find((o) => o.value === agentId);
+  const agentId = agent$.get().toolUse;
+  const opt = agentOptions$.get().toolUse.find((o) => o.value === agentId);
   return opt?.isOrchestrator ?? false;
 });
 
@@ -254,11 +246,9 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
   selectedTeamId: selectedTeamId$.get(),
   instruction: instruction$.get(),
   placeholder: instructionPlaceholder$.get(),
-  workflowAgent: workflowAgent$.get(),
-  toolUseAgent: toolUseAgent$.get(),
+  agent: agent$.get(),
   model: model$.get(),
-  workflowAgentOptions: workflowAgentOptions$.get(),
-  toolUseAgentOptions: toolUseAgentOptions$.get(),
+  agentOptions: agentOptions$.get(),
   modelOptions: getModelOptionsForSession(sessionType$.get()),
   teamOptions: teamOptions$.get(),
   workspaceRootOptions: workspaceRootOptions$.get(),

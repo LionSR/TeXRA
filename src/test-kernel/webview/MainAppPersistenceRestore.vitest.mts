@@ -44,12 +44,10 @@ let webviewState: Record<string, unknown>;
 /** Persisted blob with stale output-file state that restore must discard. */
 const PERSISTED_SEED = {
   sessionType: 'workflow',
-  workflowAgent: 'correct',
-  toolUseAgent: 'orchestrator',
+  agent: { workflow: 'correct', toolUse: 'orchestrator' },
   model: 'seed-model',
   commit: 'HEAD',
-  workflowInstruction: 'persisted workflow instruction',
-  toolUseInstruction: '',
+  instruction: { workflow: 'persisted workflow instruction', toolUse: '' },
   editedFile: 'main_polish.tex',
   baseFile: 'main.tex',
   inputFiles: ['main.tex', 'appendix.tex'],
@@ -127,12 +125,10 @@ function restoreState(
 ): Record<string, unknown> {
   return {
     sessionType: 'toolUse',
-    workflowAgent: 'correct',
-    toolUseAgent: 'orchestrator',
+    agent: { workflow: 'correct', toolUse: 'orchestrator' },
     model: 'restored-model',
     commit: 'abc1234',
-    workflowInstruction: '',
-    toolUseInstruction: '',
+    instruction: { workflow: '', toolUse: '' },
     editedFile: 'restored_edited.tex',
     baseFile: 'restored.tex',
     inputFiles: ['restored.tex'],
@@ -186,6 +182,31 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
+  it('lifts legacy flat agent/instruction fields into the persisted records', () => {
+    // Old blob shape: per-category agent and instruction as flat fields.
+    // Parsing must lift them, not silently reset to the record prefaults.
+    const legacyBlob = {
+      ...PERSISTED_SEED,
+      agent: undefined,
+      instruction: undefined,
+      workflowAgent: 'polish',
+      toolUseAgent: 'research',
+      workflowInstruction: 'legacy workflow instruction',
+      toolUseInstruction: 'legacy tool-use instruction',
+    };
+    delete (legacyBlob as Record<string, unknown>).agent;
+    delete (legacyBlob as Record<string, unknown>).instruction;
+
+    const parsed = MainViewPersistedStateSchema.parse(legacyBlob);
+    expect(parsed.agent).toEqual({ workflow: 'polish', toolUse: 'research' });
+    expect(parsed.instruction).toEqual({
+      workflow: 'legacy workflow instruction',
+      toolUse: 'legacy tool-use instruction',
+    });
+    expect(parsed).not.toHaveProperty('workflowAgent');
+    expect(parsed).not.toHaveProperty('toolUseInstruction');
+  });
+
   it('keeps the shared persisted-state schema current-only', () => {
     expect(
       MainViewPersistedStateSchema.parse({
@@ -210,8 +231,8 @@ describe('MainApp persistence and restore characterization', () => {
 
     // Session/agent/model fields restored verbatim.
     expect(session.sessionType).toBe('workflow');
-    expect(session.workflowAgent).toBe('correct');
-    expect(session.toolUseAgent).toBe('orchestrator');
+    expect(session.agent.workflow).toBe('correct');
+    expect(session.agent.toolUse).toBe('orchestrator');
     expect(session.model).toBe('seed-model');
 
     expect(session.instruction).toBe('persisted workflow instruction');
@@ -246,8 +267,8 @@ describe('MainApp persistence and restore characterization', () => {
     });
     await element.updateComplete;
     const blob = lastPersistedBlob();
-    expect(blob.workflowInstruction).toBe('persisted workflow instruction');
-    expect(blob.toolUseInstruction).toBe('');
+    expect(blob.instruction.workflow).toBe('persisted workflow instruction');
+    expect(blob.instruction.toolUse).toBe('');
     expect(blob.outputFiles).toEqual([]);
     expect(blob).not.toHaveProperty('outputFilesActive');
     expect(blob.latexdiffsVisible).toBe(true);
@@ -319,8 +340,10 @@ describe('MainApp persistence and restore characterization', () => {
     dispatchHostMessage({
       command: COMMON_COMMANDS.STATE_RESTORE,
       state: restoreState({
-        toolUseInstruction: 'restored tool-use instruction',
-        workflowInstruction: 'restored workflow instruction',
+        instruction: {
+          workflow: 'restored workflow instruction',
+          toolUse: 'restored tool-use instruction',
+        },
       }),
     });
     await element.updateComplete;
@@ -342,8 +365,8 @@ describe('MainApp persistence and restore characterization', () => {
     // Restored output files are dropped, not re-persisted.
     expect(blob.outputFiles).toEqual([]);
     expect(blob).not.toHaveProperty('outputFilesActive');
-    expect(blob.workflowInstruction).toBe('restored workflow instruction');
-    expect(blob.toolUseInstruction).toBe('restored tool-use instruction');
+    expect(blob.instruction.workflow).toBe('restored workflow instruction');
+    expect(blob.instruction.toolUse).toBe('restored tool-use instruction');
 
     const { fileState, session } = contextsOf(element);
     expect(session.sessionType).toBe('toolUse');
@@ -366,15 +389,17 @@ describe('MainApp persistence and restore characterization', () => {
       command: COMMON_COMMANDS.STATE_RESTORE,
       state: restoreState({
         sessionType: 'workflow',
-        workflowInstruction: 'workflow winner',
-        toolUseInstruction: 'tool-use winner',
+        instruction: {
+          workflow: 'workflow winner',
+          toolUse: 'tool-use winner',
+        },
       }),
     });
     await element.updateComplete;
 
     const blob = lastPersistedBlob();
-    expect(blob.workflowInstruction).toBe('workflow winner');
-    expect(blob.toolUseInstruction).toBe('tool-use winner');
+    expect(blob.instruction.workflow).toBe('workflow winner');
+    expect(blob.instruction.toolUse).toBe('tool-use winner');
     expect(contextsOf(element).session.instruction).toBe('workflow winner');
   });
 
@@ -384,7 +409,9 @@ describe('MainApp persistence and restore characterization', () => {
 
     dispatchHostMessage({
       command: COMMON_COMMANDS.STATE_RESTORE,
-      state: restoreState({ toolUseInstruction: 'run this' }),
+      state: restoreState({
+        instruction: { workflow: '', toolUse: 'run this' },
+      }),
       executeImmediately: true,
     });
     await element.updateComplete;
@@ -404,7 +431,7 @@ describe('MainApp persistence and restore characterization', () => {
       command: COMMON_COMMANDS.STATE_RESTORE,
       state: restoreState({
         sessionType: 'workflow',
-        workflowInstruction: 'about to be cleared',
+        instruction: { workflow: 'about to be cleared', toolUse: '' },
         autoExtractFigure: true,
         autoExtractTikzFigure: true,
         autoCompileInputPdf: true,
@@ -422,8 +449,8 @@ describe('MainApp persistence and restore characterization', () => {
 
     expect(storageWrites).toHaveLength(1);
     const blob = lastPersistedBlob();
-    expect(blob.workflowInstruction).toBe('');
-    expect(blob.toolUseInstruction).toBe('');
+    expect(blob.instruction.workflow).toBe('');
+    expect(blob.instruction.toolUse).toBe('');
     expect(blob.editedFile).toBe('');
     expect(blob.baseFile).toBe('');
     expect(blob.inputFiles).toEqual([]);
@@ -456,7 +483,7 @@ describe('MainApp persistence and restore characterization', () => {
       command: COMMON_COMMANDS.STATE_RESTORE,
       state: restoreState({
         sessionType: 'toolUse',
-        toolUseInstruction: 'about to be cleared',
+        instruction: { workflow: '', toolUse: 'about to be cleared' },
         mediaFiles: ['kept-figure.png'],
         editedFile: 'kept_edited.tex',
       }),
@@ -472,8 +499,8 @@ describe('MainApp persistence and restore characterization', () => {
 
     expect(storageWrites).toHaveLength(1);
     const blob = lastPersistedBlob();
-    expect(blob.workflowInstruction).toBe('');
-    expect(blob.toolUseInstruction).toBe('');
+    expect(blob.instruction.workflow).toBe('');
+    expect(blob.instruction.toolUse).toBe('');
     // Tool-use reset keeps file selections (SESSION_DEFAULTS.toolUse.resetFiles=false).
     expect(blob.mediaFiles).toEqual(['kept-figure.png']);
     expect(blob.editedFile).toBe('kept_edited.tex');
@@ -503,7 +530,9 @@ describe('MainApp persistence and restore characterization', () => {
     it('writes nothing when a restore reproduces the state already applied', async () => {
       const element = await mountMainApp();
 
-      const state = restoreState({ toolUseInstruction: 'same' });
+      const state = restoreState({
+        instruction: { workflow: '', toolUse: 'same' },
+      });
       dispatchHostMessage({ command: COMMON_COMMANDS.STATE_RESTORE, state });
       await element.updateComplete;
       expect(storageWrites).toHaveLength(1);
@@ -536,7 +565,7 @@ describe('MainApp persistence and restore characterization', () => {
 
         vi.advanceTimersByTime(1);
         expect(storageWrites).toHaveLength(1);
-        expect(lastPersistedBlob().workflowInstruction).toBe('hello');
+        expect(lastPersistedBlob().instruction.workflow).toBe('hello');
       } finally {
         vi.useRealTimers();
       }
@@ -561,7 +590,7 @@ describe('MainApp persistence and restore characterization', () => {
         await Promise.resolve();
 
         expect(storageWrites).toHaveLength(1);
-        expect(lastPersistedBlob().workflowInstruction).toBe(
+        expect(lastPersistedBlob().instruction.workflow).toBe(
           'typed but not yet due',
         );
 
@@ -589,7 +618,7 @@ describe('MainApp persistence and restore characterization', () => {
         // be written synchronously, not dropped on teardown.
         element.remove();
         expect(storageWrites).toHaveLength(1);
-        expect(lastPersistedBlob().workflowInstruction).toBe(
+        expect(lastPersistedBlob().instruction.workflow).toBe(
           'unsaved when disconnected',
         );
 

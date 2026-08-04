@@ -20,8 +20,8 @@ import type { StreamSlice } from './cliState';
 export interface StreamView {
   readonly id: StreamTabId;
   readonly label: string;
-  /** Canonical spawning tool retained with the child execution. */
-  readonly toolName?: string;
+  /** What owns the child stream, retained with the child execution. */
+  readonly identity?: import('@shared/schemas').RunIdentity;
   /** Workflow-script phase owning this child, when its parent runs a script. */
   readonly workflowPhase?: string;
   readonly parentId?: StreamTabId;
@@ -145,8 +145,8 @@ export function streamViewForId(init: {
   return {
     id: init.streamId,
     label: streamDisplayLabel(init),
-    toolName:
-      childEntry?.kind === 'live' ? childEntry.summary?.toolName : undefined,
+    identity:
+      childEntry?.kind === 'live' ? childEntry.summary?.identity : undefined,
     workflowPhase:
       childEntry?.kind === 'live'
         ? childEntry.summary?.workflowPhase

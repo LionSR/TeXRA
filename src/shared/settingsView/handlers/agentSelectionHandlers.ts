@@ -9,6 +9,7 @@
  * imports, per `SharedSettingsViewBoundary.vitest.ts`.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { ByCategory } from '@shared/schemas';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import type {
   AgentSelectionItem,
@@ -19,21 +20,16 @@ import type {
 
 export interface AgentSelectionPorts {
   loadAgents(): Promise<void>;
-  buildSelectionItems(): {
-    workflow: AgentSelectionItem[];
-    toolUse: AgentSelectionItem[];
-  };
+  buildSelectionItems(): ByCategory<AgentSelectionItem[]>;
 }
 
 export async function buildAgentSelectionMessage(
   ports: AgentSelectionPorts,
 ): Promise<UpdateAgentSelectionMessage> {
   await ports.loadAgents();
-  const { workflow, toolUse } = ports.buildSelectionItems();
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-    workflow,
-    toolUse,
+    agents: ports.buildSelectionItems(),
   };
 }
 

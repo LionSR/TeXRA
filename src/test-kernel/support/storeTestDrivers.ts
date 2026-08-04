@@ -8,7 +8,7 @@ import type {
   OutputFileInfo,
   Plan,
   RoundIndexed,
-  RunDescriptor,
+  RunIdentity,
   StorageKey,
   StreamTabId,
   TodoItem,
@@ -81,7 +81,11 @@ export function appendTranscriptText(
  * {@link SessionEventHub}.
  */
 export interface SnapshotProjection {
-  setRunDescriptor(descriptor: RunDescriptor): void;
+  setRunStart(run: {
+    streamId: StreamTabId;
+    executionId: ExecutionId;
+    identity: RunIdentity;
+  }): void;
   setRunConfig(
     stream: StreamTabId,
     config: AgentConfig,
@@ -119,8 +123,8 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
     events.emit({ scope: 'run', streamId, event });
   };
   return {
-    setRunDescriptor: (descriptor) => {
-      emitRun(descriptor.streamId, { type: 'run.start', descriptor });
+    setRunStart: ({ streamId, executionId, identity }) => {
+      emitRun(streamId, { type: 'run.start', streamId, executionId, identity });
     },
     setRunConfig: (streamId, config, executionId) => {
       emitRun(streamId, { type: 'run.config', streamId, executionId, config });

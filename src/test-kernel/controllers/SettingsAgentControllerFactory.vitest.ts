@@ -72,8 +72,7 @@ describe('createSettingsAgentControllers', () => {
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
-      workflowAgentKeys: 'all',
-      toolUseAgentKeys: ['builtInToolUse:assistant'],
+      agentKeys: { workflow: 'all', toolUse: ['builtInToolUse:assistant'] },
     });
   });
 
@@ -81,8 +80,10 @@ describe('createSettingsAgentControllers', () => {
     const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
         kind: 'custom',
-        workflowAgentKeys: 'all',
-        toolUseAgentKeys: ['builtInToolUse:assistant', 'future-assistant'],
+        agentKeys: {
+          workflow: 'all',
+          toolUse: ['builtInToolUse:assistant', 'future-assistant'],
+        },
       },
     });
     const controllers = createControllers(workspaceState);
@@ -98,8 +99,7 @@ describe('createSettingsAgentControllers', () => {
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
-      workflowAgentKeys: 'all',
-      toolUseAgentKeys: ['future-assistant'],
+      agentKeys: { workflow: 'all', toolUse: ['future-assistant'] },
     });
   });
 });

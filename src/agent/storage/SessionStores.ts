@@ -11,7 +11,6 @@ import { waitForOwnedExecutionLeaseRelease } from '@agent/storage/executionLease
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
-import { legacyExecutionIdFromStreamSuffix } from '@transcript/legacyExecutionIdentity';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -268,29 +267,17 @@ export class SessionStores {
     }
   }
 
+  /**
+   * The stream→execution reverse edge: in-memory first, then the persisted
+   * sidecar FK. A stream without either has no owned execution — name
+   * resemblance is never ownership, so no suffix derivation exists.
+   */
   private async executionIdForStream(
     stream: StreamTabId,
   ): Promise<ExecutionId | undefined> {
     return (
       this.snapshots.getExecutionId(stream) ??
-      (await this.persistedOrDerivedExecutionId(stream))
-    );
-  }
-
-  /**
-   * Persisted run-descriptor id (the stream→execution reverse edge), falling
-   * back to the suffix-derived legacy boundary. Suffix resemblance alone never
-   * admits an execution directory into deletion: the boundary rejects a
-   * derived id whose registered metadata names a different stream (#9590 A2).
-   */
-  private async persistedOrDerivedExecutionId(
-    stream: StreamTabId,
-  ): Promise<ExecutionId | undefined> {
-    return (
-      (await this.snapshots.readPersistedExecutionId(stream)) ??
-      (await legacyExecutionIdFromStreamSuffix(stream, {
-        malformedMeta: 'reject',
-      }))
+      (await this.snapshots.readPersistedExecutionId(stream))
     );
   }
 
@@ -348,19 +335,9 @@ export class SessionStores {
     };
     for (const stream of snapshotStreams) {
       try {
-        const executionId = await this.persistedOrDerivedExecutionId(stream);
+        const executionId =
+          await this.snapshots.readPersistedExecutionId(stream);
         if (executionId) executionIdsByStream.set(stream, executionId);
-      } catch (error) {
-        retainUnreadable(stream, error);
-      }
-    }
-    for (const stream of streamIds) {
-      if (failed.has(stream) || executionIdsByStream.has(stream)) continue;
-      try {
-        const derived = await legacyExecutionIdFromStreamSuffix(stream, {
-          malformedMeta: 'reject',
-        });
-        if (derived) executionIdsByStream.set(stream, derived);
       } catch (error) {
         retainUnreadable(stream, error);
       }
@@ -480,7 +457,8 @@ export class SessionStores {
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         try {
-          const executionId = await this.persistedOrDerivedExecutionId(stream);
+          const executionId =
+            await this.snapshots.readPersistedExecutionId(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,

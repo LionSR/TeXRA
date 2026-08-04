@@ -28,6 +28,7 @@ import {
   type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
+  type TaskGroup,
 } from '@shared/schemas';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
@@ -36,7 +37,7 @@ import {
 import { normalizeToolUseData } from '@shared/toolUse';
 import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -52,9 +53,12 @@ import {
   getCliStateGeneration,
   isCliStreamRetired,
   patchStream,
+  registerCliStateResetHook,
   setTransientNotice,
+  streams,
   type ConversationEntry,
   type LoadedImage,
+  type StreamSlice,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
@@ -135,9 +139,18 @@ const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.USER_MESSAGE,
 ]);
 
-function isFullLogChildStream(streamId: StreamTabId): boolean {
-  return /^(bash@tool|claude@agent-sdk|codex@codex-sdk|workflow-script)#/.test(
-    streamId,
+/**
+ * Detached child runs that surface their full log output when focused: a
+ * process stream, an external-CLI agent session, or a workflow-script run.
+ * Keyed on the stream's parsed identity — never on the stream-id format.
+ */
+function isFullLogChildStream(
+  slice: Pick<StreamSlice, 'identity'> | undefined,
+): boolean {
+  const identity = slice?.identity;
+  return (
+    identity !== undefined &&
+    !(identity.kind === 'agent' && identity.tool === undefined)
   );
 }
 
@@ -175,13 +188,15 @@ function workflowOperationalLatestLine(
   return undefined;
 }
 
-function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
+function transcriptMessageTypesForStream(
+  slice: Pick<StreamSlice, 'identity'> | undefined,
+): Set<string> {
   // Detached child runs surface their full log output (phase group rows and
   // plain log lines, both `DEFAULT`) when focused, unlike the root/subagent
   // transcript which shows only model/tool/user/error rows. A workflow-script
   // run is one such child: its phases and per-agent Running/Finished lines
   // project onto its own stream trace and must render in its focused viewport.
-  return isFullLogChildStream(streamId)
+  return isFullLogChildStream(slice)
     ? CHILD_STREAM_LOG_MESSAGE_TYPES
     : TRANSCRIPT_MESSAGE_TYPES;
 }
@@ -651,6 +666,53 @@ function sortTranscriptCandidatesIfNeeded(
   return candidates;
 }
 
+/**
+ * Incremental task-group projection state, kept beside the slice: the
+ * upsert engine's mutable working set plus the immutable `snapshot` the
+ * slice holds. `applied` remembers the last log-entry object applied per
+ * group row — `StreamLog` replaces the entry object on every update
+ * (including the in-place GROUP_START → GROUP_END upsert at stage end), so
+ * a reference change is exactly a content change and only new/changed rows
+ * are fed to `upsertTaskGroupFromStreamLog`, never a full re-projection.
+ */
+interface TaskGroupProjectionState {
+  readonly working: TaskGroup[];
+  readonly index: Map<string, number>;
+  readonly applied: Map<string, StreamLogEntry>;
+  snapshot: readonly TaskGroup[];
+}
+
+const TASK_GROUP_PROJECTIONS = new Map<StreamTabId, TaskGroupProjectionState>();
+registerCliStateResetHook(() => TASK_GROUP_PROJECTIONS.clear());
+
+function projectTaskGroupsIncrementally(
+  streamId: StreamTabId,
+  entries: readonly StreamLogEntry[],
+): readonly TaskGroup[] {
+  let state = TASK_GROUP_PROJECTIONS.get(streamId);
+  if (!state) {
+    state = { working: [], index: new Map(), applied: new Map(), snapshot: [] };
+    TASK_GROUP_PROJECTIONS.set(streamId, state);
+  }
+  let changed = false;
+  for (const entry of entries) {
+    if (
+      entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+      entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
+    ) {
+      continue;
+    }
+    if (state.applied.get(entry.id) === entry) continue;
+    upsertTaskGroupFromStreamLog(state.working, state.index, entry);
+    state.applied.set(entry.id, entry);
+    changed = true;
+  }
+  // Fresh array only on change: the slice-unchanged check below compares the
+  // snapshot by reference, replacing the former per-tick deep-equality walk.
+  if (changed) state.snapshot = [...state.working];
+  return state.snapshot;
+}
+
 function trySyncStreamLog(streamId: StreamTabId): void {
   try {
     syncStreamLog(streamId);
@@ -729,7 +791,10 @@ export function syncStreamLog(
   streamId: StreamTabId,
   options: { readonly forceFull?: boolean } = {},
 ): void {
-  if (isChildStreamRemoved(streamId)) return;
+  if (isChildStreamRemoved(streamId)) {
+    TASK_GROUP_PROJECTIONS.delete(streamId);
+    return;
+  }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
   // between two TUI sync ticks), the assistant text is still sitting in
@@ -742,10 +807,12 @@ export function syncStreamLog(
   if (!log) return;
 
   const allEntries = log.getRange(0);
-  const taskGroups = projectTaskGroupsFromStreamLog(allEntries);
+  const taskGroups = projectTaskGroupsIncrementally(streamId, allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
   const compactingActive = latestCompactionActivityIsRunning(allEntries);
-  const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
+  const transcriptMessageTypes = transcriptMessageTypesForStream(
+    streams.get().get(streamId),
+  );
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
     options.forceFull === true ||
@@ -757,7 +824,7 @@ export function syncStreamLog(
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const workflowStream = slice.category === AgentCategory.Workflow;
     const workflowOperationalOnly =
-      workflowStream && !isFullLogChildStream(streamId);
+      workflowStream && !isFullLogChildStream(slice);
     const syntheticEntries = slice.entries.filter(
       (entry) =>
         entry.synthetic &&
@@ -897,7 +964,7 @@ export function syncStreamLog(
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
-      isDeepStrictEqual(slice.taskGroups, taskGroups)
+      slice.taskGroups === taskGroups
     ) {
       return slice;
     }

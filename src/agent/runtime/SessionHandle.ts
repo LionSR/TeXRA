@@ -47,7 +47,6 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
-import { legacyExecutionIdFromStreamSuffix } from '@transcript/legacyExecutionIdentity';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -580,10 +579,12 @@ export class SessionHandle {
     for (const streamId of this.transcripts.keys()) {
       if (executionIds.has(streamId)) continue;
       try {
-        const derived = await legacyExecutionIdFromStreamSuffix(streamId, {
-          malformedMeta: 'admit',
-        });
-        if (derived) executionIds.set(streamId, derived);
+        // The stream→execution reverse edge is the persisted sidecar FK;
+        // name resemblance is never ownership. A stream without one stays
+        // unmapped and is skipped by repair.
+        const persisted =
+          await this.snapshots.readPersistedExecutionId(streamId);
+        if (persisted) executionIds.set(streamId, persisted);
       } catch (error) {
         // A transient storage failure proves nothing about this stream. Leave
         // it out of this pass — repairing it unmapped would skip its lease

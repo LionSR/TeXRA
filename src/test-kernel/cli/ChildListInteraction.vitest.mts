@@ -293,6 +293,10 @@ describe('CLI child list interaction', () => {
     const rootSlice: StreamSlice = {
       ...emptySlice(root),
       agent: 'workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'workflow',
+      },
       category: AgentCategory.Workflow,
       entries: [
         {
@@ -416,6 +420,10 @@ describe('CLI child list interaction', () => {
     const rootSlice: StreamSlice = {
       ...emptySlice(root),
       agent: 'workflow',
+      identity: {
+        kind: 'multiAgentWorkflow' as const,
+        workflowName: 'workflow',
+      },
       category: AgentCategory.Workflow,
       entries: [
         ...['first', 'second'].map((id) => ({

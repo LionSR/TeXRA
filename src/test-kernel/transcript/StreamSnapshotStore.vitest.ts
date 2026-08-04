@@ -5,18 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { KVStore } from '@common/storage/KVStore';
 import * as logUtils from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import {
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
-  buildRunDescriptor,
-} from '@shared/schemas';
+import { STREAM_TAB_META_SCHEMA_VERSION } from '@shared/schemas';
 import type {
   CompileFailure,
   ExecutionId,
@@ -40,7 +35,6 @@ import {
   stagedStreamDataDir,
   STREAM_DATA_DIR,
   STREAM_DATA_DELETION_DIR,
-  STREAM_DATA_KEYS,
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files';
 
@@ -110,11 +104,6 @@ function toolUseConfig(agent = 'search', model = 'deepseekproT'): AgentConfig {
   });
 }
 
-/** Legacy `meta.taskState` payload, written only by the disk-read shim tests. */
-function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
-  return TaskStateSchema.parse({ agentConfig: toolUseConfig(agent, model) });
-}
-
 type StagedDeletion = Awaited<
   ReturnType<StreamSnapshotStore['stageDeleteStream']>
 >;
@@ -135,24 +124,9 @@ async function writeMetaFile(
   stream: StreamTabId,
   meta: Record<string, unknown>,
 ): Promise<void> {
-  const { executionId, ...rest } = meta;
-  let runDescriptor = rest.runDescriptor;
-  if (runDescriptor === undefined && typeof executionId === 'string') {
-    const config = await getExecutionStore(
-      executionId as ExecutionId,
-    ).readConfig();
-    runDescriptor = buildRunDescriptor({
-      streamId: stream,
-      executionId: executionId as ExecutionId,
-      agent: config?.agent ?? 'search',
-      category: config?.agentCategory ?? AgentCategory.ToolUse,
-      kind: 'agent',
-    });
-  }
   await writeStreamFile(stream, 'meta.json', {
-    schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-    ...rest,
-    ...(runDescriptor === undefined ? {} : { runDescriptor }),
+    schemaVersion: STREAM_TAB_META_SCHEMA_VERSION,
+    ...meta,
   });
 }
 
@@ -296,11 +270,12 @@ describe('StreamSnapshotStore', () => {
       toolUseTokens: 4,
     };
 
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
     // Emitter contract for `updateStreamDescription` (#9590 A4/Stage 6): the
     // authority write to `ExecutionMeta.description` lands before the event.
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
+      identity: { kind: 'agent', agent: 'session-label' },
       description: 'session-search / kimi26T',
     });
 
@@ -309,13 +284,9 @@ describe('StreamSnapshotStore', () => {
       streamId: STREAM,
       event: {
         type: 'run.start',
-        descriptor: buildRunDescriptor({
-          streamId: STREAM,
-          executionId,
-          agent: 'session-label',
-          category: AgentCategory.ToolUse,
-          kind: 'agent',
-        }),
+        streamId: STREAM,
+        executionId,
+        identity: { kind: 'agent', agent: 'session-label' },
       },
     });
     events.emit({
@@ -432,24 +403,22 @@ describe('StreamSnapshotStore', () => {
     });
     expect(snap.runUsage[RUN]).not.toHaveProperty('elapsedTime');
     expect(snap.runUsage[RUN]).not.toHaveProperty('percentageCached');
-    expect(snap.runUsage[RUN]).not.toHaveProperty('reasoningTokens');
+    // reasoningTokens is part of the accumulated vocabulary and persists.
+    expect(snap.runUsage[RUN].reasoningTokens).toBe(7);
     expect(snap.runUsage[RUN]).not.toHaveProperty('toolUseTokens');
     expect(snap.executionId).toBe(executionId);
     // The live event updated the writer's display value in memory only.
     expect(writer.getDescription(STREAM)).toBe('session-search / kimi26T');
-    // A fresh load serves the description from ExecutionMeta (the authority);
-    // the snapshot's `description` is the legacy sidecar mirror, which current
-    // records no longer write (#9590 Stage 6).
+    // Every seed (bulk load included) hydrates the description from the one
+    // authority, ExecutionMeta — it rides the same read as identity. Nothing
+    // writes a sidecar copy, so the assembled snapshot carries none.
     expect(reader.getDescription(STREAM)).toBe('session-search / kimi26T');
     expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
     expect(reader.getRunConfig(STREAM)).toEqual(runConfig);
-    expect(reader.getRunDescriptor(STREAM)).toMatchObject({
-      streamId: STREAM,
-      executionId,
-      agent: 'session-label',
-      category: AgentCategory.ToolUse,
+    expect(reader.getRunIdentity(STREAM)).toEqual({
       kind: 'agent',
+      agent: 'session-label',
     });
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);
@@ -458,18 +427,19 @@ describe('StreamSnapshotStore', () => {
     expect(goalPausedOnly.runUsage).toEqual({});
   });
 
-  it('treats run.start as authoritative after run.config synthesizes identity', async () => {
+  it('keeps identity pending after run.config until run.start supplies it', async () => {
     const events = new SessionEventHub();
     const writer = new StreamSnapshotStore();
     const detach = writer.attachSessionEvents(events);
     const executionId = 'a1b2c3d4' as ExecutionId;
     const runConfig = toolUseConfig('worker-agent');
-    const workflowDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId,
-      agent: 'workflow-script',
-      category: AgentCategory.Workflow,
-      kind: 'workflowScript',
+    const workflowIdentity = {
+      kind: 'multiAgentWorkflow',
+      workflowName: 'workflow-script',
+    } as const;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      identity: workflowIdentity,
     });
 
     events.emit({
@@ -482,27 +452,27 @@ describe('StreamSnapshotStore', () => {
         config: runConfig,
       },
     });
-    expect(writer.getRunDescriptor(STREAM)).toMatchObject({
-      agent: 'worker-agent',
-      kind: 'agent',
-    });
+    // No synthesis from the config: identity stays pending until run.start.
+    expect(writer.getRunIdentity(STREAM)).toBeUndefined();
 
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
         type: 'run.start',
-        descriptor: workflowDescriptor,
+        streamId: STREAM,
+        executionId,
+        identity: workflowIdentity,
       },
     });
     detach();
     await writer.flush();
 
-    expect(writer.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(writer.getRunIdentity(STREAM)).toEqual(workflowIdentity);
     const reader = new StreamSnapshotStore();
     await reader.load([STREAM]);
     expect(reader.getExecutionId(STREAM)).toBe(executionId);
-    expect(reader.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(reader.getRunIdentity(STREAM)).toEqual(workflowIdentity);
   });
 
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {
@@ -915,124 +885,77 @@ describe('StreamSnapshotStore', () => {
       parentStreamId?: unknown;
       description?: unknown;
     };
-    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
+    expect(raw.schemaVersion).toBe(STREAM_TAB_META_SCHEMA_VERSION);
     expect(raw.parentStreamId).toBe(OTHER_STREAM);
     // The rejected file's fields do not leak into the fresh current record.
     expect(raw.description).toBeUndefined();
   });
 
-  it('preserves legacy meta taskState and description when unrelated meta patches are written', async () => {
-    await installPlatform();
-    const taskState = toolUseTaskState('legacy-search');
-    await writeMetaFile(STREAM, {
-      taskState,
-      description: 'Prior session',
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-    snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
-    await store.flush();
-
-    // Rewriting an unrelated meta field round-trips the LEGACY description
-    // (#9590 Stage 6: never patched for current records, never destroyed for
-    // legacy sidecars before their Stage 7 retirement).
-    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
-      schemaVersion?: unknown;
-      taskState?: unknown;
-      parentStreamId?: unknown;
-      description?: unknown;
-    };
-    expect(raw.schemaVersion).toBe(RUN_DESCRIPTOR_SCHEMA_VERSION);
-    expect(raw.taskState).toEqual(taskState);
-    expect(raw.parentStreamId).toBe(OTHER_STREAM);
-    expect(raw.description).toBe('Prior session');
-  });
-
-  it('falls back to legacy taskState when an execution config is unreadable', async () => {
+  it('leaves the run config absent when an execution config is unreadable', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
-    const taskState = toolUseTaskState('legacy-search');
-    await writeMetaFile(STREAM, {
-      executionId,
-      taskState,
-    });
+    await writeMetaFile(STREAM, { executionId });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await StorageFS.write(
       path.join(resolveRunStoragePath(executionId), 'config.json'),
       '{',
     );
 
+    // The legacy `meta.taskState` fallback is retired: an unreadable execution
+    // config leaves the stream with no config at all, not a shimmed one.
     const store = new StreamSnapshotStore();
     await expect(store.load([STREAM])).resolves.toBeUndefined();
 
-    expect(store.getRunConfig(STREAM)).toEqual(taskState.agentConfig);
+    expect(store.getRunConfig(STREAM)).toBeUndefined();
+    expect(store.getRunIdentity(STREAM)).toBeUndefined();
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('resolves the descriptor execution id everywhere', async () => {
-    await installPlatform();
-    const executionId = 'aa11bb22' as ExecutionId;
-    const runConfig = toolUseConfig('legacy-search');
-    await getExecutionStore(executionId).writeConfig(runConfig);
+  it('strips a retired runDescriptor sidecar without reading its FK', async () => {
+    // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
+    // The unknown key is stripped: no FK is lifted out of it, and the rest
+    // of the meta (parentStreamId) survives untouched.
     await writeMetaFile(STREAM, {
-      runDescriptor: buildRunDescriptor({
+      parentStreamId: OTHER_STREAM,
+      runDescriptor: {
+        schemaVersion: 1,
         streamId: STREAM,
-        executionId,
+        executionId: 'aa11bb22',
         agent: 'legacy-search',
         category: AgentCategory.ToolUse,
         kind: 'agent',
-      }),
+      },
     });
 
     const store = new StreamSnapshotStore();
-    // The meta-only scan the execution→stream resolver runs, and the seeded
-    // accessors, must agree instead of one finding the run and the other not.
-    expect(await store.readPersistedExecutionId(STREAM)).toBe(executionId);
+    expect(await store.readPersistedExecutionId(STREAM)).toBeUndefined();
     await store.load([STREAM]);
 
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
-    expect(store.getExecutionIdMap().get(STREAM)).toBe(executionId);
-    expect((await store.read(STREAM)).executionId).toBe(executionId);
+    expect(store.getExecutionId(STREAM)).toBeUndefined();
+    await expect(store.read(STREAM)).resolves.toMatchObject({
+      executionId: undefined,
+      parentStreamId: OTHER_STREAM,
+    });
   });
 
-  it('omits an invalid run descriptor without discarding other stream metadata', async () => {
-    const executionId = 'aa11bb33' as ExecutionId;
-    const validDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId,
-      agent: 'legacy-search',
-      category: AgentCategory.ToolUse,
-      kind: 'agent',
-    });
-    const invalidDescriptors = [
-      { ...validDescriptor, kind: undefined },
-      { kind: 'agent', executionId: 'not-hex!!' },
-    ];
+  it('drops only a malformed execution FK from meta, loudly', async () => {
+    // Field-level tolerance: a malformed FK severs the execution pointer
+    // (warned), but must NOT discard the rest of the meta — losing
+    // `parentStreamId` would orphan the tab.
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    await writeMetaFile(STREAM, {
+      parentStreamId: OTHER_STREAM,
+      executionId: 'not-hex!!',
+    });
 
-    for (const [index, runDescriptor] of invalidDescriptors.entries()) {
-      const description = `Prior session ${index}`;
-      await writeMetaFile(STREAM, {
-        parentStreamId: OTHER_STREAM,
-        description,
-        runDescriptor,
-      });
-
-      const store = new StreamSnapshotStore();
-      await expect(
-        store.readPersistedStreamAssociation(STREAM),
-      ).resolves.toEqual({ parentStreamId: OTHER_STREAM });
-      await expect(store.read(STREAM)).resolves.toMatchObject({
-        executionId: undefined,
-        parentStreamId: OTHER_STREAM,
-        description,
-      });
-    }
-
+    const store = new StreamSnapshotStore();
+    await expect(store.read(STREAM)).resolves.toMatchObject({
+      executionId: undefined,
+      parentStreamId: OTHER_STREAM,
+    });
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
-      expect.stringContaining('unreadable run descriptor'),
+      expect.stringContaining('malformed execution FK'),
       expect.anything(),
     );
   });
@@ -1053,73 +976,12 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
-  it('serves a current record description from ExecutionMeta without writing a sidecar mirror (#9590 Stage 6)', async () => {
-    await installPlatform();
-    const executionId = 'aa22cc33' as ExecutionId;
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: new Date(0).toISOString(),
-      description: 'Meta authority label',
-    });
-    await writeMetaFile(STREAM, { executionId });
-
-    // Every load hydrates the display value from the authority and never
-    // projects a sidecar description copy — pinned at the persistence
-    // boundary: no sidecar meta write may be issued.
-    const store = new StreamSnapshotStore();
-    const kvWrites = vi.spyOn(KVStore.prototype, 'write');
-    await store.load([STREAM]);
-    expect(store.getDescription(STREAM)).toBe('Meta authority label');
-    await store.flush();
-    expect(kvWrites).not.toHaveBeenCalledWith(
-      STREAM_DATA_KEYS.META,
-      expect.anything(),
-    );
-    kvWrites.mockRestore();
-    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
-      description?: unknown;
-    };
-    expect(raw.description).toBeUndefined();
-    expect((await getExecutionStore(executionId).readMeta())?.description).toBe(
-      'Meta authority label',
-    );
-  });
-
-  it('does not resurrect a stream evicted during description hydration', async () => {
-    await installPlatform();
-    const executionId = 'bb33dd44' as ExecutionId;
-    const executionStore = getExecutionStore(executionId);
-    await executionStore.writeConfig(toolUseConfig());
-    await executionStore.writeMeta({
-      timestamp: new Date(0).toISOString(),
-      description: 'Late authority label',
-    });
-    await writeMetaFile(STREAM, { executionId });
-    const persistedMeta = await executionStore.readMeta();
-    const readStarted = pDefer<void>();
-    const deferredRead = pDefer<typeof persistedMeta>();
-    vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
-      readStarted.resolve();
-      return deferredRead.promise;
-    });
-
-    const store = new StreamSnapshotStore();
-    const loading = store.load([STREAM]);
-    await readStarted.promise;
-    await store.deleteStream(STREAM);
-    deferredRead.resolve(persistedMeta);
-    await loading;
-
-    expect(store.getDescription(STREAM)).toBeUndefined();
-    await expect(store.listPersistedStreams()).resolves.not.toContain(STREAM);
-  });
-
   it('does not apply an authority read across an execution handoff', async () => {
     await installPlatform();
     const oldExecutionId = 'ee66aa77' as ExecutionId;
     const newExecutionId = 'ff77bb88' as ExecutionId;
     const oldExecutionStore = getExecutionStore(oldExecutionId);
-    await oldExecutionStore.writeConfig(toolUseConfig('old-search'));
+    await oldExecutionStore.writeRunRecord(toolUseConfig('old-search'));
     await oldExecutionStore.writeMeta({
       timestamp: new Date(0).toISOString(),
       description: 'Old authority label',
@@ -1137,18 +999,16 @@ describe('StreamSnapshotStore', () => {
     const facts = snapshotFacts(store);
     const loading = store.load([STREAM]);
     await readStarted.promise;
-    const newDescriptor = buildRunDescriptor({
+    const newIdentity = { kind: 'agent', agent: 'new-search' } as const;
+    facts.setRunStart({
       streamId: STREAM,
       executionId: newExecutionId,
-      agent: 'new-search',
-      category: AgentCategory.ToolUse,
-      kind: 'agent',
+      identity: newIdentity,
     });
-    facts.setRunDescriptor(newDescriptor);
     deferredRead.resolve(oldMeta);
     await loading;
 
-    expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
+    expect(store.getRunIdentity(STREAM)).toEqual(newIdentity);
     expect(store.getDescription(STREAM)).toBeUndefined();
   });
 
@@ -1156,7 +1016,7 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const executionId = 'aa77cc88' as ExecutionId;
     const executionStore = getExecutionStore(executionId);
-    await executionStore.writeConfig(toolUseConfig());
+    await executionStore.writeRunRecord(toolUseConfig());
     await executionStore.writeMeta({
       timestamp: new Date(0).toISOString(),
       description: 'Captured authority label',
@@ -1165,6 +1025,8 @@ describe('StreamSnapshotStore', () => {
     const capturedMeta = await executionStore.readMeta();
     const readStarted = pDefer<void>();
     const deferredRead = pDefer<typeof capturedMeta>();
+    // The description rides the seed's one execution-meta read; the live
+    // event lands while that read is still in flight.
     vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
       readStarted.resolve();
       return deferredRead.promise;
@@ -1172,19 +1034,23 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     const facts = snapshotFacts(store);
-    const loading = store.load([STREAM]);
+    // First mutation on the unseeded stream triggers the lazy seed, whose
+    // hydration would otherwise fill the description from ExecutionMeta.
+    facts.setParentStream(STREAM, OTHER_STREAM);
+    const flushing = store.flush();
     await readStarted.promise;
     facts.setDescription(STREAM, 'New live label');
     deferredRead.resolve(capturedMeta);
-    await loading;
+    await flushing;
 
+    // The live event owns the field by presence; hydration does not clobber it.
     expect(store.getDescription(STREAM)).toBe('New live label');
   });
 
   it('hydrates a current no-mirror description during first lazy seed', async () => {
     await installPlatform();
     const executionId = 'bb88dd99' as ExecutionId;
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
       description: 'Lazy authority label',
@@ -1202,191 +1068,6 @@ describe('StreamSnapshotStore', () => {
     ).toBeUndefined();
   });
 
-  it('does not expose a prior execution mirror after a handoff', async () => {
-    await installPlatform();
-    const oldExecutionId = 'cc99ee00' as ExecutionId;
-    const newExecutionId = 'dd00ff11' as ExecutionId;
-    await getExecutionStore(oldExecutionId).writeConfig(
-      toolUseConfig('old-search'),
-    );
-    await getExecutionStore(newExecutionId).writeConfig(
-      toolUseConfig('new-search'),
-    );
-    await getExecutionStore(newExecutionId).writeMeta({
-      timestamp: new Date(0).toISOString(),
-    });
-    await writeMetaFile(STREAM, {
-      executionId: oldExecutionId,
-      description: 'Old mirror label',
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-    expect(store.getDescription(STREAM)).toBe('Old mirror label');
-
-    await writeMetaFile(STREAM, {
-      executionId: newExecutionId,
-      description: 'Old mirror label',
-    });
-    await store.load([STREAM]);
-
-    expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
-    expect(store.getDescription(STREAM)).toBeUndefined();
-    expect(
-      ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
-        .description,
-    ).toBe('Old mirror label');
-  });
-
-  it('hydrates independent execution descriptions concurrently', async () => {
-    await installPlatform();
-    const firstExecutionId = 'cc44ee55' as ExecutionId;
-    const secondExecutionId = 'dd55ff66' as ExecutionId;
-    const firstExecutionStore = getExecutionStore(firstExecutionId);
-    const secondExecutionStore = getExecutionStore(secondExecutionId);
-    await firstExecutionStore.writeConfig(toolUseConfig());
-    await secondExecutionStore.writeConfig(toolUseConfig());
-    await firstExecutionStore.writeMeta({
-      timestamp: new Date(0).toISOString(),
-      description: 'First authority label',
-    });
-    await secondExecutionStore.writeMeta({
-      timestamp: new Date(0).toISOString(),
-      description: 'Second authority label',
-    });
-    await writeMetaFile(STREAM, { executionId: firstExecutionId });
-    await writeMetaFile(OTHER_STREAM, { executionId: secondExecutionId });
-    const firstMeta = await firstExecutionStore.readMeta();
-    const secondMeta = await secondExecutionStore.readMeta();
-    const firstRead = pDefer<typeof firstMeta>();
-    const secondRead = pDefer<typeof secondMeta>();
-    const firstReadSpy = vi
-      .spyOn(firstExecutionStore, 'readMeta')
-      .mockReturnValue(firstRead.promise);
-    const secondReadSpy = vi
-      .spyOn(secondExecutionStore, 'readMeta')
-      .mockReturnValue(secondRead.promise);
-
-    const store = new StreamSnapshotStore();
-    const loading = store.load([STREAM, OTHER_STREAM]);
-    await vi.waitFor(() => {
-      expect(firstReadSpy).toHaveBeenCalledOnce();
-      expect(secondReadSpy).toHaveBeenCalledOnce();
-    });
-    firstRead.resolve(firstMeta);
-    secondRead.resolve(secondMeta);
-    await loading;
-
-    expect(store.getDescription(STREAM)).toBe('First authority label');
-    expect(store.getDescription(OTHER_STREAM)).toBe('Second authority label');
-  });
-
-  it('bounds concurrent description reads to the seed I/O cap', async () => {
-    await installPlatform();
-    const streamIds = Array.from(
-      { length: 9 },
-      (_, index) => `bounded-stream-${index}` as StreamTabId,
-    );
-    const executionIds = Array.from(
-      { length: 9 },
-      (_, index) => `b0ded00${index}` as ExecutionId,
-    );
-    const executionStores = executionIds.map((executionId) =>
-      getExecutionStore(executionId),
-    );
-    for (const [index, executionStore] of executionStores.entries()) {
-      await executionStore.writeConfig(toolUseConfig());
-      await executionStore.writeMeta({
-        timestamp: new Date(0).toISOString(),
-        description: `Authority label ${index}`,
-      });
-      await writeMetaFile(streamIds[index]!, {
-        executionId: executionIds[index],
-      });
-    }
-    const metas = await Promise.all(
-      executionStores.map((executionStore) => executionStore.readMeta()),
-    );
-    const reads = metas.map((meta) => pDefer<typeof meta>());
-    let activeReads = 0;
-    let maximumActiveReads = 0;
-    let startedReads = 0;
-    for (const [index, executionStore] of executionStores.entries()) {
-      vi.spyOn(executionStore, 'readMeta').mockImplementation(async () => {
-        activeReads++;
-        startedReads++;
-        maximumActiveReads = Math.max(maximumActiveReads, activeReads);
-        const meta = await reads[index]!.promise;
-        activeReads--;
-        return meta;
-      });
-    }
-
-    const store = new StreamSnapshotStore();
-    const loading = store.load(streamIds);
-    await vi.waitFor(() => expect(startedReads).toBe(8));
-    expect(activeReads).toBe(8);
-    expect(maximumActiveReads).toBe(8);
-
-    reads[0]!.resolve(metas[0]);
-    await vi.waitFor(() => expect(startedReads).toBe(9));
-    expect(maximumActiveReads).toBe(8);
-    for (const [index, read] of reads.entries()) {
-      if (index !== 0) read.resolve(metas[index]);
-    }
-    await loading;
-
-    expect(maximumActiveReads).toBe(8);
-    expect(store.getDescription(streamIds[8]!)).toBe('Authority label 8');
-  });
-
-  it('resolves description disagreement to ExecutionMeta and never writes either side (#9590 A4)', async () => {
-    await installPlatform();
-    // Both sides present and disagreeing: the display serves the authority
-    // (ExecutionMeta) and neither persisted side is rewritten.
-    const described = 'aa33dd44' as ExecutionId;
-    await getExecutionStore(described).writeConfig(toolUseConfig());
-    await getExecutionStore(described).writeMeta({
-      timestamp: new Date(0).toISOString(),
-      description: 'Meta authority label',
-    });
-    await writeMetaFile(STREAM, {
-      executionId: described,
-      description: 'Stale mirror label',
-    });
-
-    // Mirror-only: the authoritative side is absent and must stay absent —
-    // the display mirror is never a backfill source for ExecutionMeta, and it
-    // keeps serving reads as the legacy compatibility fallback.
-    const undescribed = 'aa44ee55' as ExecutionId;
-    await getExecutionStore(undescribed).writeConfig(toolUseConfig());
-    await getExecutionStore(undescribed).writeMeta({
-      timestamp: new Date(0).toISOString(),
-    });
-    await writeMetaFile(OTHER_STREAM, {
-      executionId: undescribed,
-      description: 'Mirror-only label',
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM, OTHER_STREAM]);
-    await store.flush();
-
-    expect(store.getDescription(STREAM)).toBe('Meta authority label');
-    expect((await getExecutionStore(described).readMeta())?.description).toBe(
-      'Meta authority label',
-    );
-    // The stale legacy mirror stays on disk untouched until Stage 7 retires it.
-    expect(
-      ((await readStreamFile(STREAM, 'meta.json')) as { description?: unknown })
-        .description,
-    ).toBe('Stale mirror label');
-    expect(store.getDescription(OTHER_STREAM)).toBe('Mirror-only label');
-    expect(
-      (await getExecutionStore(undescribed).readMeta())?.description,
-    ).toBeUndefined();
-  });
-
   it("round-trips a current record's description through ExecutionMeta only (#9590 Stage 6)", async () => {
     await installPlatform();
     const events = new SessionEventHub();
@@ -1394,20 +1075,16 @@ describe('StreamSnapshotStore', () => {
     const detach = store.attachSessionEvents(events);
     const executionId = 'aa55ff66' as ExecutionId;
     const runConfig = toolUseConfig();
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
 
     events.emit({
       scope: 'run',
       streamId: STREAM,
       event: {
         type: 'run.start',
-        descriptor: buildRunDescriptor({
-          streamId: STREAM,
-          executionId,
-          agent: 'search',
-          category: AgentCategory.ToolUse,
-          kind: 'agent',
-        }),
+        streamId: STREAM,
+        executionId,
+        identity: { kind: 'agent', agent: 'search' },
       },
     });
     // Emitter contract (#9590 A4): the authority write to
@@ -1427,31 +1104,29 @@ describe('StreamSnapshotStore', () => {
     detach();
     await store.flush();
 
-    // Persistence boundary: the sidecar meta carries the descriptor reverse
-    // edge but no description copy — the sidecar write stopped in Stage 6.
+    // Persistence boundary: the sidecar meta carries the execution FK but no
+    // description copy — the sidecar write stopped in Stage 6.
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
-      runDescriptor?: { executionId?: unknown };
+      executionId?: unknown;
       description?: unknown;
     };
-    expect(raw.runDescriptor).toMatchObject({ executionId });
+    expect(raw.executionId).toBe(executionId);
     expect(raw.description).toBeUndefined();
 
-    // A fresh store reads the description back via descriptor → ExecutionMeta.
+    // A fresh store reads the description back via the FK → ExecutionMeta on
+    // the stream's first lazy seed (a bulk load() does not hydrate it).
     const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
+    snapshotFacts(reloaded).setParentStream(STREAM, OTHER_STREAM);
+    await reloaded.flush();
     expect(reloaded.getDescription(STREAM)).toBe('Current label');
 
     // The label is execution-scoped: a live run.start handing the stream to a
     // new execution synchronously drops the previous run's description.
-    snapshotFacts(reloaded).setRunDescriptor(
-      buildRunDescriptor({
-        streamId: STREAM,
-        executionId: 'bb77bb88' as ExecutionId,
-        agent: 'search',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    snapshotFacts(reloaded).setRunStart({
+      streamId: STREAM,
+      executionId: 'bb77bb88' as ExecutionId,
+      identity: { kind: 'agent', agent: 'search' },
+    });
     expect(reloaded.getDescription(STREAM)).toBeUndefined();
   });
 
@@ -1464,7 +1139,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
-    await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
+    await getExecutionStore(oldExecutionId).writeRunRecord(oldConfig);
 
     const store = new StreamSnapshotStore();
     const wasRuntimeUpdateInjected = injectDuringExecutionConfigHydration(
@@ -1481,13 +1156,10 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       executionId?: unknown;
-      runDescriptor?: { executionId?: unknown; agent?: unknown };
+      runDescriptor?: unknown;
     };
-    expect(raw.executionId).toBeUndefined();
-    expect(raw.runDescriptor).toMatchObject({
-      executionId: newExecutionId,
-      agent: 'new-search',
-    });
+    expect(raw.executionId).toBe(newExecutionId);
+    expect(raw.runDescriptor).toBeUndefined();
   });
 
   it('keeps a same-execution model switch that arrives during async hydration', async () => {
@@ -1498,7 +1170,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await getExecutionStore(executionId).writeConfig(persisted);
+    await getExecutionStore(executionId).writeRunRecord(persisted);
 
     const store = new StreamSnapshotStore();
     // A model switch rewrites the execution config and re-emits `run.config`
@@ -1516,33 +1188,34 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('does not re-derive the run.start descriptor when a seed re-reads disk meta', async () => {
+  it('does not re-derive the run.start identity when a seed re-reads disk meta', async () => {
     await installPlatform();
     const executionId = 'abc123' as ExecutionId;
     const runConfig = toolUseConfig('worker-agent');
-    const workflowDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId,
-      agent: 'workflow-script',
-      category: AgentCategory.Workflow,
-      kind: 'workflowScript',
-    });
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    const workflowIdentity = {
+      kind: 'multiAgentWorkflow',
+      workflowName: 'workflow-script',
+    } as const;
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
 
     const store = new StreamSnapshotStore();
-    snapshotFacts(store).setRunDescriptor(workflowDescriptor);
+    snapshotFacts(store).setRunStart({
+      streamId: STREAM,
+      executionId,
+      identity: workflowIdentity,
+    });
     snapshotFacts(store).setRunConfig(STREAM, runConfig, executionId);
     await store.flush();
 
-    // Disk meta drops back to the pre-descriptor shape for the same execution.
-    // Re-seeding may read it, but may not synthesize a competing identity from
-    // the execution config over the one run.start emitted.
+    // Disk meta names the same execution but carries no identity of its own.
+    // Re-seeding may read it, but may not synthesize a competing identity
+    // from the execution config over the one run.start emitted.
     await writeMetaFile(STREAM, {
       executionId,
     });
     await store.load([STREAM]);
 
-    expect(store.getRunDescriptor(STREAM)).toEqual(workflowDescriptor);
+    expect(store.getRunIdentity(STREAM)).toEqual(workflowIdentity);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
@@ -1560,7 +1233,11 @@ describe('StreamSnapshotStore', () => {
     );
     await store.flush();
 
-    await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
+    await getExecutionStore(foreignExecutionId).writeRunRecord(foreignConfig);
+    await getExecutionStore(foreignExecutionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      identity: { kind: 'agent', agent: 'foreign-search' },
+    });
     await writeMetaFile(STREAM, {
       executionId: foreignExecutionId,
     });
@@ -1568,8 +1245,8 @@ describe('StreamSnapshotStore', () => {
 
     expect(store.getExecutionId(STREAM)).toBe(foreignExecutionId);
     expect(store.getRunConfig(STREAM)).toEqual(foreignConfig);
-    expect(store.getRunDescriptor(STREAM)).toMatchObject({
-      executionId: foreignExecutionId,
+    expect(store.getRunIdentity(STREAM)).toEqual({
+      kind: 'agent',
       agent: 'foreign-search',
     });
   });
@@ -1580,7 +1257,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await getExecutionStore(executionId).writeConfig(
+    await getExecutionStore(executionId).writeRunRecord(
       toolUseConfig('search', 'deepseekproT'),
     );
 
@@ -1590,7 +1267,7 @@ describe('StreamSnapshotStore', () => {
 
     // The model switch runs in another host: it rewrites the execution config
     // for the SAME execution and this store never sees the `run.config` event.
-    await getExecutionStore(executionId).writeConfig(
+    await getExecutionStore(executionId).writeRunRecord(
       toolUseConfig('search', 'kimi26T'),
     );
     await store.load([STREAM]);
@@ -1599,31 +1276,44 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('replaces a legacy run config once meta names a real execution', async () => {
+  it('derives identity in memory for an un-healed legacy row and replaces the pair on handoff', async () => {
     await installPlatform();
-    const legacyTaskState = toolUseTaskState('legacy-search');
-    await writeMetaFile(STREAM, {
-      taskState: legacyTaskState,
+    // Un-healed legacy row: the execution meta carries no stamped `identity`,
+    // but its config is readable — hydration derives the identity in memory
+    // with the stamper's rule instead of leaving it undefined.
+    const legacyExecutionId = 'abc123' as ExecutionId;
+    const legacyConfig = toolUseConfig('legacy-search');
+    await getExecutionStore(legacyExecutionId).writeRunRecord(legacyConfig);
+    await getExecutionStore(legacyExecutionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
     });
+    await writeMetaFile(STREAM, { executionId: legacyExecutionId });
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunConfig(STREAM)).toEqual(legacyTaskState.agentConfig);
-    expect(store.getRunDescriptor(STREAM)).toBeUndefined();
+    expect(store.getRunConfig(STREAM)).toEqual(legacyConfig);
+    expect(store.getRunIdentity(STREAM)).toEqual({
+      kind: 'agent',
+      agent: 'legacy-search',
+    });
 
-    // A legacy config carries no descriptor, so the handoff cannot be detected
-    // from the descriptor half alone: the pair still has to move together.
+    // Once meta names a stamped execution, the identity/config pair moves
+    // together to the new execution's durable record.
     const executionId = 'def456' as ExecutionId;
     const handoffConfig = toolUseConfig('handoff-search');
-    await getExecutionStore(executionId).writeConfig(handoffConfig);
+    await getExecutionStore(executionId).writeRunRecord(handoffConfig);
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: new Date(0).toISOString(),
+      identity: { kind: 'agent', agent: 'handoff-search' },
+    });
     await writeMetaFile(STREAM, {
       executionId,
     });
     await store.load([STREAM]);
 
     expect(store.getRunConfig(STREAM)).toEqual(handoffConfig);
-    expect(store.getRunDescriptor(STREAM)).toMatchObject({
-      executionId,
+    expect(store.getRunIdentity(STREAM)).toEqual({
+      kind: 'agent',
       agent: 'handoff-search',
     });
   });
@@ -1634,21 +1324,19 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunDescriptor(STREAM)).toMatchObject({ executionId });
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
 
-    await writeMetaFile(STREAM, {
-      description: 'Detached tab',
-    });
+    await writeMetaFile(STREAM, {});
     await store.load([STREAM]);
 
-    expect(store.getRunDescriptor(STREAM)).toBeUndefined();
+    expect(store.getRunIdentity(STREAM)).toBeUndefined();
     expect(store.getRunConfig(STREAM)).toBeUndefined();
     expect(store.getExecutionId(STREAM)).toBeUndefined();
-    expect(store.getDescription(STREAM)).toBe('Detached tab');
+    expect(store.getDescription(STREAM)).toBeUndefined();
   });
 
   it('does not attach the seeded run config to a run.start that lands during hydration', async () => {
@@ -1659,30 +1347,32 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
-    await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
+    await getExecutionStore(oldExecutionId).writeRunRecord(oldConfig);
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
     expect(store.getRunConfig(STREAM)).toEqual(oldConfig);
 
-    const newDescriptor = buildRunDescriptor({
-      streamId: STREAM,
-      executionId: newExecutionId,
-      agent: 'workflow-script',
-      category: AgentCategory.Workflow,
-      kind: 'workflowScript',
-    });
+    const newIdentity = {
+      kind: 'multiAgentWorkflow',
+      workflowName: 'workflow-script',
+    } as const;
     // `run.start` for the next execution lands while the seed is still reading
     // the previous one's config, which belongs to neither the new identity nor
     // this stream any more.
     const wasRunStartInjected = injectDuringExecutionConfigHydration(
       oldExecutionId,
-      () => snapshotFacts(store).setRunDescriptor(newDescriptor),
+      () =>
+        snapshotFacts(store).setRunStart({
+          streamId: STREAM,
+          executionId: newExecutionId,
+          identity: newIdentity,
+        }),
     );
     await store.load([STREAM]);
 
     expect(wasRunStartInjected).toHaveBeenCalledOnce();
-    expect(store.getRunDescriptor(STREAM)).toEqual(newDescriptor);
+    expect(store.getRunIdentity(STREAM)).toEqual(newIdentity);
     expect(store.getRunConfig(STREAM)).toBeUndefined();
   });
 
@@ -1694,7 +1384,7 @@ describe('StreamSnapshotStore', () => {
         executionId,
       }),
       writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
-      getExecutionStore(executionId).writeConfig(toolUseConfig()),
+      getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -1732,7 +1422,7 @@ describe('StreamSnapshotStore', () => {
       writeStreamFile(STREAM, 'missingOutputs.json', {
         '0': ['current.tex'],
       }),
-      getExecutionStore(executionId).writeConfig(toolUseConfig()),
+      getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -2592,7 +2282,7 @@ describe('StreamSnapshotStore', () => {
     snapshotFacts(writer).setRunConfig(STREAM, toolUseConfig(), executionId);
     snapshotFacts(writer).setPlan(STREAM, PLAN);
     await writer.flush();
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
 
     const store = new StreamSnapshotStore();
     const deletionError = new Error('stream data directory is locked');
@@ -2635,7 +2325,7 @@ describe('StreamSnapshotStore', () => {
       writeStreamFile(STREAM, 'missingOutputs.json', {
         '0': ['stale.tex'],
       }),
-      getExecutionStore(executionId).writeConfig(toolUseConfig()),
+      getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -2905,16 +2595,22 @@ describe('StreamSnapshotStore', () => {
     expect(snap.plan).toBeNull();
   });
 
-  it('drops a malformed executionId at the read entry without aborting the snapshot', async () => {
-    // A legacy/corrupt executionId would trip the strict ExecutionIdSchema in
-    // assembleSnapshot; validating at the read entry drops just the bad pointer
-    // so the rest of meta (description) still surfaces and resume never throws.
+  it('drops a malformed executionId loudly without aborting the snapshot', async () => {
+    // A legacy/corrupt executionId fails StreamTabMetaSchema; only the bad
+    // FK is dropped (warned, not silently coerced) and the snapshot read
+    // still succeeds with a valid record.
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'meta.json', {
       executionId: 'not-hex!!',
       description: 'Prior session',
     });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
-    expect(snap.description).toBe('Prior session');
+    expect(snap.description).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('malformed execution FK'),
+      expect.anything(),
+    );
   });
 });

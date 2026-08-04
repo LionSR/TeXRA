@@ -92,11 +92,6 @@ const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   subagents: z.array(ActiveChildInfoSchema),
 });
 
-const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM),
-  parentStreamId: StreamTabIdSchema.nullish(),
-});
-
 const UpdateStreamDescriptionMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION),
   description: z.string(),
@@ -301,7 +296,6 @@ const StreamContentRenderFields = {
       badges: z.strictObject({
         subagents: z.array(ActiveChildInfoSchema),
       }),
-      parentStreamId: StreamTabIdSchema.nullable(),
     })
     .optional(),
 };
@@ -313,7 +307,7 @@ const ClearStreamContentMessageSchema = z.strictObject({
 
 const WorkflowStreamContentMessageSchema = z.strictObject({
   ...StreamContentRenderFields,
-  kind: z.literal(AgentCategory.Workflow),
+  category: z.literal(AgentCategory.Workflow),
   outputs: z.strictObject({
     files: roundIndexedRecord(OutputFileInfoSchema),
     missing: roundIndexedRecord(z.string()),
@@ -323,7 +317,7 @@ const WorkflowStreamContentMessageSchema = z.strictObject({
 
 const ToolUseStreamContentMessageSchema = z.strictObject({
   ...StreamContentRenderFields,
-  kind: z.literal(AgentCategory.ToolUse),
+  category: z.literal(AgentCategory.ToolUse),
   workPlan: z.strictObject({
     todos: z.array(TodoItemSchema),
     plan: PlanSchema.nullable(),
@@ -337,8 +331,8 @@ const ToolUseStreamContentMessageSchema = z.strictObject({
   }),
 });
 
-/** Full tab snapshots, one branch per stream kind. */
-const RenderStreamContentMessageSchema = z.discriminatedUnion('kind', [
+/** Full tab snapshots, one branch per stream category. */
+const RenderStreamContentMessageSchema = z.discriminatedUnion('category', [
   WorkflowStreamContentMessageSchema,
   ToolUseStreamContentMessageSchema,
 ]);
@@ -399,7 +393,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateConversationProgressMessageSchema,
     UpdateRoundStageMessageSchema,
     UpdateStreamBadgesMessageSchema,
-    UpdateParentStreamMessageSchema,
     UpdateStreamDescriptionMessageSchema,
     UpdateStreamStatusMessageSchema,
     LogDeltaMessageSchema,

@@ -207,9 +207,10 @@ export const hasAnyStreams$ = new Signal.Computed(
 const activeStreamState$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
   if (!info) return null;
-  return (
-    streamStates$.get().get(info.name) ?? createStreamState(info.agentCategory)
-  );
+  const existing = streamStates$.get().get(info.name);
+  if (existing) return existing;
+  // No state and no resolved category yet: the stream is pending.
+  return info.agentCategory ? createStreamState(info.agentCategory) : null;
 });
 
 /** Only changes when the ACTIVE stream's logs change, not any stream. */
@@ -293,7 +294,7 @@ const subagentExecutionLabels$ = new Signal.Computed((): ExecutionLabels => {
   const labels = new Map<string, string>();
   for (const child of streamById$.get().values()) {
     if (
-      child.kind === 'process' ||
+      child.identity?.kind === 'process' ||
       !child.parentStreamId ||
       !child.executionId
     ) {
@@ -352,7 +353,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     subagentExecutionLabels: subagentExecutionLabels$.get(),
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
-    terminalMode: activeStreamInfo.kind === 'process',
+    terminalMode: activeStreamInfo.identity?.kind === 'process',
   };
 });
 
@@ -368,9 +369,10 @@ export function setStreamStateForId(
   const state = appState.get();
   let current = state.streamStates.get(streamId);
   if (!current) {
-    const streamInfo = state.streamById.get(streamId);
-    if (!streamInfo) return;
-    current = createStreamState(streamInfo.agentCategory);
+    const category = state.streamById.get(streamId)?.agentCategory;
+    // A stream whose category is still pending has no state to update yet.
+    if (!category) return;
+    current = createStreamState(category);
   }
   const updated = updater(current);
   if (updated === current) return;
@@ -379,7 +381,7 @@ export function setStreamStateForId(
       // Backfills streamLogs/followupOptionsByStream alongside streamStates
       // when this is the first handler to observe the stream (see
       // `ensureStreamState`'s doc comment for the owned key list).
-      ensureStreamState(draft, streamId, current.kind);
+      ensureStreamState(draft, streamId, current.category);
       draft.streamStates.set(streamId, updated);
     }),
   );

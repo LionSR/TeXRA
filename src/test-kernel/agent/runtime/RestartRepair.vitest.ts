@@ -8,7 +8,6 @@ import {
   RestartRepairRetryScheduler,
 } from '@agent/runtime/restartRepair';
 import {
-  EXECUTION_STATUS,
   RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
@@ -46,7 +45,7 @@ function seedWaiting(
 function createDurableFinalizer() {
   return vi.fn(async () => ({
     status: 'durable' as const,
-    terminalStatusPersisted: true as const,
+    outcomePersisted: true as const,
     flowRecord: 'deleted' as const,
   }));
 }
@@ -125,7 +124,7 @@ describe('repairRestartedStreams', () => {
       failedStreams: [],
       closedWaitingGroups: [],
       closedFailedGroups: [],
-      terminalStatusUpdated: [],
+      outcomeUpdated: [],
       nextLeaseCheckAt: 120_124,
     });
     expect(closeRunningGroups).not.toHaveBeenCalled();
@@ -138,7 +137,6 @@ describe('repairRestartedStreams', () => {
     const store = getExecutionStore(executionId);
     await store.writeMeta({
       timestamp: '2026-07-26T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
       outcome: RUN_OUTCOME.COMPLETED,
     });
     const streamStatus = new StreamStatusMachine(new SessionEventHub());
@@ -158,7 +156,6 @@ describe('repairRestartedStreams', () => {
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
       await expect(store.readMeta()).resolves.toMatchObject({
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
         outcome: RUN_OUTCOME.COMPLETED,
       });
       expect(result.failedStreams).toEqual([]);
@@ -201,43 +198,6 @@ describe('repairRestartedStreams', () => {
     }
   });
 
-  it('protects an unknown legacy terminal state from restart repair', async () => {
-    const streamId = 'stream-legacy-terminal' as StreamTabId;
-    const executionId = 'execution-legacy-terminal' as ExecutionId;
-    const store = getExecutionStore(executionId);
-    await store.writeMeta({
-      timestamp: '2026-07-26T00:00:00.000Z',
-      terminalStatus: 'legacy-terminal',
-    });
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    seedRunning(streamStatus, streamId);
-    const closeRunningGroups = vi.fn(async () => [streamId]);
-    const finalizeExecution = createDurableFinalizer();
-
-    try {
-      const result = await repairRestartedStreams({
-        streamStatus,
-        waitingStreams: new Set(),
-        executionIds: new Map([[streamId, executionId]]),
-        closeRunningGroups,
-        finalizeExecution,
-        runWithInactiveExecutionLease: performInactiveLease,
-      });
-
-      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-      expect(closeRunningGroups).not.toHaveBeenCalled();
-      expect(result.failedStreams).toEqual([]);
-      const persistedMeta = await store.readMeta();
-      expect(persistedMeta).toMatchObject({
-        terminalStatus: 'legacy-terminal',
-      });
-      expect(persistedMeta?.outcome).toBeUndefined();
-      expect(finalizeExecution).not.toHaveBeenCalled();
-    } finally {
-      await store.clear();
-    }
-  });
-
   it('repairs resumable running streams to WAITING with neutral group closure', async () => {
     const streamId = 'stream-waiting' as StreamTabId;
     const executionId = 'execution-waiting' as ExecutionId;
@@ -261,7 +221,7 @@ describe('repairRestartedStreams', () => {
       failedStreams: [],
       closedWaitingGroups: [streamId],
       closedFailedGroups: [],
-      terminalStatusUpdated: [],
+      outcomeUpdated: [],
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
@@ -321,7 +281,7 @@ describe('repairRestartedStreams', () => {
       failedStreams: [],
       closedWaitingGroups: [],
       closedFailedGroups: [streamId],
-      terminalStatusUpdated: [],
+      outcomeUpdated: [],
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
@@ -360,7 +320,7 @@ describe('repairRestartedStreams', () => {
       failedStreams: [],
       closedWaitingGroups: [streamId],
       closedFailedGroups: [],
-      terminalStatusUpdated: [],
+      outcomeUpdated: [],
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
@@ -393,7 +353,7 @@ describe('repairRestartedStreams', () => {
       failedStreams: [streamId],
       closedWaitingGroups: [],
       closedFailedGroups: [streamId],
-      terminalStatusUpdated: [executionId],
+      outcomeUpdated: [executionId],
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
@@ -402,7 +362,7 @@ describe('repairRestartedStreams', () => {
     );
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
   });
@@ -462,7 +422,7 @@ describe('repairRestartedStreams', () => {
     expect(streamStatus.get(firstStream)).toBe(STREAM_PHASE.FAILED);
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId: firstExecution,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
     expect(result.failedStreams).toEqual([firstStream]);
@@ -507,7 +467,7 @@ describe('repairRestartedStreams', () => {
     expect(result).toMatchObject({
       failedStreams: [streamId],
       closedFailedGroups: [streamId],
-      terminalStatusUpdated: [executionId],
+      outcomeUpdated: [executionId],
     });
     expect(closeRunningGroups).toHaveBeenCalledWith(
       [streamId],
@@ -516,7 +476,7 @@ describe('repairRestartedStreams', () => {
     );
     expect(finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       flowRecord: 'delete',
     });
   });
@@ -549,7 +509,7 @@ describe('repairRestartedStreams', () => {
     expect(result).toMatchObject({
       failedStreams: [],
       closedFailedGroups: [],
-      terminalStatusUpdated: [],
+      outcomeUpdated: [],
     });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
@@ -564,7 +524,7 @@ describe('repairRestartedStreams', () => {
     const finalizeExecution = vi.fn(async () => ({
       status: 'failed' as const,
       stage: 'terminal-status' as const,
-      terminalStatusPersisted: false as const,
+      outcomePersisted: false as const,
       error: durabilityError,
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
@@ -579,7 +539,7 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
-    expect(result.terminalStatusUpdated).toEqual([]);
+    expect(result.outcomeUpdated).toEqual([]);
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       'Failed to finalize restart-repair execution',
       {
@@ -587,7 +547,7 @@ describe('repairRestartedStreams', () => {
           streamId,
           executionId,
           stage: 'terminal-status',
-          terminalStatusPersisted: false,
+          outcomePersisted: false,
           error: durabilityError,
         },
       },
@@ -603,7 +563,7 @@ describe('repairRestartedStreams', () => {
     const finalizeExecution = vi.fn(async () => ({
       status: 'failed' as const,
       stage: 'flow-record-delete' as const,
-      terminalStatusPersisted: true as const,
+      outcomePersisted: true as const,
       error: cleanupError,
     }));
     const logger = { debug: vi.fn(), warn: vi.fn() };
@@ -617,7 +577,7 @@ describe('repairRestartedStreams', () => {
       logger,
     });
 
-    expect(result.terminalStatusUpdated).toEqual([executionId]);
+    expect(result.outcomeUpdated).toEqual([executionId]);
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       'Failed to finalize restart-repair execution',
       {
@@ -625,7 +585,7 @@ describe('repairRestartedStreams', () => {
           streamId,
           executionId,
           stage: 'flow-record-delete',
-          terminalStatusPersisted: true,
+          outcomePersisted: true,
           error: cleanupError,
         },
       },
@@ -680,9 +640,9 @@ describe('repairRestartedStreams', () => {
       closeRunningGroups: async () => [],
     });
 
-    await expect(store.readMeta()).resolves.toMatchObject({
+    const repairedMeta = await store.readMeta();
+    expect(repairedMeta).toMatchObject({
       description: 'keep this field',
-      terminalStatus: EXECUTION_STATUS.ERROR,
       outcome: RUN_OUTCOME.FAILED,
     });
     await expect(store.readResultMeta()).resolves.toMatchObject({
@@ -691,6 +651,6 @@ describe('repairRestartedStreams', () => {
         response: 'interim response',
       },
     });
-    expect(result.terminalStatusUpdated).toEqual([executionId]);
+    expect(result.outcomeUpdated).toEqual([executionId]);
   });
 });

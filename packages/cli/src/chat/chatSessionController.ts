@@ -11,8 +11,10 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
+import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
@@ -30,11 +32,7 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '@cli/runtime/cliPresentationHost';
-import {
-  explainNonResumable,
-  resolveCliResume,
-  type CliToolUseResumeResolution,
-} from '@cli/runtime/sessionResume';
+import { readCliToolUseResumeData } from '@cli/runtime/toolUseResumeData';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -124,10 +122,7 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(
-    id: ExecutionId,
-    preResolved?: CliToolUseResumeResolution,
-  ): Promise<void>;
+  resume(id: ExecutionId, preResolved?: ToolUseResumeData): Promise<void>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
@@ -199,7 +194,9 @@ export function createChatSessionController(
   // projecting status, output, and approval-related facts after the root
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
-  disposers.push(attachTuiRunFactSubscription(runtimeSession.events));
+  disposers.push(
+    attachTuiRunFactSubscription(runtimeSession.events, snapshotStore),
+  );
 
   // Shared prelude of the three run-starting paths (start, resume,
   // follow-up-wake resume): resolve the model-keyed session context and
@@ -430,7 +427,7 @@ export function createChatSessionController(
 
   const resume = async (
     id: ExecutionId,
-    preResolved?: CliToolUseResumeResolution,
+    preResolved?: ToolUseResumeData,
   ): Promise<void> => {
     // Claim the root-run slot as the FIRST statement, synchronously, before
     // any `await` below — see tryClaimRootRunSlot. This fuses the
@@ -453,13 +450,31 @@ export function createChatSessionController(
 
     const supersededRecovery = supersedeInterruptedRecovery();
     try {
-      const resolution = preResolved ?? (await resolveCliResume(id));
-      if (resolution.type !== 'toolUse') {
-        restoreInterruptedRecovery(supersededRecovery);
-        appendLocalErrorTranscript(explainNonResumable(resolution, id));
-        session.markRunCompleted();
-        resolveRunPromise();
-        return;
+      // Inline resolution over the shared retrieval (the durable record plus
+      // `retrieveSessionResumeData` via the FK-stamped stream id). Workflow
+      // runs resume headless through `texra resume`, not inside a chat.
+      let resolution = preResolved;
+      if (!resolution) {
+        const config = await getExecutionStore(id).readConfig();
+        let failure: string | undefined;
+        if (!config) {
+          failure = `Execution not found: ${id}`;
+        } else if (config.agentCategory !== AgentCategory.ToolUse) {
+          failure = `Execution ${id} is a workflow; resume it with \`texra resume ${id}\`.`;
+        } else {
+          resolution =
+            (await readCliToolUseResumeData(id, config)) ?? undefined;
+        }
+        if (!resolution) {
+          restoreInterruptedRecovery(supersededRecovery);
+          appendLocalErrorTranscript(
+            failure ??
+              `Execution ${id} has no resumable session state (it completed or was cleared).`,
+          );
+          session.markRunCompleted();
+          resolveRunPromise();
+          return;
+        }
       }
 
       clearLocalTranscript();
@@ -476,10 +491,19 @@ export function createChatSessionController(
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
       const restored = await snapshotStore.read(resolution.streamId);
+      // A rehydrated stream never re-emits `run.start`, so its identity is
+      // seeded from the durable store (ExecutionMeta by FK) on this cold
+      // read — mirroring `tryResumeStream()`'s seeding.
+      const restoredIdentity = snapshotStore.getRunIdentity(
+        resolution.streamId,
+      );
       patchStream(resolution.streamId, (slice) => {
         const runUsages = Object.values(restored.runUsage);
         return {
           ...slice,
+          ...(restoredIdentity && !slice.identity
+            ? { identity: restoredIdentity }
+            : {}),
           cumulativeUsage: runUsages.length
             ? sumUsageStats(runUsages)
             : slice.cumulativeUsage,
@@ -495,7 +519,7 @@ export function createChatSessionController(
       ownExecution(resolution.executionId);
       session.presentationHost = presentationHost;
 
-      // A Ctrl-C during the rehydration awaits above (`resolveCliResume`,
+      // A Ctrl-C during the rehydration awaits above (resume resolution,
       // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
       // `session.stopRequested`. Honor it before starting the real run chain —
       // matching `tryResumeStream()`'s stop-check after its own preparatory
@@ -610,8 +634,13 @@ export function createChatSessionController(
         // A follow-up wake may target a stream the user /clear-ed;
         // resuming it un-retires it (patchStream drops the retired mark),
         // matching the explicit resume path, or focusStream would refuse
-        // and the resumed run would stay invisible.
-        patchStream(streamId, (slice) => slice);
+        // and the resumed run would stay invisible. A rehydrated stream never
+        // re-emits `run.start`, so its identity is seeded from the durable
+        // store (ExecutionMeta by FK) on this cold read.
+        const identity = snapshotStore.getRunIdentity(streamId);
+        patchStream(streamId, (slice) =>
+          identity && !slice.identity ? { ...slice, identity } : slice,
+        );
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 

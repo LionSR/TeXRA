@@ -13,7 +13,6 @@ import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and presentation
-import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Row-dot color for a child stream's phase.
@@ -28,7 +27,7 @@ export function childStatusColor(status: string | undefined): string {
   if (status === STREAM_PHASE.WAITING) {
     return COLOR_WARNING;
   }
-  if (isChildExecutionErrorStatus(status)) return COLOR_ERROR;
+  if (status === STREAM_PHASE.FAILED) return COLOR_ERROR;
   if (status === STREAM_PHASE.RUNNING || status === STREAM_PHASE.COMPLETED) {
     return COLOR_SUCCESS;
   }

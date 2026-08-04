@@ -99,9 +99,7 @@ function isTeamLaunch(
 }
 
 function selectedAgentId(session: SessionContextValue): string {
-  return session.sessionType === SESSION_TYPES.WORKFLOW
-    ? session.workflowAgent
-    : session.toolUseAgent;
+  return session.agent[session.sessionType];
 }
 
 function getDesktopLaunchMode(session: SessionContextValue): DesktopLaunchMode {
@@ -240,10 +238,7 @@ export class InstructionPanel extends LitElement {
     if (value === BROWSE_ALL_AGENTS_OPTION_VALUE) {
       // Not a real agent: keep the current selection and open the catalog.
       const session = this.sessionData;
-      select.value =
-        (sessionType === SESSION_TYPES.WORKFLOW
-          ? session?.workflowAgent
-          : session?.toolUseAgent) ?? '';
+      select.value = session?.agent[sessionType] ?? '';
       this.dispatchEvent(MainViewEvents.browseAllAgents());
       return;
     }
@@ -401,15 +396,15 @@ export class InstructionPanel extends LitElement {
             id: 'workflowAgent',
             sessionType: 'workflow',
             ariaLabel: 'Workflow agent',
-            options: session.workflowAgentOptions,
-            value: session.workflowAgent,
+            options: session.agentOptions.workflow,
+            value: session.agent.workflow,
           }
         : {
             id: 'toolUseAgent',
             sessionType: 'toolUse',
             ariaLabel: 'Tool-use agent',
-            options: session.toolUseAgentOptions,
-            value: session.toolUseAgent,
+            options: session.agentOptions.toolUse,
+            value: session.agent.toolUse,
           };
     return html`
       <wa-select

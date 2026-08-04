@@ -88,10 +88,10 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 async function persistTranscriptEntry(
   executionId: ExecutionId,
   agent: string,
-  model: string,
-): Promise<void> {
+): Promise<StreamTabId> {
+  const streamId = getStreamTabId(agent, { executionId });
   const store = await StreamLogStore.open();
-  appendTranscriptEntry(store, getStreamTabId(agent, model, { executionId }), {
+  appendTranscriptEntry(store, streamId, {
     id: 'entry-1',
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
@@ -100,6 +100,7 @@ async function persistTranscriptEntry(
     text: 'hello',
   });
   await store.flush();
+  return streamId;
 }
 
 describe('ChatExportController.exportAsHtml', () => {
@@ -123,9 +124,9 @@ describe('ChatExportController.exportAsHtml', () => {
     expect(outcome).toEqual({ status: 'config_missing' });
   });
 
-  it('returns streamLogs_missing when config exists but no transcript was persisted', async () => {
+  it('returns streamLogs_missing when metadata carries no stamped stream id', async () => {
     const templatePath = await writeTemplate();
-    await getExecutionStore('exec-missing-logs' as ExecutionId).writeConfig(
+    await getExecutionStore('exec-missing-logs' as ExecutionId).writeRunRecord(
       config(),
     );
 
@@ -137,11 +138,11 @@ describe('ChatExportController.exportAsHtml', () => {
     expect(outcome).toEqual({ status: 'streamLogs_missing' });
   });
 
-  it('returns streamId_ambiguous when no canonical transcript timeline is proven', async () => {
+  it('never resolves a transcript from sidecar candidates without a stamped stream id', async () => {
     const templatePath = await writeTemplate();
     const executionId = 'aaa555aaa555' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
@@ -152,14 +153,14 @@ describe('ChatExportController.exportAsHtml', () => {
 
     const outcome = await controller.exportAsHtml(executionId, templatePath);
 
-    expect(outcome).toEqual({ status: 'streamId_ambiguous' });
+    expect(outcome).toEqual({ status: 'streamLogs_missing' });
   });
 
   it('returns streamLogs_missing when only delegated child sidecars remain', async () => {
     const templatePath = await writeTemplate();
     const executionId = 'aaa556aaa556' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
@@ -185,12 +186,13 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
     const executionId = 'exec-full' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
+    const streamId = await persistTranscriptEntry(executionId, 'review');
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
+      streamId,
     });
-    await persistTranscriptEntry(executionId, 'review', 'sonnet46T');
 
     const outcome = await controller.exportAsHtml(executionId, templatePath);
 
@@ -213,8 +215,12 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it('throws when the standalone template bundle is missing', async () => {
     const executionId = 'exec-missing-template' as ExecutionId;
-    await getExecutionStore(executionId).writeConfig(config());
-    await persistTranscriptEntry(executionId, 'orchestrator', 'deepseekT');
+    await getExecutionStore(executionId).writeRunRecord(config());
+    const streamId = await persistTranscriptEntry(executionId, 'orchestrator');
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-05T00:00:00.000Z',
+      streamId,
+    });
 
     await expect(
       controller.exportAsHtml(executionId, '/nonexistent/index.html'),

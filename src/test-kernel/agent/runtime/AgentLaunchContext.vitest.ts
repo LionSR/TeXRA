@@ -49,7 +49,10 @@ import { testModelCell } from '../modelCellTestUtils';
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('AgentLaunchContext', () => {
-  it('retains the missing-field diagnostic for empty canonical values', async () => {
+  it('still rejects empty canonical values, now at agent resolution', async () => {
+    // The pre-mint missing-field guard died with the model-keyed stream id
+    // (Axis T): an empty agent now fails agent resolution instead of a
+    // dedicated field check, but it must still fail the launch.
     const session = createTestSession();
     try {
       await expect(
@@ -57,9 +60,7 @@ describe('AgentLaunchContext', () => {
           config: AgentConfigSchema.parse({ agent: '', model: '' }),
           session,
         }),
-      ).rejects.toMatchObject({
-        message: 'Missing required fields: model and/or agent',
-      });
+      ).rejects.toThrow('Could not find agent');
     } finally {
       session.dispose();
     }
@@ -139,8 +140,8 @@ describe('AgentLaunchContext', () => {
     const order: string[] = [];
     const failure = new Error('user vars unavailable');
     const delegationAgentScope = {
-      workflowAgentKeys: ['builtInWorkflow:correct'],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+      workflow: ['builtInWorkflow:correct'],
+      toolUse: ['builtInToolUse:orchestrator'],
     };
     const postProcessResponse = vi.fn((text: string) => text);
     const responseTextProcessing = {

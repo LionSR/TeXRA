@@ -13,8 +13,8 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
-import { STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
-import type { ExecutionId, RunKind, StreamTabId } from '@shared/schemas';
+import { STREAM_PHASE } from '@shared/schemas';
+import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
@@ -24,13 +24,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
-  streamCategory: AgentCategory;
-  runKind: RunKind;
-  agentName: string;
+  /** What owns this stream — the launch site declares the truth once. */
+  run: RunIdentity;
   description: string;
   config: AgentConfig;
-  /** Tool that spawned this child (e.g. "bash", "codex"). Used for icon selection in the UI. */
-  toolName?: string;
   /** Writer atomically reserved by createRehydratedChildStream. */
   reservedWriter?: TranscriptWriter;
 }
@@ -125,14 +122,12 @@ export function createChildStream(
     };
     session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
 
-    const descriptor = buildRunDescriptor({
+    runTrace.trace.emit({
+      type: 'run.start',
       streamId: childStreamId,
       executionId,
-      agent: options.agentName,
-      category: options.streamCategory,
-      kind: options.runKind,
+      identity: options.run,
     });
-    runTrace.trace.emit({ type: 'run.start', descriptor });
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,
@@ -154,7 +149,12 @@ export function createChildStream(
     });
 
     const handle = new AgentExecutionHandle(
-      descriptor,
+      {
+        streamId: childStreamId,
+        executionId,
+        identity: options.run,
+        category: options.config.agentCategory,
+      },
       parentStreamId,
       runTrace.trace,
     );
@@ -163,7 +163,6 @@ export function createChildStream(
     if (executionLeaseScope) {
       handle.attachExecutionLeaseScope(executionLeaseScope);
     }
-    if (options.toolName) handle.toolName = options.toolName;
     // The process-owned snapshot listener persists both facts before handle
     // tracking; a later presentation replays them from the snapshot store during
     // canonical state loading (#8258).
@@ -181,7 +180,7 @@ export function createChildStream(
         type: 'setActiveStream',
         payload: {
           streamId: childStreamId,
-          agentCategory: options.streamCategory,
+          agentCategory: options.config.agentCategory,
           suppressViewSwitch: true,
         },
       },
@@ -332,7 +331,7 @@ async function finalizeChildStream(
     streamStatus: session.status,
     outcome,
     error,
-    isSubagent: handle.parentStreamId !== handle.childStreamId,
+    isSubagent: handle.isChildExecution,
     stage: options?.stage,
     flushArtifacts: () => session.flushArtifacts(handle.executionId),
     // No trace emit: child-stream results must stay out of `session.onResult`

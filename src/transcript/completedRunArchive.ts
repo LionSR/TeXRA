@@ -4,9 +4,7 @@
  * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
  * execution→stream mapping.
  */
-import { isDeepStrictEqual } from 'node:util';
-
-import type { TodoEntry } from '@agent/storage';
+import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { mediaAttachmentKindToContentBlock } from '@agent/export/attachmentMarkerVocabulary';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import {
@@ -29,10 +27,6 @@ import {
 import { ToolResultSchema } from '@shared/schemas/toolResult';
 import { assertNever, generateShortId, isObject } from '@utils/core';
 
-import {
-  resolvePersistedStreamIdForExecution,
-  type PersistedStreamIdResolution,
-} from './legacyExecutionIdentity';
 import { StreamLogStore } from './StreamLogStore';
 import { StreamSnapshotStore } from './StreamSnapshotStore';
 
@@ -53,29 +47,22 @@ function todoItemToEntry(todo: TodoItem): TodoEntry {
 
 /**
  * Read the archived task list for a completed run from the durable stream
- * sidecar (`streamData/{stream}/workPlan.json`).
- *
- * A registration-proven record resolves directly from its execution metadata
- * (the resolver's constant-time fast path); only legacy records enter the
- * legacy boundary's sidecar/suffix scans (#9590 A1).
+ * sidecar (`streamData/{stream}/workPlan.json`). The execution→stream
+ * mapping is the `streamId` stamped on execution metadata at registration —
+ * a row without one has no persisted stream.
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
 ): Promise<CompletedRunTodosReadResult> {
   const snapshotStore = new StreamSnapshotStore();
-  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
-    snapshotStore,
-  });
+  const streamId = (await getExecutionStore(executionId).readMeta())?.streamId;
 
-  if (
-    resolved?.streamId &&
-    (await snapshotStore.hasPersistedWorkPlan(resolved.streamId))
-  ) {
-    const snapshot = await snapshotStore.read(resolved.streamId);
+  if (streamId && (await snapshotStore.hasPersistedWorkPlan(streamId))) {
+    const snapshot = await snapshotStore.read(streamId);
     return {
       todos: snapshot.todos.map(todoItemToEntry),
       source: 'streamData',
-      streamId: resolved.streamId,
+      streamId,
     };
   }
   return { todos: [], source: 'none' };
@@ -88,24 +75,11 @@ export async function readCompletedRunTodos(
 type CompletedRunConversationSource = 'streamLog' | 'none';
 
 export interface CompletedRunConversationReadResult {
-  /** Provider-agnostic `{role, content}` messages, or `null` when neither
-   *  source holds any conversation data. */
+  /** Provider-agnostic `{role, content}` messages, or `null` when the
+   *  transcript sidecar holds no conversation data. */
   readonly conversation: unknown[] | null;
   readonly source: CompletedRunConversationSource;
   readonly streamId?: StreamTabId;
-  /** All overlap-connected sidecars used for a merged archive. */
-  readonly streamIds?: readonly StreamTabId[];
-  /** Exact-execution or suffix-matched streams excluded because persisted
-   *  evidence is insufficient to prove a canonical archive root. */
-  readonly candidateStreamIds?: readonly StreamTabId[];
-  /** Proven child associations retained as evidence but never read as archive rows. */
-  readonly associatedStreamIds?: readonly StreamTabId[];
-  /** Same row ID persisted with incompatible conversation payload or state. */
-  readonly conflicts?: readonly CompletedRunConversationConflict[];
-  /** Overlap constraints contradicted one another. */
-  readonly hasOrderingCycle?: boolean;
-  /** Overlap constraints did not establish one complete chronology. */
-  readonly hasOrderingAmbiguity?: boolean;
 }
 
 /** Whether completed-run storage proves a conversation or transcript association exists. */
@@ -113,17 +87,8 @@ export function hasCompletedRunConversationEvidence(
   result: CompletedRunConversationReadResult,
 ): boolean {
   return (
-    (result.conversation?.length ?? 0) > 0 ||
-    result.streamId !== undefined ||
-    (result.streamIds?.length ?? 0) > 0 ||
-    (result.candidateStreamIds?.length ?? 0) > 0 ||
-    (result.associatedStreamIds?.length ?? 0) > 0
+    (result.conversation?.length ?? 0) > 0 || result.streamId !== undefined
   );
-}
-
-interface CompletedRunConversationConflict {
-  readonly rowId: string;
-  readonly streamIds: readonly StreamTabId[];
 }
 
 /**
@@ -409,383 +374,6 @@ async function conversationFromStream(
   return log ? streamLogEntriesToConversation(log.toJSON()) : [];
 }
 
-interface LoadedConversationStream {
-  readonly streamId: StreamTabId;
-  readonly entries: readonly StreamLogEntry[];
-  readonly entriesById: ReadonlyMap<string, StreamLogEntry>;
-}
-
-interface MergedConversationResult {
-  readonly conversation: unknown[];
-  readonly streamIds: readonly StreamTabId[];
-  readonly candidateStreamIds: readonly StreamTabId[];
-  readonly conflicts: readonly CompletedRunConversationConflict[];
-  readonly hasOrderingCycle: boolean;
-  readonly hasOrderingAmbiguity: boolean;
-}
-
-function rowsAgree(left: StreamLogEntry, right: StreamLogEntry): boolean {
-  return (
-    left.id === right.id &&
-    left.type === right.type &&
-    left.level === right.level &&
-    left.timestamp === right.timestamp &&
-    left.groupId === right.groupId &&
-    left.messageType === right.messageType &&
-    left.text === right.text &&
-    left.verbose === right.verbose &&
-    isDeepStrictEqual(left.data, right.data)
-  );
-}
-
-async function loadConversationStreams(
-  streamLogStore: StreamLogStore,
-  streamIds: readonly StreamTabId[],
-): Promise<LoadedConversationStream[]> {
-  return Promise.all(
-    streamIds.map(async (streamId) => {
-      await streamLogStore.ensureLoaded(streamId);
-      const entries = streamLogStore.get(streamId)?.toJSON() ?? [];
-      return {
-        streamId,
-        entries,
-        entriesById: new Map(entries.map((entry) => [entry.id, entry])),
-      };
-    }),
-  );
-}
-
-function sharedRows(
-  left: LoadedConversationStream,
-  right: LoadedConversationStream,
-): {
-  readonly overlaps: number;
-  readonly conflictingIds: string[];
-  readonly conversationConflictingIds: string[];
-} {
-  let overlaps = 0;
-  const conflictingIds: string[] = [];
-  const conversationConflictingIds: string[] = [];
-  for (const [id, leftEntry] of left.entriesById) {
-    const rightEntry = right.entriesById.get(id);
-    if (!rightEntry) continue;
-    if (rowsAgree(leftEntry, rightEntry)) {
-      overlaps++;
-      continue;
-    }
-    conflictingIds.push(id);
-    if (
-      conversationMessagesForEntry(leftEntry).length > 0 ||
-      conversationMessagesForEntry(rightEntry).length > 0
-    ) {
-      conversationConflictingIds.push(id);
-    }
-  }
-  return { overlaps, conflictingIds, conversationConflictingIds };
-}
-
-/**
- * Merge exact-execution sidecars connected by validated copied row IDs. When
- * no canonical stream is proven, every candidate must join the same component.
- * Stream-local adjacency supplies ordering; neither clocks nor per-stream
- * sequence numbers order disjoint rows.
- */
-async function mergedCandidateConversation(
-  streamLogStore: StreamLogStore,
-  streamIds: readonly StreamTabId[],
-  selectedStreamId?: StreamTabId,
-): Promise<MergedConversationResult> {
-  const streams = await loadConversationStreams(streamLogStore, streamIds);
-  const neighbors = new Map<StreamTabId, Set<StreamTabId>>();
-  const conflictingPairs: [StreamTabId, StreamTabId][] = [];
-  const conflictStreamsById = new Map<string, Set<StreamTabId>>();
-  for (const [index, left] of streams.entries()) {
-    for (const right of streams.slice(index + 1)) {
-      const { overlaps, conflictingIds, conversationConflictingIds } =
-        sharedRows(left, right);
-      if (conversationConflictingIds.length > 0) {
-        conflictingPairs.push([left.streamId, right.streamId]);
-      }
-      for (const id of conflictingIds) {
-        const conflictStreams = conflictStreamsById.get(id) ?? new Set();
-        conflictStreams.add(left.streamId);
-        conflictStreams.add(right.streamId);
-        conflictStreamsById.set(id, conflictStreams);
-      }
-      if (overlaps === 0 || conversationConflictingIds.length > 0) continue;
-      const leftNeighbors = neighbors.get(left.streamId) ?? new Set();
-      leftNeighbors.add(right.streamId);
-      neighbors.set(left.streamId, leftNeighbors);
-      const rightNeighbors = neighbors.get(right.streamId) ?? new Set();
-      rightNeighbors.add(left.streamId);
-      neighbors.set(right.streamId, rightNeighbors);
-    }
-  }
-
-  const selected = selectedStreamId
-    ? streams.find(({ streamId }) => streamId === selectedStreamId)
-    : undefined;
-  const overlapAnchor = selected ?? streams[0];
-  if (!overlapAnchor) {
-    return {
-      conversation: [],
-      streamIds: [],
-      candidateStreamIds: [],
-      conflicts: [],
-      hasOrderingCycle: false,
-      hasOrderingAmbiguity: false,
-    };
-  }
-  const connectedIds = new Set<StreamTabId>([overlapAnchor.streamId]);
-  const queue = [overlapAnchor.streamId];
-  for (const streamId of queue) {
-    for (const neighbor of neighbors.get(streamId) ?? []) {
-      if (connectedIds.has(neighbor)) continue;
-      connectedIds.add(neighbor);
-      queue.push(neighbor);
-    }
-  }
-  const connected = streams.filter(({ streamId }) =>
-    connectedIds.has(streamId),
-  );
-  const connectedConflict = conflictingPairs.some(
-    ([left, right]) => connectedIds.has(left) && connectedIds.has(right),
-  );
-  let mergeStreams = connected;
-  if (connectedConflict) mergeStreams = selected ? [selected] : [];
-  const allNodes = new Map<string, StreamLogEntry>();
-  const rowSuccessors = new Map<string, Set<string>>();
-  // Persisted IDs identify conflict diagnostics, but only complete agreeing rows
-  // represent the same ordering node. Keep incompatible copies stream-qualified.
-  const rowVariantsById = new Map<
-    string,
-    { readonly graphId: string; readonly entry: StreamLogEntry }[]
-  >();
-  for (const { streamId, entries } of mergeStreams) {
-    let previousGraphId: string | undefined;
-    for (const entry of entries) {
-      const variants = rowVariantsById.get(entry.id) ?? [];
-      const matchingVariant = variants.find((variant) =>
-        rowsAgree(variant.entry, entry),
-      );
-      const graphId =
-        matchingVariant?.graphId ??
-        (variants.length === 0
-          ? entry.id
-          : `${entry.id}\0${streamId}\0${variants.length}`);
-      if (!matchingVariant) {
-        variants.push({ graphId, entry });
-        rowVariantsById.set(entry.id, variants);
-        allNodes.set(graphId, entry);
-      }
-      if (previousGraphId && previousGraphId !== graphId) {
-        const nextIds = rowSuccessors.get(previousGraphId) ?? new Set<string>();
-        nextIds.add(graphId);
-        rowSuccessors.set(previousGraphId, nextIds);
-      }
-      previousGraphId = graphId;
-    }
-  }
-
-  // Diagnostic rows still prove copied-row overlap and carry payload conflicts,
-  // but they do not produce archived messages. Contract paths through them so
-  // they can preserve A < diagnostic < B without creating false branch choices
-  // when two sidecars persisted different STATISTICS/PROGRESS rows between the
-  // same conversation turns.
-  const nodes = new Map(
-    [...allNodes].filter(
-      ([, entry]) =>
-        entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-        conversationMessagesForEntry(entry).length > 0,
-    ),
-  );
-  const successors = new Map<string, Set<string>>();
-  const indegrees = new Map([...nodes.keys()].map((id) => [id, 0]));
-  for (const sourceId of nodes.keys()) {
-    const pending = [...(rowSuccessors.get(sourceId) ?? [])];
-    const visitedDiagnostics = new Set<string>();
-    for (const successorId of pending) {
-      if (nodes.has(successorId)) {
-        const nextIds = successors.get(sourceId) ?? new Set<string>();
-        if (!nextIds.has(successorId)) {
-          nextIds.add(successorId);
-          successors.set(sourceId, nextIds);
-          indegrees.set(successorId, (indegrees.get(successorId) ?? 0) + 1);
-        }
-        continue;
-      }
-      if (visitedDiagnostics.has(successorId)) continue;
-      visitedDiagnostics.add(successorId);
-      pending.push(...(rowSuccessors.get(successorId) ?? []));
-    }
-  }
-
-  const remaining = new Set(nodes.keys());
-  const ready = new Set(
-    [...remaining].filter((id) => (indegrees.get(id) ?? 0) === 0),
-  );
-  const ordered: StreamLogEntry[] = [];
-  let hasOrderingCycle = false;
-  let hasOrderingAmbiguity = false;
-  while (remaining.size > 0) {
-    if (ready.size === 0) {
-      hasOrderingCycle = true;
-      break;
-    }
-    if (ready.size > 1) hasOrderingAmbiguity = true;
-    const nextId = ready.values().next().value as string;
-    const next = nodes.get(nextId);
-    if (!next) break;
-    ordered.push(next);
-    ready.delete(nextId);
-    remaining.delete(nextId);
-    for (const successorId of successors.get(nextId) ?? []) {
-      const indegree = (indegrees.get(successorId) ?? 0) - 1;
-      indegrees.set(successorId, indegree);
-      if (indegree === 0 && remaining.has(successorId)) ready.add(successorId);
-    }
-  }
-
-  const mergeTrusted =
-    !connectedConflict &&
-    !hasOrderingCycle &&
-    !hasOrderingAmbiguity &&
-    (selected !== undefined || connected.length === streams.length);
-  let usedStreams: LoadedConversationStream[] = [];
-  let conversation: unknown[] = [];
-  if (mergeTrusted) {
-    usedStreams = mergeStreams;
-    conversation = streamLogEntriesToConversation(ordered);
-  } else if (selected) {
-    usedStreams = [selected];
-    conversation = streamLogEntriesToConversation(selected.entries);
-  }
-  const usedIds = new Set(usedStreams.map(({ streamId }) => streamId));
-  const streamOrder = new Map(
-    streams.map(({ streamId }, index) => [streamId, index]),
-  );
-  return {
-    conversation,
-    streamIds: usedStreams.map(({ streamId }) => streamId),
-    candidateStreamIds: streams
-      .map(({ streamId }) => streamId)
-      .filter((streamId) => !usedIds.has(streamId)),
-    conflicts: [...conflictStreamsById]
-      .map(([rowId, ids]) => ({
-        rowId,
-        streamIds: [...ids].toSorted(
-          (left, right) =>
-            (streamOrder.get(left) ?? 0) - (streamOrder.get(right) ?? 0),
-        ),
-      }))
-      .toSorted((left, right) => left.rowId.localeCompare(right.rowId)),
-    hasOrderingCycle,
-    hasOrderingAmbiguity,
-  };
-}
-
-/**
- * Sidecar arm of the non-empty rule. Current executions normally need only
- * their registered primary. If it reconstructs empty, historical candidates
- * are tried in deterministic order before the legacy projection.
- */
-async function readSidecarConversation(
-  resolved: PersistedStreamIdResolution,
-  streamLogStore: StreamLogStore,
-): Promise<CompletedRunConversationReadResult | null> {
-  // Current executions register one canonical stream at birth; a disk-backed
-  // release/reopen regression proves resumed turns append there. Only
-  // pre-registration resolutions scan historical candidates, so keep the
-  // ordinary completed-read path constant-time.
-  const associationDiagnostics =
-    resolved.associatedStreamIds && resolved.associatedStreamIds.length > 0
-      ? { associatedStreamIds: resolved.associatedStreamIds }
-      : {};
-  const exactCandidates = resolved.exactExecutionCandidateStreamIds;
-  if (exactCandidates !== undefined) {
-    const orderedCandidates = resolved.streamId
-      ? [
-          resolved.streamId,
-          ...exactCandidates.filter(
-            (streamId) => streamId !== resolved.streamId,
-          ),
-        ]
-      : exactCandidates;
-    const merged = await mergedCandidateConversation(
-      streamLogStore,
-      orderedCandidates,
-      resolved.streamId,
-    );
-    const diagnostics = {
-      ...associationDiagnostics,
-      ...(resolved.streamId ? { streamId: resolved.streamId } : {}),
-      ...(merged.streamIds.length > 1 ? { streamIds: merged.streamIds } : {}),
-      ...(merged.candidateStreamIds.length > 0
-        ? { candidateStreamIds: merged.candidateStreamIds }
-        : {}),
-      ...(merged.conflicts.length > 0 ? { conflicts: merged.conflicts } : {}),
-      ...(merged.hasOrderingCycle ? { hasOrderingCycle: true } : {}),
-      ...(merged.hasOrderingAmbiguity ? { hasOrderingAmbiguity: true } : {}),
-    };
-    if (merged.conversation.length > 0) {
-      return {
-        conversation: merged.conversation,
-        source: 'streamLog',
-        ...diagnostics,
-      };
-    }
-    // Exact metadata established the selected stream and candidate set. An
-    // empty selected conversation falls back to the legacy projection, never
-    // to a child, disconnected candidate, or suffix-only sidecar. Preserve
-    // the association diagnostics so every persisted root remains findable.
-    return { conversation: null, source: 'none', ...diagnostics };
-  }
-
-  if (!resolved.streamId) {
-    // Explicit ambiguity from the legacy boundary: several suffix-matched
-    // streams with no ownership proof. Surface the candidates instead of
-    // silently reading one; suffix resemblance never selects an archive.
-    if (resolved.suffixCandidateStreamIds?.length) {
-      return {
-        conversation: null,
-        source: 'none',
-        candidateStreamIds: resolved.suffixCandidateStreamIds,
-        ...associationDiagnostics,
-      };
-    }
-    return resolved.associatedStreamIds?.length
-      ? { conversation: null, source: 'none', ...associationDiagnostics }
-      : null;
-  }
-  const primaryConversation = await conversationFromStream(
-    streamLogStore,
-    resolved.streamId,
-  );
-  if (primaryConversation.length > 0) {
-    return {
-      conversation: primaryConversation,
-      source: 'streamLog',
-      streamId: resolved.streamId,
-      ...associationDiagnostics,
-    };
-  }
-
-  // The resolution always states its fallback candidates (empty by proof for
-  // registered records), so an empty primary never triggers a re-scan here.
-  for (const streamId of resolved.fallbackStreamIds) {
-    const conversation = await conversationFromStream(streamLogStore, streamId);
-    if (conversation.length > 0) {
-      return {
-        conversation,
-        source: 'streamLog',
-        streamId,
-        ...associationDiagnostics,
-      };
-    }
-  }
-  return null;
-}
-
 /**
  * Read the archived conversation for a completed run from the transcript
  * sidecar (`streamLogs/{stream}.json`), reconstructed into provider-agnostic
@@ -794,18 +382,14 @@ async function readSidecarConversation(
 export async function readCompletedRunConversation(
   executionId: ExecutionId,
 ): Promise<CompletedRunConversationReadResult> {
-  const snapshotStore = new StreamSnapshotStore();
   // A call-scoped read-only store, so this reader neither reloads a live store
   // nor mutates persistence.
   const streamLogStore = await StreamLogStore.openReadOnly();
+  const streamId = (await getExecutionStore(executionId).readMeta())?.streamId;
+  if (!streamId) return { conversation: null, source: 'none' };
 
-  const resolved = await resolvePersistedStreamIdForExecution(executionId, {
-    snapshotStore,
-    streamLogStore,
-  });
-
-  const sidecar = resolved
-    ? await readSidecarConversation(resolved, streamLogStore)
-    : null;
-  return sidecar ?? { conversation: null, source: 'none' };
+  const conversation = await conversationFromStream(streamLogStore, streamId);
+  return conversation.length > 0
+    ? { conversation, source: 'streamLog', streamId }
+    : { conversation: null, source: 'none', streamId };
 }

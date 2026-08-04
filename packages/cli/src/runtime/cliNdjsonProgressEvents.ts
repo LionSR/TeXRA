@@ -9,9 +9,9 @@ import type {
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
+  StreamPhase,
   StreamTabId,
   UpdateConversationProgressPayload,
-  UpdateActiveSubagentsPayload,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
   UpdatePlanPayload,
@@ -22,6 +22,29 @@ import type {
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
 } from '@shared/schemas';
+
+/**
+ * Frozen public `updateActiveSubagents` row — the pre-consolidation
+ * `ActiveChildInfo` shape, discriminated by `kind` with no `identity` struct.
+ * The internal roster now carries the parsed `identity` verbatim; the NDJSON
+ * boundary alone projects it back so `--output-format ndjson` consumers keep
+ * the old wire shape (proposal gate G).
+ */
+export interface CliNdjsonActiveChildRow {
+  readonly kind: 'subagent' | 'process';
+  readonly executionId: string;
+  readonly agentName: string;
+  readonly status?: StreamPhase;
+  readonly startedAt?: number;
+  readonly finishedAt?: number;
+  readonly elapsed?: string | null;
+  readonly workflowPhase?: string;
+  /** Tool that spawned this child (e.g. "bash", "codex"); omitted for a
+   *  native agent child. */
+  readonly toolName?: string;
+  /** Only on `kind: 'subagent'` rows — subagents own a stream tab. */
+  readonly childStreamId?: string;
+}
 
 /**
  * Progress payloads retained only for CLI NDJSON public-output compatibility.
@@ -55,7 +78,10 @@ export interface CliNdjsonProgressEventPayloads {
   updateRoundStage: UpdateRoundStagePayload;
   updateQueuedFollowUps: UpdateQueuedFollowUpsPayload;
   goalPaused: GoalPausedPayload;
-  updateActiveSubagents: UpdateActiveSubagentsPayload;
+  updateActiveSubagents: {
+    parentStreamId: StreamTabId;
+    children: CliNdjsonActiveChildRow[];
+  };
   updateStreamDescription: UpdateStreamDescriptionPayload;
   setParentStream: SetParentStreamPayload;
 

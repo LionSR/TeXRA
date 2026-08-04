@@ -1,8 +1,10 @@
 import { quote } from 'shell-quote';
 
 import {
+  AGENT_COMPLETION_SOURCES,
   CLI_COMPLETION_SHELLS,
   COMPLETION_SOURCES,
+  allCompletionSources,
   commandKey,
   completionFlagVariants,
   completionSourceListing,
@@ -11,10 +13,10 @@ import {
   type CompletionFlagVariant,
 } from './completionCommandTree';
 
-const { agents, models, toolUseAgents, workflowAgents } = COMPLETION_SOURCES;
+const { agents, models } = COMPLETION_SOURCES;
 
 const DYNAMIC_FLAG_VALUE_SOURCES: ReadonlyMap<string, string> = new Map([
-  ['agent', toolUseAgents.shellFunction],
+  ['agent', AGENT_COMPLETION_SOURCES.toolUse.shellFunction],
   ['model', models.shellFunction],
 ]);
 
@@ -31,14 +33,14 @@ function zshFlagValueSuffix(
 
 const POSITIONAL_SPECS: Readonly<Record<string, string>> = {
   completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
-  run: `1:agent:($(${workflowAgents.shellFunction}))`,
+  run: `1:agent:($(${AGENT_COMPLETION_SOURCES.workflow.shellFunction}))`,
   'agents show': `1:agent:($(${agents.shellFunction}))`,
-  'agents run': `1:agent:($(${toolUseAgents.shellFunction}))`,
+  'agents run': `1:agent:($(${AGENT_COMPLETION_SOURCES.toolUse.shellFunction}))`,
   'models show': `1:model:($(${models.shellFunction}))`,
 };
 
 function dynamicSourceFunctions(): string {
-  return Object.values(COMPLETION_SOURCES)
+  return allCompletionSources()
     .map(
       (source) =>
         `${source.shellFunction}() {

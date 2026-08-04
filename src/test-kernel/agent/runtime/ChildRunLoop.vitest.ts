@@ -70,7 +70,7 @@ import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
-  EXECUTION_STATUS,
+  RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
   type StreamPhase,
@@ -334,7 +334,6 @@ describe('childRunLoop E2E fixtures', () => {
         CodexThreads.trackInFlight({
           thread: {} as never,
           childStreamId,
-          parentStreamId,
           executionId,
           executions: runSession.executions,
         }),
@@ -352,7 +351,6 @@ describe('childRunLoop E2E fixtures', () => {
       ) =>
         ClaudeAgentSessions.trackInFlight({
           childStreamId,
-          parentStreamId,
           executionId,
           executions: runSession.executions,
           model: 'claude-sonnet-4-6',
@@ -719,7 +717,7 @@ describe('childRunLoop E2E fixtures', () => {
     // it, and reads project the durable outcome onto it.
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId,
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+      outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
     });
   });
@@ -914,9 +912,7 @@ describe('childRunLoop E2E fixtures', () => {
     const parentStreamId = 'parent' as StreamTabId;
     const childStream = createChildStream(executionId, parentStreamId, {
       streamPrefix: 'codex',
-      streamCategory: AgentCategory.ToolUse,
-      runKind: 'agent',
-      agentName: 'fake-cli',
+      run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
       description: 'Fail a turn, then take an interrupt',
       config: childStreamConfig,
     });
@@ -955,7 +951,7 @@ describe('childRunLoop E2E fixtures', () => {
       }),
     });
     expect(mocks.finalizeExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ terminalStatus: EXECUTION_STATUS.ERROR }),
+      expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
   });
 

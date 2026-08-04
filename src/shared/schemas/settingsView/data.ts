@@ -171,8 +171,7 @@ export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
 /** Outbound: backend → frontend agent selection data */
 const UpdateAgentSelectionMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION),
-  workflow: z.array(AgentSelectionItemSchema),
-  toolUse: z.array(AgentSelectionItemSchema),
+  agents: z.record(AgentCategorySchema, z.array(AgentSelectionItemSchema)),
 });
 export type UpdateAgentSelectionMessage = z.infer<
   typeof UpdateAgentSelectionMessageSchema
