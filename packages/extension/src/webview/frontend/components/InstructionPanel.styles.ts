@@ -136,9 +136,10 @@ export const instructionPanelStyles: CSSResult = css`
     flex: 1 1 auto;
   }
 
+  /* No element opacity: --wa-color-text-quiet is already 70% alpha, and the
+     extra 0.85 composited to 3.18:1 on the brand callout. */
   .session-hint-time {
     color: var(--wa-color-text-quiet);
-    opacity: var(--opacity-normal);
   }
 
   .session-hint-dismiss {
