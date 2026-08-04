@@ -35,7 +35,8 @@ export function shouldUseSubscriptionDeviceCode(
 /**
  * Publish the loopback sign-in URL before awaiting the browser process.
  * Some launchers remain open until the browser exits; the sign-in panel must
- * not hide the only manual route behind that wait.
+ * not hide the only manual route behind that wait. Print the URL once — later
+ * status lines must not re-emit it (progress sinks append, not replace).
  */
 export async function writeCliLoopbackSignInProgress(options: {
   readonly writeProgress: (message: string) => void;
@@ -44,23 +45,15 @@ export async function writeCliLoopbackSignInProgress(options: {
   readonly noBrowser: boolean;
 }): Promise<void> {
   const { writeProgress, displayName, url, noBrowser } = options;
-  if (noBrowser) {
-    writeProgress(`${displayName} sign-in URL:\n${url}`);
-    return;
-  }
+  writeProgress(`${displayName} sign-in URL:\n${url}`);
+  if (noBrowser) return;
 
-  writeProgress(
-    `${displayName} sign-in URL:\n${url}\nBrowser launch in progress...`,
-  );
+  writeProgress('Browser launch in progress...');
   if (await tryOpenBrowser(url)) {
-    writeProgress(
-      `${displayName} sign-in URL:\n${url}\nBrowser opened; the same URL works in another browser.`,
-    );
+    writeProgress('Browser opened; the same URL works in another browser.');
     return;
   }
-  writeProgress(
-    `${displayName} sign-in URL:\n${url}\nAutomatic browser launch failed; the URL remains available above.`,
-  );
+  writeProgress('Automatic browser launch failed; open the sign-in URL above.');
 }
 
 export type CliSubscriptionSignOutResult =

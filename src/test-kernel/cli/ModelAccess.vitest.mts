@@ -382,6 +382,31 @@ describe('CLI model access resolution', () => {
         'included',
       ),
     ).toBe('included: sign-in required');
+    expect(
+      formatModelStatusForCliMode(
+        model('gpt56', {
+          model: modelOption('gpt56', {
+            availability: 'subscription-access',
+            availabilityLabel: 'ChatGPT subscription',
+          }),
+          status: 'chatgpt subscription',
+        }),
+        'included',
+      ),
+    ).toBe('chatgpt subscription');
+    expect(
+      formatModelStatusForCliMode(
+        model('grok45', {
+          model: modelOption('grok45', {
+            availability: 'subscription-access',
+            availabilityLabel: 'Grok subscription',
+            provider: 'xai',
+          }),
+          status: 'grok subscription',
+        }),
+        'included',
+      ),
+    ).toBe('grok subscription');
   });
 
   it('builds model picker rows from the access-list source of truth', () => {

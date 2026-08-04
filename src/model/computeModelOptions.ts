@@ -429,7 +429,9 @@ async function resolveModelAvailability(
     }
   }
 
-  // Grok (xAI) subscription — same preference pattern as ChatGPT.
+  // Grok (xAI) subscription — same preference pattern as ChatGPT. Reuse the
+  // subscription-access kind, but label it Grok so pickers/status rows do not
+  // say "ChatGPT subscription" for an xAI model.
   if (ctx.xaiSignedIn) {
     const subscriptionCapabilities =
       resolveXaiSubscriptionCapabilitiesForAgentCategory(
@@ -439,6 +441,7 @@ async function resolveModelAvailability(
     if (subscriptionCapabilities) {
       return {
         ...availabilityStatus('subscription-access'),
+        label: 'Grok subscription',
         providerCapabilities: subscriptionCapabilities,
       };
     }
