@@ -645,7 +645,7 @@ wa-dialog.desktop-command-palette::part(body) {
   height: 1em;
   place-items: center;
   color: var(--wa-color-text-quiet);
-  font-size: var(--icon-size-m);
+  font-size: var(--font-size-icon);
 }
 
 wa-input.desktop-command-palette-input {
@@ -715,7 +715,7 @@ wa-input.desktop-command-palette-input::part(input) {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-wide);
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
 }
 
@@ -786,7 +786,7 @@ wa-input.desktop-command-palette-input::part(input) {
   border-radius: var(--wa-border-radius-s);
   background: var(--wa-color-surface-lowered);
   color: var(--wa-color-text-quiet);
-  font-size: var(--icon-size-s);
+  font-size: var(--font-size-icon-sm);
 }
 
 .desktop-command-palette-main {
@@ -857,7 +857,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-command-palette-customize::part(base) {
-  min-height: var(--height-control-s);
+  min-height: var(--height-control-compact);
   padding-inline: var(--wa-space-2xs);
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
@@ -1595,7 +1595,7 @@ wa-card.desktop-onboarding::part(footer) {
 }
 
 .desktop-editor-tree-status::part(item) {
-  min-height: var(--row-height-compact);
+  min-height: var(--height-control-compact);
   padding: var(--row-padding);
 }
 

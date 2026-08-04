@@ -78,7 +78,7 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .card-copy {
         margin: 0;
-        color: var(--vscode-descriptionForeground);
+        color: var(--wa-color-text-quiet);
         line-height: var(--line-height-normal, 1.4);
         overflow-wrap: anywhere;
       }
@@ -93,11 +93,11 @@ export class OnboardingWelcomeCard extends LitElement {
       .path-step {
         min-width: 0;
         padding: var(--wa-space-xs);
-        border: 1px solid var(--vscode-input-border, transparent);
+        border: var(--border-thin) solid var(--wa-color-surface-border);
         border-radius: var(--wa-border-radius-s, 4px);
         background: color-mix(
           in srgb,
-          var(--vscode-editor-background) 76%,
+          var(--wa-color-surface-default) 76%,
           transparent
         );
       }
@@ -113,7 +113,7 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .path-step__copy {
         margin: 0;
-        color: var(--vscode-descriptionForeground);
+        color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal, 1.4);
         overflow-wrap: anywhere;

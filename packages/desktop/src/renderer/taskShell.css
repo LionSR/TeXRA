@@ -626,7 +626,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-environment-trailing.is-success {
-  color: var(--wa-color-success-60);
+  color: var(--color-success);
 }
 
 .task-environment-diff {
@@ -634,11 +634,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-environment-diff .is-added {
-  color: var(--wa-color-success-60);
+  color: var(--color-success);
 }
 
 .task-environment-diff .is-deleted {
-  color: var(--wa-color-danger-60);
+  color: var(--color-error);
 }
 
 .task-environment-more {
