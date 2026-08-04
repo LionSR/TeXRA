@@ -852,7 +852,7 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'packages/cli/src/runtime/cliConfig.ts',
-    enumLabels: ['Ask', 'Never', 'Auto-approve'],
+    enumLabels: ['Never', 'Ask', 'Auto-approve'],
     settingsViewSnapshot: 'approval',
   },
   {
