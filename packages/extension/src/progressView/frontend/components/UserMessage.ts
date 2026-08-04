@@ -65,6 +65,12 @@ export class UserMessage extends LitElement {
         margin: var(--wa-space-l) 0 var(--wa-space-m);
       }
 
+      /* The log's own top padding already separates the first entry from the
+         prelude panels; the inter-turn gap is only needed between entries. */
+      :host(:first-child) .user-message-container {
+        margin-top: 0;
+      }
+
       .user-message {
         position: relative;
         padding: var(--wa-space-xs) var(--wa-space-s);

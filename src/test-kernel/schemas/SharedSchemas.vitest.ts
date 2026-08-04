@@ -234,6 +234,7 @@ describe('settings view tab definitions', () => {
       GOAL: 9,
       ACCOUNT: 10,
       SHORTCUTS: 11,
+      SUBSCRIPTIONS: 12,
     });
     expect(SETTINGS_TAB_PANEL_NAMES).toEqual([
       'memory',
@@ -248,6 +249,7 @@ describe('settings view tab definitions', () => {
       'goal',
       'account',
       'shortcuts',
+      'subscriptions',
     ]);
   });
 

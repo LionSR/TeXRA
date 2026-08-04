@@ -7,7 +7,6 @@ import { css } from 'lit';
 import katexStyles from 'katex/dist/katex.min.css?inline';
 
 // Shared styles
-import { animationStyles } from '@shared/styles/litStyles';
 import { commonViewStyles } from '@shared/styles/commonViewStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 
@@ -86,7 +85,6 @@ export const layoutStyles = css`
  * Use this for components that need the full set of log styles.
  */
 export const logStyles = [
-  animationStyles,
   commonViewStyles,
   katexStyleSheet,
   layoutStyles,

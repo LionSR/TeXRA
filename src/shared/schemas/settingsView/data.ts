@@ -87,6 +87,7 @@ export const SETTINGS_TAB_ORDER = [
   'GOAL',
   'ACCOUNT',
   'SHORTCUTS',
+  'SUBSCRIPTIONS',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
@@ -128,7 +129,7 @@ export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
  * appended tab cannot ship without being placed here.
  */
 export const SETTINGS_TAB_GROUPS = [
-  { label: 'Account', tabs: ['ACCOUNT'] },
+  { label: 'Account', tabs: ['ACCOUNT', 'SUBSCRIPTIONS'] },
   { label: 'Models', tabs: ['MODELS'] },
   { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
   { label: 'Capabilities', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },

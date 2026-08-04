@@ -382,12 +382,17 @@ async function resolveModelAvailability(
   // state — consent and temporary unavailability are route states on the one
   // canonical model row, never a reason to fall back to another transport.
   if (prefersCopilotRoute(model)) {
-    switch (copilotRouteForModel(model)?.access) {
+    const access = copilotRouteForModel(model)?.access;
+    switch (access) {
       case 'allowed':
         return availabilityStatus('copilot-access');
       case 'consent-required':
         return availabilityStatus('copilot-consent-required');
+      case 'unavailable':
+      case undefined:
+        return availabilityStatus('copilot-unavailable');
       default:
+        access satisfies never;
         return availabilityStatus('copilot-unavailable');
     }
   }

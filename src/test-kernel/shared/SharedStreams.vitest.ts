@@ -205,7 +205,7 @@ describe('stream status display labels', () => {
   const wordingCases: Array<[StreamStatusLabelStyle, string, string]> = [
     ['cli', STREAM_PHASE.WAITING, 'idle'],
     ['cliCompact', STREAM_PHASE.WAITING, 'idle'],
-    ['progressHeader', STREAM_PHASE.WAITING, 'Waiting for follow-up'],
+    ['progressHeader', STREAM_PHASE.WAITING, 'Idle'],
     ['cliCompact', STREAM_PHASE.COMPLETED, 'completed'],
     ['progressHeader', STREAM_PHASE.COMPLETED, 'Completed'],
     ['cliCompact', STREAM_PHASE.CANCELLED, 'stopped'],
@@ -258,13 +258,13 @@ describe('stream status display labels', () => {
     ).toBe('idle');
   });
 
-  it('ignores isChildStream for the progressHeader style, which already says "Waiting for follow-up"', () => {
+  it('ignores isChildStream for the progressHeader style, which shows the same "Idle" for root and child', () => {
     expect(
       formatStreamStatusLabel(STREAM_STATUS.WAITING, {
         style: 'progressHeader',
         isChildStream: true,
       }),
-    ).toBe('Waiting for follow-up');
+    ).toBe('Idle');
   });
 
   it('ignores isChildStream for statuses other than WAITING', () => {

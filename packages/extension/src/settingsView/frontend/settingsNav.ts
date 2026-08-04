@@ -55,13 +55,13 @@ const SETTINGS_TAB_METADATA: Record<
   MODELS: {
     icon: 'server',
     label: 'Providers & Models',
-    description: 'Choose model access, credentials, defaults, and reliability.',
+    description: 'Choose model access, credentials, and defaults.',
   },
   AGENTS: {
     icon: 'robot',
     label: 'Agents',
     description:
-      'Configure the workflow and tool-use agents available to tasks.',
+      'Configure the agents and agent sets available to tasks, plus session reliability.',
   },
   MULTI_AGENT: {
     icon: 'users',
@@ -101,6 +101,11 @@ const SETTINGS_TAB_METADATA: Record<
     icon: 'circle-user',
     label: 'Account & Usage',
     description: 'Manage sign-in, included access, and current model usage.',
+  },
+  SUBSCRIPTIONS: {
+    icon: 'gem',
+    label: 'Subscriptions',
+    description: 'Manage ChatGPT, Kimi Code, and Copilot model access.',
   },
   SHORTCUTS: {
     icon: 'code',
