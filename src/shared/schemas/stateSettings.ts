@@ -275,6 +275,12 @@ const AGENT_SKILLS_RUNTIME_REACHABILITY = {
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/utils/userVars.ts',
 } satisfies CliRuntimeReachability;
+const TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "run a shell command"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> packages/cli/src/runtime/cliContext.ts -> packages/cli/src/runtime/cliConfig.ts -> SessionHandle.setApprovalPolicy -> src/tools/approval/bashApproval.ts',
+} satisfies CliRuntimeReachability;
 
 const PROXY_CONFIG_CONSUMER =
   'src/agent/modelHandlers/support/ProxyConfigResolver.ts';
@@ -852,6 +858,7 @@ export const SETTINGS_VIEW_CORE_SETTINGS: readonly StateSettingEntry[] = [
     store: 'config',
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: 'packages/cli/src/runtime/cliConfig.ts',
+    cliRuntimeReachability: TEXRA_APPROVAL_POLICY_RUNTIME_REACHABILITY,
     enumLabels: ['Never', 'Ask', 'Auto-approve'],
     settingsViewSnapshot: 'approval',
   },
