@@ -54,8 +54,14 @@ export async function writeApprovalTempFiles(
 ): Promise<ApprovalTempFiles> {
   const { directory, targetPath, originalContent, proposedContent } = input;
   const ext = path.extname(targetPath) || '.txt';
-  const originalPath = path.join(directory, `${generateShortId()}-original${ext}`);
-  const proposedPath = path.join(directory, `${generateShortId()}-proposed${ext}`);
+  const originalPath = path.join(
+    directory,
+    `${generateShortId()}-original${ext}`,
+  );
+  const proposedPath = path.join(
+    directory,
+    `${generateShortId()}-proposed${ext}`,
+  );
 
   await Promise.all([
     writeFile(originalPath, originalContent, 'utf8'),
