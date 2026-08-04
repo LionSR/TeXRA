@@ -15,6 +15,40 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **New Subscriptions settings tab** — ChatGPT subscription, Copilot in VS
+  Code, and Kimi Code setup with step-by-step instructions now live together
+  under Account instead of being split across Account and Providers & Models.
+- **Settings status indicators now share one visual language** — a green
+  check for set values and a neutral "Not set" tag everywhere, toggle rows
+  show just the switch, and the LaTeX tab no longer flags off states in red.
+  Section headings, toggle rows, reset/delete/sign-in buttons, and empty
+  states now use the same shared styles and icons across all tabs, the
+  launcher loading shimmer uses Web Awesome skeletons, and account notices
+  use the shared callout banner.
+- **The sidebar tabs are now "New" and "Sessions"** — the former Launcher and
+  Progress tabs use names that say what they hold, the redundant "Sessions"
+  heading inside the sessions panel is gone, and an idle session now reads
+  "Idle" instead of "Waiting for follow-up".
+- **Removed stray blank bands in the session view** — empty space above the
+  first message and above the message input no longer appears when there are
+  no queued follow-ups.
+- **The session close button is quieter** — its tooltip reads "Delete" and it
+  no longer shows a hover box, only a color change.
+- **Dropped the redundant subscription tooltip in the usage bar** — "Free ·
+  ChatGPT" no longer explains itself on hover.
+- **Session rows are more compact** — a run's short description now leads the
+  row instead of the agent name, and the metadata line (worktree, last
+  activity, model) only appears on hover, focus, or selection; everything
+  remains in the tooltip.
+- **The Copilot section no longer shows a wall of buttons** — per-model route
+  controls collapse behind a "Manage Copilot routes" disclosure that opens
+  only when a route needs a decision.
+- **Session reliability controls moved to the Agents tab** — compaction
+  threshold and automatic retries now live with agent configuration instead of
+  the Providers & Models tab, and tool-use agents now list before workflow
+  agents.
+- **The agent and model pickers in the task input are narrower** — they no
+  longer stretch to dominate the input row on wide sidebars.
 - **CLI approval modes now govern Bash commands and file edits consistently** —
   `never` denies them even when a prompt setting or stream bypass would allow
   them, while automatic approval permits them without opening a prompt.

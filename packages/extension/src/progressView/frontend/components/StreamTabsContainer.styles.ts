@@ -35,29 +35,6 @@ export const streamTabsContainerStyles = css`
     background-color: var(--background-color);
   }
 
-  /*
-   * Optional rail header band. Pins to the shared --height-header token so
-   * it lines up with the conversation header in the Progress view (and the
-   * desktop rail header). Rendered only when a heading is set.
-   */
-  .stream-tabs-header {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    box-sizing: border-box;
-    min-height: var(--height-header);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    border-bottom: var(--border-thin) solid var(--color-border);
-  }
-
-  .stream-tabs-title {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold, 600);
-    letter-spacing: var(--letter-spacing-caps);
-    text-transform: uppercase;
-    color: var(--color-text-secondary);
-  }
-
   .tabs-content {
     flex: 1;
     overflow-y: auto;

@@ -62,7 +62,7 @@ const STREAM_STATUS_LABELS = {
     [STREAM_PHASE.COMPLETED]: 'Completed',
     [STREAM_PHASE.CANCELLED]: 'Stopped',
     ready: 'Ready',
-    [STREAM_PHASE.WAITING]: 'Waiting for follow-up',
+    [STREAM_PHASE.WAITING]: 'Idle',
     [STREAM_SUBSTATE.RESUMING]: 'Resuming',
   },
 } as const;
@@ -74,8 +74,7 @@ export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
 // situation from the root session's ordinary idle-between-turns WAITING, so
 // the CLI styles ('cli'/'cliCompact', which otherwise fold WAITING into the
 // root's "idle" wording) use this distinct label instead. `progressHeader`
-// already says "Waiting for follow-up" for both root and child, so it needs
-// no such split.
+// shows the same "Idle" for root and child, so it needs no such split.
 const CLI_CHILD_WAITING_LABEL = 'waiting for you';
 
 interface FormatStreamStatusLabelOptions {

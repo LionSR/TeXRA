@@ -4,7 +4,7 @@ export {
   compactIconActionButtonStyles,
   headerActionStyles,
 } from './commonViewStyles';
-export { designTokens, animationStyles } from './litStyles';
+export { designTokens } from './litStyles';
 
 // The canonical button/input/focus-ring/settings-row skins reach consumers
 // through `commonViewStyles` (which interpolates them), so they are not

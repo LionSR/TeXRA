@@ -16,11 +16,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports - shared styles
-import {
-  designTokens,
-  animationStyles,
-  commonViewStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import { TODO_STATUS, STATUS_ICONS, type TodoItem } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -34,7 +30,6 @@ export class TodoList extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    animationStyles,
     css`
       :host {
         display: block;

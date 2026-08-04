@@ -393,7 +393,13 @@ export class FollowUpInput extends LitElement {
         class="follow-up-container"
         aria-label="Follow-up message"
       >
-        <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
+        ${
+          this.queuedMessages.length > 0
+            ? html`<queued-follow-ups
+                .messages=${this.queuedMessages}
+              ></queued-follow-ups>`
+            : nothing
+        }
 
         <div class="composer-surface">
           <wa-textarea

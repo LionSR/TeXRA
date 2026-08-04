@@ -57,9 +57,9 @@ export function renderViewHeader({
           title=${ifDefined(launcherTab?.title)}
           @click=${launcherTab?.onClick}
         >
-          ${waIcon('pencil')} Launcher
+          ${waIcon('pencil')} New
         </wa-tab>
-        <wa-tab panel="progress"> ${waIcon('robot')} Progress </wa-tab>
+        <wa-tab panel="progress"> ${waIcon('robot')} Sessions </wa-tab>
         <wa-tab-panel name="launcher"></wa-tab-panel>
         <wa-tab-panel name="progress"></wa-tab-panel>
       </wa-tab-group>
