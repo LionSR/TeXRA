@@ -22,6 +22,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { markApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
+import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -33,10 +34,6 @@ import { readCliToolUseResumeData } from '@cli/runtime/toolUseResumeData';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import {
-  decideTexraApproval,
-  isTexraApprovalDenied,
-} from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -338,13 +335,9 @@ export function createChatSessionController(
 
     return {
       presentationHost,
-      approvalsUnavailable: isTexraApprovalDenied(
-        decideTexraApproval({
-          policy: runtimeSession.approvalPolicy,
-          promptRequired: true,
-          scopedBypass: false,
-          canPresent: sessionContext.mode === 'interactive',
-        }),
+      approvalsUnavailable: cliApprovalPromptsUnavailable(
+        sessionContext,
+        runtimeSession.approvalPolicy,
       ),
       ownExecution: (executionId): void => ownership.claim(executionId),
       finalize: (): void => {

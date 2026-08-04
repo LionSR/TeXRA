@@ -167,6 +167,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -316,6 +317,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     addChildActivationListener: mocks.addChildActivationListener,
   };
   mocks.defaultSession.mockReturnValue({
+    approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
     useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
     interactions: { cancel: mocks.cancelInteractions },
     events: { emit: mocks.sessionEventEmit },
