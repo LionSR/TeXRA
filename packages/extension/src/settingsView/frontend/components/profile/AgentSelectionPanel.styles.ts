@@ -230,9 +230,21 @@ export const agentSelectionPanelStyles: CSSResult = css`
     .agent-list-pane {
       width: 100%;
       max-width: none;
-      max-height: 40%;
+      /* A length, not a percentage: the panel sets min-/max-height but never
+         height, so a percentage max-height resolves against an indefinite
+         containing block and is dropped. */
+      max-height: 12rem;
+      /* Stacked, the list is the pane that yields space to the detail pane;
+         the row layout's flex-shrink: 0 would let it starve the detail. */
+      flex-shrink: 1;
       border-inline-end: 0;
       border-block-end: var(--border-thin) solid var(--color-border);
+    }
+
+    .agent-detail-pane {
+      /* Without a floor, a tall list can shrink the detail pane to nothing
+         inside the panel's 500px cap. */
+      min-height: 8rem;
     }
   }
 `;

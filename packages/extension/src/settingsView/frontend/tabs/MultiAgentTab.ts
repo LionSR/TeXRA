@@ -150,6 +150,10 @@ export class MultiAgentTab extends LitElement {
         inset-block-start: var(--wa-space-2xs);
         inset-inline-end: var(--wa-space-2xs);
         opacity: 0;
+        /* Destructive and invisible: a tap on the card corner must not delete a
+           team. Keyboard focus is unaffected, and focusing reveals the button
+           through :focus-within below. */
+        pointer-events: none;
         z-index: 10;
       }
 
@@ -172,6 +176,7 @@ export class MultiAgentTab extends LitElement {
       .preset-card:hover .preset-delete-btn,
       .preset-card:focus-within .preset-delete-btn {
         opacity: var(--opacity-full);
+        pointer-events: auto;
       }
     `,
   ];
