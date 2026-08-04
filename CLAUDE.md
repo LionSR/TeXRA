@@ -64,7 +64,10 @@ Things the tree won't tell you:
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
-must have its key declared in `package.json` under `contributes.configuration`.
+must be declared in the Zod schemas (`src/shared/schemas/coreSettings.ts` or
+`stateSettings.ts`) and the native TeXRA settings view —
+`packages/extension/package.json` must NOT contribute `configuration`;
+`scripts/sync-package-contributes.mjs` throws if it does.
 
 ## Separation of concerns: VS Code coupling
 
