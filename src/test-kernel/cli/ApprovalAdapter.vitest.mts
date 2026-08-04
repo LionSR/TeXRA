@@ -198,8 +198,9 @@ describe('human input approval policy', () => {
     );
     expect(result).toMatchObject({ accepted: false });
     expect(hasCliApprovalDenied(ctx)).toBe(true);
+    // A denied gate the model worked around still completed the run.
     expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED, ctx)).toBe(
-      CliExitCode.ApprovalDenied,
+      CliExitCode.Success,
     );
     expect(runOutcomeExitCode(RUN_OUTCOME.CANCELLED, ctx)).toBe(
       CliExitCode.Interrupted,

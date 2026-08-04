@@ -257,8 +257,12 @@ The CLI then consumes shared decisions directly:
   before consulting `canPresent`, so their policy dependence was dead
   weight).
 - The `WeakSet` denial marker is replaced by an explicit boolean on the
-  context object; exit code 4 (`CliExitCode.ApprovalDenied`) behavior is
-  unchanged and covered by tests on both the headless and TUI paths.
+  context object; exit code 4 (`CliExitCode.ApprovalDenied`) is reserved for a
+  run that FAILED with a denied gate, and is covered by tests on both the
+  headless and TUI paths. A denial the model routed around leaves the run
+  COMPLETED and exits 0 — #9692 briefly hoisted the denial check above the
+  outcome, which made every `--approval-policy never` run exit 4 and silently
+  discarded results in callers that read a nonzero exit as "no result".
 - `CliContext.approvalPolicy` reverts to a plain pre-session seed. The TUI
   live-alias getter (`runChatTui.tsx:342-344`, inside the per-run
   `currentSessionContext` literal at `:339-347`) is deleted; the genuinely
