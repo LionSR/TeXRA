@@ -1,4 +1,5 @@
 import { getCodexStatus } from '@auth/codex';
+import { getXaiStatus, xaiAccountLabel } from '@auth/xai';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { apiKeyExists } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -6,6 +7,10 @@ import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
+import {
+  isPreferXaiSubscription,
+  setPreferXaiSubscription,
+} from '@model/xai/xaiPreference';
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
@@ -15,6 +20,7 @@ import {
 } from '@utils/config/providerConfig';
 
 import { shouldUseChatGptDeviceCode, signInCliChatGpt } from './chatgptLogin';
+import { shouldUseGrokDeviceCode, signInCliGrok } from './grokLogin';
 import {
   effectiveCliApiMode,
   getCliApiMode,
@@ -44,12 +50,14 @@ export function contextForCliModelAccess(
 export async function readCliModelAccessStatus(
   apiMode: ApiAccessMode,
 ): Promise<CliModelAccessStatus> {
-  const [chatGpt, kimiCodeKeySet] = await Promise.all([
+  const [chatGpt, grok, kimiCodeKeySet] = await Promise.all([
     getCodexStatus(),
+    getXaiStatus(),
     apiKeyExists(platform().secrets, 'kimiCode'),
   ]);
   const preferences = {
     chatGpt: isPreferCodexSubscription() ? 'on' : 'off',
+    grok: isPreferXaiSubscription() ? 'on' : 'off',
     kimiCode: getPreferKimiCode() ? 'on' : 'off',
   } as const;
   return {
@@ -57,6 +65,8 @@ export async function readCliModelAccessStatus(
     preferences,
     chatGptSignedIn: chatGpt.signedIn,
     chatGptAccountLabel: chatGpt.email ?? chatGpt.accountId,
+    grokSignedIn: grok.signedIn,
+    grokAccountLabel: grok.email,
     kimiCodeKeySet,
   };
 }
@@ -112,6 +122,44 @@ export async function updateCliModelAccess(
     return {
       apiMode,
       message: `Prefer Kimi Code subscription enabled for Kimi models · API fallback remains ${formatCliModelAccessRoute(apiMode)}.`,
+    };
+  }
+
+  if (selection.provider === 'grok') {
+    if (selection.state === 'off') {
+      const update = await setPreferXaiSubscription(false);
+      invalidateModelOptionsCache();
+      return {
+        apiMode,
+        message: update.effective
+          ? `Grok subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
+          : 'Prefer Grok subscription disabled for xAI models.',
+      };
+    }
+
+    const status = await getXaiStatus();
+    let accountLabel = xaiAccountLabel(status);
+    if (!status.signedIn) {
+      const init = { device: false, noBrowser: false };
+      const session = await signInCliGrok(
+        {
+          ...init,
+          device:
+            context == null ? false : shouldUseGrokDeviceCode(context, init),
+        },
+        options,
+      );
+      accountLabel = xaiAccountLabel(session);
+    }
+
+    const update = await setPreferXaiSubscription(true);
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    invalidateModelOptionsCache();
+    return {
+      apiMode,
+      message: update.effective
+        ? `Prefer Grok subscription enabled for xAI models (${accountLabel}).`
+        : 'Grok sign-in succeeded, but a more specific setting keeps subscription access disabled.',
     };
   }
 

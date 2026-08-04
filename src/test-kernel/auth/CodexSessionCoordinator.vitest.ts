@@ -336,6 +336,65 @@ describe('CodexSessionCoordinator', () => {
     expect(storage.peek()?.refreshToken).toBe('refresh-new');
   });
 
+  it('returns the newer login when a successful refresh is superseded', async () => {
+    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
+    const refreshTokens = vi.fn(() => pending);
+    const exchangeAuthorizationCode = vi.fn(async () =>
+      newLoginTokenResponse(),
+    );
+    const coordinator = makeCoordinator(storage, {
+      exchangeAuthorizationCode,
+      refreshTokens,
+    });
+
+    const token = coordinator.getFreshAccessToken();
+    await delay(0);
+    expect(refreshTokens).toHaveBeenCalledOnce();
+
+    await completeLogin(coordinator);
+    resolve(tokenResponse());
+
+    // Concurrent sign-in is not a re-auth failure — hand back the new session.
+    await expect(token).resolves.toBe('access-new');
+    expect(storage.peek()?.accessToken).toBe('access-new');
+    expect(storage.peek()?.refreshToken).toBe('refresh-new');
+  });
+
+  it('does not treat a still-expiring pre-refresh session as a successful supersede', async () => {
+    // Generation bump that leaves the same expiring credentials (models a
+    // concurrent store that failed after supersede, or rewrote the same
+    // blob) must not hand back the stale token as if refresh completed.
+    const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
+    const { promise: pending, resolve } = pDefer<CodexTokenResponse>();
+    const refreshTokens = vi.fn(() => pending);
+    const exchangeAuthorizationCode = vi.fn(async () =>
+      tokenResponse({
+        access_token: 'access-0',
+        refresh_token: 'refresh-0',
+        // Still inside the proactive refresh buffer.
+        expires_in: 60,
+      }),
+    );
+    const coordinator = makeCoordinator(storage, {
+      exchangeAuthorizationCode,
+      refreshTokens,
+    });
+
+    const token = coordinator.getFreshAccessToken();
+    await delay(0);
+    expect(refreshTokens).toHaveBeenCalledOnce();
+
+    await completeLogin(coordinator);
+    resolve(tokenResponse({ access_token: 'access-stale-refresh' }));
+
+    await expect(token).rejects.toMatchObject({
+      kind: 'transient',
+      needsReauth: false,
+    });
+    expect(storage.peek()?.accessToken).toBe('access-0');
+  });
+
   it('keeps the previous refresh token when the response omits a new one', async () => {
     const storage = memoryStorage(session({ expiresAtMs: NOW - 1 }));
     const refreshTokens = vi.fn(async () =>

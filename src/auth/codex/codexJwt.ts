@@ -20,6 +20,11 @@
  */
 import { z } from 'zod';
 
+import {
+  NonEmptyJwtClaim,
+  claimsPreferringIdToken,
+  decodeJwtClaimsWithSchema,
+} from '../oauth/jwtDecode';
 import { CODEX_JWT_AUTH_CLAIM } from './codexConstants';
 
 /** Account id + email distilled from a JWT (either may be absent). */
@@ -28,22 +33,19 @@ export interface CodexJwtClaims {
   email?: string;
 }
 
-/** A claim we read as a non-empty string, tolerating any other shape. */
-const NonEmptyClaim = z.string().min(1).optional().catch(undefined);
-
 /** Validates an UNTRUSTED decoded JWT payload and distills the claims we read. */
 const CodexJwtClaimsSchema = z
   .object({
-    chatgpt_account_id: NonEmptyClaim,
+    chatgpt_account_id: NonEmptyJwtClaim,
     [CODEX_JWT_AUTH_CLAIM]: z
-      .object({ chatgpt_account_id: NonEmptyClaim })
+      .object({ chatgpt_account_id: NonEmptyJwtClaim })
       .optional()
       .catch(undefined),
     organizations: z
-      .array(z.object({ id: NonEmptyClaim }).catch({ id: undefined }))
+      .array(z.object({ id: NonEmptyJwtClaim }).catch({ id: undefined }))
       .optional()
       .catch(undefined),
-    email: NonEmptyClaim,
+    email: NonEmptyJwtClaim,
   })
   .transform((claims): CodexJwtClaims => ({
     accountId:
@@ -53,20 +55,7 @@ const CodexJwtClaimsSchema = z
     email: claims.email,
   }));
 
-/**
- * Decode + validate a JWT's claims (the middle base64url segment). Returns empty
- * claims on any structural error; never throws.
- */
-function decodeJwtPayload(token: string): CodexJwtClaims {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return {};
-    const json = Buffer.from(parts[1], 'base64url').toString('utf-8');
-    return CodexJwtClaimsSchema.catch({}).parse(JSON.parse(json));
-  } catch {
-    return {};
-  }
-}
+const EMPTY_CLAIMS: CodexJwtClaims = {};
 
 /**
  * Extract account id + email, preferring the id_token and falling back to the
@@ -76,10 +65,11 @@ export function extractCodexClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ): CodexJwtClaims {
-  const idClaims = idToken ? decodeJwtPayload(idToken) : {};
-  const accessClaims = accessToken ? decodeJwtPayload(accessToken) : {};
-  return {
-    accountId: idClaims.accountId ?? accessClaims.accountId,
-    email: idClaims.email ?? accessClaims.email,
-  };
+  return claimsPreferringIdToken(
+    idToken,
+    accessToken,
+    (token) =>
+      decodeJwtClaimsWithSchema(token, CodexJwtClaimsSchema, EMPTY_CLAIMS),
+    ['accountId', 'email'],
+  );
 }

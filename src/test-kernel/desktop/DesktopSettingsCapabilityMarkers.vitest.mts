@@ -79,7 +79,7 @@ function realCredentialController(): DefaultDesktopCredentialSettingsController 
     },
     externalOpener: {
       openExternal: noOp,
-      presentChatGptSignInUrl: () => undefined,
+      presentSubscriptionSignInUrl: () => undefined,
     },
     notifications: {
       showInfoMessage: noOp,
@@ -146,11 +146,15 @@ describe('desktop settings capability markers', () => {
 
     expect(unsupportedCommands(real.profileHandlers)).toEqual([]);
     expect(unsupportedCommands(real.chatGptHandlers)).toEqual([]);
+    expect(unsupportedCommands(real.grokHandlers)).toEqual([]);
     expect(unsupportedCommands(stub.profileHandlers)).toEqual(
       unsupportedCommands(real.profileHandlers),
     );
     expect(unsupportedCommands(stub.chatGptHandlers)).toEqual(
       unsupportedCommands(real.chatGptHandlers),
+    );
+    expect(unsupportedCommands(stub.grokHandlers)).toEqual(
+      unsupportedCommands(real.grokHandlers),
     );
   });
 

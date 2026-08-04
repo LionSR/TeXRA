@@ -346,6 +346,11 @@ export const SETTINGS_VIEW_CMD = {
   SIGN_IN_CHATGPT: 'signInChatGpt',
   SIGN_OUT_CHATGPT: 'signOutChatGpt',
   SET_CHATGPT_PREFER_SUBSCRIPTION: 'setChatGptPreferSubscription',
+  // Grok (xAI SuperGrok) subscription sign-in commands
+  UPDATE_GROK_AUTH_STATUS: 'updateGrokAuthStatus',
+  SIGN_IN_GROK: 'signInGrok',
+  SIGN_OUT_GROK: 'signOutGrok',
+  SET_GROK_PREFER_SUBSCRIPTION: 'setGrokPreferSubscription',
   GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
   UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
   UNSUBSCRIBE_PR: 'unsubscribePR',

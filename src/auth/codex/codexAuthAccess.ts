@@ -1,15 +1,13 @@
 /**
  * Process-wide access to the Codex OAuth coordinator, backed by
- * `platform().secrets`. The model handler, availability gate, and login
- * commands all share one instance so its single-flight refresh state is honored
- * within a process.
- *
- * Stays `vscode`-free: reaches the keychain only through the platform port.
+ * `platform().secrets`.
  */
-import * as logger from '@logger/logUtils';
 import { tryPlatform } from '@platform/platform';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import {
+  getSubscriptionSessionStatus,
+  isSubscriptionSessionRoutable,
+} from '../oauth/sessionAccess';
 import { CODEX_SESSION_SECRET_KEY } from './codexConstants';
 import {
   CodexSessionCoordinator,
@@ -48,65 +46,16 @@ export function resetCodexCoordinator(): void {
 
 /** Signed-in status, safe to call before platform init (returns signed-out). */
 export async function getCodexStatus(): Promise<CodexSessionStatus> {
-  if (!tryPlatform()) return { signedIn: false };
-  try {
-    return await codexCoordinator().getStatus();
-  } catch (error) {
-    // Treat an unreadable session as signed-out, but surface the unexpected
-    // failure (corrupted keychain entry, platform misconfig) for diagnosis.
-    logger.warn(
-      CHANNEL,
-      `Failed to read ChatGPT session status: ${toErrorMessage(error)}`,
-    );
-    return { signedIn: false };
-  }
+  return getSubscriptionSessionStatus(codexCoordinator, CHANNEL, 'ChatGPT');
 }
 
 /**
- * Whether subscription routing should use the stored session. Expiring sessions
- * are refreshed by the coordinator; absent/dead sessions return false after its
- * re-auth path clears them. If a re-auth error leaves a session in storage, the
- * refresh was superseded and the error propagates rather than misrouting the
- * newer session. Retryable/config errors likewise propagate so callers do not
- * silently spend fallback quota or immediately retry the same refresh.
+ * Whether subscription routing should use the stored session.
  */
 export async function isCodexSessionRoutable(): Promise<boolean> {
-  if (!tryPlatform()) return false;
-  const coordinator = codexCoordinator();
-  try {
-    await coordinator.getFreshAccessToken();
-    return true;
-  } catch (error) {
-    if (!(error instanceof CodexAuthError)) {
-      throw new CodexAuthError(
-        `Could not access ChatGPT session: ${toErrorMessage(error)}`,
-        'transient',
-        undefined,
-        { cause: error },
-      );
-    }
-    if (error.needsReauth) {
-      let storedSession;
-      try {
-        storedSession = await coordinator.loadSession();
-      } catch (readError) {
-        throw new CodexAuthError(
-          `Could not verify ChatGPT session: ${toErrorMessage(readError)}`,
-          'transient',
-          undefined,
-          { cause: readError },
-        );
-      }
-      if (storedSession) {
-        throw new CodexAuthError(
-          'ChatGPT session changed while refreshing.',
-          'transient',
-          error.status,
-          { cause: error },
-        );
-      }
-      return false;
-    }
-    throw error;
-  }
+  return isSubscriptionSessionRoutable(
+    codexCoordinator,
+    CodexAuthError,
+    'ChatGPT',
+  );
 }

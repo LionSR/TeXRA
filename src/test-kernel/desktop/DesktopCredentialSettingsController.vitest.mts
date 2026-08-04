@@ -132,7 +132,7 @@ async function createFixture({
     },
     externalOpener: {
       openExternal: async () => undefined,
-      presentChatGptSignInUrl: () => undefined,
+      presentSubscriptionSignInUrl: () => undefined,
     },
     notifications: {
       showInfoMessage: async (message) => {

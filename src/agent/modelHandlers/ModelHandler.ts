@@ -616,7 +616,9 @@ export abstract class ModelHandler<
     // token rotation does not split recovery coordination; direct credentials
     // use a non-secret fingerprint so distinct keys stay distinct routes.
     const credentialIdentity =
-      route === 'relay' || route === 'chatgpt-subscription'
+      route === 'relay' ||
+      route === 'chatgpt-subscription' ||
+      route === 'xai-subscription'
         ? route
         : createHash('sha256')
             .update(route)
@@ -673,6 +675,8 @@ export abstract class ModelHandler<
     switch (route) {
       case 'chatgpt-subscription':
         return 'chatgpt-subscription';
+      case 'xai-subscription':
+        return 'xai-subscription';
       case 'relay':
         return 'relay';
       case 'api-key':

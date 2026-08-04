@@ -29,12 +29,12 @@ and ordered globals an embedder must perform before reaching `runAgent`. Section
 
 ## 1. Scope audited
 
-| Area          | Entry points inspected                                                                                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Area          | Entry points inspected                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent core    | `src/agent/runtime/{runAgent,executeAgent,SessionHandle,SessionEventHub,ModelCell,childRunLoop}.ts`, `src/agent/implementations/flows/` |
-| Model handler | `src/agent/modelHandlers/ModelHandler.ts` (2008 LoC), `src/agent/types/IModelHandler.ts`                                               |
-| Logger        | `src/agent/trace/{channelTrace,AgentTrace,noopTrace,helpers}.ts`                                                                       |
-| Surface       | `packages/agent/src/index.ts`, `config/ratchets/host-agent-import-baseline.json`                                                       |
+| Model handler | `src/agent/modelHandlers/ModelHandler.ts` (2008 LoC), `src/agent/types/IModelHandler.ts`                                                |
+| Logger        | `src/agent/trace/{channelTrace,AgentTrace,noopTrace,helpers}.ts`                                                                        |
+| Surface       | `packages/agent/src/index.ts`, `config/ratchets/host-agent-import-baseline.json`                                                        |
 | Subagents     | `src/tools/delegation/`, `src/agent/{review,goal,roster}/`, `implementations/flows/agentCreator/`                                       |
 
 ---
@@ -49,15 +49,15 @@ callers"). All are load-bearing:
   god-class.** It already delegates its heavy machinery to collaborators
   (`mediaProcessor: MediaAttachmentProcessor` at `ModelHandler.ts:223`;
   `ResponseTextProcessing` at `:229-230`; `support/{ProxyConfigResolver,
-  UsageNormalizer,BackgroundPoller,AnthropicStreamHandler}`). The default-bodied
+UsageNormalizer,BackgroundPoller,AnthropicStreamHandler}`). The default-bodied
   concrete methods that look like pushdown bait are genuine multi-subclass hooks
   (`createMediaContent :1252`, `createResponseImpl :1213`, `extractServerToolData
-  :1707`, `backgroundModeSupported :220`) — each overridden by ≥2 providers. **No
+:1707`, `backgroundModeSupported :220`) — each overridden by ≥2 providers. **No
   method is used by only one subclass.** This is correct polymorphism, not
   indirection.
 - **`IModelHandler.ts` earns its keep.** It is a `Pick<ModelHandler, …>`
   (`IModelHandler.ts:41-85`) — structurally cannot drift from the class — and is
-  consumed *as a narrowed port* by code that must not see the full class
+  consumed _as a narrowed port_ by code that must not see the full class
   (`runtime/ModelCell.ts`, `followUp/followUpMessages.ts`,
   `support/ProxyConfigResolver.ts`, `utils/UsageMonitor.ts`). It also carries one
   interface-only optional member the class does not (`createBatchedToolUseFollowUpMessages`,
@@ -71,7 +71,7 @@ callers"). All are load-bearing:
   with per-scope subscriber accounting. `ModelCell` is a concurrency-guarding
   cell. None are removable.
 - **The logger surface is already minimal.** `AgentTrace` is the SSoT; every
-  method reduces to `emit()`; TeXRA-specific helpers are *plain functions* over
+  method reduces to `emit()`; TeXRA-specific helpers are _plain functions_ over
   the interface (`trace/helpers.ts`, `toolUseHelpers.ts`) — deliberately **no
   wrapper subclass**. `createChannelTrace` (`channelTrace.ts:30`) spreads
   `noopTrace` and overrides only the four log methods. This design already avoids
@@ -80,7 +80,7 @@ callers"). All are load-bearing:
 **One structural observation (non-urgent, cohesion not removal):** within
 `ModelHandler.ts`, the credential/wire-route cluster (`:470-720`, ~250 LoC) and
 the compaction cluster (`:827-889` + `:1317-1497`, ~250 LoC) are the most
-cohesive candidates for *future* collaborator extraction (a `CredentialRouter`, a
+cohesive candidates for _future_ collaborator extraction (a `CredentialRouter`, a
 `CompactionController`). Both are coupled to per-attempt mutable state that
 `createResponse` mutates mid-turn, so extraction is a readability refactor with
 real risk — **not** removal of unnecessary indirection, and against the repo's
@@ -112,10 +112,10 @@ Grouped by concern, the **highest cross-host overlap** (so the biggest
 deep-import retirement per unit of Tier-1 work) is:
 
 1. **Runtime control / lifecycle** — `runtime/{agentShutdown, detachSubagentsOnStop,
-   SessionHandle, HostInteractions, ExecutionHandle, runtimePresentationEvents,
-   terminalResultToast}` (≥2 hosts each; `runAgent` already exposed). *Highest priority.*
+SessionHandle, HostInteractions, ExecutionHandle, runtimePresentationEvents,
+terminalResultToast}` (≥2 hosts each; `runAgent` already exposed). _Highest priority._
 2. **Resume / stream reattach** — `runtime/{resolveAndResumeStream,
-   resumeQueuedToolUse, SessionResumeRetrieval}`, `storage/detectWaitingStreams`.
+resumeQueuedToolUse, SessionResumeRetrieval}`, `storage/detectWaitingStreams`.
 3. **Trace** — `@agent/trace` (all 3; already partially re-exported).
 4. **Storage** — `@agent/storage` (all 3).
 5. **FollowUp** — `followUp/ToolUseFollowUp` (all 3).
@@ -126,7 +126,7 @@ extension's model-handler / text-enhancement imports and its
 `review/`+`agentCreator/`+`goal/` composition imports (see §4).
 
 The invariant to hold while doing this (per CLAUDE.md): **never widen a
-baseline.** Each promotion into the Tier-1 barrel should *shrink* the matching
+baseline.** Each promotion into the Tier-1 barrel should _shrink_ the matching
 host list, not add a new export without a consumer.
 
 ---
@@ -159,7 +159,7 @@ delegate_agent / delegate_workflow        src/tools/delegation/DelegationTools.t
   `src/tools/agentCliSessionStores.ts`) — external-subagent adapters already
   funneled through `childRunLoop`.
 
-**Logical units that *could* be promoted to first-class subagents but are still
+**Logical units that _could_ be promoted to first-class subagents but are still
 runtime-coupled (why the extension still deep-imports them):** the two per-run
 engines `implementations/flows/reflection/runReflectionFlow.ts` (340 LoC) and
 `flows/tooluse/runToolUseFlow.ts` (725 LoC), and the autonomous `src/agent/goal/`

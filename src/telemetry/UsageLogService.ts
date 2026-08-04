@@ -82,6 +82,7 @@ function isTelemetryDisabledByEnv(): boolean {
 const PLAN_ACCOUNTING_ROUTES = new Set<UsageRoute>([
   'relay',
   'chatgpt-subscription',
+  'xai-subscription',
   'kimi-code-subscription',
 ]);
 

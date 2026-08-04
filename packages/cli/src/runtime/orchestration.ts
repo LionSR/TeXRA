@@ -90,7 +90,7 @@ export interface BuildCliOrchestrationItemsInput {
   readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;
 }
 
-type CliAccountProvider = 'chatgpt' | 'texra';
+type CliAccountProvider = 'chatgpt' | 'grok' | 'texra';
 type CliAccountOperation = 'sign-in' | 'sign-out';
 
 export interface CliAccountStatus {
@@ -99,6 +99,8 @@ export interface CliAccountStatus {
   readonly texraCredentialSource?: 'session' | 'relayToken';
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
+  readonly grokSignedIn: boolean;
+  readonly grokAccountLabel?: string;
 }
 
 export function isCliOrchestrationModelPickAction(
@@ -205,21 +207,30 @@ export function buildCliOrchestrationItems(
 }
 
 function accountSummary(status: CliAccountStatus): string {
+  const signed: string[] = [];
   if (status.texraCredentialSource === 'relayToken') {
-    return status.chatGptSignedIn
-      ? 'TeXRA relay token and ChatGPT signed in'
-      : 'TeXRA relay token configured';
+    signed.push('TeXRA relay token');
+  } else if (status.texraSignedIn) {
+    signed.push('TeXRA');
   }
-  if (status.texraSignedIn && status.chatGptSignedIn) {
-    return 'TeXRA and ChatGPT signed in';
-  }
-  if (status.chatGptSignedIn) {
-    return `ChatGPT · ${status.chatGptAccountLabel ?? 'signed in'}`;
-  }
-  if (status.texraSignedIn) {
+  if (status.chatGptSignedIn) signed.push('ChatGPT');
+  if (status.grokSignedIn) signed.push('Grok');
+  if (signed.length === 0) return 'Sign in or manage accounts';
+  if (signed.length === 1) {
+    if (status.texraCredentialSource === 'relayToken') {
+      return 'TeXRA relay token configured';
+    }
+    if (status.chatGptSignedIn) {
+      return `ChatGPT · ${status.chatGptAccountLabel ?? 'signed in'}`;
+    }
+    if (status.grokSignedIn) {
+      return `Grok · ${status.grokAccountLabel ?? 'signed in'}`;
+    }
     return `TeXRA · ${status.texraAccountLabel ?? 'signed in'}`;
   }
-  return 'Sign in or manage accounts';
+  // Oxford list for 3+ accounts ("A, B, and C"), plain "A and B" for two.
+  if (signed.length === 2) return `${signed[0]} and ${signed[1]} signed in`;
+  return `${signed.slice(0, -1).join(', ')}, and ${signed.at(-1)} signed in`;
 }
 
 export function buildCliAccountItems(
@@ -245,6 +256,28 @@ export function buildCliAccountItems(
       },
       label: 'Sign in with ChatGPT',
       description: 'Use a ChatGPT subscription',
+    });
+  }
+
+  if (status.grokSignedIn) {
+    items.push({
+      value: {
+        kind: 'account',
+        provider: 'grok',
+        operation: 'sign-out',
+      },
+      label: 'Sign out of Grok',
+      description: status.grokAccountLabel ?? 'Grok subscription',
+    });
+  } else {
+    items.push({
+      value: {
+        kind: 'account',
+        provider: 'grok',
+        operation: 'sign-in',
+      },
+      label: 'Sign in with Grok',
+      description: 'Use a Grok / SuperGrok subscription',
     });
   }
 

@@ -62,6 +62,10 @@ import {
   chatGptSignOutPreferenceMessage,
   signOutCliChatGpt,
 } from '../runtime/chatgptLogin';
+import {
+  grokSignOutPreferenceMessage,
+  signOutCliGrok,
+} from '../runtime/grokLogin';
 import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
@@ -182,6 +186,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
       texraCredentialSource: authProfile.credentialSource,
       chatGptSignedIn: modelAccess.chatGptSignedIn,
       chatGptAccountLabel: modelAccess.chatGptAccountLabel,
+      grokSignedIn: modelAccess.grokSignedIn,
+      grokAccountLabel: modelAccess.grokAccountLabel,
     };
     const launcherModelAccess = {
       ...modelAccess,
@@ -338,18 +344,25 @@ async function runOrchestration(context: CliContext): Promise<number> {
       }
       case 'account': {
         try {
-          if (action.provider === 'chatgpt') {
+          if (action.provider === 'chatgpt' || action.provider === 'grok') {
             if (action.operation === 'sign-out') {
-              const update = await signOutCliChatGpt();
-              writeTextStdout(
-                `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
-              );
+              if (action.provider === 'chatgpt') {
+                const update = await signOutCliChatGpt();
+                writeTextStdout(
+                  `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
+                );
+              } else {
+                const update = await signOutCliGrok();
+                writeTextStdout(
+                  `Signed out of Grok.\n${grokSignOutPreferenceMessage(update)}`,
+                );
+              }
             } else {
               const result = await updateCliModelAccess(
                 launchContext,
                 {
                   kind: 'subscription-preference',
-                  provider: 'chatgpt',
+                  provider: action.provider,
                   state: 'on',
                 },
                 { writeProgress: writeTextStdout },
