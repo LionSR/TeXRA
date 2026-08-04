@@ -363,12 +363,16 @@ export class StreamHeader extends LitElement {
     const isNativeAgentRun =
       identity?.kind === 'agent' && identity.tool === undefined;
     const agentCategory = this.stream.agentCategory;
-    // No known category (identity pending, process, or multi-agent-workflow
-    // container) renders the neutral toolbar — never a fabricated category's
-    // chrome.
-    const toolbarButtons = agentCategory
-      ? TOOLBAR_BUTTONS[agentCategory]
-      : NEUTRAL_TOOLBAR;
+    // Identity decides the chrome: a non-agent run (process, multi-agent-
+    // workflow container) gets the neutral toolbar even when a borrowed
+    // agentCategory rides the live wire, and a pending stream (no identity,
+    // no category) never gets a fabricated category's chrome.
+    const isAgentOrPending =
+      identity === undefined || identity.kind === 'agent';
+    const toolbarButtons =
+      isAgentOrPending && agentCategory
+        ? TOOLBAR_BUTTONS[agentCategory]
+        : NEUTRAL_TOOLBAR;
     const displayKey = streamStatusDisplayKey(status, this.substate);
     const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
