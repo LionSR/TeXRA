@@ -49,7 +49,7 @@ export const fileSelectLayoutStyles = css`
   .file-select-label-group {
     display: flex;
     align-items: center;
-    gap: var(--wa-space-3xs);
+    gap: var(--wa-space-2xs);
     flex-wrap: nowrap;
     flex: 1;
     min-width: 0;
@@ -86,7 +86,7 @@ export const fileSelectLayoutStyles = css`
     align-items: center;
     flex-wrap: nowrap;
     margin-left: auto;
-    gap: var(--wa-space-3xs);
+    gap: var(--wa-space-2xs);
   }
 
   .file-select-actions wa-button {
@@ -163,7 +163,7 @@ const multiFilesStyles = css`
 
   .file-folder {
     color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
   }
 
   .file-folder wa-icon {

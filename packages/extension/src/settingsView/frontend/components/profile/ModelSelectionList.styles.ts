@@ -151,9 +151,12 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   /* Unavailable model rows (not in relay allowlist) */
-  .model-row--unavailable {
-    opacity: var(--opacity-disabled);
-  }
+  /* No row-level dim. At 0.5 on top of an already-translucent secondary text
+     token this composited to 1.91:1, and it also dimmed .model-metadata and
+     .reasoning-level-select, which render OUTSIDE the wa-switch and so never
+     qualified for the disabled-control contrast exemption in the first place.
+     Unavailability is already carried by the key / warning icon and its title
+     on the row, which is the cue that survives a contrast check. */
 
   /**
    * Inline icon following a model row's name. Variants set --_icon-color;
