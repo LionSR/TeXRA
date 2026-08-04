@@ -24,6 +24,7 @@ import {
 import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
+import { focusRingStyles } from '@shared/styles/controlStyles';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -55,6 +56,11 @@ export class UserMessage extends LitElement {
   static override styles = [
     designTokens,
     compactIconActionButtonStyles,
+    // The only markdownStyles consumer that does not compose commonViewStyles,
+    // so it is also the only one that would not inherit the shared focus ring.
+    // A user message can contain \ref{}/\cref{}, which render as focusable
+    // .latex-ref spans (role=button, tabindex=0) — they need the ring too.
+    focusRingStyles,
     markdownStyles,
     css`
       :host {

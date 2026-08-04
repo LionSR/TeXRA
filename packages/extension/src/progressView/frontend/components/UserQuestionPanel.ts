@@ -142,6 +142,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
           question.allowFreeText
             ? html`<wa-textarea
                 class="user-question-request__free-text"
+                aria-label=${`Another answer for: ${question.question}`}
                 placeholder="Type another answer"
                 rows="2"
                 .value=${this.freeText[question.question] ?? ''}

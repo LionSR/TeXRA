@@ -400,7 +400,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
         </div>
         <wa-textarea
           class="external-inquiry-request__answer-input"
-          placeholder="Paste the answer here..."
+          aria-label="Answer from the external model"
+          placeholder="Paste the answer here…"
           rows="4"
           resize="vertical"
           .value=${live(this.answerText)}
@@ -458,7 +459,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           </div>
           <wa-textarea
             class="external-inquiry-request__session-links-input"
-            placeholder="Paste one external session link per line..."
+            aria-label="External session links, one per line"
+            placeholder="Paste one external session link per line…"
             rows="2"
             resize="vertical"
             .value=${live(this.sessionLinksText)}
