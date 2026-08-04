@@ -152,6 +152,7 @@ export class OnboardingWelcomeCard extends LitElement {
         text-align: center;
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal, 1.4);
+        color: var(--wa-color-text-quiet);
         overflow-wrap: anywhere;
       }
 
