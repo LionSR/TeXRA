@@ -1,5 +1,5 @@
-import { logMissingOutputs, type AgentTrace } from '@agent/trace';
-import { emitRunFact } from '@agent/runtime/runFactEvents';
+import { type AgentTrace } from '@agent/trace';
+import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import { replaceInputCommands } from '@agent/output/fileMapping';
 import {
   type FileLocation,
@@ -154,13 +154,11 @@ export class OutputFileProcessor {
         },
       );
     }
-    logMissingOutputs(this.ctx.logger, {
-      missing: [] as string[],
-      xmlFile: outputLocation.absolutePath,
-    });
-    emitRunFact(this.ctx.logger, 'updateMissingOutputs', {
+    reportMissingOutputs(this.ctx.logger, {
       streamId: this.ctx.streamId,
-      filesByRound: { [currRound]: [] },
+      round: currRound,
+      missing: [],
+      xmlFile: outputLocation.absolutePath,
     });
   }
 

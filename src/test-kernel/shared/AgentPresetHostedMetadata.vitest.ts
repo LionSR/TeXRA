@@ -10,8 +10,8 @@ describe('agent preset hosted-definition metadata', () => {
   it('keeps every hosted name inside its owning preset roster', () => {
     for (const preset of [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS]) {
       const roster = new Set([
-        ...preset.workflowAgents,
-        ...preset.toolUseAgents,
+        ...preset.agents.workflow,
+        ...preset.agents.toolUse,
       ]);
       expect(
         (preset.texraHostedAgents ?? []).filter((name) => !roster.has(name)),
@@ -27,6 +27,30 @@ describe('agent preset hosted-definition metadata', () => {
 
     expect(softwareTeam?.texraHostedAgents).toEqual([]);
   });
+
+  it('normalizes a legacy pair-shaped custom team into the category record', () => {
+    // Migration fixture: user-authored teams persisted before the ByCategory
+    // recut carry `workflowAgents`/`toolUseAgents`. Dropping them instead of
+    // normalizing would silently delete users' saved teams.
+    const presets = parseAgentModePresets([
+      {
+        id: 'legacy-team',
+        name: 'Legacy Team',
+        description: 'Saved by an older binary',
+        icon: 'bookmark',
+        workflowAgents: ['polish', 'correct'],
+        toolUseAgents: ['assistant'],
+        texraHostedAgents: ['assistant'],
+      },
+    ]);
+
+    expect(presets).toHaveLength(1);
+    expect(presets[0]).toMatchObject({
+      id: 'legacy-team',
+      agents: { workflow: ['polish', 'correct'], toolUse: ['assistant'] },
+      texraHostedAgents: ['assistant'],
+    });
+  });
 });
 
 describe('parseAgentModePresets icon degradation', () => {
@@ -39,8 +63,10 @@ describe('parseAgentModePresets icon degradation', () => {
     name: 'My Team',
     description: 'Hand-saved roster',
     icon,
-    workflowAgents: ['polish'],
-    toolUseAgents: ['assistant'],
+    agents: {
+      workflow: ['polish'],
+      toolUse: ['assistant'],
+    },
   });
 
   it('treats an absent custom-preset value as an empty list', () => {
@@ -79,7 +105,7 @@ describe('parseAgentModePresets icon degradation', () => {
     // over persisted state — permanent data loss.
     expect(presets).toHaveLength(1);
     expect(presets[0]?.id).toBe('custom-1');
-    expect(presets[0]?.workflowAgents).toEqual(['polish']);
+    expect(presets[0]?.agents.workflow).toEqual(['polish']);
     expect(presets[0]?.icon).toBe('bookmark');
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('nonexistent-icon'),

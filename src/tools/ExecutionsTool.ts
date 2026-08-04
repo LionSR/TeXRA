@@ -19,6 +19,7 @@ import {
   type TodoEntry,
   listExecutions,
   resolveExecutionWorkspaceFilePath,
+  deriveLegacyIdentity,
 } from '@agent/storage';
 import {
   currentSession,
@@ -35,12 +36,15 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import { platform } from '@platform/platform';
 import {
   ExecutionIdSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  registeredStreamId,
   STREAM_LOG_ENTRY_TYPES,
   type ExecutionId,
   type StreamLogEntry,
@@ -62,7 +66,6 @@ import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
   readCompletedRunTodos,
-  resolvePersistedStreamIdForExecution,
 } from '@transcript';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { clamp, unique } from '@utils/core';
@@ -79,7 +82,8 @@ import {
   formatTodoHeader,
   formatTodoSection,
   getExecutionStatusInfo,
-  resolveExecutionDisplayCategory,
+  executionDisplayCategory,
+  type ExecutionDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -624,15 +628,15 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Completed execution: full KV fetch
     const store = getExecutionStore(executionId);
-    const [meta, config, children, todosResult, report] = await Promise.all([
+    const [meta, record, children, todosResult, report] = await Promise.all([
       store.readMeta(),
-      store.readConfig(),
+      store.readRunRecord(),
       store.readChildren(),
       readCompletedRunTodos(executionId),
       store.readReport(),
     ]);
 
-    if (!meta && !config) {
+    if (!meta && !record) {
       const resumability = await deriveResumability(executionId);
       if (!resumability.resumable) {
         throw new ToolError(`Execution not found: ${executionId}`);
@@ -642,14 +646,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const category = resolveExecutionDisplayCategory(
-      config?.agent,
-      meta?.category ?? config?.agentCategory,
-    );
-    const info = getExecutionStatusInfo(executionId, meta?.terminalStatus);
+    const identity =
+      meta?.identity ??
+      deriveLegacyIdentity(
+        meta,
+        record && isAgentRunRecord(record) ? record : null,
+      );
+    const category = executionDisplayCategory(identity, record);
+    const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const lines = buildCompletedSummaryLines(
       executionId,
-      config,
+      record,
       category,
       info,
       meta,
@@ -677,7 +684,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private async appendSummaryTail(
     lines: string[],
     executionId: ExecutionId,
-    category: string | undefined,
+    category: ExecutionDisplayCategory | undefined,
     children: ChildRecord[],
     todos: TodoEntry[],
     report: string | null,
@@ -724,7 +731,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     // Scope: can only kill your own children. Deny if no context.
-    if (!callerStreamId || target.parentStreamId !== callerStreamId) {
+    if (
+      !(target instanceof AgentExecutionHandle) ||
+      !target.isOwnedBy(callerStreamId)
+    ) {
       throw new ToolError(
         `Cannot kill execution ${executionId}: not a child of this session.`,
       );
@@ -861,18 +871,19 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   private async showConfig(executionId: ExecutionId): Promise<ToolResult> {
-    const config = await getExecutionStore(executionId).readConfig();
+    const record = await getExecutionStore(executionId).readRunRecord();
 
-    if (!config) {
+    if (!record) {
       throw new ToolError(`Config not found for execution: ${executionId}.`);
     }
 
     // Filter out fields irrelevant to this agent's category
-    const category = resolveExecutionDisplayCategory(
-      config.agent,
-      config.agentCategory,
-    );
-    return executed(serializeFilteredConfig(config, category));
+    const meta = await getExecutionStore(executionId).readMeta();
+    const identity =
+      meta?.identity ??
+      deriveLegacyIdentity(meta, isAgentRunRecord(record) ? record : null);
+    const category = executionDisplayCategory(identity, record);
+    return executed(serializeFilteredConfig(record, category));
   }
 
   private async showConversation(
@@ -882,36 +893,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
     const conversationResult = await readCompletedRunConversation(executionId);
-    const {
-      conversation,
-      source,
-      streamId,
-      streamIds,
-      candidateStreamIds,
-      associatedStreamIds,
-      conflicts,
-      hasOrderingCycle,
-      hasOrderingAmbiguity,
-    } = conversationResult;
-    const streamDiagnostics = [
-      `Stream: ${streamId ?? 'none'}`,
-      ...(streamIds ? [`Merged streams: ${streamIds.join(', ')}`] : []),
-      ...(associatedStreamIds
-        ? [`Associated streams: ${associatedStreamIds.join(', ')}`]
-        : []),
-      ...(candidateStreamIds
-        ? [`Ambiguous candidate streams: ${candidateStreamIds.join(', ')}`]
-        : []),
-      ...(conflicts
-        ? [
-            `Conflicting row IDs: ${conflicts
-              .map(({ rowId }) => rowId)
-              .join(', ')}`,
-          ]
-        : []),
-      ...(hasOrderingCycle ? ['Ordering cycle detected: yes'] : []),
-      ...(hasOrderingAmbiguity ? ['Complete chronology established: no'] : []),
-    ];
+    const { conversation, source, streamId } = conversationResult;
+    const streamDiagnostics = [`Stream: ${streamId ?? 'none'}`];
 
     if (!conversation) {
       // Match the top-level execution lookup: a flow-only record is found only
@@ -977,7 +960,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (!meta && !handle) {
       throw new ToolError(`Execution not found: ${executionId}`);
     }
-    if (meta?.category !== 'process') {
+    if (meta?.identity?.kind !== 'process') {
       return executed(
         `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
           `Use /executions/${executionId}/conversation for an agent run's message history.`,
@@ -985,17 +968,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     const transcripts = currentSession().transcripts;
-    // A registration-proven record names its stream directly; only legacy
-    // records enter the compatibility resolver's scans (#9590 A1).
+    // The stream is the one stamped on execution metadata at registration.
     const streamId =
       handle instanceof AgentExecutionHandle
         ? handle.childStreamId
-        : (registeredStreamId(meta) ??
-          (
-            await resolvePersistedStreamIdForExecution(executionId, {
-              streamLogStore: transcripts,
-            })
-          )?.streamId);
+        : meta?.streamId;
     // Resident while the command runs (an open writer refuses eviction); a
     // released stream rehydrates from disk, and an ephemeral store no-ops.
     if (streamId) await transcripts.ensureLoaded(streamId);
@@ -1008,7 +985,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     const { lines, chars } = projectProcessOutput(log.toJSON());
-    const info = getExecutionStatusInfo(executionId, meta.terminalStatus);
+    const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
       ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;
@@ -1115,11 +1092,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     executionId: ExecutionId,
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const [config, paths] = await Promise.all([
-      store.readConfig(),
+    const [record, paths] = await Promise.all([
+      store.readRunRecord(),
       store.readWorkspaceFiles(),
     ]);
-    const entries = await listExecutionWorkspaceFiles(config, paths);
+    const entries = await listExecutionWorkspaceFiles(record, paths);
 
     if (entries.length === 0) {
       return executed(
@@ -1147,13 +1124,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     viewRange?: [number, number],
   ): Promise<ToolResult> {
     const store = getExecutionStore(executionId);
-    const [config, paths] = await Promise.all([
-      store.readConfig(),
+    const [record, paths] = await Promise.all([
+      store.readRunRecord(),
       store.readWorkspaceFiles(),
     ]);
-    const recordedPaths = this.recordedWorkspacePathSet(config, paths);
+    const recordedPaths = this.recordedWorkspacePathSet(record, paths);
     const resolved = this.resolveRecordedWorkspaceFile(
-      config,
+      record,
       recordedPaths,
       filePath,
     );
@@ -1180,7 +1157,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   private resolveRecordedWorkspaceFile(
-    config: AgentConfig | null,
+    config: RunRecord | null,
     recordedPaths: ReadonlySet<string>,
     filePath: string,
   ): { readonly absolutePath: string; readonly path: string } | undefined {
@@ -1198,7 +1175,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   }
 
   private recordedWorkspacePathSet(
-    config: AgentConfig | null,
+    config: RunRecord | null,
     paths: readonly string[],
   ): Set<string> {
     return new Set(

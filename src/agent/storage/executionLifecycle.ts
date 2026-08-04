@@ -6,19 +6,17 @@
  * with no cross-store mutations or error-swallowing policies.
  */
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
+import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { flowKey } from '@agent/node/persistedFlow';
 
 import * as logger from '@logger/logUtils';
 import {
-  EXECUTION_STREAM_ID_SOURCE,
   RUN_OUTCOME,
-  executionStatusToRunOutcome,
   type ExecutionId,
   type ExecutionMeta,
-  type ExecutionStatus,
+  type RegisteredExecutionMeta,
+  type RunIdentity,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import { KeyedMutex } from '@utils/core';
@@ -33,39 +31,10 @@ import {
 
 const CHANNEL = 'ExecutionLifecycle';
 
-/**
- * Tool-driven executions (e.g. the `bash` background tool) persist a synthetic
- * config tagged `agentCategory: ToolUse` with a name that is not a real
- * tool-use agent. Those rows would otherwise be picked up as chat-session
- * defaults (see `chatDefaults.loadHistoryDefaults`, which keys off
- * `agentConfig.agentCategory === ToolUse`). Demote the persisted category to
- * Workflow for names the loaded registry does not know as tool-use agents so
- * the rows stop polluting defaults resolution.
- *
- * Skipped when the registry is not loaded — an empty registry can't tell
- * "agent absent" from "not loaded yet", and we must never demote a legitimate
- * tool-use agent's run. The displayed history category is unaffected: listing
- * surfaces `meta.category` (e.g. `'process'`) ahead of `config.agentCategory`.
- */
-export function normalizeWriterCategory(
-  config: AgentConfig,
-  agentName: string,
-): AgentConfig {
-  if (config.agentCategory !== AgentCategory.ToolUse) return config;
-  if (!isAgentRegistryReady()) return config;
-  if (
-    getAgent(agentName, AgentCategory.ToolUse)?.category ===
-    AgentCategory.ToolUse
-  ) {
-    return config;
-  }
-  return { ...config, agentCategory: AgentCategory.Workflow };
-}
-
-function pinExecutionWorkingDirectory(config: AgentConfig): AgentConfig {
+function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   const workingDirectory =
-    config.workingDirectory?.trim() || WorkspaceFS.getPath()?.trim();
-  return workingDirectory ? { ...config, workingDirectory } : config;
+    record.workingDirectory?.trim() || WorkspaceFS.getPath()?.trim();
+  return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
 /** Return whether readable persisted metadata directly links to a parent. */
@@ -78,7 +47,7 @@ export async function hasPersistedParent(
 
 // ---------------------------------------------------------------------------
 // Per-execution write serialization — read-modify-write cycles on meta run one
-// at a time per execution so that concurrent writeTerminalStatus /
+// at a time per execution so that concurrent writeTerminalOutcome /
 // writeSessionDescription calls never race and silently drop each other's
 // fields. Different executions proceed independently.
 // ---------------------------------------------------------------------------
@@ -106,12 +75,13 @@ function enqueueMetaUpdate(
  */
 export async function registerExecution(
   executionId: ExecutionId,
-  config: AgentConfig,
+  record: RunRecord,
   agentName: string,
   options: {
     readonly streamId: StreamTabId;
+    /** The run's identity, declared by the launch site — the durable authority. */
+    readonly identity: RunIdentity;
     readonly parentExecutionId?: ExecutionId;
-    readonly category?: string;
     /**
      * Display description persisted on `ExecutionMeta.description` — the one
      * description authority (#9590 A4). Child-stream launchers pass the
@@ -122,28 +92,25 @@ export async function registerExecution(
     readonly description?: string;
   },
 ): Promise<void> {
-  const { streamId, parentExecutionId, category, description } = options;
+  const { streamId, identity, parentExecutionId, description } = options;
   await acquireFreshExecutionLease(executionId);
   const runWithOwnership = captureOwnedExecutionLease(executionId);
   await runWithOwnership(async () => {
     try {
       const timestamp = new Date().toISOString();
       const store = getExecutionStore(executionId);
-      const meta = {
+      const meta: RegisteredExecutionMeta = {
+        schemaVersion: 1,
         timestamp,
         streamId,
-        streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
+        identity,
         parentExecutionId,
-        ...(category ? { category } : {}),
         ...(description ? { description } : {}),
       };
-      const persistedConfig = normalizeWriterCategory(
-        pinExecutionWorkingDirectory(config),
-        agentName,
-      );
+      const persistedRecord = pinExecutionWorkingDirectory(record);
 
       const writes: Promise<void>[] = [
-        store.writeConfig(persistedConfig),
+        store.writeRunRecord(persistedRecord),
         store.writeMeta(meta),
       ];
       if (parentExecutionId) {
@@ -210,8 +177,7 @@ async function persistSupplementaryMetaFieldsBestEffort(
  * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
  * an execution that resumes while still carrying its interrupted predecessor's
  * outcome relabels every turn the resumed run writes until its next terminal
- * finalize. Both fields go together: `ExecutionMetaSchema` re-derives `outcome`
- * from a surviving `terminalStatus`.
+ * finalize.
  *
  * Metadata that is absent or unreadable is left alone: `readResultMeta` reads
  * the same metadata, so there is no outcome to project either way, and the
@@ -222,35 +188,28 @@ export async function clearTerminalExecutionState(
 ): Promise<void> {
   const meta = await getExecutionStore(executionId).readMeta();
   if (!meta) return;
-  if (meta.terminalStatus === undefined && meta.outcome === undefined) return;
-  await enqueueMetaUpdate(executionId, () => ({
-    terminalStatus: undefined,
-    outcome: undefined,
-  }));
+  if (meta.outcome === undefined) return;
+  await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
 }
 
-/** Persist a terminal status and its canonical outcome projection. */
-async function writeTerminalStatus(
+/** Persist the canonical terminal outcome — the one terminal write. */
+async function writeTerminalOutcome(
   executionId: ExecutionId,
-  status: ExecutionStatus,
+  outcome: RunOutcome,
 ): Promise<void> {
-  const outcome = executionStatusToRunOutcome(status);
-  await enqueueMetaUpdate(executionId, () => ({
-    terminalStatus: status,
-    ...(outcome && { outcome }),
-  }));
+  await enqueueMetaUpdate(executionId, () => ({ outcome }));
 }
 
 export interface FinalizeExecutionInput {
   readonly executionId: ExecutionId;
-  readonly terminalStatus: ExecutionStatus;
+  readonly outcome: RunOutcome;
   readonly flowRecord: 'preserve' | 'delete';
 }
 
 export type FinalizeExecutionResult =
   | {
       readonly status: 'durable';
-      readonly terminalStatusPersisted: true;
+      readonly outcomePersisted: true;
       readonly flowRecord: 'preserved' | 'deleted';
     }
   | {
@@ -258,25 +217,24 @@ export type FinalizeExecutionResult =
       readonly error: unknown;
       readonly stage:
         'terminal-status' | 'terminal-status-and-flow-record-delete';
-      readonly terminalStatusPersisted: false;
+      readonly outcomePersisted: false;
     }
   | {
       readonly status: 'failed';
       readonly error: unknown;
       readonly stage: 'flow-record-delete';
-      readonly terminalStatusPersisted: true;
+      readonly outcomePersisted: true;
     };
 
 /** Persist terminal metadata, then apply the requested flow-record policy. */
 export async function finalizeExecution({
   executionId,
-  terminalStatus,
+  outcome,
   flowRecord,
 }: FinalizeExecutionInput): Promise<FinalizeExecutionResult> {
   try {
-    await writeTerminalStatus(executionId, terminalStatus);
+    await writeTerminalOutcome(executionId, outcome);
   } catch (error) {
-    const outcome = executionStatusToRunOutcome(terminalStatus);
     // A terminal COMPLETED/FAILED result must never retain a resumable flow,
     // even when the caller requested preservation before the status write failed.
     const deleteToFailClosed =
@@ -294,7 +252,7 @@ export async function finalizeExecution({
             `Terminal metadata and flow deletion failed for ${executionId}`,
           ),
           stage: 'terminal-status-and-flow-record-delete',
-          terminalStatusPersisted: false,
+          outcomePersisted: false,
         };
       }
     }
@@ -302,14 +260,14 @@ export async function finalizeExecution({
       status: 'failed',
       error,
       stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     };
   }
 
   if (flowRecord === 'preserve') {
     return {
       status: 'durable',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       flowRecord: 'preserved',
     };
   }
@@ -318,7 +276,7 @@ export async function finalizeExecution({
     await getExecutionStore(executionId).delete(flowKey(executionId));
     return {
       status: 'durable',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
       flowRecord: 'deleted',
     };
   } catch (error) {
@@ -326,7 +284,7 @@ export async function finalizeExecution({
       status: 'failed',
       error,
       stage: 'flow-record-delete',
-      terminalStatusPersisted: true,
+      outcomePersisted: true,
     };
   }
 }
@@ -340,20 +298,5 @@ export async function writeSessionDescription(
     executionId,
     { description },
     'session description',
-  );
-}
-
-/** Persist a confirmed stream identity for a pre-streamId execution record. */
-export async function writeLegacyExecutionStreamId(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): Promise<void> {
-  await persistSupplementaryMetaFieldsBestEffort(
-    executionId,
-    {
-      streamId,
-      streamIdSource: EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION,
-    },
-    'legacy execution stream id',
   );
 }

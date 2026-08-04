@@ -1,6 +1,6 @@
 /**
  * Stream lifecycle handlers: UPDATE_STREAMS, SET_ACTIVE_STREAM,
- * DELETE_STREAM, DELETE_ALL, UPDATE_PARENT_STREAM.
+ * DELETE_STREAM, DELETE_ALL.
  *
  * Owns the updateStreamInfo helper.
  */
@@ -38,10 +38,7 @@ import {
   clearFollowUpInputTransientStateStore,
   deleteFollowUpInputTransientState,
 } from '../followUpInputState';
-import {
-  removePermissionsForStream,
-  updateParentStreamId,
-} from '../stateUtils';
+import { removePermissionsForStream } from '../stateUtils';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
 
 // ============================================================
@@ -67,8 +64,11 @@ function updateStreamInfo(
   for (const stream of streams) {
     const existing = state.streamStates.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
-    if (metadata) {
-      mergedStates.set(stream.name, mergeBackendOwnedState(existing, metadata));
+    const merged = metadata
+      ? mergeBackendOwnedState(existing, metadata)
+      : undefined;
+    if (merged) {
+      mergedStates.set(stream.name, merged);
     } else if (!existing) {
       streamsNeedingDefaultState.push(stream);
     }
@@ -105,7 +105,11 @@ function updateStreamInfo(
     }
 
     for (const stream of streamsNeedingDefaultState) {
-      ensureStreamState(draft, stream.name, stream.agentCategory);
+      // Pending streams (no resolved category) get their state once a later
+      // UPDATE_STREAMS carries one.
+      if (stream.agentCategory) {
+        ensureStreamState(draft, stream.name, stream.agentCategory);
+      }
     }
 
     draft.streamById = newStreamById;
@@ -228,9 +232,5 @@ export const streamLifecycleHandlers = {
         draft.activeStreamId = null;
       }),
     );
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM]: (data) => {
-    updateParentStreamId(data.stream, data.parentStreamId);
   },
 } satisfies Partial<ProgressViewOutboundHandlerRegistry>;

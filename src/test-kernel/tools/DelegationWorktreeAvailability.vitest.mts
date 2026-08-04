@@ -130,7 +130,11 @@ describe('resolveAgentTools worktree annotation', () => {
   > {
     const { tools } = await resolveAgentTools({
       tools: [
-        { name: 'delegate_agent', description: DELEGATE_AGENT_DESCRIPTION },
+        {
+          name: 'delegate_agent',
+          availabilityCategory: 'toolUse',
+          description: DELEGATE_AGENT_DESCRIPTION,
+        },
       ],
       registry: new MapToolRegistry({
         delegate_agent: {

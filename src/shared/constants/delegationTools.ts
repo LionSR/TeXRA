@@ -33,14 +33,6 @@ export const DELEGATION_TOOL_CATEGORY: Readonly<Record<string, AgentCategory>> =
     delegate_agent: AgentCategory.ToolUse,
   };
 
-/** Delegation tools whose descriptions receive live roster/model annotations. */
-export const DELEGATION_AVAILABILITY_CATEGORY: Readonly<
-  Record<string, AgentCategory>
-> = {
-  ...DELEGATION_TOOL_CATEGORY,
-  [DELEGATE_MULTI_AGENTS_TOOL_NAME]: AgentCategory.Workflow,
-};
-
 /** True when any of the given tool names is a delegation tool. */
 export function hasDelegationTool(
   toolNames: Iterable<string> | undefined,

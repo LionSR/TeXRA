@@ -292,7 +292,8 @@ export class OutputNode<C = unknown> extends Node<
       }
     }
 
-    // Validate expected outputs if turn ended
+    // Validate expected outputs if turn ended. checkExpectedOutputs reports
+    // the transcript row and the updateMissingOutputs fact together.
     if (endTurn) {
       await tryOperation(async () => {
         const validationResult = await checkExpectedOutputs(
@@ -302,11 +303,6 @@ export class OutputNode<C = unknown> extends Node<
           currentRound,
           summary.stage,
         );
-
-        emitRunFact(logger, 'updateMissingOutputs', {
-          streamId,
-          filesByRound: { [currentRound]: validationResult.missing },
-        });
 
         if (validationResult.missing.length > 0) {
           interactions.emit('requestShowInstruction', {

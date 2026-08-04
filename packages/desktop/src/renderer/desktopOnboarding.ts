@@ -193,7 +193,7 @@ export function createStartupTeamPanel({
       return workStepTemplate();
     }
     const agentCount =
-      preset.workflowAgents.length + preset.toolUseAgents.length;
+      preset.agents.workflow.length + preset.agents.toolUse.length;
     return html`
       <header class="desktop-onboarding-header">
         <span class="desktop-onboarding-icon icon-surface is-size-l">
@@ -209,12 +209,12 @@ export function createStartupTeamPanel({
           ${agentCount} agents enabled, each with its own tools and prompts.
         </p>
         ${
-          preset.workflowAgents.length > 0
+          preset.agents.workflow.length > 0
             ? html`
                 <div class="desktop-onboarding-roster-group">
                   <span class="desktop-onboarding-roster-label">Workflows</span>
                   <div class="desktop-onboarding-roster-chips">
-                    ${preset.workflowAgents.map(
+                    ${preset.agents.workflow.map(
                       (name) =>
                         html`<span class="desktop-onboarding-chip"
                           >${name}</span
@@ -228,7 +228,7 @@ export function createStartupTeamPanel({
         <div class="desktop-onboarding-roster-group">
           <span class="desktop-onboarding-roster-label">Agents</span>
           <div class="desktop-onboarding-roster-chips">
-            ${preset.toolUseAgents.map(
+            ${preset.agents.toolUse.map(
               (name) =>
                 html`<span class="desktop-onboarding-chip">${name}</span>`,
             )}

@@ -13,9 +13,9 @@ import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
+  runIdentityName,
   type ExecutionId,
-  type ExecutionStatus,
-  type RunDescriptor,
+  type RunIdentity,
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
@@ -23,7 +23,7 @@ import type { AgentCategory } from '@shared/schemas/agent';
 import { onAbort } from '@utils/core';
 
 export interface ExecutionStatusInfo {
-  status: StreamPhase | ExecutionStatus | 'unknown';
+  status: StreamPhase | 'unknown';
   elapsed: string | null;
 }
 
@@ -33,6 +33,19 @@ export interface ExecutionHandle {
   readonly category: AgentCategory;
   readonly agentName: string;
   readonly startedAt: number;
+}
+
+/**
+ * The run's immutable birth facts, the same values `run.start` publishes and
+ * `registerExecution` persists. `category` is the launch-time in-memory
+ * config's execution mode — never re-read from a persisted record or a
+ * display projection.
+ */
+export interface ExecutionRun {
+  readonly streamId: StreamTabId;
+  readonly executionId: ExecutionId;
+  readonly identity: RunIdentity;
+  readonly category: AgentCategory;
 }
 
 /** Live run-owned capability that can receive a user stop request. */
@@ -108,14 +121,11 @@ export class AgentExecutionHandle implements ExecutionHandle {
   private _executionLeaseLost = false;
   private executionLeaseScope?: OwnedExecutionLeaseScope;
 
-  /** Stable tool name for UI identification (e.g. "bash", "codex"). */
-  toolName?: string;
-
   /**
    * Workflow-script phase owning this run, when it is an `agent()` grandchild
-   * of a workflow-script run. Same mutable display-field slot as
-   * {@link toolName}, and set the same way: assigned between construction and
-   * `track()`, so the first roster emission already carries it.
+   * of a workflow-script run. A mutable display-field slot, assigned between
+   * construction and `track()`, so the first roster emission already carries
+   * it.
    */
   workflowPhase?: string;
 
@@ -132,11 +142,11 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   constructor(
     /**
-     * The run's identity, the same object its `run.start` published and its
+     * The run's birth facts, the same object its `run.start` published and its
      * terminal `result` reports. Held whole rather than copied field by field,
      * so the handle and the event plane cannot describe the run differently.
      */
-    readonly descriptor: RunDescriptor,
+    readonly run: ExecutionRun,
     parentStreamId: StreamTabId,
     /** The run's discriminated-event channel, for run-scoped subscribers. */
     readonly trace?: AgentTrace,
@@ -145,19 +155,23 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   get executionId(): ExecutionId {
-    return this.descriptor.executionId;
+    return this.run.executionId;
   }
 
   get childStreamId(): StreamTabId {
-    return this.descriptor.streamId;
+    return this.run.streamId;
+  }
+
+  get identity(): RunIdentity {
+    return this.run.identity;
   }
 
   get agentName(): string {
-    return this.descriptor.agent;
+    return runIdentityName(this.run.identity);
   }
 
   get category(): AgentCategory {
-    return this.descriptor.category;
+    return this.run.category;
   }
 
   /** Settle {@link result} with the terminal outcome (idempotent). */
@@ -202,6 +216,20 @@ export class AgentExecutionHandle implements ExecutionHandle {
   /** Promote this subagent to a top-level execution (detach from parent). */
   detach(): void {
     this._parentStreamId = this.childStreamId;
+  }
+
+  /**
+   * True when this run is a live child whose results deliver to
+   * `callerStreamId` — the one caller-ownership authorization check. Reads
+   * the live parent edge, so a detached child answers false to its former
+   * orchestrator.
+   */
+  isOwnedBy(callerStreamId: StreamTabId | null | undefined): boolean {
+    return (
+      callerStreamId != null &&
+      this.isChildExecution &&
+      this._parentStreamId === callerStreamId
+    );
   }
 
   attachToolUseFlow(
@@ -339,6 +367,7 @@ export type AgentRunHandle = Pick<
   | 'executionId'
   | 'parentStreamId'
   | 'childStreamId'
+  | 'identity'
   | 'category'
   | 'agentName'
   | 'startedAt'

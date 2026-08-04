@@ -17,6 +17,7 @@ import {
   type OutputFileInfo,
   type Plan,
   type RoundIndexed,
+  type RunIdentity,
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
@@ -181,6 +182,9 @@ export type StreamStage =
 
 export interface StreamSlice {
   readonly streamId: StreamTabId;
+  /** What owns this stream, verbatim from `run.start` (or the durable store
+   *  on cold read). Never re-derived from names, ids, or transcript roles. */
+  readonly identity?: RunIdentity | undefined;
   /** Canonical agent name captured from this stream's `run.config`. */
   readonly agent?: string | undefined;
   /** Model identity captured from setTaskState for this specific stream. */
@@ -192,7 +196,8 @@ export interface StreamSlice {
   /** Normalized run files received with `run.config`. Absent until that fact
    *  arrives; each category may then be empty. */
   readonly files?: StreamFileMetadata | undefined;
-  /** Canonical workflow artifacts, merged from live facts and durable sidecars. */
+  /** Canonical workflow artifacts, projected from the shared
+   *  `StreamSnapshotStore` accumulator — never accumulated here. */
   readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: RoundIndexed<string>;
   readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
@@ -217,9 +222,10 @@ export interface StreamSlice {
   /** Latest model usage snapshot. The StatusBar treats this as current context
    *  occupancy, so it must not be accumulated across turns. */
   readonly usage: TokenUsageStats | undefined;
-  /** Accumulated usage for resume/exit summaries across all turns in this
-   *  stream. Kept separate from `usage` so the context-window indicator remains
-   *  a latest-snapshot display. */
+  /** Whole-stream usage for resume/exit summaries: the store's per-run
+   *  accumulator (`getRunUsage`) summed, never a second running sum here.
+   *  Kept separate from `usage` so the context-window indicator remains a
+   *  latest-snapshot display. */
   readonly cumulativeUsage: TokenUsageStats | undefined;
   /** True while the latest hidden provider-side reasoning/thinking stream is
    *  the current live activity. The CLI never renders the content directly;
@@ -314,36 +320,6 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
 /** Per-stream state map, keyed by `StreamTabId`. */
 export const streams = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
 const RETIRED_STREAMS = new Set<StreamTabId>();
-const STREAM_ARTIFACT_REVISIONS = new Map<
-  StreamTabId,
-  StreamArtifactRevision
->();
-
-/**
- * Source revisions for destructive artifact mutations that cannot be encoded
- * by spreading a round-indexed value over a cold snapshot.
- */
-export interface StreamArtifactRevision {
-  readonly missingOutputsReset: number;
-}
-
-/** Capture an immutable revision value for an asynchronous artifact read. */
-export function streamArtifactRevision(
-  streamId: StreamTabId,
-): StreamArtifactRevision {
-  return {
-    missingOutputsReset:
-      STREAM_ARTIFACT_REVISIONS.get(streamId)?.missingOutputsReset ?? 0,
-  };
-}
-
-/** Record that every persisted missing-output round before this point is stale. */
-export function recordMissingOutputsReset(streamId: StreamTabId): void {
-  const current = streamArtifactRevision(streamId);
-  STREAM_ARTIFACT_REVISIONS.set(streamId, {
-    missingOutputsReset: current.missingOutputsReset + 1,
-  });
-}
 
 /** Whether reset retired this stream identity from the current state lifetime. */
 export function isCliStreamRetired(streamId: StreamTabId): boolean {
@@ -691,7 +667,6 @@ export function bumpCodexPreferenceVersion(): void {
 // for its former children — can resurrect it.
 
 export function removeStream(streamId: StreamTabId): void {
-  STREAM_ARTIFACT_REVISIONS.delete(streamId);
   const current = streams.get();
   if (current.has(streamId)) {
     const out = new Map(current);
@@ -745,7 +720,6 @@ export function resetCliState(
 ): void {
   CLI_STATE_GENERATION += 1;
   RETIRED_STREAMS.clear();
-  STREAM_ARTIFACT_REVISIONS.clear();
   for (const streamId of streams.get().keys()) RETIRED_STREAMS.add(streamId);
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);

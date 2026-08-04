@@ -418,7 +418,6 @@ function startCodexLoop(params: {
     buildEntry: (session) => ({
       thread,
       childStreamId,
-      parentStreamId,
       executionId,
       executions: session.executions,
     }),

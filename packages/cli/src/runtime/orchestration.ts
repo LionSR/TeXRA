@@ -18,11 +18,7 @@ import {
   pickDefaultToolUseAgent,
 } from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
-import {
-  resumableCliHistoryEntries,
-  userStartedCliHistoryEntries,
-  type CliHistoryEntry,
-} from './history';
+import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
 import {
   modelAccessLaunchBlockDescriptionForCliMode,
   modelSelectItemsForCliMode,
@@ -81,6 +77,11 @@ type CliPresetLaunchBlockReason = 'delegation-denied';
 
 export interface BuildCliOrchestrationItemsInput {
   readonly presetPlans: readonly CliMultiAgentPresetRunPlan[];
+  /**
+   * User-visible history rows, as produced by `listCliHistoryEntries` —
+   * which already applies `isUserVisibleExecution`. Menu builders trust
+   * that filter rather than re-applying it.
+   */
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
   readonly includeMultiAgentLoginHint?: boolean;
@@ -146,7 +147,6 @@ const TEAM_DELEGATION_DENIED_DESCRIPTION =
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
 ): CliOrchestrationItem[] {
-  const userStartedHistory = userStartedCliHistoryEntries(input.history);
   const items: CliOrchestrationItem[] = [
     {
       value: { kind: 'chat' },
@@ -166,7 +166,7 @@ export function buildCliOrchestrationItems(
       disabled: launchBlocked,
     });
   }
-  const resumeItems = buildCliResumeItems(userStartedHistory);
+  const resumeItems = buildCliResumeItems(input.history);
   if (resumeItems.length > 0) {
     items.push({
       value: { kind: 'browse-resumes' },
@@ -299,7 +299,7 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
 export function buildCliResumeItems(
   history: readonly CliHistoryEntry[],
 ): CliOrchestrationItem[] {
-  return resumableCliHistoryEntries(userStartedCliHistoryEntries(history))
+  return resumableCliHistoryEntries(history)
     .slice(0, 50)
     .map((entry) => ({
       value: { kind: 'resume', id: entry.id },

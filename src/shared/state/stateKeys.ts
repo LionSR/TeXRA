@@ -18,6 +18,7 @@ export enum WorkspaceStateKey {
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
 
   // Agent visibility
+  /** Roster selection; the `custom` member carries a category-keyed record. */
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',

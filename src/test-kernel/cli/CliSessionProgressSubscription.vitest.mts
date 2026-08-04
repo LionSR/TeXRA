@@ -116,10 +116,10 @@ const inquiryThread = {
   turnCount: 1,
 };
 const child = {
-  kind: 'subagent' as const,
   executionId: childExecutionId,
   childStreamId,
   agentName: 'review',
+  identity: { kind: 'agent' as const, agent: 'review' },
   status: STREAM_PHASE.RUNNING,
 };
 const PROGRESS_PROJECTION_CASES = {
@@ -280,7 +280,19 @@ const PROGRESS_PROJECTION_CASES = {
       parentStreamId: streamId,
       items: [child],
     }),
-    payload: { parentStreamId: streamId, children: [child] },
+    // The frozen public row shape: `kind` discriminant, no `identity`.
+    payload: {
+      parentStreamId: streamId,
+      children: [
+        {
+          kind: 'subagent',
+          executionId: childExecutionId,
+          agentName: 'review',
+          status: STREAM_PHASE.RUNNING,
+          childStreamId,
+        },
+      ],
+    },
   },
   updateStreamDescription: {
     source: sessionFact('updateStreamDescription', {
@@ -385,6 +397,97 @@ describe('attachCliSessionProgressProjection', () => {
           progressRecord(event, projection.payload),
         );
       }
+    });
+  });
+
+  it('projects updateActiveSubagents rows byte-for-byte onto the frozen public shape', () => {
+    // One row per identity kind; `toEqual` (not objectContaining) pins the
+    // exact pre-consolidation wire shape: `kind` discriminant, `toolName`
+    // encoding, `childStreamId` only on subagent rows, and NO `identity`.
+    const items = [
+      {
+        executionId: 'exec-native' as ExecutionId,
+        childStreamId: 'stream:native-child',
+        identity: { kind: 'agent' as const, agent: 'review' },
+        agentName: 'review',
+        status: STREAM_PHASE.RUNNING,
+        startedAt: 1754280000000,
+        elapsed: '1m 2s',
+      },
+      {
+        executionId: 'exec-codex' as ExecutionId,
+        childStreamId: 'stream:codex-child',
+        identity: { kind: 'agent' as const, agent: 'coder', tool: 'codex' },
+        agentName: 'coder',
+        status: STREAM_PHASE.RUNNING,
+      },
+      {
+        executionId: 'exec-bash' as ExecutionId,
+        childStreamId: 'stream:bash-child',
+        identity: { kind: 'process' as const, tool: 'bash' },
+        agentName: 'bash',
+        finishedAt: 1754280060000,
+      },
+      {
+        executionId: 'exec-workflow' as ExecutionId,
+        childStreamId: 'stream:workflow-child',
+        identity: {
+          kind: 'multiAgentWorkflow' as const,
+          workflowName: 'engineer',
+        },
+        agentName: 'engineer',
+        workflowPhase: 'implement',
+      },
+    ];
+
+    withProjection(({ events, writeRecord }) => {
+      events.emit(
+        runEvent({
+          type: 'child.activity',
+          parentStreamId: streamId,
+          items,
+        }),
+      );
+
+      const written = vi
+        .mocked(writeRecord)
+        .mock.calls.at(0)?.[0] as unknown as {
+        payload: { children: unknown[] };
+      };
+      expect(written.payload.children).toStrictEqual([
+        {
+          kind: 'subagent',
+          executionId: 'exec-native',
+          agentName: 'review',
+          status: STREAM_PHASE.RUNNING,
+          startedAt: 1754280000000,
+          elapsed: '1m 2s',
+          childStreamId: 'stream:native-child',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'exec-codex',
+          agentName: 'coder',
+          status: STREAM_PHASE.RUNNING,
+          toolName: 'codex',
+          childStreamId: 'stream:codex-child',
+        },
+        {
+          kind: 'process',
+          executionId: 'exec-bash',
+          agentName: 'bash',
+          finishedAt: 1754280060000,
+          toolName: 'bash',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'exec-workflow',
+          agentName: 'engineer',
+          workflowPhase: 'implement',
+          toolName: 'delegate_multi_agents',
+          childStreamId: 'stream:workflow-child',
+        },
+      ]);
     });
   });
 

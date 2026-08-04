@@ -2,10 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  buildRunDescriptor,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -59,15 +57,11 @@ describe('SessionHandle.repairWaitingIfResumable', () => {
   let executionId: ExecutionId;
 
   function ownStream(owner: ExecutionId): void {
-    snapshotFacts(session.snapshots).setRunDescriptor(
-      buildRunDescriptor({
-        streamId,
-        executionId: owner,
-        agent: 'assistant',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    snapshotFacts(session.snapshots).setRunStart({
+      streamId,
+      executionId: owner,
+      identity: { kind: 'agent', agent: 'assistant' },
+    });
   }
 
   beforeEach(() => {

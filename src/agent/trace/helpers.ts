@@ -21,6 +21,7 @@ import {
   type ErrorContext,
   type FileListEntry,
   type MediaAttachmentKind,
+  type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -91,16 +92,23 @@ export function logCompactionActivity(
  * `attachments` records each attached media file's kind (not bytes) so the
  * archived conversation can render `[image attachment]` / `[document
  * attachment]` markers for media that only ever reached the provider
- * message (#7508).
+ * message (#7508). `workflowSummary` carries a workflow delivery's typed
+ * presentation facts beside the row text (`UserMessagePayloadSchema`), so
+ * renderers never re-parse them out of the text.
  */
 export function logUserMessage(
   trace: AgentTrace,
   message: string,
   attachments?: readonly MediaAttachmentKind[],
+  workflowSummary?: WorkflowScriptDeliverySummary,
 ): void {
+  const data = {
+    ...(attachments?.length ? { attachments } : {}),
+    ...(workflowSummary ? { workflowSummary } : {}),
+  };
   trace.info(message, {
     messageType: MESSAGE_TYPES.USER_MESSAGE,
-    ...(attachments?.length ? { data: { attachments } } : {}),
+    ...(Object.keys(data).length > 0 ? { data } : {}),
   });
 }
 

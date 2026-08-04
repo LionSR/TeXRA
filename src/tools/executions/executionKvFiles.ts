@@ -6,7 +6,7 @@
  *
  * The reserved-key vocabulary itself (meta, config, todos, `child-*`, …) is
  * owned by `ExecutionKVStore`; the `flow_*` prefix is owned by
- * `persistedFlow`; workflow checkpoint keys are owned by `workflowScript`.
+ * `persistedFlow`; workflow checkpoint keys are owned by `multiAgentWorkflow`.
  * This module only strips the on-disk `.json` suffix and defers to those
  * owners rather than re-deriving the vocabulary.
  *

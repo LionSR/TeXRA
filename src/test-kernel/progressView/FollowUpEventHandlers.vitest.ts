@@ -58,7 +58,6 @@ function seedState(): () => ProgressState {
   ] as const) {
     state.streamStates.set(streamId, createToolUseState(text));
     state.streamById.set(streamId, {
-      kind: 'agent',
       name: streamId as StreamTabId,
       label: streamId,
       agentCategory: AgentCategory.ToolUse,

@@ -53,7 +53,6 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
-import { isChildExecutionErrorStatus } from '@cli/chat/tui/state/childExecutionStatus';
 import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
@@ -94,11 +93,10 @@ import {
   type StorageKey,
   type StreamPhase,
   type StreamTabId,
-  type SubagentChildInfo,
   type TodoItem,
 } from '@shared/schemas';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
-import { createRunTrace } from '@transcript';
+import { createRunTrace, StreamSnapshotStore } from '@transcript';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -112,11 +110,11 @@ function orderedSessionDescendants(parent: StreamTabId): StreamTabId[] {
   ];
 }
 
-function activeRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+function activeRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return activeSubagentsFor(parent, childStreamEntries.get(), streams.get());
 }
 
-function retainedRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+function retainedRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return retainedChildStreamsFor(
     parent,
     childStreamEntries.get(),
@@ -124,7 +122,7 @@ function retainedRows(parent: StreamTabId): readonly SubagentChildInfo[] {
   );
 }
 
-function visibleRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+function visibleRows(parent: StreamTabId): readonly ActiveChildInfo[] {
   return visibleSubagentRows(parent, childStreamEntries.get(), streams.get());
 }
 
@@ -144,14 +142,21 @@ function runTrace(
   return createRunTrace(streamId, defaultSession().transcripts).trace;
 }
 
-/** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
+/** Run `body` with a TUI run-fact subscription attached to a fresh hub. The
+ *  snapshot store attaches to the hub first — mirroring production, where the
+ *  session attaches its store at construction — so the TUI projection reads
+ *  accumulated artifact/usage state the store has already folded in. */
 function withRunFacts(body: (hub: SessionEventHub) => void): void {
   const hub = new SessionEventHub();
-  const detach = attachTuiRunFactSubscription(hub);
+  const snapshots = new StreamSnapshotStore();
+  const detachSnapshots = snapshots.attachSessionEvents(hub);
+  const detach = attachTuiRunFactSubscription(hub, snapshots);
   try {
     body(hub);
   } finally {
     detach();
+    detachSnapshots();
+    snapshots.evictAll();
   }
 }
 
@@ -305,9 +310,9 @@ describe('cliState stream, focus, and child-edge fields', () => {
     // active membership, then the explicit edge arrives.
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'agent-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.RUNNING,
       },
@@ -333,9 +338,9 @@ describe('cliState stream, focus, and child-edge fields', () => {
     withStreamStatus(() => {
       applySubagentRoster(root, [
         {
-          kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'codex',
+          identity: { kind: 'agent' as const, agent: 'codex' },
           childStreamId: child1,
           status: STREAM_PHASE.RUNNING,
         },
@@ -356,7 +361,6 @@ describe('cliState stream, focus, and child-edge fields', () => {
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
       expect(visibleRows(root)).toMatchObject([
         {
-          kind: 'subagent',
           executionId: 'agent-1',
           childStreamId: child1,
           status: STREAM_PHASE.FAILED,
@@ -453,9 +457,9 @@ describe('cliState stream, focus, and child-edge fields', () => {
           parentStreamId: root,
           items: [
             {
-              kind: 'subagent',
               executionId: 'agent-1',
               agentName: 'critic',
+              identity: { kind: 'agent' as const, agent: 'critic' },
               childStreamId: child1,
               status: STREAM_PHASE.RUNNING,
             },
@@ -1193,9 +1197,9 @@ describe('CLI TUI row allocation', () => {
     });
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'child-exec-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.COMPLETED,
       },
@@ -1223,9 +1227,9 @@ describe('CLI TUI row allocation', () => {
     });
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'child-exec-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.RUNNING,
       },
@@ -1289,9 +1293,9 @@ describe('CLI TUI row allocation', () => {
       });
       applySubagentRoster(root, [
         {
-          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
+          identity: { kind: 'agent' as const, agent: 'critic' },
           childStreamId: child1,
           status: STREAM_PHASE.COMPLETED,
         },
@@ -1326,9 +1330,9 @@ describe('CLI TUI row allocation', () => {
       });
       applySubagentRoster(root, [
         {
-          kind: 'subagent',
           executionId: 'child-exec-1',
           agentName: 'critic',
+          identity: { kind: 'agent' as const, agent: 'critic' },
           childStreamId: child1,
           status: STREAM_PHASE.RUNNING,
         },
@@ -3044,9 +3048,9 @@ describe('subscribeRuntimeHost run facts', () => {
   it('applies direct child activity and parent-link facts without host emission', () => {
     withRunFacts((hub) => {
       const child: ActiveChildInfo = {
-        kind: 'subagent',
         executionId: 'agent-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.RUNNING,
       };
@@ -3112,6 +3116,8 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.usage).toEqual(usage);
+      // Cumulative usage is the snapshot store's per-run accumulator summed;
+      // reasoningTokens is part of the one accumulated vocabulary.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
         inputTokens: 100,
         outputTokens: 20,
@@ -3219,7 +3225,10 @@ describe('subscribeRuntimeHost run facts', () => {
 
   it('streams every workflow output round into selected-agent state', () => {
     withRunFacts((hub) => {
-      const executionId = 'exec-output' as ExecutionId;
+      // A real hex id: the snapshot store (now the accumulator the slice is
+      // projected from) parses output-file payloads, and ExecutionIdSchema
+      // rejects non-hex ids the old slice-spread silently accepted.
+      const executionId = 'ab12cd34ef56' as ExecutionId;
 
       hub.emit({
         scope: 'run',
@@ -3237,7 +3246,7 @@ describe('subscribeRuntimeHost run facts', () => {
                   executionId,
                   relativePath: 'r1/draft.tex',
                   absolutePath:
-                    '/tmp/texra/executions/exec-output/r1/draft.tex',
+                    '/tmp/texra/executions/ab12cd34ef56/r1/draft.tex',
                 },
                 round: 0,
                 lineage: null,
@@ -3263,7 +3272,7 @@ describe('subscribeRuntimeHost run facts', () => {
                   executionId,
                   relativePath: 'r2/paper.tex',
                   absolutePath:
-                    '/tmp/texra/executions/exec-output/r2/paper.tex',
+                    '/tmp/texra/executions/ab12cd34ef56/r2/paper.tex',
                 },
                 round: 1,
                 lineage: null,
@@ -3278,14 +3287,14 @@ describe('subscribeRuntimeHost run facts', () => {
         0: [
           expect.objectContaining({
             location: expect.objectContaining({
-              absolutePath: '/tmp/texra/executions/exec-output/r1/draft.tex',
+              absolutePath: '/tmp/texra/executions/ab12cd34ef56/r1/draft.tex',
             }),
           }),
         ],
         1: [
           expect.objectContaining({
             location: expect.objectContaining({
-              absolutePath: '/tmp/texra/executions/exec-output/r2/paper.tex',
+              absolutePath: '/tmp/texra/executions/ab12cd34ef56/r2/paper.tex',
             }),
           }),
         ],
@@ -3420,6 +3429,8 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
+      // Summed from the store's per-run map — the one accumulator, which
+      // carries reasoningTokens — not a second running sum in the slice.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
         inputTokens: 150,
         outputTokens: 30,
@@ -3487,8 +3498,6 @@ describe('subscribeRuntimeHost run facts', () => {
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
     setStreamStatusInCliState({
       streamId: root,
       status: STREAM_PHASE.RUNNING,
@@ -3497,33 +3506,34 @@ describe('subscribeRuntimeHost run facts', () => {
     const queue = defaultSession().followUps.queue(lease);
 
     try {
-      queue.enqueue({ text: 'Keep the proof under one page.' });
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'followUpSent',
-          payload: { streamId: root },
-        },
+      withRunFacts((hub) => {
+        queue.enqueue({ text: 'Keep the proof under one page.' });
+        hub.emit({
+          scope: 'session',
+          event: {
+            type: 'followUpSent',
+            payload: { streamId: root },
+          },
+        });
+
+        let slice = streams.get().get(root);
+        expect(slice?.queuedFollowUpMessages).toEqual([
+          'Keep the proof under one page.',
+        ]);
+
+        queue.drain();
+        hub.emit({
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId: root },
+          },
+        });
+
+        slice = streams.get().get(root);
+        expect(slice?.queuedFollowUpMessages).toEqual([]);
       });
-
-      let slice = streams.get().get(root);
-      expect(slice?.queuedFollowUpMessages).toEqual([
-        'Keep the proof under one page.',
-      ]);
-
-      queue.drain();
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId: root },
-        },
-      });
-
-      slice = streams.get().get(root);
-      expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
-      detach();
       defaultSession().followUps.terminalize(root);
     }
   });
@@ -3582,18 +3592,9 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheReadInputTokens: 35,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 7,
+        reasoningTokens: 0,
       });
     });
-  });
-
-  it('classifies child-execution error statuses', () => {
-    expect(isChildExecutionErrorStatus('running')).toBe(false);
-    expect(isChildExecutionErrorStatus('exit 0')).toBe(false);
-    expect(isChildExecutionErrorStatus('exit 1')).toBe(true);
-    expect(isChildExecutionErrorStatus('exited with code 2')).toBe(true);
-    expect(isChildExecutionErrorStatus('failed')).toBe(true);
-    // A user stop is not an error (RUN_OUTCOME keeps cancelled ≠ failed).
-    expect(isChildExecutionErrorStatus('stopped')).toBe(false);
   });
 });
 
@@ -3601,15 +3602,15 @@ describe('session tree order', () => {
   it('orders retained sibling sessions', () => {
     applySubagentRoster(root, [
       {
-        kind: 'subagent',
         executionId: 'e1',
         agentName: 'a',
+        identity: { kind: 'agent' as const, agent: 'a' },
         childStreamId: child1,
       },
       {
-        kind: 'subagent',
         executionId: 'e2',
         agentName: 'b',
+        identity: { kind: 'agent' as const, agent: 'b' },
         childStreamId: child2,
       },
     ]);
@@ -3656,11 +3657,16 @@ describe('child-stream ordered transition matrix', () => {
   const parentQ = 'parent-q' as StreamTabId;
   const kid = 'kid' as StreamTabId;
 
+  // Shared reference: `summaryUnchanged` compares `identity` by reference,
+  // so a per-call identity object would defeat the roster no-op detection
+  // that case 12 asserts.
+  const kidIdentity = { kind: 'agent' as const, agent: 'kid-agent' };
+
   function rosterRow(status?: StreamPhase, elapsed?: string) {
     return {
-      kind: 'subagent' as const,
       executionId: 'kid-exec',
       agentName: 'kid-agent',
+      identity: kidIdentity,
       childStreamId: kid,
       status,
       elapsed,
@@ -3882,9 +3888,9 @@ describe('child-stream ordered transition matrix', () => {
     setParentStream(freshKid, parentP);
     applySubagentRoster(parentP, [
       {
-        kind: 'subagent',
         executionId: 'kid-2-exec',
         agentName: 'kid-agent',
+        identity: { kind: 'agent' as const, agent: 'kid-agent' },
         childStreamId: freshKid,
         status: STREAM_PHASE.RUNNING,
       },
@@ -3899,16 +3905,16 @@ describe('child-stream ordered transition matrix', () => {
     const kidA = 'kid-a' as StreamTabId;
     const kidB = 'kid-b' as StreamTabId;
     const rowA = (status?: StreamPhase) => ({
-      kind: 'subagent' as const,
       executionId: 'exec-a',
       agentName: 'a',
+      identity: { kind: 'agent' as const, agent: 'a' },
       childStreamId: kidA,
       status,
     });
     const rowB = (status?: StreamPhase) => ({
-      kind: 'subagent' as const,
       executionId: 'exec-b',
       agentName: 'b',
+      identity: { kind: 'agent' as const, agent: 'b' },
       childStreamId: kidB,
       status,
     });

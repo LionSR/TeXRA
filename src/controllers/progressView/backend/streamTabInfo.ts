@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
+import { runIdentityName } from '@shared/schemas';
 import { AgentCategory, getCleanAgentName } from '@shared/schemas/agent';
-import { isProcessAgent } from '@shared/streams/agentKind';
 import type { ProgressStreamMetadata } from './ProgressViewState';
 
 export interface StreamTabInfoInputs {
@@ -21,51 +21,41 @@ export interface StreamTabInfoInputs {
  * both the extension's progress view and the Electron desktop main can
  * emit identical metadata to the shared <stream-tab> renderer.
  *
- * Replaces the duplicated, drift-prone implementations in
- * `streamInfoUtils.buildStreamInfo` (extension) and
- * `desktopAgentExecution.buildStreamInfo` (desktop).
+ * The parsed {@link RunIdentity} travels verbatim; display fields sit beside
+ * it. A stream whose identity has not resolved yet (no `run.start` seen, no
+ * durable record hydrated) renders pending — never a fabricated default kind
+ * or category.
  */
 export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, metadata } = inputs;
-  const { run } = metadata;
+  const { identity, config } = metadata;
 
-  const category = metadata.agentCategory ?? AgentCategory.Workflow;
+  const identityName = identity
+    ? getCleanAgentName(runIdentityName(identity))
+    : streamId;
 
-  // `run` is undefined until the stream's RunConfig snapshot resolves (see
-  // `applySnapshotMetadata`); fall back to parsing the agent name out of the
-  // stream ID (format "agentName@timestamp") so an early render — e.g. a
-  // just-created bash child stream — still classifies correctly. Once `run`
-  // is set, its `kind` is authoritative: no more guessing from the name.
-  const rawIdentityName =
-    run?.kind === 'workflowScript'
-      ? run.workflowName
-      : (run?.agent ?? streamId.split('@')[0]);
-  const identityName = getCleanAgentName(rawIdentityName);
-  const resolvedAgent =
-    run?.kind === 'workflowScript' ? undefined : (run?.agent ?? identityName);
-  const isProcessStream = run
-    ? run.kind === 'process'
-    : isProcessAgent(rawIdentityName);
-
-  const inputFile = (run?.kind === 'agent' ? run.inputFile : undefined) ?? '';
+  const inputFile = (identity?.kind === 'agent' ? config?.inputFile : '') ?? '';
 
   // Workflow agents include the input filename in the tab label so users
   // can tell parallel runs apart at a glance. Tool-use agents don't have
   // a single canonical input file, so we just show the agent name.
   const label =
-    category !== AgentCategory.ToolUse && inputFile
+    metadata.agentCategory === AgentCategory.Workflow && inputFile
       ? `${identityName}: ${path.basename(inputFile)}`
       : identityName;
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).
   const command =
-    run?.kind === 'process' && run.instruction ? run.instruction : undefined;
+    identity?.kind === 'process' ? config?.instruction : undefined;
 
   // Canonical host-known status takes precedence because setActiveStream can
   // identify a remote run before its agent is present in the registry.
   const isRemote =
-    metadata.isRemote ?? (resolvedAgent ? isRemoteAgent(resolvedAgent) : false);
+    metadata.isRemote ??
+    (identity?.kind === 'agent'
+      ? isRemoteAgent(getCleanAgentName(identity.agent))
+      : false);
 
   // Worktree context comes from one of two sources, in order:
   //   1. An explicit hint passed in by the caller (already resolved branch /
@@ -74,15 +64,24 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   //      just the path until async resolution lands.
   const worktree: WorktreeInfo | undefined =
     inputs.worktreeInfo ??
-    (run?.workingDirectory
-      ? { workingDirectory: run.workingDirectory }
+    (config?.workingDirectory
+      ? { workingDirectory: config.workingDirectory }
       : undefined);
 
-  const base = {
+  // Process streams carry a synthetic AgentConfig whose `model` is the
+  // schema's prefault, not a real inference model — only agent runs show one.
+  const model = identity?.kind === 'agent' ? config?.model : undefined;
+
+  return {
     name: streamId,
     label,
-    ...(resolvedAgent ? { agent: resolvedAgent } : {}),
-    agentCategory: category,
+    identity,
+    agentCategory: metadata.agentCategory,
+    model,
+    modelLabel: model
+      ? (getRuntimeModelConfig(model)?.label ?? model)
+      : undefined,
+    command,
     isRemote,
     inputFile,
     creationTimestamp: metadata.creationTimestamp,
@@ -90,30 +89,5 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
     parentStreamId: metadata.parentStreamId,
     description: metadata.description,
     worktree,
-  };
-
-  if (isProcessStream) {
-    return { ...base, kind: 'process', command };
-  }
-  if (run?.kind === 'workflowScript') {
-    return {
-      ...base,
-      kind: 'workflowScript',
-      workflowName: run.workflowName,
-    };
-  }
-
-  // Process agents (e.g. bash) carry a synthetic AgentConfig whose `model`
-  // is the schema's prefault, not a real inference model — the `process`
-  // variant of `ProgressStreamRunDetails` has no `model` field at all, so
-  // there's nothing to omit here; only the `agent` variant carries one.
-  const model = run?.kind === 'agent' ? run.model : undefined;
-  return {
-    ...base,
-    kind: 'agent',
-    model,
-    modelLabel: model
-      ? (getRuntimeModelConfig(model)?.label ?? model)
-      : undefined,
   };
 }

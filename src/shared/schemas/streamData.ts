@@ -13,10 +13,7 @@
 
 import { z } from 'zod';
 
-import {
-  PersistedRunDescriptorSchema,
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
-} from './runDescriptor';
+import { ExecutionIdSchema } from './identifiers';
 import {
   TokenUsageStatsBaseSchema,
   UsageRouteSchema,
@@ -28,29 +25,22 @@ import {
 // Per-stream meta file (streamData/{id}/meta.json) — single source of truth
 // ============================================================================
 
+export const STREAM_TAB_META_SCHEMA_VERSION = 1;
+
 /**
- * On-disk shape of `meta.json`. `taskState` is kept as `unknown` here so this
- * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
- * need the typed value parse it with `TaskStateSchema` (which depends on
- * `@agent`).
+ * On-disk shape of `meta.json`. The stream sidecar carries a foreign key
+ * (`executionId`) into `executions/{id}/` — identity and config live there,
+ * never as a sidecar copy. Pre-FK sidecars carried a whole `runDescriptor`;
+ * that retired shape is no longer read — the unknown key is stripped and the
+ * sidecar simply has no FK.
  */
 export const StreamTabMetaSchema = z.object({
   schemaVersion: z
-    .literal(RUN_DESCRIPTOR_SCHEMA_VERSION)
-    .prefault(RUN_DESCRIPTOR_SCHEMA_VERSION),
+    .literal(STREAM_TAB_META_SCHEMA_VERSION)
+    .prefault(STREAM_TAB_META_SCHEMA_VERSION),
   parentStreamId: z.string().optional(),
-  runDescriptor: PersistedRunDescriptorSchema.optional(),
-  /** Legacy field — read-shimmed from pre-RunDescriptor snapshots only. */
-  taskState: z.unknown().optional(),
-  /**
-   * Legacy field — read-only mirror of `ExecutionMeta.description` (#9590 A4).
-   * Current records stopped writing it in #9590 Stage 6; readers use
-   * ExecutionMeta and fall back to this field only for records whose execution
-   * metadata carries no description (pre-registration records, desktop legacy
-   * imports). Scheduled for deletion in #9590 Stage 7 / #9627 with the
-   * ≥ 2026-11-01 legacy-retirement cohort.
-   */
-  description: z.string().optional(),
+  /** FK into `executions/{executionId}/` — the durable run authority. */
+  executionId: ExecutionIdSchema.optional(),
 });
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;

@@ -5,7 +5,10 @@
  *
  * The fixtures build real completed executions on disk from sidecar data
  * alone, which is what a tool-use run persists, and prove that conversation
- * display, chat export, and todos all read through the facade.
+ * display, chat export, and todos all read through the facade. The
+ * execution→stream mapping is the `streamId` stamped on execution metadata at
+ * registration — nothing re-derives it from names, sidecar scans, or
+ * suffix matching.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -64,7 +67,6 @@ import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
-  EXECUTION_STREAM_ID_SOURCE,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -86,6 +88,7 @@ import {
 } from '@test/support/storeTestDrivers';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
+  hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
   readCompletedRunTodos,
   seedResumedConversationSidecar,
@@ -100,6 +103,18 @@ function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
     agent,
     model,
     agentCategory: AgentCategory.ToolUse,
+  });
+}
+
+/** Stamp the execution→stream mapping the way registration does. */
+async function stampStreamId(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): Promise<void> {
+  await getExecutionStore(executionId).writeMeta({
+    timestamp: '2026-07-07T00:00:00.000Z',
+    streamId,
+    identity: { kind: 'agent', agent: 'orchestrator' },
   });
 }
 
@@ -283,7 +298,7 @@ describe('completedRunArchive facade', () => {
     await writeSidecarFixture(executionId, streamId);
 
     const store = getExecutionStore(executionId);
-    await store.writeConfig(
+    await store.writeRunRecord(
       AgentConfigSchema.parse({
         agent: 'orchestrator',
         model: 'deepseekproT',
@@ -293,12 +308,14 @@ describe('completedRunArchive facade', () => {
     );
     await store.writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
-      terminalStatus: 'completed',
+      streamId,
+      identity: { kind: 'agent', agent: 'orchestrator' },
     });
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult.source).toBe('streamLog');
     expect(conversationResult.streamId).toBe(streamId);
+    expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
     expect(conversationResult.conversation).toEqual([
       {
         role: 'user',
@@ -379,11 +396,12 @@ describe('completedRunArchive facade', () => {
     const executionId = '0aa1110aa111' as ExecutionId;
     const streamId = 'orchestrator@legacyModel#0aa1110aa111' as StreamTabId;
     const config = runConfig('orchestrator');
-    expect(
-      getStreamTabId(config.agent, config.model, { executionId }),
-    ).not.toBe(streamId);
+    // The stamped id is the reproduction contract: minting from today's
+    // config would produce a different (wrong) id.
+    expect(getStreamTabId(config.agent, { executionId })).not.toBe(streamId);
 
     const snapshots = await seedStreams(executionId, [{ streamId }]);
+    await stampStreamId(executionId, streamId);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
@@ -566,23 +584,24 @@ describe('completedRunArchive facade', () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
     await seedStreams(executionId, [{ streamId, todos: [] }]);
+    await stampStreamId(executionId, streamId);
     const result = await readCompletedRunTodos(executionId);
 
     expect(result).toEqual({ todos: [], source: 'streamData', streamId });
   });
 
-  it('reports none when no sidecar has data', async () => {
+  it('reports none, with no conversation evidence, when metadata has no stamped stream', async () => {
     const executionId = 'ccc333ccc333' as ExecutionId;
 
     const conversationResult = await readCompletedRunConversation(executionId);
     expect(conversationResult).toEqual({ conversation: null, source: 'none' });
+    expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
     const todosResult = await readCompletedRunTodos(executionId);
     expect(todosResult).toEqual({ todos: [], source: 'none' });
 
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
-      terminalStatus: 'completed',
     });
     const endpoint = await new ExecutionsTool().call({
       path: `/executions/${executionId}/conversation`,
@@ -604,15 +623,9 @@ describe('completedRunArchive facade', () => {
   it('reads a registered execution without sidecar or suffix scans, even when its transcript is empty (#9590 A1)', async () => {
     const executionId = 'abc907abc907' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc907abc907' as StreamTabId;
-    await getExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-07T00:00:00.000Z',
-      terminalStatus: 'completed',
-      streamId,
-      streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
-    });
+    await stampStreamId(executionId, streamId);
     // A decoy stream that a suffix scan would match; registration must make
-    // it unreachable, and an empty registered transcript must not trigger the
-    // alternate-root fallback scan.
+    // it unreachable — the stamped (empty) stream is authoritative.
     await persistRows(
       executionId,
       new Map([
@@ -627,25 +640,27 @@ describe('completedRunArchive facade', () => {
       StreamSnapshotStore.prototype,
       'listPersistedStreams',
     );
-    const association = vi.spyOn(
-      StreamSnapshotStore.prototype,
-      'readPersistedStreamAssociation',
-    );
 
     const conversationResult = await readCompletedRunConversation(executionId);
-    expect(conversationResult).toEqual({ conversation: null, source: 'none' });
+    expect(conversationResult).toEqual({
+      conversation: null,
+      source: 'none',
+      streamId,
+    });
+    // The stamped stream id alone is association evidence.
+    expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
 
     const todosResult = await readCompletedRunTodos(executionId);
     expect(todosResult).toEqual({ todos: [], source: 'none' });
 
     expect(scan).not.toHaveBeenCalled();
-    expect(association).not.toHaveBeenCalled();
   });
 
   it('reads a sidecar conversation', async () => {
     const executionId = 'ddd444ddd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#ddd444ddd444' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
+    await stampStreamId(executionId, streamId);
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('streamLog');
     expect(result.streamId).toBe(streamId);
@@ -656,6 +671,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0dd4440dd444' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0dd4440dd444' as StreamTabId;
     await seedStreams(executionId, [{ streamId }]);
+    await stampStreamId(executionId, streamId);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
@@ -699,6 +715,7 @@ describe('completedRunArchive facade', () => {
     const executionId = '0ee5550ee555' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0ee5550ee555' as StreamTabId;
     await seedStreams(executionId, [{ streamId }]);
+    await stampStreamId(executionId, streamId);
 
     const logs = await StreamLogStore.open();
     logs.ensureStream(streamId);
@@ -766,6 +783,7 @@ describe('completedRunArchive facade', () => {
     const executionId = 'fff666fff666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#fff666fff666' as StreamTabId;
     await writeSidecarFixture(executionId, streamId);
+    await stampStreamId(executionId, streamId);
     const result = await readCompletedRunConversation(executionId);
     expect(result.source).toBe('streamLog');
     expect(result.streamId).toBe(streamId);
@@ -773,895 +791,11 @@ describe('completedRunArchive facade', () => {
     expect(result.conversation!.length).toBeGreaterThan(0);
   });
 
-  it('reads the historical root instead of its child sidecar', async () => {
-    const executionId = '0777aa0777aa' as ExecutionId;
-    const emptyStream = 'aChild@tool#0777aa0777aa' as StreamTabId;
-    const fullStream = 'zOrchestrator@deepseekproT#0777aa0777aa' as StreamTabId;
-
-    await seedStreams(executionId, [
-      { streamId: emptyStream, agent: 'bash', parent: fullStream },
-      { streamId: fullStream },
-    ]);
-
-    const logs = await StreamLogStore.open();
-    logs.ensureStream(emptyStream);
-    appendTranscriptEntry(
-      logs,
-      emptyStream,
-      logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Working...' }),
-    );
-    logs.ensureStream(fullStream);
-    appendTranscriptEntry(
-      logs,
-      fullStream,
-      logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Real question' }),
-    );
-    appendTranscriptEntry(
-      logs,
-      fullStream,
-      logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Real answer' }),
-    );
-    await logs.flush();
-
-    const result = await readCompletedRunConversation(executionId);
-    expect(result).toEqual({
-      source: 'streamLog',
-      streamId: fullStream,
-      associatedStreamIds: [emptyStream],
-      conversation: [
-        { role: 'user', content: 'Real question' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Real answer' }],
-        },
-      ],
-    });
-  });
-
-  it('does not merge a disjoint exact-execution sidecar with missing parent metadata', async () => {
-    const executionId = '0888ba0888ba' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888ba0888ba' as StreamTabId;
-    const ambiguousChild = 'zOrchestrator@new#0888ba0888ba' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: ambiguousChild },
-    ]);
-
-    await persistRows(
-      executionId,
-      new Map([
-        [
-          canonical,
-          [
-            {
-              ...logRow(MESSAGE_TYPES.USER_MESSAGE, {
-                text: 'Canonical question',
-              }),
-              timestamp: 9000,
-            },
-          ],
-        ],
-        [
-          ambiguousChild,
-          [
-            {
-              ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-                text: 'Unproven child answer',
-              }),
-              // A reversed clock cannot order a disconnected sidecar.
-              timestamp: 1000,
-            },
-          ],
-        ],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      candidateStreamIds: [canonical, ambiguousChild],
-      conversation: null,
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.output).toContain('Source: none');
-    expect(endpoint.output).toContain('Stream: none');
-    expect(endpoint.output).toContain(
-      `Ambiguous candidate streams: ${canonical}, ${ambiguousChild}`,
-    );
-    expect(endpoint.output).not.toContain('Canonical question');
-    expect(endpoint.output).not.toContain('Unproven child answer');
-  });
-
-  it('reports conflicting copied text, role, and status instead of silently deduplicating', async () => {
-    const executionId = '0888bd0888bd' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888bd0888bd' as StreamTabId;
-    const conflicting = 'zOrchestrator@new#0888bd0888bd' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: conflicting },
-    ]);
-
-    const copiedText = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Canonical answer' }),
-      id: 'copied-text',
-    };
-    const copiedRole = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, {
-        text: 'Role-sensitive prompt',
-        data: { archivedRole: 'user' },
-      }),
-      id: 'copied-role',
-    };
-    const copiedStatus = {
-      ...logRow(MESSAGE_TYPES.TOOL_USE, {
-        data: {
-          toolName: 'read_file',
-          input: { path: 'proof.tex' },
-          output: 'Proof text',
-          status: 'completed',
-        },
-      }),
-      id: 'copied-status',
-    };
-    const copiedTimestamp = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Timed answer' }),
-      id: 'copied-timestamp',
-      timestamp: 1000,
-    };
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [copiedText, copiedRole, copiedStatus, copiedTimestamp]],
-        [
-          conflicting,
-          [
-            { ...copiedText, text: 'Conflicting answer' },
-            { ...copiedRole, data: { archivedRole: 'system' } },
-            {
-              ...copiedStatus,
-              data: {
-                toolName: 'read_file',
-                input: { path: 'proof.tex' },
-                output: 'Proof text',
-                status: 'failed',
-              },
-            },
-            { ...copiedTimestamp, timestamp: 2000 },
-          ],
-        ],
-      ]),
-    );
-
-    const result = await readCompletedRunConversation(executionId);
-    expect(result).toEqual({
-      source: 'none',
-      conversation: null,
-      candidateStreamIds: [canonical, conflicting],
-      conflicts: [
-        { rowId: 'copied-role', streamIds: [canonical, conflicting] },
-        { rowId: 'copied-status', streamIds: [canonical, conflicting] },
-        { rowId: 'copied-text', streamIds: [canonical, conflicting] },
-        { rowId: 'copied-timestamp', streamIds: [canonical, conflicting] },
-      ],
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.output).toContain(
-      'Conflicting row IDs: copied-role, copied-status, copied-text, copied-timestamp',
-    );
-  });
-
-  it('merges matched roots, excluding children and only deduplicating row identity', async () => {
-    const executionId = '0888bb0888bb' as ExecutionId;
-    const firstRoot = 'aOrchestrator@old#0888bb0888bb' as StreamTabId;
-    const secondRoot = 'bOrchestrator@new#0888bb0888bb' as StreamTabId;
-    const child = 'child@tool#0888bb0888bb' as StreamTabId;
-
-    await seedStreams(executionId, [
-      { streamId: firstRoot },
-      { streamId: secondRoot },
-      { streamId: child, agent: 'bash', parent: firstRoot },
-    ]);
-
-    const firstQuestion = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First question' }),
-      timestamp: 2000,
-    };
-    const firstAnswer = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'First answer' }),
-      // A clock adjustment must not move this response before its prompt.
-      timestamp: 1000,
-    };
-    const secondQuestion = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Second question' }),
-      timestamp: 3000,
-    };
-    const secondAnswer = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-        // Equal text with a distinct row identity is a real second message.
-        text: 'First answer',
-      }),
-      timestamp: 4000,
-    };
-    const childMessage = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'Child implementation detail',
-    });
-
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, firstRoot, firstQuestion);
-    appendTranscriptEntry(logs, firstRoot, firstAnswer);
-    // The resumed sidecar copied the last settled row before appending turn 2.
-    appendTranscriptEntry(logs, secondRoot, firstAnswer);
-    appendTranscriptEntry(logs, secondRoot, secondQuestion);
-    appendTranscriptEntry(logs, secondRoot, secondAnswer);
-    appendTranscriptEntry(logs, child, childMessage);
-    await logs.flush();
-
-    const result = await readCompletedRunConversation(executionId);
-    expect(result).toEqual({
-      source: 'streamLog',
-      streamIds: [firstRoot, secondRoot],
-      associatedStreamIds: [child],
-      conversation: [
-        { role: 'user', content: 'First question' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'First answer' }],
-        },
-        { role: 'user', content: 'Second question' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'First answer' }],
-        },
-      ],
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.output).toContain(
-      `Merged streams: ${firstRoot}, ${secondRoot}`,
-    );
-    expect(endpoint.output).not.toContain('Child implementation detail');
-    expect(endpoint.output?.split('First answer')).toHaveLength(3);
-  });
-
-  it('retains copied rows as ordering constraints across roots', async () => {
-    const executionId = '0888bc0888bc' as ExecutionId;
-    const firstRoot = 'orchestrator@old#0888bc0888bc' as StreamTabId;
-    const resumedRoot = 'orchestrator@new#0888bc0888bc' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: firstRoot },
-      { streamId: resumedRoot },
-    ]);
-
-    const copiedQuestion = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Copied question' }),
-      timestamp: 2000,
-    };
-    const answer = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Later answer' }),
-      // The copied prompt still constrains this row despite the earlier clock.
-      timestamp: 1000,
-    };
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, firstRoot, copiedQuestion);
-    appendTranscriptEntry(logs, resumedRoot, copiedQuestion);
-    appendTranscriptEntry(logs, resumedRoot, answer);
-    await logs.flush();
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'streamLog',
-      streamIds: [resumedRoot, firstRoot],
-      conversation: [
-        { role: 'user', content: 'Copied question' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Later answer' }],
-        },
-      ],
-    });
-  });
-
-  it('does not choose an overlap component when another exact candidate is disconnected', async () => {
-    const executionId = '0888be0888be' as ExecutionId;
-    const streams = ['a', 'b', 'c', 'd', 'z'].map(
-      (name) => `orchestrator@${name}#0888be0888be` as StreamTabId,
-    );
-    const [streamA, streamB, streamC, streamD, disconnected] = streams;
-    await seedStreams(
-      executionId,
-      streams.map((streamId) => ({ streamId })),
-    );
-
-    const rows = ['A', 'B', 'C', 'D', 'E'].map((text) => ({
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text }),
-      id: `transitive-${text.toLowerCase()}`,
-    }));
-    const disconnectedRow = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Disconnected' }),
-      timestamp: 1,
-    };
-    await persistRows(
-      executionId,
-      new Map([
-        [streamA, [rows[0], rows[1]]],
-        [streamB, [rows[1], rows[2]]],
-        [streamC, [rows[2], rows[3]]],
-        [streamD, [rows[3], rows[4]]],
-        [disconnected, [disconnectedRow]],
-      ]),
-    );
-
-    const archived = await readCompletedRunConversation(executionId);
-    expect(archived).toEqual({
-      source: 'none',
-      candidateStreamIds: streams,
-      conversation: null,
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 200,
-      limit: 2,
-    });
-    expect(endpoint.output).toContain(
-      `Ambiguous candidate streams: ${streams.join(', ')}`,
-    );
-    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
-    expect(endpoint.output).not.toContain('Merged streams:');
-    expect(endpoint.output).not.toContain('Disconnected');
-  });
-
-  it('reports overlap conflicts without selecting an unproven component', async () => {
-    const executionId = '0888b60888b6' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b60888b6' as StreamTabId;
-    const continuation = 'bOrchestrator@new#0888b60888b6' as StreamTabId;
-    const conflicting = 'cOrchestrator@other#0888b60888b6' as StreamTabId;
-    await seedStreams(
-      executionId,
-      [canonical, continuation, conflicting].map((streamId) => ({ streamId })),
-    );
-
-    const prefix = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Prefix' });
-    const copied = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared answer' }),
-      id: 'shared-conflict-row',
-    };
-    const continued = logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'Valid continuation',
-    });
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [prefix, copied]],
-        [continuation, [copied, continued]],
-        [conflicting, [{ ...copied, text: 'Incompatible copy' }]],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      conversation: null,
-      candidateStreamIds: [canonical, continuation, conflicting],
-      conflicts: [
-        {
-          rowId: 'shared-conflict-row',
-          streamIds: [canonical, continuation, conflicting],
-        },
-      ],
-    });
-  });
-
-  it('ignores divergent diagnostic rows when conversation chronology has one continuation', async () => {
-    const executionId = '0888b80888b8' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b80888b8' as StreamTabId;
-    const continuation = 'bOrchestrator@new#0888b80888b8' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: continuation },
-    ]);
-
-    const shared = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
-      id: 'diagnostic-shared-prompt',
-    };
-    const answer = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'Unique continuation',
-    });
-    await persistRows(
-      executionId,
-      new Map([
-        [
-          canonical,
-          [
-            shared,
-            logRow(MESSAGE_TYPES.STATISTICS, {
-              text: 'Usage - input: 10, output: 5',
-            }),
-          ],
-        ],
-        [
-          continuation,
-          [
-            shared,
-            logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Resuming...' }),
-            answer,
-          ],
-        ],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'streamLog',
-      streamIds: [canonical, continuation],
-      conversation: [
-        { role: 'user', content: 'Shared prompt' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Unique continuation' }],
-        },
-      ],
-    });
-  });
-
-  it('ignores divergent diagnostics that reconverge around one conversation chronology across pages', async () => {
-    const executionId = '0888b90888b9' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b90888b9' as StreamTabId;
-    const continuation = 'bOrchestrator@new#0888b90888b9' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: continuation },
-    ]);
-
-    const prompt = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Reconverged prompt' }),
-      id: 'reconverged-prompt',
-    };
-    const answer = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Reconverged answer' }),
-      id: 'reconverged-answer',
-    };
-    const followUp = logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'Later unique turn',
-    });
-    await persistRows(
-      executionId,
-      new Map([
-        [
-          canonical,
-          [
-            prompt,
-            logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage branch A' }),
-            answer,
-          ],
-        ],
-        [
-          continuation,
-          [
-            prompt,
-            logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Branch B' }),
-            answer,
-            followUp,
-          ],
-        ],
-      ]),
-    );
-
-    const archived = await readCompletedRunConversation(executionId);
-    expect(archived).toEqual({
-      source: 'streamLog',
-      streamIds: [canonical, continuation],
-      conversation: [
-        { role: 'user', content: 'Reconverged prompt' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Reconverged answer' }],
-        },
-        { role: 'user', content: 'Later unique turn' },
-      ],
-    });
-
-    const firstPage = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 0,
-      limit: 2,
-    });
-    const secondPage = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 2,
-      limit: 1,
-    });
-    for (const page of [firstPage, secondPage]) {
-      expect(page.output).toContain(
-        `Merged streams: ${canonical}, ${continuation}`,
-      );
-      expect(page.output).not.toContain('Complete chronology established: no');
-      expect(page.output).not.toContain('Ordering cycle detected: yes');
-      expect(page.output).not.toContain('Usage branch A');
-      expect(page.output).not.toContain('Branch B');
-    }
-    expect(firstPage.output).toContain('Returned message interval: [0, 2)');
-    expect(firstPage.output).toContain('Next offset: 2');
-    expect(secondPage.output).toContain('Returned message interval: [2, 3)');
-    expect(secondPage.output).toContain('Next offset: none');
-  });
-
-  it('reports divergent diagnostic payloads without vetoing a unique conversation merge', async () => {
-    const executionId = '0888b00888b0' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b00888b0' as StreamTabId;
-    const continuation = 'bOrchestrator@new#0888b00888b0' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: continuation },
-    ]);
-
-    const prompt = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Payload prompt' }),
-      id: 'payload-prompt',
-    };
-    const answer = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Payload answer' }),
-      id: 'payload-answer',
-    };
-    const statistics = {
-      ...logRow(MESSAGE_TYPES.STATISTICS, {
-        text: 'Usage branch A',
-        data: { inputTokens: 10 },
-      }),
-      id: 'divergent-statistics',
-    };
-    const followUp = logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'Payload continuation',
-    });
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [prompt, statistics, answer]],
-        [
-          continuation,
-          [
-            prompt,
-            {
-              ...statistics,
-              text: 'Usage branch B',
-              data: { inputTokens: 20 },
-            },
-            answer,
-            followUp,
-          ],
-        ],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'streamLog',
-      streamIds: [canonical, continuation],
-      conflicts: [
-        {
-          rowId: 'divergent-statistics',
-          streamIds: [canonical, continuation],
-        },
-      ],
-      conversation: [
-        { role: 'user', content: 'Payload prompt' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Payload answer' }],
-        },
-        { role: 'user', content: 'Payload continuation' },
-      ],
-    });
-  });
-
-  it('keeps incompatible copied diagnostics distinct while ordering conversation rows', async () => {
-    const executionId = '0888b20888b2' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b20888b2' as StreamTabId;
-    const continuation = 'bOrchestrator@new#0888b20888b2' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: continuation },
-    ]);
-
-    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First turn' });
-    const shared = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Shared turn' }),
-      id: 'shared-conversation-row',
-    };
-    const diagnostic = {
-      ...logRow(MESSAGE_TYPES.STATISTICS, {
-        text: 'Usage branch A',
-        data: { inputTokens: 10 },
-      }),
-      id: 'incompatible-diagnostic-row',
-    };
-    const last = logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Last turn' });
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [first, diagnostic, shared]],
-        [
-          continuation,
-          [
-            shared,
-            {
-              ...diagnostic,
-              text: 'Usage branch B',
-              data: { inputTokens: 20 },
-            },
-            last,
-          ],
-        ],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'streamLog',
-      streamIds: [canonical, continuation],
-      conflicts: [
-        {
-          rowId: 'incompatible-diagnostic-row',
-          streamIds: [canonical, continuation],
-        },
-      ],
-      conversation: [
-        { role: 'user', content: 'First turn' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Shared turn' }],
-        },
-        { role: 'user', content: 'Last turn' },
-      ],
-    });
-  });
-
-  it('recognizes a connected diagnostic-only archive as an existing execution', async () => {
-    const executionId = '0888b30888b3' as ExecutionId;
-    const first = 'aOrchestrator@old#0888b30888b3' as StreamTabId;
-    const second = 'bOrchestrator@new#0888b30888b3' as StreamTabId;
-    await seedStreams(executionId, [{ streamId: first }, { streamId: second }]);
-
-    const sharedDiagnostic = {
-      ...logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' }),
-      id: 'shared-diagnostic-only-row',
-    };
-    await persistRows(
-      executionId,
-      new Map([
-        [first, [sharedDiagnostic]],
-        [second, [sharedDiagnostic]],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      streamIds: [first, second],
-      conversation: null,
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain(`Merged streams: ${first}, ${second}`);
-    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
-  });
-
-  it('recognizes a sole diagnostic-only root as an existing execution', async () => {
-    const executionId = '0888c20888c2' as ExecutionId;
-    const streamId = 'orchestrator@model#0888c20888c2' as StreamTabId;
-    await seedStreams(executionId, [{ streamId }]);
-    await persistRows(
-      executionId,
-      new Map([
-        [
-          streamId,
-          [logRow(MESSAGE_TYPES.STATISTICS, { text: 'Usage recorded' })],
-        ],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      streamId,
-      conversation: null,
-    });
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain(`Stream: ${streamId}`);
-  });
-
-  it('uses proven child associations as existence evidence without reading them', async () => {
-    const executionId = '0888b40888b4' as ExecutionId;
-    const parent = 'orchestrator@model#parent' as StreamTabId;
-    const firstChild = 'bash@tool#0888b40888b4' as StreamTabId;
-    const secondChild = 'codex@tool#0888b40888b4' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: firstChild, agent: 'bash', parent },
-      { streamId: secondChild, agent: 'codex', parent },
-    ]);
-    await persistRows(
-      executionId,
-      new Map([
-        [
-          firstChild,
-          [logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First child row' })],
-        ],
-        [
-          secondChild,
-          [
-            logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-              text: 'Second child row',
-            }),
-          ],
-        ],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      associatedStreamIds: [firstChild, secondChild],
-      conversation: null,
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain(
-      `Associated streams: ${firstChild}, ${secondChild}`,
-    );
-    expect(endpoint.output).toContain('Conversation (0 messages)');
-    expect(endpoint.output).not.toContain('First child row');
-    expect(endpoint.output).not.toContain('Second child row');
-    expect(endpoint.output).not.toContain('Ambiguous candidate streams:');
-    expect(endpoint.output).not.toContain('Merged streams:');
-  });
-
-  it('contracts a copied diagnostic bridge while preserving conversation order', async () => {
-    const executionId = '0888b10888b1' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b10888b1' as StreamTabId;
-    const continuation = 'bOrchestrator@new#0888b10888b1' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: continuation },
-    ]);
-
-    const first = logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'Before diagnostic bridge',
-    });
-    const bridge = {
-      ...logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Copied status' }),
-      id: 'copied-diagnostic-bridge',
-    };
-    const second = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'After diagnostic bridge',
-    });
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [first, bridge]],
-        [continuation, [bridge, second]],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'streamLog',
-      streamIds: [canonical, continuation],
-      conversation: [
-        { role: 'user', content: 'Before diagnostic bridge' },
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'After diagnostic bridge' }],
-        },
-      ],
-    });
-  });
-
-  it('reports acyclic ambiguity without selecting an unproven archive', async () => {
-    const executionId = '0888b70888b7' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888b70888b7' as StreamTabId;
-    const ambiguous = 'bOrchestrator@new#0888b70888b7' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: ambiguous },
-    ]);
-
-    const shared = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'Shared prompt' }),
-      id: 'ambiguous-shared',
-    };
-    const canonicalSuccessor = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'Canonical branch',
-    });
-    const ambiguousSuccessor = logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'Ambiguous branch',
-    });
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [shared, canonicalSuccessor]],
-        [ambiguous, [shared, ambiguousSuccessor]],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      candidateStreamIds: [canonical, ambiguous],
-      hasOrderingAmbiguity: true,
-      conversation: null,
-    });
-
-    const firstPage = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 0,
-      limit: 1,
-    });
-    const secondPage = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-      offset: 1,
-      limit: 1,
-    });
-    for (const page of [firstPage, secondPage]) {
-      expect(page.output).toContain('Complete chronology established: no');
-      expect(page.output).toContain(
-        `Ambiguous candidate streams: ${canonical}, ${ambiguous}`,
-      );
-      expect(page.output).not.toContain('Canonical branch');
-      expect(page.output).not.toContain('Ambiguous branch');
-      expect(page.output).toContain('Returned message interval: [0, 0)');
-    }
-  });
-
-  it('reports copied-row cycles without selecting an unproven archive', async () => {
-    const executionId = '0888bf0888bf' as ExecutionId;
-    const canonical = 'aOrchestrator@old#0888bf0888bf' as StreamTabId;
-    const contradictory = 'bOrchestrator@new#0888bf0888bf' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: canonical },
-      { streamId: contradictory },
-    ]);
-
-    const first = {
-      ...logRow(MESSAGE_TYPES.USER_MESSAGE, { text: 'First' }),
-      id: 'cycle-first',
-    };
-    const second = {
-      ...logRow(MESSAGE_TYPES.MODEL_RESPONSE, { text: 'Second' }),
-      id: 'cycle-second',
-    };
-    await persistRows(
-      executionId,
-      new Map([
-        [canonical, [first, second]],
-        [contradictory, [second, first]],
-      ]),
-    );
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      source: 'none',
-      candidateStreamIds: [canonical, contradictory],
-      hasOrderingCycle: true,
-      conversation: null,
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.output).toContain('Ordering cycle detected: yes');
-    expect(endpoint.output).not.toContain('Merged streams:');
-  });
-
-  it('preserves a sole diagnostic-only exact root as execution evidence', async () => {
+  it('preserves a diagnostic-only stamped stream as execution evidence without a conversation', async () => {
     const executionId = '0999cb0999cb' as ExecutionId;
     const root = 'orchestrator@model#0999cb0999cb' as StreamTabId;
     await seedStreams(executionId, [{ streamId: root }]);
+    await stampStreamId(executionId, root);
 
     const logs = await StreamLogStore.open();
     appendTranscriptEntry(
@@ -1671,11 +805,13 @@ describe('completedRunArchive facade', () => {
     );
     await logs.flush();
 
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
+    const result = await readCompletedRunConversation(executionId);
+    expect(result).toEqual({
       conversation: null,
       source: 'none',
       streamId: root,
     });
+    expect(hasCompletedRunConversationEvidence(result)).toBe(true);
 
     const endpoint = await new ExecutionsTool().call({
       path: `/executions/${executionId}/conversation`,
@@ -1685,7 +821,7 @@ describe('completedRunArchive facade', () => {
     expect(endpoint.output).toContain(`Stream: ${root}`);
   });
 
-  it('never substitutes child conversation rows for empty confirmed roots', async () => {
+  it('never substitutes another stream for an empty stamped stream', async () => {
     const executionId = '0999cc0999cc' as ExecutionId;
     const root = 'orchestrator@model#0999cc0999cc' as StreamTabId;
     const child = 'child@tool#0999cc0999cc' as StreamTabId;
@@ -1693,6 +829,7 @@ describe('completedRunArchive facade', () => {
       { streamId: root },
       { streamId: child, agent: 'bash', parent: root },
     ]);
+    await stampStreamId(executionId, root);
 
     const logs = await StreamLogStore.open();
     appendTranscriptEntry(
@@ -1716,43 +853,17 @@ describe('completedRunArchive facade', () => {
       conversation: null,
       source: 'none',
       streamId: root,
-      associatedStreamIds: [child],
     });
   });
 
-  it('retains existence evidence when only several proven child streams remain', async () => {
-    const executionId = '0999ce0999ce' as ExecutionId;
-    const parent = 'orchestrator@model#parent' as StreamTabId;
-    const firstChild = 'bash@tool#0999ce0999ce' as StreamTabId;
-    const secondChild = 'codex@tool#0999ce0999ce' as StreamTabId;
-    await seedStreams(executionId, [
-      { streamId: firstChild, agent: 'bash', parent },
-      { streamId: secondChild, agent: 'codex', parent },
-    ]);
-
-    await expect(readCompletedRunConversation(executionId)).resolves.toEqual({
-      conversation: null,
-      source: 'none',
-      associatedStreamIds: [firstChild, secondChild],
-    });
-
-    const endpoint = await new ExecutionsTool().call({
-      path: `/executions/${executionId}/conversation`,
-    });
-    expect(endpoint.status).toBe('executed');
-    expect(endpoint.output).toContain(
-      `Associated streams: ${firstChild}, ${secondChild}`,
-    );
-    expect(endpoint.output).toContain('Returned message interval: [0, 0)');
-  });
-
-  it('reads a historical execution whose canonical stream is delegated', async () => {
+  it('reads a historical execution whose stamped stream uses the tool-format child id', async () => {
     const executionId = '0999cd0999cd' as ExecutionId;
     const streamId = 'child@tool#0999cd0999cd' as StreamTabId;
     const parentStreamId = 'orchestrator@model#parent' as StreamTabId;
     await seedStreams(executionId, [
       { streamId, agent: 'bash', parent: parentStreamId },
     ]);
+    await stampStreamId(executionId, streamId);
 
     const logs = await StreamLogStore.open();
     appendTranscriptEntry(

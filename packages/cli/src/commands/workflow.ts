@@ -1,7 +1,7 @@
 import { buildCliWorkflowResultMeta, getExecutionStore } from '@agent/storage';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -31,7 +31,10 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliConfig } from '../runtime/runExecution';
+import {
+  executeCliConfig,
+  type CliConfigExecuteOptions,
+} from '../runtime/runExecution';
 import { runOutcomeExitCode } from '../runtime/terminalStatus';
 import {
   hasMixedStdinWorkflowInputSpecs,
@@ -108,83 +111,108 @@ export async function runWorkflowAgent(
         agentCategory: AgentCategory.Workflow,
       };
 
-      let workflowResult: CliWorkflowRunResult | undefined;
-      let workflowOutputError: unknown;
-      const execution = await executeCliConfig(config, runContext, {
-        enforceCategory: true,
+      return executeCliWorkflowConfig(config, runContext, {
         registerExecution: true,
-        expectedCategory: AgentCategory.Workflow,
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
-        openWorkflowOutput: async (result) => {
-          try {
-            workflowResult = await resolveWorkflowOutput(
-              init.output,
-              init.outputDir,
-              result,
-              runContext,
-              {
-                expectedOutputFiles: init.outputDir
-                  ? expectedOutputFilesForOutputDir(agent, inputFiles)
-                  : undefined,
-              },
-            );
-            await persistWorkflowResultMeta(
-              result.executionId,
-              buildCliWorkflowResultMeta(result, {
-                outcome: result.outcome,
-                copiedOutput: workflowResult.copiedOutput,
-                copiedOutputs: workflowResult.copiedOutputs,
-              }),
-            );
-          } catch (error) {
-            workflowOutputError = error;
-            await persistWorkflowResultMeta(
-              result.executionId,
-              buildCliWorkflowResultMeta(result, {
-                outcome:
-                  result.outcome === RUN_OUTCOME.CANCELLED
-                    ? result.outcome
-                    : RUN_OUTCOME.FAILED,
-              }),
-            );
-            if (result.outcome !== RUN_OUTCOME.CANCELLED) {
-              await finalizeCliExecution(
-                result.executionId,
-                EXECUTION_STATUS.ERROR,
-                'delete',
-                (finalizationError) =>
-                  writeTextStderr(
-                    `Warning: ${toErrorMessage(finalizationError)}`,
-                  ),
-              );
-            }
-          }
-        },
+        output: init.output,
+        outputDir: init.outputDir,
+        expectedOutputFiles: init.outputDir
+          ? expectedOutputFilesForOutputDir(agent, inputFiles)
+          : undefined,
       });
-      if (!execution.ok) return execution.exitCode;
-
-      const { result } = execution;
-      if (workflowOutputError !== undefined) {
-        writeErrorStderr(workflowOutputError);
-        return result.outcome === RUN_OUTCOME.CANCELLED
-          ? CliExitCode.Interrupted
-          : CliExitCode.AgentError;
-      }
-      if (!workflowResult) {
-        throw new Error(
-          'Workflow output was not finalized before lease release.',
-        );
-      }
-
-      emitCliResult(runContext, {
-        json: workflowResult,
-        ndjson: { kind: 'result', result: workflowResult },
-        text: formatWorkflowTextResult(workflowResult),
-      });
-
-      return runOutcomeExitCode(result.outcome, runContext);
     },
   );
+}
+
+/**
+ * Execute a workflow config headless and surface its outputs: run through the
+ * shared CLI execution skeleton, copy `--output`/`--output-dir` artifacts,
+ * persist the result metadata, emit the result in the requested format, and
+ * map the outcome to an exit code. Shared by `texra run` (fresh runs) and
+ * `texra resume` (workflow continuation under the persisted execution id).
+ */
+export async function executeCliWorkflowConfig(
+  config: AgentConfigPayload,
+  runContext: CliContext,
+  options: {
+    readonly registerExecution?: boolean;
+    readonly categoryMismatchMessage: string;
+    readonly output?: string;
+    readonly outputDir?: string;
+    readonly expectedOutputFiles?: readonly string[];
+    readonly executionId?: ExecutionId;
+    readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
+  },
+): Promise<number> {
+  let workflowResult: CliWorkflowRunResult | undefined;
+  let workflowOutputError: unknown;
+  const execution = await executeCliConfig(config, runContext, {
+    enforceCategory: true,
+    registerExecution: options.registerExecution,
+    executionId: options.executionId,
+    modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    expectedCategory: AgentCategory.Workflow,
+    categoryMismatchMessage: options.categoryMismatchMessage,
+    openWorkflowOutput: async (result) => {
+      try {
+        workflowResult = await resolveWorkflowOutput(
+          options.output,
+          options.outputDir,
+          result,
+          runContext,
+          { expectedOutputFiles: options.expectedOutputFiles },
+        );
+        await persistWorkflowResultMeta(
+          result.executionId,
+          buildCliWorkflowResultMeta(result, {
+            outcome: result.outcome,
+            copiedOutput: workflowResult.copiedOutput,
+            copiedOutputs: workflowResult.copiedOutputs,
+          }),
+        );
+      } catch (error) {
+        workflowOutputError = error;
+        await persistWorkflowResultMeta(
+          result.executionId,
+          buildCliWorkflowResultMeta(result, {
+            outcome:
+              result.outcome === RUN_OUTCOME.CANCELLED
+                ? result.outcome
+                : RUN_OUTCOME.FAILED,
+          }),
+        );
+        if (result.outcome !== RUN_OUTCOME.CANCELLED) {
+          await finalizeCliExecution(
+            result.executionId,
+            RUN_OUTCOME.FAILED,
+            'delete',
+            (finalizationError) =>
+              writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
+          );
+        }
+      }
+    },
+  });
+  if (!execution.ok) return execution.exitCode;
+
+  const { result } = execution;
+  if (workflowOutputError !== undefined) {
+    writeErrorStderr(workflowOutputError);
+    return result.outcome === RUN_OUTCOME.CANCELLED
+      ? CliExitCode.Interrupted
+      : CliExitCode.AgentError;
+  }
+  if (!workflowResult) {
+    throw new Error('Workflow output was not finalized before lease release.');
+  }
+
+  emitCliResult(runContext, {
+    json: workflowResult,
+    ndjson: { kind: 'result', result: workflowResult },
+    text: formatWorkflowTextResult(workflowResult),
+  });
+
+  return runOutcomeExitCode(result.outcome, runContext);
 }
 
 async function persistWorkflowResultMeta(

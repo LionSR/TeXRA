@@ -14,12 +14,12 @@ import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
 import {
   EXECUTION_STATUS,
+  RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
-  DELEGATION_AVAILABILITY_CATEGORY,
   DELEGATION_TOOL_CATEGORY,
   DELEGATION_TOOLS,
 } from '@shared/constants/delegationTools';
@@ -200,9 +200,6 @@ describe('WorkflowScriptTool', () => {
   it('is registered and classified without becoming a proposal tool', () => {
     expect(getDefaultToolRegistry().has('delegate_multi_agents')).toBe(true);
     expect(DELEGATION_TOOLS.has('delegate_multi_agents')).toBe(true);
-    expect(DELEGATION_AVAILABILITY_CATEGORY.delegate_multi_agents).toBe(
-      'workflow',
-    );
     expect(DELEGATION_TOOL_CATEGORY.delegate_multi_agents).toBeUndefined();
   });
 
@@ -328,14 +325,17 @@ describe('WorkflowScriptTool', () => {
     // still works (#8712).
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionId,
-      expect.objectContaining({
-        agentCategory: 'workflow',
-        agent: 'correct',
-        agentSource: 'builtInWorkflow',
-      }),
+      // The durable record is honest: workflow name, launch summary, and the
+      // real delegation model — no fabricated agent identity or category.
+      {
+        name: 'tool-test',
+        instruction: "Workflow script 'tool-test'",
+        model: 'parent-model',
+      },
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionId}`,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -345,8 +345,7 @@ describe('WorkflowScriptTool', () => {
       streamId,
       expect.objectContaining({
         streamPrefix: 'workflow-script',
-        streamCategory: 'workflow',
-        agentName: 'tool-test',
+        run: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
       }),
     );
     // The run's own stream inherits the orchestrator's approval ancestry.
@@ -435,6 +434,10 @@ describe('WorkflowScriptTool', () => {
       'edited-tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('edited-tool-test')}`,
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'edited-tool-test',
+        },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -521,7 +524,7 @@ describe('WorkflowScriptTool', () => {
       `<workflow-script-result>solved</workflow-script-result>\n\n${scriptReference}`,
     );
     vi.spyOn(store, 'readMeta').mockResolvedValue({
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
     } as never);
 
     const result = await callTool({ stopAfterCycle: true });
@@ -548,7 +551,7 @@ describe('WorkflowScriptTool', () => {
       `<workflow-script-error>broken</workflow-script-error>\n\n${scriptReference}`,
     );
     vi.spyOn(store, 'readMeta').mockResolvedValue({
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
     } as never);
 
     const result = await callTool({ stopAfterCycle: true });
@@ -572,7 +575,7 @@ describe('WorkflowScriptTool', () => {
     const store = getExecutionStore(runExecutionId);
     await store.writeReport('stale success from the prior attempt');
     vi.spyOn(store, 'readMeta').mockResolvedValue({
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
     } as never);
 
     // The default resolved completion writes no report, matching an
@@ -620,6 +623,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -645,7 +649,7 @@ describe('WorkflowScriptTool', () => {
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('validates and persists files bound to the workflow run', async () => {
+  it('validates files and binds them to the live workflow run stream', async () => {
     const files = {
       inputFiles: ['paper.tex'],
       contextFiles: ['references.bib'],
@@ -654,19 +658,18 @@ describe('WorkflowScriptTool', () => {
     const result = await callTool({ files });
 
     expect(result.status).toBe('executed');
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    // The durable record stays honest (no file lists); the binding rides the
+    // checkpoint and the live stream config the agent steps consume.
+    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
       runExecutionIdFor('tool-test'),
+      expect.anything(),
       expect.objectContaining({
-        inputFiles: ['paper.tex'],
-        contextFiles: ['references.bib'],
-        mediaFiles: ['figure.pdf'],
+        config: expect.objectContaining({
+          inputFiles: ['paper.tex'],
+          contextFiles: ['references.bib'],
+          mediaFiles: ['figure.pdf'],
+        }),
       }),
-      'tool-test',
-      {
-        streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
     );
   });
 
@@ -716,19 +719,16 @@ describe('WorkflowScriptTool', () => {
     const result = await callTool({ script: resumeScript });
 
     expect(result.status).toBe('executed');
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
       runExecutionIdFor('resume'),
+      expect.anything(),
       expect.objectContaining({
-        inputFiles: ['paper.tex'],
-        contextFiles: ['references.bib'],
-        mediaFiles: ['figure.pdf'],
+        config: expect.objectContaining({
+          inputFiles: ['paper.tex'],
+          contextFiles: ['references.bib'],
+          mediaFiles: ['figure.pdf'],
+        }),
       }),
-      'resume',
-      {
-        streamId: `workflow-script#${runExecutionIdFor('resume')}`,
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
     );
   });
 

@@ -9,7 +9,7 @@ import type {
   AgentProposal,
   ModelOptionData,
 } from '@shared/schemas';
-import type { StreamTabId } from '@shared/schemas';
+import type { RunIdentity, StreamTabId } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
@@ -98,7 +98,8 @@ export interface ProgressViewBypassCommandOptions {
    * window session; the extension omits it so the default session applies.
    */
   session?: SessionHandle;
-  /** Confirms the new auto-approval state to the user after a toggle. */
+  /** Host info-notification port: confirms the new auto-approval state after
+   *  a toggle, and reports refused resume/re-run requests. */
   showInfo(message: string): void | PromiseLike<unknown>;
 }
 
@@ -319,6 +320,7 @@ export interface ProgressViewSecondTierActions {
   readonly session: SessionHandle;
   /** Look up a stream's run config from persisted snapshots. */
   readonly getRunConfig: (stream: StreamTabId) => AgentConfig | undefined;
+  readonly getRunIdentity: (stream: StreamTabId) => RunIdentity | undefined;
   /**
    * Restore the run config of a completed run into the main view (the extension
    * routes through `texra.restoreState`; the desktop calls
@@ -454,6 +456,18 @@ export function createProgressViewSecondTierHandlers(
 
     // ── State restore ──
     [CMD.RESTORE_STATE]: async (data) => {
+      // Restoring the launcher form from a non-agent stream would push a
+      // synthetic/borrowed config into it — native agent runs only. The
+      // toolbar hides the button for such streams; a refusal that still
+      // arrives (stale renderer state, direct IPC) must say why.
+      const identity = deps.getRunIdentity(data.stream);
+      if (identity?.kind !== 'agent' || identity.tool !== undefined) {
+        await deps.host.showInfo(
+          "Only TeXRA agent runs can be restored from here; this stream's " +
+            'run is not one.',
+        );
+        return;
+      }
       const config = deps.getRunConfig(data.stream);
       if (!config) return;
       await deps.restoreRunConfig(config);

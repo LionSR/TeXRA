@@ -108,6 +108,7 @@ import {
   type TraceDocument,
 } from '@transcript';
 import {
+  cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
@@ -202,11 +203,12 @@ describe('CLI history runtime', () => {
   it('formats history list rows with the stable tab-separated text shape', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'a1' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
-        terminalStatus: 'completed',
+        record: config,
+        outcome: 'completed',
       },
     ]);
 
@@ -227,6 +229,57 @@ describe('CLI history runtime', () => {
     expect(mocks.readCliToolUseResumeDataForListing).not.toHaveBeenCalled();
   });
 
+  it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
+    // Byte parity for the public stream (proposal gate G): terminal outcomes
+    // emit as ExecutionStatus ('interrupted'/'error'/'completed');
+    // 'resumable'/'unknown' pass through. Internal entries keep RunOutcome.
+    mocks.listExecutions.mockResolvedValue(
+      (
+        [
+          ['b1', 'cancelled'],
+          ['b2', 'failed'],
+          ['b3', 'completed'],
+          ['b4', undefined],
+        ] as const
+      ).map(([id, outcome]) => ({
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
+        id: id as ExecutionId,
+        timestamp: '2026-05-18T08:00:00.000Z',
+        record: config,
+        ...(outcome ? { outcome } : {}),
+      })),
+    );
+
+    const entries = await listCliHistoryEntries();
+    expect(entries.map((entry) => entry.status)).toEqual([
+      'cancelled',
+      'failed',
+      'completed',
+      'unknown',
+    ]);
+    expect(
+      cliHistoryNdjsonRecords(entries, '2026-05-18T09:00:00.000Z').map(
+        (record) => (record as { entry: { status: string } }).entry.status,
+      ),
+    ).toEqual(['interrupted', 'error', 'completed', 'unknown']);
+  });
+
+  it('projects the history-detail NDJSON status onto the frozen vocabulary', async () => {
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      identity: { kind: 'agent', agent: 'correct' },
+      outcome: 'cancelled',
+    });
+
+    const details = await readCliHistoryDetails('c1' as ExecutionId);
+    expect(details?.status).toBe('cancelled');
+    expect(cliHistoryDetailNdjsonRecord(details!)).toMatchObject({
+      kind: 'history-detail',
+      detail: { id: 'c1', status: 'interrupted' },
+    });
+  });
+
   it('hides internal process-bookkeeping and configless entries from the history list', async () => {
     const processConfig = AgentConfigSchema.parse({
       ...config,
@@ -237,24 +290,26 @@ describe('CLI history runtime', () => {
     });
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'visible' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
-        terminalStatus: 'completed',
+        record: config,
+        outcome: 'completed',
       },
       {
-        kind: 'process',
+        kind: 'run',
+        identity: { kind: 'process', tool: 'bash' },
         id: 'bash-process' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
-        agentConfig: processConfig,
-        terminalStatus: 'completed',
+        record: processConfig,
+        outcome: 'completed',
       },
       {
         kind: 'incomplete',
         id: 'configless' as ExecutionId,
         timestamp: '2026-05-18T08:02:00.000Z',
-        terminalStatus: 'completed',
+        outcome: 'completed',
       },
     ]);
 
@@ -266,18 +321,20 @@ describe('CLI history runtime', () => {
   it('hides agent-spawned child runs from the history list', async () => {
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'root' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
-        terminalStatus: 'completed',
+        record: config,
+        outcome: 'completed',
       },
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
         id: 'delegated-child' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
-        agentConfig: config,
-        terminalStatus: 'completed',
+        record: config,
+        outcome: 'completed',
         parentExecutionId: 'root' as ExecutionId,
       },
     ]);
@@ -298,13 +355,21 @@ describe('CLI history runtime', () => {
     });
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'engineer' },
         id: 'team1' as ExecutionId,
         timestamp: '2026-05-18T10:00:00.000Z',
-        agentConfig: teamConfig,
-        terminalStatus: 'resumable',
+        record: teamConfig,
+        outcome: 'cancelled',
       },
     ]);
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
+      agentConfig: teamConfig,
+    });
 
     const entries = await listCliHistoryEntries();
 
@@ -325,14 +390,22 @@ describe('CLI history runtime', () => {
     });
     mocks.listExecutions.mockResolvedValue([
       {
-        kind: 'agent',
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'assistant' },
         id: 'chat1' as ExecutionId,
         timestamp: '2026-05-18T11:00:00.000Z',
-        agentConfig: chatConfig,
-        terminalStatus: 'resumable',
+        record: chatConfig,
+        outcome: 'cancelled',
         description: 'Sketch a proof outline',
       },
     ]);
+    mocks.deriveResumability.mockResolvedValue({
+      resumable: true,
+      cause: 'interrupted-with-flow',
+    });
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
+      agentConfig: chatConfig,
+    });
 
     const entries = await listCliHistoryEntries();
 
@@ -383,7 +456,10 @@ describe('CLI history runtime', () => {
     ).resolves.toBeNull();
   });
 
-  it('treats candidate-only sidecar associations as a found execution', async () => {
+  it('treats sidecar-only associations as not found in history details', async () => {
+    // The sidecar FK maps a stream to an execution for session bookkeeping;
+    // since Axis T it is NOT existence evidence for an execution whose
+    // metadata carries no stamped stream and whose transcript is empty.
     const executionId = 'a11ce5a11ce5' as ExecutionId;
     const snapshots = new StreamSnapshotStore();
     snapshotFacts(snapshots).setRunConfig(
@@ -401,43 +477,12 @@ describe('CLI history runtime', () => {
     mocks.readMeta.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
 
-    await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
-      id: executionId,
-      status: 'unknown',
-      conversationPreview: null,
-    });
-    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-      status: 'incomplete',
-    });
+    await expect(readCliHistoryDetails(executionId)).resolves.toBeNull();
   });
 
-  it('treats children-only associations as incomplete markdown export evidence', async () => {
-    const executionId = 'a11ce6a11ce6' as ExecutionId;
-    const parent = 'orchestrator@model#parent' as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    for (const streamId of [
-      `bash@tool#${executionId}`,
-      `codex@tool#${executionId}`,
-    ] as StreamTabId[]) {
-      snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
-      snapshotFacts(snapshots).setParentStream(streamId, parent);
-    }
-    await snapshots.flush();
-    mocks.readConfig.mockResolvedValue(null);
-    mocks.readMeta.mockResolvedValue(null);
-    mocks.exists.mockResolvedValue(false);
-
-    await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-      status: 'incomplete',
-    });
-  });
-
-  it('finds a sole diagnostic-only exact root in CLI history details', async () => {
+  it('finds a stamped diagnostic-only root in CLI history details', async () => {
     const executionId = 'a11ce7a11ce7' as ExecutionId;
     const root = `orchestrator@model#${executionId}` as StreamTabId;
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(root, config, executionId);
-    await snapshots.flush();
     const logs = await StreamLogStore.open();
     appendTranscriptEntry(logs, root, {
       id: 'diagnostic-only-root',
@@ -449,7 +494,13 @@ describe('CLI history runtime', () => {
     });
     await logs.flush();
     mocks.readConfig.mockResolvedValue(null);
-    mocks.readMeta.mockResolvedValue(null);
+    // The streamId stamped on execution metadata at registration is the one
+    // execution→stream mapping; the diagnostic-only transcript row proves
+    // the run exists even though it yields no conversation.
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      streamId: root,
+    });
     mocks.exists.mockResolvedValue(false);
 
     await expect(readCliHistoryDetails(executionId)).resolves.toMatchObject({
@@ -977,109 +1028,18 @@ describe('CLI history runtime', () => {
     ]);
   });
 
-  it('surfaces workspace files written by tool-use calls', async () => {
-    const workspace = await makeTempDir('texra-history-', tempDirs);
-    await writeFile(path.join(workspace, 'review.md'), '# report');
-    await writeFile(path.join(workspace, 'draft.tex'), 'old text');
-    mockToolUseWorkspace(workspace);
-    mockToolCallConversation(
-      {
-        name: 'write_file',
-        args: JSON.stringify({ path: 'review.md', content: '# report' }),
-      },
-      {
-        name: 'edit_file',
-        args: { path: 'draft.tex', old_str: 'old', new_str: 'new' },
-      },
-    );
-
-    const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-    expect(details?.files).toEqual([
-      { path: 'workspace/draft.tex', size: 8, isDirectory: false },
-      { path: 'workspace/review.md', size: 8, isDirectory: false },
-    ]);
-    expect(formatCliHistoryDetailsText(details!)).toContain(
-      '8\tworkspace/review.md',
-    );
-  });
-
-  it('surfaces workspace files from Responses function call records', async () => {
-    const workspace = await makeTempDir('texra-history-', tempDirs);
-    await writeFile(path.join(workspace, 'response.md'), 'response');
-    mockToolUseWorkspace(workspace);
-    mocks.readConversation.mockResolvedValue([
-      {
-        type: 'function_call',
-        call_id: 'call_1',
-        name: 'write_file',
-        arguments: JSON.stringify({ path: 'response.md' }),
-      },
-    ]);
-
-    const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-    expect(details?.files).toEqual([
-      { path: 'workspace/response.md', size: 8, isDirectory: false },
-    ]);
-  });
-
-  it('surfaces workspace files from Google functionCall parts', async () => {
-    const workspace = await makeTempDir('texra-history-', tempDirs);
-    await mkdir(path.join(workspace, 'subdir'));
-    await writeFile(path.join(workspace, 'subdir', 'gemini.md'), 'gemini');
-    mockToolUseWorkspace(workspace);
-    mocks.readConversation.mockResolvedValue([
-      {
-        role: 'model',
-        parts: [
-          {
-            functionCall: {
-              id: 'call_1',
-              name: 'edit_file',
-              args: { path: 'subdir/gemini.md' },
-            },
-          },
-        ],
-      },
-    ]);
-
-    const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-    expect(details?.files).toEqual([
-      { path: 'workspace/subdir/gemini.md', size: 6, isDirectory: false },
-    ]);
-  });
-
-  it('does not derive workspace files for workflow runs', async () => {
-    const workspace = await makeTempDir('texra-history-', tempDirs);
-    await writeFile(path.join(workspace, 'review.md'), '# report');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      workingDirectory: workspace,
-    });
-    mockToolCallConversation({
-      name: 'write_file',
-      args: JSON.stringify({ path: 'review.md' }),
-    });
-
-    const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-    expect(details?.files).toEqual([]);
-  });
-
-  it('does not surface missing files or tool paths outside the workspace', async () => {
+  it('does not surface missing files or persisted paths outside the workspace', async () => {
     const root = await makeTempDir('texra-history-root-', tempDirs);
     const workspace = path.join(root, 'workspace');
     const outsidePath = path.join(root, 'outside.md');
     await mkdir(workspace);
     await writeFile(outsidePath, 'outside');
     mockToolUseWorkspace(workspace);
-    mockToolCallConversation(
-      { name: 'write_file', args: JSON.stringify({ path: '../outside.md' }) },
-      { name: 'edit_file', args: JSON.stringify({ path: outsidePath }) },
-      { name: 'write_file', args: JSON.stringify({ path: 'missing.md' }) },
-    );
+    mocks.readWorkspaceFiles.mockResolvedValue([
+      '../outside.md',
+      outsidePath,
+      'missing.md',
+    ]);
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
 
@@ -1269,7 +1229,10 @@ describe('CLI history runtime', () => {
       ).resolves.toEqual({ status: 'not_found' });
     });
 
-    it('reports candidate-only sidecars as incomplete rather than not found', async () => {
+    it('reports sidecar-only associations as not found for markdown export', async () => {
+      // Since Axis T the sidecar FK is session bookkeeping, not transcript
+      // evidence: without meta, config, a stamped stream, or a conversation,
+      // the id resolves to nothing at all.
       const executionId = 'a11ce6a11ce6' as ExecutionId;
       const snapshots = new StreamSnapshotStore();
       snapshotFacts(snapshots).setRunConfig(
@@ -1288,7 +1251,7 @@ describe('CLI history runtime', () => {
       mocks.readConversation.mockResolvedValue(null);
 
       await expect(readCliHistoryExportInput(executionId)).resolves.toEqual({
-        status: 'incomplete',
+        status: 'not_found',
       });
     });
 
@@ -1520,29 +1483,6 @@ describe('CLI history runtime', () => {
         expect(stdout).toBe('');
         expect(stderr).toContain('no replayable execution-root transcript');
         expect(stderr).not.toContain('sidecars (');
-      });
-
-      it('reports ambiguous transcript ownership without exporting an arbitrary trace', async () => {
-        mocks.assembleTrace.mockResolvedValue({
-          status: 'streamId_ambiguous',
-          candidateStreamIds: ['orchestrator@old#a1', 'orchestrator@new#a1'],
-        });
-
-        const exitCode = await runHistoryExport(
-          makeContext('/resources'),
-          'a1' as ExecutionId,
-          'html',
-          { assetsDir: '/assets' },
-        );
-
-        expect(exitCode).toBe(CliExitCode.Usage);
-        expect(stdout).toBe('');
-        expect(stderr).toContain(
-          'multiple associated transcript sidecars (orchestrator@old#a1, orchestrator@new#a1)',
-        );
-        expect(stderr).toContain('no canonical trace timeline');
-        expect(stderr).toContain('HTML trace export was not written');
-        expect(stderr).not.toContain('texra history show');
       });
 
       it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {

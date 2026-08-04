@@ -55,10 +55,9 @@ function overWire(
 function registerStream(
   state: ProgressState,
   streamId: StreamTabId,
-  overrides: Partial<Extract<StreamTabInfo, { kind: 'agent' }>> = {},
+  overrides: Partial<StreamTabInfo> = {},
 ): void {
   state.streamById.set(streamId, {
-    kind: 'agent',
     name: streamId,
     label: streamId,
     agentCategory: AgentCategory.Workflow,
@@ -113,10 +112,10 @@ describe('stream meta frontend state', () => {
         status: STREAM_PHASE.RUNNING,
         subagents: [
           {
-            kind: 'subagent',
             childStreamId: 'old-child-stream',
             executionId: 'old-child',
             agentName: 'old child',
+            identity: { kind: 'agent' as const, agent: 'old child' },
           },
         ],
       } satisfies Partial<StreamState>),
@@ -126,16 +125,15 @@ describe('stream meta frontend state', () => {
     dispatch(streamMetaHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
       streamInfo: {
-        kind: 'agent',
         name: siblingId,
         label: 'search',
-        agent: 'search',
+        identity: { kind: 'agent', agent: 'search' },
         model: 'deepseekproT',
         agentCategory: AgentCategory.ToolUse,
         creationTimestamp: 2,
       },
       streamState: {
-        kind: AgentCategory.ToolUse,
+        category: AgentCategory.ToolUse,
         status: STREAM_PHASE.WAITING,
         lastTimestamp: 9,
         conversationProgress: {
@@ -218,7 +216,6 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
       streams: [
         {
-          kind: 'agent',
           name: streamId,
           label: 'stream-a',
           agentCategory: AgentCategory.Workflow,
@@ -228,7 +225,7 @@ describe('stream meta frontend state', () => {
       activeStream: streamId,
       streamStates: {
         [streamId]: {
-          kind: AgentCategory.Workflow,
+          category: AgentCategory.Workflow,
           status: STREAM_PHASE.COMPLETED,
           lastTimestamp: 2,
           conversationProgress: {
@@ -262,12 +259,11 @@ describe('stream meta frontend state', () => {
       streamInfo: {
         name: streamId,
         label: 'stream-a',
-        kind: 'agent',
         agentCategory: AgentCategory.Workflow,
         creationTimestamp: 1,
       },
       streamState: {
-        kind: AgentCategory.Workflow,
+        category: AgentCategory.Workflow,
         status: STREAM_PHASE.RUNNING,
         conversationProgress: {
           toolCallCount: 0,
@@ -296,12 +292,11 @@ describe('stream meta frontend state', () => {
         streamInfo: {
           name: streamId,
           label: 'stream-a',
-          kind: 'agent',
           agentCategory: AgentCategory.Workflow,
           creationTimestamp: 1,
         },
         streamState: {
-          kind: AgentCategory.Workflow,
+          category: AgentCategory.Workflow,
           status: STREAM_PHASE.RUNNING,
           conversationProgress: {
             toolCallCount: 0,
@@ -395,7 +390,7 @@ describe('stream meta frontend state', () => {
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
       stream: streamId,
       action: 'render',
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       runUsage: {},
       outputs: { files: {}, missing: {}, compileFailures: {} },
       activeState: {
@@ -405,7 +400,6 @@ describe('stream meta frontend state', () => {
         badges: {
           subagents: [],
         },
-        parentStreamId: null,
       },
     });
 
@@ -428,26 +422,5 @@ describe('stream meta frontend state', () => {
     });
 
     expect(getState().activeStreamId).toBeNull();
-  });
-
-  it('clears a stream parent when update parent stream receives null', () => {
-    const parent = 'stream-parent' as StreamTabId;
-    const child = 'stream-child' as StreamTabId;
-    const state = createInitialState();
-    registerStream(state, parent);
-    registerStream(state, child, {
-      agentCategory: AgentCategory.ToolUse,
-      creationTimestamp: 2,
-      parentStreamId: parent,
-    });
-    const getState = seedState(state);
-
-    dispatch(streamLifecycleHandlers, {
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
-      stream: child,
-      parentStreamId: null,
-    });
-
-    expect(getState().streamById.get(child)?.parentStreamId).toBeUndefined();
   });
 });

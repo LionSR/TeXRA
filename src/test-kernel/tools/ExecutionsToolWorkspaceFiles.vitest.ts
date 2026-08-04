@@ -14,7 +14,6 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -54,6 +53,9 @@ vi.mock('@agent/storage', async () => {
     ...actual,
     getExecutionStore: vi.fn(() => ({
       readConfig: mocks.readConfig,
+      // The tool reads the record; this suite's fixtures are all agent-arm,
+      // so the record IS the config.
+      readRunRecord: mocks.readConfig,
       readMeta: mocks.readMeta,
       readChildren: mocks.readChildren,
       readReport: mocks.readReport,
@@ -121,7 +123,7 @@ async function writeSidecarTodos(
   await StorageFS.write(
     path.join(streamDataDir(streamId), 'meta.json'),
     JSON.stringify({
-      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      schemaVersion: 1,
       executionId,
     }),
   );
@@ -129,10 +131,11 @@ async function writeSidecarTodos(
 }
 
 /** Mocks the storage reads for a completed, non-subagent toolUse execution. */
-function mockCompletedExecution(): void {
+function mockCompletedExecution(streamId?: StreamTabId): void {
   mocks.readMeta.mockResolvedValue({
     timestamp: '2026-06-15T09:36:02.345Z',
     category: 'toolUse',
+    ...(streamId ? { streamId } : {}),
   });
   mocks.readConfig.mockResolvedValue(config);
 }
@@ -408,14 +411,14 @@ describe('ExecutionsTool', () => {
   it('reads completed summary todos from stream sidecars', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
-      await writeSidecarTodos(executionId, [
+      const streamId = await writeSidecarTodos(executionId, [
         {
           content: 'Read the sidecar work plan',
           status: 'in_progress',
           activeForm: 'Reading the sidecar work plan',
         },
       ]);
-      mockCompletedExecution();
+      mockCompletedExecution(streamId);
       const result = await new ExecutionsTool().call({
         path: `/executions/${executionId}`,
       });
@@ -429,13 +432,14 @@ describe('ExecutionsTool', () => {
   it('agrees with the completed summary when reading /executions/{id}/todos', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
-      await writeSidecarTodos(executionId, [
+      const streamId = await writeSidecarTodos(executionId, [
         {
           content: 'Read the sidecar work plan',
           status: 'in_progress',
           activeForm: 'Reading the sidecar work plan',
         },
       ]);
+      mockCompletedExecution(streamId);
       const result = await new ExecutionsTool().call({
         path: `/executions/${executionId}/todos`,
       });

@@ -10,12 +10,11 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 function subscribeOverTestSession() {
   const session = createTestSession();
-  const tracker = new StatusBarUsageTracker(session.status);
+  const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
   const onStatusChanged = vi.fn();
   const onUsageChanged = vi.fn();
   const dispose = subscribeStatusBarSessionEvents({
     session,
-    tracker,
     onStatusChanged,
     onUsageChanged,
   });
@@ -57,34 +56,33 @@ describe('subscribeStatusBarSessionEvents', () => {
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('records valid run usage events after an in-flight status', () => {
+  it('projects run usage the session snapshot store accumulated', () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
     session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
     emitUsage(session);
+    emitUsage(session);
 
-    expect(tracker.totalUsage).toEqual({
-      inputTokens: 10,
-      outputTokens: 20,
-      cost: 0.01,
-    });
-    expect(onUsageChanged).toHaveBeenCalledTimes(1);
+    // The snapshot store subscribed at session construction is the one
+    // accumulator; the tracker's total is its per-run sum for the stream.
+    expect(tracker.totalUsage.inputTokens).toBe(20);
+    expect(tracker.totalUsage.outputTokens).toBe(40);
+    expect(tracker.totalUsage.cost).toBeCloseTo(0.02);
+    expect(onUsageChanged).toHaveBeenCalledTimes(2);
 
     dispose();
   });
 
-  it('ignores usage for unknown streams', () => {
+  it('skips the refresh for usage on streams not in flight', () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
     emitUsage(session);
 
-    expect(tracker.totalUsage).toEqual({
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    });
+    expect(tracker.totalUsage.inputTokens).toBe(0);
+    expect(tracker.totalUsage.outputTokens).toBe(0);
+    expect(tracker.totalUsage.cost).toBe(0);
     expect(onUsageChanged).not.toHaveBeenCalled();
 
     dispose();

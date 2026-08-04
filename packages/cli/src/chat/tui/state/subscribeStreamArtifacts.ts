@@ -1,10 +1,12 @@
-// Restore durable workflow artifacts when a stream becomes focused.
+// Hydrate durable workflow artifacts when a stream becomes focused.
 //
-// Live run facts and the snapshot store share the same round-indexed shape.
-// The focused-stream load therefore merges once at this boundary, with newer
-// live rounds taking precedence over the disk snapshot.
+// The shared `StreamSnapshotStore` is the single accumulator for round
+// artifacts and per-run usage: `preload` seeds its memory from disk and
+// replays any live deltas recorded meanwhile on top, so the focused-stream
+// load just copies the store's accumulated state into the slice — there is
+// no CLI-side live/durable merge.
 
-import type { StreamTabId, StreamSnapshot } from '@shared/schemas';
+import { sumUsageStats, type StreamTabId } from '@shared/schemas';
 import type { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -14,20 +16,18 @@ import {
   isCliStreamRetired,
   patchStream,
   setTransientNotice,
-  streamArtifactRevision,
-  type StreamArtifactRevision,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 
-type StreamArtifactSnapshot = Pick<
-  StreamSnapshot,
-  'outputFilesByRound' | 'missingOutputsByRound' | 'compileFailuresByRound'
->;
-
+/** The store surface the TUI projects accumulated artifact/usage state from. */
 export type StreamArtifactReader = Pick<
   StreamSnapshotStore,
-  'preload' | 'read'
+  | 'preload'
+  | 'getOutputFiles'
+  | 'getMissingOutputs'
+  | 'getCompileFailures'
+  | 'getRunUsage'
 >;
 
 function streamCanReceiveArtifacts(
@@ -44,52 +44,16 @@ function streamCanReceiveArtifacts(
   );
 }
 
-function mergeArtifactSnapshot(
-  streamId: StreamTabId,
-  snapshot: StreamArtifactSnapshot,
-  revisionAtStart: StreamArtifactRevision,
-): void {
-  const currentRevision = streamArtifactRevision(streamId);
-  patchStream(streamId, (slice) => {
-    const missingOutputsByRound =
-      currentRevision.missingOutputsReset ===
-      revisionAtStart.missingOutputsReset
-        ? {
-            ...snapshot.missingOutputsByRound,
-            ...slice.missingOutputsByRound,
-          }
-        : slice.missingOutputsByRound;
-    return {
-      ...slice,
-      outputFilesByRound: {
-        ...snapshot.outputFilesByRound,
-        ...slice.outputFilesByRound,
-      },
-      missingOutputsByRound,
-      compileFailuresByRound: {
-        ...snapshot.compileFailuresByRound,
-        ...slice.compileFailuresByRound,
-      },
-    };
-  });
-}
-
 async function hydrateFocusedStream(
   store: StreamArtifactReader,
   streamId: StreamTabId,
   focusIsCurrent: () => boolean,
 ): Promise<void> {
   const generation = getCliStateGeneration();
-  const artifactRevision = streamArtifactRevision(streamId);
   try {
     // `preload` warms only this stream. `load([streamId])` would incorrectly
     // claim an authoritative complete stream set and evict sibling state.
     await store.preload([streamId]);
-    const snapshot = await store.read(streamId);
-    if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
-      return;
-    }
-    mergeArtifactSnapshot(streamId, snapshot, artifactRevision);
   } catch (error) {
     if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
       return;
@@ -97,7 +61,24 @@ async function hydrateFocusedStream(
     setTransientNotice(
       `Could not load workflow artifacts: ${toErrorMessage(error)}`,
     );
+    return;
   }
+  if (!streamCanReceiveArtifacts(streamId, generation, focusIsCurrent)) {
+    return;
+  }
+  // The store already ordered the seed against live facts (including a
+  // `clearMissingOutputs` reset — see its overlay `reset` flag), so its
+  // accumulated state replaces the slice's wholesale.
+  const runUsage = [...store.getRunUsage(streamId).values()];
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    outputFilesByRound: store.getOutputFiles(streamId),
+    missingOutputsByRound: store.getMissingOutputs(streamId),
+    compileFailuresByRound: store.getCompileFailures(streamId),
+    cumulativeUsage: runUsage.length
+      ? sumUsageStats(runUsage)
+      : slice.cumulativeUsage,
+  }));
 }
 
 /**

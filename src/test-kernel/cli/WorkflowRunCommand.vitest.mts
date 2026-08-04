@@ -608,7 +608,7 @@ describe('CLI workflow run command', () => {
     });
     expect(mocks.finalizeExecution).toHaveBeenCalledWith({
       executionId: 'exec-copy-fail',
-      terminalStatus: EXECUTION_STATUS.ERROR,
+      outcome: 'failed',
       flowRecord: 'delete',
     });
   });
@@ -653,7 +653,7 @@ describe('CLI workflow run command', () => {
     ).resolves.toBe(CliExitCode.AgentError);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Warning: Failed to persist error status for execution exec-copy-fail: terminal metadata disk full',
+      'Warning: Failed to persist failed status for execution exec-copy-fail: terminal metadata disk full',
     );
     expect(mocks.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ code: 'ENOENT' }),

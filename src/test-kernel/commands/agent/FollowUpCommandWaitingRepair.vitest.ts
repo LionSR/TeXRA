@@ -32,11 +32,9 @@ vi.mock('@commands/_shared/registerCommands', () => ({
 }));
 
 // Local imports
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerFollowUpCommand } from '@commands/agent/followUpCommand';
 import {
-  buildRunDescriptor,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -53,15 +51,11 @@ describe('texra.sendFollowUp waiting repair admission', () => {
     registerFollowUpCommand({ subscriptions: [] } as never);
 
     const session = defaultSession();
-    snapshotFacts(session.snapshots).setRunDescriptor(
-      buildRunDescriptor({
-        streamId: STREAM,
-        executionId: EXECUTION,
-        agent: 'assistant',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      }),
-    );
+    snapshotFacts(session.snapshots).setRunStart({
+      streamId: STREAM,
+      executionId: EXECUTION,
+      identity: { kind: 'agent', agent: 'assistant' },
+    });
     session.status.transition(STREAM, STREAM_PHASE.RUNNING, 'lifecycle');
     session.status.transition(STREAM, STREAM_PHASE.CANCELLED, 'user-stop');
   });

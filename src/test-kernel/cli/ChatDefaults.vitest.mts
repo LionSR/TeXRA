@@ -52,10 +52,11 @@ function historyEntry(
   timestamp = '2026-05-21T08:00:00.000Z',
 ) {
   return {
-    kind: 'agent',
+    kind: 'run',
     id: 'abc123' as ExecutionId,
     timestamp,
-    agentConfig: AgentConfigSchema.parse({
+    identity: { kind: 'agent', agent },
+    record: AgentConfigSchema.parse({
       agent,
       model: 'sonnet46T',
       agentCategory: AgentCategory.ToolUse,

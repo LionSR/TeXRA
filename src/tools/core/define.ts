@@ -62,6 +62,8 @@ export function defineTool<T>(
     /** Static description string or function for lazy evaluation */
     description: string | (() => string);
     schema: ZodType<T, T>;
+    /** Roster namespace a delegation tool's description is annotated from. */
+    availabilityCategory?: ToolDefinition['availabilityCategory'];
   } & DefineToolFlags,
 ): DefinedToolClass<T> {
   const getDescription = (): string =>
@@ -75,6 +77,9 @@ export function defineTool<T>(
     parameters: toToolParameters(def.schema),
     // Include original Zod schema for SDK-native conversions (OpenAI, Anthropic)
     zodSchema: def.schema,
+    ...(def.availabilityCategory && {
+      availabilityCategory: def.availabilityCategory,
+    }),
     ...override,
   });
 

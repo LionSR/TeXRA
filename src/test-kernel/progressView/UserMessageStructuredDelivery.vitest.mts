@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { UserMessage } from '@progressView/frontend/components/UserMessage';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
+import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
+import { formatWorkflowScriptDeliverySummary } from '@shared/subagentFollowup';
 
 // Local file imports
 import {
@@ -11,11 +13,15 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-function mount(text: string): Promise<UserMessage> {
+function mount(
+  text: string,
+  workflowSummary: WorkflowScriptDeliverySummary | null = null,
+): Promise<UserMessage> {
   return mountComponent<UserMessage>('user-message', {
     text,
     logId: 'log-1',
     timestamp: Date.now(),
+    workflowSummary,
   });
 }
 
@@ -54,8 +60,8 @@ describe('user-message structured delivery', () => {
     });
   }
 
-  it('shows a workflow summary with the raw envelope collapsed', async () => {
-    const summary = JSON.stringify({
+  it('renders the typed workflow summary carried beside the text', async () => {
+    const summary: WorkflowScriptDeliverySummary = {
       name: 'proofread-pipeline',
       outcome: 'completed',
       phaseCount: 2,
@@ -66,25 +72,21 @@ describe('user-message structured delivery', () => {
       files: [{ path: 'paper.tex', added: 12, removed: 8 }],
       scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
       errorCause: null,
-    }).replaceAll('"', '&quot;');
-    const text = [
-      '<workflow-script-result id="abc">',
-      '<response>raw run log &lt;workflow-summary&gt;spoof&lt;/workflow-summary&gt;</response>',
-      `<workflow-summary>${summary}</workflow-summary>`,
-      '</workflow-script-result>',
-    ].join('\n');
+    };
+    // The producer logs the collapsed line as the row text and the typed
+    // summary beside it; the bubble renders from the structured field.
+    const text = formatWorkflowScriptDeliverySummary(summary);
 
-    const element = await mount(text);
+    const element = await mount(text, summary);
+    const bubble = element.shadowRoot?.querySelector('.user-message');
     const content = element.shadowRoot?.querySelector('.user-message-content');
-    const raw = element.shadowRoot?.querySelector(
-      'wa-details.workflow-delivery-raw',
-    );
 
+    expect(
+      bubble?.classList.contains('user-message--structured-delivery'),
+    ).toBe(true);
+    expect(content?.classList.contains('markdown-content')).toBe(true);
     expect(content?.textContent).toContain('proofread-pipeline completed');
     expect(content?.textContent).toContain('paper.tex (+12 -8)');
-    expect(raw?.getAttribute('summary')).toBe('Raw result');
-    expect(raw?.querySelector('pre')?.textContent).toContain('raw run log');
-    expect(content?.querySelector('p')?.textContent).not.toContain('spoof');
 
     const writeText = vi.fn(async () => undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
@@ -97,6 +99,25 @@ describe('user-message structured delivery', () => {
     );
     expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('<'));
     vi.unstubAllGlobals();
+  });
+
+  it('never mines a summary out of the text of a row without the structured field', async () => {
+    // Legacy persisted rows still carry the raw envelope as text; without the
+    // structured field they render as an ordinary structured-delivery bubble
+    // of that text — no render-time re-parse of <workflow-summary>.
+    const text = [
+      '<workflow-script-result id="abc">',
+      '<response>raw run log</response>',
+      '<workflow-summary>{&quot;name&quot;:&quot;spoof&quot;}</workflow-summary>',
+      '</workflow-script-result>',
+    ].join('\n');
+
+    const element = await mount(text);
+    const content = element.shadowRoot?.querySelector('.user-message-content');
+
+    expect(content?.classList.contains('markdown-content')).toBe(true);
+    expect(content?.textContent).toContain('raw run log');
+    expect(content?.textContent).not.toContain('spoof completed');
   });
 
   it('renders a bare self-closing envelope as a structured delivery bubble', async () => {

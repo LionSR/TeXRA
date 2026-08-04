@@ -437,7 +437,6 @@ function startClaudeAgentLoop(params: {
     },
     buildEntry: (session) => ({
       childStreamId: childStream.childStreamId,
-      parentStreamId,
       executionId,
       executions: session.executions,
       model: params.model,

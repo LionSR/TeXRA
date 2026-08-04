@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { finalizeExecution, getExecutionStore } from '@agent/storage';
 import { writeSessionDescription } from '@agent/storage/executionLifecycle';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 describe('execution metadata updates', () => {
@@ -20,14 +20,14 @@ describe('execution metadata updates', () => {
       writeSessionDescription(id, 'A described session'),
       finalizeExecution({
         executionId: id,
-        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'preserve',
       }),
     ]);
 
     const meta = await getExecutionStore(id).readMeta();
     expect(meta?.description).toBe('A described session');
-    expect(meta?.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
+    expect(meta?.outcome).toBe(RUN_OUTCOME.COMPLETED);
   });
 
   it('accepts a later update after one fails on absent metadata', async () => {

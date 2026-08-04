@@ -4,6 +4,7 @@ import {
   loadAgents,
 } from '@agent/index';
 import { platform } from '@platform/platform';
+import { byCategory, type ByCategory } from '@shared/schemas';
 import type {
   AgentRosterCategorySelection,
   AgentRosterSelection,
@@ -19,8 +20,7 @@ export interface CliAgentRosterRecord {
   readonly defaultTeamId?: string;
   readonly missingTeamId?: string;
   readonly defaultChatAgent?: string;
-  readonly workflowAgentKeys: AgentRosterCategorySelection;
-  readonly toolUseAgentKeys: AgentRosterCategorySelection;
+  readonly agentKeys: ByCategory<AgentRosterCategorySelection>;
   readonly unresolvedNames: readonly string[];
 }
 
@@ -41,8 +41,9 @@ export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
     defaultTeamId: snapshot.defaultTeamId,
     missingTeamId: snapshot.missingTeamId,
     defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
-    workflowAgentKeys: roster.getEnabledAgentKeys('workflow') ?? 'all',
-    toolUseAgentKeys: roster.getEnabledAgentKeys('toolUse') ?? 'all',
+    agentKeys: byCategory(
+      (category) => roster.getEnabledAgentKeys(category) ?? 'all',
+    ),
     unresolvedNames: snapshot.unresolvedNames,
   };
 }
@@ -68,8 +69,8 @@ export function formatCliAgentRoster(record: CliAgentRosterRecord): string {
     `Effective roster: ${formatSelection(record.effectiveSelection)}`,
     `Default team: ${record.defaultTeamId ?? '(none)'}`,
     `Default chat agent: ${record.defaultChatAgent ?? '(automatic)'}`,
-    `Workflow agents: ${formatCategory(record.workflowAgentKeys)}`,
-    `Tool-use agents: ${formatCategory(record.toolUseAgentKeys)}`,
+    `Workflow agents: ${formatCategory(record.agentKeys.workflow)}`,
+    `Tool-use agents: ${formatCategory(record.agentKeys.toolUse)}`,
   ];
   if (record.unresolvedNames.length > 0) {
     lines.push(`Unavailable members: ${record.unresolvedNames.join(', ')}`);

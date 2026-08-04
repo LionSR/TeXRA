@@ -7,8 +7,8 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewHandlerRegistry } from '@shared/schemas';
 
 // Local imports - main view
-import { SESSION_TYPES, parseSessionType } from '../constants';
-import { sessionType$, toolUseAgent$, workflowAgent$ } from '../mainViewState';
+import { parseSessionType } from '../constants';
+import { agent$, sessionType$ } from '../mainViewState';
 import { refreshInstructionPlaceholder } from '../mainViewActions';
 
 // `satisfies Partial<...>` (not `: MainViewHandlerRegistry`): this slice
@@ -21,11 +21,7 @@ export const sessionHandlers = {
       sessionType$.set(sessionType);
     }
     if (message.agentId) {
-      if (sessionType$.get() === SESSION_TYPES.TOOL_USE) {
-        toolUseAgent$.set(message.agentId);
-      } else {
-        workflowAgent$.set(message.agentId);
-      }
+      agent$.set({ ...agent$.get(), [sessionType$.get()]: message.agentId });
     }
     refreshInstructionPlaceholder();
   },

@@ -16,7 +16,6 @@ import {
   OutputFileInfoSchema,
   parsePersistedRoundIndexed,
   parseUsageData,
-  PersistedRunDescriptorSchema,
   PersistedWorkPlanSchema,
   STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
@@ -36,9 +35,6 @@ import { isObject, mapToRecord } from '@utils/core';
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
 const CHANNEL = 'StreamSnapshotStore';
-const StreamTabMetaWithoutRunDescriptorSchema = StreamTabMetaSchema.omit({
-  runDescriptor: true,
-});
 
 /** The canonical empty work plan (no todos, no plan). Single source for the
  *  "no durable plan yet" value, reused by the store's in-memory default. */
@@ -91,27 +87,28 @@ export async function readMeta(
 ): Promise<StreamTabMeta | undefined> {
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
-  const parsed = StreamTabMetaWithoutRunDescriptorSchema.safeParse(raw);
-  if (!parsed.success) {
-    logger.warn(CHANNEL, 'Discarding unreadable persisted stream metadata.', {
-      data: parsed.error,
-    });
-    return undefined;
+  const parsed = StreamTabMetaSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  // Field-level tolerance: a malformed execution FK must drop only the bad
+  // pointer, not the whole meta — discarding everything would sever
+  // `parentStreamId` and orphan the tab.
+  if (isObject(raw)) {
+    const { executionId: _executionId, ...rest } = raw;
+    const retried = StreamTabMetaSchema.safeParse(rest);
+    if (retried.success) {
+      logger.warn(
+        CHANNEL,
+        'Dropping malformed execution FK from persisted stream metadata; ' +
+          'keeping the remaining fields.',
+        { data: parsed.error },
+      );
+      return retried.data;
+    }
   }
-  if (!isObject(raw) || !Object.hasOwn(raw, 'runDescriptor')) {
-    return parsed.data;
-  }
-
-  const descriptor = PersistedRunDescriptorSchema.safeParse(raw.runDescriptor);
-  if (!descriptor.success) {
-    logger.warn(
-      CHANNEL,
-      'Ignoring unreadable run descriptor in persisted stream metadata.',
-      { data: descriptor.error },
-    );
-    return parsed.data;
-  }
-  return { ...parsed.data, runDescriptor: descriptor.data };
+  logger.warn(CHANNEL, 'Discarding unreadable persisted stream metadata.', {
+    data: parsed.error,
+  });
+  return undefined;
 }
 
 /**
@@ -196,9 +193,8 @@ export function assembleSnapshot(
       missingOutputsByRound: data.missingOutputs,
       compileFailuresByRound: data.compileFailures,
       runUsage: mapToRecord(data.usage),
-      executionId: data.meta?.runDescriptor?.executionId,
+      executionId: data.meta?.executionId,
       parentStreamId: data.meta?.parentStreamId,
-      description: data.meta?.description,
     });
   } catch (error) {
     // Defense-in-depth for the unwrapped CLI resume path (`await store.read`):

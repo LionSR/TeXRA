@@ -394,9 +394,10 @@ export class BackgroundTasksPanel extends LitElement {
     index: number,
   ): TemplateResult {
     const icon = getTaskIcon(child);
-    const childStreamId =
-      child.kind === 'subagent' ? child.childStreamId : undefined;
-    const isClickable = childStreamId !== undefined;
+    // Icons and clickability key on `identity.kind`; every roster row owns a
+    // stream tab, so every row is navigable.
+    const childStreamId = child.childStreamId;
+    const isClickable = true;
     const description = childStreamId
       ? this.streamById.get(childStreamId)?.description
       : undefined;
@@ -412,7 +413,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <div class="task-header">
         ${waIcon(icon, {
-          className: `task-icon ${isAgentTool(child) ? 'task-icon--subagent' : 'task-icon--process'}`,
+          className: `task-icon ${child.identity?.kind === 'process' ? 'task-icon--process' : 'task-icon--subagent'}`,
         })}
         <span
           id="${idPrefix}-name"
@@ -509,21 +510,20 @@ function renderSectionDetails(options: {
   `;
 }
 
-/** True when the child is an AI agent (codex, delegation) rather than a plain shell tool. */
-function isAgentTool(child: ActiveChildInfo): boolean {
-  // Explicit tool name match, or subagent with no tool name (delegation/workflow)
-  return (
-    child.toolName === 'codex' || (!child.toolName && child.kind === 'subagent')
-  );
-}
-
 /** Pick the appropriate wa-icon name for a background task item. */
 function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
-  if (child.toolName === 'bash') return 'terminal';
-  if (isAgentTool(child)) return 'robot';
-  // Subagents (delegation, workflow) default to server-process;
-  // processes without a toolName fall back to terminal.
-  return child.kind === 'subagent' ? 'server' : 'terminal';
+  switch (child.identity?.kind) {
+    case 'process':
+      return 'terminal';
+    case 'agent':
+      // AI agent rows — native and external-CLI-driven alike.
+      return 'robot';
+    case 'multiAgentWorkflow':
+      return 'server';
+    case undefined:
+      // Legacy emitter without an identity: neutral agent icon.
+      return 'server';
+  }
 }
 
 /**
@@ -536,8 +536,11 @@ function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;
   readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
 } {
+  // Membership is decided by `finishedAt` presence alone (see the schema
+  // doc); the lagging display `status` may only soften HOW a retained
+  // subagent row renders, and processes have no child status source at all.
   const subagentStatusStillInFlight =
-    child.kind === 'subagent' &&
+    child.identity?.kind !== 'process' &&
     (child.status === STREAM_PHASE.RUNNING ||
       child.status === STREAM_PHASE.WAITING);
   if (child.finishedAt === undefined || subagentStatusStillInFlight) {

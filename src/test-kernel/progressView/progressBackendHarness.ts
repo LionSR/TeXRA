@@ -138,7 +138,7 @@ export function executionDeleter(backend: ProgressBackend): ExecutionDeleter {
 export async function writeExecutionConfig(
   executionId: ExecutionId,
 ): Promise<void> {
-  await getExecutionStore(executionId).writeConfig(
+  await getExecutionStore(executionId).writeRunRecord(
     toolUseConfig('search', 'deepseekproT'),
   );
 }

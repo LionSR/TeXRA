@@ -82,7 +82,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
-      kind: AgentCategory.Workflow,
+      category: AgentCategory.Workflow,
       files: {},
       missingOutputs: {},
       compileFailures: {},
@@ -115,7 +115,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       todos: [{ content: 'Replay the plan' }],
       plan: null,
     });
@@ -129,13 +129,11 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
       model: 'gemini35f',
       agentCategory: AgentCategory.Workflow,
     });
-    await getExecutionStore(executionId).writeConfig(config);
+    const streamId = getStreamTabId(config.agent, { executionId });
+    await getExecutionStore(executionId).writeRunRecord(config);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-06T00:00:00.000Z',
-    });
-
-    const streamId = getStreamTabId(config.agent, config.model, {
-      executionId,
+      streamId,
     });
     const store = await StreamLogStore.open();
     appendTranscriptEntry(store, streamId, {

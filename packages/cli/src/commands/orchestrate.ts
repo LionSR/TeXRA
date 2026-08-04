@@ -6,6 +6,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { canLaunchTeam } from '@common/teams/TeamPlan';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
+import { byCategory } from '@shared/schemas';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
@@ -71,7 +72,7 @@ import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { runResumeExecution } from '../runtime/resumeExecution';
+import { runResumeExecution } from './resumeExecution';
 import { type CliContext } from '../runtime/cliContext';
 
 async function canLaunchWithDefaultModel(
@@ -313,10 +314,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
           teamName: plan.preset.name,
           modelOverride: action.model,
           cliMultiAgentPresetId: plan.preset.id,
-          delegationAgentScope: {
-            workflowAgentKeys: [...plan.workflowAgentKeys],
-            toolUseAgentKeys: [...plan.toolUseAgentKeys],
-          },
+          delegationAgentScope: byCategory((category) => [
+            ...plan.agentKeys[category],
+          ]),
         });
         return result.exitCode;
       }

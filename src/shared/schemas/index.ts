@@ -1,6 +1,7 @@
 // Layer 1: Base types (no dependencies on other schema files)
 export * from './identifiers';
 export * from './agent';
+export * from './runIdentity';
 export * from './agentRoster';
 export * from './agentCliSettings';
 export * from './fileFields';
@@ -30,7 +31,6 @@ export * from './todo';
 export * from './todoDisplay';
 export * from './plan';
 export * from './workPlan';
-export * from './runDescriptor';
 export * from './streamData';
 export * from './subagentProgress';
 export * from './inquiry';

@@ -1,21 +1,17 @@
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
-  RUN_DESCRIPTOR_SCHEMA_VERSION,
-  type RunDescriptor,
-  type StreamTabId,
-} from '@shared/schemas';
+  AgentExecutionHandle,
+  type ExecutionRun,
+} from '@agent/runtime/ExecutionHandle';
+import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
 
 /**
  * A live execution handle for tests.
  *
- * The identity object is assembled here rather than through
- * `buildRunDescriptor`, whose parse rejects the readable non-hex execution ids
- * fixtures use (`exec-a`, `execution-lease`). It is still typed as the
- * canonical {@link RunDescriptor}, so a schema change breaks every fixture in
- * one place.
+ * The run struct is assembled here and typed as the canonical
+ * {@link ExecutionRun}, so a schema change breaks every fixture in one place.
  */
 export function testExecutionHandle(input: {
   executionId: string;
@@ -24,25 +20,16 @@ export function testExecutionHandle(input: {
   childStreamId?: StreamTabId;
   agent: string;
   category?: AgentCategory;
+  /** Defaults to a native agent identity for `agent`. */
+  identity?: RunIdentity;
   trace?: AgentTrace;
 }): AgentExecutionHandle {
   const streamId = input.childStreamId ?? input.parentStreamId;
-  const descriptor: RunDescriptor = {
-    schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+  const run: ExecutionRun = {
     streamId,
-    executionId: input.executionId,
-    agent: input.agent,
+    executionId: input.executionId as ExecutionId,
+    identity: input.identity ?? { kind: 'agent', agent: input.agent },
     category: input.category ?? AgentCategory.ToolUse,
-    kind: 'agent',
-    configRef: {
-      kind: 'executionConfig',
-      executionId: input.executionId,
-      path: `executions/${input.executionId}/config.json`,
-    },
   };
-  return new AgentExecutionHandle(
-    descriptor,
-    input.parentStreamId,
-    input.trace,
-  );
+  return new AgentExecutionHandle(run, input.parentStreamId, input.trace);
 }

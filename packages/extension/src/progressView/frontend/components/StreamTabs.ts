@@ -60,7 +60,7 @@ function buildTooltip(
   statusLabel: string,
 ): string {
   const modelDisplay =
-    info.kind === 'agent' && info.model
+    info.identity?.kind === 'agent' && info.model
       ? (info.modelLabel ?? info.model)
       : undefined;
   const worktreeDisplay = info.worktree
@@ -127,9 +127,10 @@ export class StreamTab extends LitElement {
     )
       return;
     if (changed.has('info')) {
+      const identityKind = this.info.identity?.kind;
       this._streamDecorator =
-        this.info.kind === 'workflowScript'
-          ? AGENT_DECORATORS.streamKinds.workflowScript
+        identityKind === 'multiAgentWorkflow' || identityKind === 'process'
+          ? AGENT_DECORATORS.streamKinds[identityKind]
           : getAgentCategoryDecorator(this.info.agentCategory);
     }
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
@@ -233,7 +234,7 @@ export class StreamTab extends LitElement {
                     }
                     <span class="model"
                       >${
-                        stream.kind === 'agent'
+                        stream.identity?.kind === 'agent'
                           ? (stream.modelLabel ?? stream.model ?? '')
                           : ''
                       }</span
@@ -261,9 +262,13 @@ export class StreamTab extends LitElement {
             ? nothing
             : html`<wa-tooltip for="stream-tab-kind"
                   >${
-                    stream.kind === 'workflowScript'
-                      ? streamDecorator.label
-                      : `Category: ${streamDecorator.label}`
+                    // Only agent runs have an execution-mode category; other
+                    // stream kinds (and pending streams) show their label bare.
+                    (stream.identity === undefined ||
+                      stream.identity.kind === 'agent') &&
+                    stream.agentCategory !== undefined
+                      ? `Category: ${streamDecorator.label}`
+                      : streamDecorator.label
                   }</wa-tooltip
                 >${when(
                   stream.isRemote,

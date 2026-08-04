@@ -13,7 +13,7 @@ import {
 
 function makeStream(name: string): StreamTabInfo {
   return {
-    kind: 'agent',
+    identity: { kind: 'agent', agent: name },
     name,
     label: name,
     agentCategory: AgentCategory.Workflow,
@@ -141,10 +141,12 @@ describe('stream-tab expand chevron', () => {
     const tabs = await mountTabs({
       streams: [
         {
-          kind: 'workflowScript',
+          identity: {
+            kind: 'multiAgentWorkflow',
+            workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          },
           name: 'workflow-script#abc123',
           label: 'repo-cleanup-readonly-pilot-2026-07-24',
-          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
           agentCategory: AgentCategory.Workflow,
           creationTimestamp: 1,
         },

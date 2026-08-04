@@ -14,7 +14,6 @@ import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUt
 import {
   AgentCategory,
   type ActiveChildInfo,
-  buildRunDescriptor,
   type CompileFailure,
   type InquiryThreadUpdatedEvent,
   LOG_LEVELS,
@@ -231,6 +230,12 @@ describe('ProgressBackend', () => {
     ).toBe(false);
     messages.length = 0;
 
+    emitRunEvent(target, 'child' as StreamTabId, {
+      type: 'run.start',
+      streamId: 'child' as StreamTabId,
+      executionId: 'c41111' as ExecutionId,
+      identity: { kind: 'agent', agent: 'search' },
+    });
     emitRunConfig(
       target,
       'child' as StreamTabId,
@@ -240,7 +245,7 @@ describe('ProgressBackend', () => {
 
     await vi.waitFor(() =>
       expect(
-        messages.find(
+        messages.findLast(
           (message) =>
             message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
         ),
@@ -248,7 +253,7 @@ describe('ProgressBackend', () => {
         streamInfo: {
           name: 'child',
           label: 'search',
-          agent: 'search',
+          identity: { kind: 'agent', agent: 'search' },
           model: 'deepseekproT',
           executionId: 'c41111',
         },
@@ -260,7 +265,9 @@ describe('ProgressBackend', () => {
       ),
     ).toBe(false);
 
-    const patch = metadataPatchFor(messages, 'child');
+    // The run.start patch precedes the run.config one; compare the full sync
+    // against the final (config-carrying) patch.
+    const patch = metadataPatchFor([...messages].reverse(), 'child');
     messages.length = 0;
 
     backend.webviewUpdater.sendStreamMetadata(
@@ -624,6 +631,7 @@ describe('ProgressBackend', () => {
           inputTokens: 10,
           outputTokens: 5,
           cost: 0.01,
+          reasoningTokens: 0,
           cacheReadInputTokens: 0,
           cacheMissInputTokens: 0,
           cacheCreationInputTokens: 0,
@@ -650,6 +658,7 @@ describe('ProgressBackend', () => {
               inputTokens: 10,
               outputTokens: 5,
               cost: 0.01,
+              reasoningTokens: 0,
               cacheReadInputTokens: 0,
               cacheMissInputTokens: 0,
               cacheCreationInputTokens: 0,
@@ -755,10 +764,10 @@ describe('ProgressBackend', () => {
     const childStreamId = 'session:child' as StreamTabId;
     const executionId = 'exec:direct-session' as ExecutionId;
     const child: ActiveChildInfo = {
-      kind: 'subagent',
       executionId: 'exec:child' as ExecutionId,
       childStreamId,
       agentName: 'orchestrator',
+      identity: { kind: 'agent' as const, agent: 'orchestrator' },
       status: 'running',
       startedAt: 1,
       elapsed: null,
@@ -898,7 +907,8 @@ describe('ProgressBackend', () => {
       activeStream: undefined,
       streamInfo: {
         name: 'unknown-stream',
-        agentCategory: AgentCategory.Workflow,
+        // Identity has not resolved, so no category is fabricated.
+        agentCategory: undefined,
       },
     });
   });
@@ -924,10 +934,10 @@ describe('ProgressBackend', () => {
       roundStage: { index: 2 },
       subagents: [
         {
-          kind: 'subagent',
           childStreamId: 'child-stream',
           executionId: 'finished-child',
           agentName: 'reviewer',
+          identity: { kind: 'agent' as const, agent: 'reviewer' },
           finishedAt: 1,
         },
       ],
@@ -949,7 +959,7 @@ describe('ProgressBackend', () => {
     const patch = metadataPatchFor(messages, stream);
 
     expect(patch.streamState).toMatchObject({
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
       status: STREAM_PHASE.RUNNING,
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
@@ -1100,19 +1110,17 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.ToolUse,
       isRemote: true,
       executionId,
-      run: expect.objectContaining({
-        kind: 'agent',
-        agent: 'search',
-        model: 'deepseekproT',
-      }),
+      config: expect.objectContaining({ model: 'deepseekproT' }),
     });
+    // run.config alone never synthesizes identity; the tab stays pending
+    // until run.start (or a durable ExecutionMeta.identity) supplies it.
+    expect(backend.state.getStreamMetadata(stream).identity).toBeUndefined();
 
     const infos = buildStreamInfos(backend.state);
     expect(infos.map((info) => info.name)).toContain(stream);
     expect(infos.find((info) => info.name === stream)).toMatchObject({
-      agent: 'search',
+      label: stream,
       agentCategory: AgentCategory.ToolUse,
-      model: 'deepseekproT',
       isRemote: true,
       executionId,
     });
@@ -1125,7 +1133,7 @@ describe('ProgressBackend', () => {
     expect(sync).toMatchObject({
       stream,
       action: 'render',
-      kind: AgentCategory.ToolUse,
+      category: AgentCategory.ToolUse,
     });
   });
 
@@ -1135,16 +1143,16 @@ describe('ProgressBackend', () => {
     backend.setupEventListeners();
     const stream = 'workflow-script#f10a11' as StreamTabId;
     const executionId = 'f10a11' as ExecutionId;
-    const descriptor = buildRunDescriptor({
+    backend.state.streamLogs.ensureStream(stream);
+    emitRunEvent(target, stream, {
+      type: 'run.start',
       streamId: stream,
       executionId,
-      agent: 'repo-cleanup-readonly-pilot-2026-07-24',
-      category: AgentCategory.Workflow,
-      kind: 'workflowScript',
+      identity: {
+        kind: 'multiAgentWorkflow',
+        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+      },
     });
-
-    backend.state.streamLogs.ensureStream(stream);
-    emitRunEvent(target, stream, { type: 'run.start', descriptor });
     emitRunConfig(
       target,
       stream,
@@ -1158,10 +1166,9 @@ describe('ProgressBackend', () => {
     );
 
     await vi.waitFor(() =>
-      expect(backend.state.getStreamMetadata(stream).run).toEqual({
-        kind: 'workflowScript',
+      expect(backend.state.getStreamMetadata(stream).identity).toEqual({
+        kind: 'multiAgentWorkflow',
         workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
       }),
     );
     const workflowInfos = buildStreamInfos(backend.state);
@@ -1169,14 +1176,15 @@ describe('ProgressBackend', () => {
       expect.objectContaining({
         name: stream,
         label: 'repo-cleanup-readonly-pilot-2026-07-24',
-        kind: 'workflowScript',
-        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        },
         agentCategory: AgentCategory.Workflow,
       }),
     );
     const workflowScript = workflowInfos.find((info) => info.name === stream);
-    expect(workflowScript).not.toHaveProperty('agent');
-    expect(workflowScript).not.toHaveProperty('model');
+    expect(workflowScript?.model).toBeUndefined();
   });
 
   it('promotes the transcript first timestamp into canonical metadata', () => {

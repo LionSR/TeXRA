@@ -430,10 +430,7 @@ export function resolveDelegationScopeAgents(
   category: AgentCategoryType,
 ): AgentEntry[] {
   if (!scope) return getVisibleAgents(category);
-  const keys =
-    category === AgentCategory.Workflow
-      ? scope.workflowAgentKeys
-      : scope.toolUseAgentKeys;
+  const keys = scope[category];
 
   // Deduplicated by canonical key: two identifiers that resolve to the same
   // entry contribute it once.

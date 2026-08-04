@@ -15,8 +15,7 @@ function formState(
 ): MainViewExecutionFormState {
   return {
     sessionType: 'toolUse',
-    workflowAgent: 'correct',
-    toolUseAgent: 'orchestrator',
+    agent: { workflow: 'correct', toolUse: 'orchestrator' },
     model: 'gpt-5.4',
     instruction: 'Solve a small enumeration problem.',
     singleFiles: { baseFile: '', editedFile: '' },

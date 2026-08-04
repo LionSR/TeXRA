@@ -175,7 +175,7 @@ function SessionRow({
   // itself, whose model already rides the status bar. A background bash stream
   // inherits its parent's configuration, but the shell does not use a model.
   const modelLabel =
-    !isListRoot && session.toolName !== 'bash'
+    !isListRoot && session.slice?.identity?.kind !== 'process'
       ? session.slice?.model
       : undefined;
   const metadata = metadataColumn
@@ -726,8 +726,7 @@ export function SubagentList(
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
   const workflowRoot =
-    props.listRootSlice?.category === AgentCategory.Workflow &&
-    props.listRootSlice.entries.some((entry) => entry.role === 'workflowTask')
+    props.listRootSlice?.identity?.kind === 'multiAgentWorkflow'
       ? props.listRootSlice
       : undefined;
   const workflowTasks = useMemo(

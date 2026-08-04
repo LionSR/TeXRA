@@ -109,7 +109,7 @@ function createHistoryHandlers(overrides: DesktopHistoryActionOverrides = {}) {
 }
 
 async function writeHistoryConfig(): Promise<void> {
-  await getExecutionStore(HISTORY_ID).writeConfig(HISTORY_CONFIG);
+  await getExecutionStore(HISTORY_ID).writeRunRecord(HISTORY_CONFIG);
 }
 
 describe('DesktopHistoryHandlers', () => {
@@ -261,8 +261,8 @@ describe('DesktopHistoryHandlers', () => {
     const activeHistoryId = 'cccc3333';
     const inactiveHistoryId = 'dddd4444';
     await Promise.all([
-      getExecutionStore(activeHistoryId).writeConfig(HISTORY_CONFIG),
-      getExecutionStore(inactiveHistoryId).writeConfig(HISTORY_CONFIG),
+      getExecutionStore(activeHistoryId).writeRunRecord(HISTORY_CONFIG),
+      getExecutionStore(inactiveHistoryId).writeRunRecord(HISTORY_CONFIG),
     ]);
     await writeForeignLease(activeHistoryId);
     const postToRenderer = vi.fn();

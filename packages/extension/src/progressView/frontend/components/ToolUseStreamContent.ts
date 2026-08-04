@@ -4,15 +4,13 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-// Local imports - shared schemas
-import { sumUsageStats } from '@shared/schemas';
-
 // Local imports - progress view
 import { ProgressEvents } from '../events';
 import { getFollowUpInputTransientState } from '../followUpInputState';
 import { BaseStreamContent } from './BaseStreamContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 import { renderStreamHeader } from './streamHeaderView';
+import { totalRunUsage } from '../stateUtils';
 import { isToolUseState, type ToolUseStreamState } from '../store';
 
 // Side-effect imports - sibling components
@@ -73,7 +71,7 @@ export class ToolUseStreamContent extends BaseStreamContent {
 
         <div class="conversation-column conversation-epilogue">
           <usage-panel
-            .usage=${sumUsageStats(Object.values(currentState.runUsage))}
+            .usage=${totalRunUsage(currentState.runUsage)}
             .contextState=${currentState.contextState ?? null}
           ></usage-panel>
         </div>

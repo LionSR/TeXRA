@@ -19,8 +19,10 @@ const mocks = vi.hoisted(() => ({
     id: 'mathematician',
     name: 'Mathematician',
     description: 'For math papers.',
-    workflowAgents: [],
-    toolUseAgents: ['orchestrator'],
+    agents: {
+      workflow: [],
+      toolUse: ['orchestrator'],
+    },
     source: 'built-in',
   })),
   formatCliMultiAgentPresetRunWarnings: vi.fn(),
@@ -140,10 +142,8 @@ const ORCHESTRATOR_AGENT = {
 interface TeamPlan {
   readonly preset: { id: string; name: string; source: string };
   readonly rootAgent?: typeof ORCHESTRATOR_AGENT;
-  readonly missingWorkflowAgents: string[];
-  readonly missingToolUseAgents: string[];
-  readonly workflowAgentKeys: string[];
-  readonly toolUseAgentKeys: string[];
+  readonly missingAgents: { workflow: string[]; toolUse: string[] };
+  readonly agentKeys: { workflow: string[]; toolUse: string[] };
 }
 
 function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
@@ -154,10 +154,14 @@ function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
       source: 'built-in',
     },
     rootAgent: ORCHESTRATOR_AGENT,
-    missingWorkflowAgents: [],
-    missingToolUseAgents: [],
-    workflowAgentKeys: [],
-    toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    missingAgents: {
+      workflow: [],
+      toolUse: [],
+    },
+    agentKeys: {
+      workflow: [],
+      toolUse: ['builtInToolUse:orchestrator'],
+    },
     ...overrides,
   };
 }
@@ -221,8 +225,10 @@ describe('CLI multi-agent run command', () => {
     mocks.planTeamRuns.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planTeamRun(preset, {
-          workflowAgents: mocks.getAgentsByCategory('workflow'),
-          toolUseAgents: mocks.getAgentsByCategory('toolUse'),
+          agents: {
+            workflow: mocks.getAgentsByCategory('workflow'),
+            toolUse: mocks.getAgentsByCategory('toolUse'),
+          },
         }),
       ),
     );
@@ -350,8 +356,10 @@ describe('CLI multi-agent run command', () => {
         name: 'Mathematician',
         description: 'For math papers.',
         icon: 'cube',
-        workflowAgents: [],
-        toolUseAgents: ['orchestrator'],
+        agents: {
+          workflow: [],
+          toolUse: ['orchestrator'],
+        },
         source: 'built-in',
       },
     ]);
@@ -522,9 +530,11 @@ describe('CLI multi-agent run command', () => {
   it('refuses built-in presets without a runnable root agent', async () => {
     const plan = teamPlan({
       rootAgent: undefined,
-      missingWorkflowAgents: ['generic', 'devise', 'apply'],
-      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
-      toolUseAgentKeys: ['builtInToolUse:lean'],
+      missingAgents: {
+        workflow: ['generic', 'devise', 'apply'],
+        toolUse: ['simplifier', 'progressCheck', 'orchestrator'],
+      },
+      agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
     });
     const message =
       'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.';
@@ -559,9 +569,14 @@ describe('CLI multi-agent run command', () => {
     mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValueOnce([warning]);
     mocks.planTeamRun.mockReturnValue(
       teamPlan({
-        missingWorkflowAgents: ['generic'],
-        missingToolUseAgents: ['simplifier'],
-        workflowAgentKeys: ['builtIn:devise'],
+        missingAgents: {
+          workflow: ['generic'],
+          toolUse: ['simplifier'],
+        },
+        agentKeys: {
+          workflow: ['builtIn:devise'],
+          toolUse: ['builtInToolUse:orchestrator'],
+        },
       }),
     );
 
@@ -575,8 +590,10 @@ describe('CLI multi-agent run command', () => {
 
   it('refuses a delegating root with no available team members', async () => {
     const plan = teamPlan({
-      missingWorkflowAgents: ['generic'],
-      missingToolUseAgents: ['simplifier'],
+      missingAgents: {
+        workflow: ['generic'],
+        toolUse: ['simplifier'],
+      },
     });
     const message =
       'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.';

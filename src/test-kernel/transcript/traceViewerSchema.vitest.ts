@@ -67,13 +67,13 @@ describe('trace-viewer TraceDataSchema', () => {
     const executionId = 'abc12345' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    const streamId = getStreamTabId('review', { executionId });
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
+      streamId,
     });
-
-    const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
     const store = await StreamLogStore.open();
     appendTranscriptEntry(store, streamId, {
       id: 'entry-1',
@@ -120,9 +120,11 @@ describe('trace-viewer TraceDataSchema', () => {
 
     const parsed = TraceDataSchema.parse(trace({ config: legacyConfig }));
 
-    expect(parsed.config.agent).toBe('correct');
-    expect(parsed.config.model).toBe(DEFAULT_AGENT_MODEL);
-    expect(parsed.config.instruction).toBe('');
+    expect(parsed.config).toMatchObject({
+      agent: 'correct',
+      model: DEFAULT_AGENT_MODEL,
+      instruction: '',
+    });
   });
 
   it('normalizes legacy execution metadata', () => {
@@ -135,8 +137,12 @@ describe('trace-viewer TraceDataSchema', () => {
         },
       }),
     );
+    // Legacy residue (`delegationDepth`, the retired `terminalStatus`) is
+    // stripped at the parse boundary; `outcome` is the one terminal fact and
+    // is never derived from residue here.
     expect(parsed.meta).not.toHaveProperty('delegationDepth');
-    expect(parsed.meta?.outcome).toBe('failed');
+    expect(parsed.meta).not.toHaveProperty('terminalStatus');
+    expect(parsed.meta?.outcome).toBeUndefined();
   });
 
   it('throws a clear, identifying error via parseTraceData for a malformed trace', () => {
