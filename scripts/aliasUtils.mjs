@@ -138,7 +138,7 @@ export function deriveBuildPaths(rootPaths) {
 export function loadAliasEntries(rootDir) {
   const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
 
-  return Object.entries(tsconfig.compilerOptions.paths).flatMap(
+  return Object.entries(tsconfig.compilerOptions.paths ?? {}).flatMap(
     ([key, values]) => {
       const alias = key.replace('/*', '');
       const requiresSubpath = key.endsWith('/*');
