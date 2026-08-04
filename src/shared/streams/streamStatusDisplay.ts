@@ -8,6 +8,7 @@ import {
   type StreamPhase,
   type StreamSubstate,
 } from '@shared/schemas';
+import type { StreamStage } from '@shared/streams/stage';
 
 export type StreamStatusDisplayKey = StreamPhase | StreamSubstate | 'ready';
 
@@ -153,10 +154,7 @@ export function formatPhaseStageLabel(
  *  through named phases, a tool-use run through numbered rounds, never both,
  *  so every surface that shows the slot dispatches on the same discriminant. */
 export function formatStageLabel(
-  stage:
-    | ({ readonly kind: 'round' } & Readonly<RoundStage>)
-    | ({ readonly kind: 'phase' } & Readonly<PhaseStage>)
-    | undefined,
+  stage: Readonly<StreamStage> | undefined,
 ): string | undefined {
   if (stage === undefined) return undefined;
   if (stage.kind === 'round') return formatRoundStageLabel(stage);

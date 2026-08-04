@@ -6,6 +6,7 @@ import type {
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import { roundStageFromStageStart } from '@shared/streams/stage';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
@@ -159,20 +160,13 @@ function projectCliRunFact(
       };
     case 'goalPaused':
       return { event: 'goalPaused', payload: { streamId: event.streamId } };
-    case 'stage.start':
-      if (event.kind !== 'round') return undefined;
-      return {
-        event: 'updateRoundStage',
-        payload: {
-          streamId,
-          roundStage: {
-            index: event.index ?? 0,
-            ...(event.total !== undefined && event.total > 0
-              ? { total: event.total }
-              : {}),
-          },
-        },
-      };
+    case 'stage.start': {
+      // The frozen public wire carries round progress only; phase progress
+      // stays internal.
+      const roundStage = roundStageFromStageStart(event);
+      if (!roundStage) return undefined;
+      return { event: 'updateRoundStage', payload: { streamId, roundStage } };
+    }
     case 'child.activity':
       return {
         event: 'updateActiveSubagents',
