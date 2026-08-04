@@ -9,6 +9,9 @@ import {
   setCliModelEnabled,
   type CliEnabledModelRow,
 } from '@cli/runtime/enabledModels';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 export interface EnabledModelsFormProps {
@@ -55,7 +58,11 @@ export function EnabledModelsForm(
         if (!row) return;
         void setCliModelEnabled(id, !row.enabled)
           .then(() => listCliEnabledModelCatalog())
-          .then(setModels);
+          .then(setModels)
+          .catch((error: unknown) => {
+            // e.g. disabling the last remaining model — keep the catalog as-is.
+            setTransientNotice(toErrorMessage(error));
+          });
       }}
       onCancel={props.onClose}
     />

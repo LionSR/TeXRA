@@ -192,6 +192,11 @@ async function setModelEnabled(
 ): Promise<number> {
   try {
     await initCliPlatform({ ...context, quietLogs: true });
+  } catch (error) {
+    writeTextStderr(formatCliModelListError(error));
+    return CliExitCode.ModelOrNetworkError;
+  }
+  try {
     const result = await setCliModelEnabled(id, enabled);
     emitCliResult(context, {
       json: result,
