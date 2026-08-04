@@ -1,5 +1,4 @@
 import type { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import type { ProgressEventSubscription } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import type { AppSignalsLike } from '@eventBus/AppSignals';
 
 /**
@@ -7,11 +6,11 @@ import type { AppSignalsLike } from '@eventBus/AppSignals';
  * This adapter keeps app-scoped shutdown facts out of the progress event bus.
  */
 export function attachProgressBackendAppSignals(
-  backend: Pick<ProgressBackend, 'factApplier'>,
+  backend: Pick<ProgressBackend, 'markAllRunningTasksAsCancelled'>,
   signals: AppSignalsLike,
-): ProgressEventSubscription {
+): { dispose(): void } {
   const dispose = signals.on('extensionDeactivating', () => {
-    backend.factApplier.markAllRunningTasksAsCancelled();
+    backend.markAllRunningTasksAsCancelled();
   });
 
   return { dispose };

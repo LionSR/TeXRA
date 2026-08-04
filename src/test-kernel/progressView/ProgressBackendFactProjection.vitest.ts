@@ -10,7 +10,8 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
+import { buildStreamInfos } from '@controllers/session/streamInfoUtils';
+import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import {
   AgentCategory,
   type ActiveChildInfo,
@@ -91,7 +92,7 @@ describe('ProgressBackend', () => {
 
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
-      backend.factApplier.getAllStreamStates(),
+      backend.state.streamStatus.getAllStreamStates(),
     );
 
     expect(
@@ -271,7 +272,7 @@ describe('ProgressBackend', () => {
 
     backend.webviewUpdater.sendStreamMetadata(
       backend.state,
-      backend.factApplier.getAllStreamStates(),
+      backend.state.streamStatus.getAllStreamStates(),
     );
     const fullSync = fullSyncFrom(messages);
 
@@ -505,7 +506,10 @@ describe('ProgressBackend', () => {
     const target = createIsolatedRecordingBackend();
     const { backend } = target;
     backend.setupEventListeners();
-    const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
+    const handleRunFact = vi.spyOn(
+      SessionFactApplier.prototype,
+      'handleRunFact',
+    );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const updateMissingOutputs = vi.spyOn(
       backend.webviewUpdater,
@@ -709,7 +713,10 @@ describe('ProgressBackend', () => {
     const target = createIsolatedRecordingBackend();
     const { backend } = target;
     backend.setupEventListeners();
-    const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
+    const handleRunFact = vi.spyOn(
+      SessionFactApplier.prototype,
+      'handleRunFact',
+    );
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const streamId = 'session:output-files-after-dispose' as StreamTabId;
     const location: FileLocation = {
@@ -891,10 +898,7 @@ describe('ProgressBackend', () => {
     backend.state.getOrCreateStreamState('tool-stream', AgentCategory.ToolUse);
     backend.state.switchActiveStream('tool-stream');
 
-    await backend.factApplier.setStreamStatus(
-      'unknown-stream',
-      STREAM_PHASE.RUNNING,
-    );
+    await backend.applyStreamStatus('unknown-stream', STREAM_PHASE.RUNNING);
 
     const patch = messages.find(
       (message) =>
@@ -942,7 +946,7 @@ describe('ProgressBackend', () => {
       ],
     }));
 
-    await backend.factApplier.setStreamStatus(
+    await backend.applyStreamStatus(
       stream,
       STREAM_PHASE.RUNNING,
       STREAM_PHASE.COMPLETED,
@@ -978,7 +982,7 @@ describe('ProgressBackend', () => {
     });
     backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-    await backend.factApplier.setStreamStatus(
+    await backend.applyStreamStatus(
       stream,
       STREAM_PHASE.RUNNING,
       STREAM_PHASE.RUNNING,
@@ -1008,12 +1012,12 @@ describe('ProgressBackend', () => {
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      backend.factApplier.handleRunFact(stream, {
+      backend.applyRunFact(stream, {
         type: 'conversation.progress',
         progress: { toolCallCount: 7 },
       });
 
-      await backend.factApplier.setStreamStatus(
+      await backend.applyStreamStatus(
         stream,
         STREAM_PHASE.RUNNING,
         STREAM_PHASE.COMPLETED,
@@ -1063,11 +1067,11 @@ describe('ProgressBackend', () => {
         return Promise.resolve().then(onFulfilled, onRejected);
       },
     };
-    vi.spyOn(backend.factApplier, 'setStreamStatus').mockReturnValue(
+    vi.spyOn(SessionFactApplier.prototype, 'setStreamStatus').mockReturnValue(
       tracking as Promise<void>,
     );
 
-    backend.factApplier.handleSessionFact({
+    backend.applySessionFact({
       type: 'status',
       streamId: stream,
       phase: STREAM_PHASE.RUNNING,
@@ -1087,7 +1091,7 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(stream);
     // Provisional patches only ever carry agentCategory/isRemote in
-    // production (see ProgressFactApplier.handleSetActiveStream). Identity
+    // production (see SessionFactApplier.handleSetActiveStream). Identity
     // comes from the immutable descriptor; input/model details come from
     // RunConfig and are assembled atomically by applySnapshotMetadata.
     backend.state.updateStreamMetadata(stream, {
@@ -1124,7 +1128,7 @@ describe('ProgressBackend', () => {
       executionId,
     });
 
-    backend.factApplier.syncStreamContent(stream);
+    backend.syncStreamContent(stream);
     const sync = messages.find(
       (message) =>
         message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,

@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   addChildActivationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
-  attachTuiRunFactSubscription: vi.fn(),
+  attachSessionSignalsAdapter: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resolveAndResumeStream: vi.fn(),
   resumeQueuedToolUseFromResumeData: vi.fn(),
@@ -105,8 +105,8 @@ vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
   createTuiHostInteractions: mocks.createTuiHostInteractions,
 }));
 
-vi.mock('@cli/chat/tui/state/subscribeRuntimeHost', () => ({
-  attachTuiRunFactSubscription: mocks.attachTuiRunFactSubscription,
+vi.mock('@cli/chat/tui/state/sessionSignalsAdapter', () => ({
+  attachSessionSignalsAdapter: mocks.attachSessionSignalsAdapter,
 }));
 
 vi.mock('@cli/chat/tui/state/transcriptProjection', () => ({
@@ -558,7 +558,7 @@ describe('createChatSessionController', () => {
     mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
     mocks.addChildActivationListener.mockReturnValue(vi.fn());
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
-    mocks.attachTuiRunFactSubscription.mockReturnValue(vi.fn());
+    mocks.attachSessionSignalsAdapter.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
     installSession();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
@@ -766,7 +766,7 @@ describe('createChatSessionController', () => {
       dispose: disposeAdapter,
     });
     mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
-    mocks.attachTuiRunFactSubscription.mockReturnValue(detachRunFacts);
+    mocks.attachSessionSignalsAdapter.mockReturnValue(detachRunFacts);
 
     const rootRun = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     mocks.executeAgent.mockImplementationOnce(

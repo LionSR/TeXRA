@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { logCompactionActivity } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
   closeInfoPane,
@@ -35,7 +35,7 @@ import {
 import { focusedChildInputDisabledMessage } from '@cli/chat/tui/state/focusedChildFollowUp';
 import {
   activeSubagentsFor,
-  applySubagentRoster,
+  projectChildRoster,
   childStreamEntries,
   focusOrderDescendants,
   isChildStreamRemoved,
@@ -52,7 +52,7 @@ import {
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
-import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
+import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
@@ -96,7 +96,11 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
-import { createRunTrace, StreamSnapshotStore } from '@transcript';
+import {
+  createRunTrace,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -146,16 +150,25 @@ function runTrace(
  *  snapshot store attaches to the hub first — mirroring production, where the
  *  session attaches its store at construction — so the TUI projection reads
  *  accumulated artifact/usage state the store has already folded in. */
-function withRunFacts(body: (hub: SessionEventHub) => void): void {
+function withRunFacts(
+  body: (hub: SessionEventHub, session: SessionHandle) => void,
+): void {
   const hub = new SessionEventHub();
   const snapshots = new StreamSnapshotStore();
-  const detachSnapshots = snapshots.attachSessionEvents(hub);
-  const detach = attachTuiRunFactSubscription(hub, snapshots);
+  const session = new SessionHandle({
+    events: hub,
+    snapshots,
+    transcripts: StreamLogStore.ephemeral('TUI session signals test'),
+  });
+  const detach = attachSessionSignalsAdapter({
+    events: hub,
+    session,
+    snapshots,
+  });
   try {
-    body(hub);
+    body(hub, session);
   } finally {
     detach();
-    detachSnapshots();
     snapshots.evictAll();
   }
 }
@@ -308,7 +321,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
     activeStreamId.set(root);
     // Roster-first (rule 3): registers both the retained history row and
     // active membership, then the explicit edge arrives.
-    applySubagentRoster(root, [
+    projectChildRoster(root, [
       {
         executionId: 'agent-1',
         agentName: 'critic',
@@ -336,7 +349,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
   it('updates retained child rows when a failed subagent leaves the active list', () => {
     withStreamStatus(() => {
-      applySubagentRoster(root, [
+      projectChildRoster(root, [
         {
           executionId: 'agent-1',
           agentName: 'codex',
@@ -347,7 +360,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
       ]);
       // A later, empty roster clears active membership; the retained row
       // survives and its status is read live from the child's own slice.
-      applySubagentRoster(root, []);
+      projectChildRoster(root, []);
 
       expect(subagentExecutionLabels.get().get('agent-1')).toBe('codex');
 
@@ -1195,7 +1208,7 @@ describe('CLI TUI row allocation', () => {
       streamId: root,
       status: STREAM_PHASE.WAITING,
     });
-    applySubagentRoster(root, [
+    projectChildRoster(root, [
       {
         executionId: 'child-exec-1',
         agentName: 'critic',
@@ -1225,7 +1238,7 @@ describe('CLI TUI row allocation', () => {
       streamId: root,
       status: STREAM_PHASE.WAITING,
     });
-    applySubagentRoster(root, [
+    projectChildRoster(root, [
       {
         executionId: 'child-exec-1',
         agentName: 'critic',
@@ -1291,7 +1304,7 @@ describe('CLI TUI row allocation', () => {
         streamId: root,
         status: STREAM_PHASE.WAITING,
       });
-      applySubagentRoster(root, [
+      projectChildRoster(root, [
         {
           executionId: 'child-exec-1',
           agentName: 'critic',
@@ -1328,7 +1341,7 @@ describe('CLI TUI row allocation', () => {
         streamId: root,
         status: STREAM_PHASE.WAITING,
       });
-      applySubagentRoster(root, [
+      projectChildRoster(root, [
         {
           executionId: 'child-exec-1',
           agentName: 'critic',
@@ -2913,7 +2926,7 @@ describe('CLI transcript state', () => {
   });
 });
 
-describe('subscribeRuntimeHost run facts', () => {
+describe('sessionSignalsAdapter run facts', () => {
   it('keeps a session-scoped fact subscription live after state reset', () => {
     withRunFacts((hub) => {
       const nextRoot = 'root-after-clear' as StreamTabId;
@@ -3502,11 +3515,10 @@ describe('subscribeRuntimeHost run facts', () => {
       streamId: root,
       status: STREAM_PHASE.RUNNING,
     });
-    const lease = defaultSession().followUps.claimLive(root, 'flow')!;
-    const queue = defaultSession().followUps.queue(lease);
-
-    try {
-      withRunFacts((hub) => {
+    withRunFacts((hub, session) => {
+      const lease = session.followUps.claimLive(root, 'flow')!;
+      const queue = session.followUps.queue(lease);
+      try {
         queue.enqueue({ text: 'Keep the proof under one page.' });
         hub.emit({
           scope: 'session',
@@ -3532,10 +3544,10 @@ describe('subscribeRuntimeHost run facts', () => {
 
         slice = streams.get().get(root);
         expect(slice?.queuedFollowUpMessages).toEqual([]);
-      });
-    } finally {
-      defaultSession().followUps.terminalize(root);
-    }
+      } finally {
+        session.followUps.terminalize(root);
+      }
+    });
   });
 
   it('keeps latest usage separate from cumulative resume usage', () => {
@@ -3600,7 +3612,7 @@ describe('subscribeRuntimeHost run facts', () => {
 
 describe('session tree order', () => {
   it('orders retained sibling sessions', () => {
-    applySubagentRoster(root, [
+    projectChildRoster(root, [
       {
         executionId: 'e1',
         agentName: 'a',
@@ -3646,8 +3658,8 @@ describe('session tree order', () => {
 // (docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md, "Race-regression
 // plan" / "Ordered unit matrix"). Each scenario drives the real transition
 // functions the production event handlers call
-// (subscribeRuntimeHost.applyActiveSubagents -> applySubagentRoster,
-// subscribeRuntimeHost.applyParentStream -> setParentStream, cliState's
+// (sessionSignalsAdapter.applyActiveSubagents -> projectChildRoster,
+// sessionSignalsAdapter.applyParentStream -> setParentStream, cliState's
 // removeStream -> applyChildStreamRemoval) in the stated order and asserts
 // the load-bearing checkpoint(s) each sequence exists to prove, per the
 // design's precedence rule:
@@ -3680,7 +3692,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
     expect(parentStream.get().get(kid)).toBe(parentP);
@@ -3693,7 +3705,7 @@ describe('child-stream ordered transition matrix', () => {
   });
 
   it('2. roster first: R_P+, A, S(running), E_P+', () => {
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     // A: the child's slice exists with no status of its own yet.
     patchStream(kid, (s) => ({ ...s }));
     setStreamStatusInCliState({
@@ -3720,7 +3732,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
 
     expect(activeRows(parentP)).toHaveLength(1);
     expect(retainedRows(parentP)).toHaveLength(1);
@@ -3732,7 +3744,7 @@ describe('child-stream ordered transition matrix', () => {
       status: STREAM_PHASE.RUNNING,
     });
     setParentStream(kid, parentP);
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
 
     expect(parentStream.get().get(kid)).toBe(parentP);
     expect(activeRows(parentP)).toMatchObject([
@@ -3745,11 +3757,11 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
     // Untrack (roster omission) arrives before the terminal status.
-    applySubagentRoster(parentP, []);
+    projectChildRoster(parentP, []);
     expect(activeRows(parentP)).toEqual([]);
     expect(retainedRows(parentP)).toHaveLength(1);
 
@@ -3779,15 +3791,15 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
     setParentStream(kid, parentP);
 
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '5s')]);
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '41s')]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '5s')]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '41s')]);
 
     // The child is untracked (dropped from the roster) with its last-known
     // elapsed already captured; the terminal status lands separately.
-    applySubagentRoster(parentP, []);
+    projectChildRoster(parentP, []);
     setStreamStatusInCliState({
       streamId: kid,
       status: STREAM_PHASE.COMPLETED,
@@ -3801,7 +3813,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
 
     setParentStream(kid, null);
@@ -3809,7 +3821,7 @@ describe('child-stream ordered transition matrix', () => {
 
     // A stale roster from the former parent must not resurrect the edge or
     // active membership.
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     expect(parentStream.get().has(kid)).toBe(false);
     expect(activeRows(parentP)).toEqual([]);
@@ -3822,16 +3834,16 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
     setParentStream(kid, null);
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     setParentStream(kid, parentQ);
-    applySubagentRoster(parentQ, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentQ, [rosterRow(STREAM_PHASE.RUNNING)]);
     // Late roster from the old parent must not erase active membership or
     // metadata under the new parent.
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     expect(parentStream.get().get(kid)).toBe(parentQ);
     expect(activeRows(parentQ)).toMatchObject([{ executionId: 'kid-exec' }]);
@@ -3845,9 +3857,9 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
-    applySubagentRoster(parentP, []);
+    projectChildRoster(parentP, []);
     setStreamStatusInCliState({
       status: STREAM_PHASE.COMPLETED,
       streamId: kid,
@@ -3861,7 +3873,7 @@ describe('child-stream ordered transition matrix', () => {
     // fact-application path), which checks the tombstone directly; a raw
     // `patchStream` call (used elsewhere in this file as a low-level test
     // shortcut) intentionally has no such guard.
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     setStreamStatusInCliState({ status: STREAM_PHASE.RUNNING, streamId: kid });
 
@@ -3876,7 +3888,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     removeStream(kid);
 
@@ -3886,7 +3898,7 @@ describe('child-stream ordered transition matrix', () => {
       status: STREAM_PHASE.RUNNING,
     });
     setParentStream(freshKid, parentP);
-    applySubagentRoster(parentP, [
+    projectChildRoster(parentP, [
       {
         executionId: 'kid-2-exec',
         agentName: 'kid-agent',
@@ -3928,21 +3940,21 @@ describe('child-stream ordered transition matrix', () => {
     });
 
     // First-seen order: A then B.
-    applySubagentRoster(parentP, [rowA(), rowB()]);
+    projectChildRoster(parentP, [rowA(), rowB()]);
     expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
       kidA,
       kidB,
     ]);
 
     // A later roster reorders (B, A) — retained order must not change.
-    applySubagentRoster(parentP, [rowB(), rowA()]);
+    projectChildRoster(parentP, [rowB(), rowA()]);
     expect(retainedRows(parentP).map((r) => r.childStreamId)).toEqual([
       kidA,
       kidB,
     ]);
 
     // Shrink to just B; A completes.
-    applySubagentRoster(parentP, [rowB()]);
+    projectChildRoster(parentP, [rowB()]);
     setStreamStatusInCliState({
       streamId: kidA,
       status: STREAM_PHASE.COMPLETED,
@@ -3965,7 +3977,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
     setStreamStatusInCliState({
       streamId: parentP,
@@ -3977,7 +3989,7 @@ describe('child-stream ordered transition matrix', () => {
 
     // Late facts naming the removed parent must not resurrect it as an
     // ancestor anywhere.
-    applySubagentRoster(parentP, [rosterRow()]);
+    projectChildRoster(parentP, [rosterRow()]);
     setParentStream(kid, parentP);
 
     expect(parentStream.get().get(kid)).toBeUndefined();
@@ -3990,13 +4002,13 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     const entriesAfterFirst = childStreamEntries.get();
 
     // The runtime resends a fresh array/row object on every poll even when
     // nothing changed; `rosterRow` below is a distinct object with identical
     // field values, not `===` to the first call's row.
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     expect(childStreamEntries.get()).toBe(entriesAfterFirst);
   });
@@ -4006,9 +4018,9 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
-    applySubagentRoster(parentQ, [
+    projectChildRoster(parentQ, [
       { ...rosterRow(STREAM_PHASE.RUNNING), agentName: 'stale-parent' },
     ]);
 
@@ -4022,7 +4034,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
 
     for (let index = 0; index < 250; index += 1) {
       removeStream(`gone-${index}` as StreamTabId);
@@ -4046,7 +4058,7 @@ describe('child-stream ordered transition matrix', () => {
       streamId: kid,
       status: STREAM_PHASE.RUNNING,
     });
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    projectChildRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
     setParentStream(kid, parentP);
 
     removeStream(parentP);
