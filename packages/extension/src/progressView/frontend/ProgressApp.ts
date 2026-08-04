@@ -123,7 +123,7 @@ export class ProgressApp extends ProgressAppBase {
           dashboardButtonId: 'progressOpenDashboardButton',
           launcherTab: {
             focusSidebar: isEditorMode,
-            title: isEditorMode ? 'Focus Launcher sidebar' : undefined,
+            title: isEditorMode ? 'Focus New sidebar' : undefined,
             onClick: this.onFocusLauncherTab,
           },
           onOpenDashboard: this.onOpenDashboard,
@@ -159,7 +159,6 @@ export class ProgressApp extends ProgressAppBase {
 
                     <stream-tabs
                       slot="end"
-                      .heading=${compactTabs ? '' : 'Sessions'}
                       .compact=${compactTabs}
                       .streams=${topLevelStreams$.get()}
                       .activeStreamId=${activeStreamId$.get()}
@@ -184,12 +183,12 @@ export class ProgressApp extends ProgressAppBase {
         <div class="progress-empty-panel">
           ${renderEmptyState({
             icon: 'robot',
-            kicker: 'Progress',
+            kicker: 'Sessions',
             title: 'No runs yet',
-            body: 'Start an agent from the Launcher or Commands. New runs, streamed logs, approvals, and follow-up controls will appear here.',
+            body: 'Start an agent from the New tab or Commands. Runs, streamed logs, approvals, and follow-up controls will appear here.',
             actions: [
               {
-                label: 'Open Launcher',
+                label: 'Open New',
                 icon: 'play',
                 appearance: 'filled',
                 variant: 'brand',

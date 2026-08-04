@@ -1,15 +1,15 @@
 /** Switch to enable/disable memory for chat agents. */
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
+
+// Local imports - shared styles
+import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-
-// Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import { renderSettingsToggleRow } from '@shared/wa/settingsSection';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('memory-toggle')
@@ -20,12 +20,6 @@ export class MemoryToggle extends LitElement {
     css`
       :host {
         display: block;
-      }
-
-      .memory-settings {
-        display: flex;
-        align-items: center;
-        min-height: var(--height-control-compact);
       }
     `,
   ];
@@ -41,17 +35,13 @@ export class MemoryToggle extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`
-      <div class="memory-settings">
-        <wa-switch
-          ?checked=${this.enabled}
-          ?disabled=${this.disabled}
-          @change=${this.handleChange}
-        >
-          Enable memory for chat agents
-        </wa-switch>
-      </div>
-    `;
+    return renderSettingsToggleRow({
+      label: 'Enable memory for chat agents',
+      description: 'Remember useful details across chat sessions.',
+      checked: this.enabled,
+      disabled: this.disabled,
+      onChange: this.handleChange,
+    });
   }
 }
 

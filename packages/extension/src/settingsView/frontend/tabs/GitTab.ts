@@ -13,12 +13,14 @@ import {
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared schemas
@@ -238,7 +240,7 @@ export class GitTab extends LitElement {
       title: 'Token set',
       fallbacks: {
         env: { label: 'Env', variant: 'neutral' },
-        none: { label: 'Not set', variant: 'warning' },
+        none: { label: 'Not set' },
       },
     });
   }
@@ -283,7 +285,7 @@ export class GitTab extends LitElement {
                           : nothing
                       }
                       ${renderLabeledActionButton({
-                        icon: 'code-branch',
+                        icon: 'arrow-up-right-from-square',
                         text: 'Create on GitHub…',
                         kind: 'secondary',
                         appearance: 'outlined',
@@ -405,22 +407,14 @@ export class GitTab extends LitElement {
               'Keep agent-authored commits distinguishable from your personal Git identity.',
             icon: 'circle-dot',
           })}
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">Mark TeXRA commits</span>
-              <span class="settings-row-help">
-                Use the TeXRA author identity for commits created by agents.
-              </span>
-            </div>
-            <div class="settings-row-control">
-              <wa-switch
-                aria-label="Mark commits with TeXRA author info"
-                ?checked=${this.markCommits}
-                ?disabled=${this.toggleDisabled}
-                @change=${this.handleMarkCommitsToggle}
-              ></wa-switch>
-            </div>
-          </div>
+          ${renderSettingsToggleRow({
+            label: 'Mark TeXRA commits',
+            description:
+              'Use the TeXRA author identity for commits created by agents.',
+            checked: this.markCommits,
+            disabled: this.toggleDisabled,
+            onChange: this.handleMarkCommitsToggle,
+          })}
           ${
             this.markCommits
               ? html`

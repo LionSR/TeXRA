@@ -8,7 +8,7 @@ export const instructionPanelStyles: CSSResult = css`
     /* Both agent + model selects share this width so the two boxes are
        identical at every viewport. clamp() floors at the min so the
        formula can't go negative on viewports < 12rem. */
-    --agent-select-max-width: clamp(7rem, calc((100vw - 12rem) / 2), 12rem);
+    --agent-select-max-width: clamp(6rem, calc((100vw - 12rem) / 3), 9rem);
     --agent-model-listbox-min-width: 12rem;
     --agent-model-listbox-max-width: min(
       20rem,

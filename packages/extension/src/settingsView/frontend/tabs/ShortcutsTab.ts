@@ -18,6 +18,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -33,8 +34,7 @@ export class ShortcutsTab extends LitElement {
         display: block;
       }
 
-      .shortcuts-feedback,
-      .shortcuts-empty {
+      .shortcuts-feedback {
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
       }
@@ -206,10 +206,13 @@ export class ShortcutsTab extends LitElement {
           >
             ${waIcon('code', { slot: 'start' })} ${label}
           </wa-button>
-          ${renderIconActionButton({
+          ${renderLabeledActionButton({
             icon: 'arrow-rotate-left',
+            text: 'Reset',
+            kind: 'secondary',
+            appearance: 'outlined',
             label: `Reset ${entry.label}`,
-            tooltip: 'Reset to default',
+            title: 'Reset to default',
             onClick: () =>
               this.updateShortcut(entry.id, entry.defaultAccelerator),
           })}
@@ -264,7 +267,13 @@ export class ShortcutsTab extends LitElement {
         </p>
         ${
           entries.length === 0
-            ? html`<p class="shortcuts-empty">No matching commands.</p>`
+            ? renderEmptyState({
+                icon: 'magnifying-glass',
+                title: 'No matching commands.',
+                body: 'Try a different search term.',
+                headingTag: 'h3',
+                className: 'empty-state',
+              })
             : [...groups].map(
                 ([category, categoryEntries]) => html`
                   <section>

@@ -3,7 +3,6 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -15,19 +14,22 @@ import {
   designTokens,
   settingsBannerStyles,
 } from '@shared/styles';
-import type { ChatGptAuthStatus } from '@shared/schemas';
 import type {
   SpendingStatus,
   SpendingStatusError,
 } from '@shared/schemas/spendingStatus';
 import type { SessionProblem } from '@shared/schemas/profileViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderBannerFrame } from '@shared/wa/bannerFrame';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
+import {
+  renderSettingsSectionHeading,
+  renderSettingsToggleRow,
+} from '@shared/wa/settingsSection';
+import { createEvent } from '@shared/utils/events';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 // Local imports - settings view components
-import '../components/profile/CodexSubscriptionSection';
 import '../components/profile/RelayQuotaMeter';
 
 @customElement('account-tab')
@@ -48,15 +50,6 @@ export class AccountTab extends LitElement {
       .account-tier {
         text-transform: capitalize;
       }
-
-      .account-empty {
-        padding: var(--wa-space-m);
-        border: var(--border-thin) solid var(--border-hairline);
-        border-radius: var(--wa-border-radius-m);
-        color: var(--wa-color-text-quiet);
-        background: var(--wa-color-surface-lowered);
-        font-size: var(--font-size-sm);
-      }
     `,
   ];
 
@@ -69,7 +62,6 @@ export class AccountTab extends LitElement {
   spendingStatusError: SpendingStatusError | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ type: Boolean }) telemetryEnabled = true;
-  @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
 
   private readonly handleSignIn = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
@@ -80,12 +72,7 @@ export class AccountTab extends LitElement {
   };
 
   private handleManageProviderKeys(): void {
-    this.dispatchEvent(
-      new CustomEvent('manage-provider-keys', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    this.dispatchEvent(createEvent('manage-provider-keys'));
   }
 
   private readonly handleTelemetryChange = (event: Event): void => {
@@ -95,45 +82,47 @@ export class AccountTab extends LitElement {
     });
   };
 
+  private renderUsageNotice(id: string, body: string): TemplateResult {
+    return renderBannerFrame({
+      id,
+      variant: 'neutral',
+      appearance: 'outlined',
+      size: 's',
+      body: html`${body}`,
+    });
+  }
+
   private renderUsage(): TemplateResult {
     // Session and spend-check failures take priority over stale usage data.
     if (this.sessionProblem === 'expired') {
-      return html`
-        <div class="account-empty">
-          Usage data can't load because your session has expired. Sign in again
-          to reconnect.
-        </div>
-      `;
+      return this.renderUsageNotice(
+        'account-usage-session-expired',
+        "Usage data can't load because your session has expired. Sign in again to reconnect.",
+      );
     }
     if (this.sessionProblem === 'unavailable') {
-      return html`
-        <div class="account-empty">
-          Usage data can't load because the authentication service is
-          temporarily unavailable. Try again later.
-        </div>
-      `;
+      return this.renderUsageNotice(
+        'account-usage-auth-unavailable',
+        "Usage data can't load because the authentication service is temporarily unavailable. Try again later.",
+      );
     }
     if (this.spendingStatusError != null) {
-      return html`
-        <div class="account-empty">
-          Usage check failed on the server. Included access is temporarily
-          unavailable; switch to your own provider API keys or try again later.
-        </div>
-      `;
+      return this.renderUsageNotice(
+        'account-usage-spend-check-failed',
+        'Usage check failed on the server. Included access is temporarily unavailable; switch to your own provider API keys or try again later.',
+      );
     }
     if (!this.authenticated) {
-      return html`
-        <div class="account-empty">
-          Sign in to monitor your included TeXRA usage and monthly relay quota.
-        </div>
-      `;
+      return this.renderUsageNotice(
+        'account-usage-sign-in',
+        'Sign in to monitor your included TeXRA usage and monthly relay quota.',
+      );
     }
     if (this.spendingStatus == null) {
-      return html`
-        <div class="account-empty">
-          Usage data is not available for this account.
-        </div>
-      `;
+      return this.renderUsageNotice(
+        'account-usage-unavailable',
+        'Usage data is not available for this account.',
+      );
     }
     return html`
       <relay-quota-meter
@@ -167,9 +156,9 @@ export class AccountTab extends LitElement {
     let actions: TemplateResult | typeof nothing;
     if (expired) {
       actions = html`
-        <wa-tag variant="warning">Session expired</wa-tag>
+        <wa-tag variant="warning" size="s">Session expired</wa-tag>
         ${renderLabeledActionButton({
-          icon: 'user',
+          icon: 'right-to-bracket',
           text: 'Sign in',
           kind: 'primary',
           appearance: 'filled',
@@ -187,7 +176,7 @@ export class AccountTab extends LitElement {
       actions = nothing;
     } else if (this.authenticated) {
       actions = html`
-        <wa-tag variant="success">Connected</wa-tag>
+        <wa-tag variant="success" size="s">Connected</wa-tag>
         ${renderLabeledActionButton({
           icon: 'right-from-bracket',
           text: 'Sign out',
@@ -198,7 +187,7 @@ export class AccountTab extends LitElement {
       `;
     } else {
       actions = renderLabeledActionButton({
-        icon: 'user',
+        icon: 'right-to-bracket',
         text: 'Sign in',
         kind: 'primary',
         appearance: 'filled',
@@ -224,19 +213,17 @@ export class AccountTab extends LitElement {
             title: 'Included access usage',
             description:
               'Monthly usage for models provided through your TeXRA plan.',
+            icon: 'chart-line',
           })}
           ${this.renderUsage()}
         </section>
-
-        <codex-subscription-section
-          .chatgptAuth=${this.chatgptAuth}
-        ></codex-subscription-section>
 
         <section>
           ${renderSettingsSectionHeading({
             title: 'Credentials',
             description:
               'Provider API keys remain in Providers & Models, alongside the models that use them.',
+            icon: 'key',
           })}
           <div class="settings-section">
             <div class="settings-row">
@@ -264,23 +251,16 @@ export class AccountTab extends LitElement {
             title: 'Privacy',
             description:
               'Choose whether TeXRA records anonymous usage metadata.',
+            icon: 'shield',
           })}
           <div class="settings-section">
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <span class="settings-row-label">Share usage telemetry</span>
-                <span class="settings-row-help">
-                  Sends model, token, cost, timing, route, and host metadata.
-                  Prompt text, document content, and file names are never sent.
-                </span>
-              </div>
-              <wa-switch
-                class="settings-row-control"
-                aria-label="Share usage telemetry"
-                ?checked=${this.telemetryEnabled}
-                @change=${this.handleTelemetryChange}
-              ></wa-switch>
-            </div>
+            ${renderSettingsToggleRow({
+              label: 'Share usage telemetry',
+              description:
+                'Sends model, token, cost, timing, route, and host metadata. Prompt text, document content, and file names are never sent.',
+              checked: this.telemetryEnabled,
+              onChange: this.handleTelemetryChange,
+            })}
           </div>
         </section>
       </div>

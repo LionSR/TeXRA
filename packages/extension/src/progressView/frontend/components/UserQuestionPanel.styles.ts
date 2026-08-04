@@ -5,15 +5,6 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@shared/styles';
 
 export const userQuestionPanelStyles: CSSResult = css`
-  .user-question-request__context {
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
-    padding: ${sp.small} ${sp.medium};
-    background: var(--wa-color-surface-lowered);
-    border-radius: var(--border-radius-small);
-    line-height: var(--line-height-normal);
-  }
-
   .user-question-request__questions {
     display: flex;
     flex-direction: column;

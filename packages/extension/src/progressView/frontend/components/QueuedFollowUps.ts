@@ -32,10 +32,6 @@ export class QueuedFollowUps extends LitElement {
         min-width: 0;
       }
 
-      :host([hidden]) {
-        display: none;
-      }
-
       /* Info-style collapsible for queued messages */
       .queued-collapsible {
         border: var(--border-thin) solid var(--wa-color-brand-border-quiet);
@@ -105,16 +101,18 @@ export class QueuedFollowUps extends LitElement {
     };
   }
 
-  override render(): TemplateResult {
-    const visible = this.messages.length > 0;
+  override render(): TemplateResult | typeof nothing {
+    // Empty queue renders nothing. The layout fix lives in FollowUpInput,
+    // which only mounts this element when messages exist — Lit's `nothing`
+    // clears shadow content but the host stays in the parent's layout, so a
+    // mounted-but-empty host would still consume the parent's flex gap.
+    if (this.messages.length === 0) return nothing;
     return html`
       <wa-details
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
         class="queued-collapsible"
         summary="Queued Messages"
-        ?open=${visible}
-        ?hidden=${!visible}
-        aria-hidden=${visible ? 'false' : 'true'}
+        open
       >
         <div
           id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_LIST}

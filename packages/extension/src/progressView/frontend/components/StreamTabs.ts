@@ -18,11 +18,7 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
-import {
-  designTokens,
-  animationStyles,
-  commonViewStyles,
-} from '@shared/styles';
+import { designTokens, commonViewStyles } from '@shared/styles';
 import {
   formatStreamStatusLabel,
   streamStatusDisplayKey,
@@ -67,10 +63,14 @@ function buildTooltip(
     info.kind === 'agent' && info.model
       ? (info.modelLabel ?? info.model)
       : undefined;
+  const worktreeDisplay = info.worktree
+    ? `Worktree: ${info.worktree.branch}${info.worktree.pr ? ` (#${info.worktree.pr.number})` : ''}`
+    : undefined;
   const mainLine = [
     info.label || info.name,
     `Status: ${statusLabel}`,
     modelDisplay && `Model: ${modelDisplay}`,
+    worktreeDisplay,
     info.inputFile && `Input: ${info.inputFile}`,
   ]
     .filter(Boolean)
@@ -98,7 +98,7 @@ function buildTooltip(
  */
 @customElement('stream-tab')
 export class StreamTab extends LitElement {
-  static override styles = [designTokens, animationStyles, streamTabStyles];
+  static override styles = [designTokens, streamTabStyles];
 
   @property({ attribute: false }) info!: StreamTabInfo;
   @property({ type: String }) status: string = DEFAULT_STREAM_METADATA_STATUS;
@@ -197,7 +197,7 @@ export class StreamTab extends LitElement {
                 stream.parentStreamId
                   ? waIcon('chevron-right', { className: 'nested-stream-icon' })
                   : nothing
-              }${stream.label || stream.name}</span
+              }${stream.description || stream.label || stream.name}</span
             >
             ${
               showCompactChildHint
@@ -213,23 +213,14 @@ export class StreamTab extends LitElement {
             this.compact
               ? nothing
               : html`
-                  ${
-                    stream.description
-                      ? html`<div class="tab-description">
-                          ${stream.description}
-                        </div>`
-                      : nothing
-                  }
-                  ${
-                    stream.worktree
-                      ? html`<div class="worktree-chip-row">
-                          <worktree-chip
-                            .info=${stream.worktree}
-                          ></worktree-chip>
-                        </div>`
-                      : nothing
-                  }
                   <div class="tab-meta">
+                    ${
+                      stream.worktree
+                        ? html`<worktree-chip
+                            .info=${stream.worktree}
+                          ></worktree-chip>`
+                        : nothing
+                    }
                     ${
                       this.lastTimestamp
                         ? html`<wa-relative-time
@@ -289,13 +280,13 @@ export class StreamTab extends LitElement {
           variant="neutral"
           size="s"
           type="button"
-          aria-label="Delete stream"
+          aria-label="Delete"
           data-stream=${stream.name}
           data-action="delete"
         >
           ${waIcon('xmark')}
         </wa-button>
-        <wa-tooltip for="stream-tab-delete-button">Delete stream</wa-tooltip>
+        <wa-tooltip for="stream-tab-delete-button">Delete</wa-tooltip>
       </div>
     `;
   }
@@ -309,7 +300,6 @@ export class StreamTab extends LitElement {
 export class StreamTabs extends LitElement {
   static override styles = [
     designTokens,
-    animationStyles,
     commonViewStyles,
     layoutStyles,
     streamTabsContainerStyles,
@@ -317,8 +307,6 @@ export class StreamTabs extends LitElement {
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
   @property({ type: Boolean, reflect: true }) compact = false;
-  /** Optional rail-header title. Empty (default) renders no header band. */
-  @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
   /**
    * Stream states map — passed directly from ProgressApp's streamStates$.
@@ -445,13 +433,6 @@ export class StreamTabs extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="tabs">
-        ${
-          this.heading && !this.compact
-            ? html`<header class="stream-tabs-header" part="header">
-                <span class="stream-tabs-title">${this.heading}</span>
-              </header>`
-            : nothing
-        }
         <div class="tabs-content">
           <div id=${ELEMENT_IDS.STREAM_TABS} @click=${this.handleTabClick}>
             ${repeat(
