@@ -2052,22 +2052,15 @@ describe('DesktopProgressBridge', () => {
       executionId,
     }));
     const runAgent = vi.fn(async () => {});
-    // One mocked KV serves both stores: the stream sidecar lifts only the
-    // legacy runDescriptor's executionId FK from `meta`, while the execution
-    // store reads timestamp/identity/description from the same blob and the
-    // run config from `config` — identity and config live in
-    // `executions/{id}/`, never as a sidecar copy.
+    // One mocked KV serves both stores: the stream sidecar reads only the
+    // executionId FK from `meta`, while the execution store reads
+    // timestamp/identity/description from the same blob and the run config
+    // from `config` — identity and config live in `executions/{id}/`, never
+    // as a sidecar copy.
     const kvRead = vi.fn(async (key: string) => {
       if (key === 'meta') {
         return {
-          runDescriptor: {
-            schemaVersion: 1,
-            streamId: 'stream-1',
-            executionId,
-            agent: runConfig.agent,
-            category: runConfig.agentCategory,
-            kind: 'agent',
-          },
+          executionId,
           timestamp: '2026-07-10T00:00:00.000Z',
           identity: { kind: 'agent', agent: runConfig.agent },
           description: 'Persisted workflow',

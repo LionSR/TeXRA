@@ -30,30 +30,18 @@ export const STREAM_TAB_META_SCHEMA_VERSION = 1;
 /**
  * On-disk shape of `meta.json`. The stream sidecar carries a foreign key
  * (`executionId`) into `executions/{id}/` — identity and config live there,
- * never as a sidecar copy. Legacy sidecars carried a whole `runDescriptor`;
- * its `executionId` field IS the FK, normalized here once at the parse
- * boundary.
+ * never as a sidecar copy. Pre-FK sidecars carried a whole `runDescriptor`;
+ * that retired shape is no longer read — the unknown key is stripped and the
+ * sidecar simply has no FK.
  */
-export const StreamTabMetaSchema = z
-  .object({
-    schemaVersion: z
-      .literal(STREAM_TAB_META_SCHEMA_VERSION)
-      .prefault(STREAM_TAB_META_SCHEMA_VERSION),
-    parentStreamId: z.string().optional(),
-    /** FK into `executions/{executionId}/` — the durable run authority. */
-    executionId: ExecutionIdSchema.optional(),
-    /** Legacy pre-FK sidecar shape; only the FK inside it is read.
-     *  Introduced 2026-08-04; retire together with the pre-FK sidecar cohort
-     *  (once no `meta.json` still carries a `runDescriptor`). */
-    runDescriptor: z.looseObject({ executionId: ExecutionIdSchema }).optional(),
-  })
-  .transform(({ runDescriptor, ...meta }) => {
-    const executionId = meta.executionId ?? runDescriptor?.executionId;
-    // Never materialize an explicit `executionId: undefined`: overlay merges
-    // spread this object over freshly-read disk meta, and an explicit
-    // undefined would clobber a persisted FK.
-    return executionId === undefined ? meta : { ...meta, executionId };
-  });
+export const StreamTabMetaSchema = z.object({
+  schemaVersion: z
+    .literal(STREAM_TAB_META_SCHEMA_VERSION)
+    .prefault(STREAM_TAB_META_SCHEMA_VERSION),
+  parentStreamId: z.string().optional(),
+  /** FK into `executions/{executionId}/` — the durable run authority. */
+  executionId: ExecutionIdSchema.optional(),
+});
 
 export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
 

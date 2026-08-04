@@ -172,7 +172,7 @@ describe('extension settings AgentHandlers', () => {
     });
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'physicist' });
     expect(refreshAfterAgentMutation).toHaveBeenCalledWith(
       'orchestrator',
@@ -251,11 +251,11 @@ describe('extension settings AgentHandlers', () => {
     });
     expect(
       update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toHaveLength(1);
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'remote-team' });
   });
 

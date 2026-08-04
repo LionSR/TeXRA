@@ -37,14 +37,8 @@ const REPO_ROOT = resolve(
 );
 
 function workspaceRoster(): AgentRosterSelection | undefined {
-  // New writes land on the versioned v2 key; v1 is a legacy read fallback.
-  return (
-    platform().workspaceState.get<AgentRosterSelection>(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
-    ) ??
-    platform().workspaceState.get<AgentRosterSelection>(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    )
+  return platform().workspaceState.get<AgentRosterSelection>(
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
 }
 
@@ -53,10 +47,6 @@ async function clearOnboardingState(): Promise<void> {
   setSetupPlatform(createFakeSetupPlatform());
   await platform().workspaceState.update(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    undefined,
-  );
-  await platform().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
     undefined,
   );
   await platform().globalState.update(

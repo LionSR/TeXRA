@@ -227,44 +227,25 @@ describe('execution listing normalization', () => {
     }
   });
 
-  it('heals legacy terminalStatus raw bytes into the canonical outcome', async () => {
-    const interruptedId = 'abd001' as ExecutionId;
-    const junkId = 'abd002' as ExecutionId;
-    const interruptedStore = getExecutionStore(interruptedId);
-    // terminalStatus no longer exists on ExecutionMetaSchema, so the typed
-    // writer would strip it — persist the raw legacy bytes directly.
-    await interruptedStore.write('meta', {
+  it('lists a legacy terminalStatus-bearing row with no outcome', async () => {
+    // The retired terminalStatus vocabulary is deliberately not converted:
+    // pre-consolidation rows simply have no recorded terminal state. The
+    // stray bytes must not break parsing or identity healing.
+    const id = 'abd001' as ExecutionId;
+    const store = getExecutionStore(id);
+    await store.write('meta', {
       timestamp: '2026-07-15T06:00:00.000Z',
       terminalStatus: 'interrupted',
     });
-    await interruptedStore.writeConfig(config('assistant'));
-    const junkStore = getExecutionStore(junkId);
-    await junkStore.write('meta', {
-      timestamp: '2026-07-15T05:30:00.000Z',
-      terminalStatus: 'exploded',
-    });
-    await junkStore.writeConfig(config('assistant'));
+    await store.writeConfig(config('assistant'));
 
-    // The first listing read already surfaces the converted outcome.
     const entries = await listExecutions();
-    expect(
-      entries.find((candidate) => candidate.id === interruptedId),
-    ).toMatchObject({ kind: 'run', outcome: 'cancelled' });
-    expect(entries.find((candidate) => candidate.id === junkId)).toMatchObject({
+    const entry = entries.find((candidate) => candidate.id === id);
+    expect(entry).toMatchObject({
       kind: 'run',
-      outcome: 'failed',
+      identity: { kind: 'agent', agent: 'assistant' },
     });
-
-    // The durable stamp converts the raw evidence before any schema-shaped
-    // rewrite would strip it forever.
-    await vi.waitFor(async () => {
-      const healed = await interruptedStore.readMeta();
-      expect(healed?.identity).toEqual({ kind: 'agent', agent: 'assistant' });
-      expect(healed?.outcome).toBe('cancelled');
-    });
-    await vi.waitFor(async () => {
-      expect((await junkStore.readMeta())?.outcome).toBe('failed');
-    });
+    expect(entry?.outcome).toBeUndefined();
   });
 
   it('lists a pre-PR team-run config with the legacy delegation-scope pair as kind run', async () => {

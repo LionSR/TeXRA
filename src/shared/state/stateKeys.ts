@@ -18,14 +18,8 @@ export enum WorkspaceStateKey {
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
 
   // Agent visibility
-  /** v1 roster key: legacy pair-shaped `custom` member. Read-only fallback. */
+  /** Roster selection; the `custom` member carries a category-keyed record. */
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
-  /**
-   * v2 roster key: `custom` member carries a category-keyed record. Written
-   * under a new key so older binaries sharing `state.json` keep reading their
-   * untouched v1 value instead of failing on the new shape.
-   */
-  AGENT_ROSTER_SELECTION_V2 = 'texra.agentRosterSelection.v2',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',

@@ -460,7 +460,7 @@ if (
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
   await platform().workspaceState.update(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     {
       kind: 'custom',
       agentKeys: {

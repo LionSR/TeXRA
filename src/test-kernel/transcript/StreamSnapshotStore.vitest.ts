@@ -910,18 +910,16 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(executionId);
   });
 
-  it('lifts the legacy runDescriptor execution id everywhere', async () => {
-    await installPlatform();
-    const executionId = 'aa11bb22' as ExecutionId;
-    const runConfig = toolUseConfig('legacy-search');
-    await getExecutionStore(executionId).writeConfig(runConfig);
-    // Legacy pre-FK sidecar: a whole runDescriptor object whose executionId
-    // IS the FK, lifted once at the parse boundary.
+  it('strips a retired runDescriptor sidecar without reading its FK', async () => {
+    // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
+    // The unknown key is stripped: no FK is lifted out of it, and the rest
+    // of the meta (parentStreamId) survives untouched.
     await writeMetaFile(STREAM, {
+      parentStreamId: OTHER_STREAM,
       runDescriptor: {
         schemaVersion: 1,
         streamId: STREAM,
-        executionId,
+        executionId: 'aa11bb22',
         agent: 'legacy-search',
         category: AgentCategory.ToolUse,
         kind: 'agent',
@@ -929,24 +927,24 @@ describe('StreamSnapshotStore', () => {
     });
 
     const store = new StreamSnapshotStore();
-    // The meta-only scan the execution→stream resolver runs, and the seeded
-    // accessors, must agree instead of one finding the run and the other not.
-    expect(await store.readPersistedExecutionId(STREAM)).toBe(executionId);
+    expect(await store.readPersistedExecutionId(STREAM)).toBeUndefined();
     await store.load([STREAM]);
 
-    expect(store.getExecutionId(STREAM)).toBe(executionId);
-    expect(store.getExecutionIdMap().get(STREAM)).toBe(executionId);
-    expect((await store.read(STREAM)).executionId).toBe(executionId);
+    expect(store.getExecutionId(STREAM)).toBeUndefined();
+    await expect(store.read(STREAM)).resolves.toMatchObject({
+      executionId: undefined,
+      parentStreamId: OTHER_STREAM,
+    });
   });
 
-  it('drops only the FK from meta whose legacy runDescriptor is unreadable, loudly', async () => {
-    // Field-level tolerance: a malformed legacy pointer severs the execution
-    // FK (warned), but must NOT discard the rest of the meta — losing
+  it('drops only a malformed execution FK from meta, loudly', async () => {
+    // Field-level tolerance: a malformed FK severs the execution pointer
+    // (warned), but must NOT discard the rest of the meta — losing
     // `parentStreamId` would orphan the tab.
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeMetaFile(STREAM, {
       parentStreamId: OTHER_STREAM,
-      runDescriptor: { kind: 'agent', executionId: 'not-hex!!' },
+      executionId: 'not-hex!!',
     });
 
     const store = new StreamSnapshotStore();

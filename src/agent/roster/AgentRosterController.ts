@@ -11,7 +11,6 @@ import {
 } from '@shared/schemas/agent';
 import {
   AgentRosterSelectionSchema,
-  AgentRosterSelectionV1Schema,
   INHERITED_AGENT_ROSTER,
   type AgentRosterCategorySelection,
   type AgentRosterSelection,
@@ -83,40 +82,25 @@ function allPresets(
 }
 
 /**
- * Read the canonical workspace selection.
- *
- * The v2 key holds the record-shaped selection; on absence the unversioned v1
- * key (pair-shaped `custom` member) is read and normalized. The v1 value is
- * never rewritten, so older binaries sharing the same `state.json` keep
- * working against their own key.
+ * Read the canonical workspace selection. A value that does not parse —
+ * including the retired pair-shaped pre-record value — falls back loudly to
+ * the inherited roster; the stored value is left for the next write to
+ * replace.
  */
 function readAgentRosterSelection(
   workspaceState: StateStore,
 ): AgentRosterSelection {
-  const rawV2 = workspaceState.get<unknown>(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
-  );
-  if (rawV2 !== undefined) {
-    const parsed = AgentRosterSelectionSchema.safeParse(rawV2);
-    if (parsed.success) return parsed.data;
-    // Deliberate `console`: this parse/migration boundary runs before any
-    // agent trace or logger channel exists (settings-layer convention,
-    // matching agentPresets.ts).
-    console.warn(
-      `[agentRoster] Ignoring malformed v2 roster selection; falling back to ` +
-        `the inherited roster: ${parsed.error.message}`,
-    );
-    return INHERITED_AGENT_ROSTER;
-  }
-
-  const rawV1 = workspaceState.get<unknown>(
+  const raw = workspaceState.get<unknown>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
-  if (rawV1 === undefined) return INHERITED_AGENT_ROSTER;
-  const parsed = AgentRosterSelectionV1Schema.safeParse(rawV1);
+  if (raw === undefined) return INHERITED_AGENT_ROSTER;
+  const parsed = AgentRosterSelectionSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
+  // Deliberate `console`: this parse boundary runs before any agent trace or
+  // logger channel exists (settings-layer convention, matching
+  // agentPresets.ts).
   console.warn(
-    `[agentRoster] Ignoring malformed v1 roster selection; falling back to ` +
+    `[agentRoster] Ignoring malformed roster selection; falling back to ` +
       `the inherited roster: ${parsed.error.message}`,
   );
   return INHERITED_AGENT_ROSTER;
@@ -294,7 +278,7 @@ export class AgentRosterController<
   private async writeSelection(selection: AgentRosterSelection): Promise<void> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
     await this.deps.workspaceState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       parsed,
     );
   }

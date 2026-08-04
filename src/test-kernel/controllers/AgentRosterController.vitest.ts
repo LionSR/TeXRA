@@ -58,86 +58,39 @@ describe('AgentRosterController', () => {
 
     expect(roster.getSelection()).toEqual({ kind: 'inherit' });
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('malformed v1 roster selection'),
+      expect.stringContaining('malformed roster selection'),
     );
     warn.mockRestore();
   });
 
-  it('reads a v1 pair-shaped custom roster and writes the v2 record beside it', async () => {
-    // Durable migration fixture: the unversioned key holds the legacy
-    // `workflowAgentKeys`/`toolUseAgentKeys` pair written by older binaries.
-    const v1Custom = {
+  it('treats the retired pair-shaped roster as malformed and overwrites it in place', async () => {
+    // The pre-record `workflowAgentKeys`/`toolUseAgentKeys` pair is retired
+    // vocabulary: it warns and reads as inherited, and the next write
+    // replaces it at the same key.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const pairShaped = {
       kind: 'custom',
       workflowAgentKeys: ['builtInWorkflow:write'],
       toolUseAgentKeys: 'all',
     };
     const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: v1Custom,
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: pairShaped,
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getSelection()).toEqual({
-      kind: 'custom',
-      agentKeys: { workflow: ['builtInWorkflow:write'], toolUse: 'all' },
-    });
-    expect(roster.getVisibleAgents('workflow').map((a) => a.name)).toEqual([
-      'write',
-    ]);
-
-    // A write lands under the versioned v2 key; the v1 value stays untouched
-    // for older binaries sharing the same state file.
-    await roster.setTeam('test-team');
-    expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
-    ).toEqual({ kind: 'team', teamId: 'test-team' });
-    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
-      v1Custom,
-    );
-    expect(roster.getSelection()).toEqual({
-      kind: 'team',
-      teamId: 'test-team',
-    });
-  });
-
-  it('prefers the v2 selection when both keys are present', () => {
-    const roster = controller(
-      new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
-          kind: 'team',
-          teamId: 'v1-team',
-        },
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
-          kind: 'team',
-          teamId: 'test-team',
-        },
-      }),
-    );
-
-    expect(roster.getSelection()).toEqual({
-      kind: 'team',
-      teamId: 'test-team',
-    });
-  });
-
-  it('warns and inherits on a malformed v2 selection without consulting v1', () => {
-    // Pinned behavior: a PRESENT v2 key owns the decision even when
-    // malformed — the read never falls back to the v1 key (whose value may
-    // be older than the v2 write that got corrupted).
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const roster = controller(
-      new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
-          kind: 'team',
-          teamId: 'test-team',
-        },
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: { kind: 'invalid' },
-      }),
-    );
-
     expect(roster.getSelection()).toEqual({ kind: 'inherit' });
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('malformed v2 roster selection'),
+      expect.stringContaining('malformed roster selection'),
     );
+
+    await roster.setTeam('test-team');
+    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toEqual(
+      { kind: 'team', teamId: 'test-team' },
+    );
+    expect(roster.getSelection()).toEqual({
+      kind: 'team',
+      teamId: 'test-team',
+    });
     warn.mockRestore();
   });
 
@@ -166,7 +119,7 @@ describe('AgentRosterController', () => {
     await roster.setTeam('test-team');
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'team',
       teamId: 'test-team',
@@ -209,7 +162,7 @@ describe('AgentRosterController', () => {
     });
     expect(inherited.getSelection()).toEqual({ kind: 'inherit' });
     expect(
-      inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();
 
     const team = controller(new FakeStateStore());
@@ -271,7 +224,7 @@ describe('AgentRosterController', () => {
 
   it('falls back to all agents for a missing symbolic team', () => {
     const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
+      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
         kind: 'team',
         teamId: 'deleted-team',
       },
@@ -312,7 +265,7 @@ describe('AgentRosterController', () => {
     };
     const roster = controller(
       new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
           kind: 'custom',
           agentKeys: {
             workflow: [],
@@ -341,7 +294,7 @@ describe('AgentRosterController', () => {
     };
     const roster = controller(
       new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
           kind: 'custom',
           agentKeys: {
             workflow: [],

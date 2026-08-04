@@ -11,13 +11,11 @@ import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import {
-  executionStatusToRunOutcome,
-  RUN_OUTCOME,
-  type ExecutionId,
-  type ExecutionMeta,
-  type RunIdentity,
-  type RunOutcome,
+import type {
+  ExecutionId,
+  ExecutionMeta,
+  RunIdentity,
+  RunOutcome,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -139,29 +137,12 @@ export function deriveLegacyIdentity(
 }
 
 /**
- * Un-stamped legacy row → terminal outcome, from the retired `terminalStatus`
- * field still present in the raw meta bytes. `ExecutionMetaSchema` no longer
- * carries that field, so `readMeta` strips it — the stamper reads the raw
- * bytes once and converts the evidence into the canonical `outcome` before
- * its first schema-shaped rewrite would drop it forever. Any present value
- * means the run reached a terminal state; a string outside the known
- * vocabulary maps to `failed` rather than resurrecting a dead enum.
- */
-function deriveLegacyOutcome(rawMeta: unknown): RunOutcome | undefined {
-  if (typeof rawMeta !== 'object' || rawMeta === null) return undefined;
-  const terminalStatus = (rawMeta as { terminalStatus?: unknown })
-    .terminalStatus;
-  if (terminalStatus === undefined) return undefined;
-  return typeof terminalStatus === 'string'
-    ? (executionStatusToRunOutcome(terminalStatus) ?? RUN_OUTCOME.FAILED)
-    : RUN_OUTCOME.FAILED;
-}
-
-/**
- * Durably stamp derived identity and legacy terminal outcome onto an
- * unstamped row. Best-effort: an active lease or a write failure leaves the
- * row to heal on the next pass, and the caller still uses the derived
- * identity for this read.
+ * Durably stamp a derived identity onto an unstamped row. Best-effort: an
+ * active lease or a write failure leaves the row to heal on the next pass,
+ * and the caller still uses the derived value for this read. The retired
+ * `terminalStatus` bytes some legacy rows still carry are deliberately NOT
+ * converted: `outcome` starts absent for pre-consolidation rows, which
+ * simply have no recorded terminal state.
  */
 async function stampExecutionRow(
   id: ExecutionId,
@@ -171,20 +152,14 @@ async function stampExecutionRow(
   try {
     await runWithInactiveExecutionLease(id, async () => {
       const store = getExecutionStore(id);
-      const [current, cfg, rawMeta] = await Promise.all([
+      const [current, cfg] = await Promise.all([
         store.readMeta(),
         store.readConfig(),
-        store.read('meta'),
       ]);
       if (!current || current.identity) return;
       const identity = deriveLegacyIdentity(current, cfg);
-      const outcome = current.outcome ?? deriveLegacyOutcome(rawMeta);
-      if (!identity && outcome === current.outcome) return;
-      await store.writeMeta({
-        ...current,
-        ...(identity && { identity }),
-        ...(outcome && { outcome }),
-      });
+      if (!identity) return;
+      await store.writeMeta({ ...current, identity });
     });
   } catch (error) {
     logger.warn(
@@ -247,23 +222,17 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 
         if (!meta) return null;
 
-        const identity = meta.identity ?? deriveLegacyIdentity(meta, cfg);
-        // An unstamped row is the pre-consolidation cohort: derive the
-        // legacy terminal outcome from the raw meta bytes for this read and
-        // heal both fields durably. Healing is async and best-effort; this
-        // read already has the derived values either way.
-        const outcome = meta.identity
-          ? meta.outcome
-          : (meta.outcome ?? deriveLegacyOutcome(await store.read('meta')));
-        if (!meta.identity) void stampExecutionRow(id, meta);
-
         const base: ExecutionListingBase = {
           id,
           timestamp: meta.timestamp,
           parentExecutionId: meta.parentExecutionId,
-          outcome,
+          outcome: meta.outcome,
           description: meta.description,
         };
+        const identity = meta.identity ?? deriveLegacyIdentity(meta, cfg);
+        // Durable healing is async and best-effort; this read already has
+        // the derived value either way.
+        if (identity !== meta.identity) void stampExecutionRow(id, meta);
         if (!cfg || !identity) {
           return { ...base, kind: 'incomplete' };
         }

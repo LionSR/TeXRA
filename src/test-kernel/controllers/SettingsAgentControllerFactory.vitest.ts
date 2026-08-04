@@ -69,7 +69,7 @@ describe('createSettingsAgentControllers', () => {
     ]);
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
       agentKeys: { workflow: 'all', toolUse: ['builtInToolUse:assistant'] },
@@ -77,13 +77,13 @@ describe('createSettingsAgentControllers', () => {
   });
 
   it('preserves unavailable members when settings toggles a visible agent', async () => {
-    // Seeded under the legacy v1 key: the toggle must read through the pair
-    // migration and write the record shape to the v2 key.
     const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
         kind: 'custom',
-        workflowAgentKeys: 'all',
-        toolUseAgentKeys: ['builtInToolUse:assistant', 'future-assistant'],
+        agentKeys: {
+          workflow: 'all',
+          toolUse: ['builtInToolUse:assistant', 'future-assistant'],
+        },
       },
     });
     const controllers = createControllers(workspaceState);
@@ -96,7 +96,7 @@ describe('createSettingsAgentControllers', () => {
     });
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
       agentKeys: { workflow: 'all', toolUse: ['future-assistant'] },

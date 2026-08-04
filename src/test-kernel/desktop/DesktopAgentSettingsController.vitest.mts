@@ -193,7 +193,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({
       kind: 'custom',
       agentKeys: { workflow: ['builtInWorkflow:correct'], toolUse: 'all' },
@@ -273,7 +273,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     });
 
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'physicist' });
     expect(
       posted.find(
@@ -387,11 +387,11 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(refreshAgents).toHaveBeenCalledWith({ includeRemote: true });
     expect(
       update.mock.calls.filter(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toHaveLength(1);
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'remote-team' });
   });
 
@@ -429,7 +429,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     expect(refreshAgents).not.toHaveBeenCalled();
     expect(
       update.mock.calls.some(
-        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2,
+        ([key]) => key === WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       ),
     ).toBe(false);
   });
@@ -569,7 +569,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
 
     expect(errorMessages).toEqual(['Unknown team: missing-team']);
     expect(
-      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2),
+      workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();
   });
 });

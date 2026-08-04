@@ -89,15 +89,11 @@ export async function readMeta(
   if (raw === undefined) return undefined;
   const parsed = StreamTabMetaSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
-  // Field-level tolerance: a malformed execution FK (or legacy
-  // `runDescriptor`) must drop only the bad pointer, not the whole meta —
-  // discarding everything would sever `parentStreamId` and orphan the tab.
+  // Field-level tolerance: a malformed execution FK must drop only the bad
+  // pointer, not the whole meta — discarding everything would sever
+  // `parentStreamId` and orphan the tab.
   if (isObject(raw)) {
-    const {
-      executionId: _executionId,
-      runDescriptor: _runDescriptor,
-      ...rest
-    } = raw;
+    const { executionId: _executionId, ...rest } = raw;
     const retried = StreamTabMetaSchema.safeParse(rest);
     if (retried.success) {
       logger.warn(
