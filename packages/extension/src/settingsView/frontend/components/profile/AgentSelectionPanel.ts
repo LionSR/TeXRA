@@ -242,7 +242,11 @@ export class AgentSelectionPanel extends LitElement {
 
     return html`
       <div
-        class=${classMap({ 'agent-list-item': true, selected: isSelected })}
+        class=${classMap({
+          'agent-list-item': true,
+          'focus-ring-inset': true,
+          selected: isSelected,
+        })}
         data-source=${tone}
         role="option"
         aria-selected=${isSelected}

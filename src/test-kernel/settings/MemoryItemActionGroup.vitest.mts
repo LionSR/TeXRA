@@ -57,7 +57,7 @@ describe('memory-item action group', () => {
     );
     expect(deleteButton).toBeTruthy();
     expect(deleteButton?.tagName).toBe('WA-BUTTON');
-    expect(deleteButton?.getAttribute('aria-label')).toBe('Delete');
+    expect(deleteButton?.getAttribute('aria-label')).toBe('Delete: notes.md');
 
     const deleteTooltip = element.shadowRoot?.querySelector(
       'wa-tooltip[for="memory-delete-button"]',
@@ -70,7 +70,7 @@ describe('memory-item action group', () => {
 
     const pinButton =
       element.shadowRoot?.querySelector<HTMLElement>('#memory-pin-button');
-    expect(pinButton?.getAttribute('aria-label')).toBe('Unpin');
+    expect(pinButton?.getAttribute('aria-label')).toBe('Unpin: notes.md');
     const pinTooltip = element.shadowRoot?.querySelector(
       'wa-tooltip[for="memory-pin-button"]',
     );

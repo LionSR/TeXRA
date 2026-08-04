@@ -62,7 +62,7 @@ export class ProviderKeyList extends LitElement {
         ? renderIconActionButton({
             id: `provider-key-remove-${provider}`,
             icon: 'trash',
-            label: 'Remove',
+            label: `Remove ${provider} key`,
             tooltip: 'Remove key',
             onClick: () =>
               postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY, {
@@ -76,7 +76,7 @@ export class ProviderKeyList extends LitElement {
         ${renderIconActionButton({
           id: `provider-key-set-${provider}`,
           icon: 'key',
-          label: 'Set',
+          label: `Set ${provider} API key`,
           tooltip: 'Set API key',
           // Bubbles to SettingsApp, which owns the desktop-vs-VS Code
           // provider-key entry flow (modal on desktop, host prompt otherwise).
@@ -86,7 +86,7 @@ export class ProviderKeyList extends LitElement {
         ${renderIconActionButton({
           id: `provider-key-get-${provider}`,
           icon: 'arrow-up-right-from-square',
-          label: 'Get',
+          label: `Get ${provider} API key`,
           tooltip: 'Get API key from provider',
           onClick: () =>
             postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL, {
@@ -119,8 +119,9 @@ export class ProviderKeyList extends LitElement {
     const endpointInput = entry.supportsCustomEndpoint
       ? html`
           <div class="provider-setting">
-            <label>Custom endpoint</label>
+            <label for=${`endpoint-${entry.provider}`}>Custom endpoint</label>
             <wa-input
+              id=${`endpoint-${entry.provider}`}
               class="endpoint-input"
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"

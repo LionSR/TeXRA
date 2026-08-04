@@ -76,9 +76,16 @@ describe('tools-tab availability summary', () => {
     const element = await mount([]);
     const skillSwitch = element.shadowRoot?.querySelector<
       HTMLElement & { checked?: boolean }
-    >('wa-switch[aria-label="Make skills available to tool-use agents"]');
+    >('wa-switch#settings-toggle-make-skills-available-to-tool-use-agents');
 
     expect(skillSwitch).not.toBeNull();
+    // The <label for> is what names the control; a host aria-label never
+    // reached the role-bearing input inside wa-switch's shadow root.
+    expect(
+      element.shadowRoot?.querySelector(
+        'label[for="settings-toggle-make-skills-available-to-tool-use-agents"]',
+      )?.textContent,
+    ).toBe('Make skills available to tool-use agents');
     expect(skillSwitch?.checked).toBe(true);
 
     if (!skillSwitch) return;
@@ -99,9 +106,16 @@ describe('tools-tab availability summary', () => {
     });
     const protectionSwitch = element.shadowRoot?.querySelector<
       HTMLElement & { checked?: boolean }
-    >('wa-switch[aria-label="Restrict tool paths to the working directory"]');
+    >('wa-switch#settings-toggle-restrict-tool-paths-to-the-working-directory');
 
-    expect(protectionSwitch).toBeDefined();
+    expect(protectionSwitch).not.toBeNull();
+    // The <label for> is what names the control; a host aria-label never
+    // reached the role-bearing input inside wa-switch's shadow root.
+    expect(
+      element.shadowRoot?.querySelector(
+        'label[for="settings-toggle-restrict-tool-paths-to-the-working-directory"]',
+      )?.textContent,
+    ).toBe('Restrict tool paths to the working directory');
     expect(protectionSwitch?.checked).toBe(false);
 
     if (!protectionSwitch) return;

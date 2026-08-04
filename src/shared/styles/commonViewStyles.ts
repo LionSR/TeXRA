@@ -102,10 +102,6 @@ export const commonViewStyles: CSSResult = css`
     );
   }
 
-  .list-item:focus-within {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-  }
-
   .settings-disclosure-list {
     display: grid;
     gap: var(--wa-space-2xs);
@@ -287,6 +283,21 @@ export const commonViewStyles: CSSResult = css`
   ${busyIconButtonStyles}
   ${formControlStyles}
   ${focusRingStyles}
+
+  /* Available to the accessibility tree, absent from the layout. The canonical
+     copy: InstructionPanel carried its own and WorktreeChip a differently-named
+     .sr-only, which is how two names for one utility start. */
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
   ${settingsRowStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
