@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ExecutionId } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -249,5 +252,79 @@ describe('runResumeExecution', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
     );
+  });
+});
+
+// `readCliToolUseResumeData` is the chat-session feed for the same resume
+// surface (`/resume` inside the chat TUI). It reads the same storage and
+// retrieval seams this file already mocks, so its unit tests live here; the
+// agent-category branch runs for real against the minimal configs above.
+describe('readCliToolUseResumeData', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: STREAM_ID,
+      identity: { kind: 'agent', agent: 'planner' },
+    });
+  });
+
+  async function read(config: AgentConfig, id: ExecutionId = EXECUTION_ID) {
+    const { readCliToolUseResumeData } =
+      await import('@cli/runtime/toolUseResumeData');
+    return readCliToolUseResumeData(id, config);
+  }
+
+  it('returns null for a workflow config (resumed via the shared funnel)', async () => {
+    expect(await read(WORKFLOW_CONFIG)).toBeNull();
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('returns canonical tool-use state when a flow record exists', async () => {
+    const resume = createToolUseResumeData({
+      executionId: EXECUTION_ID,
+      streamId: STREAM_ID,
+      agentConfig: { ...TOOL_USE_CONFIG, model: 'gpt-5.5' },
+    });
+    mocks.retrieveSessionResumeData.mockResolvedValue(resume);
+
+    expect(await read(TOOL_USE_CONFIG)).toEqual(resume);
+    // The stream id is the one stamped on execution metadata at registration,
+    // never re-derived from agent/model, so resume reuses the original
+    // stream/transcript.
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
+      STREAM_ID,
+      EXECUTION_ID,
+      TOOL_USE_CONFIG,
+    );
+  });
+
+  it('returns null when metadata carries no stamped stream id', async () => {
+    // A row without a stamped streamId has no persisted stream: not resumable.
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      identity: { kind: 'agent', agent: 'planner' },
+    });
+
+    expect(await read(TOOL_USE_CONFIG)).toBeNull();
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
+  it('returns null without a live flow record', async () => {
+    mocks.retrieveSessionResumeData.mockResolvedValue(undefined);
+
+    expect(await read(TOOL_USE_CONFIG)).toBeNull();
+  });
+
+  it('propagates retrieval failures for the active-resume path to surface', async () => {
+    mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
+
+    await expect(read(TOOL_USE_CONFIG)).rejects.toThrow('KV timeout');
+  });
+
+  it('discards a non-toolUse resume payload', async () => {
+    mocks.retrieveSessionResumeData.mockResolvedValue({ type: 'workflow' });
+
+    expect(await read(TOOL_USE_CONFIG)).toBeNull();
   });
 });
