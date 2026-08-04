@@ -29,7 +29,7 @@ import StatusPill from './StatusPill.vue';
         <wa-icon
           class="sf-store-ic"
           library="texra"
-          name="folder-opened"
+          name="folder-open"
         ></wa-icon>
         <span class="sf-store-title">Task-run storage</span>
         <StatusPill variant="info" shape="chip">isolated</StatusPill>
@@ -53,11 +53,7 @@ import StatusPill from './StatusPill.vue';
         </span>
         <wa-icon class="sf-arr" library="texra" name="arrow-right"></wa-icon>
         <span class="sf-dest">
-          <wa-icon
-            class="sf-dest-ic"
-            library="texra"
-            name="repo-clone"
-          ></wa-icon>
+          <wa-icon class="sf-dest-ic" library="texra" name="folder"></wa-icon>
           <span class="sf-dest-txt">
             <span class="sf-dest-name">Workspace</span>
             <span class="sf-dest-sub">copies reviewed outputs back in</span>
@@ -67,11 +63,15 @@ import StatusPill from './StatusPill.vue';
 
       <div class="sf-branch">
         <span class="sf-cmd">
-          <wa-icon library="texra" name="archive"></wa-icon> Pack
+          <wa-icon library="texra" name="box-archive"></wa-icon> Pack
         </span>
         <wa-icon class="sf-arr" library="texra" name="arrow-right"></wa-icon>
         <span class="sf-dest">
-          <wa-icon class="sf-dest-ic" library="texra" name="history"></wa-icon>
+          <wa-icon
+            class="sf-dest-ic"
+            library="texra"
+            name="clock-rotate-left"
+          ></wa-icon>
           <span class="sf-dest-txt">
             <span class="sf-dest-name">History/</span>
             <span class="sf-dest-sub">archives the whole run, timestamped</span>

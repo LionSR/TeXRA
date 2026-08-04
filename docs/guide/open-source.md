@@ -10,11 +10,11 @@ TeXRA is built on the belief that great research tools benefit from community co
 [![GitHub](https://img.shields.io/github/stars/texra-ai/llm-zoo)](https://github.com/texra-ai/llm-zoo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/llm-zoo/blob/main/LICENSE)
 
-Keeping track of LLM pricing, context windows, and capabilities across providers is a moving target. **llm-zoo** solves this by providing a single, typed, zero-dependency package covering 70+ models from Claude, GPT, Gemini, DeepSeek, Grok, and more.
+Keeping track of LLM pricing, context windows, and capabilities across providers is a moving target. **llm-zoo** solves this by providing a single, typed, zero-dependency package covering 100+ models from Claude, GPT, Gemini, DeepSeek, Grok, and more.
 
 ### Highlights
 
-- **70+ models** across Anthropic, OpenAI, Google, DeepSeek, xAI, Moonshot, DashScope, Copilot, and OpenRouter
+- **100+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, Copilot, and OpenRouter
 - **Zero dependencies** — lightweight with full TypeScript support
 - **Tree-shakeable** for efficient bundling
 - **Zod schemas** for runtime validation (Zod v4)
@@ -30,15 +30,14 @@ npm install llm-zoo
 import { lookup, cost, from, cheapest, ModelProvider } from 'llm-zoo';
 
 // Look up a model
-const claude = lookup('sonnet');
-console.log(claude.contextWindow); // 200000
+const claude = lookup('sonnet5');
+console.log(claude.contextWindow); // 1000000
 
 // Calculate cost
-const usage = { inputTokens: 1000, outputTokens: 500 };
-console.log(cost('sonnet', usage)); // { input: 0.003, output: 0.0075, total: 0.0105 }
+const price = cost('sonnet5', { input: 1000, output: 500 }); // 0.007
 
 // Find the cheapest model with vision support
-const model = cheapest({ capabilities: ['vision'] });
+const model = cheapest({ supportsVision: true });
 
 // Filter by provider
 const anthropicModels = from(ModelProvider.ANTHROPIC);

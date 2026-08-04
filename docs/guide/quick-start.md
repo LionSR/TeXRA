@@ -45,15 +45,15 @@ TeXRA panel offers the main access choices:
 1. **Sign in — free for academics** — Researcher Access: no API key needed (recommended). Run **TeXRA: Sign In**
    from the Command Palette, or pick the sign-in option on the welcome card. Signing in also unlocks remote
    agents, including the orchestrator.
-2. **Use ChatGPT subscription** — Codex models through your ChatGPT plan. Open the Dashboard's **Models** tab
-   (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
+2. **Use ChatGPT subscription** — Codex models through your ChatGPT plan. Open the Dashboard's **Subscriptions**
+   tab (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    use the **ChatGPT subscription** sign-in section.
-3. **Use GitHub Copilot in VS Code** — compatible models through a Copilot subscription. Open **Models →
+3. **Use GitHub Copilot in VS Code** — compatible models through a Copilot subscription. Open **Subscriptions →
    Copilot in VS Code** and grant access through VS Code's native consent prompt. This source does not appear in
    the CLI or desktop applications.
-4. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. In the same **Models** tab, set your
-   provider's key in the **API Configuration** table, or place a `.env` file in your workspace with variables
-   like `OPENAI_API_KEY`.
+4. **Use your own provider API key** — Anthropic, OpenAI, Google, and more. Open the **Providers & Models** tab
+   and set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with
+   variables like `OPENAI_API_KEY`.
 
 The full per-provider key reference — the API Configuration table, Set / Get / Remove actions, and per-provider toggles — lives in [Models → Setting API Keys](./models.md#setting-api-keys).
 
@@ -94,7 +94,7 @@ Each category holds an ordered list — add as many files as the task needs and 
 ### Choose Agent, Model, and Instruction
 
 The dropdown menus at the bottom of the instruction box pick the agent
-(e.g. `polish` for improving writing) and the model (e.g. `sonnet46`).
+(e.g. `polish` for improving writing) and the model (e.g. `sonnet5`).
 Then write a specific instruction in the text area:
 
 ```
@@ -125,7 +125,7 @@ Reflection rounds are controlled by the selected agent—most writing agents alr
 <p class="hero-caption">The two helper menus in the Input and Media file-group headers. Active helpers tint their buttons; here Attach TeX Count and Figures are on.</p>
 
 ::: tip Save Prompts for Later
-For advanced debugging, enable the `texra.debug.saveModelIO` setting (in `.texra/config.json` or VS Code settings) to store the generated prompt alongside other debug artifacts.
+For advanced debugging, enable the `texra.debug.saveModelIO` setting in `.texra/config.json` to store the generated prompt alongside other debug artifacts.
 :::
 
 ### Execute and Watch the Run
@@ -193,7 +193,7 @@ texra chat
     { label: 'r0 — draft revision', state: 'done' },
     { label: 'r1 — critique and revise', state: 'done' },
   ]"
-  :outputs="['.texra/runs/9f3a6c81d24e/r1/draft.tex']"
+  :outputs="['executions/9f3a6c81d24e/r1/draft.tex']"
 />
 
 <p class="hero-caption">What a one-shot run looks like: rounds stream as progress, then the path to the revised document prints on stdout.</p>
@@ -307,7 +307,8 @@ folder per round. Each round holds three artifacts, and the document keeps your
 
 So if your input file is `paper.tex`, the first round's output lands at
 `r0/paper.tex` — the filename you started with, never `output.tex`. The CLI
-writes the same per-round tree under `.texra/runs/<run-id>/` — see
+writes the same per-round tree under `executions/<run-id>/` in the
+workspace store — see
 [First run](./first-run.md) for the terminal walkthrough.
 
 ## Next Steps
