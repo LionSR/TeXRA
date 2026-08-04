@@ -2,7 +2,7 @@ import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,
 } from '@shared/utils/clipboard';
-import { createFlushableDebounce } from '@utils/core';
+import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 interface CopyButtonConfig {
@@ -58,7 +58,7 @@ interface CopyButtonState {
 export class CopyButtonController implements ReactiveController {
   private _copied = false;
   private readonly _config: Required<CopyButtonConfig>;
-  private readonly _resetTimer: ReturnType<typeof createFlushableDebounce>;
+  private readonly _resetTimer: FlushableDebounce;
 
   constructor(
     private readonly host: ReactiveControllerHost,

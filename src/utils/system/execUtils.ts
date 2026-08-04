@@ -426,7 +426,11 @@ export async function executeCommand(
     const normalizedStderr =
       aborted && !stderr
         ? 'Command aborted by user'
-        : deriveCommandStderr(stderr, result.shortMessage, shouldUseShortMessage);
+        : deriveCommandStderr(
+            stderr,
+            result.shortMessage,
+            shouldUseShortMessage,
+          );
 
     if (!options.quiet) {
       logCommandStderr(logChannel, normalizedStderr, options.truncate);
