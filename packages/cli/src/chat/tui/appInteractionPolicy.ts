@@ -284,6 +284,6 @@ export function selectedChildRowWorkflowControllable({
   return (
     streams.get(selectedChildStreamId)?.identity?.kind === 'agent' &&
     parentOfSelectedChild !== undefined &&
-    streams.get(parentOfSelectedChild)?.identity?.kind === 'workflowScript'
+    streams.get(parentOfSelectedChild)?.identity?.kind === 'multiAgentWorkflow'
   );
 }

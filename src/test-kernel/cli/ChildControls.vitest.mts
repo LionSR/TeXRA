@@ -50,6 +50,7 @@ describe('CLI child controls', () => {
         {
           executionId: 'child-exec',
           agentName: 'critic',
+          identity: { kind: 'agent' as const, agent: 'critic' },
           childStreamId: child,
           status: STREAM_PHASE.COMPLETED,
         },
@@ -86,6 +87,7 @@ describe('CLI child controls', () => {
           {
             executionId: 'child-exec',
             agentName: 'child',
+            identity: { kind: 'agent' as const, agent: 'child' },
             childStreamId: child,
             status: STREAM_PHASE.RUNNING,
           },
@@ -97,6 +99,7 @@ describe('CLI child controls', () => {
           {
             executionId: 'leaf-exec',
             agentName: 'leaf',
+            identity: { kind: 'agent' as const, agent: 'leaf' },
             childStreamId: leaf,
             status: STREAM_PHASE.RUNNING,
           },
@@ -179,6 +182,7 @@ describe('CLI child controls', () => {
         {
           executionId: 'a-exec',
           agentName: 'a',
+          identity: { kind: 'agent' as const, agent: 'a' },
           childStreamId: a,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Reduce',
@@ -186,6 +190,7 @@ describe('CLI child controls', () => {
         {
           executionId: 'b-exec',
           agentName: 'b',
+          identity: { kind: 'agent' as const, agent: 'b' },
           childStreamId: b,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Map',
@@ -194,6 +199,7 @@ describe('CLI child controls', () => {
         {
           executionId: 'c-exec',
           agentName: 'c',
+          identity: { kind: 'agent' as const, agent: 'c' },
           childStreamId: c,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Reduce',
@@ -201,12 +207,14 @@ describe('CLI child controls', () => {
         {
           executionId: 'd-exec',
           agentName: 'd',
+          identity: { kind: 'agent' as const, agent: 'd' },
           childStreamId: d,
           status: STREAM_PHASE.RUNNING,
         },
         {
           executionId: 'e-exec',
           agentName: 'e',
+          identity: { kind: 'agent' as const, agent: 'e' },
           childStreamId: e,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Map',
@@ -273,6 +281,7 @@ describe('CLI child controls', () => {
         {
           executionId: 'child-exec',
           agentName: 'critic',
+          identity: { kind: 'agent' as const, agent: 'critic' },
           childStreamId: child,
           status: STREAM_PHASE.RUNNING,
         },

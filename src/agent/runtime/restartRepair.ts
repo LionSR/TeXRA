@@ -66,7 +66,7 @@ export interface RestartRepairResult {
   failedStreams: StreamTabId[];
   closedWaitingGroups: StreamTabId[];
   closedFailedGroups: StreamTabId[];
-  terminalStatusUpdated: ExecutionId[];
+  outcomeUpdated: ExecutionId[];
   /** Earliest time a fresh lease skipped at startup can be checked again. */
   nextLeaseCheckAt?: number;
 }
@@ -77,7 +77,7 @@ function createRestartRepairResult(): RestartRepairResult {
     failedStreams: [],
     closedWaitingGroups: [],
     closedFailedGroups: [],
-    terminalStatusUpdated: [],
+    outcomeUpdated: [],
   };
 }
 
@@ -143,7 +143,7 @@ async function readExecutionSettlement(
   executionId: ExecutionId,
 ): Promise<ExecutionSettlement> {
   const meta = await getExecutionStore(executionId).readMetaStrict();
-  if (!meta || (meta.terminalStatus == null && meta.outcome == null)) {
+  if (!meta || meta.outcome == null) {
     return { kind: 'unsettled' };
   }
   if (meta.outcome == null) {
@@ -338,7 +338,7 @@ export async function repairRestartedStreams(
       result.failedStreams.push(...streamResult.failedStreams);
       result.closedWaitingGroups.push(...streamResult.closedWaitingGroups);
       result.closedFailedGroups.push(...streamResult.closedFailedGroups);
-      result.terminalStatusUpdated.push(...streamResult.terminalStatusUpdated);
+      result.outcomeUpdated.push(...streamResult.outcomeUpdated);
     } catch (error) {
       if (repairStarted) throw error;
       options.logger?.warn(
@@ -432,7 +432,7 @@ async function repairRestartedStream(
         now,
       )
     : [];
-  const terminalStatusUpdated: ExecutionId[] = [];
+  const outcomeUpdated: ExecutionId[] = [];
   if (failedStreams.length > 0 && executionId) {
     const persisted = await writeFailedTerminalStatus(
       streamId,
@@ -440,13 +440,13 @@ async function repairRestartedStream(
       options.finalizeExecution ?? defaultFinalizeExecution,
       options.logger,
     );
-    if (persisted) terminalStatusUpdated.push(executionId);
+    if (persisted) outcomeUpdated.push(executionId);
   }
   return {
     waitingStreams,
     failedStreams,
     closedWaitingGroups: [...closedWaitingGroups],
     closedFailedGroups: [...closedFailedGroups],
-    terminalStatusUpdated,
+    outcomeUpdated,
   };
 }

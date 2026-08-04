@@ -44,7 +44,7 @@ const completedWorkflowScript: StreamTabInfo = {
   name: 'repo-cleanup#workflow-1',
   label: 'repo-cleanup-readonly-pilot-2026-07-24',
   identity: {
-    kind: 'workflowScript',
+    kind: 'multiAgentWorkflow',
     workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
   },
   agentCategory: AgentCategory.Workflow,

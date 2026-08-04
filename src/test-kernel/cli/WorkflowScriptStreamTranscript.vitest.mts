@@ -120,7 +120,7 @@ beforeEach(async () => {
     // Full-log rendering keys on the parsed identity, not the stream-id
     // prefix: this stream is a workflow-script child run.
     identity: {
-      kind: 'workflowScript' as const,
+      kind: 'multiAgentWorkflow' as const,
       workflowName: 'draft-sections',
     },
     category: AgentCategory.Workflow,
@@ -313,7 +313,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'draft-sections',
       },
       model: 'deepseekT',
@@ -501,7 +501,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'draft-sections',
       },
       model: 'deepseekT',
@@ -990,7 +990,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'draft-sections',
       },
     }));
@@ -1009,7 +1009,7 @@ describe('CLI workflow-script child-stream transcript', () => {
               agentName: 'draft-sections',
               executionId: 'exec-1',
               identity: {
-                kind: 'workflowScript' as const,
+                kind: 'multiAgentWorkflow' as const,
                 workflowName: 'draft-sections',
               },
             },

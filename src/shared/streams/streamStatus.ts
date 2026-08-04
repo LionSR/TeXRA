@@ -35,7 +35,7 @@ export function deriveRunOutcome(facts: {
 }
 
 export interface RunOutcomeProjection {
-  /** Persisted-history projection (`ExecutionMeta.terminalStatus`). */
+  /** Export-boundary projection (trace document `terminalStatus`). */
   readonly executionStatus: ExecutionStatus;
 }
 

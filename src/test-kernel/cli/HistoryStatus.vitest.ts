@@ -86,9 +86,9 @@ describe('CLI history status formatting', () => {
     expect(
       resumableCliHistoryEntries([
         { id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS },
-        { id: 'done', status: EXECUTION_STATUS.COMPLETED },
-        { id: 'errored', status: EXECUTION_STATUS.ERROR },
-      ]),
+        { id: 'done', status: 'completed' },
+        { id: 'errored', status: 'failed' },
+      ] as const),
     ).toEqual([{ id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS }]);
   });
 
@@ -114,7 +114,6 @@ describe('CLI history status formatting', () => {
       meta: {
         schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         timestamp: '2026-06-03T05:03:06.717Z',
-        category: 'toolUse',
       },
       config: null,
       result: null,

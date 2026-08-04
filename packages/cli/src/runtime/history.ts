@@ -14,7 +14,6 @@ import {
   unwrapResultMeta,
   type ExecutionListingEntry,
   type ExecutionMeta,
-  deriveLegacyOutcome,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
@@ -25,7 +24,10 @@ import {
   RunOutcomeSchema,
   type ExecutionId,
 } from '@shared/schemas';
-import { resolveHistoryRunStatus } from '@shared/schemas/historyViewMessages';
+import {
+  resolveHistoryRunStatus,
+  type HistoryRunStatus,
+} from '@shared/schemas/historyViewMessages';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import {
@@ -56,7 +58,7 @@ export interface CliHistoryEntry {
   readonly timestamp: string;
   readonly agent: string;
   readonly model: string;
-  readonly status: string;
+  readonly status: HistoryRunStatus;
   readonly inputBasename: string;
   readonly category?: string;
   readonly description?: string;
@@ -213,7 +215,7 @@ export async function readCliHistoryDetails(
     id,
     status: resolveHistoryRunStatus({
       resumable: resumeData !== null,
-      outcome: meta ? deriveLegacyOutcome(meta) : undefined,
+      outcome: meta?.outcome,
     }),
     meta,
     config,

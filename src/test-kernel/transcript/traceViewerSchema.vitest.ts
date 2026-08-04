@@ -135,10 +135,11 @@ describe('trace-viewer TraceDataSchema', () => {
         },
       }),
     );
+    // Legacy residue (`delegationDepth`, the retired `terminalStatus`) is
+    // stripped at the parse boundary; `outcome` is the one terminal fact and
+    // is never derived from residue here.
     expect(parsed.meta).not.toHaveProperty('delegationDepth');
-    // Legacy residue is preserved raw; outcome derivation moved off the read
-    // path (the listing's entrance stamper owns it, not the schema).
-    expect(parsed.meta?.terminalStatus).toBe(EXECUTION_STATUS.ERROR);
+    expect(parsed.meta).not.toHaveProperty('terminalStatus');
     expect(parsed.meta?.outcome).toBeUndefined();
   });
 

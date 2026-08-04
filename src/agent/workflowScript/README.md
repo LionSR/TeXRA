@@ -10,7 +10,7 @@ between steps. Design rationale and the full findings that motivated it:
 
 A **workflow agent** is the agent category whose output is organized into
 workflow output rounds. A **workflow script** is the deterministic program run
-under `runKind: 'workflowScript'`; each `agent()` invocation in that script is
+under `runKind: 'multiAgentWorkflow'`; each `agent()` invocation in that script is
 a **workflow call**. A **task run** is the host's stored execution record (and a
 **background task** is host-managed asynchronous work), not a workflow call.
 A trace **stage** is a generic grouping construct. Script **phases** and

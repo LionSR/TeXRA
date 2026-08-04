@@ -233,7 +233,7 @@ describe('child stream progress events', () => {
     const firstRun = withSessionEventRecording(() =>
       createChildStream(workflowRelaunchExecutionId, parentStreamId, {
         streamPrefix: 'workflow-script',
-        run: { kind: 'workflowScript', workflowName: 'draft-sections' },
+        run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
         description: 'Run a named child task',
         config,
       }),
@@ -249,7 +249,7 @@ describe('child stream progress events', () => {
       parentStreamId,
       {
         streamPrefix: 'workflow-script',
-        run: { kind: 'workflowScript', workflowName: 'draft-sections' },
+        run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
         description: 'Resume the named child task',
         config,
       },
@@ -292,7 +292,7 @@ describe('child stream progress events', () => {
     const options = {
       streamPrefix: 'workflow-script',
       run: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'retry-setup',
       },
       description: 'Retry a failed child stream setup',
@@ -349,7 +349,7 @@ describe('child stream progress events', () => {
         {
           streamPrefix: 'workflow-script',
           run: {
-            kind: 'workflowScript',
+            kind: 'multiAgentWorkflow',
             workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
           },
           description: 'Audit the repository without editing',
@@ -360,7 +360,7 @@ describe('child stream progress events', () => {
       expect(runEventsOfType(recorded.events, 'run.start')).toContainEqual(
         expect.objectContaining({
           identity: {
-            kind: 'workflowScript',
+            kind: 'multiAgentWorkflow',
             workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
           },
         }),

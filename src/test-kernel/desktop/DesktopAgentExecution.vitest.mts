@@ -1022,6 +1022,7 @@ describe('DesktopProgressBridge', () => {
           childStreamId: 'agent-1',
           executionId: 'agent-1',
           agentName: 'reviewer',
+          identity: { kind: 'agent' as const, agent: 'reviewer' },
         },
       ],
     });
@@ -1062,6 +1063,7 @@ describe('DesktopProgressBridge', () => {
           childStreamId: 'agent-1',
           executionId: 'agent-1',
           agentName: 'reviewer',
+          identity: { kind: 'agent' as const, agent: 'reviewer' },
         },
       ],
     });

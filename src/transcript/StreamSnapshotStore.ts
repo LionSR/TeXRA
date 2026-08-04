@@ -25,10 +25,7 @@ import { getExecutionStore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import {
-  deriveLegacyIdentity,
-  deriveLegacyOutcome,
-} from '@agent/storage/executionListing';
+import { deriveLegacyIdentity } from '@agent/storage/executionListing';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
@@ -2017,7 +2014,7 @@ export class StreamSnapshotStore {
       this.invalidateKvHandles(stream);
       const data = await readStreamData(this.kv(stream));
       if (this.streamVersion(stream) !== version) return;
-      await this.applyStreamData(stream, data, false);
+      await this.applyStreamData(stream, data);
     });
     const next = work.then(
       () => {
@@ -2068,9 +2065,7 @@ export class StreamSnapshotStore {
         // Un-healed legacy row: derive in memory with the stamper's rule so
         // resume/rerun and rendering behave identically before the durable
         // stamp lands (the listing entrance remains the only writer).
-        identity =
-          execMeta?.identity ??
-          (execMeta ? deriveLegacyIdentity(execMeta, execConfig) : undefined);
+        identity = execMeta?.identity ?? deriveLegacyIdentity(execConfig);
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {
@@ -2090,7 +2085,6 @@ export class StreamSnapshotStore {
   private async applyStreamData(
     stream: StreamTabId,
     data: StreamData,
-    hydrateDescription = true,
   ): Promise<void> {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
@@ -2152,9 +2146,9 @@ export class StreamSnapshotStore {
         record.runExecutionId ??= executionId;
         record.runIdentity ??= hydrated.identity;
         // The authority's description rides the same execution-meta read as
-        // identity. A live `updateStreamDescription` that landed during the
-        // await owns the field by presence.
-        if (hydrateDescription && record.description === undefined) {
+        // identity — free on every seed. A live `updateStreamDescription`
+        // that landed during the await owns the field by presence.
+        if (record.description === undefined) {
           record.description = hydrated.description;
         }
         const liveRunConfig =

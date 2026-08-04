@@ -293,7 +293,6 @@ describe('completedRunArchive facade', () => {
     );
     await store.writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
-      terminalStatus: 'completed',
     });
 
     const conversationResult = await readCompletedRunConversation(executionId);
@@ -582,7 +581,6 @@ describe('completedRunArchive facade', () => {
 
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
-      terminalStatus: 'completed',
     });
     const endpoint = await new ExecutionsTool().call({
       path: `/executions/${executionId}/conversation`,
@@ -606,7 +604,6 @@ describe('completedRunArchive facade', () => {
     const streamId = 'orchestrator@deepseekproT#abc907abc907' as StreamTabId;
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
-      terminalStatus: 'completed',
       streamId,
       streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
     });

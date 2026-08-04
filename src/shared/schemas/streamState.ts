@@ -26,8 +26,8 @@ const ActiveChildInfoSchemaBase = z.object({
   executionId: z.string(),
   /** Stream tab ID — every child stream owns a tab. */
   childStreamId: z.string(),
-  /** What owns the child stream; absent only for legacy emitters. */
-  identity: RunIdentitySchema.optional(),
+  /** What owns the child stream — every roster emitter declares it. */
+  identity: RunIdentitySchema,
   agentName: z.string(),
   /**
    * Current execution phase. Takes `StreamPhase` only: no artifact carries a

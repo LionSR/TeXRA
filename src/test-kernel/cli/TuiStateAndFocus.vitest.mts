@@ -305,6 +305,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
       {
         executionId: 'agent-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.RUNNING,
       },
@@ -332,6 +333,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
         {
           executionId: 'agent-1',
           agentName: 'codex',
+          identity: { kind: 'agent' as const, agent: 'codex' },
           childStreamId: child1,
           status: STREAM_PHASE.RUNNING,
         },
@@ -450,6 +452,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
             {
               executionId: 'agent-1',
               agentName: 'critic',
+              identity: { kind: 'agent' as const, agent: 'critic' },
               childStreamId: child1,
               status: STREAM_PHASE.RUNNING,
             },
@@ -1189,6 +1192,7 @@ describe('CLI TUI row allocation', () => {
       {
         executionId: 'child-exec-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.COMPLETED,
       },
@@ -1218,6 +1222,7 @@ describe('CLI TUI row allocation', () => {
       {
         executionId: 'child-exec-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.RUNNING,
       },
@@ -1283,6 +1288,7 @@ describe('CLI TUI row allocation', () => {
         {
           executionId: 'child-exec-1',
           agentName: 'critic',
+          identity: { kind: 'agent' as const, agent: 'critic' },
           childStreamId: child1,
           status: STREAM_PHASE.COMPLETED,
         },
@@ -1319,6 +1325,7 @@ describe('CLI TUI row allocation', () => {
         {
           executionId: 'child-exec-1',
           agentName: 'critic',
+          identity: { kind: 'agent' as const, agent: 'critic' },
           childStreamId: child1,
           status: STREAM_PHASE.RUNNING,
         },
@@ -3036,6 +3043,7 @@ describe('subscribeRuntimeHost run facts', () => {
       const child: ActiveChildInfo = {
         executionId: 'agent-1',
         agentName: 'critic',
+        identity: { kind: 'agent' as const, agent: 'critic' },
         childStreamId: child1,
         status: STREAM_PHASE.RUNNING,
       };
@@ -3582,11 +3590,13 @@ describe('session tree order', () => {
       {
         executionId: 'e1',
         agentName: 'a',
+        identity: { kind: 'agent' as const, agent: 'a' },
         childStreamId: child1,
       },
       {
         executionId: 'e2',
         agentName: 'b',
+        identity: { kind: 'agent' as const, agent: 'b' },
         childStreamId: child2,
       },
     ]);
@@ -3637,6 +3647,7 @@ describe('child-stream ordered transition matrix', () => {
     return {
       executionId: 'kid-exec',
       agentName: 'kid-agent',
+      identity: { kind: 'agent' as const, agent: 'kid-agent' },
       childStreamId: kid,
       status,
       elapsed,
@@ -3860,6 +3871,7 @@ describe('child-stream ordered transition matrix', () => {
       {
         executionId: 'kid-2-exec',
         agentName: 'kid-agent',
+        identity: { kind: 'agent' as const, agent: 'kid-agent' },
         childStreamId: freshKid,
         status: STREAM_PHASE.RUNNING,
       },
@@ -3876,12 +3888,14 @@ describe('child-stream ordered transition matrix', () => {
     const rowA = (status?: StreamPhase) => ({
       executionId: 'exec-a',
       agentName: 'a',
+      identity: { kind: 'agent' as const, agent: 'a' },
       childStreamId: kidA,
       status,
     });
     const rowB = (status?: StreamPhase) => ({
       executionId: 'exec-b',
       agentName: 'b',
+      identity: { kind: 'agent' as const, agent: 'b' },
       childStreamId: kidB,
       status,
     });

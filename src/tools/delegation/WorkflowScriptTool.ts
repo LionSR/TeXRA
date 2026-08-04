@@ -370,7 +370,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     try {
       await registerExecution(runExecutionId, runConfig, meta.name, {
         streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
-        identity: { kind: 'workflowScript', workflowName: meta.name },
+        identity: { kind: 'multiAgentWorkflow', workflowName: meta.name },
         parentExecutionId: runScope.executionId,
         description: childStreamDescription(meta.description),
       });
@@ -424,7 +424,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           runScope.streamId,
           {
             streamPrefix: STREAM_PREFIX,
-            run: { kind: 'workflowScript', workflowName: meta.name },
+            run: { kind: 'multiAgentWorkflow', workflowName: meta.name },
             description: meta.description,
             config: runConfig,
           },

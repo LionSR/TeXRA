@@ -333,7 +333,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionId}`,
-        identity: { kind: 'workflowScript', workflowName: 'tool-test' },
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -343,7 +343,7 @@ describe('WorkflowScriptTool', () => {
       streamId,
       expect.objectContaining({
         streamPrefix: 'workflow-script',
-        run: { kind: 'workflowScript', workflowName: 'tool-test' },
+        run: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
       }),
     );
     // The run's own stream inherits the orchestrator's approval ancestry.
@@ -433,7 +433,7 @@ describe('WorkflowScriptTool', () => {
       {
         streamId: `workflow-script#${runExecutionIdFor('edited-tool-test')}`,
         identity: {
-          kind: 'workflowScript',
+          kind: 'multiAgentWorkflow',
           workflowName: 'edited-tool-test',
         },
         parentExecutionId: executionId,
@@ -621,7 +621,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
-        identity: { kind: 'workflowScript', workflowName: 'tool-test' },
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -666,7 +666,7 @@ describe('WorkflowScriptTool', () => {
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
-        identity: { kind: 'workflowScript', workflowName: 'tool-test' },
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },
@@ -729,7 +729,7 @@ describe('WorkflowScriptTool', () => {
       'resume',
       {
         streamId: `workflow-script#${runExecutionIdFor('resume')}`,
-        identity: { kind: 'workflowScript', workflowName: 'resume' },
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'resume' },
         parentExecutionId: executionId,
         description: 'tests the workflow script tool',
       },

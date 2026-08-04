@@ -128,8 +128,8 @@ export class StreamTab extends LitElement {
       return;
     if (changed.has('info')) {
       this._streamDecorator =
-        this.info.identity?.kind === 'workflowScript'
-          ? AGENT_DECORATORS.streamKinds.workflowScript
+        this.info.identity?.kind === 'multiAgentWorkflow'
+          ? AGENT_DECORATORS.streamKinds.multiAgentWorkflow
           : getAgentCategoryDecorator(this.info.agentCategory);
     }
     const status = this.status || DEFAULT_STREAM_METADATA_STATUS;
@@ -270,7 +270,7 @@ export class StreamTab extends LitElement {
             ? nothing
             : html`<wa-tooltip for="stream-tab-kind"
                   >${
-                    stream.identity?.kind === 'workflowScript'
+                    stream.identity?.kind === 'multiAgentWorkflow'
                       ? streamDecorator.label
                       : `Category: ${streamDecorator.label}`
                   }</wa-tooltip

@@ -617,6 +617,7 @@ describe('CLI child list display model', () => {
           // A real agent may use the same visible label. Its canonical
           // spawning tool, rather than that label, determines model display.
           agentName: 'bash',
+          identity: { kind: 'agent' as const, agent: 'bash' },
           childStreamId: agent,
           status: STREAM_PHASE.RUNNING,
         },
@@ -808,6 +809,7 @@ describe('CLI child list display model', () => {
         {
           executionId: 'reduce-exec',
           agentName: 'reduce-agent',
+          identity: { kind: 'agent' as const, agent: 'reduce-agent' },
           childStreamId: reduceAgent,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Reduce',
@@ -815,12 +817,14 @@ describe('CLI child list display model', () => {
         {
           executionId: 'loose-exec',
           agentName: 'loose-agent',
+          identity: { kind: 'agent' as const, agent: 'loose-agent' },
           childStreamId: looseAgent,
           status: STREAM_PHASE.RUNNING,
         },
         {
           executionId: 'map-exec',
           agentName: 'map-agent',
+          identity: { kind: 'agent' as const, agent: 'map-agent' },
           childStreamId: mapAgent,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Map',
@@ -938,7 +942,7 @@ describe('CLI child list display model', () => {
     const rootSlice = workflowAgentSlice(run, {
       agent: 'research-workflow',
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'research-workflow',
       },
       status: STREAM_PHASE.RUNNING,
@@ -1108,7 +1112,7 @@ describe('CLI child list display model', () => {
     const rootSlice = workflowAgentSlice(run, {
       agent: 'grouped-workflow',
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'grouped-workflow',
       },
       status: STREAM_PHASE.RUNNING,

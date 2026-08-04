@@ -7,7 +7,6 @@ import {
 } from '@agent/node/persistedFlow';
 import * as logger from '@logger/logUtils';
 import {
-  EXECUTION_STATUS,
   ExecutionMetaSchema,
   RUN_OUTCOME,
   type ExecutionId,
@@ -34,7 +33,6 @@ export const RESUMABILITY_CAUSE = {
   MISSING_TERMINAL_WITH_FLOW: 'missing-terminal-with-flow',
   TERMINAL_COMPLETED: 'terminal-completed',
   TERMINAL_FAILED: 'terminal-failed',
-  TERMINAL_STATUS: 'terminal-status',
   MISSING_FLOW: 'missing-flow',
   INVALID_FLOW: 'invalid-flow',
   INVALID_META: 'invalid-meta',
@@ -54,34 +52,24 @@ export type ResumabilityDecision =
       readonly resumable: true;
       readonly cause: ResumableCause;
       readonly flowRecord: FlowRecord;
-      readonly terminalStatus?: string;
       readonly outcome?: RunOutcome;
     }
   | {
       readonly resumable: false;
       readonly cause: NonResumableCause;
-      readonly terminalStatus?: string;
       readonly outcome?: RunOutcome;
     };
 
 function terminalBlockCause(
   meta: ExecutionMeta | null,
 ): NonResumableCause | undefined {
-  if (!meta) return undefined;
-  if (meta.outcome === RUN_OUTCOME.COMPLETED) {
+  if (meta?.outcome === RUN_OUTCOME.COMPLETED) {
     return RESUMABILITY_CAUSE.TERMINAL_COMPLETED;
   }
-  if (meta.outcome === RUN_OUTCOME.FAILED) {
+  if (meta?.outcome === RUN_OUTCOME.FAILED) {
     return RESUMABILITY_CAUSE.TERMINAL_FAILED;
   }
-  if (
-    meta.outcome === RUN_OUTCOME.CANCELLED ||
-    meta.terminalStatus === undefined ||
-    meta.terminalStatus === EXECUTION_STATUS.INTERRUPTED
-  ) {
-    return undefined;
-  }
-  return RESUMABILITY_CAUSE.TERMINAL_STATUS;
+  return undefined;
 }
 
 /**
@@ -130,10 +118,7 @@ export async function deriveResumability(
     meta = metaResult.data;
   }
 
-  const metaFields = {
-    terminalStatus: meta?.terminalStatus,
-    outcome: meta?.outcome,
-  };
+  const metaFields = { outcome: meta?.outcome };
 
   const terminalCause = terminalBlockCause(meta);
   if (terminalCause !== undefined) {
@@ -175,8 +160,7 @@ export async function deriveResumability(
   return {
     resumable: true,
     cause:
-      meta?.outcome === RUN_OUTCOME.CANCELLED ||
-      meta?.terminalStatus === EXECUTION_STATUS.INTERRUPTED
+      meta?.outcome === RUN_OUTCOME.CANCELLED
         ? RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW
         : RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
     flowRecord: flowResult.data,

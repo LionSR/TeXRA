@@ -79,11 +79,6 @@ const ExecutionMetaBaseSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
-  /**
-   * Legacy terminal residue. Not written by current code; the entrance
-   * stamper derives `outcome` from it once and persists that instead.
-   */
-  terminalStatus: z.string().optional(),
   /** Canonical terminal outcome — the ONE persisted terminal fact. */
   outcome: RunOutcomeSchema.optional(),
   /**
@@ -95,13 +90,6 @@ const ExecutionMetaBaseSchema = z.object({
    * `incomplete`.
    */
   identity: RunIdentitySchema.optional(),
-  /**
-   * Legacy classification residue (e.g. 'process' for background bash). Not
-   * written by current code and read only by the entrance stamper, which
-   * derives `identity` from it. Kept on the schema so read-modify-write
-   * cycles on not-yet-stamped rows cannot strip the stamper's evidence.
-   */
-  category: z.string().optional(),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
   /**

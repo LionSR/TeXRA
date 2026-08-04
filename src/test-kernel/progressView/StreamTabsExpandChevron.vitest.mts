@@ -142,7 +142,7 @@ describe('stream-tab expand chevron', () => {
       streams: [
         {
           identity: {
-            kind: 'workflowScript',
+            kind: 'multiAgentWorkflow',
             workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
           },
           name: 'workflow-script#abc123',

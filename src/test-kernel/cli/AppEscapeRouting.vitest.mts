@@ -68,6 +68,7 @@ function seedChildHierarchy(): void {
     {
       executionId: 'escape-child-execution',
       agentName: 'child',
+      identity: { kind: 'agent' as const, agent: 'child' },
       childStreamId: CHILD,
       status: STREAM_PHASE.RUNNING,
     },
@@ -76,6 +77,7 @@ function seedChildHierarchy(): void {
     {
       executionId: 'escape-grandchild-execution',
       agentName: 'grandchild',
+      identity: { kind: 'agent' as const, agent: 'grandchild' },
       childStreamId: GRANDCHILD,
       status: STREAM_PHASE.RUNNING,
     },
@@ -156,7 +158,7 @@ describe('App foreground Escape ownership', () => {
       ...slice,
       agent: 'solo-workflow',
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'solo-workflow',
       },
       category: AgentCategory.Workflow,
@@ -205,7 +207,7 @@ describe('App foreground Escape ownership', () => {
       ...slice,
       agent: 'workflow',
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'workflow',
       },
       category: AgentCategory.Workflow,
@@ -239,12 +241,14 @@ describe('App foreground Escape ownership', () => {
       {
         executionId: 'workflow-child-execution',
         agentName: 'duplicate',
+        identity: { kind: 'agent' as const, agent: 'duplicate' },
         childStreamId: CHILD,
         status: STREAM_PHASE.RUNNING,
       },
       {
         executionId: 'workflow-review-execution',
         agentName: 'duplicate',
+        identity: { kind: 'agent' as const, agent: 'duplicate' },
         childStreamId: GRANDCHILD,
         status: STREAM_PHASE.RUNNING,
       },
@@ -322,6 +326,7 @@ describe('App foreground Escape ownership', () => {
       {
         executionId: 'shared-child-execution',
         agentName: 'shared-child',
+        identity: { kind: 'agent' as const, agent: 'shared-child' },
         childStreamId: CHILD,
         status: STREAM_PHASE.RUNNING,
       },
@@ -331,7 +336,7 @@ describe('App foreground Escape ownership', () => {
       ...slice,
       agent: 'ambiguous-workflow',
       identity: {
-        kind: 'workflowScript' as const,
+        kind: 'multiAgentWorkflow' as const,
         workflowName: 'ambiguous-workflow',
       },
       category: AgentCategory.Workflow,

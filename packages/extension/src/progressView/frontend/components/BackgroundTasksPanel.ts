@@ -517,7 +517,7 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
       return 'terminal';
     case 'agent':
       return child.identity.tool !== undefined ? 'robot' : 'server';
-    case 'workflowScript':
+    case 'multiAgentWorkflow':
       return 'server';
     case undefined:
       // Legacy emitter without an identity: neutral agent icon.

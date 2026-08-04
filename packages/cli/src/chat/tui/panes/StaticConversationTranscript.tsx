@@ -102,7 +102,7 @@ export function sessionHeaderIdentityLine(
       streams: context.streams,
     });
     const streamKind =
-      slice?.identity?.kind === 'workflowScript'
+      slice?.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent';
     return `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;

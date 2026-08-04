@@ -165,12 +165,13 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
   });
 
-  it('scans execution records whose stream-id provenance predates registration', async () => {
+  it('fixes a legacy-resolved stream id at its stamp instead of re-scanning every read', async () => {
     const executionId = 'abc666' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#abc666' as StreamTabId;
+    // Un-stamped legacy row: no streamId on the execution record, so the
+    // first resolution must scan sidecars and backfill the unique match.
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date().toISOString(),
-      streamId,
     });
 
     const store = new StreamSnapshotStore();
@@ -196,6 +197,10 @@ describe('resolvePersistedStreamIdForExecution', () => {
       streamIdSource: EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION,
     });
 
+    // A later resume adds a second sidecar claiming the same execution. A
+    // stamped stream id of either provenance is authoritative: resolution is
+    // fixed at the stamp and returns without scanning, instead of re-opening
+    // the mapping as ambiguity on every read.
     const resumedStream = 'zOrchestrator@newModel#abc666' as StreamTabId;
     snapshotFacts(store).setRunConfig(
       resumedStream,
@@ -208,10 +213,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       resolvePersistedStreamIdForExecution(executionId, {
         snapshotStore: new StreamSnapshotStore(),
       }),
-    ).resolves.toEqual({
-      fallbackStreamIds: [],
-      exactExecutionCandidateStreamIds: [streamId, resumedStream],
-    });
+    ).resolves.toEqual({ streamId, fallbackStreamIds: [] });
   });
 
   it('does not treat a work plan as canonical-ownership evidence', async () => {

@@ -7,7 +7,6 @@
  */
 
 import type { ChildRecord, ExecutionMeta, TodoEntry } from '@agent/storage';
-import { deriveLegacyOutcome } from '@agent/storage';
 import {
   getRunContextStreamId,
   tryUseRunContext,
@@ -25,6 +24,7 @@ import {
   formatTodoSection,
   getAvailablePaths,
   getExecutionStatusInfo,
+  type ExecutionDisplayCategory,
 } from '../executionFormatters';
 
 /** Options controlling how showSummary renders a result report. */
@@ -75,10 +75,7 @@ export function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
 ): string {
-  const info = getExecutionStatusInfo(
-    child.id,
-    childMeta ? deriveLegacyOutcome(childMeta) : undefined,
-  );
+  const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
@@ -110,7 +107,7 @@ export function buildRunningSummaryLines(
 export function buildCompletedSummaryLines(
   executionId: ExecutionId,
   config: AgentConfig | null,
-  category: string | undefined,
+  category: ExecutionDisplayCategory | undefined,
   info: ExecutionStatusInfo,
   meta: ExecutionMeta | null,
 ): string[] {
@@ -118,7 +115,9 @@ export function buildCompletedSummaryLines(
     `Execution: ${executionId}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
     ...(category ? [`Category: ${category}`] : []),
-    ...(category === 'process' ? [] : [`Model: ${config?.model ?? 'default'}`]),
+    ...(category === 'process' || category === 'multiAgentWorkflow'
+      ? []
+      : [`Model: ${config?.model ?? 'default'}`]),
     `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
     `Status: ${formatStatusInfo(info)}`,
   ];
@@ -146,7 +145,7 @@ export interface SummaryTailOptions {
  */
 export function buildSummaryTailLines(
   executionId: ExecutionId,
-  category: string | undefined,
+  category: ExecutionDisplayCategory | undefined,
   hasChildren: boolean,
   todos: TodoEntry[],
   report: string | null,

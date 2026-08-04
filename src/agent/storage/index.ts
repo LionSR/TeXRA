@@ -45,7 +45,6 @@ export {
   deleteAllExecutions,
   isUserVisibleExecution,
   deriveLegacyIdentity,
-  deriveLegacyOutcome,
 } from './executionListing';
 export {
   RESUMABILITY_CAUSE,

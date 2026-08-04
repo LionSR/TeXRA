@@ -1009,6 +1009,7 @@ describe('CLI conversation transcript splitting', () => {
         {
           executionId: 'ei_search',
           agentName: 'search',
+          identity: { kind: 'agent' as const, agent: 'search' },
           childStreamId: CHILD,
           status: STREAM_PHASE.RUNNING,
         },

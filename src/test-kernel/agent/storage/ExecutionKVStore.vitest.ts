@@ -18,7 +18,6 @@ import {
 import { clearTerminalExecutionState } from '@agent/storage/executionLifecycle';
 import * as logger from '@logger/logUtils';
 import {
-  EXECUTION_STATUS,
   RUN_OUTCOME,
   type ExecutionId,
   type RunOutcome,
@@ -75,24 +74,6 @@ describe('isReservedKvKeyName', () => {
 });
 
 describe('ExecutionKVStore meta read shims', () => {
-  it('round-trips legacy terminal residue without read-time derivation', async () => {
-    // Outcome derivation moved to the listing's entrance stamper; the read
-    // keeps the raw residue so the stamper's evidence survives a
-    // read-modify-write cycle.
-    const id = 'legacy-completed' as ExecutionId;
-    await getExecutionStore(id).write('meta', {
-      timestamp: '2026-07-04T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
-    });
-
-    const meta = await getExecutionStore(id).readMeta();
-    expect(meta).toMatchObject({
-      schemaVersion: EXECUTION_META_SCHEMA_VERSION,
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
-    });
-    expect(meta?.outcome).toBeUndefined();
-  });
-
   it.each(Object.values(RUN_OUTCOME) as RunOutcome[])(
     'preserves canonical outcome %s',
     async (outcome) => {
@@ -154,7 +135,6 @@ describe('ExecutionKVStore meta read shims', () => {
     await getExecutionStore(id).write('result-meta', interim);
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       outcome: RUN_OUTCOME.CANCELLED,
     });
 
@@ -185,7 +165,6 @@ describe('ExecutionKVStore meta read shims', () => {
     });
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
       outcome: RUN_OUTCOME.COMPLETED,
     });
 
@@ -238,7 +217,6 @@ describe('ExecutionKVStore meta read shims', () => {
     await getExecutionStore(id).write('result-meta', interim);
     await getExecutionStore(id).write('meta', {
       timestamp: '2026-07-04T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       outcome: RUN_OUTCOME.CANCELLED,
     });
     await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(

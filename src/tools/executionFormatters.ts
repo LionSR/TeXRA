@@ -10,18 +10,22 @@ import {
   type RunOutcome,
   type TodoStatus,
 } from '@shared/schemas';
+import type { AgentCategory } from '@shared/schemas/agent';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**
  * The display category of a run: an agent run shows its execution mode
  * (`workflow` / `toolUse`), every other run shows what it IS
- * (`process` / `workflowScript`). Identity-less legacy rows fall back to the
+ * (`process` / `multiAgentWorkflow`). Identity-less legacy rows fall back to the
  * config's category.
  */
+export type ExecutionDisplayCategory =
+  AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
+
 export function executionDisplayCategory(
   identity: RunIdentity | undefined,
   config: Pick<AgentConfig, 'agentCategory'> | null | undefined,
-): string | undefined {
+): ExecutionDisplayCategory | undefined {
   if (!identity) return config?.agentCategory;
   return identity.kind === 'agent' ? config?.agentCategory : identity.kind;
 }
@@ -45,7 +49,7 @@ function listingDisplay(entry: ExecutionListingEntry): {
 
 /** Return paths available for a given agent category. */
 export function getAvailablePaths(
-  category?: string,
+  category?: ExecutionDisplayCategory,
   hasChildren?: boolean,
 ): string[] {
   const common = ['config', 'report'];
@@ -54,7 +58,7 @@ export function getAvailablePaths(
     case 'toolUse':
       return [...common, 'conversation', 'todos', 'workspace-files'];
     case 'workflow':
-    case 'workflowScript':
+    case 'multiAgentWorkflow':
       return [...common, 'files'];
     case 'process':
       return [...common, 'output'];

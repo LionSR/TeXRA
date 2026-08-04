@@ -11,13 +11,11 @@ import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import {
-  executionStatusToRunOutcome,
-  RUN_OUTCOME,
-  type ExecutionId,
-  type ExecutionMeta,
-  type RunIdentity,
-  type RunOutcome,
+import type {
+  ExecutionId,
+  ExecutionMeta,
+  RunIdentity,
+  RunOutcome,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -90,8 +88,7 @@ export function isUserVisibleExecution(
 //
 // Pre-consolidation rows carry no `identity`. The listing is the store's read
 // entrance that already visits every row, so an unstamped row is healed here:
-// identity derived once from the legacy evidence (`meta.category` +
-// config), the derived `outcome` persisted beside it, written back under an
+// identity derived once from the persisted config and written back under an
 // inactive execution lease. Runs every time with no generation marker —
 // idempotent because stamped rows never reach it, and re-runnable because an
 // old binary's read-modify-write stripping the field, a legacy-bucket merge
@@ -103,29 +100,16 @@ export function isUserVisibleExecution(
 const STAMP_MIN_AGE_MS = EXECUTION_LEASE_STALE_MS;
 
 /**
- * Legacy terminal residue → canonical outcome. An unmappable string maps to
- * `failed` — the same non-resumable treatment those rows already get.
- * Exported for store-read entrances (hydration, direct detail reads) so an
+ * Un-stamped legacy row → identity, from the one surviving evidence source:
+ * the persisted config. Exported for store-read entrances (hydration) so an
  * un-healed row behaves identically before its durable stamp lands; the
- * listing's stamper remains the only WRITER of the derived values.
+ * listing's stamper remains the only WRITER of the derived value. Rows
+ * without a readable config are left unstamped: they keep parsing and keep
+ * listing as `incomplete`. No sentinel names are fabricated.
  */
-export function deriveLegacyOutcome(
-  meta: ExecutionMeta,
-): RunOutcome | undefined {
-  if (meta.outcome) return meta.outcome;
-  if (meta.terminalStatus === undefined) return undefined;
-  return executionStatusToRunOutcome(meta.terminalStatus) ?? RUN_OUTCOME.FAILED;
-}
-
 export function deriveLegacyIdentity(
-  meta: ExecutionMeta,
   cfg: AgentConfig | null,
 ): RunIdentity | undefined {
-  if (meta.category === 'process') {
-    return { kind: 'process', tool: cfg?.agent ?? 'bash' };
-  }
-  // Rows without a readable config are left unstamped: they keep parsing and
-  // keep listing as `incomplete`. No sentinel names are fabricated.
   return cfg ? { kind: 'agent', agent: cfg.agent } : undefined;
 }
 
@@ -146,15 +130,10 @@ async function stampExecutionRow(
         store.readMeta(),
         store.readConfig(),
       ]);
-      if (!current) return;
-      const identity = current.identity ?? deriveLegacyIdentity(current, cfg);
-      const outcome = deriveLegacyOutcome(current);
-      if (current.identity && current.outcome === outcome) return;
-      await store.writeMeta({
-        ...current,
-        ...(identity && { identity }),
-        ...(outcome && { outcome }),
-      });
+      if (!current || current.identity) return;
+      const identity = deriveLegacyIdentity(cfg);
+      if (!identity) return;
+      await store.writeMeta({ ...current, identity });
     });
   } catch (error) {
     logger.warn(
@@ -217,20 +196,17 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 
         if (!meta) return null;
 
-        const outcome = deriveLegacyOutcome(meta);
         const base: ExecutionListingBase = {
           id,
           timestamp: meta.timestamp,
           parentExecutionId: meta.parentExecutionId,
-          outcome,
+          outcome: meta.outcome,
           description: meta.description,
         };
-        const identity = meta.identity ?? deriveLegacyIdentity(meta, cfg);
+        const identity = meta.identity ?? deriveLegacyIdentity(cfg);
         // Durable healing is async and best-effort; this read already has
-        // the derived values either way.
-        if (identity !== meta.identity || outcome !== meta.outcome) {
-          void stampExecutionRow(id, meta);
-        }
+        // the derived value either way.
+        if (identity !== meta.identity) void stampExecutionRow(id, meta);
         if (!cfg || !identity) {
           return { ...base, kind: 'incomplete' };
         }

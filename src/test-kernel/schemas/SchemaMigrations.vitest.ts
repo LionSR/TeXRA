@@ -157,6 +157,7 @@ describe('ActiveChildInfoSchema — flat roster row', () => {
     executionId: 'exec-1',
     childStreamId: 'stream-1',
     agentName: 'review',
+    identity: { kind: 'agent', agent: 'review' },
   };
 
   it('accepts a row carrying its parsed identity verbatim', () => {

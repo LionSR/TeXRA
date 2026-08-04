@@ -31,7 +31,11 @@ function child(
     childStreamId: StreamTabId;
   },
 ): ChildStreamEntryRow {
-  return { agentName: 'agent', ...over };
+  return {
+    agentName: 'agent',
+    identity: { kind: 'agent', agent: 'agent' },
+    ...over,
+  };
 }
 
 function streamsOf(

@@ -179,8 +179,7 @@ async function persistSupplementaryMetaFieldsBestEffort(
  * projects it onto the turn-owned result envelope (`applyExecutionOutcome`), so
  * an execution that resumes while still carrying its interrupted predecessor's
  * outcome relabels every turn the resumed run writes until its next terminal
- * finalize. Both fields go together so a surviving legacy `terminalStatus`
- * cannot be re-stamped into a fresh `outcome` by the entrance healer.
+ * finalize.
  *
  * Metadata that is absent or unreadable is left alone: `readResultMeta` reads
  * the same metadata, so there is no outcome to project either way, and the
@@ -191,11 +190,8 @@ export async function clearTerminalExecutionState(
 ): Promise<void> {
   const meta = await getExecutionStore(executionId).readMeta();
   if (!meta) return;
-  if (meta.terminalStatus === undefined && meta.outcome === undefined) return;
-  await enqueueMetaUpdate(executionId, () => ({
-    terminalStatus: undefined,
-    outcome: undefined,
-  }));
+  if (meta.outcome === undefined) return;
+  await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
 }
 
 /** Persist the canonical terminal outcome — the one terminal write. */
@@ -203,10 +199,7 @@ async function writeTerminalOutcome(
   executionId: ExecutionId,
   outcome: RunOutcome,
 ): Promise<void> {
-  await enqueueMetaUpdate(executionId, () => ({
-    outcome,
-    terminalStatus: undefined,
-  }));
+  await enqueueMetaUpdate(executionId, () => ({ outcome }));
 }
 
 export interface FinalizeExecutionInput {

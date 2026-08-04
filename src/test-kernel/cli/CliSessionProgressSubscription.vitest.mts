@@ -119,6 +119,7 @@ const child = {
   executionId: childExecutionId,
   childStreamId,
   agentName: 'review',
+  identity: { kind: 'agent' as const, agent: 'review' },
   status: STREAM_PHASE.RUNNING,
 };
 const PROGRESS_PROJECTION_CASES = {

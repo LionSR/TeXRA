@@ -162,6 +162,7 @@ function subagentChild(
     executionId: 'child-1',
     childStreamId: 'child-stream',
     agentName: 'review',
+    identity: { kind: 'agent', agent: 'review' },
     status: 'running',
     ...overrides,
   };
@@ -896,6 +897,7 @@ describe('CLI run progress renderer', () => {
               executionId: 'child-execution',
               childStreamId: 'child-stream',
               agentName: 'review',
+              identity: { kind: 'agent' as const, agent: 'review' },
               status: 'running',
             },
           ],

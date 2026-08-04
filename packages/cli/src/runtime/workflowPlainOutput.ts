@@ -165,7 +165,7 @@ export function attachWorkflowPlainOutput(
       if (sessionEvent.scope !== 'run') return;
       const { streamId, event } = sessionEvent;
       if (event.type === 'run.start') {
-        if (event.identity.kind === 'workflowScript') {
+        if (event.identity.kind === 'multiAgentWorkflow') {
           projections.set(
             streamId,
             createWorkflowStreamProjection(

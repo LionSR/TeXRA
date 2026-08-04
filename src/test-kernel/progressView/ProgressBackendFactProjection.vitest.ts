@@ -765,6 +765,7 @@ describe('ProgressBackend', () => {
       executionId: 'exec:child' as ExecutionId,
       childStreamId,
       agentName: 'orchestrator',
+      identity: { kind: 'agent' as const, agent: 'orchestrator' },
       status: 'running',
       startedAt: 1,
       elapsed: null,
@@ -934,6 +935,7 @@ describe('ProgressBackend', () => {
           childStreamId: 'child-stream',
           executionId: 'finished-child',
           agentName: 'reviewer',
+          identity: { kind: 'agent' as const, agent: 'reviewer' },
           finishedAt: 1,
         },
       ],
@@ -1145,7 +1147,7 @@ describe('ProgressBackend', () => {
       streamId: stream,
       executionId,
       identity: {
-        kind: 'workflowScript',
+        kind: 'multiAgentWorkflow',
         workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
       },
     });
@@ -1163,7 +1165,7 @@ describe('ProgressBackend', () => {
 
     await vi.waitFor(() =>
       expect(backend.state.getStreamMetadata(stream).identity).toEqual({
-        kind: 'workflowScript',
+        kind: 'multiAgentWorkflow',
         workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
       }),
     );
@@ -1173,7 +1175,7 @@ describe('ProgressBackend', () => {
         name: stream,
         label: 'repo-cleanup-readonly-pilot-2026-07-24',
         identity: {
-          kind: 'workflowScript',
+          kind: 'multiAgentWorkflow',
           workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
         },
         agentCategory: AgentCategory.Workflow,

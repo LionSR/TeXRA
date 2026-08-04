@@ -20,7 +20,6 @@ import {
   listExecutions,
   resolveExecutionWorkspaceFilePath,
   deriveLegacyIdentity,
-  deriveLegacyOutcome,
 } from '@agent/storage';
 import {
   currentSession,
@@ -82,6 +81,7 @@ import {
   formatTodoSection,
   getExecutionStatusInfo,
   executionDisplayCategory,
+  type ExecutionDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/define';
 import {
@@ -644,13 +644,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const identity =
-      meta?.identity ?? (meta ? deriveLegacyIdentity(meta, config) : undefined);
+    const identity = meta?.identity ?? deriveLegacyIdentity(config);
     const category = executionDisplayCategory(identity, config);
-    const info = getExecutionStatusInfo(
-      executionId,
-      meta ? deriveLegacyOutcome(meta) : undefined,
-    );
+    const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const lines = buildCompletedSummaryLines(
       executionId,
       config,
@@ -681,7 +677,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
   private async appendSummaryTail(
     lines: string[],
     executionId: ExecutionId,
-    category: string | undefined,
+    category: ExecutionDisplayCategory | undefined,
     children: ChildRecord[],
     todos: TodoEntry[],
     report: string | null,
@@ -876,8 +872,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Filter out fields irrelevant to this agent's category
     const meta = await getExecutionStore(executionId).readMeta();
-    const identity =
-      meta?.identity ?? (meta ? deriveLegacyIdentity(meta, config) : undefined);
+    const identity = meta?.identity ?? deriveLegacyIdentity(config);
     const category = executionDisplayCategory(identity, config);
     return executed(serializeFilteredConfig(config, category));
   }
@@ -984,12 +979,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     if (!meta && !handle) {
       throw new ToolError(`Execution not found: ${executionId}`);
     }
-    // Identity is the authority; the legacy `category` residue answers only
-    // for rows the entrance stamper has not healed yet.
-    const isProcess = meta?.identity
-      ? meta.identity.kind === 'process'
-      : meta?.category === 'process';
-    if (!isProcess) {
+    if (meta?.identity?.kind !== 'process') {
       return executed(
         `/executions/${executionId}/output is only available for background commands (bash with run_in_background). ` +
           `Use /executions/${executionId}/conversation for an agent run's message history.`,
@@ -1020,10 +1010,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     }
 
     const { lines, chars } = projectProcessOutput(log.toJSON());
-    const info = getExecutionStatusInfo(
-      executionId,
-      meta ? deriveLegacyOutcome(meta) : undefined,
-    );
+    const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
       ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;

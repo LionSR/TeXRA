@@ -32,7 +32,7 @@ function startWorkflow(
       type: 'run.start',
       streamId: target,
       executionId,
-      identity: { kind: 'workflowScript', workflowName: 'proof-workflow' },
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'proof-workflow' },
     },
     target,
   );

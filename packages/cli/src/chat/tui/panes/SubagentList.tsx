@@ -726,7 +726,7 @@ export function SubagentList(
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
   const workflowRoot =
-    props.listRootSlice?.identity?.kind === 'workflowScript'
+    props.listRootSlice?.identity?.kind === 'multiAgentWorkflow'
       ? props.listRootSlice
       : undefined;
   const workflowTasks = useMemo(

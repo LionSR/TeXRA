@@ -28,11 +28,10 @@ async function writeExecution(
   id: ExecutionId,
   timestamp: string,
   agentConfig?: AgentConfig,
-  category?: string,
   parentExecutionId?: ExecutionId,
 ): Promise<void> {
   const store = getExecutionStore(id);
-  await store.writeMeta({ timestamp, category, parentExecutionId });
+  await store.writeMeta({ timestamp, parentExecutionId });
   if (agentConfig) await store.writeConfig(agentConfig);
 }
 
@@ -47,12 +46,7 @@ describe('execution listing normalization', () => {
     expect(await listExecutions()).toEqual([]);
 
     const id = 'eee555' as ExecutionId;
-    await writeExecution(
-      id,
-      '2026-07-15T11:00:00.000Z',
-      config('assistant'),
-      AgentCategory.ToolUse,
-    );
+    await writeExecution(id, '2026-07-15T11:00:00.000Z', config('assistant'));
 
     expect(await listExecutions()).toEqual([
       expect.objectContaining({
@@ -65,21 +59,15 @@ describe('execution listing normalization', () => {
 
   it('sees metadata replaced by another host after an earlier listing', async () => {
     const id = 'fff666' as ExecutionId;
-    await writeExecution(
-      id,
-      '2026-07-15T12:00:00.000Z',
-      config('assistant'),
-      AgentCategory.ToolUse,
-    );
+    await writeExecution(id, '2026-07-15T12:00:00.000Z', config('assistant'));
     expect(await listExecutions()).toEqual([
       expect.not.objectContaining({ description: expect.any(String) }),
     ]);
 
     await getExecutionStore(id).writeMeta({
       timestamp: '2026-07-15T12:00:00.000Z',
-      category: AgentCategory.ToolUse,
       description: 'Updated by another host',
-      terminalStatus: 'completed',
+      outcome: 'completed',
     });
 
     expect(await listExecutions()).toEqual([
@@ -94,12 +82,7 @@ describe('execution listing normalization', () => {
   it('uses the config as the canonical source for visible agent fields', async () => {
     const id = 'aaa111' as ExecutionId;
     const agentConfig = config('assistant');
-    await writeExecution(
-      id,
-      '2026-07-15T10:00:00.000Z',
-      agentConfig,
-      AgentCategory.ToolUse,
-    );
+    await writeExecution(id, '2026-07-15T10:00:00.000Z', agentConfig);
 
     const entries = await listExecutions();
 
@@ -119,26 +102,21 @@ describe('execution listing normalization', () => {
   });
 
   it('classifies process and incomplete storage rows explicitly', async () => {
-    const metadataProcessId = 'bbb222' as ExecutionId;
+    const processId = 'bbb222' as ExecutionId;
     const customBashAgentId = 'ccc333' as ExecutionId;
     const incompleteId = 'ddd444' as ExecutionId;
-    await writeExecution(
-      metadataProcessId,
-      '2026-07-15T09:00:00.000Z',
-      config('assistant'),
-      'process',
-    );
+    const processStore = getExecutionStore(processId);
+    await processStore.writeMeta({
+      timestamp: '2026-07-15T09:00:00.000Z',
+      identity: { kind: 'process', tool: 'assistant' },
+    });
+    await processStore.writeConfig(config('assistant'));
     await writeExecution(
       customBashAgentId,
       '2026-07-15T08:00:00.000Z',
       config('bash'),
     );
-    await writeExecution(
-      incompleteId,
-      '2026-07-15T07:00:00.000Z',
-      undefined,
-      'legacy',
-    );
+    await writeExecution(incompleteId, '2026-07-15T07:00:00.000Z');
 
     const entries = await listExecutions();
 
@@ -168,46 +146,34 @@ describe('execution listing normalization', () => {
   it('heals unstamped legacy rows durably on the listing read', async () => {
     const legacyId = 'abc777' as ExecutionId;
     const store = getExecutionStore(legacyId);
-    // Legacy row: pre-identity metadata with legacy terminal residue, old
-    // enough to be safely classified and written back.
-    await store.writeMeta({
-      timestamp: '2026-07-15T06:00:00.000Z',
-      category: 'process',
-      terminalStatus: 'interrupted',
-    });
+    // Legacy row: pre-identity metadata, old enough to be safely classified
+    // and written back.
+    await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
     await store.writeConfig(config('bash'));
 
     const entries = await listExecutions();
     expect(entries).toEqual([
       expect.objectContaining({
         kind: 'run',
-        identity: { kind: 'process', tool: 'bash' },
-        outcome: 'cancelled',
+        identity: { kind: 'agent', agent: 'bash' },
       }),
     ]);
 
-    // The async best-effort write-back stamps identity and outcome durably.
+    // The async best-effort write-back stamps the derived identity durably.
     await vi.waitFor(async () => {
       const healed = await store.readMeta();
-      expect(healed?.identity).toEqual({ kind: 'process', tool: 'bash' });
-      expect(healed?.outcome).toBe('cancelled');
+      expect(healed?.identity).toEqual({ kind: 'agent', agent: 'bash' });
     });
   });
 
   it('keeps agent-spawned child runs out of history listings', async () => {
     const rootId = 'eee111' as ExecutionId;
     const childId = 'fff222' as ExecutionId;
-    await writeExecution(
-      rootId,
-      '2026-07-15T10:00:00.000Z',
-      config('orchestrator'),
-      AgentCategory.ToolUse,
-    );
+    await writeExecution(rootId, '2026-07-15T10:00:00.000Z', config('orchestrator'));
     await writeExecution(
       childId,
       '2026-07-15T10:05:00.000Z',
       config('search'),
-      AgentCategory.ToolUse,
       rootId,
     );
 

@@ -115,6 +115,7 @@ describe('stream meta frontend state', () => {
             childStreamId: 'old-child-stream',
             executionId: 'old-child',
             agentName: 'old child',
+            identity: { kind: 'agent' as const, agent: 'old child' },
           },
         ],
       } satisfies Partial<StreamState>),

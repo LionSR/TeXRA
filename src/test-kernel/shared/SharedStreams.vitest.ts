@@ -99,12 +99,14 @@ describe('buildStreamMetadata', () => {
       executionId: 'agent-1',
       childStreamId: 'agent-1-stream',
       agentName: 'review',
+      identity: { kind: 'agent' as const, agent: 'review' },
       status: STREAM_STATUS.RUNNING,
     };
     const finishedChild: ActiveChildInfo = {
       executionId: 'agent-0',
       childStreamId: 'agent-0-stream',
       agentName: 'review',
+      identity: { kind: 'agent' as const, agent: 'review' },
       status: STREAM_PHASE.COMPLETED,
       finishedAt: 122,
     };

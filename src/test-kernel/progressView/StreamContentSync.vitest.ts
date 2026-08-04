@@ -50,6 +50,7 @@ const runId = 'run-1' as StorageKey;
 const activeSubagent: ActiveChildInfo = {
   executionId: 'child-1',
   agentName: 'search',
+  identity: { kind: 'agent' as const, agent: 'search' },
   childStreamId: 'stream:child',
 };
 

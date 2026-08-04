@@ -1276,7 +1276,7 @@ function seedWorkflowTimeline(): void {
       executionId,
       agentName: 'repositoryAudit',
       childStreamId,
-      identity: { kind: 'workflowScript', workflowName: 'repositoryAudit' },
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'repositoryAudit' },
     },
   ]);
   emitChildEventOrderEdge(childStreamId, STREAM_ID);
@@ -1389,7 +1389,7 @@ function seedRunningWorkflow(): void {
       agentName: 'live-workflow-validation',
       childStreamId,
       identity: {
-        kind: 'workflowScript',
+        kind: 'multiAgentWorkflow',
         workflowName: 'live-workflow-validation',
       },
     },
@@ -1442,6 +1442,7 @@ function seedRunningWorkflow(): void {
   const workflowChildren = [
     {
       executionId: 'harness-workflow-agent-a',
+      identity: { kind: 'agent', agent: 'correct' },
       agentName: 'correct',
       childStreamId: firstAgentStreamId,
       elapsed: '18s',
@@ -1449,6 +1450,7 @@ function seedRunningWorkflow(): void {
     },
     {
       executionId: 'harness-workflow-agent-b',
+      identity: { kind: 'agent', agent: 'correct' },
       agentName: 'correct',
       childStreamId: secondAgentStreamId,
       elapsed: '17s',
@@ -1501,6 +1503,7 @@ const HARNESS_DISPOSERS: Array<() => void> = [];
 function childEventOrderRosterRow(): ActiveChildInfo {
   return {
     executionId: CHILD_EVENT_ORDER_EXECUTION_ID,
+    identity: { kind: 'agent', agent: CHILD_EVENT_ORDER_AGENT_NAME },
     agentName: CHILD_EVENT_ORDER_AGENT_NAME,
     childStreamId: CHILD_EVENT_ORDER_STREAM_ID,
     elapsed: '1m 4s',
@@ -1730,6 +1733,7 @@ if (SHOW_CHILDREN) {
   const nestedStrategyChild = {
     kind: 'subagent' as const,
     executionId: 'harness-nested-local-checker',
+    identity: { kind: 'agent' as const, agent: 'localChecker' },
     agentName: 'localChecker',
     childStreamId: 'harness-nested-local-checker-stream',
     status: STREAM_PHASE.RUNNING,
@@ -1737,24 +1741,24 @@ if (SHOW_CHILDREN) {
   };
   const childStreams = [
     {
-      kind: 'subagent' as const,
       executionId: 'harness-child-strategy',
+      identity: { kind: 'agent' as const, agent: 'strategy' },
       agentName: 'strategy',
       childStreamId: 'harness-child-strategy-stream',
       status: STREAM_PHASE.RUNNING,
       startedAt,
     },
     {
-      kind: 'subagent' as const,
       executionId: 'harness-child-lean',
+      identity: { kind: 'agent' as const, agent: 'leanSolver' },
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
       status: STREAM_PHASE.WAITING,
       elapsed: '2m 3s',
     },
     {
-      kind: 'subagent' as const,
       executionId: 'harness-child-review',
+      identity: { kind: 'agent' as const, agent: 'reviewer' },
       agentName: 'reviewer',
       childStreamId: 'harness-child-review-stream',
       status: STREAM_PHASE.RUNNING,
