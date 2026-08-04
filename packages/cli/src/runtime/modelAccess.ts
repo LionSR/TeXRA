@@ -283,6 +283,11 @@ export function formatModelStatusForCliMode(
 
   const availability = model.model.availability;
   if (availability == null) return `included: ${model.status}`;
+  // Prefer the availability label for subscription rows so Grok OAuth is not
+  // hard-coded as "chatgpt subscription" (kind is shared with ChatGPT).
+  if (availability === 'subscription-access') {
+    return model.status;
+  }
   return INCLUDED_ACCESS_STATUS_BY_AVAILABILITY[availability];
 }
 

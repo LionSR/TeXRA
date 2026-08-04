@@ -25,6 +25,7 @@ import { CliConfigForm } from '../forms/CliConfigForm';
 import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
 import { LogoutForm } from '../forms/LogoutForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
+import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
@@ -540,12 +541,26 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'model',
-    description: 'List available models',
-    aliases: ['models'],
+    description: 'Choose the model for this chat',
     category: 'configuration',
     echo: 'ifPersists',
     handler: applyCliModelSelection,
     formComponent: ModelListFormAdapter,
+  });
+  const EnabledModelsFormAdapter = (
+    props: SlashFormProps,
+  ): React.JSX.Element => (
+    <EnabledModelsForm
+      availableRows={props.availableRows}
+      onClose={() => props.onDone(undefined)}
+    />
+  );
+  registerSlashCommand({
+    name: 'models',
+    description: 'Enable or disable models in pickers',
+    category: 'configuration',
+    echo: 'never',
+    formComponent: EnabledModelsFormAdapter,
   });
   registerSlashCommand({
     name: 'api',
