@@ -6,7 +6,6 @@
     "lib": ["ES2023", "DOM"],
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "sourceMap": false,
     "paths": {
       "vscode-jsonrpc/node": ["./node_modules/vscode-jsonrpc/lib/node/main"],
       "@shared/*": [
@@ -174,7 +173,6 @@
     "moduleResolution": "nodenext",
     "strict": true,
     "skipLibCheck": true,
-    "esModuleInterop": true,
     "types": ["node", "vscode"]
   },
   "include": [

@@ -10,7 +10,6 @@
     "outDir": "packages/agent/dist/types",
     "rootDir": ".",
     "removeComments": true,
-    "sourceMap": false,
     "types": ["node"],
     "paths": {
       "@shared/*": [

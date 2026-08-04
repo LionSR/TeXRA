@@ -9,7 +9,6 @@
     "useDefineForClassFields": false,
     "strict": true,
     "skipLibCheck": true,
-    "esModuleInterop": true,
     "types": ["node"]
   },
   "include": ["vite.config.ts"]
