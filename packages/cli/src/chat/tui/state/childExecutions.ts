@@ -40,7 +40,8 @@ type ParentProvenance =
 
 interface LiveChildStreamEntry {
   readonly kind: 'live';
-  /** Latest roster metadata, excluding identity and status. */
+  /** Latest roster metadata (identity included), excluding the stream id
+   *  (the map key) and the lagging display `status`. */
   readonly summary?: Omit<ActiveChildInfo, 'childStreamId' | 'status'>;
   /** Whether the current parent roster still includes this child. */
   readonly active: boolean;

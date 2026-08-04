@@ -476,10 +476,19 @@ export function createChatSessionController(
       await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
       const restored = await snapshotStore.read(resolution.streamId);
+      // A rehydrated stream never re-emits `run.start`, so its identity is
+      // seeded from the durable store (ExecutionMeta by FK) on this cold
+      // read — mirroring `tryResumeStream()`'s seeding.
+      const restoredIdentity = snapshotStore.getRunIdentity(
+        resolution.streamId,
+      );
       patchStream(resolution.streamId, (slice) => {
         const runUsages = Object.values(restored.runUsage);
         return {
           ...slice,
+          ...(restoredIdentity && !slice.identity
+            ? { identity: restoredIdentity }
+            : {}),
           cumulativeUsage: runUsages.length
             ? sumUsageStats(runUsages)
             : slice.cumulativeUsage,

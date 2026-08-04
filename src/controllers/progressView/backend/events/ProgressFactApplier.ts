@@ -445,9 +445,10 @@ export class ProgressFactApplier {
     } else if (shouldSwitch) {
       this.webviewUpdater.setActiveStream(streamId);
     }
-    // Always sync content for the new stream so badges/parent info reaches
-    // the webview — even when we suppress the view switch. includeActiveState
-    // is only relevant when this IS the active stream.
+    // Always sync content for the new stream so badges reach the webview —
+    // even when we suppress the view switch. (The parent edge itself rides
+    // `StreamTabInfo.parentStreamId` in the stream-metadata update.)
+    // includeActiveState is only relevant when this IS the active stream.
     this.syncStreamContent(streamId, {
       includeActiveState: shouldSwitch && wasKnownStream,
     });
@@ -628,7 +629,7 @@ export class ProgressFactApplier {
   syncStreamContent(
     stream: ActiveStreamId,
     options: {
-      /** Include conversation progress, badges, and parent stream in the batch. */
+      /** Include conversation progress, round/phase stage, and badges in the batch. */
       includeActiveState?: boolean;
     } = {},
   ): void {

@@ -152,8 +152,9 @@ function createWorkflowStreamProjection(
 
 /**
  * Project every detached workflow-script stream onto deterministic,
- * spinner-free text. The descriptor emitted during child activation is the
- * source of truth: ordinary workflow agents retain their usual renderer.
+ * spinner-free text. The `run.start` identity is the source of truth (only
+ * `kind: 'multiAgentWorkflow'` streams project here): ordinary workflow
+ * agents retain their usual renderer.
  */
 export function attachWorkflowPlainOutput(
   events: SessionEventHub,

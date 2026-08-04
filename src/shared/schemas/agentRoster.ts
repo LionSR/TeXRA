@@ -64,10 +64,35 @@ export const INHERITED_AGENT_ROSTER: AgentRosterSelection = Object.freeze({
   kind: 'inherit',
 });
 
-/** Exact delegation catalog attached to a run, independent of durable UI state. */
-export const AgentDelegationScopeSchema = z.record(
+/** Canonical delegation catalog shape: agent keys keyed by category. */
+const AgentDelegationScopeCanonicalSchema = z.record(
   AgentCategorySchema,
   AgentKeyListSchema,
 );
 
-export type AgentDelegationScope = z.infer<typeof AgentDelegationScopeSchema>;
+/**
+ * Legacy persisted shape: team-run `config.json` rows written before the
+ * category-keyed record (#8403 era) carried the scope as a
+ * `workflowAgentKeys`/`toolUseAgentKeys` field pair. Normalized once, here at
+ * the parse boundary — dropping this member would fail AgentConfigSchema on
+ * those rows and list finished team runs as incomplete.
+ */
+const AgentDelegationScopeLegacySchema = z
+  .strictObject({
+    workflowAgentKeys: AgentKeyListSchema,
+    toolUseAgentKeys: AgentKeyListSchema,
+  })
+  .transform(({ workflowAgentKeys, toolUseAgentKeys }) => ({
+    [AgentCategory.Workflow]: workflowAgentKeys,
+    [AgentCategory.ToolUse]: toolUseAgentKeys,
+  }));
+
+/** Exact delegation catalog attached to a run, independent of durable UI state. */
+export const AgentDelegationScopeSchema = z.union([
+  AgentDelegationScopeCanonicalSchema,
+  AgentDelegationScopeLegacySchema,
+]);
+
+export type AgentDelegationScope = z.infer<
+  typeof AgentDelegationScopeCanonicalSchema
+>;

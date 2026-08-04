@@ -960,6 +960,31 @@ describe('createProgressViewSecondTierHandlers', () => {
     expect(actions.restoreRunConfig).toHaveBeenCalledWith(runConfig);
   });
 
+  it.each([
+    [{ kind: 'multiAgentWorkflow' as const, workflowName: 'engineer' }],
+    [{ kind: 'process' as const, tool: 'bash' }],
+    [{ kind: 'agent' as const, agent: 'coder', tool: 'codex' }],
+  ])(
+    'refuses RESTORE_STATE with feedback for non-native identity %j',
+    async (identity) => {
+      const actions = createSecondTierActions({
+        getRunConfig: vi.fn().mockReturnValue({}),
+        getRunIdentity: vi.fn().mockReturnValue(identity),
+      });
+      const handlers = createProgressViewSecondTierHandlers(actions);
+
+      await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.RESTORE_STATE])({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      });
+
+      expect(actions.restoreRunConfig).not.toHaveBeenCalled();
+      expect(actions.host.showInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Only TeXRA agent runs'),
+      );
+    },
+  );
+
   it('notifies compaction through the execution owner session', async () => {
     const ownerSession = {};
     const actions = createSecondTierActions({

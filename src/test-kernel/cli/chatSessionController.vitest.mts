@@ -1403,6 +1403,7 @@ describe('createChatSessionController', () => {
         todos: [],
         plan: undefined,
       })),
+      getRunIdentity: vi.fn(() => undefined),
     } as unknown as StreamSnapshotStore;
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),

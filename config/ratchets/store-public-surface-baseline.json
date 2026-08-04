@@ -41,7 +41,7 @@
       "getOutputFiles",
       "getParentStreamId",
       "getRunConfig",
-      "getRunDescriptor",
+      "getRunIdentity",
       "getRunUsage",
       "getWorkPlan",
       "hasPersistedWorkPlan",

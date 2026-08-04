@@ -516,7 +516,8 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
     case 'process':
       return 'terminal';
     case 'agent':
-      return child.identity.tool !== undefined ? 'robot' : 'server';
+      // AI agent rows — native and external-CLI-driven alike.
+      return 'robot';
     case 'multiAgentWorkflow':
       return 'server';
     case undefined:
@@ -535,9 +536,13 @@ function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;
   readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
 } {
+  // Membership is decided by `finishedAt` presence alone (see the schema
+  // doc); the lagging display `status` may only soften HOW a retained
+  // subagent row renders, and processes have no child status source at all.
   const subagentStatusStillInFlight =
-    child.status === STREAM_PHASE.RUNNING ||
-    child.status === STREAM_PHASE.WAITING;
+    child.identity?.kind !== 'process' &&
+    (child.status === STREAM_PHASE.RUNNING ||
+      child.status === STREAM_PHASE.WAITING);
   if (child.finishedAt === undefined || subagentStatusStillInFlight) {
     return child.status === STREAM_PHASE.WAITING
       ? {

@@ -278,15 +278,13 @@ export class ProgressViewState {
   }
 
   /**
-   * Build the snapshot-owned slice of a metadata patch: `agentCategory` and
-   * `run` are only ever set together, atomically, from one `RunConfig` (see
-   * the {@link ProgressStreamRunDetails} doc) and are therefore omitted from
-   * the patch entirely when no config has resolved yet, rather than being
-   * patched to `undefined` — that is what lets `run`'s three-owner union
-   * stay all-or-nothing instead of drifting field-by-field. `executionId`,
-   * `parentStreamId`, and `description` fall back to the current value when
-   * the snapshot store doesn't have one yet, so a patch built before that
-   * data loads can never clear a field the snapshot hasn't caught up to.
+   * Build the snapshot-owned slice of a metadata patch: `identity` is set
+   * only once the snapshot store has one, and `agentCategory`/`config` are
+   * set together from one resolved `AgentConfig` — never patched to
+   * `undefined` while still pending. `executionId`, `parentStreamId`, and
+   * `description` fall back to the current value when the snapshot store
+   * doesn't have one yet, so a patch built before that data loads can never
+   * clear a field the snapshot hasn't caught up to.
    */
   private buildSnapshotMetadataPatch(
     stream: StreamTabId,

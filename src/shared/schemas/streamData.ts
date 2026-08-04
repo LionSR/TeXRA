@@ -42,7 +42,9 @@ export const StreamTabMetaSchema = z
     parentStreamId: z.string().optional(),
     /** FK into `executions/{executionId}/` — the durable run authority. */
     executionId: ExecutionIdSchema.optional(),
-    /** Legacy pre-FK sidecar shape; only the FK inside it is read. */
+    /** Legacy pre-FK sidecar shape; only the FK inside it is read.
+     *  Introduced 2026-08-04; retire together with the pre-FK sidecar cohort
+     *  (once no `meta.json` still carries a `runDescriptor`). */
     runDescriptor: z.looseObject({ executionId: ExecutionIdSchema }).optional(),
   })
   .transform(({ runDescriptor, ...meta }) => {

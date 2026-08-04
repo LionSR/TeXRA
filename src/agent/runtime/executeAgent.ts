@@ -391,7 +391,7 @@ export function executeAgent(
  * Low-level execution runner for an already-registered execution. Fresh
  * launches should use `runAgent()` or call `registerExecution()` first so the
  * canonical `executions/{id}/config.json` exists before `run.start` exposes
- * its descriptor. Resume paths reuse the existing execution record.
+ * its identity. Resume paths reuse the existing execution record.
  */
 export async function executeAgent(
   config: AgentConfig,

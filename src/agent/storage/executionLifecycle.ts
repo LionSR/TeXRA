@@ -48,7 +48,7 @@ export async function hasPersistedParent(
 
 // ---------------------------------------------------------------------------
 // Per-execution write serialization — read-modify-write cycles on meta run one
-// at a time per execution so that concurrent writeTerminalStatus /
+// at a time per execution so that concurrent writeTerminalOutcome /
 // writeSessionDescription calls never race and silently drop each other's
 // fields. Different executions proceed independently.
 // ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 function config(agent: string): AgentConfig {
@@ -147,22 +147,124 @@ describe('execution listing normalization', () => {
     const legacyId = 'abc777' as ExecutionId;
     const store = getExecutionStore(legacyId);
     // Legacy row: pre-identity metadata, old enough to be safely classified
-    // and written back.
+    // and written back. No stream-prefix evidence → native agent.
     await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
-    await store.writeConfig(config('bash'));
+    await store.writeConfig(config('assistant'));
 
     const entries = await listExecutions();
     expect(entries).toEqual([
       expect.objectContaining({
         kind: 'run',
-        identity: { kind: 'agent', agent: 'bash' },
+        identity: { kind: 'agent', agent: 'assistant' },
       }),
     ]);
 
     // The async best-effort write-back stamps the derived identity durably.
     await vi.waitFor(async () => {
       const healed = await store.readMeta();
-      expect(healed?.identity).toEqual({ kind: 'agent', agent: 'bash' });
+      expect(healed?.identity).toEqual({ kind: 'agent', agent: 'assistant' });
+    });
+  });
+
+  it('stamps the four legacy cohorts from quarantined stream-prefix evidence', async () => {
+    // Pre-identity rows carried their run kind only in the stream-id prefix.
+    // One fixture per real cohort, asserting both the stamped identity and
+    // that resume gating (isNativeAgentRun: kind 'agent' with no tool) keeps
+    // excluding the non-native ones after healing.
+    const isNativeAgentRun = (identity: {
+      kind: string;
+      tool?: string;
+    }): boolean => identity.kind === 'agent' && identity.tool === undefined;
+    const cohorts = [
+      {
+        id: 'aaa001' as ExecutionId,
+        streamId: 'bash@tool#aaa001',
+        agent: 'bash',
+        identity: { kind: 'process', tool: 'bash' },
+      },
+      {
+        id: 'aaa002' as ExecutionId,
+        streamId: 'workflow-script#aaa002',
+        agent: 'engineer',
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'engineer' },
+      },
+      {
+        id: 'aaa003' as ExecutionId,
+        streamId: 'codex@codex-sdk#aaa003',
+        agent: 'coder',
+        identity: { kind: 'agent', agent: 'coder', tool: 'codex' },
+      },
+      {
+        id: 'aaa004' as ExecutionId,
+        streamId: 'claude@agent-sdk#aaa004',
+        agent: 'assistant',
+        identity: { kind: 'agent', agent: 'assistant', tool: 'claude_code' },
+      },
+    ] as const;
+
+    for (const cohort of cohorts) {
+      const store = getExecutionStore(cohort.id);
+      await store.writeMeta({
+        timestamp: '2026-07-15T06:00:00.000Z',
+        streamId: cohort.streamId as StreamTabId,
+      });
+      await store.writeConfig(config(cohort.agent));
+    }
+
+    const entries = await listExecutions();
+    for (const cohort of cohorts) {
+      const entry = entries.find((candidate) => candidate.id === cohort.id);
+      expect(entry).toMatchObject({ kind: 'run', identity: cohort.identity });
+      expect(isNativeAgentRun(cohort.identity)).toBe(false);
+    }
+
+    // The durable stamp carries the same prefix-derived identity.
+    for (const cohort of cohorts) {
+      await vi.waitFor(async () => {
+        const healed = await getExecutionStore(cohort.id).readMeta();
+        expect(healed?.identity).toEqual(cohort.identity);
+      });
+    }
+  });
+
+  it('lists a pre-PR team-run config with the legacy delegation-scope pair as kind run', async () => {
+    // Realistic team-run config.json written before the category-keyed
+    // delegation-scope record (#8403 era): the scope is the old
+    // workflowAgentKeys/toolUseAgentKeys pair. It must normalize at the
+    // parse entrance, not fail AgentConfigSchema and list as incomplete.
+    const id = 'abc888' as ExecutionId;
+    const legacyTeamRunConfig = {
+      agent: 'orchestrator',
+      model: 'deepseekT',
+      instruction: 'Coordinate the team.',
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: '/workspace',
+      cliMultiAgentPresetId: 'physicist',
+      delegationAgentScope: {
+        workflowAgentKeys: ['correct', 'polish'],
+        toolUseAgentKeys: ['research', 'review'],
+      },
+    };
+    const store = getExecutionStore(id);
+    await store.writeMeta({
+      timestamp: '2026-07-15T05:00:00.000Z',
+      identity: { kind: 'agent', agent: 'orchestrator' },
+    });
+    // Persist the raw legacy bytes, bypassing the current input type.
+    await store.writeConfig(legacyTeamRunConfig as unknown as AgentConfig);
+
+    const entries = await listExecutions();
+    const entry = entries.find((candidate) => candidate.id === id);
+    expect(entry).toMatchObject({
+      kind: 'run',
+      identity: { kind: 'agent', agent: 'orchestrator' },
+      agentConfig: {
+        agent: 'orchestrator',
+        delegationAgentScope: {
+          workflow: ['correct', 'polish'],
+          toolUse: ['research', 'review'],
+        },
+      },
     });
   });
 

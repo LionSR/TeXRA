@@ -939,7 +939,10 @@ describe('StreamSnapshotStore', () => {
     expect((await store.read(STREAM)).executionId).toBe(executionId);
   });
 
-  it('discards meta whose legacy runDescriptor is unreadable, loudly', async () => {
+  it('drops only the FK from meta whose legacy runDescriptor is unreadable, loudly', async () => {
+    // Field-level tolerance: a malformed legacy pointer severs the execution
+    // FK (warned), but must NOT discard the rest of the meta — losing
+    // `parentStreamId` would orphan the tab.
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeMetaFile(STREAM, {
       parentStreamId: OTHER_STREAM,
@@ -949,11 +952,11 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await expect(store.read(STREAM)).resolves.toMatchObject({
       executionId: undefined,
-      parentStreamId: undefined,
+      parentStreamId: OTHER_STREAM,
     });
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
-      expect.stringContaining('unreadable persisted stream metadata'),
+      expect.stringContaining('malformed execution FK'),
       expect.anything(),
     );
   });
@@ -2593,10 +2596,10 @@ describe('StreamSnapshotStore', () => {
     expect(snap.plan).toBeNull();
   });
 
-  it('discards meta with a malformed executionId loudly without aborting the snapshot', async () => {
-    // A legacy/corrupt executionId fails StreamTabMetaSchema, so the whole
-    // meta record is discarded (warned, not silently coerced); the snapshot
-    // read still succeeds with an empty-but-valid record.
+  it('drops a malformed executionId loudly without aborting the snapshot', async () => {
+    // A legacy/corrupt executionId fails StreamTabMetaSchema; only the bad
+    // FK is dropped (warned, not silently coerced) and the snapshot read
+    // still succeeds with a valid record.
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'meta.json', {
       executionId: 'not-hex!!',
@@ -2607,7 +2610,7 @@ describe('StreamSnapshotStore', () => {
     expect(snap.description).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
-      expect.stringContaining('unreadable persisted stream metadata'),
+      expect.stringContaining('malformed execution FK'),
       expect.anything(),
     );
   });

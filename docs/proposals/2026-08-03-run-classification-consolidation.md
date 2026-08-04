@@ -3,8 +3,14 @@
 Status: Part I implemented (steps 1–7, 9 — `RunIdentity` struct + durable
 `ExecutionMeta.identity` with idempotent entrance stamping, descriptor
 deletion, Lit + CLI recuts onto the identity struct, resume/rerun/restore
-gating, lineage predicate dedup, per-tool delegation availability). Step 8
-(honest `RunRecord` union) and Parts II–III remain proposed.
+gating, lineage predicate dedup, per-tool delegation availability), together
+with Axis S (steps 10–11: `RunOutcome` as the sole persisted terminal fact,
+`ExecutionStatus` demoted to an export/NDJSON boundary projection), Axis R
+(step 14: the roster pair collapse onto category-keyed records with entrance
+migrations), and the Axis-T retirements (the per-read legacy rescan of
+stamped rows and the sidecar description/taskState mirrors, both retired
+early and deliberately). Step 8 (honest `RunRecord` union), the rest of
+Axis T (opaque id minting), and Parts II–III remain proposed.
 Date: 2026-08-03
 Revision: 10 (holistic build order; open-problems register)
 
@@ -318,11 +324,16 @@ users restore backups. Mechanics:
   (they heal on the next entrance) and rows younger than the lease-stale
   horizon (registration writes `meta.json`/`config.json` via
   `Promise.allSettled` — a half-born row must not be classified).
-- **Identity rule**: `meta.category === 'process'` → `{kind:'process', tool:
-config?.agent ?? 'bash'}`; otherwise `{kind:'agent', agent: config.agent}`.
-  Rows without a readable config are **left unstamped** — the read schema is
-  optional, so they keep parsing and keep listing as `incomplete`, exactly
-  today's behavior. No sentinel names are fabricated.
+- **Identity rule**: quarantined stream-id-prefix evidence (`meta.streamId`
+  is the one surviving legacy discriminator; this migration function is the
+  ONLY production code allowed to read prefixes): `workflow-script#` →
+  `{kind:'multiAgentWorkflow', workflowName: config?.agent ??
+'workflow-script'}`; `codex@` / `claude@` → `{kind:'agent', agent:
+config.agent, tool}`; `bash@` → `{kind:'process', tool:'bash'}`; otherwise
+  `{kind:'agent', agent: config.agent}`. Rows whose rule needs a config but
+  have none readable are **left unstamped** — the read schema is optional, so
+  they keep parsing and keep listing as `incomplete`, exactly today's
+  behavior. No sentinel names are fabricated.
 - **`streamId` stamping is evidence-gated**: only the resolver's
   `metaMatched.length === 1` branch may stamp (the identical condition the
   live backfill uses today, `legacyExecutionIdentity.ts:223-234`); suffix
@@ -330,9 +341,6 @@ config?.agent ?? 'bash'}`; otherwise `{kind:'agent', agent: config.agent}`.
   a wrong stamp remains demotable. The walk is inverted — one scan of
   `streamData/` into a `Map<executionId, streamId[]>`, then stamp — O(N+M),
   not the resolver's per-row scan.
-- **Demotion repair**: rows whose stamped identity is `process` or carries
-  `tool` get their `normalizeWriterCategory`-demoted `config.agentCategory`
-  bytes repaired in the same pass (breakable cohorts).
 - The stamper is the only writer of these fields outside `registerExecution`,
   imports nothing from the hot path, and nothing imports it back.
 

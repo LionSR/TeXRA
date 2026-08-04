@@ -33,9 +33,12 @@ export interface ExecutionSummaryOptions {
 }
 
 /**
- * True when `handle` is a tool-use subagent whose parent stream is the
- * calling stream — i.e. the caller already receives this subagent's report
+ * True when `handle` is a tool-use child whose parent stream is the calling
+ * stream — i.e. the caller already receives this child's report
  * automatically as a follow-up, so /executions/{id} shouldn't duplicate it.
+ * Deliberately identity-kind-agnostic: background bash processes
+ * (`kind: 'process'`, category ToolUse) auto-deliver their reports exactly
+ * like delegated agents do, and must stay suppressed too.
  */
 function isCallerParentOfToolUseSubagent(
   handle: unknown,
@@ -43,7 +46,6 @@ function isCallerParentOfToolUseSubagent(
 ): boolean {
   return (
     handle instanceof AgentExecutionHandle &&
-    handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
     handle.isOwnedBy(callerStreamId)
   );

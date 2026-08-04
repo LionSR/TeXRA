@@ -12,7 +12,6 @@ import { Box, Static, Text } from 'ink';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { StreamTabId } from '@shared/schemas';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { groupBy } from '@utils/core';
 import { safeHomedir } from '@utils/system/platformPaths';

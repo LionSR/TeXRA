@@ -383,6 +383,9 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
       (stream.identity?.kind === 'agent'
         ? stream.identity.agent || stream.modelLabel
         : undefined) ||
+      (stream.identity?.kind === 'process'
+        ? stream.command || stream.identity.tool
+        : undefined) ||
       'Stream',
     icon: 'terminal',
     category: 'Streams',

@@ -912,15 +912,16 @@ describe('CLI run progress renderer', () => {
       expect.objectContaining({
         kind: 'progress',
         event: 'updateActiveSubagents',
+        // The frozen public row shape: `kind` discriminant, no `identity`.
         payload: {
           parentStreamId: 'parent-stream',
           children: [
             {
+              kind: 'subagent',
               executionId: 'child-execution',
-              childStreamId: 'child-stream',
               agentName: 'review',
-              identity: { kind: 'agent', agent: 'review' },
               status: 'running',
+              childStreamId: 'child-stream',
             },
           ],
         },

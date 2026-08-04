@@ -425,11 +425,37 @@ export function formatInvalidExportFormatText(raw: string): string {
   return `Invalid export format: ${JSON.stringify(raw)} (use html or md)`;
 }
 
+/**
+ * Frozen-NDJSON status projection (proposal gate G): the public NDJSON stream
+ * keeps the pre-consolidation vocabulary — terminal outcomes emit as
+ * `ExecutionStatus` ('completed' | 'interrupted' | 'error') while
+ * 'resumable'/'unknown' pass through unchanged. Internal and human-readable
+ * output keeps `HistoryRunStatus`.
+ */
+function toNdjsonHistoryStatus(status: string): string {
+  const outcome = RunOutcomeSchema.safeParse(status);
+  return outcome.success ? runOutcomeToExecutionStatus(outcome.data) : status;
+}
+
 export function cliHistoryNdjsonRecords(
   entries: readonly CliHistoryEntry[],
   ts = new Date().toISOString(),
 ): CliNdjsonRecord[] {
-  return entries.map((entry) => ({ kind: 'history-entry', ts, entry }));
+  return entries.map((entry) => ({
+    kind: 'history-entry',
+    ts,
+    entry: { ...entry, status: toNdjsonHistoryStatus(entry.status) },
+  }));
+}
+
+/** `history show`'s NDJSON record, with the frozen-boundary status projection. */
+export function cliHistoryDetailNdjsonRecord(
+  details: CliHistoryDetails,
+): CliNdjsonRecord {
+  return {
+    kind: 'history-detail',
+    detail: { ...details, status: toNdjsonHistoryStatus(details.status) },
+  };
 }
 
 export function formatCliHistoryDetailsText(

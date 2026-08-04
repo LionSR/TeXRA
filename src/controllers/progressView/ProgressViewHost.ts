@@ -65,6 +65,19 @@ interface ProgressViewRunDependencies {
   executeAgent(request: ExecutionRequest): Promise<void>;
 }
 
+/** User-facing refusal for the resume/re-run gate. Front-end button hiding
+ *  makes this rare (stale renderer state, direct IPC), but a refused action
+ *  must still say why instead of silently doing nothing. */
+async function reportNonNativeRunRefusal(
+  showInfo: (message: string) => void | PromiseLike<unknown>,
+  action: string,
+): Promise<void> {
+  await showInfo(
+    `Only TeXRA agent runs can be ${action} from here; this stream's run is ` +
+      'not one.',
+  );
+}
+
 /**
  * Resume the run behind a stream. Workflow runs relaunch through the host's
  * executor with the original execution id; tool-use runs carry canonical
@@ -74,8 +87,12 @@ interface ProgressViewRunDependencies {
 async function resumeStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
+  showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
-  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) return;
+  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) {
+    await reportNonNativeRunRefusal(showInfo, 'resumed');
+    return;
+  }
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
@@ -94,8 +111,12 @@ async function resumeStream(
 async function runNewStream(
   dependencies: ProgressViewRunDependencies,
   stream: StreamTabId,
+  showInfo: (message: string) => void | PromiseLike<unknown>,
 ): Promise<void> {
-  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) return;
+  if (!isNativeAgentRun(dependencies.state.getRunIdentity(stream))) {
+    await reportNonNativeRunRefusal(showInfo, 're-run');
+    return;
+  }
   const config = dependencies.state.getRunConfig(stream);
   if (!config) return;
 
@@ -125,8 +146,10 @@ export class ProgressViewHost {
     this.commandHandlers = createProgressViewCommandHandlers({
       lifecycle: options.commands.lifecycle,
       run: {
-        resumeStream: (stream) => resumeStream(options.run, stream),
-        runNewStream: (stream) => runNewStream(options.run, stream),
+        resumeStream: (stream) =>
+          resumeStream(options.run, stream, options.commands.bypass.showInfo),
+        runNewStream: (stream) =>
+          runNewStream(options.run, stream, options.commands.bypass.showInfo),
       },
       followUp: options.commands.followUp,
       bypass: options.commands.bypass,

@@ -100,16 +100,39 @@ export function isUserVisibleExecution(
 const STAMP_MIN_AGE_MS = EXECUTION_LEASE_STALE_MS;
 
 /**
- * Un-stamped legacy row → identity, from the one surviving evidence source:
- * the persisted config. Exported for store-read entrances (hydration) so an
- * un-healed row behaves identically before its durable stamp lands; the
- * listing's stamper remains the only WRITER of the derived value. Rows
- * without a readable config are left unstamped: they keep parsing and keep
- * listing as `incomplete`. No sentinel names are fabricated.
+ * Un-stamped legacy row → identity, from the surviving evidence: the
+ * persisted config plus the row's stamped `streamId`, whose host prefix
+ * encoded the run kind before `identity` existed. This prefix-reading is
+ * quarantined HERE (and mirrored only by the trace-viewer's immutable-export
+ * fallback) — production classification never inspects stream-id prefixes;
+ * it reads the stamped `identity`. Exported for store-read entrances
+ * (hydration) so an un-healed row behaves identically before its durable
+ * stamp lands; the listing's stamper remains the only WRITER of the derived
+ * value. Rows without usable evidence are left unstamped: they keep parsing
+ * and keep listing as `incomplete`. No sentinel names are fabricated.
  */
 export function deriveLegacyIdentity(
+  meta: Pick<ExecutionMeta, 'streamId'> | null | undefined,
   cfg: AgentConfig | null,
 ): RunIdentity | undefined {
+  const streamId = meta?.streamId ?? '';
+  if (streamId.startsWith('workflow-script#')) {
+    return {
+      kind: 'multiAgentWorkflow',
+      workflowName: cfg?.agent ?? 'workflow-script',
+    };
+  }
+  if (streamId.startsWith('codex@')) {
+    return cfg ? { kind: 'agent', agent: cfg.agent, tool: 'codex' } : undefined;
+  }
+  if (streamId.startsWith('claude@')) {
+    return cfg
+      ? { kind: 'agent', agent: cfg.agent, tool: 'claude_code' }
+      : undefined;
+  }
+  if (streamId.startsWith('bash@')) {
+    return { kind: 'process', tool: 'bash' };
+  }
   return cfg ? { kind: 'agent', agent: cfg.agent } : undefined;
 }
 
@@ -131,7 +154,7 @@ async function stampExecutionRow(
         store.readConfig(),
       ]);
       if (!current || current.identity) return;
-      const identity = deriveLegacyIdentity(cfg);
+      const identity = deriveLegacyIdentity(current, cfg);
       if (!identity) return;
       await store.writeMeta({ ...current, identity });
     });
@@ -203,7 +226,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           outcome: meta.outcome,
           description: meta.description,
         };
-        const identity = meta.identity ?? deriveLegacyIdentity(cfg);
+        const identity = meta.identity ?? deriveLegacyIdentity(meta, cfg);
         // Durable healing is async and best-effort; this read already has
         // the derived value either way.
         if (identity !== meta.identity) void stampExecutionRow(id, meta);

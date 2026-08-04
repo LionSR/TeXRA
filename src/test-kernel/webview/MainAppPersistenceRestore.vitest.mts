@@ -182,6 +182,31 @@ describe('MainApp persistence and restore characterization', () => {
     });
   });
 
+  it('lifts legacy flat agent/instruction fields into the persisted records', () => {
+    // Old blob shape: per-category agent and instruction as flat fields.
+    // Parsing must lift them, not silently reset to the record prefaults.
+    const legacyBlob = {
+      ...PERSISTED_SEED,
+      agent: undefined,
+      instruction: undefined,
+      workflowAgent: 'polish',
+      toolUseAgent: 'research',
+      workflowInstruction: 'legacy workflow instruction',
+      toolUseInstruction: 'legacy tool-use instruction',
+    };
+    delete (legacyBlob as Record<string, unknown>).agent;
+    delete (legacyBlob as Record<string, unknown>).instruction;
+
+    const parsed = MainViewPersistedStateSchema.parse(legacyBlob);
+    expect(parsed.agent).toEqual({ workflow: 'polish', toolUse: 'research' });
+    expect(parsed.instruction).toEqual({
+      workflow: 'legacy workflow instruction',
+      toolUse: 'legacy tool-use instruction',
+    });
+    expect(parsed).not.toHaveProperty('workflowAgent');
+    expect(parsed).not.toHaveProperty('toolUseInstruction');
+  });
+
   it('keeps the shared persisted-state schema current-only', () => {
     expect(
       MainViewPersistedStateSchema.parse({

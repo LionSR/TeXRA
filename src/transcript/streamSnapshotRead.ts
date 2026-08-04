@@ -88,13 +88,31 @@ export async function readMeta(
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
   const parsed = StreamTabMetaSchema.safeParse(raw);
-  if (!parsed.success) {
-    logger.warn(CHANNEL, 'Discarding unreadable persisted stream metadata.', {
-      data: parsed.error,
-    });
-    return undefined;
+  if (parsed.success) return parsed.data;
+  // Field-level tolerance: a malformed execution FK (or legacy
+  // `runDescriptor`) must drop only the bad pointer, not the whole meta —
+  // discarding everything would sever `parentStreamId` and orphan the tab.
+  if (isObject(raw)) {
+    const {
+      executionId: _executionId,
+      runDescriptor: _runDescriptor,
+      ...rest
+    } = raw;
+    const retried = StreamTabMetaSchema.safeParse(rest);
+    if (retried.success) {
+      logger.warn(
+        CHANNEL,
+        'Dropping malformed execution FK from persisted stream metadata; ' +
+          'keeping the remaining fields.',
+        { data: parsed.error },
+      );
+      return retried.data;
+    }
   }
-  return parsed.data;
+  logger.warn(CHANNEL, 'Discarding unreadable persisted stream metadata.', {
+    data: parsed.error,
+  });
+  return undefined;
 }
 
 /**

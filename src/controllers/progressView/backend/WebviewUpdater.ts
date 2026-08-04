@@ -349,7 +349,7 @@ export class WebviewUpdater {
    * Use this for structural updates (initial sync, stream add/remove).
    * For incremental updates, prefer targeted messages like:
    * setActiveStream(), updateConversationProgress(), updateStreamBadges(),
-   * updateParentStream(), updateStreamStatus().
+   * updateStreamStatus().
    */
   sendStreamMetadata(
     state: StreamListMetadataSource,

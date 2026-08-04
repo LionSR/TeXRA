@@ -108,6 +108,7 @@ import {
   type TraceDocument,
 } from '@transcript';
 import {
+  cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
@@ -226,6 +227,57 @@ describe('CLI history runtime', () => {
       },
     ]);
     expect(mocks.readCliToolUseResumeDataForListing).not.toHaveBeenCalled();
+  });
+
+  it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
+    // Byte parity for the public stream (proposal gate G): terminal outcomes
+    // emit as ExecutionStatus ('interrupted'/'error'/'completed');
+    // 'resumable'/'unknown' pass through. Internal entries keep RunOutcome.
+    mocks.listExecutions.mockResolvedValue(
+      (
+        [
+          ['b1', 'cancelled'],
+          ['b2', 'failed'],
+          ['b3', 'completed'],
+          ['b4', undefined],
+        ] as const
+      ).map(([id, outcome]) => ({
+        kind: 'run',
+        identity: { kind: 'agent', agent: 'correct' },
+        id: id as ExecutionId,
+        timestamp: '2026-05-18T08:00:00.000Z',
+        agentConfig: config,
+        ...(outcome ? { outcome } : {}),
+      })),
+    );
+
+    const entries = await listCliHistoryEntries();
+    expect(entries.map((entry) => entry.status)).toEqual([
+      'cancelled',
+      'failed',
+      'completed',
+      'unknown',
+    ]);
+    expect(
+      cliHistoryNdjsonRecords(entries, '2026-05-18T09:00:00.000Z').map(
+        (record) => (record as { entry: { status: string } }).entry.status,
+      ),
+    ).toEqual(['interrupted', 'error', 'completed', 'unknown']);
+  });
+
+  it('projects the history-detail NDJSON status onto the frozen vocabulary', async () => {
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:00:00.000Z',
+      identity: { kind: 'agent', agent: 'correct' },
+      outcome: 'cancelled',
+    });
+
+    const details = await readCliHistoryDetails('c1' as ExecutionId);
+    expect(details?.status).toBe('cancelled');
+    expect(cliHistoryDetailNdjsonRecord(details!)).toMatchObject({
+      kind: 'history-detail',
+      detail: { id: 'c1', status: 'interrupted' },
+    });
   });
 
   it('hides internal process-bookkeeping and configless entries from the history list', async () => {

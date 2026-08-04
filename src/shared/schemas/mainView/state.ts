@@ -175,7 +175,48 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   openedFiles: z.array(z.string()).nullish(),
 });
 
-export const MainViewPersistedStateSchema = MainViewPersistedStateBaseSchema;
+/**
+ * Legacy persisted blobs carried the per-category agent and instruction as
+ * flat `workflowAgent`/`toolUseAgent` and `workflowInstruction`/
+ * `toolUseInstruction` fields. Lift them into the canonical `agent`/
+ * `instruction` records once, at the parse entrance, when the record keys are
+ * absent — otherwise upgrading silently resets the user's saved selections.
+ */
+function liftLegacyMainViewFlatFields(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return input;
+  }
+  const raw = input as Record<string, unknown>;
+  const lifted = { ...raw };
+  if (raw.agent === undefined) {
+    const record = {
+      ...(typeof raw.workflowAgent === 'string'
+        ? { workflow: raw.workflowAgent }
+        : {}),
+      ...(typeof raw.toolUseAgent === 'string'
+        ? { toolUse: raw.toolUseAgent }
+        : {}),
+    };
+    if (Object.keys(record).length > 0) lifted.agent = record;
+  }
+  if (raw.instruction === undefined) {
+    const record = {
+      ...(typeof raw.workflowInstruction === 'string'
+        ? { workflow: raw.workflowInstruction }
+        : {}),
+      ...(typeof raw.toolUseInstruction === 'string'
+        ? { toolUse: raw.toolUseInstruction }
+        : {}),
+    };
+    if (Object.keys(record).length > 0) lifted.instruction = record;
+  }
+  return lifted;
+}
+
+export const MainViewPersistedStateSchema = z.preprocess(
+  liftLegacyMainViewFlatFields,
+  MainViewPersistedStateBaseSchema,
+);
 export type MainViewPersistedState = z.infer<
   typeof MainViewPersistedStateSchema
 >;

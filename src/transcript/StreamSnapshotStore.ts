@@ -276,9 +276,9 @@ interface StreamRecord {
    * `ExecutionMeta.description` (#9590 A4): set by the live
    * `updateStreamDescription` session event (whose emitters persist to
    * ExecutionMeta first) or by load-time hydration from ExecutionMeta.
-   * In-memory only — never written to the stream sidecar; the persisted
-   * `meta.description` sidecar field is a legacy mirror that current records
-   * no longer write (#9590 Stage 6).
+   * In-memory only — never written to the stream sidecar, which no longer
+   * carries a description field at all (the legacy mirror was deliberately
+   * retired early with the run-classification consolidation).
    */
   description: string | undefined;
 
@@ -1462,11 +1462,10 @@ export class StreamSnapshotStore {
 
   private writeMeta(stream: StreamTabId, next: StreamTabMeta): void {
     // Persist every explicitly-set field (`!== undefined`, not falsy) so
-    // on-disk and in-memory never diverge. `description` is never patched for
-    // current records anymore (#9590 Stage 6: the authority is
-    // `ExecutionMeta.description`); its spread below only round-trips a value
-    // a LEGACY sidecar already carried, so rewriting an unrelated meta field
-    // cannot destroy legacy display data before its Stage 7 retirement.
+    // on-disk and in-memory never diverge. The sidecar carries only the FK
+    // pair below; `description` is never persisted here — its authority is
+    // `ExecutionMeta.description` (#9590), and the legacy sidecar mirror was
+    // deliberately retired early with the run-classification consolidation.
     const file: StreamTabMeta = {
       schemaVersion: STREAM_TAB_META_SCHEMA_VERSION,
       ...(next.executionId !== undefined && { executionId: next.executionId }),
@@ -2065,7 +2064,8 @@ export class StreamSnapshotStore {
         // Un-healed legacy row: derive in memory with the stamper's rule so
         // resume/rerun and rendering behave identically before the durable
         // stamp lands (the listing entrance remains the only writer).
-        identity = execMeta?.identity ?? deriveLegacyIdentity(execConfig);
+        identity =
+          execMeta?.identity ?? deriveLegacyIdentity(execMeta, execConfig);
         description = execMeta?.description;
         config = execConfig;
       } catch (error) {
@@ -2109,7 +2109,7 @@ export class StreamSnapshotStore {
     // DIFFERENT execution (or for any execution once meta names none) is a
     // handoff another writer completed: both halves go, and hydration installs
     // a coherent pair instead of one half of each run. For the execution meta
-    // does name, the two halves have different owners. The descriptor is
+    // does name, the two halves have different owners. The run identity is
     // immutable, so the live `run.start` outranks anything hydration can
     // synthesize from config. The config is mutable and persisted, so this seed
     // re-reads it — another host can switch the model without this store seeing

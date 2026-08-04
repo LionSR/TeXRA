@@ -21,7 +21,10 @@
  * Retirement (#9590 Stage 7, tracked in #9627): dated, no earlier than the
  * 2026-11-01 legacy cohort — `streamData/` has no natural expiry, so a date
  * is the only available gate — and gated on the usage evidence this module's
- * warn log accumulates.
+ * warn log accumulates. The sidecar description/taskState mirror that was
+ * scheduled for the same Stage-7 cohort was deliberately retired EARLY by
+ * the run-classification consolidation (#9705); only the resolution
+ * mechanisms in this module still ride the dated gate.
  */
 import pMap from 'p-map';
 import { ZodError } from 'zod';
@@ -92,7 +95,7 @@ interface ExecutionStreamScan {
 /**
  * Compatibility scan for executions registered before their stream identity
  * was stored directly: list every `streamData/` stream once, read each one's
- * run descriptor, and report which of them claim `executionId`.
+ * sidecar meta association, and report which of them claim `executionId`.
  */
 async function scanPersistedStreamsForExecution(
   executionId: ExecutionId,

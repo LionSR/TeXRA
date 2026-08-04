@@ -196,11 +196,11 @@ function repairToWaiting(
 }
 
 /**
- * Persist the FAILED terminal status for a repaired stream's execution,
- * reporting whether that status reached disk. Finalization problems are logged
- * rather than thrown: the in-memory repair has already committed.
+ * Persist the FAILED terminal outcome for a repaired stream's execution,
+ * reporting whether that outcome reached disk. Finalization problems are
+ * logged rather than thrown: the in-memory repair has already committed.
  */
-async function writeFailedTerminalStatus(
+async function writeFailedOutcome(
   streamId: StreamTabId,
   executionId: ExecutionId,
   finalizeExecution: (
@@ -419,7 +419,7 @@ async function repairRestartedStream(
     : [];
   const outcomeUpdated: ExecutionId[] = [];
   if (failedStreams.length > 0 && executionId) {
-    const persisted = await writeFailedTerminalStatus(
+    const persisted = await writeFailedOutcome(
       streamId,
       executionId,
       options.finalizeExecution ?? defaultFinalizeExecution,

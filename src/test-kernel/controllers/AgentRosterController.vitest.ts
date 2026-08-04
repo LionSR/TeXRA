@@ -99,6 +99,48 @@ describe('AgentRosterController', () => {
     });
   });
 
+  it('prefers the v2 selection when both keys are present', () => {
+    const roster = controller(
+      new FakeStateStore({
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          kind: 'team',
+          teamId: 'v1-team',
+        },
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: {
+          kind: 'team',
+          teamId: 'test-team',
+        },
+      }),
+    );
+
+    expect(roster.getSelection()).toEqual({
+      kind: 'team',
+      teamId: 'test-team',
+    });
+  });
+
+  it('warns and inherits on a malformed v2 selection without consulting v1', () => {
+    // Pinned behavior: a PRESENT v2 key owns the decision even when
+    // malformed — the read never falls back to the v1 key (whose value may
+    // be older than the v2 write that got corrupted).
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const roster = controller(
+      new FakeStateStore({
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          kind: 'team',
+          teamId: 'test-team',
+        },
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION_V2]: { kind: 'invalid' },
+      }),
+    );
+
+    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('malformed v2 roster selection'),
+    );
+    warn.mockRestore();
+  });
+
   it('uses the user default only for inherited workspaces', () => {
     const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, {

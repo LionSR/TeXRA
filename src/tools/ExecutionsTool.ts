@@ -644,7 +644,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const identity = meta?.identity ?? deriveLegacyIdentity(config);
+    const identity = meta?.identity ?? deriveLegacyIdentity(meta, config);
     const category = executionDisplayCategory(identity, config);
     const info = getExecutionStatusInfo(executionId, meta?.outcome);
     const lines = buildCompletedSummaryLines(
@@ -872,7 +872,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Filter out fields irrelevant to this agent's category
     const meta = await getExecutionStore(executionId).readMeta();
-    const identity = meta?.identity ?? deriveLegacyIdentity(config);
+    const identity = meta?.identity ?? deriveLegacyIdentity(meta, config);
     const category = executionDisplayCategory(identity, config);
     return executed(serializeFilteredConfig(config, category));
   }

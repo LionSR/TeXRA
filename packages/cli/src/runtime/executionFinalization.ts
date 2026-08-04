@@ -1,6 +1,6 @@
 import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
 import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
-import type { RunOutcome, ExecutionStatus } from '@shared/schemas';
+import type { RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type CliFinalizationFailureReporter = (error: Error) => void;
@@ -14,15 +14,14 @@ function finalizationFailureMessage(
   executionId: FinalizeExecutionInput['executionId'],
   outcome: RunOutcome,
 ): string {
-  const status = outcome;
   const detail = toErrorMessage(result.error);
   switch (result.stage) {
     case 'flow-record-delete':
-      return `Persisted ${status} status for execution ${executionId}, but failed to delete its flow record: ${detail}`;
+      return `Persisted ${outcome} status for execution ${executionId}, but failed to delete its flow record: ${detail}`;
     case 'terminal-status-and-flow-record-delete':
-      return `Failed to persist ${status} status and delete the flow record for execution ${executionId}: ${detail}`;
+      return `Failed to persist ${outcome} status and delete the flow record for execution ${executionId}: ${detail}`;
     case 'terminal-status':
-      return `Failed to persist ${status} status for execution ${executionId}: ${detail}`;
+      return `Failed to persist ${outcome} status for execution ${executionId}: ${detail}`;
   }
 }
 

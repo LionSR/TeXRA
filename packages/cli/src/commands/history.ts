@@ -11,6 +11,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  cliHistoryDetailNdjsonRecord,
   cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
@@ -86,7 +87,7 @@ async function runHistoryShow(
 
   emitCliResult(context, {
     json: details,
-    ndjson: { kind: 'history-detail', detail: details },
+    ndjson: cliHistoryDetailNdjsonRecord(details),
     text: formatCliHistoryDetailsText(details),
   });
   return CliExitCode.Success;

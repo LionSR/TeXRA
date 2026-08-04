@@ -133,6 +133,29 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
 }
 
 /**
+ * Identity fallback for pre-migration exports (`trace.meta.identity` absent):
+ * the stream-id prefix is the one surviving discriminator, read here and in
+ * the storage entrance stamper only — production classification reads the
+ * stamped identity.
+ */
+function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
+  const streamId = trace.streamId;
+  if (streamId.startsWith('workflow-script#')) {
+    return { kind: 'multiAgentWorkflow', workflowName: trace.config.agent };
+  }
+  if (streamId.startsWith('codex@')) {
+    return { kind: 'agent', agent: trace.config.agent, tool: 'codex' };
+  }
+  if (streamId.startsWith('claude@')) {
+    return { kind: 'agent', agent: trace.config.agent, tool: 'claude_code' };
+  }
+  if (streamId.startsWith('bash@')) {
+    return { kind: 'process', tool: 'bash' };
+  }
+  return { kind: 'agent', agent: trace.config.agent };
+}
+
+/**
  * Replays one finished execution through the REAL `dispatchMessage` pipeline
  * as a short synthetic message sequence — the same reducer logic a live host
  * uses, just fed once instead of over time. Order matters: `LOG_DELTA` is a
@@ -144,7 +167,6 @@ export function replayTrace(trace: TraceDocument): void {
   const streamTabBase = {
     name: trace.streamId,
     label: trace.config.agent,
-    agent: trace.config.agent,
     agentCategory: trace.config.agentCategory,
     // Empty-entries traces have nothing to derive a creation time from;
     // fall back to "now" rather than the Unix epoch, which would render
@@ -153,13 +175,14 @@ export function replayTrace(trace: TraceDocument): void {
     executionId: trace.executionId,
     description: trace.meta?.description,
   };
-  // The embedded ExecutionMeta carries the run's identity. The one confined
-  // legacy fallback in the tree: a pre-migration export has no identity, and
-  // every pre-migration export is an agent run.
-  const identity: RunIdentity = trace.meta?.identity ?? {
-    kind: 'agent',
-    agent: trace.config.agent,
-  };
+  // The embedded ExecutionMeta carries the run's identity. Pre-migration
+  // exports have no identity and are NOT all agent runs (bash process and
+  // workflow-script traces exist), so classify from the trace's stream-id
+  // prefix — the same quarantined evidence rule as the storage entrance
+  // stamper (`deriveLegacyIdentity`); an immutable exported file is the one
+  // permanent home for this fallback.
+  const identity: RunIdentity =
+    trace.meta?.identity ?? legacyTraceIdentity(trace);
   const streamTabInfo: StreamTabInfo =
     identity.kind === 'process'
       ? { ...streamTabBase, identity, command: trace.config.instruction }
