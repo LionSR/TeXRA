@@ -1,16 +1,16 @@
 import type { ApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import type {
-  ActiveStreamId,
-  ProgressViewState,
-  StreamBadgeSnapshot,
-} from '@controllers/progressView/backend/ProgressViewState';
 import {
   buildStreamInfo,
   buildStreamInfos,
   type StreamInfoListSource,
   type StreamInfoSource,
 } from '@controllers/progressView/backend/streamInfoUtils';
+import type {
+  ActiveStreamId,
+  SessionState,
+  StreamBadgeSnapshot,
+} from '@controllers/session/SessionState';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   CompileFailure,
@@ -38,13 +38,12 @@ import type { GoalStatus } from '@shared/schemas/goal';
 
 /** The state one stream's wire metadata is projected from. */
 type StreamMetadataSource = StreamInfoSource &
-  Pick<ProgressViewState, 'getStreamState' | 'streamLogs'>;
+  Pick<SessionState, 'getStreamState' | 'streamLogs'>;
 
 /** The state a full stream-tabs refresh is projected from. */
 type StreamListMetadataSource = StreamMetadataSource &
   StreamInfoListSource &
-  Pick<ProgressViewState, 'rotateActiveStream'>;
-
+  Pick<SessionState, 'rotateActiveStream'>;
 /**
  * Manages webview updates for the progress view.
  * Provides a clean interface for updating different parts of the webview
@@ -343,7 +342,7 @@ export class WebviewUpdater {
    * Update stream metadata and theme for the webview.
    * Returns the active stream after applying the update.
    *
-   * Note: This method computes valid active stream via ProgressViewState
+   * Note: This method computes valid active stream via SessionState
    * (single source of truth) and explicitly persists if changed.
    *
    * Use this for structural updates (initial sync, stream add/remove).

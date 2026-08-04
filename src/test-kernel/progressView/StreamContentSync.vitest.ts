@@ -8,12 +8,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
-  ProgressFactApplier,
+  LitSessionRenderer,
   type GetProgressStreamControls,
-} from '@controllers/progressView/backend/events/ProgressFactApplier';
-import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
+} from '@controllers/progressView/backend/LitSessionRenderer';
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
+import { SessionState } from '@controllers/session/SessionState';
 import type {
   ActiveChildInfo,
   CompileFailure,
@@ -40,7 +41,7 @@ const plan: Plan = {
   objective: [
     'Hydrate plan and todo state from one backend owner.',
     '',
-    'Read todos and plan from ProgressViewState.workPlan.',
+    'Read todos and plan from SessionState work-plan snapshot.',
   ].join('\n'),
 };
 
@@ -85,16 +86,16 @@ const compileFailure: CompileFailure = {
 };
 
 interface SyncHarness {
-  state: ProgressViewState;
+  state: SessionState;
   messages: SyncStreamContentPayload[];
   bridge: WebviewBridge;
-  handler: ProgressFactApplier;
+  handler: SessionFactApplier;
 }
 
 async function createSyncHarness(
   getControls?: GetProgressStreamControls,
 ): Promise<SyncHarness> {
-  const state = new ProgressViewState(new FakeStateStore());
+  const state = new SessionState(new FakeStateStore());
   await state.snapshots.load([]);
   const messages: SyncStreamContentPayload[] = [];
   const updater = {
@@ -107,14 +108,16 @@ async function createSyncHarness(
     syncStream: vi.fn(),
     clearAll: vi.fn(),
   } as unknown as WebviewBridge;
-  const handler = new ProgressFactApplier(
+  const litRenderer = new LitSessionRenderer(
     state,
     updater,
     bridge,
-    () => false,
-    vi.fn(),
     getControls,
   );
+  const handler = new SessionFactApplier(state, litRenderer, {
+    hasPendingPermissions: () => false,
+    deleteStream: vi.fn(),
+  });
   return { state, messages, bridge, handler };
 }
 

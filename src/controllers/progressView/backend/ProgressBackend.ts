@@ -14,11 +14,14 @@ import {
 } from '@controllers/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import {
-  ProgressFactApplier,
+  LitSessionRenderer,
   type GetProgressStreamControls,
-  type ProgressRunFactEvent,
-} from '@controllers/progressView/backend/events/ProgressFactApplier';
-import { ProgressViewState } from '@controllers/progressView/backend/ProgressViewState';
+} from '@controllers/progressView/backend/LitSessionRenderer';
+import {
+  SessionFactApplier,
+  type SessionRunFactEvent,
+} from '@controllers/session/SessionFactApplier';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   buildApprovalRequestHandlerSet,
   createProgressBackendUiConfig,
@@ -87,10 +90,10 @@ export interface ProgressBackendOptions {
  * graph so extension and desktop can converge on the same backend boundary.
  */
 export class ProgressBackend {
-  readonly state: ProgressViewState;
+  readonly state: SessionState;
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
-  readonly factApplier: ProgressFactApplier;
+  readonly factApplier: SessionFactApplier;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
   readonly setApprovalBypassState: (
     update: HostApprovalBypassStateUpdate,
@@ -123,7 +126,7 @@ export class ProgressBackend {
         },
       );
     };
-    this.state = new ProgressViewState(
+    this.state = new SessionState(
       options.storage,
       this.session,
       options.stores,
@@ -148,14 +151,16 @@ export class ProgressBackend {
       webviewUpdater: this.webviewUpdater,
       canSend: options.approvals.canSend,
     });
-    this.factApplier = new ProgressFactApplier(
+    const litRenderer = new LitSessionRenderer(
       this.state,
       this.webviewUpdater,
       this.webviewBridge,
-      ui.hasPendingPermissions,
-      (stream) => this.deleteStream(stream),
       options.getStreamControls,
     );
+    this.factApplier = new SessionFactApplier(this.state, litRenderer, {
+      hasPendingPermissions: ui.hasPendingPermissions,
+      deleteStream: (stream) => this.deleteStream(stream),
+    });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
 
@@ -430,7 +435,7 @@ export class ProgressBackend {
             sessionEvent.streamId,
             // Narrowed by the subscription filter below, which admits only
             // `RUN_FACT_EVENT_TYPES`.
-            sessionEvent.event as ProgressRunFactEvent,
+            sessionEvent.event as SessionRunFactEvent,
           );
         },
         { scope: 'run', types: RUN_FACT_EVENT_TYPES },

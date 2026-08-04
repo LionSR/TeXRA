@@ -1,11 +1,9 @@
-import * as path from 'node:path';
-
 import { isRemoteAgent } from '@agent/index/agentRegistry';
+import type { ProgressStreamMetadata } from '@controllers/session/SessionState';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
-import { AgentCategory, getCleanAgentName } from '@shared/schemas/agent';
-import type { ProgressStreamMetadata } from './ProgressViewState';
+import { getCleanAgentName } from '@shared/schemas/agent';
 
 export interface StreamTabInfoInputs {
   streamId: string;
@@ -25,6 +23,10 @@ export interface StreamTabInfoInputs {
  * it. A stream whose identity has not resolved yet (no `run.start` seen, no
  * durable record hydrated) renders pending — never a fabricated default kind
  * or category.
+ *
+ * Tab labels are the cleaned identity name only. Parallel runs are already
+ * distinct via `name` (`agent#executionId`); input files stay on the run
+ * config / files panel, not on the tab chip.
  */
 export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, metadata } = inputs;
@@ -33,16 +35,6 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const identityName = identity
     ? getCleanAgentName(runIdentityName(identity))
     : streamId;
-
-  const inputFile = (identity?.kind === 'agent' ? config?.inputFile : '') ?? '';
-
-  // Workflow agents include the input filename in the tab label so users
-  // can tell parallel runs apart at a glance. Tool-use agents don't have
-  // a single canonical input file, so we just show the agent name.
-  const label =
-    metadata.agentCategory === AgentCategory.Workflow && inputFile
-      ? `${identityName}: ${path.basename(inputFile)}`
-      : identityName;
 
   // Surface the full untruncated command for process streams (description
   // is capped for tab/tooltip rendering).
@@ -74,7 +66,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
 
   return {
     name: streamId,
-    label,
+    label: identityName,
     identity,
     agentCategory: metadata.agentCategory,
     model,
@@ -83,7 +75,6 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
       : undefined,
     command,
     isRemote,
-    inputFile,
     creationTimestamp: metadata.creationTimestamp,
     executionId: metadata.executionId,
     parentStreamId: metadata.parentStreamId,

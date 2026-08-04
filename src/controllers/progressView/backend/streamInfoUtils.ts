@@ -2,14 +2,14 @@ import type { StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
-import type { ProgressViewState } from './ProgressViewState';
+import type { SessionState } from '@controllers/session/SessionState';
 
 /** The state a single tab info is built from. */
-export type StreamInfoSource = Pick<ProgressViewState, 'getStreamMetadata'>;
+export type StreamInfoSource = Pick<SessionState, 'getStreamMetadata'>;
 
 /** The state the full tab list is built from. */
 export type StreamInfoListSource = StreamInfoSource &
-  Pick<ProgressViewState, 'selectableStreamNames'>;
+  Pick<SessionState, 'selectableStreamNames'>;
 
 /** Build a StreamTabInfo object for a single stream ID. */
 export function buildStreamInfo(

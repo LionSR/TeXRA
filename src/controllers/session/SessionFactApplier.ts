@@ -7,20 +7,19 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
-import { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
+import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
 import {
-  ProgressViewState,
+  SessionState,
   type ActiveStreamId,
   type StreamExecutionState,
-} from '@controllers/progressView/backend/ProgressViewState';
-import { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
+} from '@controllers/session/SessionState';
+import { withEventErrorHandling } from '@controllers/session/eventErrorHandling';
 import {
   STREAM_PHASE,
+  isGoalInFlight,
   type AddOutputFilesPayload,
   type ClearMissingOutputsPayload,
   type ConversationProgress,
-  type GoalStatus,
-  type InquiryThreadUpdatedEvent,
   type SetActiveStreamPayload,
   type SetParentStreamPayload,
   type StreamPhase,
@@ -36,22 +35,11 @@ import {
   type UpdateStreamUsagePayload,
   type UpdateTodosPayload,
 } from '@shared/schemas';
-import { isGoalInFlight } from '@shared/schemas/goal';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { streamStageFromStageStart } from '@shared/streams/stage';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
-import {
-  assertNever,
-  createFlushableDebounce,
-  mapToRecord,
-  type FlushableDebounce,
-} from '@utils/core';
-
-import { withEventErrorHandling } from './errorHandling';
-
-/** Throttle interval for conversation progress webview pushes (ms). */
-const PROGRESS_THROTTLE_MS = 500;
+import { assertNever } from '@utils/core';
 
 /**
  * Memory bound on retained finished children, per stream per kind. A long
@@ -60,30 +48,10 @@ const PROGRESS_THROTTLE_MS = 500;
  */
 const RETAINED_FINISHED_CHILDREN_CAP = 200;
 
-export type ProgressEventSubscription = {
-  dispose(): void;
-};
-
-interface ProgressStreamBypassControls {
-  bashBypass: boolean;
-  toolEditBypass: boolean;
-  superYoloBypass: boolean;
-}
-
-export type ProgressStreamControls = ProgressStreamBypassControls &
-  (
-    | { goalActive: false }
-    | { goalActive: true; goalStatus: GoalStatus; goalObjective: string }
-  );
-
-export type GetProgressStreamControls = (
-  stream: StreamTabId,
-) => ProgressStreamControls;
-
 type RunFactType = (typeof RUN_FACT_EVENT_TYPES)[number];
 
 /** The run-fact vocabulary `RUN_FACT_EVENT_TYPES` subscriptions deliver. */
-export type ProgressRunFactEvent = Extract<AgentEvent, { type: RunFactType }>;
+export type SessionRunFactEvent = Extract<AgentEvent, { type: RunFactType }>;
 
 type RunFactHandlers = {
   [K in RunFactType]: (
@@ -92,27 +60,18 @@ type RunFactHandlers = {
   ) => void | Promise<void>;
 };
 
-function getDefaultProgressStreamControls(): ProgressStreamControls {
-  return {
-    bashBypass: false,
-    toolEditBypass: false,
-    superYoloBypass: false,
-    goalActive: false,
-  };
-}
+export type SessionFactApplierOptions = {
+  hasPendingPermissions: (streamId: string) => boolean;
+  deleteStream: (stream: StreamTabId) => void | Promise<void>;
+};
 
-/** Applies session and run facts to progress-view state and webview updates. */
-export class ProgressFactApplier {
+/**
+ * Host-neutral session fact applier: mutates {@link SessionState} and notifies
+ * a {@link SessionRendererPort}. Push policy (active-only, debounce, bridge)
+ * lives in the host renderer.
+ */
+export class SessionFactApplier {
   private readonly logger: AgentTrace;
-  private readonly progressDebounce: FlushableDebounce =
-    createFlushableDebounce(
-      () => this.flushProgressUpdates(),
-      PROGRESS_THROTTLE_MS,
-    );
-  private readonly pendingProgressUpdates = new Map<
-    StreamTabId,
-    ConversationProgress
-  >();
 
   /**
    * Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive.
@@ -126,12 +85,10 @@ export class ProgressFactApplier {
     'run.start': (_streamId, event) => {
       const streamId = event.streamId;
       this.state.refreshStreamMetadataFromSnapshot(streamId);
-      if (this.webviewUpdater.isAvailable()) {
-        this.webviewUpdater.updateStreamMetadata(
-          this.state,
-          streamId,
-          this.state.streamStatus.getAllStreamStates(),
-        );
+      if (this.renderer.isAvailable()) {
+        this.renderer.onStreamMetadataChanged(streamId, {
+          streamStates: this.state.streamStatus.getAllStreamStates(),
+        });
       }
     },
     'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),
@@ -142,9 +99,8 @@ export class ProgressFactApplier {
       this.handleUpdateMissingOutputs(event),
     updateCompileFailures: (_streamId, event) =>
       this.handleUpdateCompileFailures(event),
-    goalPaused: () => {
-      // No progress-view state change; listed only to keep the run-fact type
-      // set exhaustive (it stays in the subscription filter for parity).
+    goalPaused: (_streamId, event) => {
+      this.renderer.onGoalPaused(event.streamId);
     },
     'conversation.progress': (streamId, event) =>
       this.handleUpdateConversationProgress({
@@ -160,16 +116,11 @@ export class ProgressFactApplier {
   };
 
   constructor(
-    private readonly state: ProgressViewState,
-    private readonly webviewUpdater: WebviewUpdater,
-    private readonly webviewBridge: WebviewBridge,
-    private readonly hasPendingPermissions: (streamId: string) => boolean,
-    private readonly deleteStream: (
-      stream: StreamTabId,
-    ) => void | Promise<void>,
-    private readonly getStreamControls: GetProgressStreamControls = getDefaultProgressStreamControls,
+    private readonly state: SessionState,
+    private readonly renderer: SessionRendererPort,
+    private readonly options: SessionFactApplierOptions,
   ) {
-    this.logger = createChannelTrace('ProgressFactApplier');
+    this.logger = createChannelTrace('SessionFactApplier');
   }
 
   private handleRunningTransition(
@@ -186,15 +137,13 @@ export class ProgressFactApplier {
       this.state.getOrCreateStreamState(streamId, knownCategory);
     }
     this.state.resetPerRunChildState(streamId);
-    this.pendingProgressUpdates.delete(streamId);
+    this.renderer.clearPendingConversationProgress(streamId);
     return knownCategory;
   }
 
-  /** Drop the work this applier has buffered; called by `ProgressBackend.dispose`. */
+  /** Drop buffered renderer work; called by host dispose. */
   dispose(): void {
-    this.progressDebounce.cancel();
-    this.pendingProgressUpdates.clear();
-    this.webviewBridge.clearAll();
+    this.renderer.dispose();
   }
 
   handleSessionFact(fact: SessionFact): void {
@@ -212,7 +161,11 @@ export class ProgressFactApplier {
         case 'updateQueuedFollowUps':
           return this.handleUpdateQueuedFollowUps(fact.payload);
         case 'followUpSent':
-          return;
+          // Refresh from the follow-ups store (same as updateQueuedFollowUps):
+          // the send itself is not a payload, but the queue may have changed.
+          return this.handleUpdateQueuedFollowUps({
+            streamId: fact.payload.streamId,
+          });
         case 'setActiveStream':
           return this.handleSetActiveStream(fact.payload);
         case 'updateStreamDescription':
@@ -227,18 +180,18 @@ export class ProgressFactApplier {
         case 'setParentStream':
           return this.handleSetParentStream(fact.payload);
         case 'removeStream':
-          return this.deleteStream(fact.payload.streamId);
+          return this.options.deleteStream(fact.payload.streamId);
       }
-      assertNever(fact, 'Unhandled progress-view session fact');
+      assertNever(fact, 'Unhandled session fact');
     });
   }
 
-  handleRunFact(streamId: StreamTabId, event: ProgressRunFactEvent): void {
+  handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
     // The table is exhaustive over `RunFactType`, so a slot always exists;
     // TypeScript just cannot correlate a union event with its own slot.
     const handle = this.runFactHandlers[event.type] as (
       streamId: StreamTabId,
-      event: ProgressRunFactEvent,
+      event: SessionRunFactEvent,
     ) => void | Promise<void>;
     this.applyFact(`failed to handle ${event.type} fact`, () =>
       handle(streamId, event),
@@ -246,11 +199,13 @@ export class ProgressFactApplier {
   }
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
-    withEventErrorHandling('ProgressFacts', context, handle);
+    withEventErrorHandling('SessionFacts', context, handle);
   }
 
-  handleInquiryThreadUpdated(thread: InquiryThreadUpdatedEvent): void {
-    this.webviewUpdater.updateInquiryThread(thread);
+  handleInquiryThreadUpdated(
+    thread: Parameters<SessionRendererPort['onInquiryThreadUpdated']>[0],
+  ): void {
+    this.renderer.onInquiryThreadUpdated(thread);
   }
 
   handleUpdateStreamDescription({
@@ -258,7 +213,7 @@ export class ProgressFactApplier {
     description,
   }: UpdateStreamDescriptionPayload): void {
     this.state.setStreamDescription(streamId, description);
-    this.webviewUpdater.updateStreamDescription(streamId, description);
+    this.renderer.onStreamDescriptionChanged(streamId, description);
   }
 
   handleSetParentStream({
@@ -266,109 +221,67 @@ export class ProgressFactApplier {
     parentStreamId,
   }: SetParentStreamPayload): void {
     this.state.setStreamParent(childStreamId, parentStreamId);
-    // The parent edge travels on exactly one wire copy:
-    // `StreamTabInfo.parentStreamId`, carried by UPDATE_STREAMS.
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        childStreamId,
-        this.state.streamStatus.getAllStreamStates(),
-      );
-    }
+    // Topology hosts (TUI) and Lit both learn the edge here. Lit projects it
+    // onto `StreamTabInfo.parentStreamId` inside its renderer; do not also
+    // fire `onStreamMetadataChanged` — that mint a StreamSlice on signal
+    // hosts before attachment.
+    this.renderer.onParentStreamChanged(childStreamId, parentStreamId ?? null);
   }
 
   handleAddOutputFiles({ streamId }: AddOutputFilesPayload): void {
-    this.sendIfActive(streamId, () => {
-      const rounds = this.state.snapshots.getOutputFiles(streamId);
-      this.webviewUpdater.updateFiles(streamId, {
-        rounds: Object.keys(rounds).length ? rounds : undefined,
-      });
-    });
+    this.renderer.onFilesChanged(streamId);
   }
 
   handleUpdateMissingOutputs({ streamId }: UpdateMissingOutputsPayload): void {
-    this.sendIfActive(streamId, () => {
-      const rounds = this.state.snapshots.getMissingOutputs(streamId);
-      this.webviewUpdater.updateMissingOutputs(streamId, {
-        rounds: Object.keys(rounds).length ? rounds : undefined,
-      });
-    });
+    this.renderer.onMissingOutputsChanged(streamId);
   }
 
   handleUpdateCompileFailures({
     streamId,
   }: UpdateCompileFailuresPayload): void {
-    this.sendIfActive(streamId, () => {
-      const rounds = this.state.snapshots.getCompileFailures(streamId);
-      this.webviewUpdater.updateCompileFailures(streamId, {
-        rounds: Object.keys(rounds).length ? rounds : undefined,
-        reset: true,
-      });
-    });
+    this.renderer.onCompileFailuresChanged(streamId);
   }
 
   handleClearMissingOutputs({ streamId }: ClearMissingOutputsPayload): void {
-    this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateMissingOutputs(streamId, {
-        reset: true,
-      }),
-    );
+    this.renderer.onMissingOutputsChanged(streamId, { reset: true });
   }
 
   handleUpdateStreamUsage({
     streamId,
     storageKey,
+    usage,
   }: UpdateStreamUsagePayload): void {
-    const nextUsage = this.state.snapshots
-      .getRunUsage(streamId)
-      .get(storageKey);
-    if (!nextUsage) return;
-    this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateRunUsage(streamId, storageKey, nextUsage),
-    );
+    // Latest gauge value is the event payload. The snapshot store may
+    // accumulate per-key; hosts read cumulative totals from the store.
+    this.renderer.onRunUsageChanged(streamId, storageKey, usage);
   }
 
   handleUpdateTodos({ streamId, todos }: UpdateTodosPayload): void {
-    this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateTodos(streamId, todos),
-    );
+    this.renderer.onTodosChanged(streamId, todos);
   }
 
   handleUpdatePlan({ streamId, plan }: UpdatePlanPayload): void {
-    this.webviewUpdater.updatePlan(streamId, plan);
+    this.renderer.onPlanChanged(streamId, plan);
   }
 
   handleUpdateQueuedFollowUps({
     streamId,
   }: UpdateQueuedFollowUpsPayload): void {
-    this.sendIfActive(streamId, () => {
-      const messages = this.state.followUps.getAll(streamId);
-      this.webviewUpdater.updateQueuedFollowUps(streamId, messages);
-    });
-  }
-
-  /** Send to webview only if streamId is the active stream. */
-  private sendIfActive(streamId: string, send: () => void): void {
-    if (
-      streamId === this.state.activeStream &&
-      this.webviewUpdater.isAvailable()
-    ) {
-      send();
-    }
+    this.renderer.onQueuedFollowUpsChanged(streamId);
   }
 
   async handleSetActiveStream(payload: SetActiveStreamPayload): Promise<void> {
     const { streamId, isRemote } = payload;
     if (!streamId) {
       this.state.switchActiveStream('');
-      this.webviewUpdater.setActiveStream('');
+      this.renderer.onActiveStreamChanged('');
       return;
     }
 
     const wasKnownStream = this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);
     // Only pass fields the event actually knows; omitted fields retain the
-    // canonical metadata already owned by ProgressViewState.
+    // canonical metadata already owned by SessionState.
     const metadata = {
       ...(payload.agentCategory !== undefined && {
         agentCategory: payload.agentCategory,
@@ -395,7 +308,7 @@ export class ProgressFactApplier {
     const currentStream = this.state.activeStream;
     const shouldSwitch =
       payload.suppressViewSwitch !== true &&
-      (!currentStream || !this.hasPendingPermissions(currentStream));
+      (!currentStream || !this.options.hasPendingPermissions(currentStream));
     if (shouldSwitch) {
       // The switch also releases the previously-active stream if it reached a
       // terminal status while visible — setStreamStatus skips release for the
@@ -403,7 +316,14 @@ export class ProgressFactApplier {
       this.state.switchActiveStream(streamId);
     }
 
-    if (!this.webviewUpdater.isAvailable()) return;
+    if (!this.renderer.isAvailable()) return;
+
+    // Always register the stream for signal hosts before the optional
+    // rehydrate, including suppressViewSwitch attachments with no category.
+    this.renderer.onStreamMetadataChanged(streamId, {
+      streamStates: this.state.streamStatus.getAllStreamStates(),
+      activeStream: shouldSwitch ? this.state.activeStream : undefined,
+    });
 
     // Rehydrate a potentially-evicted stream before syncing content, so the
     // webview doesn't get an empty log. All synchronous state mutations are
@@ -415,28 +335,21 @@ export class ProgressFactApplier {
     // overwrite its content with stale data.
     if (shouldSwitch && this.state.activeStream !== streamId) return;
 
-    if (!wasKnownStream) {
-      this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        streamId,
-        this.state.streamStatus.getAllStreamStates(),
-        { activeStream: shouldSwitch ? this.state.activeStream : undefined },
-      );
-    } else if (shouldSwitch) {
-      this.webviewUpdater.setActiveStream(streamId);
+    if (shouldSwitch && wasKnownStream) {
+      this.renderer.onActiveStreamChanged(streamId);
     }
     // Always sync content for the new stream so badges reach the webview —
     // even when we suppress the view switch. (The parent edge itself rides
     // `StreamTabInfo.parentStreamId` in the stream-metadata update.)
     // includeActiveState is only relevant when this IS the active stream.
-    this.syncStreamContent(streamId, {
+    this.renderer.syncStreamContent(streamId, {
       includeActiveState: shouldSwitch && wasKnownStream,
     });
   }
 
   private handleGoalStateChanged(streamId: StreamTabId): void {
     const goal = GoalStore.getForStream(streamId);
-    this.webviewUpdater.updateGoalActive(streamId, isGoalInFlight(goal), {
+    this.renderer.onGoalActiveChanged(streamId, isGoalInFlight(goal), {
       status: goal?.status,
       objective: goal?.objective,
     });
@@ -445,15 +358,13 @@ export class ProgressFactApplier {
   private handleRunConfig(streamId: StreamTabId): void {
     this.state.refreshStreamMetadataFromSnapshot(streamId);
 
-    if (this.webviewUpdater.isAvailable()) {
+    if (this.renderer.isAvailable()) {
       // A run config may change agent name, model, or label, which
       // the frontend tabs display even for background subagents. Patch only
       // the affected stream instead of rebuilding all historical stream tabs.
-      this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        streamId,
-        this.state.streamStatus.getAllStreamStates(),
-      );
+      this.renderer.onStreamMetadataChanged(streamId, {
+        streamStates: this.state.streamStatus.getAllStreamStates(),
+      });
     }
   }
 
@@ -469,43 +380,12 @@ export class ProgressFactApplier {
       conversationProgress: progress,
     }));
 
-    // Throttle webview pushes: buffer per-stream, flush on timer
-    this.pendingProgressUpdates.set(streamId, progress);
-    if (!this.progressDebounce.pending) this.progressDebounce.schedule();
+    this.renderer.onConversationProgressChanged(streamId, progress);
   }
 
   handleUpdateStage(streamId: StreamTabId, stage: StreamStage): void {
     this.state.updateStreamState(streamId, (prev) => ({ ...prev, stage }));
-
-    if (stage.kind === 'phase') {
-      // A workflow-script run's phase is read from its *parent's* viewport
-      // (the Background Tasks row for that run), so unlike round progress it
-      // cannot be pushed only for the active stream. It rides the existing
-      // per-stream metadata patch instead of the targeted message: phases
-      // advance a handful of times per run, so the extra fields on the wire
-      // cost nothing.
-      if (!this.webviewUpdater.isAvailable()) return;
-      this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        streamId,
-        this.state.streamStatus.getAllStreamStates(),
-      );
-      return;
-    }
-    this.sendIfActive(streamId, () =>
-      this.webviewUpdater.updateStage(streamId, stage),
-    );
-  }
-
-  private flushProgressUpdates(): void {
-    const { activeStream } = this.state;
-    const progress = activeStream
-      ? this.pendingProgressUpdates.get(activeStream)
-      : undefined;
-    if (progress && this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateConversationProgress(activeStream, progress);
-    }
-    this.pendingProgressUpdates.clear();
+    this.renderer.onStageChanged(streamId, stage);
   }
 
   /**
@@ -527,6 +407,13 @@ export class ProgressFactApplier {
     parentStreamId: StreamTabId,
     next: StreamExecutionState['subagents'],
   ): void {
+    // Roster facts can arrive before RUNNING/config creates the parent state
+    // (TUI child-event-order `roster-first`). Provision a ToolUse bucket so
+    // retention still runs; a later run.config refreshes the real category.
+    const category =
+      this.getStreamCategory(parentStreamId) ?? AgentCategory.ToolUse;
+    this.state.getOrCreateStreamState(parentStreamId, category);
+
     this.state.updateStreamState(parentStreamId, (prev) => {
       const previous = prev.subagents;
       const liveBefore = previous.filter(
@@ -561,12 +448,13 @@ export class ProgressFactApplier {
     });
 
     const updated = this.state.getStreamState(parentStreamId);
-    if (!updated) return;
-    this.sendIfActive(parentStreamId, () =>
-      this.webviewUpdater.updateStreamBadges(parentStreamId, {
-        subagents: updated.subagents,
-      }),
-    );
+    if (!updated) {
+      this.renderer.onBadgesChanged(parentStreamId, { subagents: next });
+      return;
+    }
+    this.renderer.onBadgesChanged(parentStreamId, {
+      subagents: updated.subagents,
+    });
   }
 
   /**
@@ -601,85 +489,7 @@ export class ProgressFactApplier {
       includeActiveState?: boolean;
     } = {},
   ): void {
-    if (!this.webviewUpdater.isAvailable()) return;
-
-    const { includeActiveState = false } = options;
-
-    if (!stream) {
-      // Clear the stream surface when no stream is active.
-      this.webviewUpdater.sendSyncStreamContent({ action: 'clear' });
-      return;
-    }
-
-    this.webviewBridge.syncStream(stream);
-
-    const existingState = this.state.getStreamState(stream);
-    const category = this.getStreamCategory(stream) ?? existingState?.category;
-    // A stream whose category has not resolved yet has nothing to render —
-    // it stays pending until run.config or the snapshot seed supplies one.
-    if (category === undefined) return;
-
-    const activeState = includeActiveState
-      ? this.toActiveStreamContentSync(
-          stream,
-          this.state.getOrCreateStreamState(stream, category),
-        )
-      : undefined;
-
-    const shared = {
-      action: 'render' as const,
-      stream,
-      runUsage: mapToRecord(this.state.snapshots.getRunUsage(stream)),
-      ...(activeState ? { activeState } : {}),
-    };
-
-    if (category === AgentCategory.Workflow) {
-      this.webviewUpdater.sendSyncStreamContent({
-        ...shared,
-        category,
-        outputs: {
-          files: this.state.snapshots.getOutputFiles(stream),
-          missing: this.state.snapshots.getMissingOutputs(stream),
-          compileFailures: this.state.snapshots.getCompileFailures(stream),
-        },
-      });
-      return;
-    }
-
-    const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
-    const controls = this.getStreamControls(stream);
-    this.webviewUpdater.sendSyncStreamContent({
-      ...shared,
-      category,
-      workPlan: {
-        todos,
-        plan,
-        queuedFollowUps: this.state.followUps.getAll(stream),
-      },
-      controls: {
-        bashBypass: controls.bashBypass,
-        toolEditBypass: controls.toolEditBypass,
-        superYoloBypass: controls.superYoloBypass,
-        goal: controls.goalActive
-          ? {
-              active: true,
-              status: controls.goalStatus,
-              objective: controls.goalObjective,
-            }
-          : { active: false },
-      },
-    });
-  }
-
-  private toActiveStreamContentSync(
-    stream: StreamTabId,
-    state: StreamExecutionState,
-  ) {
-    return {
-      conversationProgress: state.conversationProgress,
-      stage: state.stage ?? null,
-      badges: { subagents: state.subagents },
-    };
+    this.renderer.syncStreamContent(stream, options);
   }
 
   async setStreamStatus(
@@ -713,14 +523,13 @@ export class ProgressFactApplier {
       ? this.handleRunningTransition(streamId)
       : undefined;
 
-    if (!this.webviewUpdater.isAvailable()) return;
+    if (!this.renderer.isAvailable()) return;
 
     // Push the rows just written whenever the parent holding them is on screen.
     for (const parent of rosterParents) {
-      if (parent !== this.state.activeStream) continue;
       const parentState = this.state.getStreamState(parent);
       if (!parentState) continue;
-      this.webviewUpdater.updateStreamBadges(parent, {
+      this.renderer.onBadgesChanged(parent, {
         subagents: parentState.subagents,
       });
     }
@@ -742,21 +551,25 @@ export class ProgressFactApplier {
         !this.state.activeStream || this.state.activeStream === streamId
           ? this.state.activeStream
           : undefined;
-      this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        streamId,
-        this.buildStreamStatesForRefresh(streamId, status, substate),
-        { activeStream },
-      );
+      this.renderer.onStreamMetadataChanged(streamId, {
+        streamStates: this.buildStreamStatesForRefresh(
+          streamId,
+          status,
+          substate,
+        ),
+        activeStream,
+      });
     } else if (isNewRunningTransition) {
-      this.webviewUpdater.updateStreamMetadata(
-        this.state,
-        streamId,
-        this.buildStreamStatesForRefresh(streamId, status, substate),
-      );
+      this.renderer.onStreamMetadataChanged(streamId, {
+        streamStates: this.buildStreamStatesForRefresh(
+          streamId,
+          status,
+          substate,
+        ),
+      });
     } else {
       const lastTimestamp = this.state.streamLogs.getLastTimestamp(streamId);
-      this.webviewUpdater.updateStreamStatus(
+      this.renderer.onStreamStatusChanged(
         streamId,
         status,
         lastTimestamp,

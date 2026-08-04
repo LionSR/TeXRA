@@ -261,7 +261,6 @@ export const StreamTabInfoSchema = z.object({
   /** Full, untruncated command that spawned a process stream. */
   command: z.string().optional(),
   isRemote: z.boolean().optional(),
-  inputFile: z.string().optional(),
   creationTimestamp: z.number(),
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),

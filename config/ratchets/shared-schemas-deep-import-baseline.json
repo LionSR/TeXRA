@@ -588,7 +588,6 @@
       "packages/extension/src/progressView/frontend/components/StreamHeader.ts",
       "packages/extension/src/progressView/frontend/slices/permissionSlice.ts",
       "src/agent/goal/maybeBuildGoalContinuation.ts",
-      "src/controllers/progressView/backend/events/ProgressFactApplier.ts",
       "src/controllers/progressView/backend/WebviewUpdater.ts (type-only)",
       "src/tools/goal/goalFeatureFlag.ts",
       "src/tools/goal/goalStore.ts",

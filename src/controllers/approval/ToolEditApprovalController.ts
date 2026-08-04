@@ -15,7 +15,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { withEventErrorHandling } from '@controllers/progressView/backend/events/errorHandling';
+import { withEventErrorHandling } from '@controllers/session/eventErrorHandling';
 import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {

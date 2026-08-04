@@ -1,5 +1,4 @@
 import type { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import type { ProgressEventSubscription } from '@controllers/progressView/backend/events/ProgressFactApplier';
 import type { AppSignalsLike } from '@eventBus/AppSignals';
 
 /**
@@ -9,7 +8,7 @@ import type { AppSignalsLike } from '@eventBus/AppSignals';
 export function attachProgressBackendAppSignals(
   backend: Pick<ProgressBackend, 'factApplier'>,
   signals: AppSignalsLike,
-): ProgressEventSubscription {
+): { dispose(): void } {
   const dispose = signals.on('extensionDeactivating', () => {
     backend.factApplier.markAllRunningTasksAsCancelled();
   });

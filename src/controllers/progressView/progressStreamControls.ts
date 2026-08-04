@@ -1,5 +1,5 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ProgressStreamControls } from '@controllers/progressView/backend/events/ProgressFactApplier';
+import type { ProgressStreamControls } from '@controllers/progressView/backend/LitSessionRenderer';
 import type { StreamTabId } from '@shared/schemas';
 import {
   isApprovalBypassedForStream,

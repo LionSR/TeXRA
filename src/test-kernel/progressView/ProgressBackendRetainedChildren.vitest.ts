@@ -369,7 +369,7 @@ describe('retained finished children', () => {
 
   it('caps retained rows, evicting the oldest and keeping every live one', () => {
     const { backend } = createRecordingBackend();
-    // Mirrors RETAINED_FINISHED_CHILDREN_CAP in ProgressFactApplier.
+    // Mirrors RETAINED_FINISHED_CHILDREN_CAP in SessionFactApplier.
     const cap = 200;
     const overflow = 5;
     seedParent(backend);

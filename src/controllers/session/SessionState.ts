@@ -43,7 +43,6 @@ import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
  */
 interface ProgressStreamConfigDetails {
   instruction: string;
-  inputFile?: string;
   model?: string;
   workingDirectory?: string;
 }
@@ -110,7 +109,7 @@ export interface StreamExecutionState {
 export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
 
 /**
- * Core state management for the progress view.
+ * Host-neutral session presentation state.
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and
  * `snapshots` (all per-stream sidecar: output files, usage, todos, plan, and
@@ -118,7 +117,7 @@ export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
  * instructions live in the log stream (new runs write them directly; legacy
  * runs are backfilled there during load), not in separate progress-view state.
  */
-export class ProgressViewState {
+export class SessionState {
   // -- Persistence managers ---------------------------------------------------
   readonly streamLogs: StreamLogStore;
   /** Single owner of all per-stream sidecar state (output files, usage, todos,
@@ -145,7 +144,7 @@ export class ProgressViewState {
     session: SessionHandle = defaultSession(),
     stores?: SessionStores,
   ) {
-    this.logger = createChannelTrace('ProgressViewState');
+    this.logger = createChannelTrace('SessionState');
     this.session = session;
     this.streamStatus = session.status;
     this._prefs = new PersistedState(
@@ -191,7 +190,7 @@ export class ProgressViewState {
 
   /**
    * Release a previously-active stream's entries if its status is not
-   * in-flight. `ProgressFactApplier.setStreamStatus` intentionally skips
+   * in-flight. `SessionFactApplier.setStreamStatus` intentionally skips
    * eviction for the active tab, so the switch below closes the loop on the
    * stream being moved away from.
    */
@@ -296,7 +295,6 @@ export class ProgressViewState {
       patch.agentCategory = config.agentCategory;
       patch.config = {
         instruction: config.instruction,
-        inputFile: config.inputFiles?.at(0),
         model: config.model,
         workingDirectory: config.workingDirectory ?? undefined,
       };
