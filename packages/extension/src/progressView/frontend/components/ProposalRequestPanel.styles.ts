@@ -108,9 +108,8 @@ export const proposalRequestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-link-active, var(--wa-color-text-link));
   }
 
+  /* Radius only — the ring comes from focusRingStyles. */
   .workflow-proposal__file-name:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 

@@ -122,18 +122,22 @@ export class UsagePanel extends LitElement {
         color: var(--color-text-secondary);
       }
 
+      /* No opacity here or on the icons below. --color-text-secondary is
+         already color-mix(… 70%, transparent), so the extra 0.85 (and a
+         further 0.7 on icons) compounded to 0.595 / 0.4165 effective alpha:
+         text measured 4.32:1 (Dark+) and 3.34:1 (Light Modern) against AA's
+         4.5:1, and the icons missed the 3:1 non-text minimum in all four
+         default themes. The token carries the de-emphasis on its own. */
       :is(.run-summary, .context-state) {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-        opacity: var(--opacity-normal);
       }
 
       :is(.run-summary, .context-state) wa-icon {
         font-size: var(--font-size-icon-sm);
-        opacity: var(--opacity-subtle);
       }
 
       .run-summary__route {
@@ -180,8 +184,12 @@ export class UsagePanel extends LitElement {
         margin-left: auto;
       }
 
+      /* Token counts and cost tick on every stream event inside a
+         right-aligned strip, so proportional digits shifted the whole footer
+         on each update. Same treatment ToolTimer and WorktreeChip already use. */
       :is(.run-summary__value, .context-state__value) {
         color: var(--wa-color-text-normal);
+        font-variant-numeric: tabular-nums;
       }
     `,
   ];

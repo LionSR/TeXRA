@@ -112,9 +112,8 @@ export const markdownStyles: CSSResult = css`
     color: var(--wa-color-symbol-keyword);
   }
 
+  /* Radius only — the ring comes from focusRingStyles. */
   .markdown-content .latex-ref:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
     border-radius: var(--border-radius-small);
   }
 
