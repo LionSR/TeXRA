@@ -2,6 +2,7 @@ import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,
 } from '@shared/utils/clipboard';
+import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 interface CopyButtonConfig {
@@ -56,8 +57,8 @@ interface CopyButtonState {
  */
 export class CopyButtonController implements ReactiveController {
   private _copied = false;
-  private _resetTimeoutId: number | null = null;
   private readonly _config: Required<CopyButtonConfig>;
+  private readonly _resetTimer: FlushableDebounce;
 
   constructor(
     private readonly host: ReactiveControllerHost,
@@ -69,18 +70,15 @@ export class CopyButtonController implements ReactiveController {
       successClass: config.successClass ?? 'copy-success',
       resetDelay: config.resetDelay ?? COPY_RESET_DELAY_MS,
     };
+    this._resetTimer = createFlushableDebounce(() => {
+      this._copied = false;
+      this.host.requestUpdate();
+    }, this._config.resetDelay);
     this.host.addController(this);
   }
 
   hostDisconnected(): void {
-    this.clearResetTimer();
-  }
-
-  private clearResetTimer(): void {
-    if (this._resetTimeoutId !== null) {
-      window.clearTimeout(this._resetTimeoutId);
-      this._resetTimeoutId = null;
-    }
+    this._resetTimer.cancel();
   }
 
   /**
@@ -108,7 +106,7 @@ export class CopyButtonController implements ReactiveController {
       return false;
     }
 
-    this.clearResetTimer();
+    this._resetTimer.cancel();
 
     if (this._copied) {
       this._copied = false;
@@ -123,11 +121,7 @@ export class CopyButtonController implements ReactiveController {
     this._copied = true;
     this.host.requestUpdate();
 
-    this._resetTimeoutId = window.setTimeout(() => {
-      this._copied = false;
-      this._resetTimeoutId = null;
-      this.host.requestUpdate();
-    }, this._config.resetDelay);
+    this._resetTimer.schedule();
 
     return true;
   };
