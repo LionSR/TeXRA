@@ -69,7 +69,7 @@ migration story, the "safe to delete" claims, and the runtime semantics.
 Five load-bearing claims were refuted and the core mechanism was redesigned:
 
 - **"Required with zero optional fields" is impossible, twice over.** The
-  shared `ExecutionMetaSchema` is transitively the *export* schema
+  shared `ExecutionMetaSchema` is transitively the _export_ schema
   (`TraceDocumentSchema.meta` embeds it, `traceDocumentSchema.ts:20`), and
   `parseTraceData` throws on any mismatch — a required `identity` bricks
   every pre-migration exported trace before any fallback can run. And the
@@ -136,7 +136,7 @@ validates a kind.
 | `StreamState.kind: AgentCategory`               | `src/shared/schemas/streamState.ts:195` (union at `:206-209`)     | A field named `kind` carrying the other axis: `kind: z.literal(AgentCategory.Workflow)`. `createStreamState` files everything non-ToolUse as Workflow (`:229-243`).                            |
 | `isProcessAgent` over `Set(['bash'])`           | `src/shared/streams/agentKind.ts:14-18`                           | RunKind recovered by string-matching an agent name. Five production call sites.                                                                                                                |
 | `resolveExecutionDisplayCategory`               | `src/tools/executionFormatters.ts:13-20`                          | A sixth spelling of the same decision.                                                                                                                                                         |
-| `DELEGATION_AVAILABILITY_CATEGORY`              | `src/shared/constants/delegationTools.ts:37-42`                   | `DELEGATION_TOOL_CATEGORY` plus one fabricated row mapping `delegate_multi_agents` to `Workflow` — a tool that is in fact bi-categorical (`workflowScriptAgentRunner.ts:250,271`).              |
+| `DELEGATION_AVAILABILITY_CATEGORY`              | `src/shared/constants/delegationTools.ts:37-42`                   | `DELEGATION_TOOL_CATEGORY` plus one fabricated row mapping `delegate_multi_agents` to `Workflow` — a tool that is in fact bi-categorical (`workflowScriptAgentRunner.ts:250,271`).             |
 | CLI `StreamSlice.category`                      | `packages/cli/src/chat/tui/state/cliState.ts:188-191`             | The CLI's entire model. Cannot express process or workflowScript, so the TUI re-derives kind from a stream-id regex, a tool name, and transcript entry roles.                                  |
 
 Three consequences follow.
@@ -172,8 +172,8 @@ gates workflow affordances on `AgentCategory.Workflow`
 3. **The progress-view Resume button relaunches borrowed identity.**
    `ProgressViewHost.resumeStream` (`ProgressViewHost.ts:62-79`) branches only
    on `config.agentCategory`; for a workflow-script stream the persisted
-   category is `Workflow`, so Resume re-executes the *borrowed default agent's
-   config* as a plain workflow run — not the script. Post-demotion
+   category is `Workflow`, so Resume re-executes the _borrowed default agent's
+   config_ as a plain workflow run — not the script. Post-demotion
    bash/codex/claude streams take the same branch. `RESTORE_STATE`
    (`ProgressViewCommandHandlers.ts:457-459`) similarly pushes a synthetic
    bash config into the main-view launcher form.
@@ -206,11 +206,11 @@ legacy `storageUri` data into that same root
 it too (`packages/agent/src/node.ts:109`). So breakability is a property of
 **row cohorts and surface classes, not hosts**:
 
-| Class                 | Members                                                                                                                                                                                                                                                                | Regime                                                                                     |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Protected durable** | `executions/*/meta.json` + `config.json` rows whose run is a native agent; exported traces of agent runs (the trace embeds `ExecutionMeta` and `AgentConfig` wholesale)                                                                                                   | Upgraded by the one-shot migration, or (traces — immutable) read via one confined fallback. |
-| **Breakable durable** | The same files' `process` and `workflowScript` rows; `streamData/*/meta.json` sidecars; main-view `sessionType` webview state (`mainView/state.ts:151-171`)                                                                                                              | Version-bump freely; degradation acceptable.                                               |
-| **Ephemeral**         | Every UI wire shape on every host (`StreamTabInfo`, `StreamMetadata`, `SYNC_STREAM_CONTENT`, proposals, history messages, `StreamState`, `ProgressStreamRunDetails`, CLI `StreamSlice`, desktop IPC, `ActiveChildInfo` roster — safe only because `assembleSnapshot` never populates `subagents`, `streamSnapshotRead.ts:184-201`). Audited: none persisted. **Exception: the headless NDJSON vocabulary is a declared frozen public contract** (`cliNdjsonProgressEvents.ts:26-34`, texra-cli skill: byte-identical) — projected at its boundary, never recut. | Recut atomically. Zero compatibility machinery, ever. |                                      |
+| Class                 | Members                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Regime                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Protected durable** | `executions/*/meta.json` + `config.json` rows whose run is a native agent; exported traces of agent runs (the trace embeds `ExecutionMeta` and `AgentConfig` wholesale)                                                                                                                                                                                                                                                                                                                                                                                         | Upgraded by the one-shot migration, or (traces — immutable) read via one confined fallback. |
+| **Breakable durable** | The same files' `process` and `workflowScript` rows; `streamData/*/meta.json` sidecars; main-view `sessionType` webview state (`mainView/state.ts:151-171`)                                                                                                                                                                                                                                                                                                                                                                                                     | Version-bump freely; degradation acceptable.                                                |
+| **Ephemeral**         | Every UI wire shape on every host (`StreamTabInfo`, `StreamMetadata`, `SYNC_STREAM_CONTENT`, proposals, history messages, `StreamState`, `ProgressStreamRunDetails`, CLI `StreamSlice`, desktop IPC, `ActiveChildInfo` roster — safe only because `assembleSnapshot` never populates `subagents`, `streamSnapshotRead.ts:184-201`). Audited: none persisted. **Exception: the headless NDJSON vocabulary is a declared frozen public contract** (`cliNdjsonProgressEvents.ts:26-34`, texra-cli skill: byte-identical) — projected at its boundary, never recut. | Recut atomically. Zero compatibility machinery, ever.                                       |     |
 
 Two UI stacks, not three: desktop reuses the extension's Lit frontends and the
 identical `ProgressBackend`/`WebviewUpdater` wire
@@ -276,8 +276,8 @@ There are **no projections**:
   shrinks to `{schemaVersion, executionId}` plus tab-local fields. The claimed
   contract for a descriptor identity copy — "display is keyed by stream id and
   renders before config resolves" — does not survive scrutiny: at rehydration
-  the descriptor read is a disk read *and so is reading
-  `executions/{executionId}/meta.json`* — same timing, and the sidecar already
+  the descriptor read is a disk read _and so is reading
+  `executions/{executionId}/meta.json`_ — same timing, and the sidecar already
   stores the executionId. For live launches there is no window at all:
   `childStream` emits `run.start` (with identity) and `run.config`
   back-to-back (`childStream.ts:135-141`). `buildRunDescriptor`,
@@ -294,7 +294,7 @@ There are **no projections**:
 - **The wire carries the struct verbatim.** `run.start` already does.
   `StreamTabInfo.identity: RunIdentity`, `StreamSlice.identity: RunIdentity`,
   roster rows carry `identity` — the same struct from schema to disk to wire
-  to component. Hosts add display fields *beside* it (label, model, command),
+  to component. Hosts add display fields _beside_ it (label, model, command),
   never re-encodings of it. The three per-arm union re-declarations
   (`StreamTabInfo.kind` arms, `ProgressStreamRunDetails`, and the CLI shape
   that would have been fourth) are all deleted.
@@ -315,7 +315,7 @@ users restore backups. Mechanics:
   horizon (registration writes `meta.json`/`config.json` via
   `Promise.allSettled` — a half-born row must not be classified).
 - **Identity rule**: `meta.category === 'process'` → `{kind:'process', tool:
-  config?.agent ?? 'bash'}`; otherwise `{kind:'agent', agent: config.agent}`.
+config?.agent ?? 'bash'}`; otherwise `{kind:'agent', agent: config.agent}`.
   Rows without a readable config are **left unstamped** — the read schema is
   optional, so they keep parsing and keep listing as `incomplete`, exactly
   today's behavior. No sentinel names are fabricated.
@@ -380,7 +380,7 @@ to one), an index (kept, labeled), or a duplicate (deleted).
 3. **Destructive guard, pinned but out of scope.** `runExecution.ts:115-120`
    deletes the flow record when a CLI command's demanded category
    (`texra run` → Workflow, chat → ToolUse) mismatches the resolved run.
-   Red-team correction: this guards a *user-command* mismatch, not
+   Red-team correction: this guards a _user-command_ mismatch, not
    classification drift — `RunIdentity` has no bearing on it. It is pinned
    by a fixture and otherwise left alone.
 4. **Duplicated lineage predicates.** `isChildExecution` open-coded at
@@ -416,7 +416,7 @@ not a second truth; its comment says so after this work.
 checkpoint identity, deliberate and load-bearing (the double-launch guard at
 `WorkflowScriptTool.ts:378-393` depends on it). The in-band vs async
 delegation split (`subagentExecution.ts:125`) — different durability
-contracts, not duplication; only their *birth preamble* is unified (step 6).
+contracts, not duplication; only their _birth preamble_ is unified (step 6).
 
 **Reduced to one.** The parent edge travels on **one** webview message:
 `StreamTabInfo.parentStreamId`. `UPDATE_PARENT_STREAM` (`outbound.ts:95-98`)
@@ -456,7 +456,7 @@ becomes a registry method call so the fact has one author.
 and the `?? Workflow` defaults die. `StreamHeader`'s parent-label
 `split('@')` (`StreamHeader.ts:521-527`) reads the parent's tab info instead.
 The naming trap dies: `StreamMetadataSchema.kind`, `StreamState.kind`, and
-`SYNC_STREAM_CONTENT.kind` all carry *category* under the name `kind`; all
+`SYNC_STREAM_CONTENT.kind` all carry _category_ under the name `kind`; all
 ephemeral, renamed in place.
 
 **CLI.** `StreamSlice.identity: RunIdentity`, projected from the `run.start`
@@ -483,33 +483,33 @@ map onto the executable plan below.
 
 ### Shared schemas and types
 
-| Removed                                                                                                            | Location                           | Replaced by                                                     | PR  |
-| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------- | --------------------------------------------------------------- | --- |
-| `CreateChildStreamOptions.streamCategory`, `.runKind`, `.agentName`, `.toolName` (four overlapping identity fields) | `childStream.ts:27-34`             | single `run: RunIdentity`; the launch sites pass the truth      | 1   |
-| `RunKind` as an independent enum declaration                                                                       | `runDescriptor.ts:8-9`             | `RunIdentity['kind']` derived type                              | 1   |
-| `RunDescriptor` as a concept: `.agent`, `.category`, `.kind`, `buildRunDescriptor`, `PersistedRunDescriptorSchema` | `runDescriptor.ts`                 | sidecar FK `executionId`; identity on the `run.start` fact      | 5   |
-| `RunConfigReferenceSchema`                                                                                         | `runDescriptor.ts:11-15`           | `runConfigPath(executionId)` helper                             | 5   |
-| `descriptorFromConfig` rebuild fallback                                                                            | `StreamSnapshotStore.ts:232-241`   | nothing — hydration reads `ExecutionMeta` by FK                 | 5   |
-| `ExecutionMeta.category` untyped string                                                                            | `stream.ts:86`                     | `ExecutionMeta.identity` (required; one-shot migration)         | 4   |
-| `StreamMetadataSchema.kind` (category misnamed `kind`)                                                             | `streamState.ts:143`               | renamed/retyped on the recut wire shape                         | 2   |
-| `SYNC_STREAM_CONTENT.kind` naming trap                                                                             | `progressView/outbound.ts:314,325` | recut with explicit category naming                             | 2   |
-| `StreamTabInfo` per-arm union + base `agentCategory` on all arms                                                   | `stream.ts:280,300-317`            | `StreamTabInfo.identity: RunIdentity` + display fields          | 2   |
-| `ProgressStreamRunDetails`                                                                                         | `ProgressViewState.ts:49-69`       | `ProgressStreamMetadata.identity`                               | 2   |
-| `TraceDocument.identity` (planned in rev 2-4, never built)                                                         | —                                  | `trace.meta.identity` (already embedded)                        | —   |
+| Removed                                                                                                             | Location                           | Replaced by                                                | PR  |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------- | --- |
+| `CreateChildStreamOptions.streamCategory`, `.runKind`, `.agentName`, `.toolName` (four overlapping identity fields) | `childStream.ts:27-34`             | single `run: RunIdentity`; the launch sites pass the truth | 1   |
+| `RunKind` as an independent enum declaration                                                                        | `runDescriptor.ts:8-9`             | `RunIdentity['kind']` derived type                         | 1   |
+| `RunDescriptor` as a concept: `.agent`, `.category`, `.kind`, `buildRunDescriptor`, `PersistedRunDescriptorSchema`  | `runDescriptor.ts`                 | sidecar FK `executionId`; identity on the `run.start` fact | 5   |
+| `RunConfigReferenceSchema`                                                                                          | `runDescriptor.ts:11-15`           | `runConfigPath(executionId)` helper                        | 5   |
+| `descriptorFromConfig` rebuild fallback                                                                             | `StreamSnapshotStore.ts:232-241`   | nothing — hydration reads `ExecutionMeta` by FK            | 5   |
+| `ExecutionMeta.category` untyped string                                                                             | `stream.ts:86`                     | `ExecutionMeta.identity` (required; one-shot migration)    | 4   |
+| `StreamMetadataSchema.kind` (category misnamed `kind`)                                                              | `streamState.ts:143`               | renamed/retyped on the recut wire shape                    | 2   |
+| `SYNC_STREAM_CONTENT.kind` naming trap                                                                              | `progressView/outbound.ts:314,325` | recut with explicit category naming                        | 2   |
+| `StreamTabInfo` per-arm union + base `agentCategory` on all arms                                                    | `stream.ts:280,300-317`            | `StreamTabInfo.identity: RunIdentity` + display fields     | 2   |
+| `ProgressStreamRunDetails`                                                                                          | `ProgressViewState.ts:49-69`       | `ProgressStreamMetadata.identity`                          | 2   |
+| `TraceDocument.identity` (planned in rev 2-4, never built)                                                          | —                                  | `trace.meta.identity` (already embedded)                   | —   |
 
 ### Classification recovery helpers
 
-| Removed                                               | Location                                        | Replaced by                                                                                                    | PR  |
-| ----------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --- |
-| `isProcessAgent` + `agentKind.ts` (5 call sites)      | `src/shared/streams/agentKind.ts:14-18`         | `identity.kind === 'process'` at each consumer                                                                 | 2-5 |
-| `resolveExecutionDisplayCategory`                     | `executionFormatters.ts:13-20`                  | listing rows carry `identity`                                                                                  | 4   |
-| `getAvailablePaths` category-string switch            | `executionFormatters.ts:50-72`                  | keyed on `identity.kind` + config category                                                                     | 4   |
-| `normalizeWriterCategory`                             | `src/agent/storage/executionLifecycle.ts:50-63` | listing/defaults filter on `identity.kind`                                                                     | 4   |
-| `runtimeCategory`                                     | `executionListing.ts:146,157` + readers         | nothing — the demotion it hides no longer happens                                                              | 4   |
-| `meta.category === 'process'` sniff                   | `executionListing.ts:149`                       | `meta.identity.kind`                                                                                            | 4   |
-| `handle.toolName` mutable slot                        | `ExecutionHandle.ts:112`                        | `identity` on the handle, immutable                                                                            | 4   |
+| Removed                                               | Location                                        | Replaced by                                                                                                       | PR  |
+| ----------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --- |
+| `isProcessAgent` + `agentKind.ts` (5 call sites)      | `src/shared/streams/agentKind.ts:14-18`         | `identity.kind === 'process'` at each consumer                                                                    | 2-5 |
+| `resolveExecutionDisplayCategory`                     | `executionFormatters.ts:13-20`                  | listing rows carry `identity`                                                                                     | 4   |
+| `getAvailablePaths` category-string switch            | `executionFormatters.ts:50-72`                  | keyed on `identity.kind` + config category                                                                        | 4   |
+| `normalizeWriterCategory`                             | `src/agent/storage/executionLifecycle.ts:50-63` | listing/defaults filter on `identity.kind`                                                                        | 4   |
+| `runtimeCategory`                                     | `executionListing.ts:146,157` + readers         | nothing — the demotion it hides no longer happens                                                                 | 4   |
+| `meta.category === 'process'` sniff                   | `executionListing.ts:149`                       | `meta.identity.kind`                                                                                              | 4   |
+| `handle.toolName` mutable slot                        | `ExecutionHandle.ts:112`                        | `identity` on the handle, immutable                                                                               | 4   |
 | `ExecutionHandle.category` sourced from descriptor    | `ExecutionHandle.ts:159-161`                    | sourced from config (consumers: `waitCoordination.ts:43-50`, `summaryFormat.ts:46,118`, `ExecutionHandle.ts:211`) | 4   |
-| `replayTrace` kind re-derivation via `isProcessAgent` | `replayTrace.ts:159`                            | `trace.meta.identity`; one confined agent-fallback for old exports                                             | 5   |
+| `replayTrace` kind re-derivation via `isProcessAgent` | `replayTrace.ts:159`                            | `trace.meta.identity`; one confined agent-fallback for old exports                                                | 5   |
 
 ### CLI reconstructions (ephemeral, deleted atomically in step 3)
 
@@ -533,25 +533,25 @@ All step 2.
 
 ### Orchestration lineage (step 6)
 
-| Removed                                                                       | Location                                                                              | Replaced by                                              |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 4 open-coded `isChildExecution` copies                                        | `childStream.ts:335`, `waitCoordination.ts:47`, `summaryFormat.ts:47`, `DelegationTools.ts:300` | `handle.isChildExecution`                                |
-| 4 open-coded caller-ownership checks                                          | `DelegationTools.ts:306`, `agentCliShared.ts:99`, `summaryFormat.ts:48`, `ExecutionsTool.ts:727` | one `handle.isOwnedBy(callerStreamId)`                   |
-| `UPDATE_PARENT_STREAM` message + `activeState.parentStreamId` copy            | `outbound.ts:95-98,304`; `ProgressFactApplier.ts:697-706`; `WebviewUpdater.ts:312-317` | `StreamTabInfo.parentStreamId`, the one wire copy        |
-| second stream-id formula                                                      | `subagentExecution.ts:162-164` (vs `AgentLaunchContext.ts:566-572`)                   | one shared function                                      |
-| static `ChildRunLoopParams.parentStreamId` delivery fallback                  | `childRunLoop.ts:214,427-434`                                                         | delivery target from the live handle, one name           |
-| `orchestratorStreamId` / `parentStreamId` naming split                        | `nativeSubagentStrategy.ts:74`, `inBandSubagentExecution.ts:71`                       | one name                                                 |
-| 3 independent `isSubagent` spellings at finalize                              | `childStream.ts:335`, `childRunLoop.ts:894`, `nativeSubagentStrategy.ts:226`          | `handle.isChildExecution`                                |
-| `ResumableAgentCliSession.parentStreamId`/`childStreamId` copies + duplicated follow-up authorization | `agentCliSessionStores.ts:12-30`, `agentCliShared.ts:97-102`                          | read the live handle; shared ownership check             |
-| `ActiveChildInfo` kind union (dead `process` arm) + CLI roster filter + webview tool-name icon sniffing | `streamState.ts:61-71`, `childExecutions.ts:259-268`, `BackgroundTasksPanel.ts:513-527` | flat roster row carrying `identity` + `childStreamId`    |
-| desktop hand-built `child.activity` re-emission                               | `desktopAgentExecution.ts:443-450`                                                    | a registry re-seed method (one author for the fact)      |
-| phase-label join scoped, not deleted (red-team: planned/cached/skipped calls have **no** `childStreamId`, `workflowCallProgress.ts:31-36` — the phase join is what makes `1/5` headers correct) | `SubagentList.tsx:661-716` | `childStreamId` joins row→task-card (both launched sides); `workflowPhase` remains the join key for phase-group headers and counters |
+| Removed                                                                                                                                                                                         | Location                                                                                         | Replaced by                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 4 open-coded `isChildExecution` copies                                                                                                                                                          | `childStream.ts:335`, `waitCoordination.ts:47`, `summaryFormat.ts:47`, `DelegationTools.ts:300`  | `handle.isChildExecution`                                                                                                            |
+| 4 open-coded caller-ownership checks                                                                                                                                                            | `DelegationTools.ts:306`, `agentCliShared.ts:99`, `summaryFormat.ts:48`, `ExecutionsTool.ts:727` | one `handle.isOwnedBy(callerStreamId)`                                                                                               |
+| `UPDATE_PARENT_STREAM` message + `activeState.parentStreamId` copy                                                                                                                              | `outbound.ts:95-98,304`; `ProgressFactApplier.ts:697-706`; `WebviewUpdater.ts:312-317`           | `StreamTabInfo.parentStreamId`, the one wire copy                                                                                    |
+| second stream-id formula                                                                                                                                                                        | `subagentExecution.ts:162-164` (vs `AgentLaunchContext.ts:566-572`)                              | one shared function                                                                                                                  |
+| static `ChildRunLoopParams.parentStreamId` delivery fallback                                                                                                                                    | `childRunLoop.ts:214,427-434`                                                                    | delivery target from the live handle, one name                                                                                       |
+| `orchestratorStreamId` / `parentStreamId` naming split                                                                                                                                          | `nativeSubagentStrategy.ts:74`, `inBandSubagentExecution.ts:71`                                  | one name                                                                                                                             |
+| 3 independent `isSubagent` spellings at finalize                                                                                                                                                | `childStream.ts:335`, `childRunLoop.ts:894`, `nativeSubagentStrategy.ts:226`                     | `handle.isChildExecution`                                                                                                            |
+| `ResumableAgentCliSession.parentStreamId`/`childStreamId` copies + duplicated follow-up authorization                                                                                           | `agentCliSessionStores.ts:12-30`, `agentCliShared.ts:97-102`                                     | read the live handle; shared ownership check                                                                                         |
+| `ActiveChildInfo` kind union (dead `process` arm) + CLI roster filter + webview tool-name icon sniffing                                                                                         | `streamState.ts:61-71`, `childExecutions.ts:259-268`, `BackgroundTasksPanel.ts:513-527`          | flat roster row carrying `identity` + `childStreamId`                                                                                |
+| desktop hand-built `child.activity` re-emission                                                                                                                                                 | `desktopAgentExecution.ts:443-450`                                                               | a registry re-seed method (one author for the fact)                                                                                  |
+| phase-label join scoped, not deleted (red-team: planned/cached/skipped calls have **no** `childStreamId`, `workflowCallProgress.ts:31-36` — the phase join is what makes `1/5` headers correct) | `SubagentList.tsx:661-716`                                                                       | `childStreamId` joins row→task-card (both launched sides); `workflowPhase` remains the join key for phase-group headers and counters |
 
 ### Delegation gating (step 7)
 
-| Removed                                             | Location                          | Replaced by                                                                                                                                 |
-| --------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DELEGATION_AVAILABILITY_CATEGORY` (fabricated row) | `delegationTools.ts:37-42`        | per-tool roster declaration on `ToolDefinition` (a `z.looseObject`, documented as forward-compatible — `ToolDefinition.ts:18-30`), read by `annotateDelegationTool` |
+| Removed                                             | Location                   | Replaced by                                                                                                                                                         |
+| --------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DELEGATION_AVAILABILITY_CATEGORY` (fabricated row) | `delegationTools.ts:37-42` | per-tool roster declaration on `ToolDefinition` (a `z.looseObject`, documented as forward-compatible — `ToolDefinition.ts:18-30`), read by `annotateDelegationTool` |
 
 Evidence the removal is safe: `requireVisibleAgent` and
 `selectAvailableDelegationModel` already take category **literals**
@@ -574,10 +574,10 @@ consume, per the audit: `agent` (name), `instruction` (command/script label),
 for process rows — an admission). With `identity` durable and every
 classification reader keyed on it (PRs 2–5), the record becomes a union:
 
-| Removed                                                                  | Location                                              | Replaced by                                                                                  |
-| ------------------------------------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| fabricated `agentCategory`/`model` on bash/codex/claude/script records   | `bash.ts:409-413`, `codexConfig.ts:97-104`, `claudeAgentConfig.ts:248-255`, `WorkflowScriptTool.ts:353-369` | `RunRecord` union: agent arm = `AgentConfigSchema` unchanged (protected); non-agent arm = `{name, instruction, workingDirectory, model?}` |
-| `PROCESS_HIDDEN_FIELDS` display filter                                   | `configFieldFilter.ts:25`                             | nothing to hide — the fields no longer exist on non-agent records                            |
+| Removed                                                                | Location                                                                                                    | Replaced by                                                                                                                               |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| fabricated `agentCategory`/`model` on bash/codex/claude/script records | `bash.ts:409-413`, `codexConfig.ts:97-104`, `claudeAgentConfig.ts:248-255`, `WorkflowScriptTool.ts:353-369` | `RunRecord` union: agent arm = `AgentConfigSchema` unchanged (protected); non-agent arm = `{name, instruction, workingDirectory, model?}` |
+| `PROCESS_HIDDEN_FIELDS` display filter                                 | `configFieldFilter.ts:25`                                                                                   | nothing to hide — the fields no longer exist on non-agent records                                                                         |
 
 Old non-agent rows parse as the agent arm (they are `AgentConfig`s) — a
 breakable cohort, readable either way. The trace document's `config` becomes
@@ -763,7 +763,7 @@ and its PR.
 ### Axis S — lifecycle state (steps 10–11)
 
 **Findings.** 19 distinct state vocabularies; the persisted terminal fact is
-*two* fields (`ExecutionMeta.terminalStatus`, an untyped string, plus
+_two_ fields (`ExecutionMeta.terminalStatus`, an untyped string, plus
 `outcome: RunOutcome`), kept consistent by a `superRefine`
 (`stream.ts:98-110`) and healed by a `.transform` on **every read and write**
 (`stream.ts:112-119`, applied via `ExecutionKVStore.ts:290`) — a permanent
@@ -772,8 +772,8 @@ independently of the `StreamStatusMachine`, including:
 `WorkflowScriptTool.ts:505` deciding a script call's success by comparing the
 raw `terminalStatus` string; `AgentRunLifecycle.ts:183-189` reading the phase
 back out of the machine and silently **overriding the caller's outcome** with
-it; two parallel history-status projections reading *different* source fields
-into *different* vocabularies (`resolveHistoryRunStatus` over `outcome` →
+it; two parallel history-status projections reading _different_ source fields
+into _different_ vocabularies (`resolveHistoryRunStatus` over `outcome` →
 `HistoryRunStatus`; CLI `resolveCliHistoryStatus` over raw `terminalStatus` →
 plain string, `history.ts:426-434`); and the TUI detecting child errors by
 lowercasing arbitrary strings and regexing for exit codes
@@ -791,14 +791,14 @@ boundary). Everything else is a display projection computed in one place.
 non-resumable treatment); after it, `outcome` is required on terminal rows
 and **`terminalStatus` is no longer written or read** — `writeTerminalStatus`
 writes `outcome` alone.
-*Delete:* the `superRefine`, the read/write `.transform`, every raw-string
+_Delete:_ the `superRefine`, the read/write `.transform`, every raw-string
 reader (`WorkflowScriptTool.ts:505` → `outcome === RUN_OUTCOME.COMPLETED`;
 `executionListing` carries `outcome`; `getExecutionStatusInfo` merges live
 phase ⊕ persisted `outcome`, its `StreamPhase | ExecutionStatus | 'unknown'`
 union narrowing to `StreamPhase | RunOutcome`).
-*Tests:* migration fixtures incl. an unmappable legacy string; resumability
+_Tests:_ migration fixtures incl. an unmappable legacy string; resumability
 parity before/after.
-*Acceptance:* `rg -c 'terminalStatus' src/ packages/` → only the export
+_Acceptance:_ `rg -c 'terminalStatus' src/ packages/` → only the export
 projection and the migration module.
 
 **Step 11 — one projection per display decision.** One shared
@@ -818,7 +818,7 @@ read CANCELLED and the flow record survives;
 `isChildExecutionErrorStatus`'s string-lowercasing regex deleted (roster rows
 carry a typed `StreamPhase`; use `isTerminalOutcomePhase`); the retired
 7-value `StreamStatus` confined to the trace-viewer read boundary.
-*Acceptance:* `rg -c 'resolveCliHistoryStatus|isChildExecutionErrorStatus' packages/cli/` → 0.
+_Acceptance:_ `rg -c 'resolveCliHistoryStatus|isChildExecutionErrorStatus' packages/cli/` → 0.
 
 ### Axis T — opaque stream ids, and retiring the legacy resolver (step 12)
 
@@ -830,13 +830,13 @@ prefix regex reads the segment as a kind encoding (dies in step 3 anyway),
 and — load-bearing — the CLI resume paths **re-derive an existing id** from
 `config.agent + config.model` (`toolUseResumeData.ts:20`;
 `SessionResumeRetrieval.ts:196` → `executeAgent.ts:556`; workflow arm via
-`runAgent.ts:103`). The id is a *reproduction contract*, not a display
+`runAgent.ts:103`). The id is a _reproduction contract_, not a display
 string. Therefore: before the mint format changes, those call sites read
 `registeredStreamId(meta) ?? getStreamTabId(...)` — the stamped FK first,
 the legacy formula as fallback — with a resume fixture over a pre-migration
 `name@model#id` bucket, and an acceptance rule that every remaining
 `getStreamTabId` caller is a birth site. Yet it costs: `AgentLaunchContext.ts:564`
-hard-fails a launch when `model` is missing *purely to mint the id*, and the
+hard-fails a launch when `model` is missing _purely to mint the id_, and the
 fabricated display models (`CODEX_DISPLAY_MODEL`, `CLAUDE_AGENT_DISPLAY_MODEL`,
 the `DEFAULT_AGENT_MODEL` prefault leaking into bash stream ids —
 `streamTabInfo.ts:105-110` documents the leak) exist substantially to feed a
@@ -854,7 +854,7 @@ execution→stream mapping is resolved **once, at the entrance**: the one migrat
 unique match as the authoritative `streamId`, and leaves genuinely ambiguous
 rows unresolved (exactly what the resolver reports today, computed once
 instead of per read).
-*Delete:* the model segment for new ids and the `model`-required launch guard
+_Delete:_ the model segment for new ids and the `model`-required launch guard
 (`AgentLaunchContext.ts:564`); `legacyExecutionIdentity.ts` whole (374
 lines), the `streamIdSource` enum and `registeredStreamId` contract;
 `parseLegacyTaskState` + `TaskState.ts` + the `StreamTabMeta.taskState` read
@@ -863,13 +863,13 @@ shim (breakable sidecar cohort); the sidecar `description` mirrors and
 (#9627, folded in); the `legacyRuns: 'taskRuns'` directory probe (one-shot
 rename). In the final tree the last stream-id parsers are gone (steps 2/3/5),
 so the format change is safe for new runs and old ids stay opaque strings.
-*Kept, permanent by nature:* the filename-era workflow-output grammar
+_Kept, permanent by nature:_ the filename-era workflow-output grammar
 (`workflowOutput.ts:57-106`) — it parses **user files on the user's disk**,
 which no migration of our store can rewrite.
-*Tests:* migration resolves a legacy fixture bucket; ambiguous rows stay
+_Tests:_ migration resolves a legacy fixture bucket; ambiguous rows stay
 unresolved with the same user-visible result; trace assembly and
 `/executions` summaries never invoke a scan.
-*Acceptance:* `rg -c 'legacyExecutionIdentity|streamIdSource|LEGACY_RESOLUTION' src/` → 0;
+_Acceptance:_ `rg -c 'legacyExecutionIdentity|streamIdSource|LEGACY_RESOLUTION' src/` → 0;
 launches without a model succeed for non-agent runs.
 
 ### Axis U — derived data: one accumulator per fact (step 13)
@@ -894,7 +894,7 @@ data **out of rendered message text**.
 `StreamSnapshotStore` — and every consumer reads the accumulated state
 through it. Derivations that exist to compensate for missing writes move to
 the write site.
-*Changes:* the CLI consumes store-projected artifact/usage state (its merge
+_Changes:_ the CLI consumes store-projected artifact/usage state (its merge
 machinery, generation counters, and second live accumulation deleted; the
 NDJSON delta events stay — external contract); the extension's per-render
 usage sums become one selector; `StatusBarUsageTracker` projects from the
@@ -905,7 +905,7 @@ list and the read-time scraper dies; taskGroups use the incremental
 projection engine in both hosts (the CLI's full re-projection per sync tick
 deleted); `UserMessage`'s text re-parse replaced by structured data carried
 beside the text.
-*Acceptance:* `rg -c 'mergeArtifactSnapshot|streamArtifactRevision' packages/cli/` → 0;
+_Acceptance:_ `rg -c 'mergeArtifactSnapshot|streamArtifactRevision' packages/cli/` → 0;
 `rg -c 'listExecutionEditedFiles' src/` → only the finalize-time site.
 
 ### Axis R — the roster pair collapse (step 14)
@@ -920,7 +920,7 @@ consumer.
 
 **Ruling.** One generic shape, `ByCategory<T> = Record<AgentCategory, T>`,
 replaces every pair. **Both** durable values migrate at their entrances —
-`AGENT_ROSTER_SELECTION` *and* `CUSTOM_AGENT_PRESETS`
+`AGENT_ROSTER_SELECTION` _and_ `CUSTOM_AGENT_PRESETS`
 (`agentPresets.ts:48-57` carries the pair in user-authored teams; a recut
 without migration would silently drop them — red-team fixture required). And
 "its entrance" is three entrances, not one: the extension's VS Code memento,
@@ -933,12 +933,12 @@ readable and unmodified, and `readAgentRosterSelection` moves to `safeParse`
 with the inherited-roster fallback. The prompt
 variables `WORKFLOW_AGENTS`/`TOOL_USE_AGENTS` keep their names — they are an
 external prompt contract — but are built from the record.
-*Delete:* all 38 non-durable pair declarations and their branch-per-category
+_Delete:_ all 38 non-durable pair declarations and their branch-per-category
 read/write sites; the paired wire messages collapse to record-keyed ones (all
 ephemeral).
-*Tests:* memento migration fixture (old pair → record); roster resolution
+_Tests:_ memento migration fixture (old pair → record); roster resolution
 parity per category; settings/main-view round-trip.
-*Acceptance:* `rg -c 'workflowAgentKeys|toolUseAgentKeys|workflowAgents|toolUseAgents' src/ packages/`
+_Acceptance:_ `rg -c 'workflowAgentKeys|toolUseAgentKeys|workflowAgents|toolUseAgents' src/ packages/`
 → the memento migration module and prompt-var builder only.
 
 ### Step 15 — final gate battery
@@ -1064,7 +1064,7 @@ migration.
 - **The sharing asymmetry proves the thesis**: display formatters
   (`streamStatusDisplay`, `formatWorkflowCallLine`, `taskGroupProjection`,
   `normalizeToolUseData`) are already consumed by all three hosts; every
-  *derivation* module (`childActivityReducer`, `streamMetadata`,
+  _derivation_ module (`childActivityReducer`, `streamMetadata`,
   `buildStreamTabInfo`, `streamOrdering`) is shared only inside the Lit
   stack — the CLI re-derives status mirrors, roster reconciliation, parent
   topology, tombstoning, artifact merges, phase grouping, transcript role
@@ -1095,7 +1095,7 @@ status, one discriminated `stage` slot). Hosts are renderers over it:
 the `WebviewUpdater` projects it over postMessage exactly as today; the Ink
 TUI reads it through a signals adapter; the headless renderer and the
 frozen NDJSON vocabulary are boundary projections of the same store. No
-projection layers between hosts and the model — the model's types *are*
+projection layers between hosts and the model — the model's types _are_
 the language, `StreamTabInfo.identity`-style, per Part I.
 
 **Step 16 — one view-model, one subscription.** Generalize
@@ -1103,20 +1103,20 @@ the language, `StreamTabInfo.identity`-style, per Part I.
 (no `vscode`, no postMessage — they already comply); adopt the canonical
 field shapes (single `stage` slot from the CLI; three-kind info and
 per-round maps as named in Part I). The TUI consumes it.
-*Delete:* the CLI's parallel derivations — `setStreamStatusInCliState`
+_Delete:_ the CLI's parallel derivations — `setStreamStatusInCliState`
 mirror, `applySubagentRoster` + `ParentProvenance` reconciliation +
 tombstone value-copy, `mergeArtifactSnapshot` + revision guard (the store
 is the accumulator per Axis U), the full-rebuild task-group driver, the
 duplicate `subagentExecutionLabels`, the duplicated phase grouping, three
 of the four dispatch tables and all four stage-guard clones.
-*Keep (host-genuine):* Ink layout, keyboard/interaction policy,
+_Keep (host-genuine):_ Ink layout, keyboard/interaction policy,
 `<Static>` settlement ordering, terminal capabilities, ANSI repaint, VS
 Code placement/theme, postMessage batching.
-*Tests:* TUI snapshots unchanged; headless byte-parity (frozen NDJSON);
+_Tests:_ TUI snapshots unchanged; headless byte-parity (frozen NDJSON);
 the fact-coverage delta table reconciled deliberately — each of
 `followUpSent`/`goalPaused`/`goalStateChanged`/`inquiryThreadUpdated` gets
 one decided behavior, same on every host.
-*Gate:* `rg -c 'TUI_RUN_FACT_HANDLERS|applySubagentRoster|mergeArtifactSnapshot' packages/cli/` → 0.
+_Gate:_ `rg -c 'TUI_RUN_FACT_HANDLERS|applySubagentRoster|mergeArtifactSnapshot' packages/cli/` → 0.
 
 **Step 17 — one command layer.** One history service (listing, details,
 status via the one shared projection from step 11, delete + goal cleanup,
@@ -1127,15 +1127,15 @@ free; launcher validation unified in `executionRequests` (input-file rule
 and toolConfig normalization included); `AgentRosterForm` consumes
 `AgentRosterController.allPresets()`; the chat-defaults history tier reads
 the shared listing; the CLI adopts `selectAutoOpenFinalOutput`.
-*Gate:* `rg -c 'resolveCliResume|resolveCliHistoryStatus|userStartedCliHistoryEntries' packages/cli/` → 0.
+_Gate:_ `rg -c 'resolveCliResume|resolveCliHistoryStatus|userStartedCliHistoryEntries' packages/cli/` → 0.
 
 **Step 18 — Part III gate sweep.** Ratchets shrink; no new `@agent/*`
 specifiers; the NDJSON byte-parity suite passes against the unified stack.
 
 ## Build order — holistic
 
-Ordering criterion, applied adversarially to every phase: *is anything
-built here that a later phase deletes?* The answer must be no. The two
+Ordering criterion, applied adversarially to every phase: _is anything
+built here that a later phase deletes?_ The answer must be no. The two
 violations found in the step numbering and removed: (a) `StreamSlice.identity`
 and the CLI reconstruction-by-reconstruction recut (old step 3) — deleted
 by the view-model adoption; the TUI never touches an upgraded `StreamSlice`,
@@ -1208,7 +1208,7 @@ Genuinely undecided or deferred items, so they are decided deliberately
 rather than discovered during implementation:
 
 1. **Wait/report predicate target.** Chosen: `identity.kind === 'agent' &&
-   handle.category === 'toolUse'` from launch-time config. The red-team's
+handle.category === 'toolUse'` from launch-time config. The red-team's
    alternative — an explicit `deliversResultPerTurn` flag set by the
    launchers, naming the actual fact — is arguably cleaner; decide at
    phase 1 review.
@@ -1261,7 +1261,7 @@ re-roots every checkpoint and defeats the double-launch guard
 - **`descriptorFromConfig` deletion moves hydration onto the FK.** Sidecars
   predating the FK field hydrate through the existing legacy stream-id
   resolution (`legacyExecutionIdentity.ts`) — breakable cohorts; agent-run
-  sidecars carry descriptors whose `executionId` field *is* the FK, so they
+  sidecars carry descriptors whose `executionId` field _is_ the FK, so they
   hydrate unchanged.
 - **The birth-preamble unification (step 6) must not touch loop semantics.**
   The in-band path's durability ledger (`stableSubagentAttempt.ts`) and the
@@ -1282,7 +1282,7 @@ re-roots every checkpoint and defeats the double-launch guard
   legacy strings** (stamped `failed`; today they are non-resumable via the
   `TERMINAL_STATUS` cause — same user-visible result, asserted by fixture).
 - **Part II: retiring `legacyExecutionIdentity` fixes resolution at migration
-  time.** A row the resolver would have resolved differently *later* (new
+  time.** A row the resolver would have resolved differently _later_ (new
   sidecars appearing) loses that chance; accepted — post-birth-registration
   rows never need it, and the ambiguous cohort's behavior is unchanged.
 - **Part II: the CLI's artifact merge deletion assumes the store is loaded in
