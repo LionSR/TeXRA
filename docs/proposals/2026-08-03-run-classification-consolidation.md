@@ -16,8 +16,27 @@ recorded terminal state), the roster-selection v1 pair vocabulary and the
 versioned `.v2` key are gone (one unversioned key, canonical shape only,
 malformed values warn and read as inherited), and the pre-FK sidecar
 `runDescriptor` is never lifted (the unknown key is stripped; such sidecars
-carry no execution FK). Step 8 (honest `RunRecord` union), the rest of
-Axis T (opaque id minting), and Parts II–III remain proposed.
+carry no execution FK). Subsequently landed in the same PR: **step 8**
+(honest `RunRecord` union — `executions/{id}/config.json` is
+`AgentConfig | {name, instruction, workingDirectory?, model?}`, bash and the
+workflow-script container persist the honest arm, `readRunRecord()` at the
+store seam, `PROCESS_HIDDEN_FIELDS` deleted, the trace document embeds the
+union; codex/claude stay on the agent arm since they stamp
+`kind:'agent'`); **the rest of Axis T** (opaque `${name}#${executionId}`
+mint with no model segment and no model-required launch guard;
+`legacyExecutionIdentity.ts` deleted whole with no replacement walker —
+`meta.streamId` is the one execution→stream mapping, suffix resemblance is
+never ownership, and pre-registration rows simply have no persisted stream;
+`streamIdSource`/`registeredStreamId` deleted; CLI resume reads the stamped
+FK); and **Axis U** (the `StreamSnapshotStore` is the one accumulator for
+round artifacts and usage — the CLI's merge layer/revision counters/second
+live spread and dual usage sum deleted, taskGroups incremental in the TUI,
+`reportMissingOutputs` emits row+fact together, the edited-files
+conversation scraper deleted outright in favor of the persisted list,
+`StatusBarUsageTracker` and both webview components project from the store,
+and workflow delivery summaries travel typed beside row text). Still
+remaining: the `taskRuns` legacy directory probe (#6981, its own dated
+retention policy), and Part III (one view-model, one command layer).
 Date: 2026-08-03
 Revision: 10 (holistic build order; open-problems register)
 

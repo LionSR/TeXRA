@@ -561,14 +561,11 @@ export async function buildAgentLaunchContext(
   const interactions = launchSession.interactions;
   const streamStatus = launchSession.status;
   const executionId = input.executionId ?? generateExecutionId();
-  if (!input.streamTabIdOverride && (!config.agent || !config.model)) {
-    throw new AgentError('Missing required fields: model and/or agent');
-  }
-  // One derivation of this run's stream id: an override is used as-is, and
-  // otherwise the derived id is both the reservation and the run's identity.
+  // One mint of this run's stream id: an override is used as-is (resume
+  // paths pass the streamId stamped on execution metadata), and otherwise
+  // the freshly minted id is both the reservation and the run's identity.
   const streamId =
-    input.streamTabIdOverride ??
-    getStreamTabId(config.agent, config.model, { executionId });
+    input.streamTabIdOverride ?? getStreamTabId(config.agent, { executionId });
   const reservedStreamId = input.streamTabIdOverride ? undefined : streamId;
   if (reservedStreamId) {
     acquireStreamOrThrow(reservedStreamId, streamStatus);

@@ -5,7 +5,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from '@agent/runtime/SessionResumeRetrieval';
-import { getStreamTabId } from '@agent/runtime/streamTab';
+import { getExecutionStore } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -17,9 +17,11 @@ export async function readCliToolUseResumeData(
 ): Promise<ToolUseResumeData | null> {
   if (config.agentCategory !== AgentCategory.ToolUse) return null;
 
-  const streamId = getStreamTabId(config.agent, config.model, {
-    executionId: id,
-  });
+  // FK-first: the stream id stamped on execution metadata at registration is
+  // the reproduction contract — never re-derived from agent/model. A row
+  // without a stamped stream id has no persisted stream and is not resumable.
+  const streamId = (await getExecutionStore(id).readMeta())?.streamId;
+  if (!streamId) return null;
   const resume = await retrieveSessionResumeData(streamId, id, config);
   if (resume?.type !== 'toolUse') return null;
   return resume;

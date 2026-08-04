@@ -207,7 +207,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'correct' },
         id: 'a1' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
+        record: config,
         outcome: 'completed',
       },
     ]);
@@ -246,7 +246,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'correct' },
         id: id as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
+        record: config,
         ...(outcome ? { outcome } : {}),
       })),
     );
@@ -294,7 +294,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'correct' },
         id: 'visible' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
+        record: config,
         outcome: 'completed',
       },
       {
@@ -302,7 +302,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'process', tool: 'bash' },
         id: 'bash-process' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
-        agentConfig: processConfig,
+        record: processConfig,
         outcome: 'completed',
       },
       {
@@ -325,7 +325,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'correct' },
         id: 'root' as ExecutionId,
         timestamp: '2026-05-18T08:00:00.000Z',
-        agentConfig: config,
+        record: config,
         outcome: 'completed',
       },
       {
@@ -333,7 +333,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'correct' },
         id: 'delegated-child' as ExecutionId,
         timestamp: '2026-05-18T08:01:00.000Z',
-        agentConfig: config,
+        record: config,
         outcome: 'completed',
         parentExecutionId: 'root' as ExecutionId,
       },
@@ -359,7 +359,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'engineer' },
         id: 'team1' as ExecutionId,
         timestamp: '2026-05-18T10:00:00.000Z',
-        agentConfig: teamConfig,
+        record: teamConfig,
         outcome: 'cancelled',
       },
     ]);
@@ -394,7 +394,7 @@ describe('CLI history runtime', () => {
         identity: { kind: 'agent', agent: 'assistant' },
         id: 'chat1' as ExecutionId,
         timestamp: '2026-05-18T11:00:00.000Z',
-        agentConfig: chatConfig,
+        record: chatConfig,
         outcome: 'cancelled',
         description: 'Sketch a proof outline',
       },

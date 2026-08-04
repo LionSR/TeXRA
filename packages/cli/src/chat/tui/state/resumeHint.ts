@@ -79,7 +79,7 @@ function usageHasTokens(usage: ResumeUsageStats): boolean {
   );
 }
 
-export function sumResumeUsageStats(
+function sumResumeUsageStats(
   items: Iterable<ResumeUsageStats>,
 ): ResumeUsageStats {
   const usages = [...items];

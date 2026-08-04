@@ -2438,7 +2438,12 @@ if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
   // `subscribeStreamStatus()` and the run-fact subscription once per TUI
   // session.
-  HARNESS_DISPOSERS.push(attachTuiRunFactSubscription(defaultSession().events));
+  HARNESS_DISPOSERS.push(
+    attachTuiRunFactSubscription(
+      defaultSession().events,
+      defaultSession().snapshots,
+    ),
+  );
 }
 
 if (SHOW_WORKFLOW_TIMELINE) {

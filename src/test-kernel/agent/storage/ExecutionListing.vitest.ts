@@ -32,7 +32,7 @@ async function writeExecution(
 ): Promise<void> {
   const store = getExecutionStore(id);
   await store.writeMeta({ timestamp, parentExecutionId });
-  if (agentConfig) await store.writeConfig(agentConfig);
+  if (agentConfig) await store.writeRunRecord(agentConfig);
 }
 
 describe('execution listing normalization', () => {
@@ -92,7 +92,7 @@ describe('execution listing normalization', () => {
         id,
         timestamp: '2026-07-15T10:00:00.000Z',
         identity: { kind: 'agent', agent: 'assistant' },
-        agentConfig,
+        record: agentConfig,
       },
     ]);
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(1);
@@ -110,7 +110,7 @@ describe('execution listing normalization', () => {
       timestamp: '2026-07-15T09:00:00.000Z',
       identity: { kind: 'process', tool: 'assistant' },
     });
-    await processStore.writeConfig(config('assistant'));
+    await processStore.writeRunRecord(config('assistant'));
     await writeExecution(
       customBashAgentId,
       '2026-07-15T08:00:00.000Z',
@@ -128,12 +128,12 @@ describe('execution listing normalization', () => {
     expect(entries[0]).toMatchObject({
       kind: 'run',
       identity: { kind: 'process', tool: 'assistant' },
-      agentConfig: { agent: 'assistant' },
+      record: { agent: 'assistant' },
     });
     expect(entries[1]).toMatchObject({
       kind: 'run',
       identity: { kind: 'agent', agent: 'bash' },
-      agentConfig: { agent: 'bash' },
+      record: { agent: 'bash' },
     });
     expect(entries[2]).toEqual({
       kind: 'incomplete',
@@ -143,13 +143,38 @@ describe('execution listing normalization', () => {
     expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
   });
 
+  it('lists an honest non-agent record as kind run without fabricated fields', async () => {
+    const id = 'abe001' as ExecutionId;
+    const store = getExecutionStore(id);
+    await store.writeMeta({
+      timestamp: '2026-07-15T04:00:00.000Z',
+      identity: { kind: 'process', tool: 'bash' },
+    });
+    await store.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
+
+    const entries = await listExecutions();
+    const entry = entries.find((candidate) => candidate.id === id);
+    expect(entry).toMatchObject({
+      kind: 'run',
+      identity: { kind: 'process', tool: 'bash' },
+      record: { name: 'bash', instruction: 'ls -la' },
+    });
+    expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
+      'agentCategory',
+    );
+    expect(entry && 'record' in entry && entry.record).not.toHaveProperty(
+      'model',
+    );
+    expect(entries.filter(isUserVisibleExecution)).toHaveLength(0);
+  });
+
   it('heals unstamped legacy rows durably on the listing read', async () => {
     const legacyId = 'abc777' as ExecutionId;
     const store = getExecutionStore(legacyId);
     // Legacy row: pre-identity metadata, old enough to be safely classified
     // and written back. No stream-prefix evidence → native agent.
     await store.writeMeta({ timestamp: '2026-07-15T06:00:00.000Z' });
-    await store.writeConfig(config('assistant'));
+    await store.writeRunRecord(config('assistant'));
 
     const entries = await listExecutions();
     expect(entries).toEqual([
@@ -208,7 +233,7 @@ describe('execution listing normalization', () => {
         timestamp: '2026-07-15T06:00:00.000Z',
         streamId: cohort.streamId as StreamTabId,
       });
-      await store.writeConfig(config(cohort.agent));
+      await store.writeRunRecord(config(cohort.agent));
     }
 
     const entries = await listExecutions();
@@ -237,7 +262,7 @@ describe('execution listing normalization', () => {
       timestamp: '2026-07-15T06:00:00.000Z',
       terminalStatus: 'interrupted',
     });
-    await store.writeConfig(config('assistant'));
+    await store.writeRunRecord(config('assistant'));
 
     const entries = await listExecutions();
     const entry = entries.find((candidate) => candidate.id === id);
@@ -272,14 +297,14 @@ describe('execution listing normalization', () => {
       identity: { kind: 'agent', agent: 'orchestrator' },
     });
     // Persist the raw legacy bytes, bypassing the current input type.
-    await store.writeConfig(legacyTeamRunConfig as unknown as AgentConfig);
+    await store.writeRunRecord(legacyTeamRunConfig as unknown as AgentConfig);
 
     const entries = await listExecutions();
     const entry = entries.find((candidate) => candidate.id === id);
     expect(entry).toMatchObject({
       kind: 'run',
       identity: { kind: 'agent', agent: 'orchestrator' },
-      agentConfig: {
+      record: {
         agent: 'orchestrator',
         delegationAgentScope: {
           workflow: ['correct', 'polish'],

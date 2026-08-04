@@ -12,7 +12,7 @@ import {
   listExecutions,
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
-  type ExecutionListingEntry,
+  type AgentExecutionListingEntry,
   type ExecutionMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -511,9 +511,9 @@ export function formatCliHistoryDetailsText(
 }
 
 async function toCliHistoryEntry(
-  entry: Extract<ExecutionListingEntry, { kind: 'run' }>,
+  entry: AgentExecutionListingEntry,
 ): Promise<CliHistoryEntry> {
-  const config = entry.agentConfig;
+  const config = entry.record;
   const inputBasename = firstInputBasename(config);
   const resumability = await deriveResumability(entry.id);
   const resumeData = resumability.resumable

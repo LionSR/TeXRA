@@ -68,12 +68,6 @@ export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
 
 export const EXECUTION_META_SCHEMA_VERSION = 1;
 
-export const EXECUTION_STREAM_ID_SOURCE = {
-  REGISTRATION: 'registration',
-  LEGACY_RESOLUTION: 'legacyResolution',
-} as const;
-const ExecutionStreamIdSourceSchema = z.enum(EXECUTION_STREAM_ID_SOURCE);
-
 /** Execution metadata stored alongside config at launch time. */
 const ExecutionMetaBaseSchema = z.object({
   schemaVersion: z.literal(EXECUTION_META_SCHEMA_VERSION).prefault(1),
@@ -93,12 +87,11 @@ const ExecutionMetaBaseSchema = z.object({
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
   /**
-   * The transcript stream this execution's data lives under. Current runs
-   * write it at registration; it may be absent on historical executions.
+   * The transcript stream this execution's data lives under — the ONE
+   * execution→stream mapping, written at registration. A row without one has
+   * no persisted stream; nothing re-derives it from names or scans.
    */
   streamId: StreamTabIdSchema.optional(),
-  /** Distinguishes birth identity from a replaceable historical read cache. */
-  streamIdSource: ExecutionStreamIdSourceSchema.optional(),
 });
 
 export const ExecutionMetaSchema = ExecutionMetaBaseSchema;
@@ -114,22 +107,6 @@ export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 export type RegisteredExecutionMeta = ExecutionMeta & {
   identity: NonNullable<ExecutionMeta['identity']>;
 };
-
-/**
- * The execution's birth-registered stream identity (#9590 A1). Callers that
- * need birth provenance specifically (deletion admission's contradiction
- * check) use this; general execution→stream reads accept a stamped
- * `meta.streamId` of either provenance — a backfilled legacy resolution is
- * fixed at stamp time, not re-derived per read.
- */
-export function registeredStreamId(
-  meta: Pick<ExecutionMeta, 'streamId' | 'streamIdSource'> | null | undefined,
-): z.infer<typeof StreamTabIdSchema> | undefined {
-  return meta?.streamId !== undefined &&
-    meta.streamIdSource === EXECUTION_STREAM_ID_SOURCE.REGISTRATION
-    ? meta.streamId
-    : undefined;
-}
 
 export const STREAM_PHASE = {
   RUNNING: STREAM_STATUS.RUNNING,

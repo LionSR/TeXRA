@@ -108,7 +108,7 @@ describe('assembleTrace', () => {
     const executionId = 'exec-happy-path' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
@@ -122,8 +122,10 @@ describe('assembleTrace', () => {
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.trace.streamId).toBe(streamId);
-    expect(result.trace.config.agent).toBe('review');
-    expect(result.trace.config.model).toBe('sonnet46T');
+    expect(result.trace.config).toMatchObject({
+      agent: 'review',
+      model: 'sonnet46T',
+    });
     expect(result.trace.entries).toHaveLength(1);
     expect(result.trace.entries[0]).toMatchObject({
       id: 'entry-1',
@@ -140,7 +142,7 @@ describe('assembleTrace', () => {
 
   it('returns streamLogs_missing when a config exists but stream logs were never persisted', async () => {
     const executionId = 'exec-no-logs' as ExecutionId;
-    await getExecutionStore(executionId).writeConfig(config());
+    await getExecutionStore(executionId).writeRunRecord(config());
 
     const result = await assembleTrace(executionId);
 
@@ -150,7 +152,7 @@ describe('assembleTrace', () => {
   it('reports candidate-only sidecars as ambiguous without choosing the derived fallback', async () => {
     const executionId = 'aaa444aaa444' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
@@ -196,7 +198,7 @@ describe('assembleTrace', () => {
   it('does not classify children-only associations as ambiguous or choose a fallback', async () => {
     const executionId = 'aaa445aaa445' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const firstChild = `bash@tool#${executionId}` as StreamTabId;
@@ -240,7 +242,7 @@ describe('assembleTrace', () => {
       agent: 'orchestrator',
       model: 'deepseekT',
     });
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
@@ -268,7 +270,7 @@ describe('assembleTrace', () => {
   it('returns a null terminalStatus when meta has no recorded outcome', async () => {
     const executionId = 'exec-no-outcome' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
     });

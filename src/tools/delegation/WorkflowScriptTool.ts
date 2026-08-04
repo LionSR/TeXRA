@@ -368,12 +368,27 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     );
 
     try {
-      await registerExecution(runExecutionId, runConfig, meta.name, {
-        streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
-        identity: { kind: 'multiAgentWorkflow', workflowName: meta.name },
-        parentExecutionId: runScope.executionId,
-        description: childStreamDescription(meta.description),
-      });
+      // The durable record states only what the container run has: the
+      // workflow's name and the real model its agent steps will use. The
+      // fabricated AgentConfig above feeds the ephemeral live wire only.
+      await registerExecution(
+        runExecutionId,
+        {
+          name: meta.name,
+          instruction: `Workflow script '${meta.name}'`,
+          model: runModel,
+          ...(runScope.workingDirectory !== undefined && {
+            workingDirectory: runScope.workingDirectory,
+          }),
+        },
+        meta.name,
+        {
+          streamId: getChildStreamId(runExecutionId, STREAM_PREFIX),
+          identity: { kind: 'multiAgentWorkflow', workflowName: meta.name },
+          parentExecutionId: runScope.executionId,
+          description: childStreamDescription(meta.description),
+        },
+      );
     } catch (error) {
       // A relaunch whose prior run is still in flight shares this deterministic
       // id: the fresh-lease acquisition fails closed rather than starting a

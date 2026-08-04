@@ -1182,7 +1182,7 @@ describe('DesktopProgressBridge', () => {
       executionId,
     );
     const { getExecutionStore } = await import('@agent/storage');
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
     await firstSnapshots.flush();
     await firstSession.flushArtifacts();
     first.dispose();
@@ -3902,7 +3902,7 @@ describe('DesktopProgressBridge', () => {
         owner.processSession.transcripts.ensureStream(childStreamId);
         await owner
           .getExecutionStore(childExecutionId)
-          .writeConfig(childConfig);
+          .writeRunRecord(childConfig);
         const { handle: childHandle } = owner.createHandle({
           executionId: childExecutionId,
           childStreamId,

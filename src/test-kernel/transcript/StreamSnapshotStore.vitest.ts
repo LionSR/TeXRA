@@ -270,7 +270,7 @@ describe('StreamSnapshotStore', () => {
       toolUseTokens: 4,
     };
 
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
     // Emitter contract for `updateStreamDescription` (#9590 A4/Stage 6): the
     // authority write to `ExecutionMeta.description` lands before the event.
     await getExecutionStore(executionId).writeMeta({
@@ -980,7 +980,7 @@ describe('StreamSnapshotStore', () => {
     const oldExecutionId = 'ee66aa77' as ExecutionId;
     const newExecutionId = 'ff77bb88' as ExecutionId;
     const oldExecutionStore = getExecutionStore(oldExecutionId);
-    await oldExecutionStore.writeConfig(toolUseConfig('old-search'));
+    await oldExecutionStore.writeRunRecord(toolUseConfig('old-search'));
     await oldExecutionStore.writeMeta({
       timestamp: new Date(0).toISOString(),
       description: 'Old authority label',
@@ -1015,7 +1015,7 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     const executionId = 'aa77cc88' as ExecutionId;
     const executionStore = getExecutionStore(executionId);
-    await executionStore.writeConfig(toolUseConfig());
+    await executionStore.writeRunRecord(toolUseConfig());
     await executionStore.writeMeta({
       timestamp: new Date(0).toISOString(),
       description: 'Captured authority label',
@@ -1049,7 +1049,7 @@ describe('StreamSnapshotStore', () => {
   it('hydrates a current no-mirror description during first lazy seed', async () => {
     await installPlatform();
     const executionId = 'bb88dd99' as ExecutionId;
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
       description: 'Lazy authority label',
@@ -1074,7 +1074,7 @@ describe('StreamSnapshotStore', () => {
     const detach = store.attachSessionEvents(events);
     const executionId = 'aa55ff66' as ExecutionId;
     const runConfig = toolUseConfig();
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
 
     events.emit({
       scope: 'run',
@@ -1138,7 +1138,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
-    await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
+    await getExecutionStore(oldExecutionId).writeRunRecord(oldConfig);
 
     const store = new StreamSnapshotStore();
     const wasRuntimeUpdateInjected = injectDuringExecutionConfigHydration(
@@ -1169,7 +1169,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await getExecutionStore(executionId).writeConfig(persisted);
+    await getExecutionStore(executionId).writeRunRecord(persisted);
 
     const store = new StreamSnapshotStore();
     // A model switch rewrites the execution config and re-emits `run.config`
@@ -1195,7 +1195,7 @@ describe('StreamSnapshotStore', () => {
       kind: 'multiAgentWorkflow',
       workflowName: 'workflow-script',
     } as const;
-    await getExecutionStore(executionId).writeConfig(runConfig);
+    await getExecutionStore(executionId).writeRunRecord(runConfig);
 
     const store = new StreamSnapshotStore();
     snapshotFacts(store).setRunStart({
@@ -1232,7 +1232,7 @@ describe('StreamSnapshotStore', () => {
     );
     await store.flush();
 
-    await getExecutionStore(foreignExecutionId).writeConfig(foreignConfig);
+    await getExecutionStore(foreignExecutionId).writeRunRecord(foreignConfig);
     await getExecutionStore(foreignExecutionId).writeMeta({
       timestamp: new Date(0).toISOString(),
       identity: { kind: 'agent', agent: 'foreign-search' },
@@ -1256,7 +1256,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await getExecutionStore(executionId).writeConfig(
+    await getExecutionStore(executionId).writeRunRecord(
       toolUseConfig('search', 'deepseekproT'),
     );
 
@@ -1266,7 +1266,7 @@ describe('StreamSnapshotStore', () => {
 
     // The model switch runs in another host: it rewrites the execution config
     // for the SAME execution and this store never sees the `run.config` event.
-    await getExecutionStore(executionId).writeConfig(
+    await getExecutionStore(executionId).writeRunRecord(
       toolUseConfig('search', 'kimi26T'),
     );
     await store.load([STREAM]);
@@ -1282,7 +1282,7 @@ describe('StreamSnapshotStore', () => {
     // with the stamper's rule instead of leaving it undefined.
     const legacyExecutionId = 'abc123' as ExecutionId;
     const legacyConfig = toolUseConfig('legacy-search');
-    await getExecutionStore(legacyExecutionId).writeConfig(legacyConfig);
+    await getExecutionStore(legacyExecutionId).writeRunRecord(legacyConfig);
     await getExecutionStore(legacyExecutionId).writeMeta({
       timestamp: new Date(0).toISOString(),
     });
@@ -1300,7 +1300,7 @@ describe('StreamSnapshotStore', () => {
     // together to the new execution's durable record.
     const executionId = 'def456' as ExecutionId;
     const handoffConfig = toolUseConfig('handoff-search');
-    await getExecutionStore(executionId).writeConfig(handoffConfig);
+    await getExecutionStore(executionId).writeRunRecord(handoffConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: new Date(0).toISOString(),
       identity: { kind: 'agent', agent: 'handoff-search' },
@@ -1323,7 +1323,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId,
     });
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
@@ -1346,7 +1346,7 @@ describe('StreamSnapshotStore', () => {
     await writeMetaFile(STREAM, {
       executionId: oldExecutionId,
     });
-    await getExecutionStore(oldExecutionId).writeConfig(oldConfig);
+    await getExecutionStore(oldExecutionId).writeRunRecord(oldConfig);
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
@@ -1383,7 +1383,7 @@ describe('StreamSnapshotStore', () => {
         executionId,
       }),
       writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
-      getExecutionStore(executionId).writeConfig(toolUseConfig()),
+      getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -1421,7 +1421,7 @@ describe('StreamSnapshotStore', () => {
       writeStreamFile(STREAM, 'missingOutputs.json', {
         '0': ['current.tex'],
       }),
-      getExecutionStore(executionId).writeConfig(toolUseConfig()),
+      getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();
@@ -2281,7 +2281,7 @@ describe('StreamSnapshotStore', () => {
     snapshotFacts(writer).setRunConfig(STREAM, toolUseConfig(), executionId);
     snapshotFacts(writer).setPlan(STREAM, PLAN);
     await writer.flush();
-    await getExecutionStore(executionId).writeConfig(toolUseConfig());
+    await getExecutionStore(executionId).writeRunRecord(toolUseConfig());
 
     const store = new StreamSnapshotStore();
     const deletionError = new Error('stream data directory is locked');
@@ -2324,7 +2324,7 @@ describe('StreamSnapshotStore', () => {
       writeStreamFile(STREAM, 'missingOutputs.json', {
         '0': ['stale.tex'],
       }),
-      getExecutionStore(executionId).writeConfig(toolUseConfig()),
+      getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
     const store = new StreamSnapshotStore();

@@ -328,7 +328,7 @@ export async function runToolUseFlow<C = unknown>(
     const nextAgentConfig = { ...services.config, model };
     try {
       await persistModelSwitch(model);
-      await kv.writeConfig(nextAgentConfig);
+      await kv.writeRunRecord(nextAgentConfig);
     } catch (error) {
       nextHandler.dispose();
       throw error;

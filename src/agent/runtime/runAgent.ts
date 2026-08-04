@@ -100,7 +100,7 @@ export async function runAgent(
 
   if (shouldRegister) {
     await registerExecution(executionId, config, config.agent, {
-      streamId: getStreamTabId(config.agent, config.model, { executionId }),
+      streamId: getStreamTabId(config.agent, { executionId }),
       identity: { kind: 'agent', agent: config.agent },
     });
   } else {

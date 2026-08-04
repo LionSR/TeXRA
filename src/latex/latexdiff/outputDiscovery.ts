@@ -10,14 +10,14 @@ import * as path from 'node:path';
 // Local imports
 import {
   getExecutionStore,
+  isAgentRunEntry,
   listExecutions,
-  type ExecutionListingEntry,
+  type AgentExecutionListingEntry,
 } from '@agent/storage';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
-  registeredStreamId,
   type ExecutionId,
   type FileLocation,
   type OutputFileInfo,
@@ -220,35 +220,30 @@ export async function discoverLatestExecutionOutputs(query: {
     const normalizedInput = path.normalize(query.inputFile);
 
     const candidates = toNewestFirstByTimestamp(
-      executions.filter(
-        (entry): entry is Extract<ExecutionListingEntry, { kind: 'run' }> => {
-          if (
-            entry.kind !== 'run' ||
-            entry.identity.kind !== 'agent' ||
-            entry.agentConfig.agent !== query.agent ||
-            entry.agentConfig.model !== query.model
-          ) {
-            return false;
-          }
-          const entryInput = entry.agentConfig.inputFiles[0];
-          return (
-            typeof entryInput === 'string' &&
-            path.normalize(entryInput) === normalizedInput
-          );
-        },
-      ),
+      executions.filter((entry): entry is AgentExecutionListingEntry => {
+        if (
+          !isAgentRunEntry(entry) ||
+          entry.record.agent !== query.agent ||
+          entry.record.model !== query.model
+        ) {
+          return false;
+        }
+        const entryInput = entry.record.inputFiles[0];
+        return (
+          typeof entryInput === 'string' &&
+          path.normalize(entryInput) === normalizedInput
+        );
+      }),
       (entry) => entry.timestamp,
     );
 
     const snapshots = new StreamSnapshotStore();
     for (const candidate of candidates) {
-      // The execution's registered stream identity addresses its snapshot
-      // directly; identity is never rebuilt from agent/model configuration
-      // (#9590 A1). Legacy records without registration provenance go
-      // straight to the run-directory scan below.
-      const streamId = registeredStreamId(
-        await getExecutionStore(candidate.id).readMeta(),
-      );
+      // The stream stamped on execution metadata addresses its snapshot
+      // directly; identity is never rebuilt from agent/model configuration.
+      // Records without one go straight to the run-directory scan below.
+      const streamId = (await getExecutionStore(candidate.id).readMeta())
+        ?.streamId;
       if (streamId !== undefined) {
         const rounds = await snapshots.readOutputFiles(streamId);
         if (rounds && Object.keys(rounds).length > 0) {
@@ -268,7 +263,7 @@ export async function discoverLatestExecutionOutputs(query: {
       const scanned = await scanRunDirForOutputs(
         candidate.id,
         query.inputFile,
-        candidate.agentConfig.inputFiles.slice(1),
+        candidate.record.inputFiles.slice(1),
       );
       if (scanned) {
         return { executionId: candidate.id, rounds: scanned };

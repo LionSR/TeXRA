@@ -67,7 +67,7 @@ describe('trace-viewer TraceDataSchema', () => {
     const executionId = 'abc12345' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
 
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
@@ -120,9 +120,11 @@ describe('trace-viewer TraceDataSchema', () => {
 
     const parsed = TraceDataSchema.parse(trace({ config: legacyConfig }));
 
-    expect(parsed.config.agent).toBe('correct');
-    expect(parsed.config.model).toBe(DEFAULT_AGENT_MODEL);
-    expect(parsed.config.instruction).toBe('');
+    expect(parsed.config).toMatchObject({
+      agent: 'correct',
+      model: DEFAULT_AGENT_MODEL,
+      instruction: '',
+    });
   });
 
   it('normalizes legacy execution metadata', () => {

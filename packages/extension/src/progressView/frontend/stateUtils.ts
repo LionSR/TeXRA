@@ -1,6 +1,11 @@
 // Shared imports
 import { create } from 'mutative';
-import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
+import {
+  sumUsageStats,
+  type OutputFileInfo,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
 import {
   isToolUseState,
   isWorkflowState,
@@ -61,6 +66,27 @@ export function hasOutputFiles(
   filesByRound: Record<string, OutputFileInfo[]>,
 ): boolean {
   return Object.values(filesByRound).some((files) => files.length > 0);
+}
+
+/**
+ * Session-total usage for one stream, summed over its per-run map. Memoized
+ * by the map's identity: Mutative's structural sharing keeps `runUsage`
+ * reference-stable across unrelated state ticks, so both stream-content
+ * components hand the usage panel the same total object instead of re-summing
+ * (and re-rendering) on every render.
+ */
+const runUsageTotals = new WeakMap<
+  Record<string, TokenUsageStats>,
+  TokenUsageStats
+>();
+export function totalRunUsage(
+  runUsage: Record<string, TokenUsageStats>,
+): TokenUsageStats {
+  const cached = runUsageTotals.get(runUsage);
+  if (cached) return cached;
+  const total = sumUsageStats(Object.values(runUsage));
+  runUsageTotals.set(runUsage, total);
+  return total;
 }
 
 // =============================================================================

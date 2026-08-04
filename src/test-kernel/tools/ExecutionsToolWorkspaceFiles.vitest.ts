@@ -53,6 +53,9 @@ vi.mock('@agent/storage', async () => {
     ...actual,
     getExecutionStore: vi.fn(() => ({
       readConfig: mocks.readConfig,
+      // The tool reads the record; this suite's fixtures are all agent-arm,
+      // so the record IS the config.
+      readRunRecord: mocks.readConfig,
       readMeta: mocks.readMeta,
       readChildren: mocks.readChildren,
       readReport: mocks.readReport,

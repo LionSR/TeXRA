@@ -7,6 +7,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
+  sumUsageStats,
   type ClearMissingOutputsPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
@@ -20,7 +21,6 @@ import {
   focusStream,
   getCliStateGeneration,
   patchStream,
-  recordMissingOutputsReset,
   removeStream,
   registerCliStateResetHook,
   type StreamStage,
@@ -30,19 +30,26 @@ import {
   isChildStreamRemoved,
   setParentStream,
 } from './childExecutions';
-import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
+import type { StreamArtifactReader } from './subscribeStreamArtifacts';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
 
-function applyUsageUpdate(payload: UpdateStreamUsagePayload): void {
+function applyUsageUpdate(
+  snapshots: StreamArtifactReader,
+  payload: UpdateStreamUsagePayload,
+): void {
+  // `usage` is a latest-value snapshot (the context-window gauge reads it);
+  // the cumulative total is read back from the store's per-run accumulator
+  // instead of being summed here a second time.
+  const runUsage = [...snapshots.getRunUsage(payload.streamId).values()];
   patchStream(payload.streamId, (s) => ({
     ...s,
     usage: payload.usage,
-    cumulativeUsage: sumResumeUsageStats(
-      s.cumulativeUsage ? [s.cumulativeUsage, payload.usage] : [payload.usage],
-    ),
+    cumulativeUsage: runUsage.length
+      ? sumUsageStats(runUsage)
+      : s.cumulativeUsage,
   }));
 }
 
@@ -115,17 +122,19 @@ function applyStage(streamId: StreamTabId, stage: StreamStage): void {
   );
 }
 
-function applyClearMissingOutputs({
-  streamId,
-}: ClearMissingOutputsPayload): void {
-  // The empty map is a destructive reset, not a round patch. Record its
-  // source revision even when the current map is already empty so a cold
-  // read that started before this fact cannot restore older disk warnings.
-  recordMissingOutputsReset(streamId);
+function applyClearMissingOutputs(
+  snapshots: StreamArtifactReader,
+  { streamId }: ClearMissingOutputsPayload,
+): void {
+  // The store applies the reset first (its subscription attaches before this
+  // one), including the ordering against a still-unseeded stream — see its
+  // overlay `reset` flag — so re-reading yields the post-clear state.
+  const missingOutputsByRound = snapshots.getMissingOutputs(streamId);
   patchStream(streamId, (slice) =>
-    Object.keys(slice.missingOutputsByRound).length === 0
+    Object.keys(slice.missingOutputsByRound).length === 0 &&
+    Object.keys(missingOutputsByRound).length === 0
       ? slice
-      : { ...slice, missingOutputsByRound: {} },
+      : { ...slice, missingOutputsByRound },
   );
 }
 
@@ -133,6 +142,7 @@ type TuiRunFactHandlers = {
   readonly [K in AgentEvent['type']]?: (
     event: Extract<AgentEvent, { type: K }>,
     fallbackStreamId: StreamTabId,
+    snapshots: StreamArtifactReader,
   ) => void;
 };
 
@@ -145,7 +155,8 @@ const TUI_RUN_FACT_HANDLERS = {
   'run.start': (event) =>
     patchStream(event.streamId, (s) => ({ ...s, identity: event.identity })),
   'run.config': (event) => applyRunConfig(event.streamId, event.config),
-  usage: (event) => applyUsageUpdate(event.payload),
+  usage: (event, _fallbackStreamId, snapshots) =>
+    applyUsageUpdate(snapshots, event.payload),
   'conversation.progress': (event, fallbackStreamId) =>
     patchStream(fallbackStreamId, (s) => ({
       ...s,
@@ -168,26 +179,24 @@ const TUI_RUN_FACT_HANDLERS = {
       GOAL_PAUSED_TRANSCRIPT_NOTICE,
       event.streamId,
     ),
-  addOutputFiles: (event) =>
+  // Artifact facts are triggers, not payloads to accumulate: the shared
+  // snapshot store already folded the fact in (its subscription attaches
+  // first), so the slice re-reads the store's accumulated rounds — mirroring
+  // the extension's ProgressFactApplier.
+  addOutputFiles: (event, _fallbackStreamId, snapshots) =>
     patchStream(event.streamId, (s) => ({
       ...s,
-      outputFilesByRound: { ...s.outputFilesByRound, ...event.filesByRound },
+      outputFilesByRound: snapshots.getOutputFiles(event.streamId),
     })),
-  updateMissingOutputs: (event) =>
+  updateMissingOutputs: (event, _fallbackStreamId, snapshots) =>
     patchStream(event.streamId, (s) => ({
       ...s,
-      missingOutputsByRound: {
-        ...s.missingOutputsByRound,
-        ...event.filesByRound,
-      },
+      missingOutputsByRound: snapshots.getMissingOutputs(event.streamId),
     })),
-  updateCompileFailures: (event) =>
+  updateCompileFailures: (event, _fallbackStreamId, snapshots) =>
     patchStream(event.streamId, (s) => ({
       ...s,
-      compileFailuresByRound: {
-        ...s.compileFailuresByRound,
-        ...event.filesByRound,
-      },
+      compileFailuresByRound: snapshots.getCompileFailures(event.streamId),
     })),
   'stage.start': (event, fallbackStreamId) => {
     if (event.kind === 'phase') {
@@ -237,8 +246,16 @@ function refreshQueuedFollowUps(
   });
 }
 
+/**
+ * Project session/run facts into the TUI's stream slices. `snapshots` must be
+ * the `StreamSnapshotStore` already attached to the same hub (the session
+ * attaches it at construction, before this subscription), so artifact and
+ * usage facts can re-read the store's accumulated state instead of keeping a
+ * second accumulator here.
+ */
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
+  snapshots: StreamArtifactReader,
 ): () => void {
   let generation = getCliStateGeneration();
   const detachResetHook = registerCliStateResetHook(() => {
@@ -284,7 +301,7 @@ export function attachTuiRunFactSubscription(
         case 'status':
           return;
         case 'clearMissingOutputs':
-          applyClearMissingOutputs(fact.payload);
+          applyClearMissingOutputs(snapshots, fact.payload);
           return;
       }
       assertNever(fact, 'Unhandled TUI session fact');
@@ -302,8 +319,9 @@ export function attachTuiRunFactSubscription(
       const handle = TUI_RUN_FACT_HANDLERS[event.type] as (
         event: TuiRunFactEvent,
         fallbackStreamId: StreamTabId,
+        snapshots: StreamArtifactReader,
       ) => void;
-      handle(event, sessionEvent.streamId);
+      handle(event, sessionEvent.streamId, snapshots);
     },
     { scope: 'run', types: TUI_RUN_FACT_TYPES },
   );

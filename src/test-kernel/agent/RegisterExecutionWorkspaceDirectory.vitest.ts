@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
   readMeta: vi.fn(),
   readResultMeta: vi.fn(),
-  writeConfig: vi.fn(),
+  writeRunRecord: vi.fn(),
   writeMeta: vi.fn(),
   writeResultMeta: vi.fn(),
 }));
@@ -70,14 +70,14 @@ describe('execution lifecycle', () => {
       delete: mocks.delete,
       readMeta: mocks.readMeta,
       readResultMeta: mocks.readResultMeta,
-      writeConfig: mocks.writeConfig,
+      writeRunRecord: mocks.writeRunRecord,
       writeMeta: mocks.writeMeta,
       writeResultMeta: mocks.writeResultMeta,
     });
     mocks.readMeta.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.delete.mockResolvedValue(undefined);
-    mocks.writeConfig.mockResolvedValue(undefined);
+    mocks.writeRunRecord.mockResolvedValue(undefined);
     mocks.writeMeta.mockResolvedValue(undefined);
     mocks.writeResultMeta.mockResolvedValue(undefined);
   });
@@ -89,7 +89,7 @@ describe('execution lifecycle', () => {
       identity: { kind: 'agent', agent: 'chat' },
     });
 
-    expect(mocks.writeConfig).toHaveBeenCalledWith({
+    expect(mocks.writeRunRecord).toHaveBeenCalledWith({
       ...baseConfig,
       workingDirectory: '/workspace/root',
     });
@@ -110,7 +110,7 @@ describe('execution lifecycle', () => {
 
   it('rolls back lease ownership when fresh registration fails', async () => {
     const executionId = 'abc124' as ExecutionId;
-    mocks.writeConfig.mockRejectedValueOnce(new Error('config write failed'));
+    mocks.writeRunRecord.mockRejectedValueOnce(new Error('config write failed'));
 
     await expect(
       registerExecution(executionId, baseConfig, 'chat', {

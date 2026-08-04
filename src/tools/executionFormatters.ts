@@ -1,5 +1,8 @@
 import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
@@ -24,10 +27,12 @@ export type ExecutionDisplayCategory =
 
 export function executionDisplayCategory(
   identity: RunIdentity | undefined,
-  config: Pick<AgentConfig, 'agentCategory'> | null | undefined,
+  record: RunRecord | null | undefined,
 ): ExecutionDisplayCategory | undefined {
-  if (!identity) return config?.agentCategory;
-  return identity.kind === 'agent' ? config?.agentCategory : identity.kind;
+  const agentCategory =
+    record && isAgentRunRecord(record) ? record.agentCategory : undefined;
+  if (!identity) return agentCategory;
+  return identity.kind === 'agent' ? agentCategory : identity.kind;
 }
 
 function listingDisplay(entry: ExecutionListingEntry): {
@@ -36,12 +41,21 @@ function listingDisplay(entry: ExecutionListingEntry): {
   category: string | undefined;
 } {
   switch (entry.kind) {
-    case 'run':
+    case 'run': {
+      // Honest non-agent records carry a model only when a real one backs
+      // the run; a legacy fabricated AgentConfig on a non-agent identity
+      // stays suppressed.
+      const model = isAgentRunRecord(entry.record)
+        ? entry.identity.kind === 'agent'
+          ? entry.record.model
+          : null
+        : (entry.record.model ?? null);
       return {
         agent: runIdentityName(entry.identity),
-        model: entry.identity.kind === 'agent' ? entry.agentConfig.model : null,
-        category: executionDisplayCategory(entry.identity, entry.agentConfig),
+        model,
+        category: executionDisplayCategory(entry.identity, entry.record),
       };
+    }
     case 'incomplete':
       return { agent: 'unknown', model: 'unknown', category: undefined };
   }

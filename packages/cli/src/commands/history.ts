@@ -151,14 +151,6 @@ export async function runHistoryExport(
             'no output, or only proven child transcripts may remain).',
         );
         break;
-      case 'streamId_ambiguous':
-        writeTextStderr(
-          `Execution ${id} has multiple associated transcript sidecars ` +
-            `(${traceResult.candidateStreamIds.join(', ')}), but no canonical ` +
-            'trace timeline can be established, so HTML trace export was ' +
-            'not written.',
-        );
-        break;
       default:
         assertNever(traceResult, 'Unhandled trace assembly result');
     }

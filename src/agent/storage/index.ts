@@ -36,12 +36,14 @@ export {
   writeSessionDescription,
 } from './executionLifecycle';
 export {
+  type AgentExecutionListingEntry,
   type ExecutionListingEntry,
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
   listExecutions,
   deleteExecution,
   deleteAllExecutions,
+  isAgentRunEntry,
   isUserVisibleExecution,
   deriveLegacyIdentity,
 } from './executionListing';

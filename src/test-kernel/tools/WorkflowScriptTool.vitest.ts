@@ -325,11 +325,13 @@ describe('WorkflowScriptTool', () => {
     // still works (#8712).
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionId,
-      expect.objectContaining({
-        agentCategory: 'workflow',
-        agent: 'correct',
-        agentSource: 'builtInWorkflow',
-      }),
+      // The durable record is honest: workflow name, launch summary, and the
+      // real delegation model — no fabricated agent identity or category.
+      {
+        name: 'tool-test',
+        instruction: "Workflow script 'tool-test'",
+        model: 'parent-model',
+      },
       'tool-test',
       {
         streamId: `workflow-script#${runExecutionId}`,
@@ -647,7 +649,7 @@ describe('WorkflowScriptTool', () => {
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
-  it('validates and persists files bound to the workflow run', async () => {
+  it('validates files and binds them to the live workflow run stream', async () => {
     const files = {
       inputFiles: ['paper.tex'],
       contextFiles: ['references.bib'],
@@ -656,20 +658,18 @@ describe('WorkflowScriptTool', () => {
     const result = await callTool({ files });
 
     expect(result.status).toBe('executed');
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    // The durable record stays honest (no file lists); the binding rides the
+    // checkpoint and the live stream config the agent steps consume.
+    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
       runExecutionIdFor('tool-test'),
+      expect.anything(),
       expect.objectContaining({
-        inputFiles: ['paper.tex'],
-        contextFiles: ['references.bib'],
-        mediaFiles: ['figure.pdf'],
+        config: expect.objectContaining({
+          inputFiles: ['paper.tex'],
+          contextFiles: ['references.bib'],
+          mediaFiles: ['figure.pdf'],
+        }),
       }),
-      'tool-test',
-      {
-        streamId: `workflow-script#${runExecutionIdFor('tool-test')}`,
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'tool-test' },
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
     );
   });
 
@@ -719,20 +719,16 @@ describe('WorkflowScriptTool', () => {
     const result = await callTool({ script: resumeScript });
 
     expect(result.status).toBe('executed');
-    expect(mocks.registerExecution).toHaveBeenCalledWith(
+    expect(mocks.createRehydratedChildStream).toHaveBeenCalledWith(
       runExecutionIdFor('resume'),
+      expect.anything(),
       expect.objectContaining({
-        inputFiles: ['paper.tex'],
-        contextFiles: ['references.bib'],
-        mediaFiles: ['figure.pdf'],
+        config: expect.objectContaining({
+          inputFiles: ['paper.tex'],
+          contextFiles: ['references.bib'],
+          mediaFiles: ['figure.pdf'],
+        }),
       }),
-      'resume',
-      {
-        streamId: `workflow-script#${runExecutionIdFor('resume')}`,
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'resume' },
-        parentExecutionId: executionId,
-        description: 'tests the workflow script tool',
-      },
     );
   });
 

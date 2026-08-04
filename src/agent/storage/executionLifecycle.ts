@@ -6,12 +6,11 @@
  * with no cross-store mutations or error-swallowing policies.
  */
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { flowKey } from '@agent/node/persistedFlow';
 
 import * as logger from '@logger/logUtils';
 import {
-  EXECUTION_STREAM_ID_SOURCE,
   RUN_OUTCOME,
   type ExecutionId,
   type ExecutionMeta,
@@ -32,10 +31,10 @@ import {
 
 const CHANNEL = 'ExecutionLifecycle';
 
-function pinExecutionWorkingDirectory(config: AgentConfig): AgentConfig {
+function pinExecutionWorkingDirectory(record: RunRecord): RunRecord {
   const workingDirectory =
-    config.workingDirectory?.trim() || WorkspaceFS.getPath()?.trim();
-  return workingDirectory ? { ...config, workingDirectory } : config;
+    record.workingDirectory?.trim() || WorkspaceFS.getPath()?.trim();
+  return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
 /** Return whether readable persisted metadata directly links to a parent. */
@@ -76,7 +75,7 @@ function enqueueMetaUpdate(
  */
 export async function registerExecution(
   executionId: ExecutionId,
-  config: AgentConfig,
+  record: RunRecord,
   agentName: string,
   options: {
     readonly streamId: StreamTabId;
@@ -104,15 +103,14 @@ export async function registerExecution(
         schemaVersion: 1,
         timestamp,
         streamId,
-        streamIdSource: EXECUTION_STREAM_ID_SOURCE.REGISTRATION,
         identity,
         parentExecutionId,
         ...(description ? { description } : {}),
       };
-      const persistedConfig = pinExecutionWorkingDirectory(config);
+      const persistedRecord = pinExecutionWorkingDirectory(record);
 
       const writes: Promise<void>[] = [
-        store.writeConfig(persistedConfig),
+        store.writeRunRecord(persistedRecord),
         store.writeMeta(meta),
       ];
       if (parentExecutionId) {
@@ -303,17 +301,3 @@ export async function writeSessionDescription(
   );
 }
 
-/** Persist a confirmed stream identity for a pre-streamId execution record. */
-export async function writeLegacyExecutionStreamId(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): Promise<void> {
-  await persistSupplementaryMetaFieldsBestEffort(
-    executionId,
-    {
-      streamId,
-      streamIdSource: EXECUTION_STREAM_ID_SOURCE.LEGACY_RESOLUTION,
-    },
-    'legacy execution stream id',
-  );
-}

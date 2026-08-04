@@ -100,7 +100,7 @@ describe('tool status formatting', () => {
       id: '16c0f3f748e4',
       timestamp: '2026-05-15T23:42:06.000Z',
       parentExecutionId: 'fcf5150d37c6',
-      agentConfig: AgentConfigSchema.parse({
+      record: AgentConfigSchema.parse({
         agent: 'bash',
         model: 'gemini31p',
         instruction: 'ls',

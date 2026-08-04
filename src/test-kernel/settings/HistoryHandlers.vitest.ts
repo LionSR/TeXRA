@@ -30,7 +30,7 @@ const toolUseExecution = {
   identity: { kind: 'agent', agent: 'chat' },
   id: 'abc123',
   timestamp: '2026-05-31T12:00:00.000Z',
-  agentConfig: {
+  record: {
     agent: 'chat',
     model: 'deepseekT',
     instruction: 'Check a proof.',
@@ -80,7 +80,7 @@ describe('settings history handlers', () => {
         identity: { kind: 'process', tool: 'bash' },
         id: 'bash-process',
         timestamp: '2026-05-31T12:01:00.000Z',
-        agentConfig: {
+        record: {
           agent: 'bash',
           model: 'deepseekT',
           instruction: 'ls -la',

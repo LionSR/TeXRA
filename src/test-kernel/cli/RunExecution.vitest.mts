@@ -461,7 +461,7 @@ describe('executeCliRequest', () => {
       const { defaultSession } = await import('@agent/runtime/SessionHandle');
       const config = AgentConfigSchema.parse(toolUseConfig());
 
-      await getExecutionStore(executionId).writeConfig(config);
+      await getExecutionStore(executionId).writeRunRecord(config);
       // Emitter contract (#9590 A4/Stage 6): the authority write to
       // `ExecutionMeta.description` lands before the display event below.
       await getExecutionStore(executionId).writeMeta({

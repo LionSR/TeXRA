@@ -125,7 +125,7 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it('returns streamLogs_missing when config exists but no transcript was persisted', async () => {
     const templatePath = await writeTemplate();
-    await getExecutionStore('exec-missing-logs' as ExecutionId).writeConfig(
+    await getExecutionStore('exec-missing-logs' as ExecutionId).writeRunRecord(
       config(),
     );
 
@@ -141,7 +141,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
     const executionId = 'aaa555aaa555' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const first = `orchestrator@old#${executionId}` as StreamTabId;
     const second = `orchestrator@new#${executionId}` as StreamTabId;
@@ -159,7 +159,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
     const executionId = 'aaa556aaa556' as ExecutionId;
     const executionConfig = config();
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
 
     const parent = 'orchestrator@model#parent' as StreamTabId;
     const snapshots = new StreamSnapshotStore();
@@ -185,7 +185,7 @@ describe('ChatExportController.exportAsHtml', () => {
     const templatePath = await writeTemplate();
     const executionId = 'exec-full' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
-    await getExecutionStore(executionId).writeConfig(executionConfig);
+    await getExecutionStore(executionId).writeRunRecord(executionConfig);
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
@@ -213,7 +213,7 @@ describe('ChatExportController.exportAsHtml', () => {
 
   it('throws when the standalone template bundle is missing', async () => {
     const executionId = 'exec-missing-template' as ExecutionId;
-    await getExecutionStore(executionId).writeConfig(config());
+    await getExecutionStore(executionId).writeRunRecord(config());
     await persistTranscriptEntry(executionId, 'orchestrator', 'deepseekT');
 
     await expect(

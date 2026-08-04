@@ -28,6 +28,7 @@ import {
   type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
+  type TaskGroup,
 } from '@shared/schemas';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
@@ -36,7 +37,7 @@ import {
 import { normalizeToolUseData } from '@shared/toolUse';
 import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -52,6 +53,7 @@ import {
   getCliStateGeneration,
   isCliStreamRetired,
   patchStream,
+  registerCliStateResetHook,
   setTransientNotice,
   streams,
   type ConversationEntry,
@@ -664,6 +666,53 @@ function sortTranscriptCandidatesIfNeeded(
   return candidates;
 }
 
+/**
+ * Incremental task-group projection state, kept beside the slice: the
+ * upsert engine's mutable working set plus the immutable `snapshot` the
+ * slice holds. `applied` remembers the last log-entry object applied per
+ * group row — `StreamLog` replaces the entry object on every update
+ * (including the in-place GROUP_START → GROUP_END upsert at stage end), so
+ * a reference change is exactly a content change and only new/changed rows
+ * are fed to `upsertTaskGroupFromStreamLog`, never a full re-projection.
+ */
+interface TaskGroupProjectionState {
+  readonly working: TaskGroup[];
+  readonly index: Map<string, number>;
+  readonly applied: Map<string, StreamLogEntry>;
+  snapshot: readonly TaskGroup[];
+}
+
+const TASK_GROUP_PROJECTIONS = new Map<StreamTabId, TaskGroupProjectionState>();
+registerCliStateResetHook(() => TASK_GROUP_PROJECTIONS.clear());
+
+function projectTaskGroupsIncrementally(
+  streamId: StreamTabId,
+  entries: readonly StreamLogEntry[],
+): readonly TaskGroup[] {
+  let state = TASK_GROUP_PROJECTIONS.get(streamId);
+  if (!state) {
+    state = { working: [], index: new Map(), applied: new Map(), snapshot: [] };
+    TASK_GROUP_PROJECTIONS.set(streamId, state);
+  }
+  let changed = false;
+  for (const entry of entries) {
+    if (
+      entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
+      entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
+    ) {
+      continue;
+    }
+    if (state.applied.get(entry.id) === entry) continue;
+    upsertTaskGroupFromStreamLog(state.working, state.index, entry);
+    state.applied.set(entry.id, entry);
+    changed = true;
+  }
+  // Fresh array only on change: the slice-unchanged check below compares the
+  // snapshot by reference, replacing the former per-tick deep-equality walk.
+  if (changed) state.snapshot = [...state.working];
+  return state.snapshot;
+}
+
 function trySyncStreamLog(streamId: StreamTabId): void {
   try {
     syncStreamLog(streamId);
@@ -742,7 +791,10 @@ export function syncStreamLog(
   streamId: StreamTabId,
   options: { readonly forceFull?: boolean } = {},
 ): void {
-  if (isChildStreamRemoved(streamId)) return;
+  if (isChildStreamRemoved(streamId)) {
+    TASK_GROUP_PROJECTIONS.delete(streamId);
+    return;
+  }
   // AgentTrace throttles MODEL_RESPONSE chunks into the store via a 50ms
   // timer. If we read before that timer fires (e.g. the stream finalized
   // between two TUI sync ticks), the assistant text is still sitting in
@@ -755,7 +807,7 @@ export function syncStreamLog(
   if (!log) return;
 
   const allEntries = log.getRange(0);
-  const taskGroups = projectTaskGroupsFromStreamLog(allEntries);
+  const taskGroups = projectTaskGroupsIncrementally(streamId, allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
   const compactingActive = latestCompactionActivityIsRunning(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(
@@ -912,7 +964,7 @@ export function syncStreamLog(
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
-      isDeepStrictEqual(slice.taskGroups, taskGroups)
+      slice.taskGroups === taskGroups
     ) {
       return slice;
     }

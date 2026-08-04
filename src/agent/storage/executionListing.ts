@@ -8,6 +8,10 @@
 import pMap from 'p-map';
 
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  isAgentRunRecord,
+  type RunRecord,
+} from '@agent/core/definition/RunRecord';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -47,15 +51,25 @@ interface ExecutionListingBase {
   description?: string;
 }
 
+/** A native or tool-backed agent run: its record is always an AgentConfig. */
+export type AgentExecutionListingEntry = ExecutionListingBase & {
+  kind: 'run';
+  /** What the run is — the durable authority, stamped at registration. */
+  identity: Extract<RunIdentity, { kind: 'agent' }>;
+  record: AgentConfig;
+};
+
 export type ExecutionListingEntry =
+  | AgentExecutionListingEntry
   | (ExecutionListingBase & {
       kind: 'run';
-      /** What the run is — the durable authority, stamped at registration. */
-      identity: RunIdentity;
-      agentConfig: AgentConfig;
+      identity: Exclude<RunIdentity, { kind: 'agent' }>;
+      /** Honest non-agent record — or a pre-consolidation fabricated
+       *  AgentConfig, whose extra fields stay identity-suppressed. */
+      record: RunRecord;
     })
   | (ExecutionListingBase & {
-      /** Row without a readable identity or config — un-healed or corrupt. */
+      /** Row without a readable identity or record — un-healed or corrupt. */
       kind: 'incomplete';
     });
 
@@ -73,14 +87,18 @@ export type ExecutionListingEntry =
  * because tool-facing callers like `ExecutionsTool` need the raw listing to
  * manage background processes and child runs.
  */
+/** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
+ *  entry union for TypeScript, so this is the one spelled-out guard. */
+export function isAgentRunEntry(
+  entry: ExecutionListingEntry,
+): entry is AgentExecutionListingEntry {
+  return entry.kind === 'run' && entry.identity.kind === 'agent';
+}
+
 export function isUserVisibleExecution(
   entry: ExecutionListingEntry,
-): entry is Extract<ExecutionListingEntry, { kind: 'run' }> {
-  return (
-    entry.kind === 'run' &&
-    entry.identity.kind === 'agent' &&
-    entry.parentExecutionId === undefined
-  );
+): entry is AgentExecutionListingEntry {
+  return isAgentRunEntry(entry) && entry.parentExecutionId === undefined;
 }
 
 // ============================================================================
@@ -215,9 +233,9 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     async (id): Promise<ExecutionListingEntry | null> => {
       try {
         const store = getExecutionStore(id);
-        const [meta, cfg] = await Promise.all([
+        const [meta, record] = await Promise.all([
           store.readMeta(),
-          store.readConfig(),
+          store.readRunRecord(),
         ]);
 
         if (!meta) return null;
@@ -229,14 +247,23 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           outcome: meta.outcome,
           description: meta.description,
         };
-        const identity = meta.identity ?? deriveLegacyIdentity(meta, cfg);
+        const agentRecord =
+          record && isAgentRunRecord(record) ? record : null;
+        const identity =
+          meta.identity ?? deriveLegacyIdentity(meta, agentRecord);
         // Durable healing is async and best-effort; this read already has
         // the derived value either way.
         if (identity !== meta.identity) void stampExecutionRow(id, meta);
-        if (!cfg || !identity) {
+        if (!record || !identity) {
           return { ...base, kind: 'incomplete' };
         }
-        return { ...base, kind: 'run', identity, agentConfig: cfg };
+        if (identity.kind === 'agent') {
+          // An agent row's record is always an AgentConfig; anything else is
+          // corrupt and lists as incomplete rather than lying about shape.
+          if (!agentRecord) return { ...base, kind: 'incomplete' };
+          return { ...base, kind: 'run', identity, record: agentRecord };
+        }
+        return { ...base, kind: 'run', identity, record };
       } catch (error) {
         logger.warn(
           CHANNEL,

@@ -121,6 +121,42 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     expect(services.logger.info).toHaveBeenCalledTimes(1);
   });
 
+  it('logs a workflow delivery with its typed summary beside the collapsed text', async () => {
+    // The delivery envelope carries the summary typed at the write site; the
+    // transcript row producer parses it once and attaches it structured, so
+    // renderers never re-extract it from the row text.
+    const summary = {
+      name: 'proofread-pipeline',
+      outcome: 'completed',
+      phaseCount: 1,
+      taskDone: 2,
+      taskTotal: 2,
+      costUsd: 0.19,
+      durationMs: 5_000,
+      files: [{ path: 'paper.tex', added: 12, removed: 8 }],
+      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+      errorCause: null,
+    };
+    const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
+    const text = [
+      '<workflow-script-result id="abc">',
+      '<response>raw run log</response>',
+      `<workflow-summary>${escaped}</workflow-summary>`,
+      '</workflow-script-result>',
+    ].join('\n');
+    const services = buildServices();
+
+    await runPost(services, {
+      kind: 'continue',
+      followUps: [{ text, origin: 'subagent_result' }],
+    });
+
+    expect(services.logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('✓ proofread-pipeline completed'),
+      expect.objectContaining({ data: { workflowSummary: summary } }),
+    );
+  });
+
   it('does not log synthetic (idle-continuation) follow-ups', async () => {
     const services = buildServices();
     failAppend(services, 'boom');

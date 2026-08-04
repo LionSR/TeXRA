@@ -96,7 +96,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
-import { createRunTrace } from '@transcript';
+import { createRunTrace, StreamSnapshotStore } from '@transcript';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -142,14 +142,21 @@ function runTrace(
   return createRunTrace(streamId, defaultSession().transcripts).trace;
 }
 
-/** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
+/** Run `body` with a TUI run-fact subscription attached to a fresh hub. The
+ *  snapshot store attaches to the hub first — mirroring production, where the
+ *  session attaches its store at construction — so the TUI projection reads
+ *  accumulated artifact/usage state the store has already folded in. */
 function withRunFacts(body: (hub: SessionEventHub) => void): void {
   const hub = new SessionEventHub();
-  const detach = attachTuiRunFactSubscription(hub);
+  const snapshots = new StreamSnapshotStore();
+  const detachSnapshots = snapshots.attachSessionEvents(hub);
+  const detach = attachTuiRunFactSubscription(hub, snapshots);
   try {
     body(hub);
   } finally {
     detach();
+    detachSnapshots();
+    snapshots.evictAll();
   }
 }
 
@@ -3109,6 +3116,9 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.usage).toEqual(usage);
+      // Cumulative usage is the snapshot store's per-run accumulator summed;
+      // the store keeps base TokenUsageStats only, so extended fields like
+      // `reasoningTokens` live solely on the latest `usage` snapshot.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
         inputTokens: 100,
         outputTokens: 20,
@@ -3116,7 +3126,6 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheReadInputTokens: 30,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 0,
-        reasoningTokens: 7,
       });
     });
   });
@@ -3216,7 +3225,10 @@ describe('subscribeRuntimeHost run facts', () => {
 
   it('streams every workflow output round into selected-agent state', () => {
     withRunFacts((hub) => {
-      const executionId = 'exec-output' as ExecutionId;
+      // A real hex id: the snapshot store (now the accumulator the slice is
+      // projected from) parses output-file payloads, and ExecutionIdSchema
+      // rejects non-hex ids the old slice-spread silently accepted.
+      const executionId = 'ab12cd34ef56' as ExecutionId;
 
       hub.emit({
         scope: 'run',
@@ -3234,7 +3246,7 @@ describe('subscribeRuntimeHost run facts', () => {
                   executionId,
                   relativePath: 'r1/draft.tex',
                   absolutePath:
-                    '/tmp/texra/executions/exec-output/r1/draft.tex',
+                    '/tmp/texra/executions/ab12cd34ef56/r1/draft.tex',
                 },
                 round: 0,
                 lineage: null,
@@ -3260,7 +3272,7 @@ describe('subscribeRuntimeHost run facts', () => {
                   executionId,
                   relativePath: 'r2/paper.tex',
                   absolutePath:
-                    '/tmp/texra/executions/exec-output/r2/paper.tex',
+                    '/tmp/texra/executions/ab12cd34ef56/r2/paper.tex',
                 },
                 round: 1,
                 lineage: null,
@@ -3275,14 +3287,14 @@ describe('subscribeRuntimeHost run facts', () => {
         0: [
           expect.objectContaining({
             location: expect.objectContaining({
-              absolutePath: '/tmp/texra/executions/exec-output/r1/draft.tex',
+              absolutePath: '/tmp/texra/executions/ab12cd34ef56/r1/draft.tex',
             }),
           }),
         ],
         1: [
           expect.objectContaining({
             location: expect.objectContaining({
-              absolutePath: '/tmp/texra/executions/exec-output/r2/paper.tex',
+              absolutePath: '/tmp/texra/executions/ab12cd34ef56/r2/paper.tex',
             }),
           }),
         ],
@@ -3417,6 +3429,8 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.usage).toEqual(secondPayload.usage);
+      // Summed from the store's per-run map (base TokenUsageStats — no
+      // extended `reasoningTokens`), not a second running sum in the slice.
       expect(streams.get().get(root)?.cumulativeUsage).toEqual({
         inputTokens: 150,
         outputTokens: 30,
@@ -3424,7 +3438,6 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheReadInputTokens: 35,
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 0,
-        reasoningTokens: 10,
       });
     });
   });
@@ -3484,8 +3497,6 @@ describe('subscribeRuntimeHost run facts', () => {
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
     setStreamStatusInCliState({
       streamId: root,
       status: STREAM_PHASE.RUNNING,
@@ -3494,33 +3505,34 @@ describe('subscribeRuntimeHost run facts', () => {
     const queue = defaultSession().followUps.queue(lease);
 
     try {
-      queue.enqueue({ text: 'Keep the proof under one page.' });
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'followUpSent',
-          payload: { streamId: root },
-        },
+      withRunFacts((hub) => {
+        queue.enqueue({ text: 'Keep the proof under one page.' });
+        hub.emit({
+          scope: 'session',
+          event: {
+            type: 'followUpSent',
+            payload: { streamId: root },
+          },
+        });
+
+        let slice = streams.get().get(root);
+        expect(slice?.queuedFollowUpMessages).toEqual([
+          'Keep the proof under one page.',
+        ]);
+
+        queue.drain();
+        hub.emit({
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId: root },
+          },
+        });
+
+        slice = streams.get().get(root);
+        expect(slice?.queuedFollowUpMessages).toEqual([]);
       });
-
-      let slice = streams.get().get(root);
-      expect(slice?.queuedFollowUpMessages).toEqual([
-        'Keep the proof under one page.',
-      ]);
-
-      queue.drain();
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId: root },
-        },
-      });
-
-      slice = streams.get().get(root);
-      expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
-      detach();
       defaultSession().followUps.terminalize(root);
     }
   });

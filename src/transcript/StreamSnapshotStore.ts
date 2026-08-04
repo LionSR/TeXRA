@@ -1600,29 +1600,8 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * The persisted execution and parent identity needed to distinguish a run's
-   * root sidecars from child streams without hydrating the remaining files.
-   */
-  async readPersistedStreamAssociation(stream: StreamTabId): Promise<{
-    readonly executionId?: ExecutionId;
-    readonly parentStreamId?: StreamTabId;
-  }> {
-    const meta = await readMeta(this.kv(stream));
-    return {
-      ...(meta?.executionId ? { executionId: meta.executionId } : {}),
-      ...(meta?.parentStreamId
-        ? { parentStreamId: meta.parentStreamId as StreamTabId }
-        : {}),
-    };
-  }
-
-  /**
    * Whether a stream has a persisted `workPlan.json` sidecar — an existence
-   * check only (a single stat via `KVStore.exists`), not a read. Used by the
-   * resolver to disambiguate between multiple persisted streams that share an
-   * `executionId` (e.g. a parent orchestrator tab and a child stream): the
-   * candidate that actually holds durable todo/plan data is preferred over a
-   * bare `meta.json`-only match.
+   * check only (a single stat via `KVStore.exists`), not a read.
    */
   async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
     return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);

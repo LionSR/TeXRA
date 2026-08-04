@@ -138,21 +138,27 @@ function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
  * the storage entrance stamper only — production classification reads the
  * stamped identity.
  */
+/** The record's display name across both arms of the config union. */
+function recordName(config: TraceDocument['config']): string {
+  return 'agentCategory' in config ? config.agent : config.name;
+}
+
 function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
   const streamId = trace.streamId;
+  const name = recordName(trace.config);
   if (streamId.startsWith('workflow-script#')) {
-    return { kind: 'multiAgentWorkflow', workflowName: trace.config.agent };
+    return { kind: 'multiAgentWorkflow', workflowName: name };
   }
   if (streamId.startsWith('codex@')) {
-    return { kind: 'agent', agent: trace.config.agent, tool: 'codex' };
+    return { kind: 'agent', agent: name, tool: 'codex' };
   }
   if (streamId.startsWith('claude@')) {
-    return { kind: 'agent', agent: trace.config.agent, tool: 'claude_code' };
+    return { kind: 'agent', agent: name, tool: 'claude_code' };
   }
   if (streamId.startsWith('bash@')) {
     return { kind: 'process', tool: 'bash' };
   }
-  return { kind: 'agent', agent: trace.config.agent };
+  return { kind: 'agent', agent: name };
 }
 
 /**
@@ -164,10 +170,12 @@ function legacyTraceIdentity(trace: TraceDocument): RunIdentity {
  */
 export function replayTrace(trace: TraceDocument): void {
   const { snapshot } = trace;
+  const agentConfig =
+    'agentCategory' in trace.config ? trace.config : undefined;
   const streamTabBase = {
     name: trace.streamId,
-    label: trace.config.agent,
-    agentCategory: trace.config.agentCategory,
+    label: recordName(trace.config),
+    agentCategory: agentConfig?.agentCategory,
     // Empty-entries traces have nothing to derive a creation time from;
     // fall back to "now" rather than the Unix epoch, which would render
     // as a misleadingly specific (and wrong) 1970 date.
@@ -194,7 +202,7 @@ export function replayTrace(trace: TraceDocument): void {
     streamStates: {
       [trace.streamId]: {
         status: toStreamLifecycleStatus(trace),
-        category: trace.config.agentCategory,
+        category: agentConfig?.agentCategory,
         conversationProgress: snapshot.conversationProgress,
         // Liveness is never restored as live (matches the existing
         // ghost-stream hydrate convention documented on StreamSnapshot) —
@@ -220,8 +228,12 @@ export function replayTrace(trace: TraceDocument): void {
     stream: trace.streamId,
     runUsage: snapshot.runUsage,
   };
+  // Workflow-shaped sync for workflow agents AND multi-agent-workflow
+  // containers (both have round outputs); everything else renders the
+  // tool-use shape.
   const syncPayload: SyncStreamContentPayload =
-    trace.config.agentCategory === AgentCategory.Workflow
+    agentConfig?.agentCategory === AgentCategory.Workflow ||
+    identity.kind === 'multiAgentWorkflow'
       ? {
           ...syncSnapshot,
           category: AgentCategory.Workflow,

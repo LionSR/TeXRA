@@ -56,7 +56,7 @@ function historyEntry(
     id: 'abc123' as ExecutionId,
     timestamp,
     identity: { kind: 'agent', agent },
-    agentConfig: AgentConfigSchema.parse({
+    record: AgentConfigSchema.parse({
       agent,
       model: 'sonnet46T',
       agentCategory: AgentCategory.ToolUse,

@@ -444,7 +444,7 @@ async function executeInBand(
 
   try {
     await registerExecution(executionId, config, options.agentName, {
-      streamId: getStreamTabId(config.agent, config.model, { executionId }),
+      streamId: getStreamTabId(config.agent, { executionId }),
       identity: { kind: 'agent', agent: config.agent },
       parentExecutionId: options.parentExecutionId,
     });
