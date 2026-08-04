@@ -81,12 +81,19 @@ export function copilotRouteUnavailableReason(
 ): string | undefined {
   if (!prefersCopilotRoute(model)) return undefined;
   if (shouldRouteModelThroughCopilot(model)) return undefined;
-  switch (copilotRouteForModel(model)?.access) {
+  const access = copilotRouteForModel(model)?.access;
+  switch (access) {
     case 'consent-required':
       return `Copilot access to "${model}" needs your consent in VS Code. Grant it from Settings → Models, or clear the Copilot route preference.`;
     case 'unavailable':
       return `Copilot access to "${model}" is temporarily unavailable in VS Code.`;
+    // No discovered route, or a route reported allowed that something else
+    // blocked: both mean Copilot cannot serve the model right now.
+    case 'allowed':
+    case undefined:
+      break;
     default:
-      return `VS Code does not currently offer "${model}" through Copilot.`;
+      access satisfies never;
   }
+  return `VS Code does not currently offer "${model}" through Copilot.`;
 }
